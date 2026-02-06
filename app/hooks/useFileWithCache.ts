@@ -4,7 +4,6 @@ import {
   setCachedFile,
   getLocalSyncMeta,
   setLocalSyncMeta,
-  addEditHistoryEntry,
 } from "~/services/indexeddb-cache";
 
 export function useFileWithCache(
@@ -133,61 +132,33 @@ export function useFileWithCache(
       setSaved(false);
 
       try {
-        const res = await fetch("/api/drive/files", {
+        // 1. Update IndexedDB cache immediately
+        const cached = await getCachedFile(fileId);
+        await setCachedFile({
+          fileId,
+          content: newContent,
+          md5Checksum: cached?.md5Checksum ?? "",
+          modifiedTime: cached?.modifiedTime ?? "",
+          cachedAt: Date.now(),
+          fileName: cached?.fileName,
+        });
+
+        setContent(newContent);
+
+        // 2. Upload temp file to Drive (1-2 API calls)
+        const fileName = cached?.fileName ?? fileId;
+        await fetch("/api/drive/temp", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action: "update",
+            action: "save",
+            fileName,
             fileId,
             content: newContent,
           }),
         });
 
-        if (!res.ok) throw new Error("Failed to save file");
-
-        const data = await res.json();
         setSaved(true);
-        setContent(newContent);
-
-        // Update caches
-        const md5 = data.md5Checksum ?? data.file?.md5Checksum ?? "";
-        const modTime = data.file?.modifiedTime ?? "";
-
-        await setCachedFile({
-          fileId,
-          content: newContent,
-          md5Checksum: md5,
-          modifiedTime: modTime,
-          cachedAt: Date.now(),
-        });
-
-        // Update local sync meta
-        if (md5) {
-          const syncMeta = (await getLocalSyncMeta()) ?? {
-            id: "current" as const,
-            lastUpdatedAt: new Date().toISOString(),
-            files: {},
-          };
-          syncMeta.files[fileId] = {
-            md5Checksum: md5,
-            modifiedTime: modTime,
-          };
-          syncMeta.lastUpdatedAt = new Date().toISOString();
-          await setLocalSyncMeta(syncMeta);
-        }
-
-        // Cache edit history entry if returned
-        if (data.editHistoryEntry) {
-          const entry = data.editHistoryEntry;
-          await addEditHistoryEntry({
-            id: entry.id,
-            fileId,
-            timestamp: entry.timestamp,
-            source: entry.source,
-            diff: entry.diff,
-            stats: entry.stats,
-          });
-        }
       } catch {
         // ignore
       } finally {

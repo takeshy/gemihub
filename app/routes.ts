@@ -18,8 +18,10 @@ export default [
   route("api/settings/mcp-test", "routes/api.settings.mcp-test.tsx"),
   route("api/settings/rag-sync", "routes/api.settings.rag-sync.tsx"),
   route("api/settings/encryption", "routes/api.settings.encryption.tsx"),
+  route("api/settings/edit-history", "routes/api.settings.edit-history.tsx"),
   route("api/settings/edit-history-stats", "routes/api.settings.edit-history-stats.tsx"),
   route("api/settings/edit-history-prune", "routes/api.settings.edit-history-prune.tsx"),
   route("api/sync", "routes/api.sync.tsx"),
   route("api/drive/upload", "routes/api.drive.upload.tsx"),
+  route("api/drive/temp", "routes/api.drive.temp.tsx"),
 ] satisfies RouteConfig;

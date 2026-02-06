@@ -46,8 +46,10 @@ import {
   AlertCircle,
   Loader2,
   Pencil,
+  FileBox,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
+import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -397,6 +399,7 @@ function GeneralTab({
   const [rootFolderName, setRootFolderName] = useState(settings.rootFolderName || "GeminiHub");
   const [language, setLanguage] = useState<Language>(settings.language);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
+  const [showTempFiles, setShowTempFiles] = useState(false);
 
   const availableModels = getAvailableModels(apiPlan);
 
@@ -539,6 +542,28 @@ function GeneralTab({
 
         <SaveButton loading={loading} />
       </fetcher.Form>
+
+      {/* Temp Files */}
+      <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
+          {t("settings.general.tempFiles")}
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          {t("settings.general.tempFilesDescription")}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowTempFiles(true)}
+          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
+        >
+          <FileBox size={14} />
+          {t("settings.general.manageTempFiles")}
+        </button>
+      </div>
+
+      {showTempFiles && (
+        <TempFilesDialog onClose={() => setShowTempFiles(false)} />
+      )}
     </SectionCard>
   );
 }

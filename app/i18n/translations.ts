@@ -106,6 +106,22 @@ export interface TranslationStrings {
   "editHistory.confirmClear": string;
   "editHistory.confirmClearAll": string;
 
+  // Context menu - temp download
+  "contextMenu.tempDownload": string;
+  "contextMenu.noTempFile": string;
+
+  // Temp files
+  "settings.general.tempFiles": string;
+  "settings.general.tempFilesDescription": string;
+  "settings.general.manageTempFiles": string;
+  "tempFiles.title": string;
+  "tempFiles.noFiles": string;
+  "tempFiles.selectAll": string;
+  "tempFiles.downloadSelected": string;
+  "tempFiles.deleteSelected": string;
+  "tempFiles.confirmDelete": string;
+  "tempFiles.savedAt": string;
+
   // Commands tab
   "settings.tab.commands": string;
   "settings.commands.noCommands": string;
@@ -230,6 +246,22 @@ const en: TranslationStrings = {
   "editHistory.confirmClear": "Clear all edit history for this file?",
   "editHistory.confirmClearAll": "Clear all edit history for this file?",
 
+  // Context menu - temp download
+  "contextMenu.tempDownload": "Temp Download",
+  "contextMenu.noTempFile": "No temp file found for this file.",
+
+  // Temp files
+  "settings.general.tempFiles": "Temporary Files",
+  "settings.general.tempFilesDescription": "Manage temporary files saved to Drive before Push.",
+  "settings.general.manageTempFiles": "Manage Temp Files",
+  "tempFiles.title": "Temporary Files",
+  "tempFiles.noFiles": "No temporary files found.",
+  "tempFiles.selectAll": "Select All",
+  "tempFiles.downloadSelected": "Download Selected",
+  "tempFiles.deleteSelected": "Delete Selected",
+  "tempFiles.confirmDelete": "Delete the selected temporary files?",
+  "tempFiles.savedAt": "Saved at",
+
   // Commands tab
   "settings.tab.commands": "Commands",
   "settings.commands.noCommands": "No slash commands configured.",
@@ -353,6 +385,22 @@ const ja: TranslationStrings = {
   "editHistory.clearHistory": "履歴をクリア",
   "editHistory.confirmClear": "このファイルの編集履歴をすべてクリアしますか？",
   "editHistory.confirmClearAll": "このファイルの編集履歴をすべてクリアしますか？",
+
+  // Context menu - temp download
+  "contextMenu.tempDownload": "一時ダウンロード",
+  "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
+
+  // Temp files
+  "settings.general.tempFiles": "一時ファイル",
+  "settings.general.tempFilesDescription": "Push前にDriveに保存された一時ファイルを管理します。",
+  "settings.general.manageTempFiles": "一時ファイルを管理",
+  "tempFiles.title": "一時ファイル",
+  "tempFiles.noFiles": "一時ファイルが見つかりません。",
+  "tempFiles.selectAll": "すべて選択",
+  "tempFiles.downloadSelected": "選択をダウンロード",
+  "tempFiles.deleteSelected": "選択を削除",
+  "tempFiles.confirmDelete": "選択した一時ファイルを削除しますか？",
+  "tempFiles.savedAt": "保存日時",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

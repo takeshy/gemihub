@@ -19,10 +19,12 @@ import {
   FolderPlus,
   FilePlus,
   History,
+  Download,
 } from "lucide-react";
 import {
   getCachedFileTree,
   setCachedFileTree,
+  setCachedFile,
   type CachedTreeNode,
 } from "~/services/indexeddb-cache";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -485,6 +487,40 @@ export function DriveFileTree({
     [t]
   );
 
+  const handleTempDownload = useCallback(
+    async (item: CachedTreeNode) => {
+      try {
+        const res = await fetch("/api/drive/temp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "download", fileName: item.name }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.found) {
+          alert(t("contextMenu.noTempFile"));
+          return;
+        }
+        const { payload } = data.tempFile;
+        await setCachedFile({
+          fileId: payload.fileId,
+          content: payload.content,
+          md5Checksum: "",
+          modifiedTime: payload.savedAt,
+          cachedAt: Date.now(),
+          fileName: item.name,
+        });
+        // If this is the currently open file, trigger a refresh
+        if (payload.fileId === activeFileId) {
+          window.dispatchEvent(new CustomEvent("temp-file-downloaded", { detail: { fileId: payload.fileId } }));
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [activeFileId, t]
+  );
+
   const getContextMenuItems = useCallback(
     (item: CachedTreeNode): ContextMenuItem[] => {
       const items: ContextMenuItem[] = [];
@@ -504,6 +540,11 @@ export function DriveFileTree({
           });
         }
 
+        items.push({
+          label: t("contextMenu.tempDownload"),
+          icon: <Download size={14} />,
+          onClick: () => handleTempDownload(item),
+        });
         items.push({
           label: t("editHistory.menuLabel"),
           icon: <History size={14} />,
@@ -526,7 +567,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [encryptionEnabled, handleDelete, handleEncrypt, handleDecrypt, handleClearHistory, t]
+    [encryptionEnabled, handleDelete, handleEncrypt, handleDecrypt, handleClearHistory, handleTempDownload, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {

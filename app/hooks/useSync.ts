@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   getLocalSyncMeta,
   setLocalSyncMeta,
+  getCachedFile,
   setCachedFile,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
@@ -71,6 +72,46 @@ export function useSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
+      // Apply all temp files first
+      const tempRes = await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "applyAll" }),
+      });
+      if (tempRes.ok) {
+        const tempData = await tempRes.json();
+        const results = tempData.results as Array<{
+          fileId: string;
+          md5Checksum: string;
+          modifiedTime: string;
+        }>;
+        if (results.length > 0) {
+          const localMeta = (await getLocalSyncMeta()) ?? {
+            id: "current" as const,
+            lastUpdatedAt: new Date().toISOString(),
+            files: {},
+          };
+          for (const r of results) {
+            localMeta.files[r.fileId] = {
+              md5Checksum: r.md5Checksum,
+              modifiedTime: r.modifiedTime,
+            };
+            // Update IndexedDB cache with new checksum
+            const cached = await getCachedFile(r.fileId);
+            if (cached) {
+              await setCachedFile({
+                ...cached,
+                md5Checksum: r.md5Checksum,
+                modifiedTime: r.modifiedTime,
+                cachedAt: Date.now(),
+              });
+            }
+          }
+          localMeta.lastUpdatedAt = new Date().toISOString();
+          await setLocalSyncMeta(localMeta);
+        }
+      }
+
       const localMeta = (await getLocalSyncMeta()) ?? null;
       if (!localMeta) {
         setSyncStatus("idle");
