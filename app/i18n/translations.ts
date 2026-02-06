@@ -155,13 +155,13 @@ const en: TranslationStrings = {
   "header.workflow": "Workflow",
 
   // Index
-  "index.title": "Gemini Hub IDE",
+  "index.title": "Gemini Hub",
   "index.subtitle": "Build and execute AI-powered workflows visually",
   "index.signIn": "Sign in with Google",
   "index.apiKeyWarning": "Gemini API key is not set. AI features will not work.",
 
   // MainViewer
-  "mainViewer.welcome": "Welcome to Gemini Hub IDE",
+  "mainViewer.welcome": "Welcome to Gemini Hub",
   "mainViewer.welcomeDescription": "Select a file from the file tree to start editing, or create a new workflow or file using the buttons above.",
   "mainViewer.retry": "Retry",
   "mainViewer.saved": "Saved",
@@ -296,13 +296,13 @@ const ja: TranslationStrings = {
   "header.workflow": "ワークフロー",
 
   // Index
-  "index.title": "Gemini Hub IDE",
+  "index.title": "Gemini Hub",
   "index.subtitle": "AIワークフローをビジュアルに構築・実行",
   "index.signIn": "Googleでサインイン",
   "index.apiKeyWarning": "Gemini APIキーが設定されていません。AI機能は動作しません。",
 
   // MainViewer
-  "mainViewer.welcome": "Gemini Hub IDEへようこそ",
+  "mainViewer.welcome": "Gemini Hubへようこそ",
   "mainViewer.welcomeDescription": "ファイルツリーからファイルを選択して編集を開始するか、上のボタンから新しいワークフローやファイルを作成してください。",
   "mainViewer.retry": "再試行",
   "mainViewer.saved": "保存済み",

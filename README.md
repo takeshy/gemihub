@@ -1,6 +1,6 @@
-# Gemini Hub IDE
+# Gemini Hub
 
-A self-hosted web application that integrates Google Gemini AI with Google Drive. Build visual workflows, chat with AI, manage Drive files with a rich editor, and more — all from a single interface.
+A web application that integrates Google Gemini AI with Google Drive. Build visual workflows, chat with AI, manage Drive files with a rich editor, and more — all from a single interface. Supports self-hosting.
 
 [日本語版 README](./README_ja.md)
 

@@ -21,7 +21,7 @@ export function getWorkflowSpecification(context?: WorkflowSpecContext): string 
   const ragSection = buildRagSection(context?.ragSettingNames);
 
   return `
-# Gemini Hub IDE Workflow Specification
+# Gemini Hub Workflow Specification
 
 ## Format
 Workflows are defined in YAML format. Output ONLY the YAML content starting with "name:".

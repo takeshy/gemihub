@@ -1,6 +1,6 @@
-# Gemini Hub IDE
+# Gemini Hub
 
-Google Gemini AI と Google Drive を統合したセルフホスト型 Web アプリケーションです。ビジュアルワークフロー、AIチャット、リッチエディタによるDriveファイル管理など、あらゆる機能を一つの画面で利用できます。
+Google Gemini AI と Google Drive を統合した Web アプリケーションです。ビジュアルワークフロー、AIチャット、リッチエディタによるDriveファイル管理など、あらゆる機能を一つの画面で利用できます。セルフホストにも対応。
 
 [English README](./README.md)
 

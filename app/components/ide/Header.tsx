@@ -43,7 +43,7 @@ export function Header({
     <header className="flex h-10 items-center justify-between border-b border-gray-200 bg-white px-3 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-3">
         <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-          Gemini Hub IDE
+          Gemini Hub
         </span>
         {activeFileName && (
           <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">

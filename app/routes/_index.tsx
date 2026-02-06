@@ -76,7 +76,7 @@ export default function Index() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
         <div className="text-center">
           <h1 className="mb-4 text-4xl font-bold text-gray-900 dark:text-gray-100">
-            Gemini Hub IDE
+            Gemini Hub
           </h1>
           <p className="mb-8 text-gray-600 dark:text-gray-400">
             Build and execute AI-powered workflows visually
