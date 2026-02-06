@@ -1,8 +1,10 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { FileText, Loader2, Eye, PenLine, Code } from "lucide-react";
 import type { UserSettings } from "~/types/settings";
 import { WorkflowEditor } from "./WorkflowEditor";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
+import { useI18n } from "~/i18n/context";
+import { useEditorContext } from "~/contexts/EditorContext";
 
 interface MainViewerProps {
   fileId: string | null;
@@ -25,6 +27,8 @@ export function MainViewer({
   settings,
   refreshKey,
 }: MainViewerProps) {
+  const { t } = useI18n();
+
   // No file selected - welcome screen
   if (!fileId) {
     return (
@@ -32,11 +36,10 @@ export function MainViewer({
         <div className="text-center">
           <FileText size={48} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
           <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            Welcome to Gemini Hub IDE
+            {t("mainViewer.welcome")}
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md">
-            Select a file from the file tree to start editing, or create a new
-            workflow or file using the buttons above.
+            {t("mainViewer.welcomeDescription")}
           </p>
         </div>
       </div>
@@ -96,8 +99,18 @@ function TextBasedViewer({
   settings: UserSettings;
   refreshKey?: number;
 }) {
+  const { t } = useI18n();
   const { content, loading, error, saving, saved, save, refresh } =
     useFileWithCache(fileId, refreshKey);
+  const editorCtx = useEditorContext();
+
+  // Push content and file name to EditorContext
+  useEffect(() => {
+    editorCtx.setActiveFileContent(content);
+    editorCtx.setActiveFileName(fileName);
+    // Reset selection on file change
+    editorCtx.setActiveSelection(null);
+  }, [content, fileName, fileId]);
 
   if (loading && content === null) {
     return (
@@ -116,7 +129,7 @@ function TextBasedViewer({
             onClick={refresh}
             className="text-xs text-blue-600 hover:underline"
           >
-            Retry
+            {t("mainViewer.retry")}
           </button>
         </div>
       </div>
@@ -190,7 +203,28 @@ function MarkdownFileEditor({
   saving: boolean;
   saved: boolean;
 }) {
+  const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
+  const editorCtx = useEditorContext();
+
+  const handleSelect = useCallback(
+    (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      const ta = e.currentTarget;
+      const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+      editorCtx.setActiveSelection(sel || null);
+    },
+    [editorCtx]
+  );
+
+  // WYSIWYG mode: listen for selection changes
+  useEffect(() => {
+    function onSelectionChange() {
+      const sel = document.getSelection();
+      editorCtx.setActiveSelection(sel && sel.toString() ? sel.toString() : null);
+    }
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [editorCtx]);
   // New file (empty) → wysiwyg, existing file → preview
   const [mode, setMode] = useState<MdEditMode>(
     initialContent ? "preview" : "wysiwyg"
@@ -219,9 +253,9 @@ function MarkdownFileEditor({
   }, [mode, MarkdownEditorComponent]);
 
   const modes: { key: MdEditMode; icon: React.ReactNode; label: string }[] = [
-    { key: "preview", icon: <Eye size={14} />, label: "Preview" },
-    { key: "wysiwyg", icon: <PenLine size={14} />, label: "WYSIWYG" },
-    { key: "raw", icon: <Code size={14} />, label: "Raw" },
+    { key: "preview", icon: <Eye size={14} />, label: t("mainViewer.preview") },
+    { key: "wysiwyg", icon: <PenLine size={14} />, label: t("mainViewer.wysiwyg") },
+    { key: "raw", icon: <Code size={14} />, label: t("mainViewer.raw") },
   ];
 
   return (
@@ -251,7 +285,7 @@ function MarkdownFileEditor({
         <div className="flex items-center gap-2">
           {saved && (
             <span className="text-xs text-green-600 dark:text-green-400">
-              Saved
+              {t("mainViewer.saved")}
             </span>
           )}
           {mode !== "preview" && (
@@ -260,7 +294,7 @@ function MarkdownFileEditor({
               disabled={saving}
               className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("mainViewer.saving") : t("common.save")}
             </button>
           )}
         </div>
@@ -296,6 +330,7 @@ function MarkdownFileEditor({
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            onSelect={handleSelect}
             className="w-full h-full font-mono text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
           />
@@ -322,18 +357,29 @@ function TextFileEditor({
   saving: boolean;
   saved: boolean;
 }) {
+  const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
+  const editorCtx = useEditorContext();
 
   useEffect(() => {
     setContent(initialContent);
   }, [initialContent, fileId]);
+
+  const handleSelect = useCallback(
+    (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      const ta = e.currentTarget;
+      const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+      editorCtx.setActiveSelection(sel || null);
+    },
+    [editorCtx]
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex items-center justify-end px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         {saved && (
           <span className="mr-2 text-xs text-green-600 dark:text-green-400">
-            Saved
+            {t("mainViewer.saved")}
           </span>
         )}
         <button
@@ -341,13 +387,14 @@ function TextFileEditor({
           disabled={saving}
           className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save"}
+          {saving ? t("mainViewer.saving") : t("common.save")}
         </button>
       </div>
       <div className="flex-1 p-4">
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          onSelect={handleSelect}
           className="w-full h-full font-mono text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
           spellCheck={false}
         />

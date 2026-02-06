@@ -13,10 +13,14 @@ import {
   Wrench,
 } from "lucide-react";
 import type { Attachment } from "~/types/chat";
-import type { ModelType, ModelInfo, RagSetting, DriveToolMode } from "~/types/settings";
+import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand } from "~/types/settings";
+import type { ChatOverrides } from "~/components/ide/ChatPanel";
+import { useEditorContext } from "~/contexts/EditorContext";
+import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
+import { AutocompletePopup } from "./AutocompletePopup";
 
 interface ChatInputProps {
-  onSend: (content: string, attachments?: Attachment[]) => void;
+  onSend: (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => void;
   disabled?: boolean;
   models: ModelInfo[];
   selectedModel: ModelType;
@@ -31,6 +35,7 @@ interface ChatInputProps {
   enableMcp?: boolean;
   onEnableMcpChange?: (enabled: boolean) => void;
   hasMcpServers?: boolean;
+  slashCommands?: SlashCommand[];
 }
 
 function fileToAttachment(file: File): Promise<Attachment> {
@@ -58,6 +63,23 @@ function fileToAttachment(file: File): Promise<Attachment> {
 
 const ACCEPTED_FILE_TYPES = "image/*,application/pdf";
 
+function resolveTemplateVariables(
+  text: string,
+  activeFileContent: string | null,
+  activeFileName: string | null,
+  activeSelection: string | null
+): string {
+  let result = text;
+  if (result.includes("{content}") && activeFileContent) {
+    const prefix = activeFileName ? `From ${activeFileName}:\n` : "";
+    result = result.replace(/\{content\}/g, prefix + activeFileContent);
+  }
+  if (result.includes("{selection}") && activeSelection) {
+    result = result.replace(/\{selection\}/g, activeSelection);
+  }
+  return result;
+}
+
 export function ChatInput({
   onSend,
   disabled,
@@ -74,6 +96,7 @@ export function ChatInput({
   enableMcp = true,
   onEnableMcpChange,
   hasMcpServers,
+  slashCommands = [],
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -81,10 +104,80 @@ export function ChatInput({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [pendingOverrides, setPendingOverrides] = useState<ChatOverrides | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
+
+  // EditorContext for autocomplete data
+  const editorCtx = useEditorContext();
+
+  // Autocomplete
+  const autocomplete = useAutocomplete({
+    slashCommands,
+    fileList: editorCtx.fileList,
+    hasActiveContent: !!editorCtx.activeFileContent,
+    hasActiveSelection: !!editorCtx.activeSelection,
+  });
+
+  const handleAutocompleteSelect = useCallback(
+    (item: AutocompleteItem) => {
+      const result = autocomplete.selectItem(item);
+      if (!result) return;
+
+      if (item.type === "command") {
+        // Replace entire content with prompt template
+        setContent(result.text);
+        // Store overrides from command
+        if (result.command) {
+          setPendingOverrides({
+            model: result.command.model,
+            searchSetting: result.command.searchSetting,
+            driveToolMode: result.command.driveToolMode,
+            enabledMcpServers: result.command.enabledMcpServers,
+          });
+        }
+        // Focus textarea
+        setTimeout(() => {
+          const ta = textareaRef.current;
+          if (ta) {
+            ta.focus();
+            ta.setSelectionRange(result.text.length, result.text.length);
+          }
+        }, 0);
+      } else {
+        // Insert at current cursor position, replacing the trigger text
+        const ta = textareaRef.current;
+        if (!ta) return;
+        const cursorPos = ta.selectionStart;
+        const before = content.slice(0, cursorPos);
+        const after = content.slice(cursorPos);
+
+        // Find the trigger position (@ or the whole content for mentions)
+        let triggerStart = cursorPos;
+        if (item.type === "variable" || item.type === "file") {
+          // Find last @ before cursor
+          const atIdx = before.lastIndexOf("@");
+          if (atIdx >= 0) {
+            triggerStart = atIdx;
+          }
+        }
+
+        const newContent = content.slice(0, triggerStart) + result.text + " " + after;
+        setContent(newContent);
+
+        const newCursorPos = triggerStart + result.text.length + 1;
+        setTimeout(() => {
+          if (ta) {
+            ta.focus();
+            ta.setSelectionRange(newCursorPos, newCursorPos);
+          }
+        }, 0);
+      }
+    },
+    [autocomplete, content]
+  );
 
   // Auto-resize textarea
   useEffect(() => {
@@ -132,24 +225,51 @@ export function ChatInput({
     if (!trimmed && attachments.length === 0) return;
     if (disabled || isStreaming) return;
 
-    onSend(trimmed, attachments.length > 0 ? attachments : undefined);
+    // Resolve template variables
+    const resolved = resolveTemplateVariables(
+      trimmed,
+      editorCtx.activeFileContent,
+      editorCtx.activeFileName,
+      editorCtx.activeSelection
+    );
+
+    onSend(
+      resolved,
+      attachments.length > 0 ? attachments : undefined,
+      pendingOverrides || undefined
+    );
     setContent("");
     setAttachments([]);
+    setPendingOverrides(null);
 
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Autocomplete intercepts first
+      if (autocomplete.visible) {
+        const consumed = autocomplete.handleKeyDown(e);
+        if (consumed) {
+          // Tab/Enter should select the item
+          if (e.key === "Tab" || e.key === "Enter") {
+            const item = autocomplete.items[autocomplete.selectedIndex];
+            if (item) {
+              handleAutocompleteSelect(item);
+            }
+          }
+          return;
+        }
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend]
+    [handleSend, autocomplete, handleAutocompleteSelect]
   );
 
   const handleFileSelect = useCallback(
@@ -348,13 +468,31 @@ export function ChatInput({
             )}
           </div>
 
+          {/* Autocomplete popup */}
+          {autocomplete.visible && (
+            <AutocompletePopup
+              items={autocomplete.items}
+              selectedIndex={autocomplete.selectedIndex}
+              mode={autocomplete.mode}
+              onSelect={handleAutocompleteSelect}
+            />
+          )}
+
           {/* Textarea */}
           <textarea
             ref={textareaRef}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setContent(val);
+              // Clear overrides if user modifies text after command selection
+              if (pendingOverrides && !val.startsWith("/")) {
+                // Keep overrides - user may be editing the template
+              }
+              autocomplete.handleInputChange(val, e.target.selectionStart);
+            }}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder="Type / for commands, @ for mentions..."
             disabled={disabled}
             rows={3}
             className="max-h-[200px] min-h-[80px] flex-1 resize-none bg-transparent py-1 text-sm text-gray-900 placeholder-gray-400 outline-none disabled:opacity-50 dark:text-gray-100 dark:placeholder-gray-500"

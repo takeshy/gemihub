@@ -8,6 +8,9 @@ import { listChatHistories } from "~/services/chat-history.server";
 import type { UserSettings } from "~/types/settings";
 import type { ChatHistoryItem } from "~/types/chat";
 import { LogIn } from "lucide-react";
+import { I18nProvider } from "~/i18n/context";
+import { useApplySettings } from "~/hooks/useApplySettings";
+import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
 
 import { Header } from "~/components/ide/Header";
 import { LeftSidebar } from "~/components/ide/LeftSidebar";
@@ -122,6 +125,7 @@ function IDELayout({
   hasGeminiApiKey: boolean;
   rootFolderId: string;
 }) {
+  useApplySettings(settings.language, settings.fontSize);
   const [searchParams] = useSearchParams();
 
   // Active file state — use local state to avoid React Router navigation on file switch
@@ -240,99 +244,123 @@ function IDELayout({
   );
 
   return (
-    <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-950">
-      <Header
-        rightPanel={rightPanel}
-        setRightPanel={setRightPanel}
-        activeFileName={activeFileName}
-        syncStatus={syncStatus}
-        syncDiff={syncDiff}
-        lastSyncTime={lastSyncTime}
-        syncError={syncError}
-        syncConflicts={conflicts}
-        onPush={push}
-        onPull={pull}
-        onCheckSync={checkSync}
-        onShowConflicts={() => setShowConflictDialog(true)}
-      />
+    <I18nProvider language={settings.language}>
+      <EditorContextProvider>
+      <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-950">
+        <Header
+          rightPanel={rightPanel}
+          setRightPanel={setRightPanel}
+          activeFileName={activeFileName}
+          syncStatus={syncStatus}
+          syncDiff={syncDiff}
+          lastSyncTime={lastSyncTime}
+          syncError={syncError}
+          syncConflicts={conflicts}
+          onPush={push}
+          onPull={pull}
+          onCheckSync={checkSync}
+          onShowConflicts={() => setShowConflictDialog(true)}
+        />
 
-      {!hasGeminiApiKey && (
-        <div className="flex items-center justify-between border-b border-yellow-200 bg-yellow-50 px-4 py-1.5 text-xs dark:border-yellow-800 dark:bg-yellow-900/20">
-          <span className="text-yellow-800 dark:text-yellow-200">
-            Gemini API key is not set. AI features will not work.
-          </span>
-          <a
-            href="/settings"
-            className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
-          >
-            Settings
-          </a>
-        </div>
-      )}
+        {!hasGeminiApiKey && (
+          <div className="flex items-center justify-between border-b border-yellow-200 bg-yellow-50 px-4 py-1.5 text-xs dark:border-yellow-800 dark:bg-yellow-900/20">
+            <span className="text-yellow-800 dark:text-yellow-200">
+              Gemini API key is not set. AI features will not work.
+            </span>
+            <a
+              href="/settings"
+              className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
+            >
+              Settings
+            </a>
+          </div>
+        )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar - File tree */}
-        <LeftSidebar>
-          <DriveFileTree
-            rootFolderId={rootFolderId}
-            onSelectFile={handleSelectFile}
-            activeFileId={activeFileId}
-            encryptionEnabled={settings.encryption.enabled}
-          />
-        </LeftSidebar>
-
-        {/* Main viewer */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <MainViewer
-            fileId={activeFileId}
-            fileName={activeFileName}
-            fileMimeType={activeFileMimeType}
-            settings={settings}
-            refreshKey={workflowVersion}
-          />
-        </div>
-
-        {/* Right sidebar - Chat / Workflow props */}
-        <RightSidebar>
-          {rightPanel === "chat" ? (
-            <ChatPanel
-              settings={settings}
-              hasApiKey={hasGeminiApiKey}
-              chatHistories={chatHistories}
-            />
-          ) : (
-            <WorkflowPropsPanel
-              activeFileId={activeFileId}
-              activeFileName={activeFileName}
-              onNewWorkflow={handleNewWorkflow}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left sidebar - File tree */}
+          <LeftSidebar>
+            <DriveFileTreeWithContext
+              rootFolderId={rootFolderId}
               onSelectFile={handleSelectFile}
-              onWorkflowChanged={handleWorkflowChanged}
-              onModifyWithAI={handleModifyWithAI}
+              activeFileId={activeFileId}
+              encryptionEnabled={settings.encryption.enabled}
             />
-          )}
-        </RightSidebar>
+          </LeftSidebar>
+
+          {/* Main viewer */}
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <MainViewer
+              fileId={activeFileId}
+              fileName={activeFileName}
+              fileMimeType={activeFileMimeType}
+              settings={settings}
+              refreshKey={workflowVersion}
+            />
+          </div>
+
+          {/* Right sidebar - Chat / Workflow props */}
+          <RightSidebar>
+            {rightPanel === "chat" ? (
+              <ChatPanel
+                settings={settings}
+                hasApiKey={hasGeminiApiKey}
+                chatHistories={chatHistories}
+                slashCommands={settings.slashCommands || []}
+              />
+            ) : (
+              <WorkflowPropsPanel
+                activeFileId={activeFileId}
+                activeFileName={activeFileName}
+                onNewWorkflow={handleNewWorkflow}
+                onSelectFile={handleSelectFile}
+                onWorkflowChanged={handleWorkflowChanged}
+                onModifyWithAI={handleModifyWithAI}
+              />
+            )}
+          </RightSidebar>
+        </div>
+
+        {/* Conflict dialog */}
+        {showConflictDialog && conflicts.length > 0 && (
+          <ConflictDialog
+            conflicts={conflicts}
+            onResolve={resolveConflict}
+            onClose={() => setShowConflictDialog(false)}
+          />
+        )}
+
+        {/* AI Workflow dialog */}
+        {aiDialog && (
+          <AIWorkflowDialog
+            mode={aiDialog.mode}
+            currentYaml={aiDialog.currentYaml}
+            currentName={aiDialog.currentName}
+            apiPlan={settings.apiPlan}
+            onAccept={handleAIAccept}
+            onClose={() => setAiDialog(null)}
+          />
+        )}
       </div>
+      </EditorContextProvider>
+    </I18nProvider>
+  );
+}
 
-      {/* Conflict dialog */}
-      {showConflictDialog && conflicts.length > 0 && (
-        <ConflictDialog
-          conflicts={conflicts}
-          onResolve={resolveConflict}
-          onClose={() => setShowConflictDialog(false)}
-        />
-      )}
+// ---------------------------------------------------------------------------
+// DriveFileTree wrapper that bridges to EditorContext
+// ---------------------------------------------------------------------------
 
-      {/* AI Workflow dialog */}
-      {aiDialog && (
-        <AIWorkflowDialog
-          mode={aiDialog.mode}
-          currentYaml={aiDialog.currentYaml}
-          currentName={aiDialog.currentName}
-          apiPlan={settings.apiPlan}
-          onAccept={handleAIAccept}
-          onClose={() => setAiDialog(null)}
-        />
-      )}
-    </div>
+function DriveFileTreeWithContext(props: {
+  rootFolderId: string;
+  onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
+  activeFileId: string | null;
+  encryptionEnabled: boolean;
+}) {
+  const { setFileList } = useEditorContext();
+  return (
+    <DriveFileTree
+      {...props}
+      onFileListChange={setFileList}
+    />
   );
 }

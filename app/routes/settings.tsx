@@ -12,6 +12,8 @@ import type {
   RagSetting,
   ApiPlan,
   ModelType,
+  Language,
+  FontSize,
 } from "~/types/settings";
 import {
   DEFAULT_USER_SETTINGS,
@@ -19,7 +21,11 @@ import {
   getAvailableModels,
   getDefaultModelForPlan,
   isModelAllowedForPlan,
+  SUPPORTED_LANGUAGES,
+  FONT_SIZE_OPTIONS,
 } from "~/types/settings";
+import { I18nProvider, useI18n } from "~/i18n/context";
+import { useApplySettings } from "~/hooks/useApplySettings";
 import { ensureRootFolder } from "~/services/google-drive.server";
 import {
   ArrowLeft,
@@ -28,6 +34,7 @@ import {
   Database,
   Lock,
   History,
+  Terminal,
   Plus,
   Trash2,
   TestTube,
@@ -38,7 +45,9 @@ import {
   Check,
   AlertCircle,
   Loader2,
+  Pencil,
 } from "lucide-react";
+import { CommandsTab } from "~/components/settings/CommandsTab";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,14 +58,17 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "encryption" | "editHistory";
+type TabId = "general" | "mcp" | "rag" | "encryption" | "editHistory" | "commands";
 
-const TABS: { id: TabId; label: string; icon: typeof SettingsIcon }[] = [
-  { id: "general", label: "General", icon: SettingsIcon },
-  { id: "mcp", label: "MCP Servers", icon: Server },
-  { id: "rag", label: "RAG", icon: Database },
-  { id: "encryption", label: "Encryption", icon: Lock },
-  { id: "editHistory", label: "Edit History", icon: History },
+import type { TranslationStrings } from "~/i18n/translations";
+
+const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof SettingsIcon }[] = [
+  { id: "general", labelKey: "settings.tab.general", icon: SettingsIcon },
+  { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
+  { id: "rag", labelKey: "settings.tab.rag", icon: Database },
+  { id: "encryption", labelKey: "settings.tab.encryption", icon: Lock },
+  { id: "editHistory", labelKey: "settings.tab.editHistory", icon: History },
+  { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
 ];
 
 // ---------------------------------------------------------------------------
@@ -93,9 +105,10 @@ export async function action({ request }: Route.ActionArgs) {
         const apiPlan = (formData.get("apiPlan") as ApiPlan) || currentSettings.apiPlan;
         const selectedModel = (formData.get("selectedModel") as ModelType) || null;
         const systemPrompt = (formData.get("systemPrompt") as string) || "";
-        const saveChatHistory = formData.get("saveChatHistory") === "on";
         const geminiApiKey = (formData.get("geminiApiKey") as string)?.trim() || "";
         const rootFolderName = (formData.get("rootFolderName") as string)?.trim() || currentSettings.rootFolderName || "GeminiHub";
+        const language = (formData.get("language") as Language) || currentSettings.language;
+        const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
 
         const updatedSettings: UserSettings = {
           ...currentSettings,
@@ -104,8 +117,9 @@ export async function action({ request }: Route.ActionArgs) {
             ? selectedModel
             : getDefaultModelForPlan(apiPlan),
           systemPrompt,
-          saveChatHistory,
           rootFolderName,
+          language,
+          fontSize,
         };
 
         // If root folder name changed, ensure the new folder exists and update session
@@ -187,6 +201,14 @@ export async function action({ request }: Route.ActionArgs) {
         return { success: true, message: "Edit history settings saved." };
       }
 
+      case "saveCommands": {
+        const commandsJson = formData.get("slashCommands") as string;
+        const slashCommands = commandsJson ? JSON.parse(commandsJson) : [];
+        const updatedSettings: UserSettings = { ...currentSettings, slashCommands };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        return { success: true, message: "Command settings saved." };
+      }
+
       default:
         return { success: false, message: "Unknown action." };
     }
@@ -204,6 +226,36 @@ export default function Settings() {
   const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
+  useApplySettings(settings.language, settings.fontSize);
+
+  return (
+    <I18nProvider language={settings.language}>
+      <SettingsInner
+        settings={settings}
+        hasApiKey={hasApiKey}
+        maskedKey={maskedKey}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
+    </I18nProvider>
+  );
+}
+
+function SettingsInner({
+  settings,
+  hasApiKey,
+  maskedKey,
+  activeTab,
+  setActiveTab,
+}: {
+  settings: UserSettings;
+  hasApiKey: boolean;
+  maskedKey: string | null;
+  activeTab: TabId;
+  setActiveTab: (tab: TabId) => void;
+}) {
+  const { t } = useI18n();
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
@@ -215,7 +267,7 @@ export default function Settings() {
           >
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t("settings.title")}</h1>
         </div>
       </header>
 
@@ -237,7 +289,7 @@ export default function Settings() {
                   }`}
                 >
                   <Icon size={16} />
-                  {tab.label}
+                  {t(tab.labelKey)}
                 </button>
               );
             })}
@@ -254,6 +306,7 @@ export default function Settings() {
         {activeTab === "rag" && <RagTab settings={settings} />}
         {activeTab === "encryption" && <EncryptionTab settings={settings} />}
         {activeTab === "editHistory" && <EditHistoryTab settings={settings} />}
+        {activeTab === "commands" && <CommandsTab settings={settings} />}
       </main>
     </div>
   );
@@ -334,14 +387,16 @@ function GeneralTab({
 }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
+  const { t } = useI18n();
 
   const [apiPlan, setApiPlan] = useState<ApiPlan>(settings.apiPlan);
   const [selectedModel, setSelectedModel] = useState<ModelType | "">(
     settings.selectedModel || ""
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
-  const [saveChatHistory, setSaveChatHistory] = useState(settings.saveChatHistory);
   const [rootFolderName, setRootFolderName] = useState(settings.rootFolderName || "GeminiHub");
+  const [language, setLanguage] = useState<Language>(settings.language);
+  const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
 
   const availableModels = getAvailableModels(apiPlan);
 
@@ -361,7 +416,7 @@ function GeneralTab({
 
         {/* API Key */}
         <div className="mb-6">
-          <Label htmlFor="geminiApiKey">Gemini API Key</Label>
+          <Label htmlFor="geminiApiKey">{t("settings.general.apiKey")}</Label>
           {hasApiKey && (
             <p className="text-xs text-green-600 dark:text-green-400 mb-1">
               Current key: <code className="font-mono">{maskedKey}</code>
@@ -371,14 +426,14 @@ function GeneralTab({
             type="password"
             id="geminiApiKey"
             name="geminiApiKey"
-            placeholder={hasApiKey ? "Leave blank to keep current key" : "AIza..."}
+            placeholder={hasApiKey ? t("settings.general.apiKeyKeep") : t("settings.general.apiKeyPlaceholder")}
             className={inputClass}
           />
         </div>
 
         {/* API Plan */}
         <div className="mb-6">
-          <Label>API Plan</Label>
+          <Label>{t("settings.general.apiPlan")}</Label>
           <div className="flex gap-6 mt-1">
             {(["paid", "free"] as ApiPlan[]).map((plan) => (
               <label key={plan} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
@@ -390,7 +445,7 @@ function GeneralTab({
                   onChange={() => setApiPlan(plan)}
                   className="text-blue-600 focus:ring-blue-500"
                 />
-                {plan === "paid" ? "Paid" : "Free"}
+                {plan === "paid" ? t("settings.general.paid") : t("settings.general.free")}
               </label>
             ))}
           </div>
@@ -398,7 +453,7 @@ function GeneralTab({
 
         {/* Model */}
         <div className="mb-6">
-          <Label htmlFor="selectedModel">Default Model</Label>
+          <Label htmlFor="selectedModel">{t("settings.general.defaultModel")}</Label>
           <select
             id="selectedModel"
             name="selectedModel"
@@ -406,7 +461,7 @@ function GeneralTab({
             onChange={(e) => setSelectedModel(e.target.value as ModelType)}
             className={inputClass}
           >
-            <option value="">Use plan default ({getDefaultModelForPlan(apiPlan)})</option>
+            <option value="">{t("settings.general.usePlanDefault")} ({getDefaultModelForPlan(apiPlan)})</option>
             {availableModels.map((m) => (
               <option key={m.name} value={m.name}>
                 {m.displayName} -- {m.description}
@@ -417,21 +472,21 @@ function GeneralTab({
 
         {/* System Prompt */}
         <div className="mb-6">
-          <Label htmlFor="systemPrompt">System Prompt</Label>
+          <Label htmlFor="systemPrompt">{t("settings.general.systemPrompt")}</Label>
           <textarea
             id="systemPrompt"
             name="systemPrompt"
             rows={4}
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="Optional system-level instructions for the AI..."
+            placeholder={t("settings.general.systemPromptPlaceholder")}
             className={inputClass + " resize-y"}
           />
         </div>
 
         {/* Root Folder Name */}
         <div className="mb-6">
-          <Label htmlFor="rootFolderName">Drive Root Folder Name</Label>
+          <Label htmlFor="rootFolderName">{t("settings.general.rootFolderName")}</Label>
           <input
             type="text"
             id="rootFolderName"
@@ -442,21 +497,44 @@ function GeneralTab({
             className={inputClass + " max-w-[300px]"}
           />
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Name of the Google Drive folder used to store all app data.
+            {t("settings.general.rootFolderDescription")}
           </p>
         </div>
 
-        {/* Save Chat History */}
-        <div className="mb-6 flex items-center gap-3">
-          <input
-            type="checkbox"
-            id="saveChatHistory"
-            name="saveChatHistory"
-            checked={saveChatHistory}
-            onChange={(e) => setSaveChatHistory(e.target.checked)}
-            className={checkboxClass}
-          />
-          <Label htmlFor="saveChatHistory">Save chat history to Google Drive</Label>
+        {/* Language */}
+        <div className="mb-6">
+          <Label htmlFor="language">{t("settings.general.language")}</Label>
+          <select
+            id="language"
+            name="language"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+            className={inputClass + " max-w-[300px]"}
+          >
+            {SUPPORTED_LANGUAGES.map((lang) => (
+              <option key={lang.value} value={lang.value}>
+                {lang.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Font Size */}
+        <div className="mb-6">
+          <Label htmlFor="fontSize">{t("settings.general.fontSize")}</Label>
+          <select
+            id="fontSize"
+            name="fontSize"
+            value={fontSize}
+            onChange={(e) => setFontSize(Number(e.target.value) as FontSize)}
+            className={inputClass + " max-w-[300px]"}
+          >
+            {FONT_SIZE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <SaveButton loading={loading} />
@@ -481,6 +559,7 @@ const emptyMcpEntry: McpFormEntry = { name: "", url: "", headers: "{}", enabled:
 function McpTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
+  const { t } = useI18n();
 
   const [servers, setServers] = useState<McpServerConfig[]>(settings.mcpServers);
   const [adding, setAdding] = useState(false);
@@ -550,7 +629,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
       {/* Server list */}
       {servers.length === 0 && !adding && (
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          No MCP servers configured.
+          {t("settings.mcp.noServers")}
         </p>
       )}
 
@@ -606,7 +685,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
       {adding ? (
         <div className="mb-6 p-4 border border-blue-200 dark:border-blue-800 rounded-md bg-blue-50/50 dark:bg-blue-900/10 space-y-3">
           <div>
-            <Label htmlFor="mcp-name">Name</Label>
+            <Label htmlFor="mcp-name">{t("settings.mcp.name")}</Label>
             <input
               id="mcp-name"
               type="text"
@@ -617,7 +696,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
             />
           </div>
           <div>
-            <Label htmlFor="mcp-url">URL</Label>
+            <Label htmlFor="mcp-url">{t("settings.mcp.url")}</Label>
             <input
               id="mcp-url"
               type="text"
@@ -628,7 +707,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
             />
           </div>
           <div>
-            <Label htmlFor="mcp-headers">Headers (JSON)</Label>
+            <Label htmlFor="mcp-headers">{t("settings.mcp.headers")}</Label>
             <textarea
               id="mcp-headers"
               rows={2}
@@ -645,7 +724,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
               onChange={(e) => setNewEntry((p) => ({ ...p, enabled: e.target.checked }))}
               className={checkboxClass}
             />
-            <Label htmlFor="mcp-enabled">Enabled</Label>
+            <Label htmlFor="mcp-enabled">{t("settings.mcp.enabled")}</Label>
           </div>
           <div className="flex gap-2">
             <button
@@ -653,7 +732,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
               onClick={addServer}
               className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
             >
-              Add
+              {t("settings.mcp.add")}
             </button>
             <button
               type="button"
@@ -663,7 +742,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
               }}
               className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </div>
@@ -674,7 +753,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
           className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
         >
           <Plus size={16} />
-          Add Server
+          {t("settings.mcp.addServer")}
         </button>
       )}
 
@@ -685,7 +764,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        Save MCP Settings
+        {t("settings.mcp.save")}
       </button>
     </SectionCard>
   );
@@ -698,24 +777,32 @@ function McpTab({ settings }: { settings: UserSettings }) {
 function RagTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
+  const { t } = useI18n();
 
-  const [ragEnabled, setRagEnabled] = useState(settings.ragEnabled);
   const [ragTopK, setRagTopK] = useState(settings.ragTopK);
   const [ragSettings, setRagSettings] = useState<Record<string, RagSetting>>(settings.ragSettings);
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(settings.selectedRagSetting);
-  const [newSettingName, setNewSettingName] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const settingNames = Object.keys(ragSettings);
 
   const addRagSetting = useCallback(() => {
-    const name = newSettingName.trim();
-    if (!name || ragSettings[name]) return;
+    // Auto-generate a unique name
+    let idx = settingNames.length + 1;
+    let name = `setting-${idx}`;
+    while (ragSettings[name]) {
+      idx++;
+      name = `setting-${idx}`;
+    }
     setRagSettings((prev) => ({ ...prev, [name]: { ...DEFAULT_RAG_SETTING } }));
-    if (!selectedRagSetting) setSelectedRagSetting(name);
-    setNewSettingName("");
-  }, [newSettingName, ragSettings, selectedRagSetting]);
+    setSelectedRagSetting(name);
+    // Start rename immediately so user can type a proper name
+    setRenamingKey(name);
+    setRenameValue(name);
+  }, [ragSettings, settingNames]);
 
   const removeRagSetting = useCallback(
     (name: string) => {
@@ -728,9 +815,33 @@ function RagTab({ settings }: { settings: UserSettings }) {
         const remaining = settingNames.filter((n) => n !== name);
         setSelectedRagSetting(remaining.length > 0 ? remaining[0] : null);
       }
+      if (renamingKey === name) setRenamingKey(null);
     },
-    [selectedRagSetting, settingNames]
+    [selectedRagSetting, settingNames, renamingKey]
   );
+
+  const commitRename = useCallback(() => {
+    if (!renamingKey) return;
+    const newName = renameValue.trim();
+    if (!newName || newName === renamingKey) {
+      setRenamingKey(null);
+      return;
+    }
+    if (ragSettings[newName]) {
+      // Name already exists, cancel
+      setRenamingKey(null);
+      return;
+    }
+    setRagSettings((prev) => {
+      const copy: Record<string, RagSetting> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        copy[k === renamingKey ? newName : k] = v;
+      }
+      return copy;
+    });
+    if (selectedRagSetting === renamingKey) setSelectedRagSetting(newName);
+    setRenamingKey(null);
+  }, [renamingKey, renameValue, ragSettings, selectedRagSetting]);
 
   const updateCurrentSetting = useCallback(
     (patch: Partial<RagSetting>) => {
@@ -746,48 +857,92 @@ function RagTab({ settings }: { settings: UserSettings }) {
   const currentSetting = selectedRagSetting ? ragSettings[selectedRagSetting] : null;
 
   const handleSync = useCallback(async () => {
+    if (!selectedRagSetting || !ragSettings[selectedRagSetting]) {
+      setSyncMsg("No RAG setting selected.");
+      return;
+    }
     setSyncing(true);
     setSyncMsg(null);
     try {
-      const res = await fetch("/api/settings/rag-sync", { method: "POST" });
-      const data = await res.json();
-      setSyncMsg(data.message || (res.ok ? "Sync complete." : "Sync failed."));
+      // Save settings to Drive first so the sync API can find them
+      const fd = new FormData();
+      fd.set("_action", "saveRag");
+      fd.set("ragEnabled", settings.ragEnabled ? "on" : "off");
+      fd.set("ragTopK", String(ragTopK));
+      fd.set("ragSettings", JSON.stringify(ragSettings));
+      fd.set("selectedRagSetting", selectedRagSetting || "");
+      const saveRes = await fetch("/settings", { method: "POST", body: fd });
+      if (!saveRes.ok) {
+        setSyncMsg("Failed to save settings before sync.");
+        return;
+      }
+
+      const res = await fetch("/api/settings/rag-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ragSettingName: selectedRagSetting }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setSyncMsg(data.error || "Sync failed.");
+        return;
+      }
+
+      // Response is SSE stream — read events
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setSyncMsg("No response body.");
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+          try {
+            const evt = JSON.parse(raw);
+            if (evt.message) setSyncMsg(evt.message);
+          } catch {
+            // skip malformed events
+          }
+        }
+      }
     } catch (err) {
       setSyncMsg(err instanceof Error ? err.message : "Sync error.");
     } finally {
       setSyncing(false);
     }
-  }, []);
+  }, [selectedRagSetting, ragSettings, ragTopK, settings.ragEnabled]);
 
   const handleSubmit = useCallback(() => {
     const fd = new FormData();
     fd.set("_action", "saveRag");
-    fd.set("ragEnabled", ragEnabled ? "on" : "off");
+    fd.set("ragEnabled", settings.ragEnabled ? "on" : "off");
     fd.set("ragTopK", String(ragTopK));
     fd.set("ragSettings", JSON.stringify(ragSettings));
     fd.set("selectedRagSetting", selectedRagSetting || "");
     fetcher.submit(fd, { method: "post" });
-  }, [fetcher, ragEnabled, ragTopK, ragSettings, selectedRagSetting]);
+  }, [fetcher, settings.ragEnabled, ragTopK, ragSettings, selectedRagSetting]);
 
   return (
     <SectionCard>
       <StatusBanner fetcher={fetcher} />
 
-      {/* RAG Enabled */}
-      <div className="mb-6 flex items-center gap-3">
-        <input
-          type="checkbox"
-          id="ragEnabled"
-          checked={ragEnabled}
-          onChange={(e) => setRagEnabled(e.target.checked)}
-          className={checkboxClass}
-        />
-        <Label htmlFor="ragEnabled">Enable RAG (Retrieval-Augmented Generation)</Label>
-      </div>
-
       {/* Top-K */}
       <div className="mb-6">
-        <Label htmlFor="ragTopK">Top-K results</Label>
+        <Label htmlFor="ragTopK">{t("settings.rag.topK")}</Label>
         <input
           id="ragTopK"
           type="number"
@@ -801,8 +956,8 @@ function RagTab({ settings }: { settings: UserSettings }) {
 
       {/* RAG settings list */}
       <div className="mb-6">
-        <Label>RAG Settings</Label>
-        <div className="flex flex-wrap gap-2 mt-1 mb-3">
+        <Label>{t("settings.rag.settings")}</Label>
+        <div className="flex flex-wrap items-center gap-2 mt-1 mb-3">
           {settingNames.map((name) => (
             <div
               key={name}
@@ -813,43 +968,55 @@ function RagTab({ settings }: { settings: UserSettings }) {
               }`}
               onClick={() => setSelectedRagSetting(name)}
             >
-              {name}
+              {renamingKey === name ? (
+                <input
+                  type="text"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                    if (e.key === "Escape") setRenamingKey(null);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-transparent border-none outline-none text-sm w-24 focus:ring-0 p-0"
+                  autoFocus
+                />
+              ) : (
+                <>
+                  {name}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingKey(name);
+                      setRenameValue(name);
+                    }}
+                    className="ml-0.5 text-gray-400 hover:text-blue-500"
+                    title="Rename"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeRagSetting(name);
                 }}
-                className="ml-1 text-gray-400 hover:text-red-500"
+                className="ml-0.5 text-gray-400 hover:text-red-500"
               >
                 <Trash2 size={12} />
               </button>
             </div>
           ))}
-        </div>
-
-        {/* Add new */}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newSettingName}
-            onChange={(e) => setNewSettingName(e.target.value)}
-            placeholder="New setting name"
-            className={inputClass + " max-w-[200px]"}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addRagSetting();
-              }
-            }}
-          />
           <button
             type="button"
             onClick={addRagSetting}
-            className="inline-flex items-center gap-1 px-3 py-2 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
+            className="inline-flex items-center gap-1 px-3 py-1 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-full hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
           >
             <Plus size={14} />
-            Add
           </button>
         </div>
       </div>
@@ -857,10 +1024,6 @@ function RagTab({ settings }: { settings: UserSettings }) {
       {/* Selected setting editor */}
       {currentSetting && selectedRagSetting && (
         <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-md space-y-4">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-            Editing: {selectedRagSetting}
-          </h3>
-
           {/* Internal / External toggle */}
           <div>
             <Label>Type</Label>
@@ -906,7 +1069,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
           ) : (
             <>
               <div>
-                <Label htmlFor="rag-targetFolders">Target Folders (one per line)</Label>
+                <Label htmlFor="rag-targetFolders">Target Folders (one per line, name or ID)</Label>
                 <textarea
                   id="rag-targetFolders"
                   rows={3}
@@ -921,6 +1084,9 @@ function RagTab({ settings }: { settings: UserSettings }) {
                   }
                   className={inputClass + " font-mono resize-y"}
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
+                </p>
               </div>
               <div>
                 <Label htmlFor="rag-excludePatterns">Exclude Patterns (one per line)</Label>
@@ -938,6 +1104,9 @@ function RagTab({ settings }: { settings: UserSettings }) {
                   }
                   className={inputClass + " font-mono resize-y"}
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Regex patterns matched against file names. e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">\.pdf$</code> <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">^temp_</code> <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">\.tmp$</code>
+                </p>
               </div>
             </>
           )}
@@ -965,7 +1134,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        Save RAG Settings
+        {t("settings.rag.save")}
       </button>
     </SectionCard>
   );
@@ -978,6 +1147,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
 function EncryptionTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
+  const { t } = useI18n();
 
   const [encryption, setEncryption] = useState<EncryptionSettings>(settings.encryption);
   const [password, setPassword] = useState("");
@@ -1053,16 +1223,16 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
       {!isSetup ? (
         <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-md space-y-3">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-            Set Up Encryption
+            {t("settings.encryption.setup")}
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Create a password to generate encryption keys. This password cannot be recovered.
+            {t("settings.encryption.setupDescription")}
           </p>
           {setupError && (
             <p className="text-xs text-red-600 dark:text-red-400">{setupError}</p>
           )}
           <div>
-            <Label htmlFor="enc-password">Password</Label>
+            <Label htmlFor="enc-password">{t("settings.encryption.password")}</Label>
             <input
               id="enc-password"
               type="password"
@@ -1072,7 +1242,7 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
             />
           </div>
           <div>
-            <Label htmlFor="enc-confirm">Confirm Password</Label>
+            <Label htmlFor="enc-confirm">{t("settings.encryption.confirmPassword")}</Label>
             <input
               id="enc-confirm"
               type="password"
@@ -1088,14 +1258,14 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
             className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50"
           >
             {setting ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
-            Generate Keys
+            {t("settings.encryption.generateKeys")}
           </button>
         </div>
       ) : (
         <div className="mb-6 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
           <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
             <Check size={16} />
-            Encryption configured.
+            {t("settings.encryption.configured")}
           </p>
         </div>
       )}
@@ -1109,7 +1279,7 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
           onChange={(e) => setEncryption((p) => ({ ...p, encryptChatHistory: e.target.checked }))}
           className={checkboxClass}
         />
-        <Label htmlFor="encryptChatHistory">Encrypt Chat History</Label>
+        <Label htmlFor="encryptChatHistory">{t("settings.encryption.encryptChat")}</Label>
       </div>
       <div className="mb-6 flex items-center gap-3">
         <input
@@ -1119,7 +1289,7 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
           onChange={(e) => setEncryption((p) => ({ ...p, encryptWorkflowHistory: e.target.checked }))}
           className={checkboxClass}
         />
-        <Label htmlFor="encryptWorkflowHistory">Encrypt Workflow History</Label>
+        <Label htmlFor="encryptWorkflowHistory">{t("settings.encryption.encryptWorkflow")}</Label>
       </div>
 
       {/* Reset */}
@@ -1131,12 +1301,12 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
               onClick={() => setConfirmReset(true)}
               className="text-sm text-red-600 dark:text-red-400 hover:underline"
             >
-              Reset encryption keys...
+              {t("settings.encryption.reset")}
             </button>
           ) : (
             <div className="p-3 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20 space-y-2">
               <p className="text-sm text-red-700 dark:text-red-300">
-                This will remove all encryption keys. Encrypted data will become unreadable. Are you sure?
+                {t("settings.encryption.resetWarning")}
               </p>
               <div className="flex gap-2">
                 <button
@@ -1144,14 +1314,14 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
                   onClick={handleReset}
                   className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
                 >
-                  Confirm Reset
+                  {t("settings.encryption.confirmReset")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmReset(false)}
                   className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -1166,7 +1336,7 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        Save Encryption Settings
+        {t("settings.encryption.save")}
       </button>
     </SectionCard>
   );
@@ -1179,6 +1349,7 @@ function EncryptionTab({ settings }: { settings: UserSettings }) {
 function EditHistoryTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
+  const { t } = useI18n();
 
   const [editHistory, setEditHistory] = useState<EditHistorySettings>(settings.editHistory);
   const [pruning, setPruning] = useState(false);
@@ -1224,21 +1395,9 @@ function EditHistoryTab({ settings }: { settings: UserSettings }) {
     <SectionCard>
       <StatusBanner fetcher={fetcher} />
 
-      {/* Enabled */}
-      <div className="mb-6 flex items-center gap-3">
-        <input
-          type="checkbox"
-          id="editHistoryEnabled"
-          checked={editHistory.enabled}
-          onChange={(e) => setEditHistory((p) => ({ ...p, enabled: e.target.checked }))}
-          className={checkboxClass}
-        />
-        <Label htmlFor="editHistoryEnabled">Enable Edit History</Label>
-      </div>
-
       {/* Max age */}
       <div className="mb-6">
-        <Label htmlFor="maxAgeInDays">Max Age (days)</Label>
+        <Label htmlFor="maxAgeInDays">{t("settings.editHistory.maxAge")}</Label>
         <input
           id="maxAgeInDays"
           type="number"
@@ -1256,7 +1415,7 @@ function EditHistoryTab({ settings }: { settings: UserSettings }) {
 
       {/* Max entries */}
       <div className="mb-6">
-        <Label htmlFor="maxEntriesPerFile">Max Entries Per File</Label>
+        <Label htmlFor="maxEntriesPerFile">{t("settings.editHistory.maxEntries")}</Label>
         <input
           id="maxEntriesPerFile"
           type="number"
@@ -1277,7 +1436,7 @@ function EditHistoryTab({ settings }: { settings: UserSettings }) {
 
       {/* Context lines */}
       <div className="mb-6">
-        <Label htmlFor="contextLines">Context Lines (0-10)</Label>
+        <Label htmlFor="contextLines">{t("settings.editHistory.contextLines")}</Label>
         <input
           id="contextLines"
           type="number"
@@ -1303,7 +1462,7 @@ function EditHistoryTab({ settings }: { settings: UserSettings }) {
           className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50"
         >
           <Scissors size={14} className={pruning ? "animate-pulse" : ""} />
-          Prune
+          {t("settings.editHistory.prune")}
         </button>
         <button
           type="button"
@@ -1312,7 +1471,7 @@ function EditHistoryTab({ settings }: { settings: UserSettings }) {
           className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50"
         >
           <BarChart3 size={14} />
-          Stats
+          {t("settings.editHistory.stats")}
         </button>
         {pruneMsg && <span className="text-xs text-gray-500 dark:text-gray-400">{pruneMsg}</span>}
       </div>
@@ -1333,7 +1492,7 @@ function EditHistoryTab({ settings }: { settings: UserSettings }) {
         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
       >
         {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        Save Edit History Settings
+        {t("settings.editHistory.save")}
       </button>
     </SectionCard>
   );

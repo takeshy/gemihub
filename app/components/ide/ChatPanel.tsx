@@ -8,7 +8,7 @@ import type {
   ChatHistoryItem,
   GeneratedImage,
 } from "~/types/chat";
-import type { UserSettings, ModelType, DriveToolMode } from "~/types/settings";
+import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
 import {
   getAvailableModels,
   getDefaultModelForPlan,
@@ -16,18 +16,29 @@ import {
 } from "~/types/settings";
 import { MessageList } from "~/components/chat/MessageList";
 import { ChatInput } from "~/components/chat/ChatInput";
+import { useI18n } from "~/i18n/context";
+
+export interface ChatOverrides {
+  model?: ModelType | null;
+  searchSetting?: string | null;
+  driveToolMode?: DriveToolMode | null;
+  enabledMcpServers?: string[] | null;
+}
 
 interface ChatPanelProps {
   settings: UserSettings;
   hasApiKey: boolean;
   chatHistories: ChatHistoryItem[];
+  slashCommands?: SlashCommand[];
 }
 
 export function ChatPanel({
   settings,
   hasApiKey,
   chatHistories: initialHistories,
+  slashCommands = [],
 }: ChatPanelProps) {
+  const { t } = useI18n();
   const [histories, setHistories] = useState<ChatHistoryItem[]>(initialHistories);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeChatFileId, setActiveChatFileId] = useState<string | null>(null);
@@ -108,8 +119,6 @@ export function ChatPanel({
   // ---- Save chat ----
   const saveChat = useCallback(
     async (updatedMessages: Message[], title?: string) => {
-      if (!settings.saveChatHistory) return;
-
       const chatId = activeChatId || `chat-${Date.now()}`;
       const chatHistory: ChatHistory = {
         id: chatId,
@@ -152,7 +161,7 @@ export function ChatPanel({
         // ignore
       }
     },
-    [activeChatId, settings.saveChatHistory]
+    [activeChatId]
   );
 
   // ---- RAG/WebSearch change with auto-linking ----
@@ -177,8 +186,14 @@ export function ChatPanel({
 
   // ---- Send message ----
   const handleSend = useCallback(
-    async (content: string, attachments?: Attachment[]) => {
+    async (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => {
       if (!hasApiKey) return;
+
+      // Apply overrides from slash commands
+      const effectiveModel = overrides?.model || selectedModel;
+      const effectiveRagSetting = overrides?.searchSetting !== undefined ? overrides.searchSetting : selectedRagSetting;
+      const effectiveDriveToolMode = overrides?.driveToolMode || driveToolMode;
+      const mcpOverride = overrides?.enabledMcpServers;
 
       const userMessage: Message = {
         role: "user",
@@ -196,11 +211,11 @@ export function ChatPanel({
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      const isWebSearch = selectedRagSetting === "__websearch__";
+      const isWebSearch = effectiveRagSetting === "__websearch__";
 
       const ragSetting =
-        selectedRagSetting && !isWebSearch
-          ? settings.ragSettings[selectedRagSetting]
+        effectiveRagSetting && !isWebSearch
+          ? settings.ragSettings[effectiveRagSetting]
           : null;
       const ragStoreIds =
         settings.ragEnabled && ragSetting
@@ -211,19 +226,25 @@ export function ChatPanel({
               : []
           : [];
 
-      const mcpEnabled = enableMcp && !isWebSearch;
+      const mcpEnabled = mcpOverride
+        ? mcpOverride.length > 0
+        : enableMcp && !isWebSearch;
+
+      const mcpServers = mcpOverride
+        ? settings.mcpServers.filter((s) => mcpOverride.includes(s.name))
+        : mcpEnabled
+          ? settings.mcpServers.filter((s) => s.enabled)
+          : undefined;
 
       const body = {
         messages: updatedMessages,
-        model: selectedModel,
+        model: effectiveModel,
         systemPrompt: settings.systemPrompt || undefined,
         ragStoreIds: !isWebSearch && ragStoreIds.length > 0 ? ragStoreIds : undefined,
-        driveToolMode,
-        enableDriveTools: driveToolMode !== "none",
+        driveToolMode: effectiveDriveToolMode,
+        enableDriveTools: effectiveDriveToolMode !== "none",
         enableMcp: mcpEnabled,
-        mcpServers: mcpEnabled
-          ? settings.mcpServers.filter((s) => s.enabled)
-          : undefined,
+        mcpServers: mcpEnabled ? mcpServers : undefined,
         webSearchEnabled: isWebSearch,
         apiPlan: settings.apiPlan,
         settings: {
@@ -419,12 +440,12 @@ export function ChatPanel({
             {activeChatId
               ? histories.find((h) => h.id === activeChatId)?.title ||
                 "Chat"
-              : "New Chat"}
+              : t("chat.newChat")}
           </button>
           <button
             onClick={handleNewChat}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="New Chat"
+            title={t("chat.newChat")}
           >
             <Plus size={14} />
           </button>
@@ -434,13 +455,13 @@ export function ChatPanel({
           <div className="mt-1 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900">
             {histories.length === 0 ? (
               <div className="px-3 py-2 text-xs text-gray-400">
-                No chat history
+                {t("chat.noHistory")}
               </div>
             ) : (
               histories.map((chat) => (
                 <div
                   key={chat.id}
-                  className={`flex items-center gap-1 px-2 py-1.5 cursor-pointer text-xs hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                  className={`group flex items-center gap-1 px-2 py-1.5 cursor-pointer text-xs hover:bg-gray-100 dark:hover:bg-gray-800 ${
                     chat.id === activeChatId
                       ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                       : "text-gray-700 dark:text-gray-300"
@@ -453,6 +474,7 @@ export function ChatPanel({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (!confirm(t("chat.confirmDelete"))) return;
                       handleDeleteChat(chat.fileId);
                     }}
                     className="p-0.5 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100"
@@ -491,6 +513,7 @@ export function ChatPanel({
         enableMcp={enableMcp}
         onEnableMcpChange={setEnableMcp}
         hasMcpServers={settings.mcpServers.some((s) => s.enabled)}
+        slashCommands={slashCommands}
       />
     </div>
   );

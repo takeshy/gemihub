@@ -57,6 +57,24 @@ export type ApiPlan = "paid" | "free";
 // Drive Tool Mode
 export type DriveToolMode = "all" | "noSearch" | "none";
 
+// Language
+export type Language = "en" | "ja";
+
+export const SUPPORTED_LANGUAGES: { value: Language; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
+];
+
+// Font Size
+export type FontSize = 14 | 16 | 18 | 20;
+
+export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
+  { value: 14, label: "Small (14px)" },
+  { value: 16, label: "Medium (16px)" },
+  { value: 18, label: "Large (18px)" },
+  { value: 20, label: "Extra Large (20px)" },
+];
+
 // Model types
 export type ModelType =
   | "gemini-2.5-flash"
@@ -214,7 +232,6 @@ export const DEFAULT_ENCRYPTION_SETTINGS: EncryptionSettings = {
 
 // Edit history settings
 export interface EditHistorySettings {
-  enabled: boolean;
   retention: {
     maxAgeInDays: number;
     maxEntriesPerFile: number;
@@ -225,7 +242,6 @@ export interface EditHistorySettings {
 }
 
 export const DEFAULT_EDIT_HISTORY_SETTINGS: EditHistorySettings = {
-  enabled: true,
   retention: {
     maxAgeInDays: 30,
     maxEntriesPerFile: 100,
@@ -290,6 +306,18 @@ export interface ToolDefinition {
   };
 }
 
+// Slash command for chat
+export interface SlashCommand {
+  id: string;
+  name: string;
+  description: string;
+  promptTemplate: string;
+  model?: ModelType | null;
+  searchSetting?: string | null;
+  driveToolMode?: DriveToolMode | null;
+  enabledMcpServers?: string[] | null;
+}
+
 // User settings (stored in Drive as settings.json)
 export interface UserSettings {
   apiPlan: ApiPlan;
@@ -301,11 +329,13 @@ export interface UserSettings {
   ragTopK: number;
   ragSettings: Record<string, RagSetting>;
   selectedRagSetting: string | null;
-  saveChatHistory: boolean;
   systemPrompt: string;
   maxFunctionCalls: number;
   functionCallWarningThreshold: number;
   rootFolderName: string;
+  language: Language;
+  fontSize: FontSize;
+  slashCommands: SlashCommand[];
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -318,9 +348,11 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   ragTopK: 5,
   ragSettings: {},
   selectedRagSetting: null,
-  saveChatHistory: true,
   systemPrompt: "",
   maxFunctionCalls: 20,
   functionCallWarningThreshold: 5,
   rootFolderName: "GeminiHub",
+  language: "en",
+  fontSize: 16,
+  slashCommands: [],
 };
