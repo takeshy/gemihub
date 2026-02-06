@@ -4,9 +4,7 @@ import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
-import { listChatHistories } from "~/services/chat-history.server";
 import type { UserSettings } from "~/types/settings";
-import type { ChatHistoryItem } from "~/types/chat";
 import { LogIn } from "lucide-react";
 import { I18nProvider } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
@@ -33,7 +31,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     return {
       authenticated: false as const,
       settings: null,
-      chatHistories: [],
       hasGeminiApiKey: false,
       rootFolderId: "",
     };
@@ -41,15 +38,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const { tokens: validTokens } = await getValidTokens(request, tokens);
-    const [settings, chatHistories] = await Promise.all([
-      getSettings(validTokens.accessToken, validTokens.rootFolderId),
-      listChatHistories(validTokens.accessToken, validTokens.rootFolderId),
-    ]);
+    const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
     return {
       authenticated: true as const,
       settings,
-      chatHistories,
       hasGeminiApiKey: !!validTokens.geminiApiKey,
       rootFolderId: validTokens.rootFolderId,
     };
@@ -57,11 +50,27 @@ export async function loader({ request }: Route.LoaderArgs) {
     return {
       authenticated: false as const,
       settings: null,
-      chatHistories: [],
       hasGeminiApiKey: false,
       rootFolderId: "",
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Client-side loader cache
+// ---------------------------------------------------------------------------
+
+let cachedLoaderData: Awaited<ReturnType<typeof loader>> | null = null;
+
+export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
+  if (cachedLoaderData) return cachedLoaderData;
+  const data = await serverLoader();
+  cachedLoaderData = data;
+  return data;
+}
+
+export function invalidateIndexCache() {
+  cachedLoaderData = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +105,6 @@ export default function Index() {
   return (
     <IDELayout
       settings={data.settings!}
-      chatHistories={data.chatHistories as ChatHistoryItem[]}
       hasGeminiApiKey={data.hasGeminiApiKey}
       rootFolderId={data.rootFolderId}
     />
@@ -116,12 +124,10 @@ interface AIDialogState {
 
 function IDELayout({
   settings,
-  chatHistories,
   hasGeminiApiKey,
   rootFolderId,
 }: {
   settings: UserSettings;
-  chatHistories: ChatHistoryItem[];
   hasGeminiApiKey: boolean;
   rootFolderId: string;
 }) {
@@ -326,7 +332,6 @@ function IDELayout({
               <ChatPanel
                 settings={settings}
                 hasApiKey={hasGeminiApiKey}
-                chatHistories={chatHistories}
                 slashCommands={settings.slashCommands || []}
               />
             ) : (

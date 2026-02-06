@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
+import { invalidateIndexCache } from "~/routes/_index";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -324,6 +325,13 @@ function SettingsInner({
 
 function StatusBanner({ fetcher }: { fetcher: ReturnType<typeof useFetcher> }) {
   const data = fetcher.data as { success?: boolean; message?: string } | undefined;
+
+  useEffect(() => {
+    if (data?.success) {
+      invalidateIndexCache();
+    }
+  }, [data]);
+
   if (!data) return null;
   return (
     <div

@@ -29,18 +29,24 @@ export interface ChatOverrides {
 interface ChatPanelProps {
   settings: UserSettings;
   hasApiKey: boolean;
-  chatHistories: ChatHistoryItem[];
   slashCommands?: SlashCommand[];
 }
 
 export function ChatPanel({
   settings,
   hasApiKey,
-  chatHistories: initialHistories,
   slashCommands = [],
 }: ChatPanelProps) {
   const { t } = useI18n();
-  const [histories, setHistories] = useState<ChatHistoryItem[]>(initialHistories);
+  const [histories, setHistories] = useState<ChatHistoryItem[]>([]);
+
+  // Fetch chat histories on mount
+  useEffect(() => {
+    fetch("/api/chat/history")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: ChatHistoryItem[]) => setHistories(data))
+      .catch(() => {});
+  }, []);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeChatFileId, setActiveChatFileId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
