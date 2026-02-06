@@ -1,4 +1,4 @@
-# Gemini Hub
+# Gemini Hub IDE
 
 Google Gemini AI と Google Drive を統合したセルフホスト型 Web アプリケーションです。ビジュアルワークフロー、AIチャット、リッチエディタによるDriveファイル管理など、あらゆる機能を一つの画面で利用できます。
 
@@ -6,7 +6,8 @@ Google Gemini AI と Google Drive を統合したセルフホスト型 Web ア�
 
 ## 機能一覧
 
-- **AIチャット** — Geminiモデルとのストリーミング会話、Function Calling、思考表示、画像生成、ファイル添付
+- **AIチャット** — Geminiモデルとのストリーミング会話、Function Calling、思考表示、画像生成、ファイル添付、メッセージごとのモデル/ツール切替
+- **スラッシュコマンド & オートコンプリート** — ユーザー定義の`/コマンド`、テンプレート変数（`{content}`, `{selection}`）、`@ファイル`メンション、コマンドごとのモデル/ツール設定
 - **ビジュアルワークフローエディタ** — ドラッグ&ドロップのノードベースワークフロービルダー（React Flow）、YAML入出力、SSEによるリアルタイム実行
 - **AIワークフロー生成** — 自然言語でワークフローの作成・修正をAIに依頼（ストリーミング生成・思考表示・ビジュアルプレビュー・差分表示・繰り返し改善）
 - **Google Drive連携** — すべてのデータ（ワークフロー、チャット履歴、設定、変更履歴）を自分のGoogle Driveに保存
@@ -15,9 +16,10 @@ Google Gemini AI と Google Drive を統合したセルフホスト型 Web ア�
 - **MCP（Model Context Protocol）** — 外部MCPサーバーをAIチャットのツールとして接続
 - **暗号化** — チャット履歴・ワークフローログのハイブリッド暗号化（RSA + AES）に対応
 - **変更履歴** — unified diff形式によるワークフロー・Driveファイルの変更追跡
-- **オフラインキャッシュ & 同期** — IndexedDBベースのファイルキャッシュとmd5ハッシュ比較によるデバイス間Push/Pull同期
+- **オフラインキャッシュ & 同期** — IndexedDBベースのファイルキャッシュとmd5ハッシュ比較によるデバイス間Push/Pull同期。一時ファイルステージングにより保存を高速化（APIコール数: 約9→1-2）
 - **マルチモデル対応** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma。有料/無料プラン別モデルリスト
 - **画像生成** — Gemini 2.5 Flash Image / 3 Pro Image モデルで画像を生成
+- **多言語対応** — 英語・日本語UI
 
 ## アーキテクチャ
 
@@ -35,19 +37,24 @@ Google Gemini AI と Google Drive を統合したセルフホスト型 Web ア�
 ```
 app/
 ├── routes/           # ページ & APIエンドポイント
-│   ├── _index.tsx        # ダッシュボード
-│   ├── chat.tsx          # チャット（親レイアウト）
-│   ├── chat.$id.tsx      # チャットセッション
-│   ├── settings.tsx      # 設定（5タブUI）
-│   ├── workflow.$id.tsx  # ワークフローエディタ
-│   ├── drive.file.new.tsx      # 新規ファイル（WYSIWYG）
-│   ├── drive.file.$id.edit.tsx # ファイル編集（WYSIWYG）
+│   ├── _index.tsx              # IDEダッシュボード
+│   ├── settings.tsx            # 設定（6タブUI）
 │   ├── api.chat.tsx            # チャットSSEストリーミング
 │   ├── api.chat.history.tsx    # チャット履歴CRUD
+│   ├── api.drive.files.tsx     # Driveファイル操作
+│   ├── api.drive.tree.tsx      # Driveファイルツリー
+│   ├── api.drive.temp.tsx      # 一時ファイル保存/適用/削除
+│   ├── api.drive.upload.tsx    # ファイルアップロード
+│   ├── api.sync.tsx            # Push/Pull同期
+│   ├── api.workflow.*.tsx      # ワークフロー実行 & AI生成
 │   ├── api.settings.*.tsx      # 設定API群
+│   ├── auth.*.tsx              # OAuthログイン/ログアウト/コールバック
 │   └── ...
 ├── services/         # サーバーサイドビジネスロジック
 │   ├── gemini-chat.server.ts    # Geminiストリーミングクライアント
+│   ├── gemini.server.ts         # Geminiコアクライアント
+│   ├── google-drive.server.ts   # Drive API操作
+│   ├── google-auth.server.ts    # OAuth 2.0
 │   ├── chat-history.server.ts   # チャットCRUD（Drive）
 │   ├── user-settings.server.ts  # 設定CRUD（Drive）
 │   ├── drive-tools.server.ts    # Drive Function Callingツール
@@ -56,22 +63,43 @@ app/
 │   ├── file-search.server.ts    # RAG / File Search
 │   ├── crypto.server.ts         # ハイブリッド暗号化
 │   ├── edit-history.server.ts   # diff形式の変更履歴
+│   ├── workflow-history.server.ts # ワークフロー実行ログ
 │   ├── sync-meta.server.ts      # Push/Pull同期メタデータ
+│   ├── temp-file.server.ts      # 一時ファイルステージング
+│   ├── execution-store.server.ts # ワークフロー実行状態
 │   ├── indexeddb-cache.ts       # ブラウザ側IndexedDBキャッシュ
-│   └── ...
+│   └── session.server.ts       # セッション管理
 ├── hooks/            # Reactフック
-│   ├── useFileWithCache.ts  # キャッシュ優先ファイル読み書き
-│   └── useSync.ts           # Push/Pull同期ロジック
+│   ├── useFileWithCache.ts    # キャッシュ優先ファイル読み書き
+│   ├── useSync.ts             # Push/Pull同期ロジック
+│   ├── useAutocomplete.ts     # スラッシュコマンド & @ファイル オートコンプリート
+│   ├── useWorkflowExecution.ts # SSE経由ワークフロー実行
+│   ├── useFileUpload.ts       # ファイルアップロード処理
+│   └── useApplySettings.ts   # 設定適用
 ├── components/       # Reactコンポーネント
-│   ├── chat/             # チャットUI（レイアウト、サイドバー、メッセージ、入力）
+│   ├── chat/             # チャットUI（メッセージ、入力、オートコンプリートポップアップ）
 │   ├── editor/           # Markdownエディタラッパー
-│   ├── flow/             # ワークフローキャンバス＆ノード
-│   ├── execution/        # ワークフロー実行パネル
-│   └── ide/              # IDEレイアウト、同期UI、コンフリクトダイアログ
+│   ├── flow/             # ワークフローキャンバス（Mermaidプレビュー）
+│   ├── execution/        # ワークフロー実行パネル、プロンプトモーダル
+│   ├── ide/              # IDEレイアウト、同期UI、ダイアログ、ファイルツリー
+│   └── settings/         # CommandsTab、TempFilesDialog
+├── contexts/         # Reactコンテキスト
+│   └── EditorContext.tsx  # エディタ共有状態（ファイル内容、選択範囲、ファイル一覧）
+├── i18n/             # 多言語対応
+│   ├── translations.ts   # TranslationStringsインターフェース + en/ja翻訳
+│   └── context.tsx        # I18nProvider + useI18nフック
 ├── types/            # TypeScript型定義
-│   ├── settings.ts       # 設定、モデル、MCP、RAG、暗号化
+│   ├── settings.ts       # 設定、モデル、MCP、RAG、暗号化、スラッシュコマンド
 │   └── chat.ts           # メッセージ、ストリーミング、履歴
+├── utils/            # ワークフローユーティリティ
+│   ├── workflow-to-mermaid.ts       # ワークフロー → Mermaid図
+│   ├── workflow-node-summary.ts     # ノードプロパティサマリー
+│   ├── workflow-node-properties.ts  # ノードプロパティ取得/設定
+│   └── workflow-connections.ts      # ノード接続管理
 └── engine/           # ワークフロー実行エンジン
+    ├── parser.ts         # YAML → AST
+    ├── executor.ts       # ノードタイプごとのハンドラ実行
+    └── handlers/         # ノードタイプハンドラ（variable, if, while, command, drive, http, mcp, prompt, ...）
 ```
 
 ## はじめかた
@@ -188,11 +216,22 @@ docker run -p 8080:8080 \
 
 | タブ | 設定内容 |
 |------|---------|
-| **General** | APIキー、有料/無料プラン、デフォルトモデル、システムプロンプト、チャット履歴保存 |
+| **General** | APIキー、有料/無料プラン、デフォルトモデル、システムプロンプト、チャット履歴保存、言語（en/ja）、フォントサイズ、一時ファイル管理 |
 | **MCP Servers** | 外部MCPサーバーの追加・削除、接続テスト、サーバーごとの有効/無効切替 |
 | **RAG** | 有効/無効、Top-K、複数RAG設定の管理、DriveファイルのFile Search同期 |
 | **Encryption** | RSA鍵ペアの生成、チャット履歴・ワークフローログの暗号化切替 |
 | **Edit History** | 有効/無効、保持ポリシー（日数/件数）、diffコンテキスト行数、プルーン/統計 |
+| **Commands** | スラッシュコマンドの作成・編集・削除、プロンプトテンプレート、コマンドごとのモデル/ツール設定 |
+
+## スラッシュコマンド
+
+**Commands** 設定タブでカスタムスラッシュコマンドを定義できます。各コマンドには以下を設定可能です：
+
+- **プロンプトテンプレート** — `{content}`（現在のファイル内容）、`{selection}`（選択テキスト）、`@ファイル名`（Driveファイル内容）のプレースホルダーに対応
+- **モデル指定** — コマンドごとに使用するモデルを指定
+- **ツール設定** — 検索設定、Driveツールモード、MCPサーバーの有効/無効をコマンドごとに制御
+
+チャット入力欄で `/` を入力するとオートコンプリートが表示されコマンドを選択できます。`@` を入力するとファイルメンションを挿入できます。
 
 ## AIツール（Function Calling）
 
@@ -231,7 +270,8 @@ gemini-hub/
 ├── workflows/           # ワークフローYAMLファイル
 │   └── _sync-meta.json  # Push/Pull同期メタデータ
 ├── chats/               # チャット履歴JSONファイル
-└── edit-history/        # 編集スナップショットとdiff履歴
+├── edit-history/        # 編集スナップショットとdiff履歴
+└── __TEMP__/            # ステージング済み一時ファイル（Push時に適用）
 ```
 
 ### ブラウザキャッシュ & 同期
@@ -239,11 +279,12 @@ gemini-hub/
 ファイルはブラウザのIndexedDBにキャッシュされ、即座に表示されます。同期システムはmd5ハッシュ比較で変更を検出します:
 
 - **キャッシュ優先読み込み** — IndexedDBから即座にファイルを表示し、バックグラウンドでDriveのmd5Checksumと照合
-- **Push** — ローカルで変更されたファイルをDriveにアップロードし、リモート同期メタデータを更新
-- **Pull** — リモートで変更されたファイルをローカルキャッシュにダウンロード
+- **一時ファイルステージング** — ファイル保存時はまずDrive上の `__TEMP__/` フォルダに書き込み（APIコール1-2回）、Push時に実ファイルへ適用
+- **Push** — ステージング済みの一時ファイルを実Driveファイルに適用し、リモート同期メタデータ（`_sync-meta.json`）を更新。その後、残りのローカル変更をプッシュ
+- **Pull** — リモートで変更されたファイルをローカルキャッシュにダウンロード。ステージング済みの一時ファイルは保持され、次回Push時に適用
 - **コンフリクト解決** — ローカルとリモートの両方が変更された場合、ファイルごとに「ローカルを保持」または「リモートを保持」を選択
 
-ヘッダーの同期ステータスバーでPush/Pull待ちの件数を確認でき、手動同期操作が可能です。
+ヘッダーの同期ステータスバーでPush/Pull待ちの件数を確認でき、手動同期操作が可能です。一時ファイルはGeneral設定タブから管理（ダウンロード・削除）できます。
 
 ## ライセンス
 

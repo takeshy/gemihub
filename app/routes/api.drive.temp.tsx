@@ -10,6 +10,11 @@ import {
   applyAllTempFiles,
   deleteTempFiles,
 } from "~/services/temp-file.server";
+import { getWorkflowsFolderId } from "~/services/google-drive.server";
+import {
+  readRemoteSyncMeta,
+  writeRemoteSyncMeta,
+} from "~/services/sync-meta.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
@@ -86,6 +91,32 @@ export async function action({ request }: Route.ActionArgs) {
         validTokens.rootFolderId,
         settings.editHistory
       );
+
+      // Update remoteMeta (_sync-meta.json) so diff won't see false conflicts
+      if (results.length > 0) {
+        const workflowsFolderId = await getWorkflowsFolderId(
+          validTokens.accessToken,
+          validTokens.rootFolderId
+        );
+        const remoteMeta = (await readRemoteSyncMeta(
+          validTokens.accessToken,
+          workflowsFolderId
+        )) ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
+
+        for (const r of results) {
+          remoteMeta.files[r.fileId] = {
+            md5Checksum: r.md5Checksum,
+            modifiedTime: r.modifiedTime,
+          };
+        }
+        remoteMeta.lastUpdatedAt = new Date().toISOString();
+        await writeRemoteSyncMeta(
+          validTokens.accessToken,
+          workflowsFolderId,
+          remoteMeta
+        );
+      }
+
       return Response.json({ results });
     }
 
