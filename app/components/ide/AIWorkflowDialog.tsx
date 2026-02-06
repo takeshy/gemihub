@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Brain,
 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { ModelType, ApiPlan } from "~/types/settings";
 import { getAvailableModels } from "~/types/settings";
 import { WorkflowPreviewModal } from "./WorkflowPreviewModal";
@@ -222,7 +223,7 @@ export function AIWorkflowDialog({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-purple-500" />
+            <Sparkles size={ICON.LG} className="text-purple-500" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {mode === "create" ? "Create Workflow with AI" : "Modify Workflow with AI"}
             </h3>
@@ -231,7 +232,7 @@ export function AIWorkflowDialog({
             onClick={onClose}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            <X size={16} />
+            <X size={ICON.LG} />
           </button>
         </div>
 
@@ -316,7 +317,7 @@ export function AIWorkflowDialog({
           {phase === "generating" && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <Loader2 size={12} className="animate-spin" />
+                <Loader2 size={ICON.SM} className="animate-spin" />
                 <span>Generating workflow...</span>
               </div>
 
@@ -327,8 +328,8 @@ export function AIWorkflowDialog({
                     onClick={() => setShowThinking(!showThinking)}
                     className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                   >
-                    {showThinking ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    <Brain size={12} />
+                    {showThinking ? <ChevronDown size={ICON.SM} /> : <ChevronRight size={ICON.SM} />}
+                    <Brain size={ICON.SM} />
                     Thinking...
                   </button>
                   {showThinking && (
@@ -380,7 +381,7 @@ export function AIWorkflowDialog({
                 }
                 className="flex items-center gap-1.5 rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
               >
-                <Sparkles size={12} />
+                <Sparkles size={ICON.SM} />
                 {history.length > 0 ? "Regenerate" : "Generate"}
               </button>
             )}

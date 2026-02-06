@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Wrench,
 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
 import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand } from "~/types/settings";
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
@@ -330,7 +331,7 @@ export function ChatInput({
             className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
             aria-label="Expand input"
           >
-            <ChevronUp size={18} />
+            <ChevronUp size={ICON.LG} />
           </button>
         </div>
       </div>
@@ -349,9 +350,9 @@ export function ChatInput({
                 className="relative flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
               >
                 {att.type === "image" ? (
-                  <ImageIcon size={12} />
+                  <ImageIcon size={ICON.SM} />
                 ) : (
-                  <FileText size={12} />
+                  <FileText size={ICON.SM} />
                 )}
                 <span className="max-w-[120px] truncate">{att.name}</span>
                 <button
@@ -386,7 +387,7 @@ export function ChatInput({
               className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50 dark:hover:bg-gray-700 dark:hover:text-gray-300"
               aria-label="Attach file"
             >
-              <Paperclip size={18} />
+              <Paperclip size={ICON.LG} />
             </button>
             <input
               ref={fileInputRef}
@@ -410,7 +411,7 @@ export function ChatInput({
                   }`}
                   title="Tool settings"
                 >
-                  <Wrench size={18} />
+                  <Wrench size={ICON.LG} />
                 </button>
                 {toolDropdownOpen && (
                   <div className="absolute bottom-full left-0 z-10 mb-1 w-52 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
@@ -506,7 +507,7 @@ export function ChatInput({
               className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
               aria-label="Collapse input"
             >
-              <ChevronDown size={18} />
+              <ChevronDown size={ICON.LG} />
             </button>
 
             {/* Send / Stop button */}
@@ -516,7 +517,7 @@ export function ChatInput({
                 className="rounded-md bg-red-500 p-1.5 text-white transition-colors hover:bg-red-600"
                 aria-label="Stop generating"
               >
-                <Square size={18} />
+                <Square size={ICON.LG} />
               </button>
             ) : (
               <button
@@ -525,7 +526,7 @@ export function ChatInput({
                 className="rounded-md bg-blue-600 p-1.5 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600"
                 aria-label="Send message"
               >
-                <Send size={18} />
+                <Send size={ICON.LG} />
               </button>
             )}
           </div>
@@ -550,7 +551,7 @@ export function ChatInput({
               className="flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               {selectedModelInfo?.displayName || selectedModel}
-              <ChevronDown size={12} />
+              <ChevronDown size={ICON.SM} />
             </button>
             {modelDropdownOpen && (
               <div className="absolute bottom-full left-0 z-10 mb-1 max-h-64 w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">

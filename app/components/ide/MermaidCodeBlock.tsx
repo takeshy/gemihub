@@ -3,11 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useIsDark } from "~/hooks/useIsDark";
 
-interface MermaidPreviewProps {
-  chart: string;
-}
-
-export function MermaidPreview({ chart }: MermaidPreviewProps) {
+export function MermaidCodeBlock({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const isDark = useIsDark();
@@ -16,23 +12,19 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
     let cancelled = false;
 
     (async () => {
-      if (!containerRef.current || !chart) return;
+      if (!containerRef.current || !code) return;
 
       try {
         const mermaid = (await import("mermaid")).default;
         mermaid.initialize({
           startOnLoad: false,
           theme: isDark ? "dark" : "default",
-          flowchart: {
-            useMaxWidth: true,
-            htmlLabels: true,
-            curve: "basis",
-          },
+          flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" },
           securityLevel: "loose",
         });
 
-        const id = `mermaid-${Date.now()}`;
-        const { svg } = await mermaid.render(id, chart);
+        const id = `mermaid-md-${Date.now()}`;
+        const { svg } = await mermaid.render(id, code);
 
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
@@ -48,13 +40,13 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
     return () => {
       cancelled = true;
     };
-  }, [chart, isDark]);
+  }, [code, isDark]);
 
   if (error) {
     return (
-      <div className="flex items-center justify-center p-8 text-sm text-red-500">
-        {error}
-      </div>
+      <pre className="rounded bg-gray-100 p-4 text-sm text-red-600 dark:bg-gray-800 dark:text-red-400">
+        <code>{code}</code>
+      </pre>
     );
   }
 

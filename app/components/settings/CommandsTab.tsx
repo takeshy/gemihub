@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useFetcher } from "react-router";
 import { Plus, Trash2, Pencil, Save, Loader2, Check, AlertCircle } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type {
   UserSettings,
   SlashCommand,
@@ -153,7 +154,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
           }`}
         >
           <div className="flex items-center gap-2">
-            {data.success ? <Check size={16} /> : <AlertCircle size={16} />}
+            {data.success ? <Check size={ICON.LG} /> : <AlertCircle size={ICON.LG} />}
             {data.message}
           </div>
         </div>
@@ -186,7 +187,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
               className="p-1.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"
               title={t("settings.commands.edit")}
             >
-              <Pencil size={16} />
+              <Pencil size={ICON.LG} />
             </button>
             <button
               type="button"
@@ -194,7 +195,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
               className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
               title={t("settings.commands.delete")}
             >
-              <Trash2 size={16} />
+              <Trash2 size={ICON.LG} />
             </button>
           </div>
         ))}
@@ -330,7 +331,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
           onClick={startAdd}
           className="inline-flex items-center gap-2 mb-6 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-md hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
         >
-          <Plus size={16} />
+          <Plus size={ICON.LG} />
           {t("settings.commands.addCommand")}
         </button>
       )}
@@ -341,7 +342,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
         onClick={handleSubmit}
         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
       >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+        {loading ? <Loader2 size={ICON.LG} className="animate-spin" /> : <Save size={ICON.LG} />}
         {t("settings.commands.save")}
       </button>
     </div>

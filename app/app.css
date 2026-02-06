@@ -2,6 +2,7 @@
 @import "highlight.js/styles/github.css" (prefers-color-scheme: light);
 @import "highlight.js/styles/github-dark.css" (prefers-color-scheme: dark);
 @plugin "@tailwindcss/typography";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
@@ -11,10 +12,6 @@
 html,
 body {
   @apply bg-white dark:bg-gray-950;
-
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-  }
 }
 
 /* Make wysimark-lite editor fill its container.

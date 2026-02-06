@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { WorkflowNode, WorkflowNodeType } from "~/engine/types";
 import { getNodePropertyDefs } from "~/utils/workflow-node-properties";
 import { getNodeTypeLabel } from "~/utils/workflow-node-summary";
@@ -98,7 +99,7 @@ export function NodeEditorModal({
             onClick={onCancel}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
           >
-            <X size={16} />
+            <X size={ICON.LG} />
           </button>
         </div>
 

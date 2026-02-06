@@ -18,6 +18,7 @@ import {
   Info,
   Sparkles,
 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { Workflow, WorkflowNode } from "~/engine/types";
 import { parseWorkflowYaml, serializeWorkflow } from "~/engine/parser";
 import {
@@ -367,7 +368,7 @@ function WorkflowNodeListView({
   if (rawContent === null && !fileError && !error) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <Loader2 size={16} className="animate-spin text-gray-400" />
+        <Loader2 size={ICON.LG} className="animate-spin text-gray-400" />
       </div>
     );
   }
@@ -409,14 +410,14 @@ function WorkflowNodeListView({
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title="Refresh"
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={ICON.SM} />
           </button>
           <button
             onClick={handleAddNode}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title="Add Node"
           >
-            <Plus size={14} />
+            <Plus size={ICON.MD} />
           </button>
         </div>
       </div>
@@ -436,7 +437,7 @@ function WorkflowNodeListView({
               onClick={handleAddNode}
               className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
             >
-              <Plus size={12} />
+              <Plus size={ICON.SM} />
               Add Node
             </button>
           </div>
@@ -473,24 +474,24 @@ function WorkflowNodeListView({
                     >
                       {typeLabel}
                     </span>
-                    <span className="flex-1 truncate text-xs font-medium text-gray-800 dark:text-gray-200">
+                    <span className="flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-200">
                       {nodeId}
                     </span>
                     {isCompleted && !isError && (
                       <CheckCircle
-                        size={12}
+                        size={ICON.SM}
                         className="flex-shrink-0 text-green-500"
                       />
                     )}
                     {isError && (
                       <XCircle
-                        size={12}
+                        size={ICON.SM}
                         className="flex-shrink-0 text-red-500"
                       />
                     )}
                     {isExecuting && (
                       <Loader2
-                        size={12}
+                        size={ICON.SM}
                         className="flex-shrink-0 animate-spin text-blue-500"
                       />
                     )}
@@ -599,7 +600,7 @@ function WorkflowNodeListView({
             onClick={stopExecution}
             className="flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-xs text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800"
           >
-            <Square size={12} />
+            <Square size={ICON.SM} />
             Stop
           </button>
         ) : (
@@ -607,7 +608,7 @@ function WorkflowNodeListView({
             onClick={startExecution}
             className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
           >
-            <Play size={12} />
+            <Play size={ICON.SM} />
             Execute
           </button>
         )}
@@ -615,7 +616,7 @@ function WorkflowNodeListView({
           onClick={() => setShowHistory(true)}
           className="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
         >
-          <Clock size={12} />
+          <Clock size={ICON.SM} />
           History
         </button>
         {onModifyWithAI && rawYaml && (
@@ -624,7 +625,7 @@ function WorkflowNodeListView({
             className="flex items-center gap-1 rounded bg-purple-100 px-2 py-1 text-xs text-purple-700 hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:hover:bg-purple-900/60"
             title="Modify with AI"
           >
-            <Sparkles size={12} />
+            <Sparkles size={ICON.SM} />
             AI
           </button>
         )}
@@ -632,19 +633,19 @@ function WorkflowNodeListView({
           <span className="ml-auto">
             {executionStatus === "running" && (
               <Loader2
-                size={14}
+                size={ICON.MD}
                 className="animate-spin text-blue-500"
               />
             )}
             {executionStatus === "completed" && (
-              <CheckCircle size={14} className="text-green-500" />
+              <CheckCircle size={ICON.MD} className="text-green-500" />
             )}
             {executionStatus === "error" && (
-              <XCircle size={14} className="text-red-500" />
+              <XCircle size={ICON.MD} className="text-red-500" />
             )}
             {executionStatus === "waiting-prompt" && (
               <Loader2
-                size={14}
+                size={ICON.MD}
                 className="animate-spin text-yellow-500"
               />
             )}
@@ -758,14 +759,14 @@ function WorkflowListView({
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title="Refresh"
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={ICON.SM} />
           </button>
           <button
             onClick={onNewWorkflow}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title="New Workflow"
           >
-            <Plus size={14} />
+            <Plus size={ICON.MD} />
           </button>
         </div>
       </div>
@@ -774,7 +775,7 @@ function WorkflowListView({
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 size={16} className="animate-spin text-gray-400" />
+            <Loader2 size={ICON.LG} className="animate-spin text-gray-400" />
           </div>
         ) : workflows.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
@@ -789,7 +790,7 @@ function WorkflowListView({
               onClick={onNewWorkflow}
               className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
             >
-              <Plus size={14} />
+              <Plus size={ICON.MD} />
               New Workflow
             </button>
           </div>
@@ -801,10 +802,10 @@ function WorkflowListView({
                 onClick={() =>
                   onSelectFile(wf.id, wf.name, wf.mimeType || "text/yaml")
                 }
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <FileCode
-                  size={14}
+                  size={ICON.MD}
                   className="flex-shrink-0 text-orange-500"
                 />
                 <span className="truncate text-gray-700 dark:text-gray-300">
@@ -814,9 +815,9 @@ function WorkflowListView({
             ))}
             <button
               onClick={onNewWorkflow}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             >
-              <Plus size={14} className="flex-shrink-0" />
+              <Plus size={ICON.MD} className="flex-shrink-0" />
               <span>New Workflow</span>
             </button>
           </div>

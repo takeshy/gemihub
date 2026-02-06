@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Plus, Trash2, ChevronDown } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type {
   Message,
   StreamChunk,
@@ -434,9 +435,9 @@ export function ChatPanel({
         <div className="flex items-center gap-1">
           <button
             onClick={() => setChatListOpen(!chatListOpen)}
-            className="flex-1 flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 text-left truncate"
+            className="flex-1 flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 text-left truncate"
           >
-            <ChevronDown size={12} className={chatListOpen ? "rotate-180" : ""} />
+            <ChevronDown size={ICON.SM} className={chatListOpen ? "rotate-180" : ""} />
             {activeChatId
               ? histories.find((h) => h.id === activeChatId)?.title ||
                 "Chat"
@@ -447,7 +448,7 @@ export function ChatPanel({
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title={t("chat.newChat")}
           >
-            <Plus size={14} />
+            <Plus size={ICON.MD} />
           </button>
         </div>
 
@@ -461,7 +462,7 @@ export function ChatPanel({
               histories.map((chat) => (
                 <div
                   key={chat.id}
-                  className={`group flex items-center gap-1 px-2 py-1.5 cursor-pointer text-xs hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                  className={`group flex items-center gap-1 px-2 py-1.5 cursor-pointer text-sm hover:bg-gray-100 dark:hover:bg-gray-800 ${
                     chat.id === activeChatId
                       ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                       : "text-gray-700 dark:text-gray-300"
@@ -479,7 +480,7 @@ export function ChatPanel({
                     }}
                     className="p-0.5 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100"
                   >
-                    <Trash2 size={12} />
+                    <Trash2 size={ICON.SM} />
                   </button>
                 </div>
               ))

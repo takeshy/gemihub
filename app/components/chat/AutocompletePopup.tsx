@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Terminal, FileText, Hash } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { AutocompleteItem, AutocompleteMode } from "~/hooks/useAutocomplete";
 
 interface AutocompletePopupProps {
@@ -53,9 +54,9 @@ export function AutocompletePopup({
           }`}
         >
           <span className="flex-shrink-0 text-gray-400 dark:text-gray-500">
-            {item.type === "command" && <Terminal size={14} />}
-            {item.type === "file" && <FileText size={14} />}
-            {item.type === "variable" && <Hash size={14} />}
+            {item.type === "command" && <Terminal size={ICON.MD} />}
+            {item.type === "file" && <FileText size={ICON.MD} />}
+            {item.type === "variable" && <Hash size={ICON.MD} />}
           </span>
           <span className="font-medium truncate">{item.label}</span>
           <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-[50%]">

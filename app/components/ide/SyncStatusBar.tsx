@@ -1,4 +1,5 @@
 import { RefreshCw, ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { SyncStatus, SyncDiff, ConflictInfo } from "~/hooks/useSync";
 
 interface SyncStatusBarProps {
@@ -46,13 +47,13 @@ export function SyncStatusBar({
       <button
         onClick={onCheckSync}
         disabled={isBusy}
-        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
         title="Check sync status"
       >
         {isBusy ? (
-          <Loader2 size={12} className="animate-spin" />
+          <Loader2 size={ICON.SM} className="animate-spin" />
         ) : (
-          <RefreshCw size={12} />
+          <RefreshCw size={ICON.SM} />
         )}
       </button>
 
@@ -61,10 +62,10 @@ export function SyncStatusBar({
         <button
           onClick={onPush}
           disabled={isBusy}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 disabled:opacity-50"
           title={`Push ${pushCount} change${pushCount > 1 ? "s" : ""}`}
         >
-          <ArrowUp size={12} />
+          <ArrowUp size={ICON.SM} />
           <span>{pushCount}</span>
         </button>
       )}
@@ -74,10 +75,10 @@ export function SyncStatusBar({
         <button
           onClick={onPull}
           disabled={isBusy}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50"
           title={`Pull ${pullCount} change${pullCount > 1 ? "s" : ""}`}
         >
-          <ArrowDown size={12} />
+          <ArrowDown size={ICON.SM} />
           <span>{pullCount}</span>
         </button>
       )}
@@ -86,10 +87,10 @@ export function SyncStatusBar({
       {conflictCount > 0 && (
         <button
           onClick={onShowConflicts}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
           title={`${conflictCount} conflict${conflictCount > 1 ? "s" : ""}`}
         >
-          <AlertTriangle size={12} />
+          <AlertTriangle size={ICON.SM} />
           <span>{conflictCount}</span>
         </button>
       )}

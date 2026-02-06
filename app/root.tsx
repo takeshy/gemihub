@@ -33,7 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var f=localStorage.getItem("gemini-hub-fontSize");var l=localStorage.getItem("gemini-hub-language");if(f)document.documentElement.style.fontSize=f+"px";if(l)document.documentElement.lang=l;}catch(e){}})();`,
+            __html: `(function(){try{var f=localStorage.getItem("gemini-hub-fontSize");var l=localStorage.getItem("gemini-hub-language");if(f)document.documentElement.style.fontSize=f+"px";if(l)document.documentElement.lang=l;var t=localStorage.getItem("gemini-hub-theme")||"system";var d=t==="dark"||(t==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark";}else{document.documentElement.style.colorScheme="light";}}catch(e){}})();`,
           }}
         />
       </head>

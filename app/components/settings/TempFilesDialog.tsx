@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Loader2, Trash2, Download } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
 import { setCachedFile } from "~/services/indexeddb-cache";
 
@@ -121,7 +122,7 @@ export function TempFilesDialog({ onClose }: TempFilesDialogProps) {
             onClick={onClose}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
           >
-            <X size={16} />
+            <X size={ICON.LG} />
           </button>
         </div>
 
@@ -129,7 +130,7 @@ export function TempFilesDialog({ onClose }: TempFilesDialogProps) {
         <div className="flex-1 overflow-y-auto px-4 py-2">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 size={20} className="animate-spin text-gray-400" />
+              <Loader2 size={ICON.XL} className="animate-spin text-gray-400" />
             </div>
           ) : files.length === 0 ? (
             <div className="py-8 text-center text-sm text-gray-500">
@@ -182,7 +183,7 @@ export function TempFilesDialog({ onClose }: TempFilesDialogProps) {
                 disabled={selected.size === 0 || processing}
                 className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                <Download size={12} />
+                <Download size={ICON.SM} />
                 {t("tempFiles.downloadSelected")}
               </button>
               <button
@@ -190,7 +191,7 @@ export function TempFilesDialog({ onClose }: TempFilesDialogProps) {
                 disabled={selected.size === 0 || processing}
                 className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-red-600 border border-red-300 dark:border-red-700 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
               >
-                <Trash2 size={12} />
+                <Trash2 size={ICON.SM} />
                 {t("tempFiles.deleteSelected")}
               </button>
             </>

@@ -57,6 +57,7 @@ export interface TranslationStrings {
   "settings.general.rootFolderDescription": string;
   "settings.general.language": string;
   "settings.general.fontSize": string;
+  "settings.general.theme": string;
 
   // MCP tab
   "settings.mcp.noServers": string;
@@ -198,6 +199,7 @@ const en: TranslationStrings = {
   "settings.general.rootFolderDescription": "Name of the Google Drive folder used to store all app data.",
   "settings.general.language": "Language",
   "settings.general.fontSize": "Font Size",
+  "settings.general.theme": "Theme",
 
   // MCP tab
   "settings.mcp.noServers": "No MCP servers configured.",
@@ -339,6 +341,7 @@ const ja: TranslationStrings = {
   "settings.general.rootFolderDescription": "アプリデータの保存に使用するGoogle Driveフォルダの名前。",
   "settings.general.language": "言語",
   "settings.general.fontSize": "フォントサイズ",
+  "settings.general.theme": "テーマ",
 
   // MCP tab
   "settings.mcp.noServers": "MCPサーバーは設定されていません。",

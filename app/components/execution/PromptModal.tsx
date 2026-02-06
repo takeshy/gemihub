@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, FileText, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import {
   getCachedFileTree,
   type CachedTreeNode,
@@ -129,7 +130,7 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
             onClick={onCancel}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
-            <X size={18} />
+            <X size={ICON.LG} />
           </button>
         </div>
 
@@ -279,9 +280,9 @@ function DriveFilePickerTree({
                   <ChevronRight size={12} className="text-gray-400 flex-shrink-0" />
                 )}
                 {expanded ? (
-                  <FolderOpen size={14} className="text-yellow-500 flex-shrink-0" />
+                  <FolderOpen size={ICON.SM} className="text-yellow-500 flex-shrink-0" />
                 ) : (
-                  <Folder size={14} className="text-yellow-500 flex-shrink-0" />
+                  <Folder size={ICON.SM} className="text-yellow-500 flex-shrink-0" />
                 )}
                 <span className="truncate text-gray-700 dark:text-gray-300">
                   {node.name}
@@ -316,7 +317,7 @@ function DriveFilePickerTree({
             }`}
             style={{ paddingLeft: `${depth * 16 + 28}px` }}
           >
-            <FileText size={14} className="text-gray-400 flex-shrink-0" />
+            <FileText size={ICON.SM} className="text-gray-400 flex-shrink-0" />
             <span className="truncate">{node.name}</span>
           </button>
         );

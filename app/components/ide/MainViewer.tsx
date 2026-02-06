@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { FileText, Loader2, Eye, PenLine, Code } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
 import { WorkflowEditor } from "./WorkflowEditor";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
@@ -253,9 +254,9 @@ function MarkdownFileEditor({
   }, [mode, MarkdownEditorComponent]);
 
   const modes: { key: MdEditMode; icon: React.ReactNode; label: string }[] = [
-    { key: "preview", icon: <Eye size={14} />, label: t("mainViewer.preview") },
-    { key: "wysiwyg", icon: <PenLine size={14} />, label: t("mainViewer.wysiwyg") },
-    { key: "raw", icon: <Code size={14} />, label: t("mainViewer.raw") },
+    { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
+    { key: "wysiwyg", icon: <PenLine size={ICON.MD} />, label: t("mainViewer.wysiwyg") },
+    { key: "raw", icon: <Code size={ICON.MD} />, label: t("mainViewer.raw") },
   ];
 
   return (
@@ -303,8 +304,8 @@ function MarkdownFileEditor({
       {/* Content area */}
       {mode === "preview" && (
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <Suspense fallback={<Loader2 size={20} className="animate-spin text-gray-400 mx-auto mt-8" />}>
+          <div className="prose dark:prose-invert max-w-none">
+            <Suspense fallback={<Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />}>
               <LazyGfmPreview content={content} />
             </Suspense>
           </div>
@@ -320,7 +321,7 @@ function MarkdownFileEditor({
               placeholder="Write your content here..."
             />
           ) : (
-            <Loader2 size={20} className="animate-spin text-gray-400 mx-auto mt-8" />
+            <Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />
           )}
         </div>
       )}
@@ -331,7 +332,7 @@ function MarkdownFileEditor({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onSelect={handleSelect}
-            className="w-full h-full font-mono text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
           />
         </div>
@@ -395,7 +396,7 @@ function TextFileEditor({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onSelect={handleSelect}
-          className="w-full h-full font-mono text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+          className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
           spellCheck={false}
         />
       </div>

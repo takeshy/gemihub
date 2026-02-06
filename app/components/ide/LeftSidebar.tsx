@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { PanelLeftClose, PanelLeft } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 
 interface LeftSidebarProps {
   children: React.ReactNode;
@@ -73,7 +74,7 @@ export function LeftSidebar({ children }: LeftSidebarProps) {
           className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+          {collapsed ? <PanelLeft size={ICON.LG} /> : <PanelLeftClose size={ICON.LG} />}
         </button>
       </div>
       {!collapsed && (

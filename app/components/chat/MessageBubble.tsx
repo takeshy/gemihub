@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChevronDown, ChevronRight, Download, Paperclip, FileText, Wrench, BookOpen } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall } from "~/types/chat";
 
 interface MessageBubbleProps {
@@ -26,7 +27,7 @@ function ThinkingSection({ thinking }: { thinking: string }) {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
       >
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {expanded ? <ChevronDown size={ICON.MD} /> : <ChevronRight size={ICON.MD} />}
         Thinking
       </button>
       {expanded && (
@@ -63,8 +64,8 @@ function RagSourcesList({ sources }: { sources: string[] }) {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
       >
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <BookOpen size={12} />
+        {expanded ? <ChevronDown size={ICON.MD} /> : <ChevronRight size={ICON.MD} />}
+        <BookOpen size={ICON.SM} />
         RAG Sources ({sources.length})
       </button>
       {expanded && (
@@ -103,7 +104,7 @@ function GeneratedImageDisplay({ image }: { image: GeneratedImage }) {
         className="absolute right-2 top-2 rounded-md bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
         aria-label="Download image"
       >
-        <Download size={14} />
+        <Download size={ICON.MD} />
       </button>
     </div>
   );
@@ -129,9 +130,9 @@ function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
   return (
     <div className="mb-2 inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
       {attachment.type === "pdf" ? (
-        <FileText size={12} />
+        <FileText size={ICON.SM} />
       ) : (
-        <Paperclip size={12} />
+        <Paperclip size={ICON.SM} />
       )}
       {attachment.name}
     </div>

@@ -10,6 +10,7 @@ import {
   Eye,
   FileDiff,
 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import { parseWorkflowYaml } from "~/engine/parser";
 import type { Workflow } from "~/engine/types";
 import {
@@ -74,7 +75,7 @@ export function WorkflowPreviewModal({
             onClick={onClose}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            <X size={16} />
+            <X size={ICON.LG} />
           </button>
         </div>
 
@@ -83,20 +84,20 @@ export function WorkflowPreviewModal({
           <TabButton
             active={activeTab === "visual"}
             onClick={() => setActiveTab("visual")}
-            icon={<Eye size={12} />}
+            icon={<Eye size={ICON.SM} />}
             label="Visual"
           />
           <TabButton
             active={activeTab === "yaml"}
             onClick={() => setActiveTab("yaml")}
-            icon={<Code size={12} />}
+            icon={<Code size={ICON.SM} />}
             label="YAML"
           />
           {mode === "modify" && originalYaml && (
             <TabButton
               active={activeTab === "diff"}
               onClick={() => setActiveTab("diff")}
-              icon={<FileDiff size={12} />}
+              icon={<FileDiff size={ICON.SM} />}
               label="Diff"
             />
           )}
@@ -123,14 +124,14 @@ export function WorkflowPreviewModal({
             onClick={onReject}
             className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
           >
-            <RotateCcw size={12} />
+            <RotateCcw size={ICON.SM} />
             Refine
           </button>
           <button
             onClick={onAccept}
             className="flex items-center gap-1.5 rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
           >
-            <Check size={12} />
+            <Check size={ICON.SM} />
             Accept
           </button>
         </div>
@@ -256,8 +257,8 @@ function VisualPreview({
         onClick={() => setShowYaml(!showYaml)}
         className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
       >
-        {showYaml ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        <Code size={12} />
+        {showYaml ? <ChevronDown size={ICON.SM} /> : <ChevronRight size={ICON.SM} />}
+        <Code size={ICON.SM} />
         YAML
       </button>
       {showYaml && (

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useLoaderData, useSearchParams } from "react-router";
 import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
@@ -125,7 +125,7 @@ function IDELayout({
   hasGeminiApiKey: boolean;
   rootFolderId: string;
 }) {
-  useApplySettings(settings.language, settings.fontSize);
+  useApplySettings(settings.language, settings.fontSize, settings.theme);
   const [searchParams] = useSearchParams();
 
   // Active file state — use local state to avoid React Router navigation on file switch
@@ -139,6 +139,24 @@ function IDELayout({
 
   // Right panel state
   const [rightPanel, setRightPanel] = useState<"chat" | "workflow">("chat");
+
+  // Resolve file name when opened via URL (fileId present, fileName unknown)
+  useEffect(() => {
+    if (activeFileId && !activeFileName) {
+      fetch(`/api/drive/files?action=metadata&fileId=${activeFileId}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data?.name) {
+            setActiveFileName(data.name);
+            setActiveFileMimeType(data.mimeType || null);
+            if (data.name.endsWith(".yaml") || data.name.endsWith(".yml")) {
+              setRightPanel("workflow");
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeFileId, activeFileName]);
 
   // Workflow version for refreshing MainViewer after sidebar edits
   const [workflowVersion, setWorkflowVersion] = useState(0);

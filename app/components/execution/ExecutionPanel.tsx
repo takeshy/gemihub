@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Play, Square, ChevronDown, ChevronRight, CheckCircle, XCircle, Info, Loader2 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import { PromptModal } from "./PromptModal";
 import { useWorkflowExecution } from "~/hooks/useWorkflowExecution";
 import { useState } from "react";
@@ -27,10 +28,10 @@ export function ExecutionPanel({ workflowId }: ExecutionPanelProps) {
 
   const statusIcon = {
     idle: null,
-    running: <Loader2 size={14} className="animate-spin text-blue-500" />,
-    completed: <CheckCircle size={14} className="text-green-500" />,
-    error: <XCircle size={14} className="text-red-500" />,
-    "waiting-prompt": <Loader2 size={14} className="animate-spin text-yellow-500" />,
+    running: <Loader2 size={ICON.SM} className="animate-spin text-blue-500" />,
+    completed: <CheckCircle size={ICON.SM} className="text-green-500" />,
+    error: <XCircle size={ICON.SM} className="text-red-500" />,
+    "waiting-prompt": <Loader2 size={ICON.SM} className="animate-spin text-yellow-500" />,
   };
 
   return (
@@ -41,7 +42,7 @@ export function ExecutionPanel({ workflowId }: ExecutionPanelProps) {
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
         >
-          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          {isExpanded ? <ChevronDown size={ICON.SM} /> : <ChevronRight size={ICON.SM} />}
           Execution
           {statusIcon[status]}
         </button>

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Save, Code, Eye } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
 import { MermaidPreview } from "~/components/flow/MermaidPreview";
 
@@ -109,7 +110,7 @@ export function WorkflowEditor({
                   : "text-gray-500 dark:text-gray-400"
               }`}
             >
-              <Eye size={12} />
+              <Eye size={ICON.SM} />
               Visual
             </button>
             <button
@@ -120,7 +121,7 @@ export function WorkflowEditor({
                   : "text-gray-500 dark:text-gray-400"
               }`}
             >
-              <Code size={12} />
+              <Code size={ICON.SM} />
               YAML
             </button>
           </div>
@@ -136,7 +137,7 @@ export function WorkflowEditor({
             disabled={saving}
             className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
           >
-            <Save size={12} />
+            <Save size={ICON.SM} />
             {saving ? "Saving..." : "Save"}
           </button>
         </div>

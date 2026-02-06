@@ -14,6 +14,7 @@ import type {
   ModelType,
   Language,
   FontSize,
+  Theme,
 } from "~/types/settings";
 import {
   DEFAULT_USER_SETTINGS,
@@ -23,6 +24,7 @@ import {
   isModelAllowedForPlan,
   SUPPORTED_LANGUAGES,
   FONT_SIZE_OPTIONS,
+  THEME_OPTIONS,
 } from "~/types/settings";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
@@ -111,6 +113,7 @@ export async function action({ request }: Route.ActionArgs) {
         const rootFolderName = (formData.get("rootFolderName") as string)?.trim() || currentSettings.rootFolderName || "GeminiHub";
         const language = (formData.get("language") as Language) || currentSettings.language;
         const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
+        const theme = (formData.get("theme") as Theme) || currentSettings.theme || "system";
 
         const updatedSettings: UserSettings = {
           ...currentSettings,
@@ -122,6 +125,7 @@ export async function action({ request }: Route.ActionArgs) {
           rootFolderName,
           language,
           fontSize,
+          theme,
         };
 
         // If root folder name changed, ensure the new folder exists and update session
@@ -228,7 +232,7 @@ export default function Settings() {
   const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
-  useApplySettings(settings.language, settings.fontSize);
+  useApplySettings(settings.language, settings.fontSize, settings.theme);
 
   return (
     <I18nProvider language={settings.language}>
@@ -399,6 +403,7 @@ function GeneralTab({
   const [rootFolderName, setRootFolderName] = useState(settings.rootFolderName || "GeminiHub");
   const [language, setLanguage] = useState<Language>(settings.language);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
+  const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const [showTempFiles, setShowTempFiles] = useState(false);
 
   const availableModels = getAvailableModels(apiPlan);
@@ -533,6 +538,24 @@ function GeneralTab({
             className={inputClass + " max-w-[300px]"}
           >
             {FONT_SIZE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Theme */}
+        <div className="mb-6">
+          <Label htmlFor="theme">{t("settings.general.theme")}</Label>
+          <select
+            id="theme"
+            name="theme"
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as Theme)}
+            className={inputClass + " max-w-[300px]"}
+          >
+            {THEME_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

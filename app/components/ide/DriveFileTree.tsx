@@ -22,6 +22,7 @@ import {
   History,
   Download,
 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import {
   getCachedFileTree,
   setCachedFileTree,
@@ -44,15 +45,15 @@ interface DriveFileTreeProps {
 
 function getFileIcon(name: string, _mimeType: string) {
   if (name.endsWith(".yaml") || name.endsWith(".yml")) {
-    return <FileCode size={14} className="text-orange-500 flex-shrink-0" />;
+    return <FileCode size={ICON.MD} className="text-orange-500 flex-shrink-0" />;
   }
   if (name.endsWith(".md")) {
-    return <FileText size={14} className="text-blue-500 flex-shrink-0" />;
+    return <FileText size={ICON.MD} className="text-blue-500 flex-shrink-0" />;
   }
   if (name.endsWith(".json")) {
-    return <FileJson size={14} className="text-yellow-500 flex-shrink-0" />;
+    return <FileJson size={ICON.MD} className="text-yellow-500 flex-shrink-0" />;
   }
-  return <File size={14} className="text-gray-400 flex-shrink-0" />;
+  return <File size={ICON.MD} className="text-gray-400 flex-shrink-0" />;
 }
 
 function removeNodeFromTree(
@@ -555,30 +556,30 @@ export function DriveFileTree({
         if (item.name.endsWith(".encrypted")) {
           items.push({
             label: "Decrypt",
-            icon: <Unlock size={14} />,
+            icon: <Unlock size={ICON.MD} />,
             onClick: () => handleDecrypt(item),
           });
         } else {
           items.push({
             label: "Encrypt",
-            icon: <Lock size={14} />,
+            icon: <Lock size={ICON.MD} />,
             onClick: () => handleEncrypt(item),
           });
         }
 
         items.push({
           label: t("contextMenu.tempDownload"),
-          icon: <Download size={14} />,
+          icon: <Download size={ICON.MD} />,
           onClick: () => handleTempDownload(item),
         });
         items.push({
           label: t("editHistory.menuLabel"),
-          icon: <History size={14} />,
+          icon: <History size={ICON.MD} />,
           onClick: () => setEditHistoryFile(item.name),
         });
         items.push({
           label: t("editHistory.clearHistory"),
-          icon: <Trash2 size={14} />,
+          icon: <Trash2 size={ICON.MD} />,
           onClick: () => handleClearHistory(item),
           danger: true,
         });
@@ -586,13 +587,13 @@ export function DriveFileTree({
 
       items.push({
         label: t("contextMenu.rename"),
-        icon: <Pencil size={14} />,
+        icon: <Pencil size={ICON.MD} />,
         onClick: () => handleRename(item),
       });
 
       items.push({
         label: "Delete",
-        icon: <Trash2 size={14} />,
+        icon: <Trash2 size={ICON.MD} />,
         onClick: () => handleDelete(item),
         danger: true,
       });
@@ -630,7 +631,7 @@ export function DriveFileTree({
             onDragEnter={(e) => handleFolderDragEnter(e, item.id)}
             onDragLeave={(e) => handleFolderDragLeave(e, item.id)}
             onDrop={(e) => handleDrop(e, item.id)}
-            className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs ${
+            className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm ${
               isDragOver
                 ? "bg-blue-100 ring-1 ring-blue-400 dark:bg-blue-900/40 dark:ring-blue-500"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -638,14 +639,14 @@ export function DriveFileTree({
             style={{ paddingLeft: `${depth * 12 + 4}px` }}
           >
             {expanded ? (
-              <ChevronDown size={12} className="text-gray-400 flex-shrink-0" />
+              <ChevronDown size={ICON.SM} className="text-gray-400 flex-shrink-0" />
             ) : (
-              <ChevronRight size={12} className="text-gray-400 flex-shrink-0" />
+              <ChevronRight size={ICON.SM} className="text-gray-400 flex-shrink-0" />
             )}
             {expanded ? (
-              <FolderOpen size={14} className="text-yellow-500 flex-shrink-0" />
+              <FolderOpen size={ICON.MD} className="text-yellow-500 flex-shrink-0" />
             ) : (
-              <Folder size={14} className="text-yellow-500 flex-shrink-0" />
+              <Folder size={ICON.MD} className="text-yellow-500 flex-shrink-0" />
             )}
             <span className="truncate text-gray-700 dark:text-gray-300">
               {item.name}
@@ -672,7 +673,7 @@ export function DriveFileTree({
           setDraggingItem({ id: item.id, parentId });
         }}
         onDragEnd={() => setDraggingItem(null)}
-        className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs ${
+        className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm ${
           isActive
             ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -707,34 +708,34 @@ export function DriveFileTree({
             className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title="New File"
           >
-            <FilePlus size={14} />
+            <FilePlus size={ICON.MD} />
           </button>
           <button
             onClick={handleCreateFolder}
             className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title="New Folder"
           >
-            <FolderPlus size={14} />
+            <FolderPlus size={ICON.MD} />
           </button>
           <button
             onClick={handleRefresh}
             className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             title="Refresh"
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={ICON.MD} />
           </button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {loading && treeItems.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 size={16} className="animate-spin text-gray-400" />
+            <Loader2 size={ICON.LG} className="animate-spin text-gray-400" />
           </div>
         ) : treeItems.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-gray-400">
             {dragOverTree ? (
               <div className="flex flex-col items-center gap-1">
-                <Upload size={20} className="text-blue-400" />
+                <Upload size={ICON.XL} className="text-blue-400" />
                 <span className="text-blue-500">Drop files here</span>
               </div>
             ) : (
@@ -755,15 +756,15 @@ export function DriveFileTree({
             >
               {p.status === "uploading" && (
                 <Loader2
-                  size={12}
+                  size={ICON.SM}
                   className="animate-spin text-blue-500 flex-shrink-0"
                 />
               )}
               {p.status === "done" && (
-                <CheckCircle2 size={12} className="text-green-500 flex-shrink-0" />
+                <CheckCircle2 size={ICON.SM} className="text-green-500 flex-shrink-0" />
               )}
               {p.status === "error" && (
-                <XCircle size={12} className="text-red-500 flex-shrink-0" />
+                <XCircle size={ICON.SM} className="text-red-500 flex-shrink-0" />
               )}
               <span className="truncate text-gray-600 dark:text-gray-400">
                 {p.name}

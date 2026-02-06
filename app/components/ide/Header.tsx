@@ -5,6 +5,7 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
 import type { SyncStatus, SyncDiff, ConflictInfo } from "~/hooks/useSync";
 import { useI18n } from "~/i18n/context";
@@ -68,24 +69,24 @@ export function Header({
         {/* Right panel tab toggles */}
         <button
           onClick={() => setRightPanel("chat")}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+          className={`flex items-center gap-1 rounded px-2 py-1 text-sm transition-colors ${
             rightPanel === "chat"
               ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
               : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
           }`}
         >
-          <MessageSquare size={14} />
+          <MessageSquare size={ICON.MD} />
           {t("header.chat")}
         </button>
         <button
           onClick={() => setRightPanel("workflow")}
-          className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+          className={`flex items-center gap-1 rounded px-2 py-1 text-sm transition-colors ${
             rightPanel === "workflow"
               ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
               : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
           }`}
         >
-          <GitBranch size={14} />
+          <GitBranch size={ICON.MD} />
           {t("header.workflow")}
         </button>
 
@@ -97,7 +98,7 @@ export function Header({
           className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
           title={t("common.settings")}
         >
-          <Settings size={14} />
+          <Settings size={ICON.MD} />
         </Link>
 
         {/* Logout */}
@@ -106,7 +107,7 @@ export function Header({
           className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
           title={t("common.logout")}
         >
-          <LogOut size={14} />
+          <LogOut size={ICON.MD} />
         </a>
       </div>
     </header>

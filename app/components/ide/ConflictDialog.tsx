@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
 import type { ConflictInfo } from "~/hooks/useSync";
 
 interface ConflictDialogProps {
@@ -52,7 +53,7 @@ export function ConflictDialog({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <AlertTriangle size={16} className="text-amber-500" />
+            <AlertTriangle size={ICON.LG} className="text-amber-500" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               Sync Conflicts ({conflicts.length})
             </h3>
@@ -61,7 +62,7 @@ export function ConflictDialog({
             onClick={onClose}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            <X size={16} />
+            <X size={ICON.LG} />
           </button>
         </div>
 

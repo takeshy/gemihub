@@ -65,6 +65,15 @@ export const SUPPORTED_LANGUAGES: { value: Language; label: string }[] = [
   { value: "ja", label: "日本語" },
 ];
 
+// Theme
+export type Theme = "light" | "dark" | "system";
+
+export const THEME_OPTIONS: { value: Theme; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
 // Font Size
 export type FontSize = 14 | 16 | 18 | 20;
 
@@ -335,6 +344,7 @@ export interface UserSettings {
   rootFolderName: string;
   language: Language;
   fontSize: FontSize;
+  theme: Theme;
   slashCommands: SlashCommand[];
 }
 
@@ -354,5 +364,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   rootFolderName: "GeminiHub",
   language: "en",
   fontSize: 16,
+  theme: "system",
   slashCommands: [],
 };
