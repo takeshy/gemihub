@@ -106,7 +106,8 @@ export interface TranslationStrings {
   "editHistory.confirmClear": string;
   "editHistory.confirmClearAll": string;
 
-  // Context menu - temp download
+  // Context menu
+  "contextMenu.rename": string;
   "contextMenu.tempDownload": string;
   "contextMenu.noTempFile": string;
 
@@ -246,7 +247,8 @@ const en: TranslationStrings = {
   "editHistory.confirmClear": "Clear all edit history for this file?",
   "editHistory.confirmClearAll": "Clear all edit history for this file?",
 
-  // Context menu - temp download
+  // Context menu
+  "contextMenu.rename": "Rename",
   "contextMenu.tempDownload": "Temp Download",
   "contextMenu.noTempFile": "No temp file found for this file.",
 
@@ -386,7 +388,8 @@ const ja: TranslationStrings = {
   "editHistory.confirmClear": "このファイルの編集履歴をすべてクリアしますか？",
   "editHistory.confirmClearAll": "このファイルの編集履歴をすべてクリアしますか？",
 
-  // Context menu - temp download
+  // Context menu
+  "contextMenu.rename": "名前を変更",
   "contextMenu.tempDownload": "一時ダウンロード",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
 

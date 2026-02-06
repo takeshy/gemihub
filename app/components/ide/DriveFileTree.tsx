@@ -14,6 +14,7 @@ import {
   Lock,
   Unlock,
   Upload,
+  Pencil,
   CheckCircle2,
   XCircle,
   FolderPlus,
@@ -379,6 +380,31 @@ export function DriveFileTree({
     []
   );
 
+  const handleRename = useCallback(
+    async (item: CachedTreeNode) => {
+      const newName = prompt(t("contextMenu.rename"), item.name);
+      if (!newName?.trim() || newName.trim() === item.name) return;
+
+      try {
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "rename",
+            fileId: item.id,
+            name: newName.trim(),
+          }),
+        });
+        if (res.ok) {
+          await fetchAndCacheTree();
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [fetchAndCacheTree, t]
+  );
+
   const handleDelete = useCallback(
     async (item: CachedTreeNode) => {
       const typeLabel = item.isFolder ? "folder" : "file";
@@ -559,6 +585,12 @@ export function DriveFileTree({
       }
 
       items.push({
+        label: t("contextMenu.rename"),
+        icon: <Pencil size={14} />,
+        onClick: () => handleRename(item),
+      });
+
+      items.push({
         label: "Delete",
         icon: <Trash2 size={14} />,
         onClick: () => handleDelete(item),
@@ -567,7 +599,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [encryptionEnabled, handleDelete, handleEncrypt, handleDecrypt, handleClearHistory, handleTempDownload, t]
+    [encryptionEnabled, handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearHistory, handleTempDownload, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {

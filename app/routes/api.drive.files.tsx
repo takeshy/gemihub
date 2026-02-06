@@ -145,6 +145,11 @@ export async function action({ request }: Route.ActionArgs) {
       const movedFile = await moveFile(validTokens.accessToken, fileId, newParentId, oldParentId);
       return Response.json({ file: movedFile });
     }
+    case "rename": {
+      if (!fileId || !name) return Response.json({ error: "Missing fileId or name" }, { status: 400 });
+      const renamed = await renameFile(validTokens.accessToken, fileId, name);
+      return Response.json({ file: renamed });
+    }
     case "delete": {
       if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
       await deleteFile(validTokens.accessToken, fileId);
