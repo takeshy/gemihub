@@ -28,6 +28,7 @@ import {
 import { buildOutgoingMap } from "~/utils/workflow-connections";
 import { NodeEditorModal } from "./NodeEditorModal";
 import { ExecutionHistoryModal } from "./ExecutionHistoryModal";
+import { PromptModal } from "~/components/execution/PromptModal";
 import yaml from "js-yaml";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
 
@@ -149,6 +150,7 @@ function WorkflowNodeListView({
   >("idle");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [promptData, setPromptData] = useState<Record<string, unknown> | null>(null);
   const eventSourceRef = useState<EventSource | null>(null);
 
   const saveWorkflow = useCallback(
@@ -316,6 +318,11 @@ function WorkflowNodeListView({
         const data = JSON.parse(e.data);
         setExecutionStatus(data.status);
       });
+      es.addEventListener("prompt-request", (e) => {
+        const data = JSON.parse(e.data);
+        setExecutionStatus("waiting-prompt");
+        setPromptData(data);
+      });
       es.onerror = () => {
         if (es.readyState === EventSource.CLOSED) {
           setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
@@ -330,6 +337,20 @@ function WorkflowNodeListView({
     eventSourceRef[0]?.close();
     setExecutionStatus("error");
   }, [eventSourceRef]);
+
+  const handlePromptResponse = useCallback(
+    async (value: string | null) => {
+      if (!executionId) return;
+      setPromptData(null);
+      setExecutionStatus("running");
+      await fetch("/api/prompt-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ executionId, value }),
+      });
+    },
+    [executionId]
+  );
 
   // Current executing nodeId from logs
   const currentNodeId =
@@ -640,6 +661,15 @@ function WorkflowNodeListView({
           onSave={handleSaveNode}
           onCancel={() => setEditingNode(null)}
           initialNext={editingNextInfo}
+        />
+      )}
+
+      {/* Prompt Modal (for drive-file-picker, prompt-value, dialog nodes) */}
+      {promptData && (
+        <PromptModal
+          data={promptData}
+          onSubmit={handlePromptResponse}
+          onCancel={() => handlePromptResponse(null)}
         />
       )}
 
