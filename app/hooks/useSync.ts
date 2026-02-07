@@ -96,7 +96,43 @@ export function useSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
-      // Upload locally modified files as temp files
+      const localMeta = (await getLocalSyncMeta()) ?? null;
+
+      // Check diff BEFORE writing anything to Drive
+      if (localMeta) {
+        const diffRes = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "diff",
+            localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
+          }),
+        });
+
+        if (!diffRes.ok) throw new Error("Failed to compute diff");
+        const diffData = await diffRes.json();
+
+        if (diffData.diff.conflicts.length > 0) {
+          setConflicts(diffData.diff.conflicts);
+          setDiff(diffData.diff);
+          setSyncStatus("conflict");
+          return;
+        }
+
+        // Reject push if remote is newer and has changes to pull
+        if (
+          diffData.remoteMeta?.lastUpdatedAt &&
+          localMeta.lastUpdatedAt &&
+          diffData.remoteMeta.lastUpdatedAt > localMeta.lastUpdatedAt &&
+          (diffData.diff.toPull.length > 0 || diffData.diff.remoteOnly.length > 0)
+        ) {
+          setError("settings.sync.pushRejected");
+          setSyncStatus("error");
+          return;
+        }
+      }
+
+      // Safe to push — upload locally modified files as temp files
       const modifiedIds = await getLocallyModifiedFileIds();
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
@@ -128,13 +164,13 @@ export function useSync() {
           modifiedTime: string;
         }>;
         if (results.length > 0) {
-          const localMeta = (await getLocalSyncMeta()) ?? {
+          const meta = (await getLocalSyncMeta()) ?? {
             id: "current" as const,
             lastUpdatedAt: new Date().toISOString(),
             files: {},
           };
           for (const r of results) {
-            localMeta.files[r.fileId] = {
+            meta.files[r.fileId] = {
               md5Checksum: r.md5Checksum,
               modifiedTime: r.modifiedTime,
             };
@@ -149,8 +185,8 @@ export function useSync() {
               });
             }
           }
-          localMeta.lastUpdatedAt = new Date().toISOString();
-          await setLocalSyncMeta(localMeta);
+          meta.lastUpdatedAt = new Date().toISOString();
+          await setLocalSyncMeta(meta);
         }
       }
 
@@ -159,59 +195,39 @@ export function useSync() {
       setLocalModifiedCount(0);
       window.dispatchEvent(new Event("sync-complete"));
 
-      const localMeta = (await getLocalSyncMeta()) ?? null;
-      if (!localMeta) {
+      // Push metadata sync
+      const updatedMeta = (await getLocalSyncMeta()) ?? null;
+      if (!updatedMeta) {
         setSyncStatus("idle");
         setLastSyncTime(new Date().toISOString());
         return;
       }
 
-      // Compute diff
-      const diffRes = await fetch("/api/sync", {
+      const postDiffRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "diff",
-          localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
+          localMeta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
         }),
       });
 
-      if (!diffRes.ok) throw new Error("Failed to compute diff");
-      const diffData = await diffRes.json();
+      if (!postDiffRes.ok) throw new Error("Failed to compute diff");
+      const postDiffData = await postDiffRes.json();
 
-      if (diffData.diff.conflicts.length > 0) {
-        setConflicts(diffData.diff.conflicts);
-        setDiff(diffData.diff);
-        setSyncStatus("conflict");
-        return;
-      }
-
-      // lastUpdatedAt check: reject push if remote is newer
-      if (
-        diffData.remoteMeta?.lastUpdatedAt &&
-        localMeta.lastUpdatedAt &&
-        diffData.remoteMeta.lastUpdatedAt > localMeta.lastUpdatedAt &&
-        (diffData.diff.toPull.length > 0 || diffData.diff.remoteOnly.length > 0)
-      ) {
-        setError("settings.sync.pushRejected");
-        setSyncStatus("error");
-        return;
-      }
-
-      if (diffData.diff.toPush.length === 0) {
+      if (postDiffData.diff.toPush.length === 0) {
         setLastSyncTime(new Date().toISOString());
         setSyncStatus("idle");
         return;
       }
 
-      // Push remaining metadata changes
       const pushRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "push",
-          fileIds: diffData.diff.toPush,
-          localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
+          fileIds: postDiffData.diff.toPush,
+          localMeta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
         }),
       });
 
