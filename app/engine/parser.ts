@@ -72,13 +72,23 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
     positions,
   };
 
+  const usedIds = new Set<string>();
+
   for (let i = 0; i < nodesList.length; i++) {
     const rawNode = nodesList[i];
     if (!rawNode || typeof rawNode !== "object") continue;
 
-    const id = normalizeValue(rawNode.id) || `node-${i + 1}`;
+    let id = normalizeValue(rawNode.id) || `node-${i + 1}`;
     const typeRaw = rawNode.type;
     if (!isWorkflowNodeType(typeRaw)) continue;
+
+    // Detect and resolve duplicate node IDs
+    if (usedIds.has(id)) {
+      let suffix = 2;
+      while (usedIds.has(`${id}_${suffix}`)) suffix++;
+      id = `${id}_${suffix}`;
+    }
+    usedIds.add(id);
 
     const properties: Record<string, string> = {};
     for (const [key, value] of Object.entries(rawNode)) {

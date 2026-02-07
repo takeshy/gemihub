@@ -20,7 +20,7 @@ export function MermaidCodeBlock({ code }: { code: string }) {
           startOnLoad: false,
           theme: isDark ? "dark" : "default",
           flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" },
-          securityLevel: "loose",
+          securityLevel: "strict",
         });
 
         const id = `mermaid-md-${Date.now()}`;

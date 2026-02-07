@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useLoaderData, useSearchParams } from "react-router";
+import { data, useLoaderData, useSearchParams } from "react-router";
 import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
@@ -20,6 +20,7 @@ import { PasswordPromptDialog } from "~/components/ide/PasswordPromptDialog";
 import { WorkflowPropsPanel } from "~/components/ide/WorkflowPropsPanel";
 import { ConflictDialog } from "~/components/ide/ConflictDialog";
 import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
+import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { useSync } from "~/hooks/useSync";
 
 // ---------------------------------------------------------------------------
@@ -29,7 +30,7 @@ import { useSync } from "~/hooks/useSync";
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await getTokens(request);
   if (!tokens) {
-    return Response.json({
+    return data({
       authenticated: false as const,
       settings: null,
       hasGeminiApiKey: false,
@@ -42,7 +43,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
     const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
-    return Response.json(
+    return data(
       {
         authenticated: true as const,
         settings,
@@ -53,7 +54,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
     );
   } catch {
-    return Response.json({
+    return data({
       authenticated: false as const,
       settings: null,
       hasGeminiApiKey: false,
@@ -67,13 +68,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 // Client-side loader cache
 // ---------------------------------------------------------------------------
 
-let cachedLoaderData: Awaited<ReturnType<typeof loader>> | null = null;
+let cachedLoaderData: Awaited<ReturnType<Route.ClientLoaderArgs["serverLoader"]>> | null = null;
 
 export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
   if (cachedLoaderData) return cachedLoaderData;
-  const data = await serverLoader();
-  cachedLoaderData = data;
-  return data;
+  const loaderData = await serverLoader();
+  cachedLoaderData = loaderData;
+  return loaderData;
 }
 
 export function invalidateIndexCache() {
@@ -372,35 +373,39 @@ function IDELayout({
 
           {/* Main viewer */}
           <div className="flex flex-1 flex-col overflow-hidden">
-            <MainViewer
-              fileId={activeFileId}
-              fileName={activeFileName}
-              fileMimeType={activeFileMimeType}
-              settings={settings}
-              refreshKey={workflowVersion}
-            />
+            <PanelErrorBoundary fallbackLabel="Error loading main viewer">
+              <MainViewer
+                fileId={activeFileId}
+                fileName={activeFileName}
+                fileMimeType={activeFileMimeType}
+                settings={settings}
+                refreshKey={workflowVersion}
+              />
+            </PanelErrorBoundary>
           </div>
 
           {/* Right sidebar - Chat / Workflow props */}
           <RightSidebar>
-            {rightPanel === "chat" ? (
-              <ChatPanel
-                settings={settings}
-                hasApiKey={hasGeminiApiKey}
-                hasEncryptedApiKey={hasEncryptedApiKey}
-                onNeedUnlock={() => setShowPasswordPrompt(true)}
-                slashCommands={settings.slashCommands || []}
-              />
-            ) : (
-              <WorkflowPropsPanel
-                activeFileId={activeFileId}
-                activeFileName={activeFileName}
-                onNewWorkflow={handleNewWorkflow}
-                onSelectFile={handleSelectFile}
-                onWorkflowChanged={handleWorkflowChanged}
-                onModifyWithAI={handleModifyWithAI}
-              />
-            )}
+            <PanelErrorBoundary fallbackLabel="Error loading panel">
+              {rightPanel === "chat" ? (
+                <ChatPanel
+                  settings={settings}
+                  hasApiKey={hasGeminiApiKey}
+                  hasEncryptedApiKey={hasEncryptedApiKey}
+                  onNeedUnlock={() => setShowPasswordPrompt(true)}
+                  slashCommands={settings.slashCommands || []}
+                />
+              ) : (
+                <WorkflowPropsPanel
+                  activeFileId={activeFileId}
+                  activeFileName={activeFileName}
+                  onNewWorkflow={handleNewWorkflow}
+                  onSelectFile={handleSelectFile}
+                  onWorkflowChanged={handleWorkflowChanged}
+                  onModifyWithAI={handleModifyWithAI}
+                />
+              )}
+            </PanelErrorBoundary>
           </RightSidebar>
         </div>
 

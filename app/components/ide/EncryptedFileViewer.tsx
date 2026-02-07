@@ -36,7 +36,6 @@ export function EncryptedFileViewer({
 
   // Is the raw content actually encrypted, or plain text with .encrypted extension?
   const contentIsEncrypted = isEncryptedFile(encryptedContent);
-  console.log("[EncryptedFileViewer] mount/render: contentIsEncrypted:", contentIsEncrypted, "fileName:", fileName, "content starts:", JSON.stringify(encryptedContent.slice(0, 60)));
 
   const [password, setPassword] = useState("");
   // If content is plain text, skip password — go straight to editor
@@ -102,12 +101,10 @@ export function EncryptedFileViewer({
     let cancelled = false;
     setDecrypting(true);
     setError(null);
-    console.log("[EncryptedFileViewer] auto-decrypt starting, content length:", encryptedContent.length);
 
     decryptFileContent(encryptedContent, cached)
       .then((plain) => {
         if (cancelled) return;
-        console.log("[EncryptedFileViewer] auto-decrypt OK, plain starts with:", JSON.stringify(plain.slice(0, 80)));
         setDecryptedContent(plain);
         setEditedContent(plain);
       })
@@ -137,16 +134,12 @@ export function EncryptedFileViewer({
     setDecrypting(true);
     setError(null);
     try {
-      console.log("[EncryptedFileViewer] handleUnlock: content starts with:", JSON.stringify(encryptedContent.slice(0, 80)));
       const parsed = unwrapEncryptedFile(encryptedContent);
       if (!parsed) {
-        console.error("[EncryptedFileViewer] unwrapEncryptedFile returned null");
         setError(t("crypt.wrongPassword"));
         return;
       }
-      console.log("[EncryptedFileViewer] parsed OK, data length:", parsed.data.length);
       const plain = await decryptFileContent(encryptedContent, password);
-      console.log("[EncryptedFileViewer] decrypted OK, plain starts with:", JSON.stringify(plain.slice(0, 80)));
       cryptoCache.setPassword(password);
       const pk = await decryptPrivateKey(parsed.key, parsed.salt, password);
       cryptoCache.setPrivateKey(pk);
@@ -310,7 +303,6 @@ export function EncryptedFileViewer({
   }
 
   // ---------- Decrypted / plain-text editor UI ----------
-  console.log("[EncryptedFileViewer] rendering editor, editedContent starts with:", JSON.stringify(editedContent.slice(0, 80)), "isEncrypted:", isEncryptedFile(editedContent));
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       {/* Loading overlay during encryption/upload */}

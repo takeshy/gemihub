@@ -1,6 +1,7 @@
 import type { Route } from "./+types/api.mcp.resource-read";
 import { requireAuth } from "~/services/session.server";
 import { getOrCreateClient } from "~/services/mcp-tools.server";
+import { validateMcpServerUrl } from "~/services/url-validator.server";
 import type { McpServerConfig } from "~/types/settings";
 
 /**
@@ -24,6 +25,15 @@ export async function action({ request }: Route.ActionArgs) {
   if (!serverUrl || !resourceUri) {
     return Response.json(
       { error: "serverUrl and resourceUri are required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    validateMcpServerUrl(serverUrl);
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Invalid server URL" },
       { status: 400 }
     );
   }

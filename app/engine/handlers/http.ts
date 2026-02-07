@@ -125,7 +125,11 @@ export async function handleHttpNode(
 
   let response: Response;
   try {
-    const requestOptions: RequestInit = { method, headers };
+    const requestOptions: RequestInit = {
+      method,
+      headers,
+      signal: AbortSignal.timeout(60_000),
+    };
     if (body && ["POST", "PUT", "PATCH"].includes(method)) {
       requestOptions.body = body;
     }

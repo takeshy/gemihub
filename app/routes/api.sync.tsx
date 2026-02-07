@@ -58,6 +58,14 @@ export async function action({ request }: Route.ActionArgs) {
   const body = await request.json();
   const { action: actionType } = body;
 
+  const VALID_ACTIONS = new Set([
+    "diff", "push", "pull", "resolve", "fullPush", "fullPull",
+    "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
+  ]);
+  if (!actionType || !VALID_ACTIONS.has(actionType)) {
+    return jsonWithCookie({ error: `Invalid action: ${actionType}` }, { status: 400 });
+  }
+
   switch (actionType) {
     case "diff": {
       const localMeta = body.localMeta as SyncMeta | null;
@@ -349,7 +357,7 @@ export async function action({ request }: Route.ActionArgs) {
 
     case "restoreUntracked": {
       const fileIds = body.fileIds as string[];
-      let remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+      const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
         ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
 
       for (const fileId of fileIds) {

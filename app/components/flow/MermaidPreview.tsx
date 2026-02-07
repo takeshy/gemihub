@@ -28,7 +28,7 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
             htmlLabels: true,
             curve: "basis",
           },
-          securityLevel: "loose",
+          securityLevel: "strict",
         });
 
         const id = `mermaid-${Date.now()}`;

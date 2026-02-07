@@ -5,6 +5,11 @@ const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const ROOT_FOLDER_NAME = "gemini-hub";
 const HISTORY_FOLDER = "history";
 
+/** Escape a value for use in Drive API query strings (single-quote contexts). */
+function escapeDriveQuery(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
 const SYSTEM_FILES = new Set(["settings.json", "_sync-meta.json"]);
 
 export interface DriveFile {
@@ -26,15 +31,24 @@ interface DriveListResponse {
 async function driveRequest(
   url: string,
   accessToken: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retries = 2
 ): Promise<Response> {
   const response = await fetch(url, {
     ...options,
+    signal: options.signal ?? AbortSignal.timeout(30_000),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       ...options.headers,
     },
   });
+
+  // Retry on 429 (rate limit) or 503 (service unavailable)
+  if ((response.status === 429 || response.status === 503) && retries > 0) {
+    const retryAfter = parseInt(response.headers.get("Retry-After") || "2", 10);
+    await new Promise((r) => setTimeout(r, retryAfter * 1000));
+    return driveRequest(url, accessToken, options, retries - 1);
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -48,7 +62,7 @@ async function driveRequest(
 export async function ensureRootFolder(accessToken: string, folderName?: string): Promise<string> {
   const name = folderName || ROOT_FOLDER_NAME;
   // Search for existing folder
-  const query = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const query = `name='${escapeDriveQuery(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res = await driveRequest(
     `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
     accessToken
@@ -78,7 +92,7 @@ export async function ensureSubFolder(
   parentId: string,
   folderName: string
 ): Promise<string> {
-  const query = `name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const query = `name='${escapeDriveQuery(folderName)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res = await driveRequest(
     `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
     accessToken
@@ -294,9 +308,9 @@ export async function searchFiles(
 ): Promise<DriveFile[]> {
   let driveQuery: string;
   if (searchContent) {
-    driveQuery = `fullText contains '${query.replace(/'/g, "\\'")}' and '${rootFolderId}' in parents and trashed=false`;
+    driveQuery = `fullText contains '${escapeDriveQuery(query)}' and '${rootFolderId}' in parents and trashed=false`;
   } else {
-    driveQuery = `name contains '${query.replace(/'/g, "\\'")}' and '${rootFolderId}' in parents and trashed=false`;
+    driveQuery = `name contains '${escapeDriveQuery(query)}' and '${rootFolderId}' in parents and trashed=false`;
   }
 
   const res = await driveRequest(
@@ -313,7 +327,7 @@ export async function findFolderByName(
   name: string,
   parentId?: string
 ): Promise<DriveFile | null> {
-  let query = `name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  let query = `name='${escapeDriveQuery(name)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   if (parentId) {
     query += ` and '${parentId}' in parents`;
   }
@@ -331,7 +345,7 @@ export async function findFileByExactName(
   name: string,
   parentId?: string
 ): Promise<DriveFile | null> {
-  let query = `name='${name.replace(/'/g, "\\'")}' and mimeType!='application/vnd.google-apps.folder' and trashed=false`;
+  let query = `name='${escapeDriveQuery(name)}' and mimeType!='application/vnd.google-apps.folder' and trashed=false`;
   if (parentId) {
     query += ` and '${parentId}' in parents`;
   }

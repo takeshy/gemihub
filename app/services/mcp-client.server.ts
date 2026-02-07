@@ -103,6 +103,7 @@ export class McpClient {
       method: "POST",
       headers,
       body: JSON.stringify(request),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {
@@ -180,6 +181,7 @@ export class McpClient {
         method: "POST",
         headers,
         body: JSON.stringify(notification),
+        signal: AbortSignal.timeout(10_000),
       });
     } catch {
       // Notifications may not return anything
@@ -303,6 +305,7 @@ export class McpClient {
         await fetch(this.config.url, {
           method: "DELETE",
           headers,
+          signal: AbortSignal.timeout(5_000),
         });
       } catch {
         // Ignore close errors

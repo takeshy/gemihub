@@ -1,4 +1,5 @@
 import type { Route } from "./+types/api.chat";
+import { z } from "zod";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat.server";
@@ -7,6 +8,33 @@ import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.serv
 import { isImageGenerationModel } from "~/types/settings";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
+
+const ChatRequestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string(),
+    timestamp: z.number(),
+  }).passthrough()).min(1),
+  model: z.string(),
+  systemPrompt: z.string().optional(),
+  ragStoreIds: z.array(z.string()).optional(),
+  enableDriveTools: z.boolean().optional(),
+  driveToolMode: z.enum(["all", "noSearch", "none"]).optional(),
+  enableMcp: z.boolean().optional(),
+  mcpServers: z.array(z.object({
+    name: z.string(),
+    url: z.string(),
+    headers: z.record(z.string(), z.string()).optional(),
+    enabled: z.boolean(),
+  }).passthrough()).optional(),
+  webSearchEnabled: z.boolean().optional(),
+  apiPlan: z.string().optional(),
+  settings: z.object({
+    maxFunctionCalls: z.number().optional(),
+    functionCallWarningThreshold: z.number().optional(),
+    ragTopK: z.number().optional(),
+  }).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // POST handler -- Chat SSE streaming API
@@ -30,44 +58,28 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const body = await request.json();
-  const {
-    messages,
-    model,
-    systemPrompt,
-    ragStoreIds,
-    enableDriveTools,
-    driveToolMode: rawDriveToolMode,
-    enableMcp,
-    mcpServers,
-    webSearchEnabled,
-    settings: requestSettings,
-  } = body as {
-    messages: Message[];
-    model: ModelType;
-    systemPrompt?: string;
-    ragStoreIds?: string[];
-    enableDriveTools?: boolean;
-    driveToolMode?: "all" | "noSearch" | "none";
-    enableMcp?: boolean;
-    mcpServers?: McpServerConfig[];
-    webSearchEnabled?: boolean;
-    apiPlan?: string;
-    settings?: {
-      maxFunctionCalls?: number;
-      functionCallWarningThreshold?: number;
-      ragTopK?: number;
-    };
-  };
-
-  // Resolve driveToolMode: new field takes precedence, fall back to legacy enableDriveTools
-  const driveToolMode = rawDriveToolMode ?? (enableDriveTools === false ? "none" : "all");
-
-  if (!messages || messages.length === 0) {
+  const parsed = ChatRequestSchema.safeParse(body);
+  if (!parsed.success) {
     return new Response(
-      JSON.stringify({ error: "No messages provided" }),
+      JSON.stringify({ error: "Invalid request body", details: parsed.error.issues }),
       { status: 400, headers: { "Content-Type": "application/json", ...responseHeaders } }
     );
   }
+
+  const validData = parsed.data;
+  const messages = validData.messages as unknown as Message[];
+  const model = validData.model as ModelType;
+  const systemPrompt = validData.systemPrompt;
+  const ragStoreIds = validData.ragStoreIds;
+  const enableDriveTools = validData.enableDriveTools;
+  const rawDriveToolMode = validData.driveToolMode;
+  const enableMcp = validData.enableMcp;
+  const mcpServers = validData.mcpServers as McpServerConfig[] | undefined;
+  const webSearchEnabled = validData.webSearchEnabled;
+  const requestSettings = validData.settings;
+
+  // Resolve driveToolMode: new field takes precedence, fall back to legacy enableDriveTools
+  const driveToolMode = rawDriveToolMode ?? (enableDriveTools === false ? "none" : "all");
 
   // Build tools array
   const tools: ToolDefinition[] = [];

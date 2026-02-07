@@ -36,7 +36,10 @@ export async function action({ request }: Route.ActionArgs) {
     try {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      const uploadName = namePrefix ? `${namePrefix}/${file.name}` : file.name;
+      // Sanitize namePrefix and file.name to prevent path traversal
+      const safePrefix = namePrefix?.replace(/\.\.\//g, "").replace(/^\/+/, "") || "";
+      const safeName = file.name.replace(/\.\.\//g, "").replace(/^\/+/, "");
+      const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
       const driveFile = await createFileBinary(
         validTokens.accessToken,
         uploadName,

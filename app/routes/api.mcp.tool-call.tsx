@@ -1,6 +1,7 @@
 import type { Route } from "./+types/api.mcp.tool-call";
 import { requireAuth } from "~/services/session.server";
 import { getOrCreateClient } from "~/services/mcp-tools.server";
+import { validateMcpServerUrl } from "~/services/url-validator.server";
 import type { McpServerConfig } from "~/types/settings";
 
 /**
@@ -27,6 +28,18 @@ export async function action({ request }: Route.ActionArgs) {
   if (!serverUrl || !toolName) {
     return Response.json(
       { error: "serverUrl and toolName are required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    validateMcpServerUrl(serverUrl);
+  } catch (error) {
+    return Response.json(
+      {
+        content: [{ type: "text", text: error instanceof Error ? error.message : "Invalid server URL" }],
+        isError: true,
+      },
       { status: 400 }
     );
   }

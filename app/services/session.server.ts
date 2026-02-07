@@ -1,4 +1,5 @@
 import { createCookieSessionStorage, redirect } from "react-router";
+import crypto from "node:crypto";
 import type { ApiPlan } from "~/types/settings";
 
 const rawSessionSecret = process.env.SESSION_SECRET;
@@ -6,6 +7,33 @@ if (!rawSessionSecret && process.env.NODE_ENV === "production") {
   throw new Error("SESSION_SECRET must be set in production");
 }
 const SESSION_SECRET = rawSessionSecret || "dev-secret-change-in-production";
+
+// --- API key encryption helpers (AES-256-GCM) ---
+
+function deriveKey(secret: string): Buffer {
+  return crypto.createHash("sha256").update(secret).digest();
+}
+
+function encryptApiKey(plaintext: string): string {
+  const key = deriveKey(SESSION_SECRET);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  // Format: base64(iv + tag + ciphertext)
+  return Buffer.concat([iv, tag, encrypted]).toString("base64");
+}
+
+function decryptApiKey(encoded: string): string {
+  const key = deriveKey(SESSION_SECRET);
+  const buf = Buffer.from(encoded, "base64");
+  const iv = buf.subarray(0, 12);
+  const tag = buf.subarray(12, 28);
+  const ciphertext = buf.subarray(28);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  return decipher.update(ciphertext) + decipher.final("utf8");
+}
 
 export const sessionStorage = createCookieSessionStorage({
   cookie: {
@@ -47,10 +75,20 @@ export async function getTokens(request: Request): Promise<SessionTokens | null>
   const refreshToken = session.get("refreshToken");
   const expiryTime = session.get("expiryTime");
   const rootFolderId = session.get("rootFolderId");
-  const geminiApiKey = session.get("geminiApiKey");
+  const encryptedKey = session.get("geminiApiKey") as string | undefined;
 
   if (!accessToken || !refreshToken) {
     return null;
+  }
+
+  let geminiApiKey: string | undefined;
+  if (encryptedKey) {
+    try {
+      geminiApiKey = decryptApiKey(encryptedKey);
+    } catch {
+      // If decryption fails (e.g. secret changed), treat as unset
+      geminiApiKey = undefined;
+    }
   }
 
   const apiPlan = session.get("apiPlan") as ApiPlan | undefined;
@@ -69,7 +107,7 @@ export async function setTokens(
   session.set("expiryTime", tokens.expiryTime);
   session.set("rootFolderId", tokens.rootFolderId);
   if (tokens.geminiApiKey !== undefined) {
-    session.set("geminiApiKey", tokens.geminiApiKey);
+    session.set("geminiApiKey", tokens.geminiApiKey ? encryptApiKey(tokens.geminiApiKey) : "");
   }
   if (tokens.apiPlan !== undefined) {
     session.set("apiPlan", tokens.apiPlan);
@@ -82,7 +120,7 @@ export async function setTokens(
 
 export async function setGeminiApiKey(request: Request, apiKey: string) {
   const session = await getSession(request);
-  session.set("geminiApiKey", apiKey);
+  session.set("geminiApiKey", apiKey ? encryptApiKey(apiKey) : "");
   return session;
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link, useLoaderData, useFetcher } from "react-router";
+import { data, Link, useLoaderData, useFetcher } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
@@ -93,7 +93,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
-  return Response.json(
+  return data(
     {
       settings,
       hasApiKey: !!validTokens.geminiApiKey,
@@ -251,7 +251,12 @@ export async function action({ request }: Route.ActionArgs) {
 
       case "saveMcp": {
         const mcpJson = formData.get("mcpServers") as string;
-        const mcpServers: McpServerConfig[] = mcpJson ? JSON.parse(mcpJson) : [];
+        let mcpServers: McpServerConfig[];
+        try {
+          mcpServers = mcpJson ? JSON.parse(mcpJson) : [];
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid MCP servers JSON." });
+        }
         const updatedSettings: UserSettings = { ...currentSettings, mcpServers };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
         return jsonWithCookie({ success: true, message: "MCP server settings saved." });
@@ -261,9 +266,14 @@ export async function action({ request }: Route.ActionArgs) {
         const ragEnabled = formData.get("ragEnabled") === "on";
         const ragTopK = Math.min(20, Math.max(1, Number(formData.get("ragTopK")) || 5));
         const ragSettingsJson = formData.get("ragSettings") as string;
-        const ragSettings: Record<string, RagSetting> = ragSettingsJson
-          ? JSON.parse(ragSettingsJson)
-          : currentSettings.ragSettings;
+        let ragSettings: Record<string, RagSetting>;
+        try {
+          ragSettings = ragSettingsJson
+            ? JSON.parse(ragSettingsJson)
+            : currentSettings.ragSettings;
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid RAG settings JSON." });
+        }
         const selectedRagSetting = (formData.get("selectedRagSetting") as string) || null;
 
         const updatedSettings: UserSettings = {
@@ -297,7 +307,12 @@ export async function action({ request }: Route.ActionArgs) {
 
       case "saveCommands": {
         const commandsJson = formData.get("slashCommands") as string;
-        const slashCommands = commandsJson ? JSON.parse(commandsJson) : [];
+        let slashCommands;
+        try {
+          slashCommands = commandsJson ? JSON.parse(commandsJson) : [];
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid commands JSON." });
+        }
         const updatedSettings: UserSettings = { ...currentSettings, slashCommands };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
         return jsonWithCookie({ success: true, message: "Command settings saved." });
@@ -1285,38 +1300,31 @@ function McpTab({ settings }: { settings: UserSettings }) {
   const startAddOAuthFlow = useCallback(async (
     oauthConfig: OAuthConfig,
   ): Promise<OAuthTokens | null> => {
-    return new Promise(async (resolve) => {
-      const codeVerifier = generateRandomString(64);
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const state = generateRandomString(32);
-      const redirectUri = `${window.location.origin}/auth/mcp-oauth-callback`;
+    const codeVerifier = generateRandomString(64);
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = generateRandomString(32);
+    const redirectUri = `${window.location.origin}/auth/mcp-oauth-callback`;
 
-      const params = new URLSearchParams({
-        response_type: "code",
-        client_id: oauthConfig.clientId,
-        redirect_uri: redirectUri,
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-      });
-      if (oauthConfig.scopes.length > 0) {
-        params.set("scope", oauthConfig.scopes.join(" "));
-      }
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: oauthConfig.clientId,
+      redirect_uri: redirectUri,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+    });
+    if (oauthConfig.scopes.length > 0) {
+      params.set("scope", oauthConfig.scopes.join(" "));
+    }
 
-      const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
+    const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
 
-      setAddTestResult({ ok: false, msg: t("settings.mcp.oauthAuthenticating") });
+    setAddTestResult({ ok: false, msg: t("settings.mcp.oauthAuthenticating") });
 
-      const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
+    const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
 
+    return new Promise((resolve) => {
       let resolved = false;
-      let checkClosedInterval: ReturnType<typeof setInterval>;
-
-      const cleanup = () => {
-        window.removeEventListener("message", onMessage);
-        window.removeEventListener("storage", onStorage);
-        if (checkClosedInterval) clearInterval(checkClosedInterval);
-      };
 
       const onMessage = async (event: MessageEvent) => {
         if (event.origin !== window.location.origin) return;
@@ -1385,13 +1393,20 @@ function McpTab({ settings }: { settings: UserSettings }) {
 
       window.addEventListener("message", onMessage);
       window.addEventListener("storage", onStorage);
-      checkClosedInterval = setInterval(() => {
+
+      const checkClosedInterval = setInterval(() => {
         if (popup && popup.closed && !resolved) {
           resolved = true;
           cleanup();
           resolve(null);
         }
       }, 500);
+
+      function cleanup() {
+        window.removeEventListener("message", onMessage);
+        window.removeEventListener("storage", onStorage);
+        clearInterval(checkClosedInterval);
+      }
     });
   }, [t]);
 
@@ -1488,41 +1503,34 @@ function McpTab({ settings }: { settings: UserSettings }) {
     idx: number,
     oauthConfig: OAuthConfig,
   ): Promise<OAuthTokens | null> => {
-    return new Promise(async (resolve) => {
-      const codeVerifier = generateRandomString(64);
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const state = generateRandomString(32);
-      const redirectUri = `${window.location.origin}/auth/mcp-oauth-callback`;
+    const codeVerifier = generateRandomString(64);
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = generateRandomString(32);
+    const redirectUri = `${window.location.origin}/auth/mcp-oauth-callback`;
 
-      const params = new URLSearchParams({
-        response_type: "code",
-        client_id: oauthConfig.clientId,
-        redirect_uri: redirectUri,
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-      });
-      if (oauthConfig.scopes.length > 0) {
-        params.set("scope", oauthConfig.scopes.join(" "));
-      }
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: oauthConfig.clientId,
+      redirect_uri: redirectUri,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+    });
+    if (oauthConfig.scopes.length > 0) {
+      params.set("scope", oauthConfig.scopes.join(" "));
+    }
 
-      const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
+    const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
 
-      setTestResults((prev) => ({
-        ...prev,
-        [idx]: { ok: false, msg: t("settings.mcp.oauthAuthenticating") },
-      }));
+    setTestResults((prev) => ({
+      ...prev,
+      [idx]: { ok: false, msg: t("settings.mcp.oauthAuthenticating") },
+    }));
 
-      const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
+    const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
 
+    return new Promise((resolve) => {
       let resolved = false;
-      let checkClosedInterval: ReturnType<typeof setInterval>;
-
-      const cleanup = () => {
-        window.removeEventListener("message", onMessage);
-        window.removeEventListener("storage", onStorage);
-        if (checkClosedInterval) clearInterval(checkClosedInterval);
-      };
 
       const onMessage = async (event: MessageEvent) => {
         if (event.origin !== window.location.origin) return;
@@ -1605,13 +1613,19 @@ function McpTab({ settings }: { settings: UserSettings }) {
       window.addEventListener("message", onMessage);
       window.addEventListener("storage", onStorage);
 
-      checkClosedInterval = setInterval(() => {
+      const checkClosedInterval = setInterval(() => {
         if (popup && popup.closed && !resolved) {
           resolved = true;
           cleanup();
           resolve(null);
         }
       }, 500);
+
+      function cleanup() {
+        window.removeEventListener("message", onMessage);
+        window.removeEventListener("storage", onStorage);
+        clearInterval(checkClosedInterval);
+      }
     });
   }, [t]);
 
