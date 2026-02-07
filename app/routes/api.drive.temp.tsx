@@ -16,7 +16,8 @@ import { getFileMetadata } from "~/services/google-drive.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action");
@@ -27,16 +28,17 @@ export async function loader({ request }: Route.LoaderArgs) {
         validTokens.accessToken,
         validTokens.rootFolderId
       );
-      return Response.json({ files });
+      return Response.json({ files }, { headers: responseHeaders });
     }
     default:
-      return Response.json({ error: "Unknown action" }, { status: 400 });
+      return Response.json({ error: "Unknown action" }, { status: 400, headers: responseHeaders });
   }
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const body = await request.json();
   const actionType = body.action as string;
@@ -47,7 +49,7 @@ export async function action({ request }: Route.ActionArgs) {
       if (!fileName || !fileId) {
         return Response.json(
           { error: "Missing fileName or fileId" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
       const file = await saveTempFile(
@@ -60,13 +62,13 @@ export async function action({ request }: Route.ActionArgs) {
           savedAt: new Date().toISOString(),
         }
       );
-      return Response.json({ success: true, file });
+      return Response.json({ success: true, file }, { headers: responseHeaders });
     }
 
     case "download": {
       const { fileName } = body;
       if (!fileName) {
-        return Response.json({ error: "Missing fileName" }, { status: 400 });
+        return Response.json({ error: "Missing fileName" }, { status: 400, headers: responseHeaders });
       }
       const tempFile = await findTempFile(
         validTokens.accessToken,
@@ -74,9 +76,9 @@ export async function action({ request }: Route.ActionArgs) {
         fileName
       );
       if (!tempFile) {
-        return Response.json({ found: false });
+        return Response.json({ found: false }, { headers: responseHeaders });
       }
-      return Response.json({ found: true, tempFile });
+      return Response.json({ found: true, tempFile }, { headers: responseHeaders });
     }
 
     case "applyAll": {
@@ -98,7 +100,7 @@ export async function action({ request }: Route.ActionArgs) {
         } catch { /* ignore individual meta update failures */ }
       }
 
-      return Response.json({ results });
+      return Response.json({ results }, { headers: responseHeaders });
     }
 
     case "delete": {
@@ -106,14 +108,14 @@ export async function action({ request }: Route.ActionArgs) {
       if (!Array.isArray(tempFileIds)) {
         return Response.json(
           { error: "Missing tempFileIds array" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
       await deleteTempFiles(validTokens.accessToken, tempFileIds);
-      return Response.json({ success: true });
+      return Response.json({ success: true }, { headers: responseHeaders });
     }
 
     default:
-      return Response.json({ error: "Unknown action" }, { status: 400 });
+      return Response.json({ error: "Unknown action" }, { status: 400, headers: responseHeaders });
   }
 }

@@ -20,7 +20,8 @@ import yaml from "js-yaml";
 // POST: Start execution
 export async function action({ request, params }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const fileId = params.id;
   const executionId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -140,7 +141,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
   })();
 
-  return Response.json({ executionId });
+  return Response.json({ executionId }, { headers: responseHeaders });
 }
 
 // GET: SSE stream

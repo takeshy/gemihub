@@ -29,34 +29,37 @@ import { useSync } from "~/hooks/useSync";
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await getTokens(request);
   if (!tokens) {
-    return {
+    return Response.json({
       authenticated: false as const,
       settings: null,
       hasGeminiApiKey: false,
       hasEncryptedApiKey: false,
       rootFolderId: "",
-    };
+    });
   }
 
   try {
-    const { tokens: validTokens } = await getValidTokens(request, tokens);
+    const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
     const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
-    return {
-      authenticated: true as const,
-      settings,
-      hasGeminiApiKey: !!validTokens.geminiApiKey,
-      hasEncryptedApiKey: !!settings.encryptedApiKey,
-      rootFolderId: validTokens.rootFolderId,
-    };
+    return Response.json(
+      {
+        authenticated: true as const,
+        settings,
+        hasGeminiApiKey: !!validTokens.geminiApiKey,
+        hasEncryptedApiKey: !!settings.encryptedApiKey,
+        rootFolderId: validTokens.rootFolderId,
+      },
+      { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
+    );
   } catch {
-    return {
+    return Response.json({
       authenticated: false as const,
       settings: null,
       hasGeminiApiKey: false,
       hasEncryptedApiKey: false,
       rootFolderId: "",
-    };
+    });
   }
 }
 

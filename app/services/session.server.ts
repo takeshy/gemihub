@@ -1,7 +1,11 @@
 import { createCookieSessionStorage, redirect } from "react-router";
 import type { ApiPlan } from "~/types/settings";
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-in-production";
+const rawSessionSecret = process.env.SESSION_SECRET;
+if (!rawSessionSecret && process.env.NODE_ENV === "production") {
+  throw new Error("SESSION_SECRET must be set in production");
+}
+const SESSION_SECRET = rawSessionSecret || "dev-secret-change-in-production";
 
 export const sessionStorage = createCookieSessionStorage({
   cookie: {

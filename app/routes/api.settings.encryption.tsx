@@ -19,7 +19,8 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const body = await request.json();
   const { action: encAction, password } = body as {
@@ -40,14 +41,14 @@ export async function action({ request }: Route.ActionArgs) {
       if (!password) {
         return Response.json(
           { error: "Password is required" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
 
       if (password.length < 8) {
         return Response.json(
           { error: "Password must be at least 8 characters" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
 
@@ -77,12 +78,15 @@ export async function action({ request }: Route.ActionArgs) {
           updatedSettings
         );
 
-        return Response.json({
-          success: true,
-          publicKey: keyPair.publicKey,
-          encryptedPrivateKey,
-          salt,
-        });
+        return Response.json(
+          {
+            success: true,
+            publicKey: keyPair.publicKey,
+            encryptedPrivateKey,
+            salt,
+          },
+          { headers: responseHeaders }
+        );
       } catch (error) {
         return Response.json(
           {
@@ -91,7 +95,7 @@ export async function action({ request }: Route.ActionArgs) {
                 ? error.message
                 : "Key generation failed",
           },
-          { status: 500 }
+          { status: 500, headers: responseHeaders }
         );
       }
     }
@@ -103,7 +107,7 @@ export async function action({ request }: Route.ActionArgs) {
       if (!password) {
         return Response.json(
           { error: "Password is required" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
 
@@ -113,7 +117,7 @@ export async function action({ request }: Route.ActionArgs) {
       ) {
         return Response.json(
           { error: "No encryption keys configured" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
 
@@ -124,9 +128,9 @@ export async function action({ request }: Route.ActionArgs) {
           password
         );
 
-        return Response.json({ success: true, valid: isValid });
+        return Response.json({ success: true, valid: isValid }, { headers: responseHeaders });
       } catch {
-        return Response.json({ success: true, valid: false });
+        return Response.json({ success: true, valid: false }, { headers: responseHeaders });
       }
     }
 
@@ -145,13 +149,13 @@ export async function action({ request }: Route.ActionArgs) {
         updatedSettings
       );
 
-      return Response.json({ success: true });
+      return Response.json({ success: true }, { headers: responseHeaders });
     }
 
     default:
       return Response.json(
         { error: `Unknown action: ${encAction}` },
-        { status: 400 }
+        { status: 400, headers: responseHeaders }
       );
   }
 }

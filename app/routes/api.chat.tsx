@@ -18,13 +18,14 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const apiKey = validTokens.geminiApiKey;
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "Gemini API key not configured" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
+      { status: 400, headers: { "Content-Type": "application/json", ...responseHeaders } }
     );
   }
 
@@ -64,7 +65,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!messages || messages.length === 0) {
     return new Response(
       JSON.stringify({ error: "No messages provided" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
+      { status: 400, headers: { "Content-Type": "application/json", ...responseHeaders } }
     );
   }
 
@@ -183,6 +184,7 @@ export async function action({ request }: Route.ActionArgs) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      ...(responseHeaders ?? {}),
     },
   });
 }

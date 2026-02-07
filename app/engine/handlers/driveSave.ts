@@ -43,13 +43,21 @@ export async function handleDriveSaveNode(
     ? fileData.data  // Base64 encoded
     : fileData.data;
 
-  const driveFile = await driveService.createFile(
-    accessToken,
-    fileName,
-    content,
-    folderId,
-    fileData.mimeType
-  );
+  const driveFile = fileData.contentType === "binary"
+    ? await driveService.createFileBinary(
+      accessToken,
+      fileName,
+      Buffer.from(content, "base64"),
+      folderId,
+      fileData.mimeType
+    )
+    : await driveService.createFile(
+      accessToken,
+      fileName,
+      content,
+      folderId,
+      fileData.mimeType
+    );
 
   if (savePathTo) {
     context.variables.set(savePathTo, driveFile.name);

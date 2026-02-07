@@ -23,12 +23,17 @@ import { parallelProcess } from "~/utils/parallel";
 // GET: Fetch remote sync meta + current file list
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
+    const headers = new Headers(init.headers);
+    if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
+    return Response.json(data, { ...init, headers });
+  };
 
   // Rebuild meta from Drive API to ensure accurate state for sync
   const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
 
-  return Response.json({
+  return jsonWithCookie({
     remoteMeta,
     files: Object.entries(remoteMeta.files).map(([id, f]) => ({
       id,
@@ -43,7 +48,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 // POST: diff / push / pull / resolve / fullPush / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
+    const headers = new Headers(init.headers);
+    if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
+    return Response.json(data, { ...init, headers });
+  };
 
   const body = await request.json();
   const { action: actionType } = body;
@@ -56,7 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
       const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
       const files = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
       const diff = computeSyncDiff(localMeta, remoteMeta, files, settings.syncExcludePatterns);
-      return Response.json({ diff, remoteMeta });
+      return jsonWithCookie({ diff, remoteMeta });
     }
 
     case "push": {
@@ -94,7 +104,7 @@ export async function action({ request }: Route.ActionArgs) {
         remoteMeta
       );
 
-      return Response.json({ remoteMeta });
+      return jsonWithCookie({ remoteMeta });
     }
 
     case "pull": {
@@ -115,7 +125,7 @@ export async function action({ request }: Route.ActionArgs) {
         };
       }, 5);
 
-      return Response.json({ files: results });
+      return jsonWithCookie({ files: results });
     }
 
     case "resolve": {
@@ -199,7 +209,7 @@ export async function action({ request }: Route.ActionArgs) {
           readFile(validTokens.accessToken, fileId),
           getFileMetadata(validTokens.accessToken, fileId),
         ]);
-        return Response.json({
+        return jsonWithCookie({
           remoteMeta,
           file: {
             fileId,
@@ -211,7 +221,7 @@ export async function action({ request }: Route.ActionArgs) {
         });
       }
 
-      return Response.json({ remoteMeta });
+      return jsonWithCookie({ remoteMeta });
     }
 
     case "fullPull": {
@@ -242,7 +252,7 @@ export async function action({ request }: Route.ActionArgs) {
         };
       }, 5);
 
-      return Response.json({ files, remoteMeta });
+      return jsonWithCookie({ files, remoteMeta });
     }
 
     case "fullPush": {
@@ -276,7 +286,7 @@ export async function action({ request }: Route.ActionArgs) {
         remoteMeta
       );
 
-      return Response.json({ remoteMeta });
+      return jsonWithCookie({ remoteMeta });
     }
 
     case "clearConflicts": {
@@ -304,9 +314,9 @@ export async function action({ request }: Route.ActionArgs) {
           await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
         }
 
-        return Response.json({ deleted: files.length });
+        return jsonWithCookie({ deleted: files.length });
       } catch {
-        return Response.json({ deleted: 0 });
+        return jsonWithCookie({ deleted: 0 });
       }
     }
 
@@ -326,7 +336,7 @@ export async function action({ request }: Route.ActionArgs) {
           modifiedTime: f.modifiedTime,
         }));
 
-      return Response.json({ untrackedFiles });
+      return jsonWithCookie({ untrackedFiles });
     }
 
     case "deleteUntracked": {
@@ -334,7 +344,7 @@ export async function action({ request }: Route.ActionArgs) {
       await parallelProcess(fileIds, async (id) => {
         await deleteFile(validTokens.accessToken, id);
       }, 5);
-      return Response.json({ deleted: fileIds.length });
+      return jsonWithCookie({ deleted: fileIds.length });
     }
 
     case "restoreUntracked": {
@@ -358,10 +368,10 @@ export async function action({ request }: Route.ActionArgs) {
       remoteMeta.lastUpdatedAt = new Date().toISOString();
       await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
 
-      return Response.json({ restored: fileIds.length, remoteMeta });
+      return jsonWithCookie({ restored: fileIds.length, remoteMeta });
     }
 
     default:
-      return Response.json({ error: "Unknown action" }, { status: 400 });
+      return jsonWithCookie({ error: "Unknown action" }, { status: 400 });
   }
 }

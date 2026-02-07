@@ -90,14 +90,17 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
-  return {
-    settings,
-    hasApiKey: !!validTokens.geminiApiKey,
-    maskedKey: validTokens.geminiApiKey ? maskApiKey(validTokens.geminiApiKey) : null,
-  };
+  return Response.json(
+    {
+      settings,
+      hasApiKey: !!validTokens.geminiApiKey,
+      maskedKey: validTokens.geminiApiKey ? maskApiKey(validTokens.geminiApiKey) : null,
+    },
+    { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +109,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
+    const headers = new Headers(init.headers);
+    if (setCookieHeader) headers.append("Set-Cookie", setCookieHeader);
+    return Response.json(data, { ...init, headers });
+  };
   const currentSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
   const formData = await request.formData();
@@ -160,10 +168,10 @@ export async function action({ request }: Route.ActionArgs) {
         if (isInitialSetup) {
           // Initial setup: encrypt API key + generate RSA key pair
           if (password !== confirmPassword) {
-            return Response.json({ success: false, message: "Passwords do not match." });
+            return jsonWithCookie({ success: false, message: "Passwords do not match." });
           }
           if (password.length < 8) {
-            return Response.json({ success: false, message: "Password must be at least 8 characters." });
+            return jsonWithCookie({ success: false, message: "Password must be at least 8 characters." });
           }
 
           const { encryptedPrivateKey: encApiKey, salt: apiSalt } = await encryptPrivateKey(geminiApiKey, password);
@@ -183,10 +191,10 @@ export async function action({ request }: Route.ActionArgs) {
         } else if (isPasswordChange) {
           // Password change: decrypt with old, re-encrypt with new
           if (newPassword !== confirmPassword) {
-            return Response.json({ success: false, message: "Passwords do not match." });
+            return jsonWithCookie({ success: false, message: "Passwords do not match." });
           }
           if (newPassword.length < 8) {
-            return Response.json({ success: false, message: "Password must be at least 8 characters." });
+            return jsonWithCookie({ success: false, message: "Password must be at least 8 characters." });
           }
 
           try {
@@ -212,7 +220,7 @@ export async function action({ request }: Route.ActionArgs) {
               };
             }
           } catch {
-            return Response.json({ success: false, message: "Current password is incorrect." });
+            return jsonWithCookie({ success: false, message: "Current password is incorrect." });
           }
         }
 
@@ -235,15 +243,9 @@ export async function action({ request }: Route.ActionArgs) {
           session.set("rootFolderId", newRootFolderId);
         }
 
-        return new Response(
-          JSON.stringify({ success: true, message: "General settings saved." }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "Set-Cookie": await commitSession(session),
-            },
-          }
+        return jsonWithCookie(
+          { success: true, message: "General settings saved." },
+          { headers: { "Set-Cookie": await commitSession(session) } }
         );
       }
 
@@ -252,7 +254,7 @@ export async function action({ request }: Route.ActionArgs) {
         const mcpServers: McpServerConfig[] = mcpJson ? JSON.parse(mcpJson) : [];
         const updatedSettings: UserSettings = { ...currentSettings, mcpServers };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
-        return { success: true, message: "MCP server settings saved." };
+        return jsonWithCookie({ success: true, message: "MCP server settings saved." });
       }
 
       case "saveRag": {
@@ -272,7 +274,7 @@ export async function action({ request }: Route.ActionArgs) {
           selectedRagSetting,
         };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
-        return { success: true, message: "RAG settings saved." };
+        return jsonWithCookie({ success: true, message: "RAG settings saved." });
       }
 
       case "saveEncryptionReset": {
@@ -287,15 +289,9 @@ export async function action({ request }: Route.ActionArgs) {
         // Clear API key from session too
         const session = await getSession(request);
         session.unset("geminiApiKey");
-        return new Response(
-          JSON.stringify({ success: true, message: "Encryption has been reset." }),
-          {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "Set-Cookie": await commitSession(session),
-            },
-          }
+        return jsonWithCookie(
+          { success: true, message: "Encryption has been reset." },
+          { headers: { "Set-Cookie": await commitSession(session) } }
         );
       }
 
@@ -304,15 +300,15 @@ export async function action({ request }: Route.ActionArgs) {
         const slashCommands = commandsJson ? JSON.parse(commandsJson) : [];
         const updatedSettings: UserSettings = { ...currentSettings, slashCommands };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
-        return { success: true, message: "Command settings saved." };
+        return jsonWithCookie({ success: true, message: "Command settings saved." });
       }
 
       default:
-        return { success: false, message: "Unknown action." };
+        return jsonWithCookie({ success: false, message: "Unknown action." });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "An error occurred.";
-    return { success: false, message };
+    return jsonWithCookie({ success: false, message });
   }
 }
 
@@ -2387,4 +2383,3 @@ function RagTab({ settings }: { settings: UserSettings }) {
     </SectionCard>
   );
 }
-

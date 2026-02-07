@@ -5,13 +5,14 @@ import { getHistory, clearHistory } from "~/services/edit-history.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const url = new URL(request.url);
   const filePath = url.searchParams.get("filePath");
 
   if (!filePath) {
-    return Response.json({ error: "Missing filePath" }, { status: 400 });
+    return Response.json({ error: "Missing filePath" }, { status: 400, headers: responseHeaders });
   }
 
   try {
@@ -20,11 +21,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       validTokens.rootFolderId,
       filePath
     );
-    return Response.json({ entries });
+    return Response.json({ entries }, { headers: responseHeaders });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Failed to get history" },
-      { status: 500 }
+      { status: 500, headers: responseHeaders }
     );
   }
 }
@@ -35,13 +36,14 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const body = await request.json();
   const filePath = body.filePath;
 
   if (!filePath) {
-    return Response.json({ error: "Missing filePath" }, { status: 400 });
+    return Response.json({ error: "Missing filePath" }, { status: 400, headers: responseHeaders });
   }
 
   try {
@@ -50,11 +52,11 @@ export async function action({ request }: Route.ActionArgs) {
       validTokens.rootFolderId,
       filePath
     );
-    return Response.json({ success: true });
+    return Response.json({ success: true }, { headers: responseHeaders });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Failed to clear history" },
-      { status: 500 }
+      { status: 500, headers: responseHeaders }
     );
   }
 }

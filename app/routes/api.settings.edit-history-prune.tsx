@@ -10,7 +10,8 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const settings = await getSettings(
     validTokens.accessToken,
@@ -23,13 +24,14 @@ export async function action({ request }: Route.ActionArgs) {
       validTokens.rootFolderId,
       settings.editHistory
     );
-    return Response.json({
-      message: `Pruned ${result.deletedCount} entries.`,
-    });
+    return Response.json(
+      { message: `Pruned ${result.deletedCount} entries.` },
+      { headers: responseHeaders }
+    );
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Prune failed" },
-      { status: 500 }
+      { status: 500, headers: responseHeaders }
     );
   }
 }

@@ -8,7 +8,8 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file (Drive multipart limit)
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const formData = await request.formData();
   const folderId = formData.get("folderId") as string | null;
@@ -16,7 +17,7 @@ export async function action({ request }: Route.ActionArgs) {
   const files = formData.getAll("files") as File[];
 
   if (files.length === 0) {
-    return Response.json({ error: "No files provided" }, { status: 400 });
+    return Response.json({ error: "No files provided" }, { status: 400, headers: responseHeaders });
   }
 
   const targetFolderId = folderId || validTokens.rootFolderId;
@@ -53,5 +54,5 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
-  return Response.json({ results });
+  return Response.json({ results }, { headers: responseHeaders });
 }

@@ -85,14 +85,15 @@ function metaToResponse(meta: SyncMeta) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const url = new URL(request.url);
   const folderId = url.searchParams.get("folderId");
   const refresh = url.searchParams.get("refresh") === "true";
 
   if (!folderId) {
-    return Response.json({ error: "Missing folderId" }, { status: 400 });
+    return Response.json({ error: "Missing folderId" }, { status: 400, headers: responseHeaders });
   }
 
   let meta: SyncMeta;
@@ -117,5 +118,5 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const items = buildVirtualTree(files);
-  return Response.json({ items, meta: metaToResponse(meta) });
+  return Response.json({ items, meta: metaToResponse(meta) }, { headers: responseHeaders });
 }

@@ -14,13 +14,14 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const apiKey = validTokens.geminiApiKey;
   if (!apiKey) {
     return Response.json(
       { error: "Gemini API key not configured" },
-      { status: 400 }
+      { status: 400, headers: responseHeaders }
     );
   }
 
@@ -41,7 +42,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!settingName || !settings.ragSettings[settingName]) {
     return Response.json(
       { error: "RAG setting not found" },
-      { status: 400 }
+      { status: 400, headers: responseHeaders }
     );
   }
 
@@ -133,12 +134,12 @@ export async function action({ request }: Route.ActionArgs) {
     },
   });
 
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
+  const headers = new Headers({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
   });
+  if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
+
+  return new Response(stream, { status: 200, headers });
 }

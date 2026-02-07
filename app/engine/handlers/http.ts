@@ -43,36 +43,6 @@ function getMimeExtension(mimeType: string): string {
   return map[mimeType] || "";
 }
 
-function buildMultipartBody(
-  fields: Record<string, string>,
-  boundary: string
-): string {
-  let body = "";
-  for (const [name, value] of Object.entries(fields)) {
-    const fileData = tryParseFileExplorerData(value);
-    body += `--${boundary}\r\n`;
-
-    const colonIndex = name.indexOf(":");
-    if (fileData) {
-      const fieldName = colonIndex !== -1 ? name.substring(0, colonIndex) : name;
-      body += `Content-Disposition: form-data; name="${fieldName}"; filename="${fileData.basename}"\r\n`;
-      body += `Content-Type: ${fileData.mimeType}\r\n\r\n`;
-      body += fileData.data + "\r\n";
-    } else if (colonIndex !== -1) {
-      const fieldName = name.substring(0, colonIndex);
-      const filename = name.substring(colonIndex + 1);
-      body += `Content-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\n`;
-      body += `Content-Type: ${guessContentType(filename)}\r\n\r\n`;
-      body += value + "\r\n";
-    } else {
-      body += `Content-Disposition: form-data; name="${name}"\r\n\r\n`;
-      body += value + "\r\n";
-    }
-  }
-  body += `--${boundary}--\r\n`;
-  return body;
-}
-
 export async function handleHttpNode(
   node: WorkflowNode,
   context: ExecutionContext,
@@ -104,20 +74,43 @@ export async function handleHttpNode(
     }
   }
 
-  let body: string | undefined;
+  let body: BodyInit | undefined;
   const bodyStr = node.properties["body"];
 
   if (bodyStr && ["POST", "PUT", "PATCH"].includes(method)) {
     if (contentType === "form-data") {
       try {
         const rawFields = JSON.parse(bodyStr);
-        const fields: Record<string, string> = {};
+        const formData = new FormData();
         for (const [key, value] of Object.entries(rawFields)) {
-          fields[replaceVariables(key, context)] = replaceVariables(String(value), context);
+          const resolvedKey = replaceVariables(key, context);
+          const resolvedValue = replaceVariables(String(value), context);
+          const fileData = tryParseFileExplorerData(resolvedValue);
+
+          const colonIndex = resolvedKey.indexOf(":");
+          const fieldName = colonIndex !== -1 ? resolvedKey.substring(0, colonIndex) : resolvedKey;
+
+          if (fileData) {
+            const fileBuffer = fileData.contentType === "binary"
+              ? Buffer.from(fileData.data, "base64")
+              : fileData.data;
+            const fileBlob = new Blob([fileBuffer], { type: fileData.mimeType });
+            formData.append(fieldName, fileBlob, fileData.basename);
+          } else if (colonIndex !== -1) {
+            const filename = resolvedKey.substring(colonIndex + 1);
+            const mimeType = guessContentType(filename);
+            const fileBlob = new Blob([resolvedValue], { type: mimeType });
+            formData.append(fieldName, fileBlob, filename);
+          } else {
+            formData.append(fieldName, resolvedValue);
+          }
         }
-        const boundary = "----Boundary" + Date.now();
-        body = buildMultipartBody(fields, boundary);
-        headers["Content-Type"] = `multipart/form-data; boundary=${boundary}`;
+        body = formData;
+        for (const key of Object.keys(headers)) {
+          if (key.toLowerCase() === "content-type") {
+            delete headers[key];
+          }
+        }
       } catch {
         throw new Error("form-data contentType requires valid JSON object body");
       }

@@ -14,14 +14,15 @@ import type { ChatHistory } from "~/types/chat";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   const histories = await listChatHistories(
     validTokens.accessToken,
     validTokens.rootFolderId
   );
 
-  return Response.json(histories);
+  return Response.json(histories, { headers: responseHeaders });
 }
 
 // ---------------------------------------------------------------------------
@@ -30,7 +31,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
-  const { tokens: validTokens } = await getValidTokens(request, tokens);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
 
   switch (request.method) {
     case "POST": {
@@ -39,7 +41,7 @@ export async function action({ request }: Route.ActionArgs) {
       if (!chatHistory.id || !chatHistory.messages) {
         return Response.json(
           { error: "Invalid chat history data" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
 
@@ -49,7 +51,7 @@ export async function action({ request }: Route.ActionArgs) {
         chatHistory
       );
 
-      return Response.json({ success: true, fileId });
+      return Response.json({ success: true, fileId }, { headers: responseHeaders });
     }
 
     case "DELETE": {
@@ -59,19 +61,19 @@ export async function action({ request }: Route.ActionArgs) {
       if (!fileId) {
         return Response.json(
           { error: "fileId is required" },
-          { status: 400 }
+          { status: 400, headers: responseHeaders }
         );
       }
 
       await deleteChat(validTokens.accessToken, fileId);
 
-      return Response.json({ success: true });
+      return Response.json({ success: true }, { headers: responseHeaders });
     }
 
     default:
       return Response.json(
         { error: "Method not allowed" },
-        { status: 405 }
+        { status: 405, headers: responseHeaders }
       );
   }
 }
