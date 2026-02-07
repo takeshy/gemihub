@@ -37,7 +37,9 @@ function evaluateExpression(
       case "+": return left + right;
       case "-": return left - right;
       case "*": return left * right;
-      case "/": return right !== 0 ? left / right : 0;
+      case "/":
+        if (right === 0) throw new Error("Division by zero");
+        return left / right;
       case "%": return left % right;
     }
   }

@@ -74,8 +74,8 @@ export async function handleDriveReadNode(
   const path = replaceVariables(pathRaw, context);
   const accessToken = serviceContext.driveAccessToken;
 
-  // Check if path is a Drive file ID (no extension, long alphanumeric)
-  if (!path.includes(".") && path.length > 20) {
+  // Check if path is a Drive file ID (alphanumeric + hyphens/underscores, 20+ chars)
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(path)) {
     const content = await driveService.readFile(accessToken, path);
     context.variables.set(saveTo, content);
     return;

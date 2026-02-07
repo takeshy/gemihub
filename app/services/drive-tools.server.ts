@@ -120,13 +120,19 @@ export async function executeDriveTool(
 ): Promise<unknown> {
   switch (toolName) {
     case "read_drive_file": {
-      const fileId = args.fileId as string;
+      const fileId = args.fileId;
+      if (typeof fileId !== "string" || !fileId) {
+        return { error: "read_drive_file: 'fileId' must be a non-empty string" };
+      }
       const content = await readFile(accessToken, fileId);
       return { content };
     }
 
     case "search_drive_files": {
-      const query = args.query as string;
+      const query = args.query;
+      if (typeof query !== "string" || !query) {
+        return { error: "search_drive_files: 'query' must be a non-empty string" };
+      }
       const searchContent = (args.searchContent as boolean) ?? false;
       const folder = args.folder as string | undefined;
       let files = await searchFiles(accessToken, rootFolderId, query, searchContent);
@@ -184,8 +190,14 @@ export async function executeDriveTool(
     }
 
     case "create_drive_file": {
-      const name = args.name as string;
-      const content = args.content as string;
+      const name = args.name;
+      const content = args.content;
+      if (typeof name !== "string" || !name) {
+        return { error: "create_drive_file: 'name' must be a non-empty string" };
+      }
+      if (typeof content !== "string") {
+        return { error: "create_drive_file: 'content' must be a string" };
+      }
       const file = await createFile(accessToken, name, content, rootFolderId);
       return {
         id: file.id,
@@ -195,8 +207,14 @@ export async function executeDriveTool(
     }
 
     case "update_drive_file": {
-      const fileId = args.fileId as string;
-      const content = args.content as string;
+      const fileId = args.fileId;
+      const content = args.content;
+      if (typeof fileId !== "string" || !fileId) {
+        return { error: "update_drive_file: 'fileId' must be a non-empty string" };
+      }
+      if (typeof content !== "string") {
+        return { error: "update_drive_file: 'content' must be a string" };
+      }
       const file = await updateFile(accessToken, fileId, content);
 
       return {

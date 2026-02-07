@@ -57,7 +57,11 @@ export async function listChatHistories(
       })
     );
     for (const r of results) {
-      if (r.status === "fulfilled") items.push(r.value);
+      if (r.status === "fulfilled") {
+        items.push(r.value);
+      } else {
+        console.error("[chat-history] Failed to load chat file:", r.reason);
+      }
     }
   }
 

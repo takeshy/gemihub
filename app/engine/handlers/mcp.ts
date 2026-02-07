@@ -45,6 +45,7 @@ export async function handleMcpNode(
       "Content-Type": "application/json",
       ...headers,
     },
+    signal: AbortSignal.timeout(60_000),
     body: JSON.stringify({
       jsonrpc: "2.0",
       method: "tools/call",

@@ -258,7 +258,7 @@ export async function* chatWithToolsStream(
 
   while (continueLoop) {
     const functionCallsToProcess: Array<{ name: string; args: Record<string, unknown> }> = [];
-    let groundingEmitted = false;
+    const groundingEmitted = false;
     const accumulatedSources: string[] = [];
 
     for await (const chunk of response) {

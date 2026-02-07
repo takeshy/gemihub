@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import crypto from "node:crypto";
 import { getSession, commitSession, setTokens, type SessionTokens } from "./session.server";
 
 const SCOPES = [
@@ -14,13 +15,24 @@ function getOAuth2Client() {
   );
 }
 
-export function getAuthUrl(): string {
+/**
+ * Generate OAuth URL with CSRF state parameter.
+ * Returns the URL and a Set-Cookie header to persist the state in the session.
+ */
+export async function getAuthUrl(request: Request): Promise<{ url: string; setCookieHeader: string }> {
+  const state = crypto.randomUUID();
+  const session = await getSession(request);
+  session.set("oauthState", state);
+  const setCookieHeader = await commitSession(session);
+
   const oauth2Client = getOAuth2Client();
-  return oauth2Client.generateAuthUrl({
+  const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
     prompt: "consent",
+    state,
   });
+  return { url, setCookieHeader };
 }
 
 export async function exchangeCode(code: string): Promise<{

@@ -1,6 +1,7 @@
 import type { Route } from "./+types/api.settings.mcp-test";
 import { requireAuth } from "~/services/session.server";
 import { McpClient } from "~/services/mcp-client.server";
+import { validateMcpServerUrl } from "~/services/url-validator.server";
 import {
   discoverOAuth,
   registerOAuthClient,
@@ -31,6 +32,15 @@ export async function action({ request }: Route.ActionArgs) {
   if (!url) {
     return Response.json(
       { error: "URL is required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    validateMcpServerUrl(url);
+  } catch (error) {
+    return Response.json(
+      { success: false, message: error instanceof Error ? error.message : "Invalid URL", error: "SSRF blocked" },
       { status: 400 }
     );
   }

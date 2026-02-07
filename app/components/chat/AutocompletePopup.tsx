@@ -33,6 +33,7 @@ export function AutocompletePopup({
   return (
     <div
       ref={listRef}
+      role="listbox"
       className="absolute bottom-full left-0 right-0 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
     >
       {mode && (

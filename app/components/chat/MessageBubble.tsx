@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChevronDown, ChevronRight, Download, Paperclip, FileText, Wrench, BookOpen } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
@@ -140,7 +140,7 @@ function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
   );
 }
 
-export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [collapsedMcpApps, setCollapsedMcpApps] = useState<Set<number>>(new Set());
 
@@ -259,4 +259,4 @@ export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
       )}
     </>
   );
-}
+});

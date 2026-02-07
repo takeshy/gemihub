@@ -1,5 +1,6 @@
 // Edit history manager - Drive-based persistence (called at Push time)
 
+import crypto from "node:crypto";
 import * as Diff from "diff";
 import {
   readFile,
@@ -50,7 +51,7 @@ async function ensureEditHistoryFolderId(
 }
 
 function generateId(): string {
-  return Math.random().toString(36).substring(2, 8);
+  return crypto.randomUUID().replace(/-/g, "").substring(0, 8);
 }
 
 function pathToHistoryFileName(filePath: string): string {
