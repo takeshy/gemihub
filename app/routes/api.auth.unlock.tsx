@@ -1,5 +1,5 @@
 import type { Route } from "./+types/api.auth.unlock";
-import { requireAuth, getSession, commitSession } from "~/services/session.server";
+import { requireAuth, getSession, commitSession, setGeminiApiKey } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { decryptPrivateKey } from "~/services/crypto-core";
@@ -17,8 +17,9 @@ export async function action({ request }: Route.ActionArgs) {
 
   try {
     const apiKey = await decryptPrivateKey(settings.encryptedApiKey, settings.apiKeySalt, password);
+    const keySession = await setGeminiApiKey(request, apiKey);
     const session = await getSession(request);
-    session.set("geminiApiKey", apiKey);
+    session.set("geminiApiKey", keySession.get("geminiApiKey"));
     const headers = new Headers({
       "Content-Type": "application/json",
       "Set-Cookie": await commitSession(session),

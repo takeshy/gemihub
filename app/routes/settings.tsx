@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { data, Link, useLoaderData, useFetcher } from "react-router";
 import type { Route } from "./+types/settings";
-import { requireAuth, getSession, commitSession } from "~/services/session.server";
+import { requireAuth, getSession, commitSession, setGeminiApiKey } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import type {
@@ -235,7 +235,8 @@ export async function action({ request }: Route.ActionArgs) {
         // Update session with API key and plan/model
         const session = await getSession(request);
         if (effectiveApiKey) {
-          session.set("geminiApiKey", effectiveApiKey);
+          const keySession = await setGeminiApiKey(request, effectiveApiKey);
+          session.set("geminiApiKey", keySession.get("geminiApiKey"));
         }
         session.set("apiPlan", apiPlan);
         session.set("selectedModel", updatedSettings.selectedModel);
