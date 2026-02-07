@@ -105,14 +105,12 @@ export interface TranslationStrings {
   "settings.editHistory.stats": string;
   "settings.editHistory.save": string;
 
-  // Edit History Modal / Context menu
+  // History Modal / Context menu
   "editHistory.title": string;
   "editHistory.noHistory": string;
   "editHistory.clearAll": string;
   "editHistory.close": string;
   "editHistory.menuLabel": string;
-  "editHistory.clearHistory": string;
-  "editHistory.confirmClear": string;
   "editHistory.confirmClearAll": string;
   "editHistory.showRemote": string;
 
@@ -308,15 +306,13 @@ const en: TranslationStrings = {
   "settings.editHistory.stats": "Stats",
   "settings.editHistory.save": "Save Edit History Settings",
 
-  // Edit History Modal / Context menu
-  "editHistory.title": "Edit History",
-  "editHistory.noHistory": "No edit history for this file",
+  // History Modal / Context menu
+  "editHistory.title": "History",
+  "editHistory.noHistory": "No history for this file",
   "editHistory.clearAll": "Clear All",
   "editHistory.close": "Close",
-  "editHistory.menuLabel": "Edit History",
-  "editHistory.clearHistory": "Clear History",
-  "editHistory.confirmClear": "Clear all edit history for this file?",
-  "editHistory.confirmClearAll": "Clear all edit history for this file?",
+  "editHistory.menuLabel": "History",
+  "editHistory.confirmClearAll": "Clear all history for this file?",
   "editHistory.showRemote": "Show Remote",
 
   // Context menu
@@ -511,15 +507,13 @@ const ja: TranslationStrings = {
   "settings.editHistory.stats": "統計",
   "settings.editHistory.save": "編集履歴設定を保存",
 
-  // Edit History Modal / Context menu
-  "editHistory.title": "編集履歴",
-  "editHistory.noHistory": "このファイルの編集履歴はありません",
+  // History Modal / Context menu
+  "editHistory.title": "履歴",
+  "editHistory.noHistory": "このファイルの履歴はありません",
   "editHistory.clearAll": "すべてクリア",
   "editHistory.close": "閉じる",
-  "editHistory.menuLabel": "編集履歴",
-  "editHistory.clearHistory": "履歴をクリア",
-  "editHistory.confirmClear": "このファイルの編集履歴をすべてクリアしますか？",
-  "editHistory.confirmClearAll": "このファイルの編集履歴をすべてクリアしますか？",
+  "editHistory.menuLabel": "履歴",
+  "editHistory.confirmClearAll": "このファイルの履歴をすべてクリアしますか？",
   "editHistory.showRemote": "リモートを表示",
 
   // Context menu

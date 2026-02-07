@@ -338,7 +338,7 @@ function MarkdownFileEditor({
   useEffect(() => {
     contentFromProps.current = true;
     setContent(initialContent);
-    setMode(initialContent ? "preview" : "wysiwyg");
+    setMode("wysiwyg");
   }, [initialContent, fileId]);
 
   useEffect(() => {

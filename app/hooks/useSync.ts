@@ -154,13 +154,19 @@ export function useSync() {
         }
       }
 
+      // Clear local edit history (now persisted in Drive via applyTempFile)
+      await clearAllEditHistory();
+      setLocalModifiedCount(0);
+      window.dispatchEvent(new Event("sync-complete"));
+
       const localMeta = (await getLocalSyncMeta()) ?? null;
       if (!localMeta) {
         setSyncStatus("idle");
+        setLastSyncTime(new Date().toISOString());
         return;
       }
 
-      // First compute diff
+      // Compute diff
       const diffRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -193,11 +199,12 @@ export function useSync() {
       }
 
       if (diffData.diff.toPush.length === 0) {
+        setLastSyncTime(new Date().toISOString());
         setSyncStatus("idle");
         return;
       }
 
-      // Push changes
+      // Push remaining metadata changes
       const pushRes = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -209,10 +216,6 @@ export function useSync() {
       });
 
       if (!pushRes.ok) throw new Error("Failed to push changes");
-
-      // Clear local edit history (now persisted in Drive via applyTempFile)
-      await clearAllEditHistory();
-      setLocalModifiedCount(0);
 
       setLastSyncTime(new Date().toISOString());
       await checkSync(); // Refresh diff
@@ -482,6 +485,7 @@ export function useSync() {
 
       await clearAllEditHistory();
       setLocalModifiedCount(0);
+      window.dispatchEvent(new Event("sync-complete"));
 
       setLastSyncTime(new Date().toISOString());
       setSyncStatus("idle");

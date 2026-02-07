@@ -61,7 +61,7 @@ export function useFileWithCache(
 
         // 3. If cache matches, we're done
         if (cached && cached.md5Checksum === meta.md5Checksum) {
-          await setCachedFile({ ...cached, cachedAt: Date.now() });
+          await setCachedFile({ ...cached, cachedAt: Date.now(), fileName: cached.fileName ?? meta.name });
           if (currentFileId.current === id) {
             setLoading(false);
           }
@@ -90,6 +90,7 @@ export function useFileWithCache(
           md5Checksum: md5,
           modifiedTime: modTime,
           cachedAt: Date.now(),
+          fileName: meta.name,
         });
 
         // 6. Initialize edit history snapshot
@@ -184,8 +185,10 @@ export function useFileWithCache(
 
         // 1. Record local edit history BEFORE cache update
         //    (saveLocalEdit reads old cache content for reverse-apply diff)
+        let hasChange = false;
         try {
-          await saveLocalEdit(fileId, fileName, newContent);
+          const entry = await saveLocalEdit(fileId, fileName, newContent);
+          hasChange = entry !== null;
         } catch {
           // edit history failure is non-critical
         }
@@ -200,10 +203,12 @@ export function useFileWithCache(
           fileName: cached?.fileName,
         });
 
-        // Notify file tree that this file is modified locally
-        window.dispatchEvent(
-          new CustomEvent("file-modified", { detail: { fileId } })
-        );
+        // Notify file tree only when edit history actually recorded a change
+        if (hasChange) {
+          window.dispatchEvent(
+            new CustomEvent("file-modified", { detail: { fileId } })
+          );
+        }
       } catch {
         // ignore
       }

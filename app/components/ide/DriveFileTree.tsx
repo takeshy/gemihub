@@ -20,7 +20,7 @@ import {
   FolderPlus,
   FilePlus,
   History,
-  Download,
+  Eraser,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import {
@@ -41,7 +41,6 @@ import type { FileListItem } from "~/contexts/EditorContext";
 import {
   getAllCachedFileIds,
   getLocallyModifiedFileIds,
-  getCachedFile,
   deleteCachedFile,
   getLocalSyncMeta,
   setLocalSyncMeta,
@@ -283,8 +282,16 @@ export function DriveFileTree({
         setModifiedFiles((prev) => new Set(prev).add(fileId));
       }
     };
+    // After push/fullPush, re-read modified files (editHistory cleared)
+    const syncHandler = () => {
+      getLocallyModifiedFileIds().then((ids) => setModifiedFiles(ids)).catch(() => {});
+    };
     window.addEventListener("file-modified", handler);
-    return () => window.removeEventListener("file-modified", handler);
+    window.addEventListener("sync-complete", syncHandler);
+    return () => {
+      window.removeEventListener("file-modified", handler);
+      window.removeEventListener("sync-complete", syncHandler);
+    };
   }, []);
 
   // Push flattened file list to parent when tree changes
@@ -854,62 +861,6 @@ export function DriveFileTree({
     }
   }, [decryptTarget, decryptPassword, fetchAndCacheTree, updateTreeFromMeta, t]);
 
-  const handleClearHistory = useCallback(
-    async (item: CachedTreeNode) => {
-      if (!confirm(t("editHistory.confirmClear"))) return;
-      try {
-        await fetch("/api/settings/edit-history", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filePath: item.name }),
-        });
-      } catch {
-        // ignore
-      }
-    },
-    [t]
-  );
-
-  const handleTempDownload = useCallback(
-    async (item: CachedTreeNode) => {
-      try {
-        const res = await fetch("/api/drive/temp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "download", fileName: item.name }),
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.found) {
-          alert(t("contextMenu.noTempFile"));
-          return;
-        }
-        const { payload } = data.tempFile;
-        const isBinary = item.name.endsWith(".encrypted") ||
-          item.mimeType.startsWith("image/") ||
-          item.mimeType === "application/octet-stream";
-
-        // Get current cached content for diff comparison
-        const cached = await getCachedFile(payload.fileId);
-        const currentContent = cached?.content ?? "";
-        const currentModifiedTime = cached?.modifiedTime ?? "";
-
-        setTempDiffData({
-          fileName: item.name,
-          fileId: payload.fileId,
-          currentContent,
-          tempContent: payload.content,
-          tempSavedAt: payload.savedAt,
-          currentModifiedTime,
-          isBinary,
-        });
-      } catch {
-        // ignore
-      }
-    },
-    [t]
-  );
-
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
     const { fileId, tempContent, tempSavedAt, fileName } = tempDiffData;
@@ -927,29 +878,6 @@ export function DriveFileTree({
     }
     setTempDiffData(null);
   }, [tempDiffData, activeFileId]);
-
-  const handleTempUpload = useCallback(
-    async (item: CachedTreeNode) => {
-      const cached = await getCachedFile(item.id);
-      if (!cached) return;
-      try {
-        await fetch("/api/drive/temp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "save",
-            fileName: item.name,
-            fileId: item.id,
-            content: cached.content,
-          }),
-        });
-        setModifiedFiles((prev) => new Set(prev).add(item.id));
-      } catch {
-        // ignore
-      }
-    },
-    []
-  );
 
   const handleClearCache = useCallback(
     async (item: CachedTreeNode) => {
@@ -1023,27 +951,9 @@ export function DriveFileTree({
         }
 
         items.push({
-          label: t("contextMenu.tempDownload"),
-          icon: <Download size={ICON.MD} />,
-          onClick: () => handleTempDownload(item),
-        });
-        if (item.id === activeFileId) {
-          items.push({
-            label: t("contextMenu.tempUpload"),
-            icon: <Upload size={ICON.MD} />,
-            onClick: () => handleTempUpload(item),
-          });
-        }
-        items.push({
           label: t("editHistory.menuLabel"),
           icon: <History size={ICON.MD} />,
           onClick: () => setEditHistoryFile({ fileId: item.id, filePath: item.name }),
-        });
-        items.push({
-          label: t("editHistory.clearHistory"),
-          icon: <Trash2 size={ICON.MD} />,
-          onClick: () => handleClearHistory(item),
-          danger: true,
         });
       }
 
@@ -1051,16 +961,14 @@ export function DriveFileTree({
       if (!item.isFolder && cachedFiles.has(item.id)) {
         items.push({
           label: t("contextMenu.clearCache"),
-          icon: <Trash2 size={ICON.MD} />,
+          icon: <Eraser size={ICON.MD} />,
           onClick: () => handleClearCache(item),
-          danger: true,
         });
       } else if (item.isFolder) {
         items.push({
           label: t("contextMenu.clearCache"),
-          icon: <Trash2 size={ICON.MD} />,
+          icon: <Eraser size={ICON.MD} />,
           onClick: () => handleClearCache(item),
-          danger: true,
         });
       }
 
@@ -1079,7 +987,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [encryptionEnabled, handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearHistory, handleTempDownload, handleTempUpload, handleClearCache, activeFileId, cachedFiles, t]
+    [encryptionEnabled, handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearCache, activeFileId, cachedFiles, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
