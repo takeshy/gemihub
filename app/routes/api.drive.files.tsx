@@ -10,6 +10,8 @@ import {
   renameFile,
   searchFiles,
   getFileMetadata,
+  publishFile,
+  unpublishFile,
 } from "~/services/google-drive.server";
 import { getSettings } from "~/services/user-settings.server";
 import {
@@ -20,6 +22,7 @@ import {
   getFileListFromMeta,
   upsertFileInMeta,
   removeFileFromMeta,
+  setFileSharedInMeta,
 } from "~/services/sync-meta.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -164,6 +167,18 @@ export async function action({ request }: Route.ActionArgs) {
       const decRenamedFile = await renameFile(validTokens.accessToken, fileId, newName);
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, decRenamedFile);
       return jsonWithCookie({ file: decRenamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+    }
+    case "publish": {
+      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      const webViewLink = await publishFile(validTokens.accessToken, fileId);
+      const pubMeta = await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, fileId, true, webViewLink);
+      return jsonWithCookie({ webViewLink, meta: { lastUpdatedAt: pubMeta.lastUpdatedAt, files: pubMeta.files } });
+    }
+    case "unpublish": {
+      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      await unpublishFile(validTokens.accessToken, fileId);
+      const unpubMeta = await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, fileId, false);
+      return jsonWithCookie({ ok: true, meta: { lastUpdatedAt: unpubMeta.lastUpdatedAt, files: unpubMeta.files } });
     }
     default:
       return jsonWithCookie({ error: "Unknown action" }, { status: 400 });

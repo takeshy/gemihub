@@ -425,6 +425,48 @@ export async function createFileBinary(
   return res.json();
 }
 
+// Publish a file (make it accessible to anyone with the link)
+export async function publishFile(
+  accessToken: string,
+  fileId: string
+): Promise<string> {
+  // Create "anyone" reader permission
+  await driveRequest(
+    `${DRIVE_API}/files/${fileId}/permissions`,
+    accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "reader", type: "anyone" }),
+    }
+  );
+  // Fetch the webViewLink
+  const res = await driveRequest(
+    `${DRIVE_API}/files/${fileId}?fields=webViewLink`,
+    accessToken
+  );
+  const data: { webViewLink: string } = await res.json();
+  return data.webViewLink;
+}
+
+// Unpublish a file (remove "anyone" permission)
+export async function unpublishFile(
+  accessToken: string,
+  fileId: string
+): Promise<void> {
+  try {
+    await driveRequest(
+      `${DRIVE_API}/files/${fileId}/permissions/anyoneWithLink`,
+      accessToken,
+      { method: "DELETE" }
+    );
+  } catch (err) {
+    // 404 means permission doesn't exist — that's fine
+    if (err instanceof Error && err.message.includes("404")) return;
+    throw err;
+  }
+}
+
 // Helper to get Drive service context for workflow execution
 export interface DriveServiceContext {
   accessToken: string;

@@ -137,6 +137,14 @@ export interface TranslationStrings {
   "contextMenu.clearCache": string;
   "contextMenu.clearCacheModified": string;
   "contextMenu.clearCacheSkipModified": string;
+  "contextMenu.publish": string;
+  "contextMenu.unpublish": string;
+  "contextMenu.copyLink": string;
+  "contextMenu.published": string;
+  "contextMenu.unpublished": string;
+  "contextMenu.linkCopied": string;
+  "contextMenu.publishFailed": string;
+  "contextMenu.unpublishFailed": string;
 
   // Temp files
   "settings.general.tempFiles": string;
@@ -357,6 +365,14 @@ const en: TranslationStrings = {
   "contextMenu.clearCache": "Clear Cache",
   "contextMenu.clearCacheModified": "This file has unsaved changes. Push first.",
   "contextMenu.clearCacheSkipModified": "Some files have unsaved changes and will be skipped. Continue?",
+  "contextMenu.publish": "Publish to Web",
+  "contextMenu.unpublish": "Unpublish",
+  "contextMenu.copyLink": "Copy Share Link",
+  "contextMenu.published": "Published! Link copied to clipboard.",
+  "contextMenu.unpublished": "File has been unpublished.",
+  "contextMenu.linkCopied": "Link copied to clipboard.",
+  "contextMenu.publishFailed": "Failed to publish file.",
+  "contextMenu.unpublishFailed": "Failed to unpublish file.",
 
   // Temp files
   "settings.general.tempFiles": "Temporary Files",
@@ -577,6 +593,14 @@ const ja: TranslationStrings = {
   "contextMenu.clearCache": "キャッシュクリア",
   "contextMenu.clearCacheModified": "このファイルには未保存の変更があります。先にPushしてください。",
   "contextMenu.clearCacheSkipModified": "未保存の変更があるファイルはスキップされます。続行しますか？",
+  "contextMenu.publish": "ウェブに公開",
+  "contextMenu.unpublish": "公開を解除",
+  "contextMenu.copyLink": "共有リンクをコピー",
+  "contextMenu.published": "公開しました！リンクをクリップボードにコピーしました。",
+  "contextMenu.unpublished": "公開を解除しました。",
+  "contextMenu.linkCopied": "リンクをクリップボードにコピーしました。",
+  "contextMenu.publishFailed": "ファイルの公開に失敗しました。",
+  "contextMenu.unpublishFailed": "公開の解除に失敗しました。",
 
   // Temp files
   "settings.general.tempFiles": "一時ファイル",

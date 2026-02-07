@@ -22,6 +22,9 @@ import {
   History,
   Eraser,
   Download,
+  Globe,
+  GlobeLock,
+  Copy,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import {
@@ -209,6 +212,7 @@ export function DriveFileTree({
     currentModifiedTime: string;
     isBinary: boolean;
   } | null>(null);
+  const [remoteMeta, setRemoteMeta] = useState<CachedRemoteMeta["files"]>({});
   const { t } = useI18n();
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
@@ -224,6 +228,7 @@ export function DriveFileTree({
     };
     const items = buildTreeFromMeta(cachedMeta);
     setTreeItems(items);
+    setRemoteMeta(metaData.files);
     await Promise.all([
       setCachedRemoteMeta(cachedMeta),
       setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
@@ -243,6 +248,7 @@ export function DriveFileTree({
         setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
       ];
       if (data.meta) {
+        setRemoteMeta(data.meta.files);
         promises.push(setCachedRemoteMeta({
           id: "current",
           rootFolderId,
@@ -310,6 +316,7 @@ export function DriveFileTree({
       const cachedMeta = await getCachedRemoteMeta();
       if (!cancelled && cachedMeta && cachedMeta.rootFolderId === rootFolderId) {
         setTreeItems(buildTreeFromMeta(cachedMeta));
+        setRemoteMeta(cachedMeta.files);
         setLoading(false);
       } else {
         const cached = await getCachedFileTree();
@@ -931,6 +938,65 @@ export function DriveFileTree({
     [modifiedFiles, cachedFiles, collectFileIds, t]
   );
 
+  const handlePublish = useCallback(
+    async (item: CachedTreeNode) => {
+      try {
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "publish", fileId: item.id }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.meta) await updateTreeFromMeta(data.meta);
+          try {
+            if (data.webViewLink) await navigator.clipboard.writeText(data.webViewLink);
+          } catch { /* clipboard may fail in insecure context */ }
+          alert(t("contextMenu.published"));
+        } else {
+          alert(t("contextMenu.publishFailed"));
+        }
+      } catch {
+        alert(t("contextMenu.publishFailed"));
+      }
+    },
+    [updateTreeFromMeta, t]
+  );
+
+  const handleUnpublish = useCallback(
+    async (item: CachedTreeNode) => {
+      try {
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "unpublish", fileId: item.id }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.meta) await updateTreeFromMeta(data.meta);
+          alert(t("contextMenu.unpublished"));
+        } else {
+          alert(t("contextMenu.unpublishFailed"));
+        }
+      } catch {
+        alert(t("contextMenu.unpublishFailed"));
+      }
+    },
+    [updateTreeFromMeta, t]
+  );
+
+  const handleCopyLink = useCallback(
+    async (fileId: string) => {
+      const link = remoteMeta[fileId]?.webViewLink;
+      if (!link) return;
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch { /* clipboard may fail in insecure context */ }
+      alert(link);
+    },
+    [remoteMeta]
+  );
+
   const getContextMenuItems = useCallback(
     (item: CachedTreeNode): ContextMenuItem[] => {
       const items: ContextMenuItem[] = [];
@@ -982,6 +1048,29 @@ export function DriveFileTree({
             }
           },
         });
+
+        // Publish / unpublish — not for encrypted files
+        if (!item.name.endsWith(".encrypted")) {
+          const fileMeta = remoteMeta[item.id];
+          if (fileMeta?.shared) {
+            items.push({
+              label: t("contextMenu.copyLink"),
+              icon: <Copy size={ICON.MD} />,
+              onClick: () => handleCopyLink(item.id),
+            });
+            items.push({
+              label: t("contextMenu.unpublish"),
+              icon: <GlobeLock size={ICON.MD} />,
+              onClick: () => handleUnpublish(item),
+            });
+          } else {
+            items.push({
+              label: t("contextMenu.publish"),
+              icon: <Globe size={ICON.MD} />,
+              onClick: () => handlePublish(item),
+            });
+          }
+        }
       }
 
       // Cache clear - available for both files and folders
@@ -1014,7 +1103,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [encryptionEnabled, handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearCache, activeFileId, cachedFiles, t]
+    [encryptionEnabled, handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, activeFileId, cachedFiles, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -1101,10 +1190,19 @@ export function DriveFileTree({
       >
         {getFileIcon(item.name, item.mimeType)}
         <span className="truncate">{item.name}</span>
+        {remoteMeta[item.id]?.shared && (
+          <span
+            className="ml-auto flex-shrink-0 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer"
+            title={remoteMeta[item.id]?.webViewLink ?? t("contextMenu.copyLink")}
+            onClick={(e) => { e.stopPropagation(); handleCopyLink(item.id); }}
+          >
+            <Globe size={ICON.SM} />
+          </span>
+        )}
         {modifiedFiles.has(item.id) ? (
-          <span className="ml-auto w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" title="Modified" />
+          <span className={`${remoteMeta[item.id]?.shared ? "" : "ml-auto "}w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0`} title="Modified" />
         ) : cachedFiles.has(item.id) ? (
-          <span className="ml-auto w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="Cached" />
+          <span className={`${remoteMeta[item.id]?.shared ? "" : "ml-auto "}w-2 h-2 rounded-full bg-green-500 flex-shrink-0`} title="Cached" />
         ) : null}
       </button>
     );

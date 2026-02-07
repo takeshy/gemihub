@@ -19,6 +19,8 @@ export interface FileSyncMeta {
   md5Checksum: string;
   modifiedTime: string;
   createdTime?: string;
+  shared?: boolean;
+  webViewLink?: string;
 }
 
 export interface SyncMeta {
@@ -122,18 +124,23 @@ export async function rebuildSyncMeta(
   accessToken: string,
   rootFolderId: string
 ): Promise<SyncMeta> {
+  // Preserve shared/webViewLink from existing meta
+  const existing = await readRemoteSyncMeta(accessToken, rootFolderId);
   const files = await listUserFiles(accessToken, rootFolderId);
   const meta: SyncMeta = {
     lastUpdatedAt: new Date().toISOString(),
     files: {},
   };
   for (const f of files) {
+    const prev = existing?.files[f.id];
     meta.files[f.id] = {
       name: f.name,
       mimeType: f.mimeType,
       md5Checksum: f.md5Checksum ?? "",
       modifiedTime: f.modifiedTime ?? "",
       createdTime: f.createdTime,
+      shared: prev?.shared,
+      webViewLink: prev?.webViewLink,
     };
   }
   await writeRemoteSyncMeta(accessToken, rootFolderId, meta);
@@ -204,6 +211,30 @@ export async function saveConflictBackup(
     ? `${safeName.slice(0, dotIdx)}_${ts}${safeName.slice(dotIdx)}`
     : `${safeName}_${ts}`;
   await createFile(accessToken, backupName, content, folderId, "text/plain");
+}
+
+/**
+ * Update the shared/webViewLink fields for a file in meta
+ */
+export async function setFileSharedInMeta(
+  accessToken: string,
+  rootFolderId: string,
+  fileId: string,
+  shared: boolean,
+  webViewLink?: string
+): Promise<SyncMeta> {
+  const meta =
+    (await readRemoteSyncMeta(accessToken, rootFolderId)) ?? {
+      lastUpdatedAt: new Date().toISOString(),
+      files: {},
+    };
+  if (meta.files[fileId]) {
+    meta.files[fileId].shared = shared;
+    meta.files[fileId].webViewLink = shared ? webViewLink : undefined;
+  }
+  meta.lastUpdatedAt = new Date().toISOString();
+  await writeRemoteSyncMeta(accessToken, rootFolderId, meta);
+  return meta;
 }
 
 /**
