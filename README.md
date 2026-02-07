@@ -1,108 +1,61 @@
 # Gemini Hub
 
-A web application that integrates Google Gemini AI with Google Drive. Build visual workflows, chat with AI, manage Drive files with a rich editor, and more — all from a single interface. Supports self-hosting.
+**Your AI secretary, powered by Gemini and your own Google Drive.**
+
+Gemini Hub is a self-hostable web application that turns Google Gemini into a personal AI assistant deeply integrated with your Google Drive. Chat with AI that can read, search, and write your files. Build automated workflows with a visual editor. All your data stays in your own Google Drive — no external database required.
 
 [日本語版 README](./README_ja.md)
 
+![Gemini Hub](./cap.png)
+
+## Why Gemini Hub?
+
+### AI That Knows Your Data
+
+Unlike generic AI chat, Gemini Hub connects directly to your Google Drive. The AI can read your files, search across them, create new documents, and update existing ones — all through natural conversation. Ask questions about your notes, generate summaries of your documents, or have the AI organize your files for you.
+
+### Search by Meaning, Not Just Keywords (RAG)
+
+With built-in RAG (Retrieval-Augmented Generation), you can sync your Drive files to Gemini's semantic search. Instead of matching exact keywords, the AI understands the **meaning** of your question and finds relevant information from your personal knowledge base. Store product manuals, meeting notes, or research papers — then just ask questions in natural language.
+
+### Connect Any External Tool (MCP)
+
+Through the Model Context Protocol (MCP), Gemini Hub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation.
+
+### No-Code Workflow Automation
+
+Build complex automation pipelines with a visual drag-and-drop editor. Chain together AI prompts, Drive file operations, HTTP requests, user input dialogs, and more. Workflows are stored as YAML, support loops and conditionals, and run in real-time with streaming output.
+
+### Your Data, Your Control
+
+All data — chat history, workflows, settings, edit history — is stored in your own Google Drive under a `gemini-hub/` folder. No proprietary database, no vendor lock-in. Optional hybrid encryption (RSA + AES) protects sensitive files. A Python decryption script is provided so you can always access your encrypted data independently.
+
 ## Features
 
-- **AI Chat** — Streaming conversations with Gemini models, function calling, thinking display, image generation, file attachments, per-message model/tool overrides
-- **Slash Commands & Autocomplete** — User-defined `/commands` with template variables (`{content}`, `{selection}`), `@file` mentions, per-command model and tool overrides
-- **Visual Workflow Editor** — Drag-and-drop node-based workflow builder (React Flow), YAML import/export, real-time execution with SSE
-- **AI Workflow Generation** — Create and modify workflows via natural language with AI (streaming generation with thinking display, visual preview, diff view, iterative refinement)
-- **Google Drive Integration** — All data (workflows, chat history, settings, edit history) stored in your own Google Drive
-- **Rich Markdown Editor** — WYSIWYG file creation and editing powered by wysimark-lite
-- **RAG (Retrieval-Augmented Generation)** — Sync Drive files to Gemini File Search for context-aware AI responses
-- **MCP (Model Context Protocol)** — Connect external MCP servers as tools for the AI chat
-- **Encryption** — Optional hybrid encryption (RSA + AES) for chat history and workflow logs
+- **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments
+- **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}`), `@file` mentions, per-command model/tool overrides
+- **Visual Workflow Editor** — Drag-and-drop node-based builder (20+ node types), YAML import/export, real-time SSE execution
+- **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
+- **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
+- **MCP** — Connect external MCP servers as tools for AI chat
+- **Google Drive Integration** — All data stored in your own Drive, no external database
+- **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
+- **Offline Cache & Sync** — IndexedDB caching with Push/Pull synchronization, conflict resolution, temp file staging
+- **Encryption** — Optional hybrid RSA + AES encryption for chat history and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
-- **Offline Cache & Sync** — IndexedDB-based file caching with Push/Pull synchronization across devices using md5 hash comparison. Temp file staging for faster saves (1-2 API calls instead of ~9). Conflict backup, exclude patterns, Full Push/Pull, file status display, temp diff view
 - **Multi-Model Support** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma; paid and free plan model lists
-- **Image Generation** — Generate images via Gemini 2.5 Flash Image / 3 Pro Image models
+- **Image Generation** — Generate images via Gemini image models
 - **i18n** — English and Japanese UI
 
-## Architecture
+## Documentation
 
-| Layer | Tech |
-|-------|------|
-| Frontend | React 19, React Router 7, Tailwind CSS v4, React Flow |
-| Backend | React Router server (SSR + API routes) |
-| AI | Google Gemini API (`@google/genai`) |
-| Storage | Google Drive API |
-| Auth | Google OAuth 2.0 → session cookies |
-| Editor | wysimark-lite (Slate-based WYSIWYG) |
+Detailed documentation is available in the [`docs/`](./docs/) directory:
 
-### Project Structure
-
-```
-app/
-├── routes/           # Pages and API endpoints
-│   ├── _index.tsx              # IDE dashboard
-│   ├── settings.tsx            # Settings (7-tab UI)
-│   ├── api.chat.tsx            # Chat SSE streaming
-│   ├── api.chat.history.tsx    # Chat history CRUD
-│   ├── api.drive.files.tsx     # Drive file operations
-│   ├── api.drive.tree.tsx      # Drive file tree
-│   ├── api.drive.temp.tsx      # Temp file save/apply/delete
-│   ├── api.drive.upload.tsx    # File upload
-│   ├── api.sync.tsx            # Push/Pull sync
-│   ├── api.workflow.*.tsx      # Workflow execution & AI generation
-│   ├── api.settings.*.tsx      # Settings APIs
-│   ├── auth.*.tsx              # OAuth login/logout/callback
-│   └── ...
-├── services/         # Server-side business logic
-│   ├── gemini-chat.server.ts    # Gemini streaming client
-│   ├── gemini.server.ts         # Core Gemini client
-│   ├── google-drive.server.ts   # Drive API operations
-│   ├── google-auth.server.ts    # OAuth 2.0
-│   ├── chat-history.server.ts   # Chat CRUD (Drive)
-│   ├── user-settings.server.ts  # Settings CRUD (Drive)
-│   ├── drive-tools.server.ts    # Drive function calling tools
-│   ├── mcp-client.server.ts     # MCP protocol client
-│   ├── mcp-tools.server.ts      # MCP → Gemini integration
-│   ├── file-search.server.ts    # RAG / File Search
-│   ├── crypto.server.ts         # Hybrid encryption
-│   ├── edit-history.server.ts   # Diff-based history
-│   ├── workflow-history.server.ts # Workflow execution logs
-│   ├── sync-meta.server.ts      # Push/Pull sync metadata
-│   ├── temp-file.server.ts      # Temp file staging
-│   ├── execution-store.server.ts # Workflow execution state
-│   ├── indexeddb-cache.ts       # Browser-side IndexedDB cache
-│   └── session.server.ts       # Session management
-├── hooks/            # React hooks
-│   ├── useFileWithCache.ts    # Cache-first file read/write
-│   ├── useSync.ts             # Push/Pull sync logic
-│   ├── useAutocomplete.ts     # Slash command & @file autocomplete
-│   ├── useWorkflowExecution.ts # Workflow execution via SSE
-│   ├── useFileUpload.ts       # File upload handling
-│   └── useApplySettings.ts   # Settings application
-├── components/       # React components
-│   ├── chat/             # Chat UI (messages, input, autocomplete popup)
-│   ├── editor/           # Markdown editor wrapper
-│   ├── flow/             # Workflow canvas (Mermaid preview)
-│   ├── execution/        # Workflow execution panel, prompt modal
-│   ├── ide/              # IDE layout, sync UI, dialogs, file tree, TempDiffModal
-│   ├── shared/           # Shared components (DiffView)
-│   └── settings/         # CommandsTab, TempFilesDialog, UntrackedFilesDialog
-├── contexts/         # React contexts
-│   └── EditorContext.tsx  # Shared editor state (file content, selection, file list)
-├── i18n/             # Internationalization
-│   ├── translations.ts   # TranslationStrings interface + en/ja translations
-│   └── context.tsx        # I18nProvider + useI18n hook
-├── types/            # TypeScript type definitions
-│   ├── settings.ts       # Settings, models, MCP, RAG, encryption, slash commands
-│   └── chat.ts           # Messages, streaming, history
-├── utils/            # Workflow utilities
-│   ├── workflow-to-mermaid.ts       # Workflow → Mermaid diagram
-│   ├── workflow-node-summary.ts     # Node property summaries
-│   ├── workflow-node-properties.ts  # Node property get/set
-│   ├── workflow-connections.ts      # Node connection management
-│   └── parallel.ts                  # Concurrent processing utility
-└── engine/           # Workflow execution engine
-    ├── parser.ts         # YAML → AST
-    ├── executor.ts       # Handler-per-node-type execution
-    └── handlers/         # Node type handlers (variable, if, while, command, drive, http, mcp, prompt, ...)
-```
+| Topic | English | 日本語 |
+|-------|---------|--------|
+| Sync & Offline Cache | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
+| Workflow Node Reference | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
+| Encryption | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 
 ## Getting Started
 
@@ -169,8 +122,6 @@ SESSION_SECRET=<random string>
 To generate `SESSION_SECRET`:
 
 ```bash
-ruby -rsecurerandom -e 'puts SecureRandom.hex(32)'
-# or
 openssl rand -hex 32
 ```
 
@@ -212,90 +163,16 @@ docker run -p 8080:8080 \
   gemini-hub
 ```
 
-## Settings
+## Architecture
 
-All settings are stored in `settings.json` in your Google Drive root folder (`gemini-hub/`).
-
-| Tab | What you can configure |
-|-----|----------------------|
-| **General** | API key, paid/free plan, default model, system prompt, chat history saving, language (en/ja), font size, theme |
-| **Sync** | Exclude patterns, conflict folder, Full Push/Pull, temp file management, untracked file detection, clear conflicts, last sync time display |
-| **MCP Servers** | Add/remove external MCP servers, test connections, enable/disable per server |
-| **RAG** | Enable/disable, top-K, manage multiple RAG settings, sync Drive files to File Search |
-| **Encryption** | Set up RSA key pair, toggle encryption for chat history and workflow logs |
-| **Edit History** | Enable/disable, retention policy (age/count), diff context lines, prune/stats |
-| **Commands** | Create/edit/delete slash commands with prompt templates, per-command model and tool overrides |
-
-## Slash Commands
-
-Define custom slash commands in the **Commands** settings tab. Each command has:
-
-- **Prompt template** — Supports `{content}` (current file content), `{selection}` (selected text), and `@filename` (Drive file content) placeholders
-- **Model override** — Use a specific model for this command
-- **Tool overrides** — Control search setting, Drive tool mode, and MCP server availability per command
-
-Type `/` in the chat input to trigger autocomplete and select a command. Type `@` to mention and insert a file.
-
-## AI Tools (Function Calling)
-
-During chat, Gemini can use the following tools via Function Calling. Tool availability is controlled per-message from the chat input toolbar.
-
-### Drive Tools
-
-Built-in tools for reading and writing files in your Google Drive. Controlled by the "Drive Tools" setting (`all` / `noSearch` / `none`).
-
-| Tool | Description |
-|------|-------------|
-| `read_drive_file` | Read file content by file ID |
-| `search_drive_files` | Search files by name or content within a folder (Google Drive API `fullText contains` / `name contains`) |
-| `list_drive_files` | List files and subfolders in a folder |
-| `create_drive_file` | Create a new file |
-| `update_drive_file` | Update an existing file's content (with edit history tracking) |
-
-### Gemini Built-in Tools
-
-| Tool | Description |
-|------|-------------|
-| Google Search | Web search powered by Gemini's built-in `googleSearch` tool. Mutually exclusive with RAG. |
-| RAG (File Search) | Retrieval-augmented generation using files synced to Gemini File Search. Configurable `topK`. |
-
-### MCP Tools (Dynamic)
-
-Tools dynamically discovered from configured MCP servers. Each tool is prefixed as `mcp_{serverName}_{toolName}` and executed via JSON-RPC 2.0 over HTTP. Configure MCP servers in the Settings page.
-
-## Data Storage
-
-Everything is stored in your Google Drive under the `gemini-hub/` folder:
-
-```
-gemini-hub/
-├── settings.json        # User settings
-├── workflows/           # Workflow YAML files
-│   └── _sync-meta.json  # Push/Pull sync metadata
-├── chats/               # Chat history JSON files
-├── edit-history/        # Edit snapshots and diff history
-├── sync_conflicts/      # Conflict backup copies (configurable folder name)
-└── __TEMP__/            # Staged file saves (applied on Push)
-```
-
-### Browser Cache & Sync
-
-Files are cached in the browser's IndexedDB for instant loading. The sync system uses md5 hash comparison to detect changes:
-
-- **Cache-first reads** — Files load instantly from IndexedDB, then validate against Drive's md5Checksum in the background
-- **Temp file staging** — File saves are first written to a `__TEMP__/` folder on Drive (1-2 API calls), then applied to the real files during Push
-- **Push** — Apply staged temp files to real Drive files, update remote sync metadata (`_sync-meta.json`), then push any remaining locally changed files
-- **Pull** — Download remotely changed files to the local cache. Staged temp files are preserved and will be applied on the next Push
-- **Conflict resolution** — When both local and remote copies changed, choose "Keep Local" or "Keep Remote" per file. The losing side is automatically backed up to the `sync_conflicts/` folder
-- **Exclude patterns** — Regex patterns to exclude files from sync (configured in the Sync settings tab)
-- **Full Push / Full Pull** — Force-sync all files in one direction (available in the Sync settings tab)
-- **File status dots** — File tree shows green dots for cached files and yellow dots for files with pending temp changes
-- **Cache clear** — Right-click a file or folder to clear its cache. Files with pending changes are skipped to prevent data loss
-- **Temp diff view** — When downloading a temp file, a unified diff is shown before applying changes
-- **Untracked file detection** — Detect remote files not tracked by sync metadata; delete or restore them from the Sync settings tab
-- **Push rejection** — Push is rejected when remote is newer than local; pull first to avoid overwriting changes
-
-The sync status bar in the header shows pending push/pull counts and provides manual sync controls. Temp files can be managed from the Sync settings tab.
+| Layer | Tech |
+|-------|------|
+| Frontend | React 19, React Router 7, Tailwind CSS v4, React Flow |
+| Backend | React Router server (SSR + API routes) |
+| AI | Google Gemini API (`@google/genai`) |
+| Storage | Google Drive API |
+| Auth | Google OAuth 2.0 → session cookies |
+| Editor | wysimark-lite (Slate-based WYSIWYG) |
 
 ## License
 
