@@ -2,7 +2,7 @@
 // Uses a singleton DB connection for performance.
 
 const DB_NAME = "gemini-hub-cache";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 // --- Store types ---
 
@@ -46,6 +46,14 @@ export interface CachedFileTree {
   cachedAt: number;
 }
 
+export interface CachedRemoteMeta {
+  id: "current"; // primary key (fixed key, always 1 record)
+  rootFolderId: string;
+  lastUpdatedAt: string;
+  files: Record<string, { name: string; mimeType: string; md5Checksum: string; modifiedTime: string; createdTime?: string }>;
+  cachedAt: number;
+}
+
 // --- Singleton DB connection ---
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -78,6 +86,10 @@ function getDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains("fileTree")) {
         db.createObjectStore("fileTree", { keyPath: "id" });
+      }
+
+      if (!db.objectStoreNames.contains("remoteMeta")) {
+        db.createObjectStore("remoteMeta", { keyPath: "id" });
       }
     };
 
@@ -214,6 +226,22 @@ export async function getAllCachedFiles(): Promise<CachedFile[]> {
   }
 }
 
+export async function getAllCachedFileIds(): Promise<Set<string>> {
+  if (typeof indexedDB === "undefined") return new Set();
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("files", "readonly");
+      const store = tx.objectStore("files");
+      const req = store.getAllKeys();
+      req.onsuccess = () => resolve(new Set(req.result.map(String)));
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return new Set();
+  }
+}
+
 // --- syncMeta store ---
 
 export async function getLocalSyncMeta(): Promise<LocalSyncMeta | undefined> {
@@ -289,6 +317,28 @@ export async function setCachedFileTree(tree: CachedFileTree): Promise<void> {
   }
 }
 
+// --- remoteMeta store ---
+
+export async function getCachedRemoteMeta(): Promise<CachedRemoteMeta | undefined> {
+  if (typeof indexedDB === "undefined") return undefined;
+  try {
+    const db = await getDB();
+    return await txGet<CachedRemoteMeta>(db, "remoteMeta", "current");
+  } catch {
+    return undefined;
+  }
+}
+
+export async function setCachedRemoteMeta(meta: CachedRemoteMeta): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const db = await getDB();
+    await txPut(db, "remoteMeta", meta);
+  } catch {
+    // ignore
+  }
+}
+
 // --- clearAll ---
 
 export async function clearAllCache(): Promise<void> {
@@ -296,13 +346,14 @@ export async function clearAllCache(): Promise<void> {
   try {
     const db = await getDB();
     const tx = db.transaction(
-      ["files", "syncMeta", "editHistory", "fileTree"],
+      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta"],
       "readwrite"
     );
     tx.objectStore("files").clear();
     tx.objectStore("syncMeta").clear();
     tx.objectStore("editHistory").clear();
     tx.objectStore("fileTree").clear();
+    tx.objectStore("remoteMeta").clear();
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

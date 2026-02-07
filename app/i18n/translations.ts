@@ -110,12 +110,54 @@ export interface TranslationStrings {
   // Context menu
   "contextMenu.rename": string;
   "contextMenu.tempDownload": string;
+  "contextMenu.tempUpload": string;
   "contextMenu.noTempFile": string;
+  "contextMenu.clearCache": string;
+  "contextMenu.clearCacheModified": string;
+  "contextMenu.clearCacheSkipModified": string;
 
   // Temp files
   "settings.general.tempFiles": string;
   "settings.general.tempFilesDescription": string;
   "settings.general.manageTempFiles": string;
+
+  // Sync tab
+  "settings.tab.sync": string;
+  "settings.sync.status": string;
+  "settings.sync.lastUpdatedAt": string;
+  "settings.sync.notSynced": string;
+  "settings.sync.excludePatterns": string;
+  "settings.sync.excludePatternsDescription": string;
+  "settings.sync.conflictResolution": string;
+  "settings.sync.conflictFolder": string;
+  "settings.sync.clearConflicts": string;
+  "settings.sync.clearConflictsConfirm": string;
+  "settings.sync.conflictsCleared": string;
+  "settings.sync.fullSyncOps": string;
+  "settings.sync.fullPush": string;
+  "settings.sync.fullPushDescription": string;
+  "settings.sync.fullPushConfirm": string;
+  "settings.sync.fullPull": string;
+  "settings.sync.fullPullDescription": string;
+  "settings.sync.fullPullConfirm": string;
+  "settings.sync.tempFiles": string;
+  "settings.sync.manageTempFiles": string;
+  "settings.sync.untrackedFiles": string;
+  "settings.sync.detectUntracked": string;
+  "settings.sync.noUntracked": string;
+  "settings.sync.deleteSelected": string;
+  "settings.sync.restoreSelected": string;
+  "settings.sync.save": string;
+  "settings.sync.pushRejected": string;
+
+  // Temp diff modal
+  "tempDiff.title": string;
+  "tempDiff.noDiff": string;
+  "tempDiff.binaryCompare": string;
+  "tempDiff.currentFile": string;
+  "tempDiff.tempFile": string;
+  "tempDiff.accept": string;
+  "tempDiff.reject": string;
   "tempFiles.title": string;
   "tempFiles.noFiles": string;
   "tempFiles.selectAll": string;
@@ -252,12 +294,54 @@ const en: TranslationStrings = {
   // Context menu
   "contextMenu.rename": "Rename",
   "contextMenu.tempDownload": "Temp Download",
+  "contextMenu.tempUpload": "Temp Upload",
   "contextMenu.noTempFile": "No temp file found for this file.",
+  "contextMenu.clearCache": "Clear Cache",
+  "contextMenu.clearCacheModified": "This file has unsaved changes. Push first.",
+  "contextMenu.clearCacheSkipModified": "Some files have unsaved changes and will be skipped. Continue?",
 
   // Temp files
   "settings.general.tempFiles": "Temporary Files",
   "settings.general.tempFilesDescription": "Manage temporary files saved to Drive before Push.",
   "settings.general.manageTempFiles": "Manage Temp Files",
+
+  // Sync tab
+  "settings.tab.sync": "Sync",
+  "settings.sync.status": "Sync Status",
+  "settings.sync.lastUpdatedAt": "Last updated at",
+  "settings.sync.notSynced": "Not synced yet",
+  "settings.sync.excludePatterns": "Exclude Patterns",
+  "settings.sync.excludePatternsDescription": "Files matching these regex patterns will be excluded from sync (one per line).",
+  "settings.sync.conflictResolution": "Conflict Resolution",
+  "settings.sync.conflictFolder": "Conflict Folder Name",
+  "settings.sync.clearConflicts": "Clear Conflict Files",
+  "settings.sync.clearConflictsConfirm": "Delete all files in the conflict folder?",
+  "settings.sync.conflictsCleared": "Deleted {count} conflict file(s).",
+  "settings.sync.fullSyncOps": "Full Sync Operations",
+  "settings.sync.fullPush": "Full Push",
+  "settings.sync.fullPushDescription": "Upload all cached files to Google Drive (overwrites remote)",
+  "settings.sync.fullPushConfirm": "This will overwrite all remote files with local cache. Continue?",
+  "settings.sync.fullPull": "Full Pull",
+  "settings.sync.fullPullDescription": "Download all files from Google Drive (overwrites local cache)",
+  "settings.sync.fullPullConfirm": "This will overwrite all local cache with remote files. Continue?",
+  "settings.sync.tempFiles": "Temporary Files",
+  "settings.sync.manageTempFiles": "Manage Temp Files",
+  "settings.sync.untrackedFiles": "Untracked Remote Files",
+  "settings.sync.detectUntracked": "Detect Untracked Files",
+  "settings.sync.noUntracked": "No untracked files found.",
+  "settings.sync.deleteSelected": "Delete Selected",
+  "settings.sync.restoreSelected": "Restore Selected",
+  "settings.sync.save": "Save Sync Settings",
+  "settings.sync.pushRejected": "Remote is newer. Pull first.",
+
+  // Temp diff modal
+  "tempDiff.title": "Temp File Comparison",
+  "tempDiff.noDiff": "No differences found.",
+  "tempDiff.binaryCompare": "Binary file comparison",
+  "tempDiff.currentFile": "Current file",
+  "tempDiff.tempFile": "Temp file",
+  "tempDiff.accept": "Accept",
+  "tempDiff.reject": "Cancel",
   "tempFiles.title": "Temporary Files",
   "tempFiles.noFiles": "No temporary files found.",
   "tempFiles.selectAll": "Select All",
@@ -394,12 +478,54 @@ const ja: TranslationStrings = {
   // Context menu
   "contextMenu.rename": "名前を変更",
   "contextMenu.tempDownload": "一時ダウンロード",
+  "contextMenu.tempUpload": "一時アップロード",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
+  "contextMenu.clearCache": "キャッシュクリア",
+  "contextMenu.clearCacheModified": "このファイルには未保存の変更があります。先にPushしてください。",
+  "contextMenu.clearCacheSkipModified": "未保存の変更があるファイルはスキップされます。続行しますか？",
 
   // Temp files
   "settings.general.tempFiles": "一時ファイル",
   "settings.general.tempFilesDescription": "Push前にDriveに保存された一時ファイルを管理します。",
   "settings.general.manageTempFiles": "一時ファイルを管理",
+
+  // Sync tab
+  "settings.tab.sync": "同期",
+  "settings.sync.status": "同期ステータス",
+  "settings.sync.lastUpdatedAt": "最終更新日時",
+  "settings.sync.notSynced": "未同期",
+  "settings.sync.excludePatterns": "除外パターン",
+  "settings.sync.excludePatternsDescription": "これらの正規表現パターンに一致するファイルは同期から除外されます（1行に1パターン）。",
+  "settings.sync.conflictResolution": "コンフリクト解決",
+  "settings.sync.conflictFolder": "コンフリクトフォルダ名",
+  "settings.sync.clearConflicts": "コンフリクトファイルを削除",
+  "settings.sync.clearConflictsConfirm": "コンフリクトフォルダ内のすべてのファイルを削除しますか？",
+  "settings.sync.conflictsCleared": "{count}件のコンフリクトファイルを削除しました。",
+  "settings.sync.fullSyncOps": "完全同期操作",
+  "settings.sync.fullPush": "完全Push",
+  "settings.sync.fullPushDescription": "キャッシュされたすべてのファイルをGoogle Driveにアップロード（リモートを上書き）",
+  "settings.sync.fullPushConfirm": "すべてのリモートファイルをローカルキャッシュで上書きします。続行しますか？",
+  "settings.sync.fullPull": "完全Pull",
+  "settings.sync.fullPullDescription": "Google Driveからすべてのファイルをダウンロード（ローカルキャッシュを上書き）",
+  "settings.sync.fullPullConfirm": "すべてのローカルキャッシュをリモートファイルで上書きします。続行しますか？",
+  "settings.sync.tempFiles": "一時ファイル",
+  "settings.sync.manageTempFiles": "一時ファイルを管理",
+  "settings.sync.untrackedFiles": "未追跡リモートファイル",
+  "settings.sync.detectUntracked": "未追跡ファイルを検出",
+  "settings.sync.noUntracked": "未追跡ファイルは見つかりませんでした。",
+  "settings.sync.deleteSelected": "選択を削除",
+  "settings.sync.restoreSelected": "選択を復元",
+  "settings.sync.save": "同期設定を保存",
+  "settings.sync.pushRejected": "リモートが新しいです。先にPullしてください。",
+
+  // Temp diff modal
+  "tempDiff.title": "一時ファイルの比較",
+  "tempDiff.noDiff": "差分はありません。",
+  "tempDiff.binaryCompare": "バイナリファイルの比較",
+  "tempDiff.currentFile": "現在のファイル",
+  "tempDiff.tempFile": "一時ファイル",
+  "tempDiff.accept": "適用",
+  "tempDiff.reject": "キャンセル",
   "tempFiles.title": "一時ファイル",
   "tempFiles.noFiles": "一時ファイルが見つかりません。",
   "tempFiles.selectAll": "すべて選択",

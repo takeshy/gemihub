@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
+import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog";
 import { invalidateIndexCache } from "~/routes/_index";
 
 // ---------------------------------------------------------------------------
@@ -63,12 +64,13 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "encryption" | "editHistory" | "commands";
+type TabId = "general" | "mcp" | "rag" | "encryption" | "editHistory" | "commands" | "sync";
 
 import type { TranslationStrings } from "~/i18n/translations";
 
 const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof SettingsIcon }[] = [
   { id: "general", labelKey: "settings.tab.general", icon: SettingsIcon },
+  { id: "sync", labelKey: "settings.tab.sync", icon: RefreshCw },
   { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
   { id: "encryption", labelKey: "settings.tab.encryption", icon: Lock },
@@ -208,6 +210,21 @@ export async function action({ request }: Route.ActionArgs) {
         return { success: true, message: "Edit history settings saved." };
       }
 
+      case "saveSync": {
+        const syncExcludePatterns = (formData.get("syncExcludePatterns") as string || "")
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const syncConflictFolder = (formData.get("syncConflictFolder") as string)?.trim() || "sync_conflicts";
+        const updatedSettings: UserSettings = {
+          ...currentSettings,
+          syncExcludePatterns,
+          syncConflictFolder,
+        };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        return { success: true, message: "Sync settings saved." };
+      }
+
       case "saveCommands": {
         const commandsJson = formData.get("slashCommands") as string;
         const slashCommands = commandsJson ? JSON.parse(commandsJson) : [];
@@ -309,6 +326,7 @@ function SettingsInner({
         {activeTab === "general" && (
           <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} />
         )}
+        {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
         {activeTab === "rag" && <RagTab settings={settings} />}
         {activeTab === "encryption" && <EncryptionTab settings={settings} />}
@@ -412,8 +430,6 @@ function GeneralTab({
   const [language, setLanguage] = useState<Language>(settings.language);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
-  const [showTempFiles, setShowTempFiles] = useState(false);
-
   const availableModels = getAvailableModels(apiPlan);
 
   // When plan changes, reset model if it's not available
@@ -573,11 +589,294 @@ function GeneralTab({
 
         <SaveButton loading={loading} />
       </fetcher.Form>
+    </SectionCard>
+  );
+}
 
-      {/* Temp Files */}
-      <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+// ---------------------------------------------------------------------------
+// Sync Tab
+// ---------------------------------------------------------------------------
+
+function SyncTab({ settings }: { settings: UserSettings }) {
+  const fetcher = useFetcher();
+  const loading = fetcher.state !== "idle";
+  const { t } = useI18n();
+
+  const [excludePatterns, setExcludePatterns] = useState(
+    (settings.syncExcludePatterns ?? []).join("\n")
+  );
+  const [conflictFolder, setConflictFolder] = useState(
+    settings.syncConflictFolder || "sync_conflicts"
+  );
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [showTempFiles, setShowTempFiles] = useState(false);
+  const [untrackedFiles, setUntrackedFiles] = useState<Array<{ id: string; name: string; mimeType: string; modifiedTime: string }> | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  // Load lastUpdatedAt from IndexedDB
+  useEffect(() => {
+    (async () => {
+      try {
+        const { getLocalSyncMeta } = await import("~/services/indexeddb-cache");
+        const meta = await getLocalSyncMeta();
+        setLastUpdatedAt(meta?.lastUpdatedAt ?? null);
+      } catch {
+        // ignore
+      } finally {
+        setLoadingMeta(false);
+      }
+    })();
+  }, []);
+
+  const handleClearConflicts = useCallback(async () => {
+    if (!confirm(t("settings.sync.clearConflictsConfirm"))) return;
+    setActionLoading("clearConflicts");
+    setActionMsg(null);
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clearConflicts" }),
+      });
+      const data = await res.json();
+      setActionMsg(t("settings.sync.conflictsCleared").replace("{count}", String(data.deleted)));
+    } catch {
+      setActionMsg("Failed to clear conflicts.");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [t]);
+
+  const handleFullPush = useCallback(async () => {
+    if (!confirm(t("settings.sync.fullPushConfirm"))) return;
+    setActionLoading("fullPush");
+    setActionMsg(null);
+    try {
+      const { useSync } = await import("~/hooks/useSync");
+      // Directly call the API since we can't use hooks here
+      await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "applyAll" }),
+      });
+      const { getLocalSyncMeta } = await import("~/services/indexeddb-cache");
+      const localMeta = await getLocalSyncMeta();
+      if (!localMeta) {
+        setActionMsg("No local data to push.");
+        return;
+      }
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "fullPush",
+          localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
+        }),
+      });
+      if (!res.ok) throw new Error("Full push failed");
+      setActionMsg("Full push completed.");
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : "Full push failed.");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [t]);
+
+  const handleFullPull = useCallback(async () => {
+    if (!confirm(t("settings.sync.fullPullConfirm"))) return;
+    setActionLoading("fullPull");
+    setActionMsg(null);
+    try {
+      const { getAllCachedFiles, setCachedFile, setLocalSyncMeta } = await import("~/services/indexeddb-cache");
+      const cachedFiles = await getAllCachedFiles();
+      const skipHashes: Record<string, string> = {};
+      for (const f of cachedFiles) {
+        if (f.md5Checksum) skipHashes[f.fileId] = f.md5Checksum;
+      }
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "fullPull", skipHashes }),
+      });
+      if (!res.ok) throw new Error("Full pull failed");
+      const data = await res.json();
+
+      const updatedMeta = {
+        id: "current" as const,
+        lastUpdatedAt: new Date().toISOString(),
+        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
+      };
+      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { md5Checksum: string; modifiedTime: string }>)) {
+        updatedMeta.files[fileId] = {
+          md5Checksum: fileMeta.md5Checksum,
+          modifiedTime: fileMeta.modifiedTime,
+        };
+      }
+      for (const file of data.files) {
+        await setCachedFile({
+          fileId: file.fileId,
+          content: file.content,
+          md5Checksum: file.md5Checksum,
+          modifiedTime: file.modifiedTime,
+          cachedAt: Date.now(),
+          fileName: file.fileName,
+        });
+      }
+      await setLocalSyncMeta(updatedMeta);
+      setLastUpdatedAt(updatedMeta.lastUpdatedAt);
+      setActionMsg(`Full pull completed. Downloaded ${data.files.length} file(s).`);
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : "Full pull failed.");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [t]);
+
+  const handleDetectUntracked = useCallback(async () => {
+    setActionLoading("detectUntracked");
+    setActionMsg(null);
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "detectUntracked" }),
+      });
+      if (!res.ok) throw new Error("Detection failed");
+      const data = await res.json();
+      setUntrackedFiles(data.untrackedFiles);
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : "Detection failed.");
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
+  const handleSubmit = useCallback(() => {
+    const fd = new FormData();
+    fd.set("_action", "saveSync");
+    fd.set("syncExcludePatterns", excludePatterns);
+    fd.set("syncConflictFolder", conflictFolder);
+    fetcher.submit(fd, { method: "post" });
+  }, [fetcher, excludePatterns, conflictFolder]);
+
+  return (
+    <SectionCard>
+      <StatusBanner fetcher={fetcher} />
+
+      {/* Sync Status */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
+          {t("settings.sync.status")}
+        </h3>
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          <span className="font-medium">{t("settings.sync.lastUpdatedAt")}:</span>{" "}
+          {loadingMeta ? (
+            <Loader2 size={14} className="inline animate-spin" />
+          ) : lastUpdatedAt ? (
+            new Date(lastUpdatedAt).toLocaleString()
+          ) : (
+            <span className="italic text-gray-400">{t("settings.sync.notSynced")}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Exclude Patterns */}
+      <div className="mb-6">
+        <Label htmlFor="syncExcludePatterns">{t("settings.sync.excludePatterns")}</Label>
+        <textarea
+          id="syncExcludePatterns"
+          rows={3}
+          value={excludePatterns}
+          onChange={(e) => setExcludePatterns(e.target.value)}
+          placeholder="\.tmp$\n^temp_"
+          className={inputClass + " font-mono resize-y"}
+        />
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {t("settings.sync.excludePatternsDescription")}
+        </p>
+      </div>
+
+      {/* Conflict Resolution */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
+          {t("settings.sync.conflictResolution")}
+        </h3>
+        <div className="mb-3">
+          <Label htmlFor="syncConflictFolder">{t("settings.sync.conflictFolder")}</Label>
+          <input
+            type="text"
+            id="syncConflictFolder"
+            value={conflictFolder}
+            onChange={(e) => setConflictFolder(e.target.value)}
+            className={inputClass + " max-w-[300px]"}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleClearConflicts}
+          disabled={actionLoading === "clearConflicts"}
+          className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
+        >
+          {actionLoading === "clearConflicts" ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Trash2 size={14} />
+          )}
+          {t("settings.sync.clearConflicts")}
+        </button>
+      </div>
+
+      {/* Full Sync Operations */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
+          {t("settings.sync.fullSyncOps")}
+        </h3>
+        <div className="flex flex-wrap gap-3">
+          <div>
+            <button
+              type="button"
+              onClick={handleFullPush}
+              disabled={!!actionLoading}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
+            >
+              {actionLoading === "fullPush" ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              {t("settings.sync.fullPush")}
+            </button>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t("settings.sync.fullPushDescription")}
+            </p>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={handleFullPull}
+              disabled={!!actionLoading}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
+            >
+              {actionLoading === "fullPull" ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              {t("settings.sync.fullPull")}
+            </button>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t("settings.sync.fullPullDescription")}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Temporary Files */}
+      <div className="mb-6">
         <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
-          {t("settings.general.tempFiles")}
+          {t("settings.sync.tempFiles")}
         </h3>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
           {t("settings.general.tempFilesDescription")}
@@ -588,12 +887,56 @@ function GeneralTab({
           className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
         >
           <FileBox size={14} />
-          {t("settings.general.manageTempFiles")}
+          {t("settings.sync.manageTempFiles")}
         </button>
       </div>
 
+      {/* Untracked Files */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">
+          {t("settings.sync.untrackedFiles")}
+        </h3>
+        <button
+          type="button"
+          onClick={handleDetectUntracked}
+          disabled={actionLoading === "detectUntracked"}
+          className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50"
+        >
+          {actionLoading === "detectUntracked" ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          {t("settings.sync.detectUntracked")}
+        </button>
+      </div>
+
+      {actionMsg && (
+        <div className="mb-6 p-3 rounded-md border text-sm bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
+          {actionMsg}
+        </div>
+      )}
+
+      <button
+        type="button"
+        disabled={loading}
+        onClick={handleSubmit}
+        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+      >
+        {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+        {t("settings.sync.save")}
+      </button>
+
       {showTempFiles && (
         <TempFilesDialog onClose={() => setShowTempFiles(false)} />
+      )}
+
+      {untrackedFiles !== null && (
+        <UntrackedFilesDialog
+          files={untrackedFiles}
+          onClose={() => setUntrackedFiles(null)}
+          onRefresh={handleDetectUntracked}
+        />
       )}
     </SectionCard>
   );

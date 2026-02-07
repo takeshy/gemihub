@@ -346,6 +346,8 @@ export interface UserSettings {
   fontSize: FontSize;
   theme: Theme;
   slashCommands: SlashCommand[];
+  syncExcludePatterns: string[];
+  syncConflictFolder: string;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -366,4 +368,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   fontSize: 16,
   theme: "system",
   slashCommands: [],
+  syncExcludePatterns: [],
+  syncConflictFolder: "sync_conflicts",
 };

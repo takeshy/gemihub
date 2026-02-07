@@ -4,6 +4,7 @@ import {
   setLocalSyncMeta,
   getCachedFile,
   setCachedFile,
+  getAllCachedFiles,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 
@@ -138,6 +139,18 @@ export function useSync() {
         return;
       }
 
+      // lastUpdatedAt check: reject push if remote is newer
+      if (
+        diffData.remoteMeta?.lastUpdatedAt &&
+        localMeta.lastUpdatedAt &&
+        diffData.remoteMeta.lastUpdatedAt > localMeta.lastUpdatedAt &&
+        (diffData.diff.toPull.length > 0 || diffData.diff.remoteOnly.length > 0)
+      ) {
+        setError("settings.sync.pushRejected");
+        setSyncStatus("error");
+        return;
+      }
+
       if (diffData.diff.toPush.length === 0) {
         setSyncStatus("idle");
         return;
@@ -250,6 +263,15 @@ export function useSync() {
       try {
         const localMeta = (await getLocalSyncMeta()) ?? null;
 
+        // If remote wins, send local content for backup
+        let localContent: string | undefined;
+        if (choice === "remote") {
+          const cached = await getCachedFile(fileId);
+          if (cached) {
+            localContent = cached.content;
+          }
+        }
+
         const res = await fetch("/api/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -257,6 +279,7 @@ export function useSync() {
             action: "resolve",
             fileId,
             choice,
+            localContent,
             localMeta: localMeta
               ? { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files }
               : null,
@@ -306,6 +329,99 @@ export function useSync() {
     []
   );
 
+  const fullPull = useCallback(async () => {
+    setSyncStatus("pulling");
+    setError(null);
+    try {
+      // Build skipHashes from all cached files
+      const cachedFiles = await getAllCachedFiles();
+      const skipHashes: Record<string, string> = {};
+      for (const f of cachedFiles) {
+        if (f.md5Checksum) {
+          skipHashes[f.fileId] = f.md5Checksum;
+        }
+      }
+
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "fullPull", skipHashes }),
+      });
+
+      if (!res.ok) throw new Error("Full pull failed");
+      const data = await res.json();
+
+      // Update local cache with all downloaded files
+      const updatedMeta: LocalSyncMeta = {
+        id: "current",
+        lastUpdatedAt: new Date().toISOString(),
+        files: {},
+      };
+
+      // Include skipped files in meta too
+      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { md5Checksum: string; modifiedTime: string }>)) {
+        updatedMeta.files[fileId] = {
+          md5Checksum: fileMeta.md5Checksum,
+          modifiedTime: fileMeta.modifiedTime,
+        };
+      }
+
+      for (const file of data.files) {
+        await setCachedFile({
+          fileId: file.fileId,
+          content: file.content,
+          md5Checksum: file.md5Checksum,
+          modifiedTime: file.modifiedTime,
+          cachedAt: Date.now(),
+          fileName: file.fileName,
+        });
+      }
+
+      await setLocalSyncMeta(updatedMeta);
+      setLastSyncTime(new Date().toISOString());
+      setSyncStatus("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Full pull failed");
+      setSyncStatus("error");
+    }
+  }, []);
+
+  const fullPush = useCallback(async () => {
+    setSyncStatus("pushing");
+    setError(null);
+    try {
+      // Apply all temp files first
+      await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "applyAll" }),
+      });
+
+      const localMeta = (await getLocalSyncMeta()) ?? null;
+      if (!localMeta) {
+        setSyncStatus("idle");
+        return;
+      }
+
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "fullPush",
+          localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
+        }),
+      });
+
+      if (!res.ok) throw new Error("Full push failed");
+
+      setLastSyncTime(new Date().toISOString());
+      setSyncStatus("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Full push failed");
+      setSyncStatus("error");
+    }
+  }, []);
+
   // Auto-check every 5 minutes
   useEffect(() => {
     intervalRef.current = setInterval(() => {
@@ -329,5 +445,7 @@ export function useSync() {
     pull,
     checkSync,
     resolveConflict,
+    fullPush,
+    fullPull,
   };
 }

@@ -279,6 +279,7 @@ function IDELayout({
           rightPanel={rightPanel}
           setRightPanel={setRightPanel}
           activeFileName={activeFileName}
+          activeFileId={activeFileId}
           syncStatus={syncStatus}
           syncDiff={syncDiff}
           lastSyncTime={lastSyncTime}
