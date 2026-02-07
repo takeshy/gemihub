@@ -30,6 +30,7 @@ export function ExecutionHistoryModal({
     null
   );
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [expandedStepIndex, setExpandedStepIndex] = useState<number | null>(null);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -57,10 +58,12 @@ export function ExecutionHistoryModal({
       if (expandedId === record.id) {
         setExpandedId(null);
         setExpandedRecord(null);
+        setExpandedStepIndex(null);
         return;
       }
 
       setExpandedId(record.id);
+      setExpandedStepIndex(null);
       setLoadingDetail(true);
       try {
         const res = await fetch(
@@ -216,35 +219,64 @@ export function ExecutionHistoryModal({
                         ) : expandedRecord ? (
                           <div className="space-y-1">
                             {expandedRecord.steps.map(
-                              (step: ExecutionStep, i: number) => (
-                                <div
-                                  key={i}
-                                  className="flex items-start gap-2 text-xs"
-                                >
-                                  <StepStatusIcon status={step.status} />
-                                  <span className="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">
-                                    {step.nodeId}
-                                  </span>
-                                  <span className="text-gray-500 dark:text-gray-400 min-w-[60px]">
-                                    {step.nodeType}
-                                  </span>
-                                  {step.error && (
-                                    <span className="text-red-500 truncate">
-                                      {step.error}
-                                    </span>
-                                  )}
-                                  {!!step.output && !step.error && (
-                                    <span className="truncate text-gray-400">
-                                      {typeof step.output === "string"
-                                        ? step.output.slice(0, 80)
-                                        : JSON.stringify(step.output).slice(
-                                            0,
-                                            80
-                                          )}
-                                    </span>
-                                  )}
-                                </div>
-                              )
+                              (step: ExecutionStep, i: number) => {
+                                const isStepExpanded = expandedStepIndex === i;
+                                const hasDetail = step.input || step.output || step.error;
+                                return (
+                                  <div key={i}>
+                                    <div
+                                      onClick={() => hasDetail && setExpandedStepIndex(isStepExpanded ? null : i)}
+                                      className={`flex items-start gap-2 text-xs ${hasDetail ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-1" : ""}`}
+                                    >
+                                      <StepStatusIcon status={step.status} />
+                                      {hasDetail && (isStepExpanded
+                                        ? <ChevronDown size={ICON.SM} className="flex-shrink-0 mt-0.5 text-gray-400" />
+                                        : <ChevronRight size={ICON.SM} className="flex-shrink-0 mt-0.5 text-gray-400" />
+                                      )}
+                                      <span className="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">
+                                        {step.nodeId}
+                                      </span>
+                                      <span className="text-gray-500 dark:text-gray-400 min-w-[60px]">
+                                        {step.nodeType}
+                                      </span>
+                                      {step.error && !isStepExpanded && (
+                                        <span className="text-red-500 truncate">
+                                          {step.error}
+                                        </span>
+                                      )}
+                                      {!!step.output && !step.error && !isStepExpanded && (
+                                        <span className="truncate text-gray-400">
+                                          {typeof step.output === "string"
+                                            ? step.output.slice(0, 80)
+                                            : JSON.stringify(step.output).slice(0, 80)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isStepExpanded && (
+                                      <div className="ml-8 mb-1 space-y-1 text-xs">
+                                        {step.input && (
+                                          <div>
+                                            <span className="font-semibold text-gray-500">Input:</span>
+                                            <pre className="mt-0.5 max-h-[300px] overflow-auto rounded bg-gray-100 p-1.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300 whitespace-pre-wrap">{formatStepValue(step.input)}</pre>
+                                          </div>
+                                        )}
+                                        {step.output !== undefined && (
+                                          <div>
+                                            <span className="font-semibold text-gray-500">Output:</span>
+                                            <pre className="mt-0.5 max-h-[300px] overflow-auto rounded bg-gray-100 p-1.5 text-gray-700 dark:bg-gray-800 dark:text-gray-300 whitespace-pre-wrap">{formatStepValue(step.output)}</pre>
+                                          </div>
+                                        )}
+                                        {step.error && (
+                                          <div>
+                                            <span className="font-semibold text-red-500">Error:</span>
+                                            <pre className="mt-0.5 max-h-[300px] overflow-auto rounded bg-red-50 p-1.5 text-red-600 dark:bg-red-900/30 dark:text-red-400 whitespace-pre-wrap">{step.error}</pre>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
                             )}
                           </div>
                         ) : null}
@@ -315,6 +347,16 @@ function formatDate(iso: string): string {
     });
   } catch {
     return iso;
+  }
+}
+
+function formatStepValue(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
   }
 }
 

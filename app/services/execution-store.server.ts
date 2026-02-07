@@ -45,6 +45,8 @@ export function addLog(executionId: string, log: ExecutionLog): void {
     message: log.message,
     status: log.status,
     timestamp: log.timestamp.toISOString(),
+    input: log.input,
+    output: log.output,
   }));
 }
 
@@ -126,6 +128,8 @@ export function subscribe(
       message: log.message,
       status: log.status,
       timestamp: log.timestamp.toISOString(),
+      input: log.input,
+      output: log.output,
     }));
   }
 

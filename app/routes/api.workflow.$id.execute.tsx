@@ -54,7 +54,6 @@ export async function action({ request, params }: Route.ActionArgs) {
       const serviceContext: ServiceContext = {
         driveAccessToken: validTokens.accessToken,
         driveRootFolderId: validTokens.rootFolderId,
-        driveWorkflowsFolderId: driveContext.workflowsFolderId,
         driveHistoryFolderId: driveContext.historyFolderId,
         geminiApiKey: validTokens.geminiApiKey,
         abortSignal: executionState.abortController.signal,
@@ -112,14 +111,22 @@ export async function action({ request, params }: Route.ActionArgs) {
         promptCallbacks
       );
 
-      setCompleted(executionId, result.historyRecord);
+      const record = result.historyRecord;
+      if (record?.status === "error") {
+        const lastErrorStep = record.steps.filter(s => s.status === "error").pop();
+        setError(executionId, lastErrorStep?.error || "Workflow execution failed");
+      } else if (record?.status === "cancelled") {
+        setError(executionId, "Workflow execution was stopped");
+      } else {
+        setCompleted(executionId, record);
+      }
 
-      if (result.historyRecord) {
+      if (record) {
         try {
           await saveExecutionRecord(
             validTokens.accessToken,
             validTokens.rootFolderId,
-            result.historyRecord
+            record
           );
         } catch (e) {
           console.error("Failed to save execution history:", e);

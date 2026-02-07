@@ -89,6 +89,18 @@ interface LogEntry {
   message: string;
   status: "info" | "success" | "error";
   timestamp: string;
+  input?: Record<string, unknown>;
+  output?: unknown;
+}
+
+function formatValue(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function WorkflowNodeListView({
@@ -151,6 +163,7 @@ function WorkflowNodeListView({
   >("idle");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [expandedLogIndex, setExpandedLogIndex] = useState<number | null>(null);
   const [promptData, setPromptData] = useState<Record<string, unknown> | null>(null);
   const eventSourceRef = useState<EventSource | null>(null);
 
@@ -564,29 +577,52 @@ function WorkflowNodeListView({
             Logs ({logs.length})
           </button>
           {showLogs && (
-            <div className="max-h-32 overflow-y-auto px-2 pb-1 font-mono text-[10px]">
-              {logs.map((log, i) => (
-                <div
-                  key={i}
-                  className={`flex items-start gap-1 py-0.5 ${
-                    log.status === "error"
-                      ? "text-red-500"
-                      : log.status === "success"
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-gray-500"
-                  }`}
-                >
-                  {log.status === "error" ? (
-                    <XCircle size={10} className="mt-0.5 flex-shrink-0" />
-                  ) : log.status === "success" ? (
-                    <CheckCircle size={10} className="mt-0.5 flex-shrink-0" />
-                  ) : (
-                    <Info size={10} className="mt-0.5 flex-shrink-0" />
-                  )}
-                  <span className="text-gray-400">[{log.nodeId}]</span>
-                  <span className="break-all">{log.message}</span>
-                </div>
-              ))}
+            <div className="max-h-48 overflow-y-auto px-2 pb-1 font-mono text-[10px]">
+              {logs.map((log, i) => {
+                const isExpanded = expandedLogIndex === i;
+                const hasDetail = log.input || log.output;
+                return (
+                  <div key={i}>
+                    <div
+                      onClick={() => hasDetail && setExpandedLogIndex(isExpanded ? null : i)}
+                      className={`flex items-start gap-1 py-0.5 ${hasDetail ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded" : ""} ${
+                        log.status === "error"
+                          ? "text-red-500"
+                          : log.status === "success"
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-gray-500"
+                      }`}
+                    >
+                      {log.status === "error" ? (
+                        <XCircle size={10} className="mt-0.5 flex-shrink-0" />
+                      ) : log.status === "success" ? (
+                        <CheckCircle size={10} className="mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <Info size={10} className="mt-0.5 flex-shrink-0" />
+                      )}
+                      {!!hasDetail && (isExpanded ? <ChevronDown size={10} className="mt-0.5 flex-shrink-0" /> : <ChevronRight size={10} className="mt-0.5 flex-shrink-0" />)}
+                      <span className="text-gray-400">[{log.nodeId}]</span>
+                      <span className="break-all">{log.message}</span>
+                    </div>
+                    {isExpanded && (
+                      <div className="ml-5 mb-1 space-y-1 text-[10px]">
+                        {log.input && (
+                          <div>
+                            <span className="font-semibold text-gray-500">Input:</span>
+                            <pre className="mt-0.5 max-h-24 overflow-auto rounded bg-gray-100 p-1 text-gray-700 dark:bg-gray-800 dark:text-gray-300 whitespace-pre-wrap">{formatValue(log.input)}</pre>
+                          </div>
+                        )}
+                        {log.output !== undefined && (
+                          <div>
+                            <span className="font-semibold text-gray-500">Output:</span>
+                            <pre className="mt-0.5 max-h-24 overflow-auto rounded bg-gray-100 p-1 text-gray-700 dark:bg-gray-800 dark:text-gray-300 whitespace-pre-wrap">{formatValue(log.output)}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

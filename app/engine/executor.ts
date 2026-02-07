@@ -99,7 +99,7 @@ export async function executeWorkflow(
     if (options?.abortSignal?.aborted) {
       historyRecord.status = "cancelled";
       historyRecord.endTime = new Date().toISOString();
-      throw new Error("Workflow execution was stopped");
+      return { context, historyRecord };
     }
 
     totalIterations++;
@@ -370,14 +370,15 @@ export async function executeWorkflow(
       addHistoryStep(node.id, node.type, undefined, undefined, "error", errorMessage);
       historyRecord.status = "error";
       historyRecord.endTime = new Date().toISOString();
-      throw error;
+      return { context, historyRecord };
     }
   }
 
   if (totalIterations >= MAX_ITERATIONS) {
     historyRecord.status = "error";
     historyRecord.endTime = new Date().toISOString();
-    throw new Error(`Workflow exceeded maximum iterations (${MAX_ITERATIONS})`);
+    log("system", "variable", `Workflow exceeded maximum iterations (${MAX_ITERATIONS})`, "error");
+    return { context, historyRecord };
   }
 
   historyRecord.status = "completed";

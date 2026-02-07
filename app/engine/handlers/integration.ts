@@ -94,16 +94,17 @@ export function handleJsonNode(
   node: WorkflowNode,
   context: ExecutionContext
 ): void {
-  const sourceVar = node.properties["source"];
+  const sourceRaw = node.properties["source"];
   const saveTo = node.properties["saveTo"];
 
-  if (!sourceVar) throw new Error("JSON node missing 'source' property");
+  if (!sourceRaw) throw new Error("JSON node missing 'source' property");
   if (!saveTo) throw new Error("JSON node missing 'saveTo' property");
 
-  const sourceValue = context.variables.get(sourceVar);
-  if (sourceValue === undefined) {
-    throw new Error(`Variable '${sourceVar}' not found`);
-  }
+  // Resolve {{variable}} templates in source
+  const resolved = replaceVariables(sourceRaw, context);
+
+  // Try variable lookup first (backward compat for `source: myVar`), then use resolved string directly
+  const sourceValue = context.variables.get(resolved) ?? resolved;
 
   let jsonString = String(sourceValue);
 
@@ -115,6 +116,6 @@ export function handleJsonNode(
     const parsed = JSON.parse(jsonString);
     context.variables.set(saveTo, JSON.stringify(parsed));
   } catch (e) {
-    throw new Error(`Failed to parse JSON from '${sourceVar}': ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(`Failed to parse JSON from '${sourceRaw}': ${e instanceof Error ? e.message : String(e)}`);
   }
 }
