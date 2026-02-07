@@ -9,7 +9,6 @@
 - **コンフリクト解決**: ローカルまたはリモート版を選択し、選ばれなかった方は自動バックアップ
 - **自動チェック**: 5分ごとに変更を検出
 - **Full Push / Full Pull**: 初期セットアップやリカバリ用の一括同期
-- **除外パターン**: 正規表現でファイルをスキップ
 - **未追跡ファイル管理**: リモートの孤立ファイルを検出・復元・削除
 
 ## コマンド
@@ -18,7 +17,7 @@
 |---------|------|
 | **Push** | ローカルの変更をアップロード（差分） |
 | **Pull** | リモートの変更をダウンロード（差分） |
-| **Full Push** | ローカルのメタデータを全てリモートにマージ |
+| **Full Push** | ローカルの全ファイルをアップロード + メタデータをリモートにマージ |
 | **Full Pull** | リモートの全ファイルをダウンロード（ハッシュ一致分はスキップ） |
 
 ヘッダーボタン: Push と Pull ボタンは常に表示されます。バッジにはローカル編集ファイル数を含む保留中の変更数が表示されます。
@@ -72,15 +71,36 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ### フロー
 
-1. **ローカル編集ファイルの自動アップロード** — IndexedDB `editHistory` で追跡されているローカル編集ファイルを一時ファイルとしてアップロード
-2. **全一時ファイルを適用**（`__TEMP__/` ファイルを実パスに展開し、差分を Drive `.history.json` に記録）
-3. **ローカルキャッシュを更新**（適用されたファイルの新しいチェックサムで）
-4. **三者間比較で Diff を計算**
-5. **コンフリクト確認** — あれば停止してコンフリクト UI を表示
-6. **`lastUpdatedAt` を確認** — リモートが新しく、かつ未 Pull の変更がある場合は拒否
-7. **変更済みチェックサムをリモートの `_sync-meta.json` にアップロード**
-8. **ローカル編集履歴をクリア**（Drive `.history.json` に永続化済み）
-9. **Diff を再取得**してステータスを更新
+```
+1. 事前チェック: 書き込み前に Diff を確認
+   ├─ IndexedDB から LocalSyncMeta を読み取り
+   ├─ POST /api/sync { action: "diff" }
+   │   └─ サーバー: Drive の _sync-meta.json と比較 → diff を返す
+   ├─ コンフリクトあり → 中断（コンフリクトダイアログを表示）
+   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
+
+2. アップロード: Drive 上のファイルを直接更新
+   ├─ IndexedDB の editHistory から変更ファイル ID を取得
+   ├─ 各変更ファイルについて:
+   │   ├─ IndexedDB キャッシュから内容を読み取り
+   │   ├─ POST /api/drive/files { action: "update", fileId, content }
+   │   │   └─ サーバー: Drive 上のファイルを更新、_sync-meta.json を更新
+   │   │       → 新しい md5Checksum, modifiedTime を返す
+   │   ├─ LocalSyncMeta を新しい md5/modifiedTime で更新
+   │   └─ IndexedDB キャッシュを新しい md5/modifiedTime で更新
+   └─ lastUpdatedAt = now
+
+3. クリーンアップ
+   ├─ IndexedDB の editHistory をクリア（変更は Drive に反映済み）
+   ├─ localModifiedCount = 0
+   └─ "sync-complete" イベント発火（UI 更新用）
+
+4. メタデータ同期
+   ├─ diff を再計算（アップロード後の状態で）
+   ├─ toPush が残っていれば → POST /api/sync { action: "push" }
+   │   └─ サーバー: _sync-meta.json を更新
+   └─ diff を再取得してステータスを更新
+```
 
 ### 前提条件
 
@@ -93,10 +113,10 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ### 重要事項
 
-- Push はローカル編集ファイルを自動的に一時ファイルとしてアップロードしてから適用します。手動で各ファイルをアップロードする必要はありません。
+- Push はコンフリクトおよびリモート優先のチェックを **Drive への書き込み前に** 行います。チェックに失敗した場合、何も書き込まれません。
 - Push はリモートファイルを**削除しません**。
 - ローカルで削除されたファイルはリモート上で「未追跡」になります（設定から復元可能）。
-- Push 成功後、IndexedDB のローカル編集履歴はクリアされます。差分は Drive `.history.json` に保存されています。
+- Push 成功後、IndexedDB のローカル編集履歴はクリアされます。
 
 ---
 
@@ -163,13 +183,14 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ## Full Push
 
-ローカルのメタデータを全てリモートのメタデータにマージします。
+ローカルの変更ファイルを全て Drive に直接アップロードし、メタデータをマージします。
 
 ### フロー
 
-1. **全ての一時ファイルを適用**
-2. **ローカルメタの全エントリをリモートの `_sync-meta.json` にマージ**
-3. **更新されたリモートメタを Drive に書き込み**
+1. **変更ファイルをアップロード** — 各変更ファイルを `/api/drive/files` 経由で Drive に直接更新
+2. **IndexedDB を更新** — キャッシュと LocalSyncMeta を新しい md5/modifiedTime で更新
+3. **ローカルメタの全エントリをリモートの `_sync-meta.json` にマージ**
+4. **編集履歴をクリア**
 
 ### 使用するタイミング
 
@@ -202,13 +223,12 @@ Diff アルゴリズムは3つのデータソースを比較します:
 ## 一時同期（Temporary Sync）
 
 フル同期のオーバーヘッドなしにファイルを素早く共有します。以下の場合に使用:
-- Push/Pull に時間がかかりすぎる場合
-- コンフリクト解決を避けたい場合
 - 単一ファイルをデバイス間で素早く共有したい場合
+- リスクのある編集前にバックアップが必要な場合
 
 ファイルは Google Drive 上に `__TEMP__/` プレフィックス付きで保存されます。**メタデータは更新されません** — 両方のデバイスで同じ編集を手動で行うのと同等です。
 
-一時ファイルは Push の開始時に自動的に展開（実パスに適用）されます。
+一時ファイルは設定 → 同期 → 一時ファイルから管理できます。
 
 ---
 
@@ -243,29 +263,34 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ## 設定
 
-| 設定 | 説明 | デフォルト |
-|------|------|-----------|
-| 除外パターン | 同期 Diff から除外するファイルの正規表現パターン | `[]`（なし） |
-| コンフリクトフォルダ | コンフリクトバックアップ用フォルダ名 | `sync_conflicts` |
-| コンフリクトファイルの削除 | コンフリクトフォルダ内の全バックアップを削除 | — |
-| 未追跡ファイルの検出 | 未追跡のリモートファイルを検出・復元・削除 | — |
-| Full Push | ローカルの全メタデータをリモートにマージ | — |
-| Full Pull | リモートの全ファイルをダウンロード | — |
+設定 → 同期タブにセクション別で配置:
+
+### 同期ステータス
+- 最終同期日時
+
+### データ管理
+| アクション | 説明 |
+|-----------|------|
+| 一時ファイルを管理 | Drive 上の一時ファイルを閲覧・管理 |
+| 未追跡ファイルを検出 | ローカルキャッシュで追跡されていないリモートファイルを検出 |
+
+### 編集履歴
+| アクション | 説明 |
+|-----------|------|
+| 整理 | 古い編集履歴エントリを削除してストレージを解放 |
+| 統計 | 編集履歴のストレージ使用量とエントリ数を表示 |
+
+### 危険な操作
+| アクション | 説明 |
+|-----------|------|
+| コンフリクトファイルを削除 | `sync_conflicts/` 内の全バックアップファイルを削除 |
+| 完全 Push | ローカルの全ファイルをアップロードしメタデータをマージ（リモートを上書き） |
+| 完全 Pull | リモートの全ファイルをダウンロード（ローカルキャッシュを上書き） |
 
 ### システムファイル（常に除外）
 
 - `_sync-meta.json` — 同期メタデータ
 - `settings.json` — ユーザー設定
-
-### 除外パターンの例
-
-パターンは JavaScript の正規表現です:
-
-| パターン | 効果 |
-|---------|------|
-| `\.tmp$` | `.tmp` ファイルを除外 |
-| `^drafts/` | `drafts/` で始まるファイルを除外 |
-| `private` | ファイル名に「private」を含むファイルを除外 |
 
 ---
 
@@ -304,7 +329,7 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ### リモート編集履歴（Drive）
 
-Push が一時ファイルを Drive に適用する際、サーバーは:
+Push でファイルを Drive に更新する際、サーバーは:
 1. 更新前に Drive から旧ファイル内容を読み取り
 2. diff（旧 → 新）を計算
 3. ファイルの `.history.json` に diff エントリを追記
@@ -328,10 +353,10 @@ Push 後、diff は Drive に保存済みのため IndexedDB の編集履歴は�
 ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
 │ files store   │      │ /api/sync    │      │ Root folder  │
 │ syncMeta      │◄────►│ (diff/push/  │◄────►│ _sync-meta   │
-│ remoteMeta    │      │  pull/resolve)│      │ User files   │
-│ fileTree      │      │              │      │ sync_conflicts│
-│ editHistory   │      │ /api/drive/  │      │ .history.json│
-│               │      │  temp        │      │ __TEMP__/    │
+│ fileTree      │      │  pull/resolve)│      │ User files   │
+│ editHistory   │      │              │      │ sync_conflicts│
+│               │      │ /api/drive/  │      │ .history.json│
+│               │      │  files       │      │ __TEMP__/    │
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
 
@@ -342,8 +367,9 @@ Push 後、diff は Drive に保存済みのため IndexedDB の編集履歴は�
 | `app/hooks/useSync.ts` | クライアント側の同期フック（push, pull, conflict, fullPush, fullPull, localModifiedCount） |
 | `app/hooks/useFileWithCache.ts` | IndexedDB キャッシュ優先のファイル読取、編集履歴付き自動保存 |
 | `app/routes/api.sync.tsx` | サーバー側の同期 API（10アクション） |
+| `app/routes/api.drive.files.tsx` | Drive ファイル CRUD（Push 時のファイル直接更新に使用） |
 | `app/services/sync-meta.server.ts` | 同期メタデータの読取・書込・再構築・Diff |
-| `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, remoteMeta, fileTree, editHistory） |
+| `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, fileTree, editHistory） |
 | `app/services/edit-history-local.ts` | クライアント側の編集履歴（IndexedDB での逆適用 diff） |
 | `app/services/edit-history.server.ts` | サーバー側の編集履歴（Drive `.history.json` の読取・書込） |
 | `app/services/google-drive.server.ts` | Google Drive API ラッパー |
