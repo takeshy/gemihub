@@ -18,9 +18,9 @@ Gemini Hub は、Google Gemini を Google Drive と深く統合したセルフ�
 
 組み込みの RAG（検索拡張生成）により、Drive ファイルを Gemini のセマンティック検索に同期できます。キーワードの完全一致ではなく、質問の**意味**を理解して、あなたの個人的なナレッジベースから関連情報を見つけ出します。製品マニュアル、議事録、調査資料を保存しておけば、自然な言葉で質問するだけで答えが返ってきます。
 
-### 外部ツールを自由に接続（MCP）
+### 外部ツールを自由に接続（MCP & プラグイン）
 
-Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービスと連携できます。Web 検索、データベース、API、MCP 対応サーバーを接続すれば、AI が会話中にこれらのツールを自動的に発見し活用します。一度接続したツールは AI が必要に応じて自動で呼び出すため、ユーザーは意識することなく強力な機能を使えます。
+Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービスと連携できます。Web 検索、データベース、API、MCP 対応サーバーを接続すれば、AI が会話中にこれらのツールを自動的に発見し活用します。さらに**プラグイン**で機能を拡張可能 — GitHub からインストールまたはローカル開発で、カスタムサイドバービュー、スラッシュコマンド、設定パネルを追加できます。
 
 ### コード不要のワークフロー自動化
 
@@ -33,11 +33,12 @@ Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービス�
 ## 機能一覧
 
 - **AI チャット** — Gemini とのストリーミング会話、Function Calling、思考表示、画像生成、ファイル添付
-- **スラッシュコマンド** — ユーザー定義の `/コマンド`、テンプレート変数（`{content}`, `{selection}`）、`@ファイル` メンション、コマンドごとのモデル/ツール設定
+- **スラッシュコマンド** — ユーザー定義の `/コマンド`、テンプレート変数（`{content}`, `{selection}`（ファイルID・位置情報付き））、`@ファイル` メンション（Drive ファイルIDに解決しツール経由でアクセス）、コマンドごとのモデル/ツール設定
 - **ビジュアルワークフローエディタ** — ドラッグ＆ドロップのノードベースビルダー（20種以上のノードタイプ）、YAML 入出力、SSE リアルタイム実行
 - **AI ワークフロー生成** — 自然言語でワークフローを作成・修正、ストリーミングプレビューと差分表示
 - **RAG** — Drive ファイルを Gemini File Search に同期し、コンテキストを考慮した AI 応答を実現
 - **MCP** — 外部 MCP サーバーを AI チャットのツールとして接続
+- **プラグイン** — GitHub からインストールまたはローカル開発。カスタムビュー、スラッシュコマンド、設定パネルを追加する API を提供
 - **Google Drive 連携** — 全データを自分の Drive に保存、外部データベース不要
 - **リッチ Markdown エディタ** — wysimark-lite による WYSIWYG ファイル編集
 - **オフラインキャッシュ & 同期** — IndexedDB キャッシュと Push/Pull 同期、コンフリクト解決、一時ファイルステージング
@@ -56,6 +57,7 @@ Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービス�
 | 同期 & オフラインキャッシュ | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
 | ワークフローノードリファレンス | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
 | 暗号化 | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
+| プラグイン | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 
 ## はじめかた
 

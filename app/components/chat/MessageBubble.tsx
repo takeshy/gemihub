@@ -2,9 +2,10 @@
 
 import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { ChevronDown, ChevronRight, Download, Paperclip, FileText, Wrench, BookOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall } from "~/types/chat";
+import { useI18n } from "~/i18n/context";
 import { McpAppRenderer } from "./McpAppRenderer";
 
 interface MessageBubbleProps {
@@ -83,7 +84,9 @@ function RagSourcesList({ sources }: { sources: string[] }) {
 }
 
 function GeneratedImageDisplay({ image }: { image: GeneratedImage }) {
+  const { t } = useI18n();
   const dataUrl = `data:${image.mimeType};base64,${image.data}`;
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
 
   const handleDownload = () => {
     const link = document.createElement("a");
@@ -93,6 +96,32 @@ function GeneratedImageDisplay({ image }: { image: GeneratedImage }) {
     link.click();
   };
 
+  const handleSaveToDrive = async () => {
+    if (saveState !== "idle") return;
+    setSaveState("saving");
+    try {
+      const ext = image.mimeType.split("/")[1] || "png";
+      const now = new Date();
+      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+      const fileName = `generated-image-${ts}.${ext}`;
+      const res = await fetch("/api/drive/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create-image",
+          name: fileName,
+          data: image.data,
+          mimeType: image.mimeType,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setSaveState("saved");
+      window.dispatchEvent(new Event("sync-complete"));
+    } catch {
+      setSaveState("idle");
+    }
+  };
+
   return (
     <div className="group relative mb-2 inline-block">
       <img
@@ -100,13 +129,26 @@ function GeneratedImageDisplay({ image }: { image: GeneratedImage }) {
         alt="Generated image"
         className="max-h-80 max-w-full rounded-lg border border-gray-200 dark:border-gray-700"
       />
-      <button
-        onClick={handleDownload}
-        className="absolute right-2 top-2 rounded-md bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
-        aria-label="Download image"
-      >
-        <Download size={ICON.MD} />
-      </button>
+      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          onClick={handleSaveToDrive}
+          disabled={saveState === "saving"}
+          className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+          aria-label={saveState === "saved" ? t("chat.savedToDrive") : t("chat.saveToDrive")}
+          title={saveState === "saved" ? t("chat.savedToDrive") : t("chat.saveToDrive")}
+        >
+          {saveState === "idle" && <HardDrive size={ICON.MD} />}
+          {saveState === "saving" && <Loader2 size={ICON.MD} className="animate-spin" />}
+          {saveState === "saved" && <Check size={ICON.MD} />}
+        </button>
+        <button
+          onClick={handleDownload}
+          className="rounded-md bg-black/50 p-1.5 text-white hover:bg-black/70"
+          aria-label="Download image"
+        >
+          <Download size={ICON.MD} />
+        </button>
+      </div>
     </div>
   );
 }

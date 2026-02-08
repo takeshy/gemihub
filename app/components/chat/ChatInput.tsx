@@ -94,17 +94,33 @@ function resolveTemplateVariables(
   return result;
 }
 
-function resolveFileReferences(
+async function resolveFileReferences(
   text: string,
-  fileList: FileListItem[]
-): string {
+  fileList: FileListItem[],
+  expandContent: boolean
+): Promise<string> {
   // Sort by name length descending to match longer names first
   const sorted = [...fileList].sort((a, b) => b.name.length - a.name.length);
   let result = text;
   for (const file of sorted) {
     const ref = `@${file.name}`;
     if (result.includes(ref)) {
-      result = result.replaceAll(ref, `[file: ${file.name}, fileId: ${file.id}]`);
+      if (expandContent) {
+        // Drive tools unavailable — inline file content
+        try {
+          const res = await fetch(`/api/drive/files?action=read&fileId=${encodeURIComponent(file.id)}`);
+          if (res.ok) {
+            const data = await res.json();
+            result = result.replaceAll(ref, `From ${file.name}:\n${data.content}`);
+          } else {
+            result = result.replaceAll(ref, `[file: ${file.name}, fileId: ${file.id}]`);
+          }
+        } catch {
+          result = result.replaceAll(ref, `[file: ${file.name}, fileId: ${file.id}]`);
+        }
+      } else {
+        result = result.replaceAll(ref, `[file: ${file.name}, fileId: ${file.id}]`);
+      }
     }
   }
   return result;
@@ -255,7 +271,7 @@ export function ChatInput({
     }
   }, [toolDropdownOpen]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = content.trim();
     if (!trimmed && attachments.length === 0) return;
     if (disabled || isStreaming) return;
@@ -269,8 +285,9 @@ export function ChatInput({
       editorCtx.getActiveSelection()
     );
 
-    // Resolve @filename references to include fileId for Drive tool access
-    resolved = resolveFileReferences(resolved, editorCtx.fileList);
+    // Resolve @filename references — expand content when drive tools are unavailable
+    const effectiveMode = pendingOverrides?.driveToolMode ?? driveToolMode;
+    resolved = await resolveFileReferences(resolved, editorCtx.fileList, effectiveMode === "none");
 
     onSend(
       resolved,
@@ -285,7 +302,7 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

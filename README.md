@@ -18,9 +18,9 @@ Unlike generic AI chat, Gemini Hub connects directly to your Google Drive. The A
 
 With built-in RAG (Retrieval-Augmented Generation), you can sync your Drive files to Gemini's semantic search. Instead of matching exact keywords, the AI understands the **meaning** of your question and finds relevant information from your personal knowledge base. Store product manuals, meeting notes, or research papers — then just ask questions in natural language.
 
-### Connect Any External Tool (MCP)
+### Connect Any External Tool (MCP & Plugins)
 
-Through the Model Context Protocol (MCP), Gemini Hub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation.
+Through the Model Context Protocol (MCP), Gemini Hub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation. You can also extend Gemini Hub with **plugins** — install from GitHub or develop locally — to add custom sidebar views, slash commands, and settings panels.
 
 ### No-Code Workflow Automation
 
@@ -33,11 +33,12 @@ All data — chat history, workflows, settings, edit history — is stored in yo
 ## Features
 
 - **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments
-- **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}`), `@file` mentions, per-command model/tool overrides
+- **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides
 - **Visual Workflow Editor** — Drag-and-drop node-based builder (20+ node types), YAML import/export, real-time SSE execution
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
 - **MCP** — Connect external MCP servers as tools for AI chat
+- **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, and settings panels
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
 - **Offline Cache & Sync** — IndexedDB caching with Push/Pull synchronization, conflict resolution, temp file staging
@@ -56,6 +57,7 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 | Sync & Offline Cache | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
 | Workflow Node Reference | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
 | Encryption | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
+| Plugins | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 
 ## Getting Started
 

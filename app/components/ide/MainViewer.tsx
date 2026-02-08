@@ -69,10 +69,6 @@ function getMediaType(name: string | null, mimeType: string | null): "pdf" | "vi
   return null;
 }
 
-function isBinaryFile(name: string | null, mimeType: string | null): boolean {
-  return getMediaType(name, mimeType) !== null;
-}
-
 export function MainViewer({
   fileId,
   fileName,

@@ -5,6 +5,7 @@ import {
   readFile,
   readFileRaw,
   createFile,
+  createFileBinary,
   updateFile,
   moveFile,
   renameFile,
@@ -89,7 +90,7 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   const body = await request.json();
-  const { action: actionType, fileId, name, content, password, mimeType } = body;
+  const { action: actionType, fileId, name, content, data, password, mimeType } = body;
 
   switch (actionType) {
     case "create": {
@@ -99,6 +100,19 @@ export async function action({ request }: Route.ActionArgs) {
         content || "",
         validTokens.rootFolderId,
         mimeType || "text/yaml"
+      );
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+    }
+    case "create-image": {
+      if (!name || !data) return jsonWithCookie({ error: "Missing name or data" }, { status: 400 });
+      const buf = Buffer.from(data, "base64");
+      const file = await createFileBinary(
+        validTokens.accessToken,
+        name,
+        buf,
+        validTokens.rootFolderId,
+        mimeType || "image/png"
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
       return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
