@@ -30,4 +30,6 @@ export default [
   route("api/sync", "routes/api.sync.tsx"),
   route("api/drive/upload", "routes/api.drive.upload.tsx"),
   route("api/drive/temp", "routes/api.drive.temp.tsx"),
+  route("api/plugins", "routes/api.plugins.tsx"),
+  route("api/plugins/:id", "routes/api.plugins.$id.tsx"),
 ] satisfies RouteConfig;

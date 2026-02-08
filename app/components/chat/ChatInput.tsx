@@ -140,6 +140,7 @@ export function ChatInput({
             searchSetting: result.command.searchSetting,
             driveToolMode: result.command.driveToolMode,
             enabledMcpServers: result.command.enabledMcpServers,
+            pluginExecute: result.command.execute,
           });
         }
         // Focus textarea

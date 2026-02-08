@@ -334,6 +334,14 @@ export interface ToolDefinition {
   };
 }
 
+// Plugin configuration (stored in settings.json)
+export interface PluginConfig {
+  id: string;
+  repo: string; // "owner/repo"
+  version: string;
+  enabled: boolean;
+}
+
 // Slash command for chat
 export interface SlashCommand {
   id: string;
@@ -344,6 +352,7 @@ export interface SlashCommand {
   searchSetting?: string | null;
   driveToolMode?: DriveToolMode | null;
   enabledMcpServers?: string[] | null;
+  execute?: (args: string) => Promise<string>;
 }
 
 // User settings (stored in Drive as settings.json)
@@ -365,6 +374,7 @@ export interface UserSettings {
   fontSize: FontSize;
   theme: Theme;
   slashCommands: SlashCommand[];
+  plugins: PluginConfig[];
   syncExcludePatterns: string[];
   syncConflictFolder: string;
   encryptedApiKey: string;
@@ -389,6 +399,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   fontSize: 16,
   theme: "system",
   slashCommands: [],
+  plugins: [],
   syncExcludePatterns: [],
   syncConflictFolder: "sync_conflicts",
   encryptedApiKey: "",

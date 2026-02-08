@@ -9,6 +9,7 @@ import { LogIn } from "lucide-react";
 import { I18nProvider } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
+import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 
 import { Header } from "~/components/ide/Header";
 import { LeftSidebar } from "~/components/ide/LeftSidebar";
@@ -154,8 +155,8 @@ function IDELayout({
     null
   );
 
-  // Right panel state
-  const [rightPanel, setRightPanel] = useState<"chat" | "workflow">("chat");
+  // Right panel state — supports "chat", "workflow", or "plugin:{viewId}" for plugin sidebar views
+  const [rightPanel, setRightPanel] = useState<string>("chat");
 
   // Resolve file name when opened via URL (fileId present, fileName unknown)
   useEffect(() => {
@@ -317,61 +318,196 @@ function IDELayout({
   return (
     <I18nProvider language={settings.language}>
       <EditorContextProvider>
-      <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-950">
-        <Header
-          rightPanel={rightPanel}
-          setRightPanel={setRightPanel}
-          activeFileName={activeFileName}
-          activeFileId={activeFileId}
-          syncStatus={syncStatus}
-          syncDiff={syncDiff}
-          lastSyncTime={lastSyncTime}
-          syncError={syncError}
-          syncConflicts={conflicts}
-          localModifiedCount={localModifiedCount}
-          onPush={push}
-          onPull={pull}
-          onCheckSync={checkSync}
-          onShowConflicts={() => setShowConflictDialog(true)}
-        />
+      <PluginProvider pluginConfigs={settings.plugins || []}>
+      <IDEContent
+        settings={settings}
+        hasGeminiApiKey={hasGeminiApiKey}
+        hasEncryptedApiKey={hasEncryptedApiKey}
+        rootFolderId={rootFolderId}
+        rightPanel={rightPanel}
+        setRightPanel={setRightPanel}
+        activeFileId={activeFileId}
+        activeFileName={activeFileName}
+        activeFileMimeType={activeFileMimeType}
+        workflowVersion={workflowVersion}
+        syncStatus={syncStatus}
+        syncDiff={syncDiff}
+        lastSyncTime={lastSyncTime}
+        syncError={syncError}
+        conflicts={conflicts}
+        localModifiedCount={localModifiedCount}
+        push={push}
+        pull={pull}
+        checkSync={checkSync}
+        resolveConflict={resolveConflict}
+        showConflictDialog={showConflictDialog}
+        setShowConflictDialog={setShowConflictDialog}
+        showPasswordPrompt={showPasswordPrompt}
+        setShowPasswordPrompt={setShowPasswordPrompt}
+        setHasGeminiApiKey={setHasGeminiApiKey}
+        aiDialog={aiDialog}
+        setAiDialog={setAiDialog}
+        handleSelectFile={handleSelectFile}
+        handleNewWorkflow={handleNewWorkflow}
+        handleWorkflowChanged={handleWorkflowChanged}
+        handleModifyWithAI={handleModifyWithAI}
+        handleAIAccept={handleAIAccept}
+      />
+      </PluginProvider>
+      </EditorContextProvider>
+    </I18nProvider>
+  );
+}
 
-        {!hasGeminiApiKey && (
-          <div className="flex items-center justify-between border-b border-yellow-200 bg-yellow-50 px-4 py-1.5 text-xs dark:border-yellow-800 dark:bg-yellow-900/20">
-            <span className="text-yellow-800 dark:text-yellow-200">
-              Gemini API key is not set. AI features will not work.
-            </span>
-            <div className="flex items-center gap-3">
-              {hasEncryptedApiKey && (
-                <button
-                  onClick={() => setShowPasswordPrompt(true)}
-                  className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
-                >
-                  Unlock
-                </button>
-              )}
-              <a
-                href="/settings"
+// ---------------------------------------------------------------------------
+// IDE Content — separated to access PluginContext
+// ---------------------------------------------------------------------------
+
+function IDEContent({
+  settings,
+  hasGeminiApiKey,
+  hasEncryptedApiKey,
+  rootFolderId,
+  rightPanel,
+  setRightPanel,
+  activeFileId,
+  activeFileName,
+  activeFileMimeType,
+  workflowVersion,
+  syncStatus,
+  syncDiff,
+  lastSyncTime,
+  syncError,
+  conflicts,
+  localModifiedCount,
+  push,
+  pull,
+  checkSync,
+  resolveConflict,
+  showConflictDialog,
+  setShowConflictDialog,
+  showPasswordPrompt,
+  setShowPasswordPrompt,
+  setHasGeminiApiKey,
+  aiDialog,
+  setAiDialog,
+  handleSelectFile,
+  handleNewWorkflow,
+  handleWorkflowChanged,
+  handleModifyWithAI,
+  handleAIAccept,
+}: {
+  settings: UserSettings;
+  hasGeminiApiKey: boolean;
+  hasEncryptedApiKey: boolean;
+  rootFolderId: string;
+  rightPanel: string;
+  setRightPanel: (panel: string) => void;
+  activeFileId: string | null;
+  activeFileName: string | null;
+  activeFileMimeType: string | null;
+  workflowVersion: number;
+  syncStatus: import("~/hooks/useSync").SyncStatus;
+  syncDiff: import("~/hooks/useSync").SyncDiff | null;
+  lastSyncTime: string | null;
+  syncError: string | null;
+  conflicts: import("~/hooks/useSync").ConflictInfo[];
+  localModifiedCount: number;
+  push: () => void;
+  pull: () => void;
+  checkSync: () => void;
+  resolveConflict: (fileId: string, resolution: "local" | "remote") => Promise<void>;
+  showConflictDialog: boolean;
+  setShowConflictDialog: (v: boolean) => void;
+  showPasswordPrompt: boolean;
+  setShowPasswordPrompt: (v: boolean) => void;
+  setHasGeminiApiKey: (v: boolean) => void;
+  aiDialog: AIDialogState | null;
+  setAiDialog: (v: AIDialogState | null) => void;
+  handleSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
+  handleNewWorkflow: () => void;
+  handleWorkflowChanged: () => void;
+  handleModifyWithAI: (yaml: string, name: string) => void;
+  handleAIAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
+}) {
+  const { sidebarViews, mainViews, slashCommands: pluginSlashCommands, getPluginAPI } = usePlugins();
+
+  // Determine if current right panel is a plugin view
+  const activePluginSidebarView = rightPanel.startsWith("plugin:")
+    ? sidebarViews.find((v) => `plugin:${v.id}` === rightPanel)
+    : null;
+
+  // Determine if current main view is a plugin view
+  const activePluginMainView = rightPanel.startsWith("main-plugin:")
+    ? mainViews.find((v) => `main-plugin:${v.id}` === rightPanel)
+    : null;
+
+  // Merge plugin slash commands with settings slash commands for ChatPanel
+  const allSlashCommands = settings.slashCommands || [];
+
+  return (
+    <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-950">
+      <Header
+        rightPanel={rightPanel}
+        setRightPanel={setRightPanel}
+        activeFileName={activeFileName}
+        activeFileId={activeFileId}
+        syncStatus={syncStatus}
+        syncDiff={syncDiff}
+        lastSyncTime={lastSyncTime}
+        syncError={syncError}
+        syncConflicts={conflicts}
+        localModifiedCount={localModifiedCount}
+        onPush={push}
+        onPull={pull}
+        onCheckSync={checkSync}
+        onShowConflicts={() => setShowConflictDialog(true)}
+        pluginSidebarViews={sidebarViews}
+        pluginMainViews={mainViews}
+      />
+
+      {!hasGeminiApiKey && (
+        <div className="flex items-center justify-between border-b border-yellow-200 bg-yellow-50 px-4 py-1.5 text-xs dark:border-yellow-800 dark:bg-yellow-900/20">
+          <span className="text-yellow-800 dark:text-yellow-200">
+            Gemini API key is not set. AI features will not work.
+          </span>
+          <div className="flex items-center gap-3">
+            {hasEncryptedApiKey && (
+              <button
+                onClick={() => setShowPasswordPrompt(true)}
                 className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
               >
-                Settings
-              </a>
-            </div>
+                Unlock
+              </button>
+            )}
+            <a
+              href="/settings"
+              className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
+            >
+              Settings
+            </a>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left sidebar - File tree */}
-          <LeftSidebar>
-            <DriveFileTreeWithContext
-              rootFolderId={rootFolderId}
-              onSelectFile={handleSelectFile}
-              activeFileId={activeFileId}
-              encryptionEnabled={settings.encryption.enabled}
-            />
-          </LeftSidebar>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar - File tree */}
+        <LeftSidebar>
+          <DriveFileTreeWithContext
+            rootFolderId={rootFolderId}
+            onSelectFile={handleSelectFile}
+            activeFileId={activeFileId}
+            encryptionEnabled={settings.encryption.enabled}
+          />
+        </LeftSidebar>
 
-          {/* Main viewer */}
-          <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Main viewer */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {activePluginMainView ? (
+            <div className="flex-1 overflow-auto p-4">
+              <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} />
+            </div>
+          ) : (
             <MainViewer
               fileId={activeFileId}
               fileName={activeFileName}
@@ -379,65 +515,69 @@ function IDELayout({
               settings={settings}
               refreshKey={workflowVersion}
             />
-          </div>
-
-          {/* Right sidebar - Chat / Workflow props */}
-          <RightSidebar>
-            {rightPanel === "chat" ? (
-              <ChatPanel
-                settings={settings}
-                hasApiKey={hasGeminiApiKey}
-                hasEncryptedApiKey={hasEncryptedApiKey}
-                onNeedUnlock={() => setShowPasswordPrompt(true)}
-                slashCommands={settings.slashCommands || []}
-              />
-            ) : (
-              <WorkflowPropsPanel
-                activeFileId={activeFileId}
-                activeFileName={activeFileName}
-                onNewWorkflow={handleNewWorkflow}
-                onSelectFile={handleSelectFile}
-                onWorkflowChanged={handleWorkflowChanged}
-                onModifyWithAI={handleModifyWithAI}
-              />
-            )}
-          </RightSidebar>
+          )}
         </div>
 
-        {/* Conflict dialog */}
-        {showConflictDialog && conflicts.length > 0 && (
-          <ConflictDialog
-            conflicts={conflicts}
-            onResolve={resolveConflict}
-            onClose={() => setShowConflictDialog(false)}
-          />
-        )}
-
-        {/* AI Workflow dialog */}
-        {aiDialog && (
-          <AIWorkflowDialog
-            mode={aiDialog.mode}
-            currentYaml={aiDialog.currentYaml}
-            currentName={aiDialog.currentName}
-            apiPlan={settings.apiPlan}
-            onAccept={handleAIAccept}
-            onClose={() => setAiDialog(null)}
-          />
-        )}
-
-        {/* Password prompt for API key unlock */}
-        {showPasswordPrompt && (
-          <PasswordPromptDialog
-            onSuccess={() => {
-              setShowPasswordPrompt(false);
-              setHasGeminiApiKey(true);
-            }}
-            onClose={() => setShowPasswordPrompt(false)}
-          />
-        )}
+        {/* Right sidebar - Chat / Workflow props / Plugin views */}
+        <RightSidebar>
+          {activePluginSidebarView ? (
+            <div className="h-full overflow-auto p-2">
+              <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} />
+            </div>
+          ) : rightPanel === "chat" ? (
+            <ChatPanel
+              settings={settings}
+              hasApiKey={hasGeminiApiKey}
+              hasEncryptedApiKey={hasEncryptedApiKey}
+              onNeedUnlock={() => setShowPasswordPrompt(true)}
+              slashCommands={allSlashCommands}
+              pluginSlashCommands={pluginSlashCommands}
+            />
+          ) : (
+            <WorkflowPropsPanel
+              activeFileId={activeFileId}
+              activeFileName={activeFileName}
+              onNewWorkflow={handleNewWorkflow}
+              onSelectFile={handleSelectFile}
+              onWorkflowChanged={handleWorkflowChanged}
+              onModifyWithAI={handleModifyWithAI}
+            />
+          )}
+        </RightSidebar>
       </div>
-      </EditorContextProvider>
-    </I18nProvider>
+
+      {/* Conflict dialog */}
+      {showConflictDialog && conflicts.length > 0 && (
+        <ConflictDialog
+          conflicts={conflicts}
+          onResolve={resolveConflict}
+          onClose={() => setShowConflictDialog(false)}
+        />
+      )}
+
+      {/* AI Workflow dialog */}
+      {aiDialog && (
+        <AIWorkflowDialog
+          mode={aiDialog.mode}
+          currentYaml={aiDialog.currentYaml}
+          currentName={aiDialog.currentName}
+          apiPlan={settings.apiPlan}
+          onAccept={handleAIAccept}
+          onClose={() => setAiDialog(null)}
+        />
+      )}
+
+      {/* Password prompt for API key unlock */}
+      {showPasswordPrompt && (
+        <PasswordPromptDialog
+          onSuccess={() => {
+            setShowPasswordPrompt(false);
+            setHasGeminiApiKey(true);
+          }}
+          onClose={() => setShowPasswordPrompt(false)}
+        />
+      )}
+    </div>
   );
 }
 
