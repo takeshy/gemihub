@@ -85,7 +85,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
   const [form, setForm] = useState<CommandFormData>({ ...emptyForm });
 
   const availableModels = getAvailableModels(settings.apiPlan);
-  const enabledMcpServers = settings.mcpServers.filter((s) => s.enabled);
+  const enabledMcpServers = settings.mcpServers;
 
   const data = fetcher.data as { success?: boolean; message?: string } | undefined;
 

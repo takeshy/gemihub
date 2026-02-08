@@ -25,7 +25,6 @@ const ChatRequestSchema = z.object({
     name: z.string(),
     url: z.string(),
     headers: z.record(z.string(), z.string()).optional(),
-    enabled: z.boolean(),
   }).passthrough()).optional(),
   webSearchEnabled: z.boolean().optional(),
   apiPlan: z.string().optional(),

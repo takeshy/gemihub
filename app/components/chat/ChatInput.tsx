@@ -462,7 +462,7 @@ export function ChatInput({
                   className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
                     driveToolModeLocked
                       ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
-                      : driveToolMode !== "all" || (mcpServers.length > 0 && enabledMcpServerNames.length < mcpServers.filter(s => s.enabled).length)
+                      : driveToolMode !== "all" || (mcpServers.length > 0 && enabledMcpServerNames.length < mcpServers.length)
                         ? "text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
                         : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   }`}
@@ -521,7 +521,7 @@ export function ChatInput({
                         <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                           {t("chat.mcpToolsLabel")}
                         </div>
-                        {mcpServers.filter(s => s.enabled).map((server) => {
+                        {mcpServers.map((server) => {
                           const isEnabled = enabledMcpServerNames.includes(server.name);
                           const toolNames = (server.tools || []).map(tl => tl.name);
                           const toolCount = toolNames.length;

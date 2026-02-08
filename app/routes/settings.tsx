@@ -1319,12 +1319,6 @@ function McpTab({ settings }: { settings: UserSettings }) {
     saveServers(updated);
   }, [servers, saveServers]);
 
-  const toggleServer = useCallback((idx: number) => {
-    const updated = servers.map((s, i) => (i === idx ? { ...s, enabled: !s.enabled } : s));
-    setServers(updated);
-    saveServers(updated);
-  }, [servers, saveServers]);
-
   const startAddOAuthFlow = useCallback(async (
     oauthConfig: OAuthConfig,
   ): Promise<OAuthTokens | null> => {
@@ -1463,7 +1457,6 @@ function McpTab({ settings }: { settings: UserSettings }) {
           name: newEntry.name.trim(),
           url: newEntry.url.trim(),
           headers,
-          enabled: true,
           tools: data.tools as McpToolInfo[],
         };
         const updated = [...servers, newServer];
@@ -1503,7 +1496,6 @@ function McpTab({ settings }: { settings: UserSettings }) {
             name: newEntry.name.trim(),
             url: newEntry.url.trim(),
             headers,
-            enabled: true,
             tools: retryData.tools as McpToolInfo[],
             oauth: oauthConfig,
             oauthTokens: tokens,
@@ -1790,13 +1782,6 @@ function McpTab({ settings }: { settings: UserSettings }) {
             key={idx}
             className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50"
           >
-            <input
-              type="checkbox"
-              checked={server.enabled}
-              onChange={() => toggleServer(idx)}
-              className={checkboxClass}
-              title="Enabled"
-            />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">

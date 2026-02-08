@@ -22,7 +22,6 @@ export interface McpServerConfig {
   name: string;
   url: string;
   headers?: Record<string, string>;
-  enabled: boolean;
   tools?: McpToolInfo[];
   oauth?: OAuthConfig;
   oauthTokens?: OAuthTokens;

@@ -70,7 +70,6 @@ export async function action({ request }: Route.ActionArgs) {
     name: "test",
     url,
     headers: effectiveHeaders,
-    enabled: true,
   });
 
   try {

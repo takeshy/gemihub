@@ -49,7 +49,6 @@ export async function action({ request }: Route.ActionArgs) {
       name: "mcp-app-proxy",
       url: serverUrl,
       headers: serverHeaders,
-      enabled: true,
     };
 
     const client = getOrCreateClient(config);

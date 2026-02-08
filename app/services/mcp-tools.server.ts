@@ -52,8 +52,6 @@ export async function getMcpToolDefinitions(
   const allTools: ToolDefinition[] = [];
 
   for (const server of mcpServers) {
-    if (!server.enabled) continue;
-
     try {
       const client = getOrCreateClient(server);
       const tools = await client.listTools();
@@ -157,7 +155,7 @@ function buildToolMap(mcpServers: McpServerConfig[]): Map<string, { server: McpS
   const toolMap = new Map<string, { server: McpServerConfig; mcpToolName: string }>();
 
   for (const server of mcpServers) {
-    if (!server.enabled || !server.tools) continue;
+    if (!server.tools) continue;
     const safeName = sanitizeMcpName(server.name);
 
     for (const tool of server.tools) {
