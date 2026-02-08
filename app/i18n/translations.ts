@@ -18,6 +18,7 @@ export interface TranslationStrings {
 
   // Index - API key warning
   "index.apiKeyWarning": string;
+  "index.apiKeyLocked": string;
 
   // MainViewer
   "mainViewer.welcome": string;
@@ -290,6 +291,7 @@ const en: TranslationStrings = {
   "index.subtitle": "Build and execute AI-powered workflows visually",
   "index.signIn": "Sign in with Google",
   "index.apiKeyWarning": "Gemini API key is not set. AI features will not work.",
+  "index.apiKeyLocked": "Gemini API key is locked. Enter your password to unlock.",
 
   // MainViewer
   "mainViewer.welcome": "Welcome to Gemini Hub",
@@ -563,6 +565,7 @@ const ja: TranslationStrings = {
   "index.subtitle": "AIワークフローをビジュアルに構築・実行",
   "index.signIn": "Googleでサインイン",
   "index.apiKeyWarning": "Gemini APIキーが設定されていません。AI機能は動作しません。",
+  "index.apiKeyLocked": "Gemini APIキーはロックされています。パスワードを入力して解除してください。",
 
   // MainViewer
   "mainViewer.welcome": "Gemini Hubへようこそ",

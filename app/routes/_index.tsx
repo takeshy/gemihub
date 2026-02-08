@@ -7,7 +7,7 @@ import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import type { UserSettings } from "~/types/settings";
 import { LogIn } from "lucide-react";
-import { I18nProvider } from "~/i18n/context";
+import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
@@ -442,6 +442,7 @@ function IDEContent({
   handleModifyWithAI: (yaml: string, name: string) => void;
   handleAIAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
 }) {
+  const { t } = useI18n();
   const { sidebarViews, mainViews, slashCommands: pluginSlashCommands, getPluginAPI } = usePlugins();
 
   // Determine if current right panel is a plugin view
@@ -479,7 +480,7 @@ function IDEContent({
       {!hasGeminiApiKey && (
         <div className="flex items-center justify-between border-b border-yellow-200 bg-yellow-50 px-4 py-1.5 text-xs dark:border-yellow-800 dark:bg-yellow-900/20">
           <span className="text-yellow-800 dark:text-yellow-200">
-            Gemini API key is not set. AI features will not work.
+            {hasEncryptedApiKey ? t("index.apiKeyLocked") : t("index.apiKeyWarning")}
           </span>
           <div className="flex items-center gap-3">
             {hasEncryptedApiKey && (
@@ -487,14 +488,14 @@ function IDEContent({
                 onClick={() => setShowPasswordPrompt(true)}
                 className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
               >
-                Unlock
+                {t("unlock.submit")}
               </button>
             )}
             <a
               href="/settings"
               className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
             >
-              Settings
+              {t("common.settings")}
             </a>
           </div>
         </div>
