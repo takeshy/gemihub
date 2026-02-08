@@ -322,16 +322,6 @@ function MarkdownFileEditor({
     },
     [editorCtx]
   );
-
-  // WYSIWYG mode: listen for selection changes
-  useEffect(() => {
-    function onSelectionChange() {
-      const sel = document.getSelection();
-      editorCtx.setActiveSelection(sel && sel.toString() ? sel.toString() : null);
-    }
-    document.addEventListener("selectionchange", onSelectionChange);
-    return () => document.removeEventListener("selectionchange", onSelectionChange);
-  }, [editorCtx]);
   // New file (empty) → wysiwyg, existing file → preview
   const [mode, setMode] = useState<MdEditMode>(
     initialContent ? "preview" : "wysiwyg"

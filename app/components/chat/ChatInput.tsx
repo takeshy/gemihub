@@ -19,7 +19,7 @@ import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, Mcp
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
 import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
-import { useEditorContext } from "~/contexts/EditorContext";
+import { useEditorContext, type FileListItem } from "~/contexts/EditorContext";
 import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
 import { AutocompletePopup } from "./AutocompletePopup";
 
@@ -86,6 +86,22 @@ function resolveTemplateVariables(
   return result;
 }
 
+function resolveFileReferences(
+  text: string,
+  fileList: FileListItem[]
+): string {
+  // Sort by name length descending to match longer names first
+  const sorted = [...fileList].sort((a, b) => b.name.length - a.name.length);
+  let result = text;
+  for (const file of sorted) {
+    const ref = `@${file.name}`;
+    if (result.includes(ref)) {
+      result = result.replaceAll(ref, `[file: ${file.name}, fileId: ${file.id}]`);
+    }
+  }
+  return result;
+}
+
 export function ChatInput({
   onSend,
   disabled,
@@ -128,7 +144,7 @@ export function ChatInput({
     slashCommands,
     fileList: editorCtx.fileList,
     hasActiveContent: !!editorCtx.activeFileContent,
-    hasActiveSelection: !!editorCtx.activeSelection,
+    hasActiveSelection: editorCtx.hasActiveSelection,
   });
 
   const handleAutocompleteSelect = useCallback(
@@ -237,12 +253,15 @@ export function ChatInput({
     if (disabled || isStreaming) return;
 
     // Resolve template variables
-    const resolved = resolveTemplateVariables(
+    let resolved = resolveTemplateVariables(
       trimmed,
       editorCtx.activeFileContent,
       editorCtx.activeFileName,
-      editorCtx.activeSelection
+      editorCtx.getActiveSelection()
     );
+
+    // Resolve @filename references to include fileId for Drive tool access
+    resolved = resolveFileReferences(resolved, editorCtx.fileList);
 
     onSend(
       resolved,
