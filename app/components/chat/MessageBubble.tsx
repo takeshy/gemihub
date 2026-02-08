@@ -2,7 +2,7 @@
 
 import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
@@ -41,44 +41,99 @@ function ThinkingSection({ thinking }: { thinking: string }) {
   );
 }
 
+function getToolIcon(name: string) {
+  if (name.startsWith("mcp_")) return <Plug size={10} />;
+  if (name.includes("read")) return <BookOpen size={10} />;
+  if (name.includes("create")) return <FileText size={10} />;
+  if (name.includes("update")) return <FileText size={10} />;
+  if (name.includes("search") || name.includes("list")) return <Globe size={10} />;
+  return <Wrench size={10} />;
+}
+
+function getToolLabel(name: string) {
+  if (name.startsWith("mcp_")) {
+    // mcp_{server}_{tool} → server:tool
+    const parts = name.slice(4).split("_");
+    if (parts.length >= 2) {
+      const server = parts[0];
+      const tool = parts.slice(1).join("_");
+      return `${server}:${tool}`;
+    }
+  }
+  return name;
+}
+
 function ToolCallBadges({ toolCalls }: { toolCalls: ToolCall[] }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   return (
-    <div className="mb-2 flex flex-wrap gap-1">
-      {toolCalls.map((tc) => (
+    <div className="mb-2">
+      <div className="flex flex-wrap gap-1">
+        {toolCalls.map((tc) => (
+          <button
+            key={tc.id}
+            onClick={() => setExpandedId(expandedId === tc.id ? null : tc.id)}
+            className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+            title={JSON.stringify(tc.args, null, 2)}
+          >
+            {getToolIcon(tc.name)}
+            {getToolLabel(tc.name)}
+          </button>
+        ))}
+      </div>
+      {expandedId && (() => {
+        const tc = toolCalls.find(t => t.id === expandedId);
+        if (!tc) return null;
+        return (
+          <div className="mt-1 rounded-md border border-purple-200 bg-purple-50 p-2 text-xs text-purple-700 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-300">
+            <div className="font-medium">{tc.name}</div>
+            <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-[10px] opacity-80">
+              {JSON.stringify(tc.args, null, 2)}
+            </pre>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+function RagSourcesList({ sources }: { sources: string[] }) {
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-1">
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-green-700">
+        <BookOpen size={10} />
+        RAG
+      </span>
+      {sources.map((source, i) => (
         <span
-          key={tc.id}
-          className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+          key={i}
+          className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300"
+          title={source}
         >
-          <Wrench size={10} />
-          {tc.name}
+          <FileText size={10} />
+          {source.split("/").pop() || source}
         </span>
       ))}
     </div>
   );
 }
 
-function RagSourcesList({ sources }: { sources: string[] }) {
-  const [expanded, setExpanded] = useState(false);
-
+function WebSearchIndicator({ sources }: { sources?: string[] }) {
   return (
-    <div className="mb-2">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-      >
-        {expanded ? <ChevronDown size={ICON.MD} /> : <ChevronRight size={ICON.MD} />}
-        <BookOpen size={ICON.SM} />
-        RAG Sources ({sources.length})
-      </button>
-      {expanded && (
-        <ul className="mt-1 space-y-0.5 rounded-md border border-green-200 bg-green-50 p-2 text-xs text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300">
-          {sources.map((source, i) => (
-            <li key={i} className="truncate">
-              {source}
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="mb-2 flex flex-wrap items-center gap-1">
+      <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-blue-700">
+        <Globe size={10} />
+        Web Search
+      </span>
+      {sources && sources.map((source, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+          title={source}
+        >
+          {source.split("/").pop() || source}
+        </span>
+      ))}
     </div>
   );
 }
@@ -232,8 +287,13 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
           )}
 
           {/* RAG sources (assistant only) */}
-          {!isUser && message.ragSources && message.ragSources.length > 0 && (
+          {!isUser && message.ragUsed && message.ragSources && message.ragSources.length > 0 && (
             <RagSourcesList sources={message.ragSources} />
+          )}
+
+          {/* Web search indicator (assistant only) */}
+          {!isUser && message.webSearchUsed && (
+            <WebSearchIndicator sources={message.ragSources} />
           )}
 
           {/* Message content */}

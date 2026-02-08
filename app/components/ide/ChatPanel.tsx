@@ -62,6 +62,10 @@ export function ChatPanel({
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
+  const [streamingToolCalls, setStreamingToolCalls] = useState<Message["toolCalls"]>([]);
+  const [streamingRagSources, setStreamingRagSources] = useState<string[]>([]);
+  const [streamingRagUsed, setStreamingRagUsed] = useState(false);
+  const [streamingWebSearchUsed, setStreamingWebSearchUsed] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatListOpen, setChatListOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -78,9 +82,23 @@ export function ChatPanel({
   const [driveToolMode, setDriveToolMode] = useState<DriveToolMode>(
     initialConstraint.forcedMode ?? initialConstraint.defaultMode
   );
-  const [enabledMcpServerNames, setEnabledMcpServerNames] = useState<string[]>(
-    settings.mcpServers.filter((s) => s.enabled).map((s) => s.name)
-  );
+  const [enabledMcpServerNames, setEnabledMcpServerNames] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("gemini-hub:enabledMcpServers");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
+
+  // Persist MCP selection to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("gemini-hub:enabledMcpServers", JSON.stringify(enabledMcpServerNames));
+    } catch { /* ignore */ }
+  }, [enabledMcpServerNames]);
 
   // ---- Chat history management ----
   const handleNewChat = useCallback(() => {
@@ -204,30 +222,18 @@ export function ChatPanel({
 
   const handleRagSettingChange = useCallback(
     (name: string | null) => {
-      const wasLocked = getDriveToolModeConstraint(selectedModel, selectedRagSetting).locked;
       setSelectedRagSetting(name);
       applyConstraint(selectedModel, name);
-      const willBeLocked = getDriveToolModeConstraint(selectedModel, name).locked;
-      // Restore MCP defaults only when transitioning from locked to unlocked
-      if (wasLocked && !willBeLocked) {
-        setEnabledMcpServerNames(settings.mcpServers.filter((s) => s.enabled).map((s) => s.name));
-      }
     },
-    [selectedModel, selectedRagSetting, applyConstraint, settings.mcpServers]
+    [selectedModel, applyConstraint]
   );
 
   const handleModelChange = useCallback(
     (model: ModelType) => {
-      const wasLocked = getDriveToolModeConstraint(selectedModel, selectedRagSetting).locked;
       setSelectedModel(model);
       applyConstraint(model, selectedRagSetting);
-      const willBeLocked = getDriveToolModeConstraint(model, selectedRagSetting).locked;
-      // Restore MCP defaults only when transitioning from locked to unlocked
-      if (wasLocked && !willBeLocked) {
-        setEnabledMcpServerNames(settings.mcpServers.filter((s) => s.enabled).map((s) => s.name));
-      }
     },
-    [selectedModel, selectedRagSetting, applyConstraint, settings.mcpServers]
+    [selectedRagSetting, applyConstraint]
   );
 
   // ---- Send message ----
@@ -398,6 +404,7 @@ export function ChatPanel({
                       ...(accumulatedToolCalls || []),
                       chunk.toolCall,
                     ];
+                    setStreamingToolCalls([...accumulatedToolCalls]);
                   }
                   break;
                 case "tool_result":
@@ -411,10 +418,14 @@ export function ChatPanel({
                 case "rag_used":
                   ragUsed = true;
                   ragSources = chunk.ragSources || [];
+                  setStreamingRagUsed(true);
+                  setStreamingRagSources([...ragSources]);
                   break;
                 case "web_search_used":
                   webSearchUsed = true;
                   ragSources = chunk.ragSources || [];
+                  setStreamingWebSearchUsed(true);
+                  setStreamingRagSources([...ragSources]);
                   break;
                 case "image_generated":
                   if (chunk.generatedImage) {
@@ -466,6 +477,10 @@ export function ChatPanel({
                   setMessages(finalMessages);
                   setStreamingContent("");
                   setStreamingThinking("");
+                  setStreamingToolCalls([]);
+                  setStreamingRagSources([]);
+                  setStreamingRagUsed(false);
+                  setStreamingWebSearchUsed(false);
                   setIsStreaming(false);
                   await saveChat(finalMessages);
                   break;
@@ -499,6 +514,10 @@ export function ChatPanel({
       } finally {
         setStreamingContent("");
         setStreamingThinking("");
+        setStreamingToolCalls([]);
+        setStreamingRagSources([]);
+        setStreamingRagUsed(false);
+        setStreamingWebSearchUsed(false);
         setIsStreaming(false);
         abortControllerRef.current = null;
       }
@@ -588,6 +607,10 @@ export function ChatPanel({
         messages={messages}
         streamingContent={streamingContent}
         streamingThinking={streamingThinking}
+        streamingToolCalls={streamingToolCalls}
+        streamingRagSources={streamingRagSources}
+        streamingRagUsed={streamingRagUsed}
+        streamingWebSearchUsed={streamingWebSearchUsed}
         isStreaming={isStreaming}
       />
 

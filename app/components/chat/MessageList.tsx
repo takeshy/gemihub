@@ -2,12 +2,16 @@
 
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
-import type { Message } from "~/types/chat";
+import type { Message, ToolCall } from "~/types/chat";
 
 interface MessageListProps {
   messages: Message[];
   streamingContent?: string;
   streamingThinking?: string;
+  streamingToolCalls?: ToolCall[];
+  streamingRagSources?: string[];
+  streamingRagUsed?: boolean;
+  streamingWebSearchUsed?: boolean;
   isStreaming?: boolean;
 }
 
@@ -15,6 +19,10 @@ export function MessageList({
   messages,
   streamingContent,
   streamingThinking,
+  streamingToolCalls,
+  streamingRagSources,
+  streamingRagUsed,
+  streamingWebSearchUsed,
   isStreaming,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -29,11 +37,15 @@ export function MessageList({
 
   // Build a partial assistant message from streaming data
   const streamingMessage: Message | null =
-    isStreaming && (streamingContent || streamingThinking)
+    isStreaming && (streamingContent || streamingThinking || (streamingToolCalls && streamingToolCalls.length > 0))
       ? {
           role: "assistant",
           content: streamingContent || "",
           thinking: streamingThinking || undefined,
+          toolCalls: streamingToolCalls && streamingToolCalls.length > 0 ? streamingToolCalls : undefined,
+          ragUsed: streamingRagUsed || undefined,
+          webSearchUsed: streamingWebSearchUsed || undefined,
+          ragSources: streamingRagSources && streamingRagSources.length > 0 ? streamingRagSources : undefined,
           timestamp: Date.now(),
         }
       : null;
