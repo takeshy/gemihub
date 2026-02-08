@@ -32,4 +32,6 @@ export default [
   route("api/drive/temp", "routes/api.drive.temp.tsx"),
   // Public (no auth) — serves published Drive files with correct Content-Type
   route("public/file/:fileId/:fileName", "routes/public.file.$fileId.$fileName.tsx"),
+  route("api/plugins", "routes/api.plugins.tsx"),
+  route("api/plugins/:id", "routes/api.plugins.$id.tsx"),
 ] satisfies RouteConfig;

@@ -56,8 +56,10 @@ import {
   FileBox,
   ShieldCheck,
   KeyRound,
+  Puzzle,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
+import { PluginsTab } from "~/components/settings/PluginsTab";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
 import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog";
 import { TrashDialog } from "~/components/settings/TrashDialog";
@@ -73,7 +75,7 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "commands" | "sync";
+type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync";
 
 import type { TranslationStrings } from "~/i18n/translations";
 
@@ -83,6 +85,7 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
   { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
+  { id: "plugins", labelKey: "settings.tab.plugins", icon: Puzzle },
 ];
 
 // ---------------------------------------------------------------------------
@@ -417,6 +420,7 @@ function SettingsInner({
         {activeTab === "mcp" && <McpTab settings={settings} />}
         {activeTab === "rag" && <RagTab settings={settings} />}
         {activeTab === "commands" && <CommandsTab settings={settings} />}
+        {activeTab === "plugins" && <PluginsTab settings={settings} />}
       </main>
     </div>
   );

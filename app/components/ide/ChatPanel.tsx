@@ -11,6 +11,7 @@ import type {
   McpAppInfo,
 } from "~/types/chat";
 import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
+import type { PluginSlashCommand } from "~/types/plugin";
 import {
   getAvailableModels,
   getDefaultModelForPlan,
@@ -26,6 +27,7 @@ export interface ChatOverrides {
   searchSetting?: string | null;
   driveToolMode?: DriveToolMode | null;
   enabledMcpServers?: string[] | null;
+  pluginExecute?: (args: string) => Promise<string>;
 }
 
 interface ChatPanelProps {
@@ -34,6 +36,7 @@ interface ChatPanelProps {
   hasEncryptedApiKey?: boolean;
   onNeedUnlock?: () => void;
   slashCommands?: SlashCommand[];
+  pluginSlashCommands?: PluginSlashCommand[];
 }
 
 export function ChatPanel({
@@ -42,6 +45,7 @@ export function ChatPanel({
   hasEncryptedApiKey = false,
   onNeedUnlock,
   slashCommands = [],
+  pluginSlashCommands = [],
 }: ChatPanelProps) {
   const { t } = useI18n();
   const [histories, setHistories] = useState<ChatHistoryItem[]>([]);
@@ -229,6 +233,40 @@ export function ChatPanel({
   // ---- Send message ----
   const handleSend = useCallback(
     async (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => {
+      // Handle plugin slash commands with execute()
+      if (overrides?.pluginExecute) {
+        const userMessage: Message = {
+          role: "user",
+          content,
+          timestamp: Date.now(),
+          attachments,
+        };
+        const updatedMessages = [...messages, userMessage];
+        setMessages(updatedMessages);
+        setIsStreaming(true);
+        try {
+          const result = await overrides.pluginExecute(content);
+          const assistantMessage: Message = {
+            role: "assistant",
+            content: result,
+            timestamp: Date.now(),
+          };
+          const finalMessages = [...updatedMessages, assistantMessage];
+          setMessages(finalMessages);
+          await saveChat(finalMessages);
+        } catch (err) {
+          const errorMessage: Message = {
+            role: "assistant",
+            content: `**Error:** ${err instanceof Error ? err.message : "Plugin command failed"}`,
+            timestamp: Date.now(),
+          };
+          setMessages([...updatedMessages, errorMessage]);
+        } finally {
+          setIsStreaming(false);
+        }
+        return;
+      }
+
       if (!hasApiKey) {
         if (hasEncryptedApiKey && onNeedUnlock) {
           onNeedUnlock();
@@ -570,7 +608,16 @@ export function ChatPanel({
         mcpServers={settings.mcpServers}
         enabledMcpServerNames={enabledMcpServerNames}
         onEnabledMcpServerNamesChange={setEnabledMcpServerNames}
-        slashCommands={slashCommands}
+        slashCommands={[
+          ...slashCommands,
+          ...pluginSlashCommands.map((cmd) => ({
+            id: `plugin-${cmd.pluginId}-${cmd.name}`,
+            name: cmd.name,
+            description: cmd.description,
+            promptTemplate: "",
+            execute: cmd.execute,
+          })),
+        ]}
         driveToolModeLocked={toolConstraint.locked}
         driveToolModeReasonKey={toolConstraint.reasonKey as keyof TranslationStrings | undefined}
       />

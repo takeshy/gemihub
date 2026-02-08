@@ -214,6 +214,23 @@ export interface TranslationStrings {
   "crypt.wrongPassword": string;
   "crypt.encrypting": string;
 
+  // Plugins tab
+  "settings.tab.plugins": string;
+  "plugins.addPlugin": string;
+  "plugins.repoPlaceholder": string;
+  "plugins.install": string;
+  "plugins.installSuccess": string;
+  "plugins.installedPlugins": string;
+  "plugins.noPlugins": string;
+  "plugins.enable": string;
+  "plugins.disable": string;
+  "plugins.update": string;
+  "plugins.updated": string;
+  "plugins.uninstall": string;
+  "plugins.uninstalled": string;
+  "plugins.confirmUninstall": string;
+  "plugins.invalidRepo": string;
+
   // Commands tab
   "settings.tab.commands": string;
   "settings.commands.noCommands": string;
@@ -465,6 +482,23 @@ const en: TranslationStrings = {
   "crypt.wrongPassword": "Invalid password",
   "crypt.encrypting": "Encrypting & uploading...",
 
+  // Plugins tab
+  "settings.tab.plugins": "Plugins",
+  "plugins.addPlugin": "Add Plugin",
+  "plugins.repoPlaceholder": "owner/repo or https://github.com/owner/repo",
+  "plugins.install": "Install",
+  "plugins.installSuccess": "Plugin installed successfully.",
+  "plugins.installedPlugins": "Installed Plugins",
+  "plugins.noPlugins": "No plugins installed.",
+  "plugins.enable": "Enable",
+  "plugins.disable": "Disable",
+  "plugins.update": "Update",
+  "plugins.updated": "Plugin updated successfully.",
+  "plugins.uninstall": "Uninstall",
+  "plugins.uninstalled": "Plugin uninstalled.",
+  "plugins.confirmUninstall": "Uninstall this plugin? This will remove all plugin data.",
+  "plugins.invalidRepo": "Invalid repository format. Use owner/repo.",
+
   // Commands tab
   "settings.tab.commands": "Commands",
   "settings.commands.noCommands": "No slash commands configured.",
@@ -715,6 +749,23 @@ const ja: TranslationStrings = {
   "crypt.decrypting": "復号中...",
   "crypt.wrongPassword": "パスワードが正しくありません",
   "crypt.encrypting": "暗号化＆アップロード中...",
+
+  // Plugins tab
+  "settings.tab.plugins": "プラグイン",
+  "plugins.addPlugin": "プラグインを追加",
+  "plugins.repoPlaceholder": "owner/repo または https://github.com/owner/repo",
+  "plugins.install": "インストール",
+  "plugins.installSuccess": "プラグインをインストールしました。",
+  "plugins.installedPlugins": "インストール済みプラグイン",
+  "plugins.noPlugins": "プラグインはインストールされていません。",
+  "plugins.enable": "有効化",
+  "plugins.disable": "無効化",
+  "plugins.update": "更新",
+  "plugins.updated": "プラグインを更新しました。",
+  "plugins.uninstall": "アンインストール",
+  "plugins.uninstalled": "プラグインをアンインストールしました。",
+  "plugins.confirmUninstall": "このプラグインをアンインストールしますか？すべてのプラグインデータが削除されます。",
+  "plugins.invalidRepo": "リポジトリの形式が無効です。owner/repo の形式で入力してください。",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

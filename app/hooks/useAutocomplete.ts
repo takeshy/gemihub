@@ -34,7 +34,7 @@ interface UseAutocompleteReturn {
 export interface SelectResult {
   text: string;
   cursorOffset: number;
-  command?: SlashCommand;
+  command?: SlashCommand & { execute?: (args: string) => Promise<string> };
 }
 
 export function useAutocomplete({

@@ -39,7 +39,7 @@ interface ChatInputProps {
   mcpServers?: McpServerConfig[];
   enabledMcpServerNames?: string[];
   onEnabledMcpServerNamesChange?: (names: string[]) => void;
-  slashCommands?: SlashCommand[];
+  slashCommands?: (SlashCommand & { execute?: (args: string) => Promise<string> })[];
   driveToolModeLocked?: boolean;
   driveToolModeReasonKey?: keyof TranslationStrings;
 }
@@ -146,6 +146,7 @@ export function ChatInput({
             searchSetting: result.command.searchSetting,
             driveToolMode: result.command.driveToolMode,
             enabledMcpServers: result.command.enabledMcpServers,
+            pluginExecute: result.command.execute,
           });
         }
         // Focus textarea

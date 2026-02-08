@@ -6,6 +6,9 @@
 /.react-router/
 /build/
 
+# Local dev plugins
+/plugins/
+
 # Terraform
 terraform/.terraform/
 terraform/*.tfstate*
