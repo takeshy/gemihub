@@ -56,10 +56,21 @@ interface MainViewerProps {
   refreshKey?: number;
 }
 
+const VIDEO_EXTS = [".mp4", ".webm", ".ogg", ".mov", ".avi", ".mkv"];
+const AUDIO_EXTS = [".mp3", ".wav", ".flac", ".aac", ".m4a", ".opus"];
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"];
+
+function getMediaType(name: string | null, mimeType: string | null): "pdf" | "video" | "audio" | "image" | null {
+  const lower = name?.toLowerCase() ?? "";
+  if (lower.endsWith(".pdf") || mimeType === "application/pdf") return "pdf";
+  if (VIDEO_EXTS.some((ext) => lower.endsWith(ext)) || mimeType?.startsWith("video/")) return "video";
+  if (AUDIO_EXTS.some((ext) => lower.endsWith(ext)) || mimeType?.startsWith("audio/")) return "audio";
+  if (IMAGE_EXTS.some((ext) => lower.endsWith(ext)) || mimeType?.startsWith("image/")) return "image";
+  return null;
+}
+
 function isBinaryFile(name: string | null, mimeType: string | null): boolean {
-  if (name?.endsWith(".pdf")) return true;
-  if (mimeType === "application/pdf") return true;
-  return false;
+  return getMediaType(name, mimeType) !== null;
 }
 
 export function MainViewer({
@@ -88,10 +99,11 @@ export function MainViewer({
     );
   }
 
-  // Binary files (PDF etc.) - don't load via useFileWithCache
-  if (isBinaryFile(fileName, fileMimeType)) {
+  // Binary files (PDF, video, audio, image) - don't load via useFileWithCache
+  const mediaType = getMediaType(fileName, fileMimeType);
+  if (mediaType) {
     return (
-      <PdfViewer fileId={fileId} fileName={fileName || "file.pdf"} />
+      <MediaViewer fileId={fileId} fileName={fileName || "file"} mediaType={mediaType} />
     );
   }
 
@@ -106,10 +118,11 @@ export function MainViewer({
 }
 
 // ---------------------------------------------------------------------------
-// PDF Viewer
+// Media Viewer (PDF, Video, Audio, Image)
 // ---------------------------------------------------------------------------
 
-function PdfViewer({ fileId, fileName }: { fileId: string; fileName: string }) {
+function MediaViewer({ fileId, fileName, mediaType }: { fileId: string; fileName: string; mediaType: "pdf" | "video" | "audio" | "image" }) {
+  const src = `/api/drive/files?action=raw&fileId=${fileId}`;
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
@@ -117,11 +130,24 @@ function PdfViewer({ fileId, fileName }: { fileId: string; fileName: string }) {
           {fileName}
         </span>
       </div>
-      <iframe
-        src={`/api/drive/files?action=raw&fileId=${fileId}`}
-        className="flex-1 w-full border-0"
-        title={fileName}
-      />
+      {mediaType === "pdf" && (
+        <iframe src={src} className="flex-1 w-full border-0" title={fileName} />
+      )}
+      {mediaType === "video" && (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <video src={src} controls className="max-w-full max-h-full" />
+        </div>
+      )}
+      {mediaType === "audio" && (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <audio src={src} controls />
+        </div>
+      )}
+      {mediaType === "image" && (
+        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+          <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
+        </div>
+      )}
     </div>
   );
 }
