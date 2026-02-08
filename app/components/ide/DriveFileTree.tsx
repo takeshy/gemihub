@@ -701,10 +701,10 @@ export function DriveFileTree({
   const handleDelete = useCallback(
     async (item: CachedTreeNode) => {
       if (item.isFolder && item.id.startsWith("vfolder:")) {
-        // Virtual folder: delete all files within
+        // Virtual folder: move all files within to trash
         const fileIds = collectFileIds(item);
         if (fileIds.length === 0) return;
-        if (!confirm(`Delete all ${fileIds.length} file(s) in folder "${item.name}"?`)) return;
+        if (!confirm(t("trash.softDeleteFolderConfirm").replace("{count}", String(fileIds.length)).replace("{name}", item.name))) return;
 
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
@@ -718,6 +718,8 @@ export function DriveFileTree({
               const data = await res.json();
               if (data.meta) lastMeta = data.meta;
             }
+            // Clean local caches
+            await deleteCachedFile(fid);
           }
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
@@ -728,7 +730,7 @@ export function DriveFileTree({
           // ignore
         }
       } else {
-        if (!confirm(`Delete file "${item.name}"?`)) return;
+        if (!confirm(t("trash.softDeleteConfirm").replace("{name}", item.name))) return;
 
         try {
           const res = await fetch("/api/drive/files", {
@@ -737,6 +739,8 @@ export function DriveFileTree({
             body: JSON.stringify({ action: "delete", fileId: item.id }),
           });
           if (res.ok) {
+            // Clean local caches
+            await deleteCachedFile(item.id);
             const data = await res.json();
             if (data.meta) {
               await updateTreeFromMeta(data.meta);
@@ -756,7 +760,7 @@ export function DriveFileTree({
         }
       }
     },
-    [treeItems, rootFolderId, collectFileIds, fetchAndCacheTree, updateTreeFromMeta]
+    [treeItems, rootFolderId, collectFileIds, fetchAndCacheTree, updateTreeFromMeta, t]
   );
 
   const handleEncrypt = useCallback(
@@ -1068,7 +1072,7 @@ export function DriveFileTree({
       });
 
       items.push({
-        label: "Delete",
+        label: t("trash.tabTrash"),
         icon: <Trash2 size={ICON.MD} />,
         onClick: () => handleDelete(item),
         danger: true,

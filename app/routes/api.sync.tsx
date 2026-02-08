@@ -5,8 +5,11 @@ import { getSettings } from "~/services/user-settings.server";
 import {
   listUserFiles,
   readFile,
+  createFile,
   getFileMetadata,
   deleteFile,
+  moveFile,
+  renameFile,
   ensureSubFolder,
   listFiles,
 } from "~/services/google-drive.server";
@@ -61,6 +64,7 @@ export async function action({ request }: Route.ActionArgs) {
   const VALID_ACTIONS = new Set([
     "diff", "push", "pull", "resolve", "fullPush", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
+    "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
   ]);
   if (!actionType || !VALID_ACTIONS.has(actionType)) {
     return jsonWithCookie({ error: `Invalid action: ${actionType}` }, { status: 400 });
@@ -377,6 +381,135 @@ export async function action({ request }: Route.ActionArgs) {
       await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
 
       return jsonWithCookie({ restored: fileIds.length, remoteMeta });
+    }
+
+    case "listTrash": {
+      try {
+        const trashFolderId = await ensureSubFolder(
+          validTokens.accessToken,
+          validTokens.rootFolderId,
+          "trash"
+        );
+        const files = await listFiles(validTokens.accessToken, trashFolderId);
+        return jsonWithCookie({
+          files: files.map((f) => ({
+            id: f.id,
+            name: f.name,
+            mimeType: f.mimeType,
+            modifiedTime: f.modifiedTime,
+          })),
+        });
+      } catch {
+        return jsonWithCookie({ files: [] });
+      }
+    }
+
+    case "restoreTrash": {
+      const fileIds = body.fileIds as string[];
+      const renames = (body.renames ?? {}) as Record<string, string>;
+      try {
+        const trashFolderId = await ensureSubFolder(
+          validTokens.accessToken,
+          validTokens.rootFolderId,
+          "trash"
+        );
+        const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+          ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
+
+        for (const fileId of fileIds) {
+          // Move file back to root folder
+          await moveFile(validTokens.accessToken, fileId, validTokens.rootFolderId, trashFolderId);
+          // Rename if requested
+          const newName = renames[fileId];
+          if (newName) {
+            await renameFile(validTokens.accessToken, fileId, newName);
+          }
+          // Add back to sync meta
+          const meta = await getFileMetadata(validTokens.accessToken, fileId);
+          remoteMeta.files[fileId] = {
+            name: meta.name,
+            mimeType: meta.mimeType,
+            md5Checksum: meta.md5Checksum ?? "",
+            modifiedTime: meta.modifiedTime ?? "",
+          };
+        }
+
+        remoteMeta.lastUpdatedAt = new Date().toISOString();
+        await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
+        return jsonWithCookie({ restored: fileIds.length, remoteMeta });
+      } catch {
+        return jsonWithCookie({ restored: 0 });
+      }
+    }
+
+    case "listConflicts": {
+      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      const conflictFolderName = settings.syncConflictFolder || "sync_conflicts";
+      try {
+        const folderId = await ensureSubFolder(
+          validTokens.accessToken,
+          validTokens.rootFolderId,
+          conflictFolderName
+        );
+        const files = await listFiles(validTokens.accessToken, folderId);
+        return jsonWithCookie({
+          files: files.map((f) => ({
+            id: f.id,
+            name: f.name,
+            mimeType: f.mimeType,
+            modifiedTime: f.modifiedTime,
+          })),
+        });
+      } catch {
+        return jsonWithCookie({ files: [] });
+      }
+    }
+
+    case "restoreConflict": {
+      const fileIds = body.fileIds as string[];
+      const renames = (body.renames ?? {}) as Record<string, string>;
+      try {
+        const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+          ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
+
+        for (const fileId of fileIds) {
+          // Read conflict file content
+          const content = await readFile(validTokens.accessToken, fileId);
+          const meta = await getFileMetadata(validTokens.accessToken, fileId);
+          // Determine restored name: use provided rename, or strip timestamp prefix
+          let restoreName = renames[fileId] ?? meta.name;
+          if (!renames[fileId]) {
+            // Strip timestamp like "filename_20260208_123456.md" → "filename.md"
+            restoreName = restoreName.replace(/_\d{8}_\d{6}(?=\.)/, "");
+          }
+          // Create new file in root folder
+          const newFile = await createFile(
+            validTokens.accessToken,
+            restoreName,
+            content,
+            validTokens.rootFolderId,
+            meta.mimeType || "text/plain"
+          );
+          // Add to sync meta
+          const newMeta = await getFileMetadata(validTokens.accessToken, newFile.id);
+          remoteMeta.files[newFile.id] = {
+            name: newMeta.name,
+            mimeType: newMeta.mimeType,
+            md5Checksum: newMeta.md5Checksum ?? "",
+            modifiedTime: newMeta.modifiedTime ?? "",
+          };
+          // Delete the conflict backup
+          await deleteFile(validTokens.accessToken, fileId).catch(() => {});
+          // Remove conflict file from meta if it was there
+          delete remoteMeta.files[fileId];
+        }
+
+        remoteMeta.lastUpdatedAt = new Date().toISOString();
+        await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
+        return jsonWithCookie({ restored: fileIds.length, remoteMeta });
+      } catch {
+        return jsonWithCookie({ restored: 0, error: "Restore failed" });
+      }
     }
 
     default:

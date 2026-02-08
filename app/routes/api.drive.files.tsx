@@ -6,12 +6,13 @@ import {
   readFileRaw,
   createFile,
   updateFile,
-  deleteFile,
+  moveFile,
   renameFile,
   searchFiles,
   getFileMetadata,
   publishFile,
   unpublishFile,
+  ensureSubFolder,
 } from "~/services/google-drive.server";
 import { getSettings } from "~/services/user-settings.server";
 import {
@@ -121,7 +122,9 @@ export async function action({ request }: Route.ActionArgs) {
     }
     case "delete": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
-      await deleteFile(validTokens.accessToken, fileId);
+      // Soft delete: move to trash/ subfolder instead of permanent deletion
+      const trashFolderId = await ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "trash");
+      await moveFile(validTokens.accessToken, fileId, trashFolderId, validTokens.rootFolderId);
       const updatedMeta = await removeFileFromMeta(validTokens.accessToken, validTokens.rootFolderId, fileId);
       return jsonWithCookie({ ok: true, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }

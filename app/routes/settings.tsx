@@ -60,6 +60,7 @@ import {
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
 import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog";
+import { ManageFilesDialog } from "~/components/settings/ManageFilesDialog";
 import { invalidateIndexCache } from "~/routes/_index";
 
 // ---------------------------------------------------------------------------
@@ -870,6 +871,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [showTempFiles, setShowTempFiles] = useState(false);
+  const [showManageFiles, setShowManageFiles] = useState(false);
   const [untrackedFiles, setUntrackedFiles] = useState<Array<{ id: string; name: string; mimeType: string; modifiedTime: string }> | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
@@ -890,25 +892,6 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       }
     })();
   }, []);
-
-  const handleClearConflicts = useCallback(async () => {
-    if (!confirm(t("settings.sync.clearConflictsConfirm"))) return;
-    setActionLoading("clearConflicts");
-    setActionMsg(null);
-    try {
-      const res = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "clearConflicts" }),
-      });
-      const data = await res.json();
-      setActionMsg(t("settings.sync.conflictsCleared").replace("{count}", String(data.deleted)));
-    } catch {
-      setActionMsg("Failed to clear conflicts.");
-    } finally {
-      setActionLoading(null);
-    }
-  }, [t]);
 
   const handleFullPush = useCallback(async () => {
     if (!confirm(t("settings.sync.fullPushConfirm"))) return;
@@ -1123,6 +1106,17 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
               {t("settings.sync.detectUntracked")}
             </button>
           </div>
+          {/* Trash & Conflicts */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.manageFiles")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.manageFilesDescription")}</p>
+            </div>
+            <button type="button" onClick={() => setShowManageFiles(true)} className={actionBtnClass}>
+              <Trash2 size={14} />
+              {t("settings.sync.manage")}
+            </button>
+          </div>
         </div>
       </SectionCard>
 
@@ -1180,17 +1174,6 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           {t("settings.sync.dangerZoneDescription")}
         </p>
         <div className="space-y-4">
-          {/* Clear Conflicts */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.clearConflicts")}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.clearConflictsDescription")}</p>
-            </div>
-            <button type="button" onClick={handleClearConflicts} disabled={actionLoading === "clearConflicts"} className={dangerBtnClass}>
-              {actionLoading === "clearConflicts" ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {t("settings.sync.clearConflicts")}
-            </button>
-          </div>
           {/* Full Push */}
           <div className="flex items-center justify-between">
             <div>
@@ -1226,6 +1209,10 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           onClose={() => setUntrackedFiles(null)}
           onRefresh={handleDetectUntracked}
         />
+      )}
+
+      {showManageFiles && (
+        <ManageFilesDialog onClose={() => setShowManageFiles(false)} />
       )}
     </div>
   );

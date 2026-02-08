@@ -227,6 +227,24 @@ export interface TranslationStrings {
   "settings.commands.update": string;
   "settings.commands.edit": string;
   "settings.commands.delete": string;
+
+  // Trash & Manage Files
+  "settings.sync.manageFiles": string;
+  "settings.sync.manageFilesDescription": string;
+  "settings.sync.manage": string;
+  "trash.title": string;
+  "trash.tabTrash": string;
+  "trash.tabConflicts": string;
+  "trash.noFiles": string;
+  "trash.noConflicts": string;
+  "trash.permanentDelete": string;
+  "trash.permanentDeleteConfirm": string;
+  "trash.restore": string;
+  "trash.restoreAs": string;
+  "trash.selectAll": string;
+  "trash.softDeleteConfirm": string;
+  "trash.softDeleteFolderConfirm": string;
+  "trash.conflictInfo": string;
 }
 
 const en: TranslationStrings = {
@@ -455,6 +473,24 @@ const en: TranslationStrings = {
   "settings.commands.update": "Update",
   "settings.commands.edit": "Edit",
   "settings.commands.delete": "Delete",
+
+  // Trash & Manage Files
+  "settings.sync.manageFiles": "Trash & Conflicts",
+  "settings.sync.manageFilesDescription": "Manage deleted files and conflict backups.",
+  "settings.sync.manage": "Manage",
+  "trash.title": "Trash & Conflicts",
+  "trash.tabTrash": "Trash",
+  "trash.tabConflicts": "Conflicts",
+  "trash.noFiles": "No files in trash.",
+  "trash.noConflicts": "No conflict backups.",
+  "trash.permanentDelete": "Permanently Delete",
+  "trash.permanentDeleteConfirm": "Permanently delete the selected files? This cannot be undone.",
+  "trash.restore": "Restore",
+  "trash.restoreAs": "Restore as:",
+  "trash.selectAll": "Select All",
+  "trash.softDeleteConfirm": "Move \"{name}\" to trash?",
+  "trash.softDeleteFolderConfirm": "Move all {count} file(s) in folder \"{name}\" to trash?",
+  "trash.conflictInfo": "Conflict backups created during sync resolution.",
 };
 
 const ja: TranslationStrings = {
@@ -683,6 +719,24 @@ const ja: TranslationStrings = {
   "settings.commands.update": "更新",
   "settings.commands.edit": "編集",
   "settings.commands.delete": "削除",
+
+  // Trash & Manage Files
+  "settings.sync.manageFiles": "ゴミ箱・コンフリクト",
+  "settings.sync.manageFilesDescription": "削除されたファイルとコンフリクトバックアップを管理します。",
+  "settings.sync.manage": "管理",
+  "trash.title": "ゴミ箱・コンフリクト",
+  "trash.tabTrash": "ゴミ箱",
+  "trash.tabConflicts": "コンフリクト",
+  "trash.noFiles": "ゴミ箱にファイルはありません。",
+  "trash.noConflicts": "コンフリクトバックアップはありません。",
+  "trash.permanentDelete": "完全に削除",
+  "trash.permanentDeleteConfirm": "選択したファイルを完全に削除しますか？この操作は元に戻せません。",
+  "trash.restore": "復元",
+  "trash.restoreAs": "復元名:",
+  "trash.selectAll": "すべて選択",
+  "trash.softDeleteConfirm": "「{name}」をゴミ箱に移動しますか？",
+  "trash.softDeleteFolderConfirm": "フォルダ「{name}」内の{count}件のファイルをゴミ箱に移動しますか？",
+  "trash.conflictInfo": "同期コンフリクト解決時に作成されたバックアップです。",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };

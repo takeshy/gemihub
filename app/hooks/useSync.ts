@@ -4,10 +4,12 @@ import {
   setLocalSyncMeta,
   getCachedFile,
   setCachedFile,
+  deleteCachedFile,
   getAllCachedFiles,
   clearAllEditHistory,
   getLocallyModifiedFileIds,
   getCachedRemoteMeta,
+  deleteEditHistoryEntry,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { commitSnapshot } from "~/services/edit-history-local";
@@ -234,7 +236,31 @@ export function useSync() {
         return;
       }
 
+      // Clean up localOnly files (deleted on remote, e.g. moved to trash on another device)
+      const localOnlyIds: string[] = diffData.diff.localOnly ?? [];
+      if (localOnlyIds.length > 0) {
+        const updatedMetaForDelete: LocalSyncMeta = localMeta ?? {
+          id: "current",
+          lastUpdatedAt: new Date().toISOString(),
+          files: {},
+        };
+        for (const fid of localOnlyIds) {
+          await deleteCachedFile(fid);
+          await deleteEditHistoryEntry(fid);
+          delete updatedMetaForDelete.files[fid];
+        }
+        updatedMetaForDelete.lastUpdatedAt = new Date().toISOString();
+        await setLocalSyncMeta(updatedMetaForDelete);
+      }
+
       const filesToPull = [...diffData.diff.toPull, ...diffData.diff.remoteOnly];
+      if (filesToPull.length === 0 && localOnlyIds.length > 0) {
+        // Only local cleanups happened, trigger tree refresh
+        window.dispatchEvent(new Event("sync-complete"));
+        setLastSyncTime(new Date().toISOString());
+        await checkSync();
+        return;
+      }
       if (filesToPull.length === 0) {
         setSyncStatus("idle");
         return;
