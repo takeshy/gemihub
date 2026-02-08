@@ -311,6 +311,8 @@ function IDELayout({
             const data = await res.json();
             workflowId = data.file.id;
             finalName = data.file.name;
+            // Refresh file tree so the new file appears
+            window.dispatchEvent(new Event("sync-complete"));
             handleSelectFile(data.file.id, data.file.name, "text/yaml");
           }
         }
