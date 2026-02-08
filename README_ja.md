@@ -80,8 +80,12 @@ Model Context Protocol（MCP）を通じて、Gemini Hub は外部サービス�
 1. 「API とサービス」→「OAuth 同意画面」
 2. User Type: **外部** を選択
 3. アプリ名（例: Gemini Hub）、ユーザーサポートメール、デベロッパー連絡先を入力
-4. スコープ追加: `https://www.googleapis.com/auth/drive`
+4. スコープ追加: `https://www.googleapis.com/auth/drive.file`
 5. テストユーザーに自分の Gmail アドレスを追加（公開前は自分しかアクセスできません）
+
+> **重要: Google Drive のファイルアクセスについて**
+>
+> このアプリは `drive.file` スコープを使用しており、**アプリ自身が作成したファイルにのみアクセスできます**。Google Drive の Web UI や他のアプリから `gemini-hub/` フォルダに直接アップロードしたファイルは Gemini Hub からは**見えません**。ファイルを追加するには、アプリ内のアップロード機能を使用するか、AI チャット経由で作成してください。
 
 #### OAuth 認証情報の作成
 1. 「API とサービス」→「認証情報」→「＋認証情報を作成」→「OAuth クライアント ID」

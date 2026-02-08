@@ -80,8 +80,12 @@ Go to [Google Cloud Console](https://console.cloud.google.com/) and perform the 
 1. Go to "APIs & Services" → "OAuth consent screen"
 2. User Type: **External**
 3. Fill in App name (e.g., Gemini Hub), support email, and developer contact
-4. Add scope: `https://www.googleapis.com/auth/drive`
+4. Add scope: `https://www.googleapis.com/auth/drive.file`
 5. Add your Gmail address as a test user (only your account can access before publishing)
+
+> **Important: Google Drive File Access**
+>
+> This app uses the `drive.file` scope, which means it can **only access files created by the app itself**. Files you upload directly to the `gemini-hub/` folder via the Google Drive web UI or other apps will **not** be visible to Gemini Hub. To add files, use the upload feature within the app or create them through AI chat.
 
 #### Create OAuth credentials
 1. Go to "APIs & Services" → "Credentials" → "+ Create Credentials" → "OAuth client ID"

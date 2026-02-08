@@ -6,7 +6,7 @@ import {
   createFile,
   updateFile,
 } from "./google-drive.server";
-import { getFileListFromMeta } from "./sync-meta.server";
+import { getFileListFromMeta, upsertFileInMeta } from "./sync-meta.server";
 import type { ToolDefinition } from "~/types/settings";
 
 /**
@@ -199,6 +199,7 @@ export async function executeDriveTool(
         return { error: "create_drive_file: 'content' must be a string" };
       }
       const file = await createFile(accessToken, name, content, rootFolderId);
+      await upsertFileInMeta(accessToken, rootFolderId, file);
       return {
         id: file.id,
         name: file.name,
@@ -216,7 +217,7 @@ export async function executeDriveTool(
         return { error: "update_drive_file: 'content' must be a string" };
       }
       const file = await updateFile(accessToken, fileId, content);
-
+      await upsertFileInMeta(accessToken, rootFolderId, file);
       return {
         id: file.id,
         name: file.name,

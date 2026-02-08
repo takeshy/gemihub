@@ -89,6 +89,11 @@ export function useSync() {
         setConflicts([]);
         setSyncStatus("idle");
       }
+      // If new remote-only files were detected, refresh the file tree
+      // (rebuildSyncMeta in the diff action already updated _sync-meta.json)
+      if (data.diff.remoteOnly?.length > 0) {
+        window.dispatchEvent(new Event("sync-complete"));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync check failed");
       setSyncStatus("error");

@@ -60,7 +60,8 @@ import {
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
 import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog";
-import { ManageFilesDialog } from "~/components/settings/ManageFilesDialog";
+import { TrashDialog } from "~/components/settings/TrashDialog";
+import { ConflictsDialog } from "~/components/settings/ConflictsDialog";
 import { invalidateIndexCache } from "~/routes/_index";
 
 // ---------------------------------------------------------------------------
@@ -871,7 +872,8 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [showTempFiles, setShowTempFiles] = useState(false);
-  const [showManageFiles, setShowManageFiles] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const [showConflicts, setShowConflicts] = useState(false);
   const [untrackedFiles, setUntrackedFiles] = useState<Array<{ id: string; name: string; mimeType: string; modifiedTime: string }> | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
@@ -1106,14 +1108,25 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
               {t("settings.sync.detectUntracked")}
             </button>
           </div>
-          {/* Trash & Conflicts */}
+          {/* Trash */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.manageFiles")}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.manageFilesDescription")}</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.trashTitle")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.trashDescription")}</p>
             </div>
-            <button type="button" onClick={() => setShowManageFiles(true)} className={actionBtnClass}>
+            <button type="button" onClick={() => setShowTrash(true)} className={actionBtnClass}>
               <Trash2 size={14} />
+              {t("settings.sync.manage")}
+            </button>
+          </div>
+          {/* Conflicts */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.conflictsTitle")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.conflictsDescription")}</p>
+            </div>
+            <button type="button" onClick={() => setShowConflicts(true)} className={actionBtnClass}>
+              <RefreshCw size={14} />
               {t("settings.sync.manage")}
             </button>
           </div>
@@ -1211,8 +1224,11 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         />
       )}
 
-      {showManageFiles && (
-        <ManageFilesDialog onClose={() => setShowManageFiles(false)} />
+      {showTrash && (
+        <TrashDialog onClose={() => setShowTrash(false)} />
+      )}
+      {showConflicts && (
+        <ConflictsDialog onClose={() => setShowConflicts(false)} />
       )}
     </div>
   );

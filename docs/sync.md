@@ -6,10 +6,12 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 
 - **Manual Sync**: Push and pull changes when you want
 - **Offline-First**: Files are cached in IndexedDB for instant access
+- **Soft Delete**: Deleted files are moved to a `trash/` folder on Drive (recoverable)
 - **Conflict Resolution**: Choose local or remote version with automatic backup
 - **Auto-Check**: Detects changes every 5 minutes
 - **Full Push / Full Pull**: Bulk sync for initial setup or recovery
 - **Untracked File Management**: Detect, restore, or delete orphaned remote files
+- **Trash & Conflict Backup Management**: Restore or permanently delete trashed files and conflict backups
 
 ## Commands
 
@@ -36,7 +38,7 @@ Each metadata contains:
 - `lastUpdatedAt`: Timestamp of last sync
 - `files`: MD5 checksum and modification time for each file (keyed by file ID)
 
-File contents are cached in the IndexedDB `files` store. All edits update this cache directly. The MD5 checksum is provided by the Google Drive API on every file operation (create, update, read).
+File contents are cached in the IndexedDB `files` store. All edits update this cache directly (no Drive API call). The MD5 checksum in the metadata is only updated during sync operations (Push/Pull) and file reads — it reflects the last-synced state, not the current local content. Local modifications are tracked separately via the `editHistory` store.
 
 ### Three-Way Diff
 
@@ -114,8 +116,7 @@ Uploads locally-changed files to remote.
 ### Important Notes
 
 - Push checks for conflicts and remote-newer **before** writing any files to Drive. If the check fails, nothing is written.
-- Push does **NOT** delete remote files.
-- Deleted local files become "untracked" on remote (recoverable via settings).
+- Push does **NOT** delete remote files. Deletion is handled separately (see Soft Delete below).
 - After a successful push, local edit history in IndexedDB is cleared.
 
 ---
@@ -128,11 +129,12 @@ Downloads only remotely-changed files to local cache.
 
 1. **Compute diff** using three-way comparison
 2. **Check conflicts** — if any, stop and show conflict UI
-3. **Combine** `toPull` + `remoteOnly` arrays
-4. **Download file contents** in parallel (max 5 concurrent)
-5. **Update IndexedDB cache** with downloaded files
-6. **Update local sync meta** with new checksums
-7. **Refresh diff** to update status
+3. **Clean up `localOnly` files** — files that exist locally but were deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta
+4. **Combine** `toPull` + `remoteOnly` arrays
+5. **Download file contents** in parallel (max 5 concurrent)
+6. **Update IndexedDB cache** with downloaded files
+7. **Update local sync meta** with new checksums
+8. **Refresh diff** to update status
 
 ### Decision Tables
 
@@ -149,7 +151,7 @@ Downloads only remotely-changed files to local cache.
 
 | Local Meta | Remote Meta | Current Remote | Action |
 |:----------:|:-----------:|:--------------:|--------|
-| A | - | - | **localOnly** (kept locally, can push later) |
+| A | - | - | **localOnly** → Remove from local cache (remote deletion synced) |
 
 #### Files Only in Remote (New Remote)
 
@@ -220,6 +222,33 @@ Example: `notes/daily.md` → `sync_conflicts/notes_daily_20260207_143000.md`
 
 ---
 
+## Soft Delete (Trash)
+
+File deletion uses a soft delete model. Deleted files are moved to a `trash/` subfolder on Google Drive instead of being permanently destroyed.
+
+### Flow
+
+1. User deletes a file (context menu → Trash)
+2. Server moves the file to `trash/` subfolder via Drive API (`moveFile`)
+3. File is removed from `_sync-meta.json`
+4. Local caches (IndexedDB file cache) are cleaned up
+5. File tree updates to reflect the removal
+
+### Cross-Device Sync
+
+When a file is deleted on one device:
+- The file is moved to `trash/` and removed from remote sync meta
+- Other devices detect it as `localOnly` during their next Pull
+- Pull automatically removes the file from their local cache
+
+### Recovery
+
+Trashed files can be managed from Settings → Sync → Trash:
+- **Restore**: Moves the file back from `trash/` to the root folder and re-adds it to sync meta
+- **Permanently Delete**: Removes the file from Drive entirely (irreversible)
+
+---
+
 ## Temporary Sync
 
 Quick file sharing without full sync overhead. Use when:
@@ -239,19 +268,18 @@ Temp files can be managed from Settings → Sync → Temporary Files.
 When a conflict occurs, you choose Keep Local or Keep Remote, but the other version is always saved to `sync_conflicts/`.
 
 **To merge manually:**
-1. Open the file you kept
-2. Browse `sync_conflicts/` in the file tree to find the other version
-3. Copy the parts you need from the backup
-4. Delete the backup file when done
+1. Settings → Sync → Conflict Backups → Manage
+2. Select the backup file, edit the restore name if needed
+3. Click Restore — the backup is created as a new file in the root folder
 
 ### Scenario 2: Recover a Deleted File
 
-When you delete a file locally, it becomes "untracked" on remote.
+Deleted files are moved to the `trash/` folder on Google Drive.
 
 **To recover:**
-1. Settings → Sync tab → Detect Untracked Files
+1. Settings → Sync → Trash → Manage
 2. Select the file you need
-3. Click Restore Selected
+3. Click Restore — the file is moved back to the root folder and re-tracked
 
 ### Scenario 3: Restore from Remote
 
@@ -273,6 +301,8 @@ Located in Settings → Sync tab, organized into sections:
 |--------|-------------|
 | Manage Temp Files | Browse and manage temporary files on Drive |
 | Detect Untracked Files | Find remote files not tracked in local cache |
+| Trash | Restore or permanently delete trashed files |
+| Conflict Backups | Manage conflict backup files from sync resolution |
 
 ### Edit History
 | Action | Description |
@@ -283,14 +313,16 @@ Located in Settings → Sync tab, organized into sections:
 ### Danger Zone
 | Action | Description |
 |--------|-------------|
-| Clear Conflict Files | Delete all backup files from `sync_conflicts/` |
 | Full Push | Upload all local files and merge metadata (overwrites remote) |
 | Full Pull | Download all remote files (overwrites local cache) |
 
-### System Files (Always Excluded)
+### System Files & Folders (Always Excluded from Sync)
 
 - `_sync-meta.json` — Sync metadata
 - `settings.json` — User settings
+- `trash/` — Soft-deleted files (managed via Trash dialog)
+- `sync_conflicts/` — Conflict backup files (managed via Conflict Backups dialog)
+- `__TEMP__/` — Temporary sync files (managed via Temp Files dialog)
 
 ---
 
@@ -354,9 +386,10 @@ Browser (IndexedDB)          Server                Google Drive
 │ files store   │      │ /api/sync    │      │ Root folder  │
 │ syncMeta      │◄────►│ (diff/push/  │◄────►│ _sync-meta   │
 │ fileTree      │      │  pull/resolve)│      │ User files   │
-│ editHistory   │      │              │      │ sync_conflicts│
-│               │      │ /api/drive/  │      │ .history.json│
-│               │      │  files       │      │ __TEMP__/    │
+│ editHistory   │      │              │      │ trash/       │
+│               │      │ /api/drive/  │      │ sync_conflicts│
+│               │      │  files       │      │ .history.json│
+│               │      │              │      │ __TEMP__/    │
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
 
@@ -366,12 +399,14 @@ Browser (IndexedDB)          Server                Google Drive
 |------|------|
 | `app/hooks/useSync.ts` | Client-side sync hook (push, pull, conflict, fullPush, fullPull, localModifiedCount) |
 | `app/hooks/useFileWithCache.ts` | IndexedDB cache-first file reads, auto-save with edit history |
-| `app/routes/api.sync.tsx` | Server-side sync API (10 actions) |
-| `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly) |
+| `app/routes/api.sync.tsx` | Server-side sync API (14 actions) |
+| `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory) |
 | `app/services/edit-history-local.ts` | Client-side edit history (reverse-apply diffs in IndexedDB) |
 | `app/services/edit-history.server.ts` | Server-side edit history (Drive `.history.json` read/write) |
+| `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |
+| `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog (restore/rename/delete) |
 | `app/services/google-drive.server.ts` | Google Drive API wrapper |
 | `app/utils/parallel.ts` | Parallel processing utility (concurrency limit) |
 
@@ -389,3 +424,7 @@ Browser (IndexedDB)          Server                Google Drive
 | `detectUntracked` | POST | Find files on Drive not in sync meta |
 | `deleteUntracked` | POST | Delete specified untracked files |
 | `restoreUntracked` | POST | Add specified files back to sync meta |
+| `listTrash` | POST | List files in the `trash/` folder |
+| `restoreTrash` | POST | Move files from `trash/` back to root, re-add to sync meta |
+| `listConflicts` | POST | List files in the `sync_conflicts/` folder |
+| `restoreConflict` | POST | Create new file from conflict backup, delete backup |

@@ -261,9 +261,10 @@ export function DriveFileTree({
         setModifiedFiles((prev) => new Set(prev).add(fileId));
       }
     };
-    // After push/fullPush, re-read modified files (editHistory cleared)
+    // After push/pull/sync-check, re-read modified files and refresh tree
     const syncHandler = () => {
       getLocallyModifiedFileIds().then((ids) => setModifiedFiles(ids)).catch(() => {});
+      fetchAndCacheTree();
     };
     window.addEventListener("file-modified", handler);
     window.addEventListener("sync-complete", syncHandler);
@@ -271,7 +272,7 @@ export function DriveFileTree({
       window.removeEventListener("file-modified", handler);
       window.removeEventListener("sync-complete", syncHandler);
     };
-  }, []);
+  }, [fetchAndCacheTree]);
 
   // Push flattened file list to parent when tree changes
   useEffect(() => {

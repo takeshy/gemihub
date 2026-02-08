@@ -228,11 +228,12 @@ export interface TranslationStrings {
   "settings.commands.edit": string;
   "settings.commands.delete": string;
 
-  // Trash & Manage Files
-  "settings.sync.manageFiles": string;
-  "settings.sync.manageFilesDescription": string;
+  // Trash & Conflicts
+  "settings.sync.trashTitle": string;
+  "settings.sync.trashDescription": string;
+  "settings.sync.conflictsTitle": string;
+  "settings.sync.conflictsDescription": string;
   "settings.sync.manage": string;
-  "trash.title": string;
   "trash.tabTrash": string;
   "trash.tabConflicts": string;
   "trash.noFiles": string;
@@ -475,10 +476,11 @@ const en: TranslationStrings = {
   "settings.commands.delete": "Delete",
 
   // Trash & Manage Files
-  "settings.sync.manageFiles": "Trash & Conflicts",
-  "settings.sync.manageFilesDescription": "Manage deleted files and conflict backups.",
+  "settings.sync.trashTitle": "Trash",
+  "settings.sync.trashDescription": "Restore or permanently delete trashed files.",
+  "settings.sync.conflictsTitle": "Conflict Backups",
+  "settings.sync.conflictsDescription": "Manage conflict backup files from sync resolution.",
   "settings.sync.manage": "Manage",
-  "trash.title": "Trash & Conflicts",
   "trash.tabTrash": "Trash",
   "trash.tabConflicts": "Conflicts",
   "trash.noFiles": "No files in trash.",
@@ -721,10 +723,11 @@ const ja: TranslationStrings = {
   "settings.commands.delete": "削除",
 
   // Trash & Manage Files
-  "settings.sync.manageFiles": "ゴミ箱・コンフリクト",
-  "settings.sync.manageFilesDescription": "削除されたファイルとコンフリクトバックアップを管理します。",
+  "settings.sync.trashTitle": "ゴミ箱",
+  "settings.sync.trashDescription": "削除されたファイルの復元・完全削除を管理します。",
+  "settings.sync.conflictsTitle": "コンフリクトバックアップ",
+  "settings.sync.conflictsDescription": "同期コンフリクト解決時のバックアップファイルを管理します。",
   "settings.sync.manage": "管理",
-  "trash.title": "ゴミ箱・コンフリクト",
   "trash.tabTrash": "ゴミ箱",
   "trash.tabConflicts": "コンフリクト",
   "trash.noFiles": "ゴミ箱にファイルはありません。",
