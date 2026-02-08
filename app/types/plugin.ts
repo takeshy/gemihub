@@ -39,6 +39,9 @@ export interface PluginSettingsTab {
 
 /** API exposed to plugins */
 export interface PluginAPI {
+  // Current language setting (e.g. "en", "ja")
+  language: string;
+
   // UI registration
   registerView(view: {
     id: string;

@@ -15,9 +15,12 @@ interface PluginAPICallbacks {
  */
 export function createPluginAPI(
   pluginId: string,
+  language: string,
   callbacks: PluginAPICallbacks
 ): PluginAPI {
   const api: PluginAPI = {
+    language,
+
     registerView(view) {
       callbacks.onRegisterView({
         id: view.id,

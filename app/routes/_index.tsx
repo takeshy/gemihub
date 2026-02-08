@@ -331,7 +331,7 @@ function IDELayout({
   return (
     <I18nProvider language={settings.language}>
       <EditorContextProvider>
-      <PluginProvider pluginConfigs={settings.plugins || []}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language}>
       <IDEContent
         settings={settings}
         hasGeminiApiKey={hasGeminiApiKey}

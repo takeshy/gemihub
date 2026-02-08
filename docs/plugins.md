@@ -107,6 +107,13 @@ require("esbuild").build({
 
 The `api` object passed to `onload` provides:
 
+#### Language
+
+```typescript
+// Current language setting ("en", "ja", etc.)
+const lang = api.language;
+```
+
 #### UI Registration
 
 ```typescript

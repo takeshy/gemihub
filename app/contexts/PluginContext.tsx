@@ -40,9 +40,11 @@ const PluginContext = createContext<PluginContextValue>({
 
 export function PluginProvider({
   pluginConfigs,
+  language,
   children,
 }: {
   pluginConfigs: PluginConfig[];
+  language: string;
   children: ReactNode;
 }) {
   const [plugins, setPlugins] = useState<PluginInstance[]>([]);
@@ -121,7 +123,7 @@ export function PluginProvider({
     Promise.all(
       toLoad.map(async (config) => {
         try {
-          const api = createPluginAPI(config.id, {
+          const api = createPluginAPI(config.id, language, {
             onRegisterView: addView,
             onRegisterSlashCommand: addSlashCommand,
             onRegisterSettingsTab: addSettingsTab,

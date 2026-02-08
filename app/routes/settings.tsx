@@ -355,7 +355,7 @@ export default function Settings() {
 
   return (
     <I18nProvider language={settings.language}>
-      <PluginProvider pluginConfigs={settings.plugins || []}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language}>
         <SettingsInner
           settings={settings}
           hasApiKey={hasApiKey}

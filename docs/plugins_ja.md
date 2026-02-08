@@ -107,6 +107,13 @@ require("esbuild").build({
 
 `onload` に渡される `api` オブジェクトが提供する機能:
 
+#### 言語
+
+```typescript
+// 現在の言語設定（"en"、"ja" など）
+const lang = api.language;
+```
+
 #### UI 登録
 
 ```typescript
