@@ -29,7 +29,9 @@ function isPrivateHost(hostname: string): boolean {
 
 /**
  * Validate a URL intended for MCP server communication.
- * Throws if the URL is invalid, points to a private IP, or uses HTTP in production.
+ * Throws if the URL is invalid, points to a private IP (production only),
+ * or uses HTTP in production.
+ * Private/localhost hosts are allowed in development for local MCP servers.
  */
 export function validateMcpServerUrl(url: string): void {
   let parsed: URL;
@@ -39,18 +41,17 @@ export function validateMcpServerUrl(url: string): void {
     throw new Error(`Invalid MCP server URL: ${url}`);
   }
 
-  // Block private/internal hosts
-  if (isPrivateHost(parsed.hostname)) {
-    throw new Error(
-      `MCP server URL points to a private/internal address: ${parsed.hostname}`
-    );
-  }
+  if (process.env.NODE_ENV === "production") {
+    // Block private/internal hosts in production to prevent SSRF
+    if (isPrivateHost(parsed.hostname)) {
+      throw new Error(
+        `MCP server URL points to a private/internal address: ${parsed.hostname}`
+      );
+    }
 
-  // Enforce HTTPS in production (allow HTTP in dev for local testing)
-  if (
-    parsed.protocol !== "https:" &&
-    process.env.NODE_ENV === "production"
-  ) {
-    throw new Error("MCP server URL must use HTTPS in production");
+    // Enforce HTTPS in production
+    if (parsed.protocol !== "https:") {
+      throw new Error("MCP server URL must use HTTPS in production");
+    }
   }
 }
