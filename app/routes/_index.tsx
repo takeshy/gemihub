@@ -43,6 +43,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+    if (validTokens.userId) {
+      console.log(JSON.stringify({ severity: "INFO", message: "user_access", userId: validTokens.userId }));
+    }
     const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
     // Merge local plugins (dev only) — local plugins take priority over Drive plugins
@@ -592,6 +595,9 @@ function IDEContent({
           onSuccess={() => {
             setShowPasswordPrompt(false);
             setHasGeminiApiKey(true);
+            // Trigger a pull so Drive files are cached in IndexedDB
+            // and the file tree shows green cache indicators
+            pull();
           }}
           onClose={() => setShowPasswordPrompt(false)}
         />
