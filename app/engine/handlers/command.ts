@@ -16,11 +16,23 @@ import {
   type ToolDefinition,
   type ModelType,
 } from "~/types/settings";
+import { getOrCreateStore } from "~/services/file-search.server";
+import { readFileRaw } from "~/services/google-drive.server";
 import type { Message, Attachment, McpAppInfo } from "~/types/chat";
+
+export interface CommandToolCall {
+  name: string;
+  args: Record<string, unknown>;
+  result?: unknown;
+}
 
 export interface CommandNodeResult {
   usedModel: string;
   mcpApps?: McpAppInfo[];
+  toolCalls?: CommandToolCall[];
+  ragSources?: string[];
+  webSearchSources?: string[];
+  attachmentNames?: string[];
 }
 
 export async function handleCommandNode(
@@ -47,17 +59,31 @@ export async function handleCommandNode(
     : settings?.selectedModel || getDefaultModelForPlan(settings?.apiPlan ?? "paid")) as ModelType;
 
   // Resolve RAG store IDs
-  const ragSetting = node.properties["ragSetting"] || "";
-  const webSearchEnabled = ragSetting === "__websearch__";
+  const ragSettingProp = node.properties["ragSetting"] || "";
+  const webSearchEnabled = ragSettingProp === "__websearch__";
   let ragStoreIds: string[] | undefined;
-  if (ragSetting && ragSetting !== "__none__" && ragSetting !== "__websearch__" && settings?.ragSettings) {
-    const rag = settings.ragSettings[ragSetting];
+  if (ragSettingProp && ragSettingProp !== "__none__" && ragSettingProp !== "__websearch__" && settings?.ragSettings) {
+    const rag = settings.ragSettings[ragSettingProp];
     if (rag) {
-      ragStoreIds = rag.storeIds.length > 0
-        ? rag.storeIds
+      ragStoreIds = rag.isExternal
+        ? rag.storeIds.length > 0 ? rag.storeIds : undefined
         : rag.storeId
           ? [rag.storeId]
           : undefined;
+    }
+    // Fallback: if settings has the RAG name but no store ID, try to find the store by name
+    if (!ragStoreIds && apiKey) {
+      try {
+        const storeName = await getOrCreateStore(apiKey, ragSettingProp);
+        ragStoreIds = [storeName];
+        // Cache the store ID in settings for subsequent nodes
+        if (rag) {
+          rag.storeName = storeName;
+          rag.storeId = storeName;
+        }
+      } catch {
+        // Store lookup failed, proceed without RAG
+      }
     }
   }
 
@@ -128,6 +154,27 @@ export async function handleCommandNode(
       if (!val || typeof val !== "string") continue;
       try {
         const fileData: FileExplorerData = JSON.parse(val);
+        // If FileExplorerData has an id but no data, read from Drive
+        if (!fileData.data && fileData.id && serviceContext.driveAccessToken) {
+          const res = await readFileRaw(serviceContext.driveAccessToken, fileData.id);
+          const buffer = await res.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          fileData.data = btoa(binary);
+          // Infer mimeType from extension if generic
+          if (!fileData.mimeType || fileData.mimeType === "application/octet-stream") {
+            const ext = (fileData.extension || "").toLowerCase();
+            const mimeMap: Record<string, string> = {
+              png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+              gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+              pdf: "application/pdf",
+            };
+            fileData.mimeType = mimeMap[ext] || "application/octet-stream";
+          }
+        }
         if (fileData.data && fileData.mimeType) {
           const attachType = fileData.mimeType.startsWith("image/") ? "image"
             : fileData.mimeType === "application/pdf" ? "pdf" : "text";
@@ -210,9 +257,25 @@ export async function handleCommandNode(
   );
 
   let fullResponse = "";
+  const collectedToolCalls: CommandToolCall[] = [];
+  let collectedRagSources: string[] | undefined;
+  let collectedWebSources: string[] | undefined;
+  let pendingToolCall: { name: string; args: Record<string, unknown> } | null = null;
+
   for await (const chunk of generator) {
     if (chunk.type === "text" && chunk.content) {
       fullResponse += chunk.content;
+    } else if (chunk.type === "tool_call" && chunk.toolCall) {
+      pendingToolCall = { name: chunk.toolCall.name, args: chunk.toolCall.args };
+    } else if (chunk.type === "tool_result" && chunk.toolResult) {
+      if (pendingToolCall) {
+        collectedToolCalls.push({ ...pendingToolCall, result: chunk.toolResult.result });
+        pendingToolCall = null;
+      }
+    } else if (chunk.type === "rag_used" && chunk.ragSources) {
+      collectedRagSources = chunk.ragSources;
+    } else if (chunk.type === "web_search_used" && chunk.ragSources) {
+      collectedWebSources = chunk.ragSources;
     } else if (chunk.type === "error") {
       throw new Error(chunk.error || "LLM error");
     }
@@ -231,5 +294,9 @@ export async function handleCommandNode(
   return {
     usedModel: modelName,
     mcpApps: collectedMcpApps.length > 0 ? collectedMcpApps : undefined,
+    toolCalls: collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+    ragSources: collectedRagSources,
+    webSearchSources: collectedWebSources,
+    attachmentNames: attachments.length > 0 ? attachments.map(a => a.name) : undefined,
   };
 }

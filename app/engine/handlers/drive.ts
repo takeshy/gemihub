@@ -1,7 +1,47 @@
-import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
+import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
 import { saveEdit } from "~/services/edit-history.server";
+
+const BINARY_MIME_PREFIXES = ["image/", "audio/", "video/"];
+const BINARY_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/zip",
+  "application/octet-stream",
+]);
+
+function isBinaryMimeType(mimeType: string): boolean {
+  return BINARY_MIME_PREFIXES.some(p => mimeType.startsWith(p)) || BINARY_MIME_TYPES.has(mimeType);
+}
+
+async function readFileAsExplorerData(
+  accessToken: string,
+  fileId: string,
+  fileName: string,
+  mimeType: string,
+): Promise<string> {
+  const res = await driveService.readFileRaw(accessToken, fileId);
+  const buffer = await res.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+  const ext = fileName.includes(".") ? fileName.split(".").pop()! : "";
+  const name = fileName.includes(".") ? fileName.slice(0, fileName.lastIndexOf(".")) : fileName;
+  const fileData: FileExplorerData = {
+    id: fileId,
+    path: fileName,
+    basename: fileName,
+    name,
+    extension: ext,
+    mimeType,
+    contentType: "binary",
+    data: base64,
+  };
+  return JSON.stringify(fileData);
+}
 
 // Handle drive-file node (was: note) - write content to a Drive file
 export async function handleDriveFileNode(
@@ -126,8 +166,13 @@ export async function handleDriveReadNode(
 
   // Check if path is a Drive file ID (alphanumeric + hyphens/underscores, 20+ chars)
   if (/^[a-zA-Z0-9_-]{20,}$/.test(path)) {
-    const content = await driveService.readFile(accessToken, path);
-    context.variables.set(saveTo, content);
+    const meta = await driveService.getFileMetadata(accessToken, path);
+    if (isBinaryMimeType(meta.mimeType)) {
+      context.variables.set(saveTo, await readFileAsExplorerData(accessToken, path, meta.name, meta.mimeType));
+    } else {
+      const content = await driveService.readFile(accessToken, path);
+      context.variables.set(saveTo, content);
+    }
     return;
   }
 
@@ -136,8 +181,13 @@ export async function handleDriveReadNode(
   if (varMatch) {
     const fileId = context.variables.get(`${varMatch[1]}_fileId`);
     if (fileId && typeof fileId === "string") {
-      const content = await driveService.readFile(accessToken, fileId);
-      context.variables.set(saveTo, content);
+      const meta = await driveService.getFileMetadata(accessToken, fileId);
+      if (isBinaryMimeType(meta.mimeType)) {
+        context.variables.set(saveTo, await readFileAsExplorerData(accessToken, fileId, meta.name, meta.mimeType));
+      } else {
+        const content = await driveService.readFile(accessToken, fileId);
+        context.variables.set(saveTo, content);
+      }
       return;
     }
   }
@@ -157,6 +207,10 @@ export async function handleDriveReadNode(
 
   if (!file) throw new Error(`File not found on Drive: ${path}`);
 
-  const content = await driveService.readFile(accessToken, file.id);
-  context.variables.set(saveTo, content);
+  if (isBinaryMimeType(file.mimeType)) {
+    context.variables.set(saveTo, await readFileAsExplorerData(accessToken, file.id, file.name, file.mimeType));
+  } else {
+    const content = await driveService.readFile(accessToken, file.id);
+    context.variables.set(saveTo, content);
+  }
 }

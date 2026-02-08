@@ -1,4 +1,6 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
+import type { McpAppInfo } from "~/types/chat";
+import type { McpAppResult, McpAppUiResource } from "~/types/settings";
 import { replaceVariables } from "./utils";
 
 // Handle MCP node - call remote MCP server tool via HTTP
@@ -6,7 +8,7 @@ export async function handleMcpNode(
   node: WorkflowNode,
   context: ExecutionContext,
   _serviceContext: ServiceContext
-): Promise<void> {
+): Promise<McpAppInfo | undefined> {
   const url = replaceVariables(node.properties["url"] || "", context);
   const toolName = replaceVariables(node.properties["tool"] || "", context);
   const argsStr = node.properties["args"] || "";
@@ -83,10 +85,22 @@ export async function handleMcpNode(
     context.variables.set(saveTo, JSON.stringify(result.result || result));
   }
 
-  // Check for UI resource metadata and save if saveUiTo is set
+  // Check for UI resource metadata
   const saveUiTo = node.properties["saveUiTo"];
-  if (saveUiTo && result.result?._meta?.ui?.resourceUri) {
+  let mcpAppInfo: McpAppInfo | undefined;
+
+  if (result.result?._meta?.ui?.resourceUri) {
     const resourceUri = result.result._meta.ui.resourceUri;
+    const toolResult: McpAppResult = {
+      content: Array.isArray(content)
+        ? content.map((c: { type: string; text?: string }) => ({
+            type: c.type as "text" | "image" | "resource",
+            text: c.text,
+          }))
+        : [],
+      _meta: { ui: { resourceUri } },
+    };
+
     try {
       // Fetch the UI resource from the MCP server
       const uiResponse = await fetch(url, {
@@ -103,18 +117,45 @@ export async function handleMcpNode(
           id: Date.now(),
         }),
       });
+
+      let uiResource: McpAppUiResource | undefined;
       if (uiResponse.ok) {
         const uiResult = await uiResponse.json();
         const uiContent = uiResult.result?.contents?.[0];
         if (uiContent) {
-          context.variables.set(saveUiTo, JSON.stringify({
-            serverUrl: url,
-            resourceUri,
+          uiResource = {
+            uri: resourceUri,
             mimeType: uiContent.mimeType || "text/html",
-            content: uiContent.text || uiContent.blob || "",
-          }));
+            text: uiContent.text,
+            blob: uiContent.blob,
+          };
+
+          // Save to variable if saveUiTo is set
+          if (saveUiTo) {
+            context.variables.set(saveUiTo, JSON.stringify({
+              serverUrl: url,
+              resourceUri,
+              mimeType: uiContent.mimeType || "text/html",
+              content: uiContent.text || uiContent.blob || "",
+            }));
+          }
         }
       }
-    } catch { /* UI resource fetch is non-fatal */ }
+
+      mcpAppInfo = {
+        serverUrl: url,
+        toolResult,
+        uiResource: uiResource || null,
+      };
+    } catch {
+      // UI resource fetch is non-fatal; still create McpAppInfo without resource
+      mcpAppInfo = {
+        serverUrl: url,
+        toolResult,
+        uiResource: null,
+      };
+    }
   }
+
+  return mcpAppInfo;
 }

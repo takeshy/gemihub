@@ -2,6 +2,7 @@ import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
 import { uploadDriveFile, getOrCreateStore } from "~/services/file-search.server";
+import { DEFAULT_RAG_SETTING } from "~/types/settings";
 
 // Handle rag-sync node - sync a Drive file to a RAG store
 export async function handleRagSyncNode(
@@ -36,6 +37,21 @@ export async function handleRagSyncNode(
   // Get or create the RAG store
   const storeName = await getOrCreateStore(apiKey, ragSettingName);
 
+  // Update in-memory settings so subsequent command nodes can find the store ID
+  if (serviceContext.settings) {
+    if (!serviceContext.settings.ragSettings) {
+      serviceContext.settings.ragSettings = {};
+    }
+    if (!serviceContext.settings.ragSettings[ragSettingName]) {
+      serviceContext.settings.ragSettings[ragSettingName] = { ...DEFAULT_RAG_SETTING };
+    }
+    const rs = serviceContext.settings.ragSettings[ragSettingName];
+    rs.storeName = storeName;
+    if (!rs.storeId) {
+      rs.storeId = storeName;
+    }
+  }
+
   // Upload the file to the RAG store
   const fileId = await uploadDriveFile(apiKey, accessToken, file.id, file.name, storeName);
 
@@ -43,6 +59,7 @@ export async function handleRagSyncNode(
     path,
     ragSetting: ragSettingName,
     fileId: fileId || file.id,
+    storeName,
     mode: "upload",
     syncedAt: new Date().toISOString(),
   };

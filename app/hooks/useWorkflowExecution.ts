@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import type { McpAppInfo } from "~/types/chat";
 
 interface LogEntry {
   nodeId: string;
@@ -6,6 +7,7 @@ interface LogEntry {
   message: string;
   status: "info" | "success" | "error";
   timestamp: string;
+  mcpApps?: McpAppInfo[];
 }
 
 type ExecutionHookStatus =

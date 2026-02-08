@@ -176,6 +176,24 @@ export async function executeWorkflow(
           const promptPreview = (node.properties["prompt"] || "").substring(0, 50);
           log(node.id, node.type, `Executing LLM: ${promptPreview}...`, "info");
           const cmdResult = await handleCommandNode(node, context, serviceContext, promptCallbacks);
+          // Log attachments
+          if (cmdResult.attachmentNames && cmdResult.attachmentNames.length > 0) {
+            log(node.id, node.type, `Attachments: ${cmdResult.attachmentNames.join(", ")}`, "info");
+          }
+          // Log tool calls
+          if (cmdResult.toolCalls) {
+            for (const tc of cmdResult.toolCalls) {
+              log(node.id, node.type, `Tool: ${tc.name}`, "info", tc.args, tc.result);
+            }
+          }
+          // Log RAG sources
+          if (cmdResult.ragSources && cmdResult.ragSources.length > 0) {
+            log(node.id, node.type, `RAG sources: ${cmdResult.ragSources.join(", ")}`, "info");
+          }
+          // Log web search sources
+          if (cmdResult.webSearchSources && cmdResult.webSearchSources.length > 0) {
+            log(node.id, node.type, `Web search: ${cmdResult.webSearchSources.join(", ")}`, "info");
+          }
           const saveTo = node.properties["saveTo"];
           const output = saveTo ? context.variables.get(saveTo) : undefined;
           log(node.id, node.type, `LLM completed (${cmdResult.usedModel})`, "success",
@@ -371,10 +389,11 @@ export async function executeWorkflow(
           const mcpUrl = replaceVariables(node.properties["url"] || "", context);
           const mcpTool = replaceVariables(node.properties["tool"] || "", context);
           log(node.id, node.type, `MCP: ${mcpTool} @ ${mcpUrl}`, "info");
-          await handleMcpNode(node, context, serviceContext);
+          const mcpAppInfo = await handleMcpNode(node, context, serviceContext);
           const mcpSaveTo = node.properties["saveTo"];
           const mcpResult = mcpSaveTo ? context.variables.get(mcpSaveTo) : undefined;
-          log(node.id, node.type, `MCP completed`, "success", { url: mcpUrl, tool: mcpTool }, mcpResult);
+          const mcpApps = mcpAppInfo ? [mcpAppInfo] : undefined;
+          log(node.id, node.type, `MCP completed`, "success", { url: mcpUrl, tool: mcpTool }, mcpResult, mcpApps);
           addHistoryStep(node.id, node.type, { url: mcpUrl, tool: mcpTool }, mcpResult);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });

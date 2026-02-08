@@ -45,11 +45,10 @@ export async function action({ request, params }: Route.ActionArgs) {
         }
       } catch { /* ignore parse errors */ }
 
-      // Load settings for edit history
-      let editHistorySettings;
+      // Load settings for edit history and command node tools
+      let settings;
       try {
-        const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-        editHistorySettings = settings.editHistory;
+        settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       } catch { /* ignore */ }
 
       const serviceContext: ServiceContext = {
@@ -58,7 +57,8 @@ export async function action({ request, params }: Route.ActionArgs) {
         driveHistoryFolderId: driveContext.historyFolderId,
         geminiApiKey: validTokens.geminiApiKey,
         abortSignal: executionState.abortController.signal,
-        editHistorySettings,
+        editHistorySettings: settings?.editHistory,
+        settings,
       };
 
       const promptCallbacks: PromptCallbacks = {

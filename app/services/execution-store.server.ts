@@ -47,6 +47,7 @@ export function addLog(executionId: string, log: ExecutionLog): void {
     timestamp: log.timestamp.toISOString(),
     input: log.input,
     output: log.output,
+    mcpApps: log.mcpApps,
   }));
 }
 
@@ -130,6 +131,7 @@ export function subscribe(
       timestamp: log.timestamp.toISOString(),
       input: log.input,
       output: log.output,
+      mcpApps: log.mcpApps,
     }));
   }
 
