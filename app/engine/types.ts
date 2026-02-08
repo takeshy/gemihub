@@ -16,9 +16,12 @@ export type WorkflowNodeType =
   | "drive-save"       // was: file-save
   | "preview"          // was: open
   | "dialog"
-  | "prompt-value"     // was: prompt-file + prompt-selection
+  | "prompt-value"
+  | "prompt-file"
+  | "prompt-selection"
   | "workflow"
   | "mcp"
+  | "rag-sync"
   | "sleep";
 
 export interface WorkflowNode {
@@ -60,6 +63,7 @@ export interface ExecutionLog {
   status: "info" | "success" | "error";
   input?: Record<string, unknown>;
   output?: unknown;
+  mcpApps?: import("~/types/chat").McpAppInfo[];
 }
 
 export interface LastCommandInfo {
@@ -204,4 +208,5 @@ export interface ServiceContext {
   geminiApiKey?: string;
   abortSignal?: AbortSignal;
   editHistorySettings?: import("~/types/settings").EditHistorySettings;
+  settings?: import("~/types/settings").UserSettings;
 }

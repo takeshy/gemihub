@@ -114,6 +114,28 @@ export async function handleHttpNode(
       } catch {
         throw new Error("form-data contentType requires valid JSON object body");
       }
+    } else if (contentType === "binary") {
+      // Parse body as FileExplorerData, decode base64, send with mimeType
+      const resolved = replaceVariables(bodyStr, context);
+      const fileData = tryParseFileExplorerData(resolved);
+      if (fileData && fileData.contentType === "binary") {
+        body = Buffer.from(fileData.data, "base64");
+        if (!headers["Content-Type"]) headers["Content-Type"] = fileData.mimeType;
+      } else {
+        // Try as raw variable reference
+        const varVal = context.variables.get(resolved);
+        if (varVal && typeof varVal === "string") {
+          const varFileData = tryParseFileExplorerData(varVal);
+          if (varFileData && varFileData.contentType === "binary") {
+            body = Buffer.from(varFileData.data, "base64");
+            if (!headers["Content-Type"]) headers["Content-Type"] = varFileData.mimeType;
+          } else {
+            throw new Error("binary contentType requires FileExplorerData with contentType: 'binary'");
+          }
+        } else {
+          throw new Error("binary contentType requires FileExplorerData body");
+        }
+      }
     } else if (contentType === "text") {
       body = replaceVariables(bodyStr, context);
       if (!headers["Content-Type"]) headers["Content-Type"] = "text/plain";

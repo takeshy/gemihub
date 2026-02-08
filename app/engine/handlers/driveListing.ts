@@ -2,6 +2,18 @@ import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import { replaceVariables } from "./utils";
 import { getFileListFromMeta } from "~/services/sync-meta.server";
 
+function parseDuration(duration: string): number | null {
+  const match = duration.match(/^(\d+)\s*(d|h|m)$/);
+  if (!match) return null;
+  const num = parseInt(match[1], 10);
+  switch (match[2]) {
+    case "d": return num * 24 * 60 * 60 * 1000;
+    case "h": return num * 60 * 60 * 1000;
+    case "m": return num * 60 * 1000;
+    default: return null;
+  }
+}
+
 // Handle drive-list node (was: note-list)
 export async function handleDriveListNode(
   node: WorkflowNode,
@@ -11,6 +23,12 @@ export async function handleDriveListNode(
   const folder = replaceVariables(node.properties["folder"] || "", context);
   const limitStr = node.properties["limit"] || "50";
   const limit = parseInt(limitStr, 10) || 50;
+  const sortBy = replaceVariables(node.properties["sortBy"] || "modified", context);
+  const sortOrder = replaceVariables(node.properties["sortOrder"] || "desc", context);
+  const modifiedWithin = node.properties["modifiedWithin"]
+    ? replaceVariables(node.properties["modifiedWithin"], context) : undefined;
+  const createdWithin = node.properties["createdWithin"]
+    ? replaceVariables(node.properties["createdWithin"], context) : undefined;
   const saveTo = node.properties["saveTo"];
 
   if (!saveTo) throw new Error("drive-list node missing 'saveTo' property");
@@ -22,9 +40,51 @@ export async function handleDriveListNode(
 
   // Filter by virtual folder prefix
   const prefix = folder ? folder + "/" : "";
-  const filtered = folder
+  let filtered = folder
     ? allFiles.filter(f => f.name.startsWith(prefix))
     : allFiles;
+
+  // Time-based filters
+  const now = Date.now();
+  if (modifiedWithin) {
+    const ms = parseDuration(modifiedWithin);
+    if (ms) {
+      const cutoff = now - ms;
+      filtered = filtered.filter(f =>
+        f.modifiedTime && new Date(f.modifiedTime).getTime() >= cutoff
+      );
+    }
+  }
+  if (createdWithin) {
+    const ms = parseDuration(createdWithin);
+    if (ms) {
+      const cutoff = now - ms;
+      filtered = filtered.filter(f =>
+        f.createdTime && new Date(f.createdTime).getTime() >= cutoff
+      );
+    }
+  }
+
+  // Sort
+  filtered.sort((a, b) => {
+    let aVal: string | number = 0;
+    let bVal: string | number = 0;
+    if (sortBy === "name") {
+      aVal = a.name.toLowerCase();
+      bVal = b.name.toLowerCase();
+    } else if (sortBy === "created") {
+      aVal = a.createdTime ? new Date(a.createdTime).getTime() : 0;
+      bVal = b.createdTime ? new Date(b.createdTime).getTime() : 0;
+    } else {
+      // "modified" (default)
+      aVal = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0;
+      bVal = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0;
+    }
+    if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+    return 0;
+  });
+
   const limitedFiles = filtered.slice(0, limit);
 
   const results = limitedFiles.map(f => ({

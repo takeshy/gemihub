@@ -2,14 +2,15 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { WorkflowNode, WorkflowNodeType } from "~/engine/types";
-import { getNodePropertyDefs } from "~/utils/workflow-node-properties";
+import { getNodePropertyDefs, type NodePropertyContext } from "~/utils/workflow-node-properties";
 import { getNodeTypeLabel } from "~/utils/workflow-node-summary";
 
 const ALL_NODE_TYPES: WorkflowNodeType[] = [
   "variable", "set", "if", "while", "command", "http", "json",
   "drive-file", "drive-read", "drive-search", "drive-list",
   "drive-folder-list", "drive-file-picker", "drive-save",
-  "preview", "dialog", "prompt-value", "workflow", "mcp", "sleep",
+  "preview", "dialog", "prompt-value", "prompt-file", "prompt-selection",
+  "workflow", "mcp", "rag-sync", "sleep",
 ];
 
 interface NodeEditorModalProps {
@@ -19,6 +20,7 @@ interface NodeEditorModalProps {
   onSave: (node: WorkflowNode, nextInfo: { next?: string; trueNext?: string; falseNext?: string }) => void;
   onCancel: () => void;
   initialNext?: { next?: string; trueNext?: string; falseNext?: string };
+  propertyContext?: NodePropertyContext;
 }
 
 export function NodeEditorModal({
@@ -28,6 +30,7 @@ export function NodeEditorModal({
   onSave,
   onCancel,
   initialNext,
+  propertyContext,
 }: NodeEditorModalProps) {
   const isNew = !node?.id || !existingNodeIds.includes(node.id);
 
@@ -42,15 +45,17 @@ export function NodeEditorModal({
   const [idError, setIdError] = useState("");
 
   const isConditional = type === "if" || type === "while";
-  const propDefs = getNodePropertyDefs(type);
+  const propDefs = getNodePropertyDefs(type, propertyContext);
 
   useEffect(() => {
     // Reset properties when type changes (keep properties that match new type)
     const newProps: Record<string, string> = {};
-    const newDefs = getNodePropertyDefs(type);
+    const newDefs = getNodePropertyDefs(type, propertyContext);
     for (const def of newDefs) {
       if (properties[def.key] !== undefined) {
         newProps[def.key] = properties[def.key];
+      } else if (def.defaultValue !== undefined) {
+        newProps[def.key] = def.defaultValue;
       }
     }
     setProperties(newProps);
@@ -157,13 +162,13 @@ export function NodeEditorModal({
               </label>
               {def.options ? (
                 <select
-                  value={properties[def.key] || ""}
+                  value={properties[def.key] || def.defaultValue || ""}
                   onChange={(e) =>
                     setProperties((p) => ({ ...p, [def.key]: e.target.value }))
                   }
                   className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs dark:border-gray-600 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 >
-                  <option value="">—</option>
+                  {def.defaultValue === undefined && <option value="">—</option>}
                   {def.options.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}

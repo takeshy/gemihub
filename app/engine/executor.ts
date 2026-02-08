@@ -17,9 +17,10 @@ import { handleDriveSearchNode } from "./handlers/driveSearch";
 import { handleDriveListNode, handleDriveFolderListNode } from "./handlers/driveListing";
 import { handleDriveSaveNode } from "./handlers/driveSave";
 import { handleCommandNode } from "./handlers/command";
-import { handlePromptValueNode, handleDialogNode, handlePreviewNode, handleDriveFilePickerNode } from "./handlers/prompt";
+import { handlePromptValueNode, handlePromptFileNode, handlePromptSelectionNode, handleDialogNode, handlePreviewNode, handleDriveFilePickerNode } from "./handlers/prompt";
 import { handleWorkflowNode, handleJsonNode } from "./handlers/integration";
 import { handleMcpNode } from "./handlers/mcp";
+import { handleRagSyncNode } from "./handlers/ragSync";
 
 const MAX_ITERATIONS = 1000;
 
@@ -66,10 +67,11 @@ export async function executeWorkflow(
     message: string,
     status: ExecutionLog["status"] = "info",
     input?: Record<string, unknown>,
-    output?: unknown
+    output?: unknown,
+    mcpApps?: import("~/types/chat").McpAppInfo[]
   ) => {
     const logEntry: ExecutionLog = {
-      nodeId, nodeType, message, timestamp: new Date(), status, input, output,
+      nodeId, nodeType, message, timestamp: new Date(), status, input, output, mcpApps,
     };
     context.logs.push(logEntry);
     onLog?.(logEntry);
@@ -177,7 +179,7 @@ export async function executeWorkflow(
           const saveTo = node.properties["saveTo"];
           const output = saveTo ? context.variables.get(saveTo) : undefined;
           log(node.id, node.type, `LLM completed (${cmdResult.usedModel})`, "success",
-            { prompt: node.properties["prompt"], model: cmdResult.usedModel }, output);
+            { prompt: node.properties["prompt"], model: cmdResult.usedModel }, output, cmdResult.mcpApps);
           addHistoryStep(node.id, node.type, { model: cmdResult.usedModel }, output);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
@@ -328,6 +330,32 @@ export async function executeWorkflow(
           break;
         }
 
+        case "prompt-file": {
+          const pfTitle = node.properties["title"] || "Select a file";
+          log(node.id, node.type, `Prompt file: ${pfTitle}`, "info");
+          await handlePromptFileNode(node, context, serviceContext, promptCallbacks);
+          const pfSaveTo = node.properties["saveTo"];
+          const pfResult = pfSaveTo ? context.variables.get(pfSaveTo) : undefined;
+          log(node.id, node.type, `File selected`, "success", { title: pfTitle }, pfResult);
+          addHistoryStep(node.id, node.type, { title: pfTitle }, pfResult);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "prompt-selection": {
+          const psTitle = node.properties["title"] || "Input";
+          log(node.id, node.type, `Prompt selection: ${psTitle}`, "info");
+          await handlePromptSelectionNode(node, context, serviceContext, promptCallbacks);
+          const psSaveTo = node.properties["saveTo"];
+          const psResult = psSaveTo ? context.variables.get(psSaveTo) : undefined;
+          log(node.id, node.type, `Selection received`, "success", { title: psTitle }, psResult);
+          addHistoryStep(node.id, node.type, { title: psTitle }, psResult);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
         case "workflow": {
           const subPath = replaceVariables(node.properties["path"] || "", context);
           log(node.id, node.type, `Sub-workflow: ${subPath}`, "info");
@@ -348,6 +376,20 @@ export async function executeWorkflow(
           const mcpResult = mcpSaveTo ? context.variables.get(mcpSaveTo) : undefined;
           log(node.id, node.type, `MCP completed`, "success", { url: mcpUrl, tool: mcpTool }, mcpResult);
           addHistoryStep(node.id, node.type, { url: mcpUrl, tool: mcpTool }, mcpResult);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "rag-sync": {
+          const ragPath = replaceVariables(node.properties["path"] || "", context);
+          const ragSettingName = replaceVariables(node.properties["ragSetting"] || "", context);
+          log(node.id, node.type, `RAG sync: ${ragPath} → ${ragSettingName}`, "info");
+          await handleRagSyncNode(node, context, serviceContext);
+          const ragSaveTo = node.properties["saveTo"];
+          const ragResult = ragSaveTo ? context.variables.get(ragSaveTo) : undefined;
+          log(node.id, node.type, `RAG sync completed`, "success", { path: ragPath, ragSetting: ragSettingName }, ragResult);
+          addHistoryStep(node.id, node.type, { path: ragPath }, ragResult);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;

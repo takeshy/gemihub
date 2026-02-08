@@ -37,10 +37,16 @@ export function getNodeSummary(node: WorkflowNode): string {
       return truncate(p.title || p.message || "", 60);
     case "prompt-value":
       return truncate(p.title || "", 60);
+    case "prompt-file":
+      return truncate(p.title || "", 60);
+    case "prompt-selection":
+      return truncate(p.title || "", 60);
     case "workflow":
       return p.path || p.name || "";
     case "mcp":
       return p.tool ? `${truncate(p.url || "", 20)}:${p.tool}` : "";
+    case "rag-sync":
+      return p.path ? `${truncate(p.path, 30)} → ${p.ragSetting || ""}` : "";
     case "sleep":
       return p.duration ? `${p.duration}ms` : "";
     default:
@@ -72,8 +78,11 @@ export function getNodeTypeLabel(type: WorkflowNodeType): string {
     preview: "Preview",
     dialog: "Dialog",
     "prompt-value": "Prompt",
+    "prompt-file": "File Prompt",
+    "prompt-selection": "Selection",
     workflow: "Workflow",
     mcp: "MCP",
+    "rag-sync": "RAG Sync",
     sleep: "Sleep",
   };
   return labels[type] || type;
@@ -104,12 +113,15 @@ export function getNodeTypeColor(type: WorkflowNodeType): string {
     // Interactive: amber
     case "dialog":
     case "prompt-value":
+    case "prompt-file":
+    case "prompt-selection":
     case "preview":
       return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300";
     // External: cyan
     case "http":
     case "json":
     case "mcp":
+    case "rag-sync":
       return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300";
     // Sub-workflow: indigo
     case "workflow":

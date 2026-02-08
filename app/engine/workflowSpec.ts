@@ -18,7 +18,9 @@ export function getWorkflowSpecification(context?: WorkflowSpecContext): string 
   const models = getAvailableModels(context?.apiPlan ?? "paid");
   const modelList = buildModelList(models);
   const mcpSection = buildMcpSection(context?.mcpServers);
-  const ragSection = buildRagSection(context?.ragSettingNames);
+  const mcpServerList = buildMcpServerList(context?.mcpServers);
+  const commandRagSection = buildCommandRagSection(context?.ragSettingNames);
+  const ragSyncSection = buildRagSyncSection(context?.ragSettingNames);
 
   return `
 # Gemini Hub Workflow Specification
@@ -46,8 +48,16 @@ nodes:
 - Object: \`{{obj.property}}\`, \`{{obj.nested.value}}\`
 - Array: \`{{arr[0]}}\`, \`{{arr[0].name}}\`
 - Variable index: \`{{arr[index]}}\` (where index is a variable)
-- JSON escape: \`{{variable:json}}\` for embedding in JSON strings
+- JSON escape: \`{{variable:json}}\` for embedding in JSON strings (escapes quotes, newlines, etc.)
 - Expression (in set node): \`{{a}} + {{b}}\`, operators: +, -, *, /, %
+
+Example — JSON escape usage:
+\`\`\`yaml
+- id: build-json
+  type: set
+  name: payload
+  value: '{"content": "{{userInput:json}}"}'
+\`\`\`
 
 ## Condition Syntax
 Operators: ==, !=, <, >, <=, >=, contains
@@ -85,59 +95,87 @@ Loop while condition is true.
 
 #### sleep
 Pause execution.
-- **duration** (required): Sleep duration in milliseconds
+- **duration** (required): Sleep duration in milliseconds (supports {{variables}})
 
 ### AI & LLM
 
 #### command
-Execute LLM prompt via Gemini API.
+Execute LLM prompt via Gemini API with optional tools.
 - **prompt** (required): Prompt template (supports {{variables}})
 - **model** (optional): Model override${modelList}
+- **ragSetting** (optional): "__websearch__", "__none__", or RAG setting name${commandRagSection}
+- **driveToolMode** (optional): "all", "noSearch", "none" (default: "none")
+- **mcpServers** (optional): Comma-separated MCP server names${mcpServerList}
+- **systemPrompt** (optional): System prompt override
+- **attachments** (optional): Comma-separated variable names containing FileExplorerData (images, PDFs, etc.)
 - **saveTo** (optional): Variable for text response
-${ragSection}
+- **saveImageTo** (optional): Variable for generated image (FileExplorerData JSON) — use with image generation models
+
 ### Google Drive Operations
 
 #### drive-file
 Write/create file on Drive.
 - **path** (required): File name/path (supports {{variables}})
 - **content** (required): Content to write (supports {{variables}})
-- **mode** (optional): overwrite (default), append, create
+- **mode** (optional): "overwrite" (default), "append", "create"
+- **confirm** (optional): "true"/"false" — show confirmation dialog before write
+- **history** (optional): "true"/"false" — record edit in edit history
 
 #### drive-read
 Read file from Drive.
 - **path** (required): File name or Drive file ID
-- **saveTo** (required): Variable for content
+- **saveTo** (required): Variable for content (string)
 
 #### drive-search
 Search files on Drive.
 - **query** (required): Search query
-- **searchContent** (optional): "true"/"false" (default: "false")
-- **saveTo** (required): Variable for results (JSON array)
+- **searchContent** (optional): "true"/"false" (default: "false") — search inside file content
+- **limit** (optional): Maximum results to return (default: 10)
+- **saveTo** (required): Variable for results — JSON array: \`[{id, name, modifiedTime}]\`
 
 #### drive-list
 List files in folder.
-- **folder** (optional): Folder name
-- **limit** (optional): Max results (default: "50")
+- **folder** (optional): Folder name (virtual path prefix)
+- **limit** (optional): Max results (default: 50)
+- **sortBy** (optional): "modified" (default), "created", "name"
+- **sortOrder** (optional): "desc" (default), "asc"
+- **modifiedWithin** (optional): Time filter, e.g. "7d", "2h", "30m"
+- **createdWithin** (optional): Time filter, e.g. "30d"
 - **saveTo** (required): Variable for results
 
+Result structure:
+\`\`\`json
+{"notes": [{id, name, modifiedTime, createdTime}], "count": 5, "totalCount": 100, "hasMore": true}
+\`\`\`
+Access: \`{{fileList.notes[index].name}}\`, \`{{fileList.count}}\`, \`{{fileList.hasMore}}\`
+
 #### drive-folder-list
-List folders.
+List virtual folders.
 - **folder** (optional): Parent folder
 - **saveTo** (required): Variable for results
 
+Result structure:
+\`\`\`json
+{"folders": [{"name": "subfolder"}], "count": 3}
+\`\`\`
+
 #### drive-file-picker
-File picker dialog.
+Interactive file picker dialog.
 - **title** (optional): Dialog title
-- **path** (optional): Direct path (skip dialog)
-- **extensions** (optional): Comma-separated extensions
-- **saveTo** (optional): Variable for file data
-- **savePathTo** (optional): Variable for file path
+- **mode** (optional): "select" (default) — pick existing file; "create" — enter new path
+- **default** (optional): Default path value
+- **path** (optional): Direct path (skip dialog entirely)
+- **extensions** (optional): Comma-separated extensions filter
+- **saveTo** (optional): Variable for FileExplorerData JSON
+- **savePathTo** (optional): Variable for file path string
+
+FileExplorerData structure: \`{id, path, basename, name, extension, mimeType, contentType, data}\`
 
 #### drive-save
-Save FileExplorerData to Drive.
-- **source** (required): Variable containing FileExplorerData
+Save FileExplorerData (e.g., from HTTP download or image generation) to Drive.
+- **source** (required): Variable containing FileExplorerData JSON
 - **path** (required): Save path
-- **savePathTo** (optional): Variable for final path
+- **savePathTo** (optional): Variable for final saved path
 
 #### preview
 Generate preview link.
@@ -148,42 +186,85 @@ Generate preview link.
 #### dialog
 Show dialog with options and optional text input.
 - **title** (optional): Dialog title
-- **message** (optional): Message content
-- **markdown** (optional): "true"/"false"
-- **options** (optional): Comma-separated options
-- **multiSelect** (optional): "true"/"false"
-- **inputTitle** (optional): Label for text input field
-- **multiline** (optional): "true"/"false"
+- **message** (optional): Message content (supports {{variables}})
+- **markdown** (optional): "true"/"false" — render message as markdown
+- **options** (optional): Comma-separated options for selection
+- **multiSelect** (optional): "true"/"false" — allow multiple selections
+- **inputTitle** (optional): Label for text input field (adds a text input to dialog)
+- **multiline** (optional): "true"/"false" — multiline text input
 - **button1** (optional): Primary button text (default: "OK")
-- **button2** (optional): Secondary button text
+- **button2** (optional): Secondary button text (e.g., "Cancel")
+- **defaults** (optional): JSON string with defaults: \`{"input": "text", "selected": ["opt1"]}\`
 - **saveTo** (optional): Variable for result JSON
+
+Result structure: \`{"button": "OK", "selected": ["opt1", "opt2"], "input": "text"}\`
+
+IMPORTANT: To check which button was pressed, use:
+\`\`\`yaml
+condition: "{{dialogResult}} contains \\"button\\":\\"OK\\""
+\`\`\`
+To check selected items: \`"{{dialogResult}} contains \\"opt1\\""\`
 
 #### prompt-value
 Prompt user for text input.
 - **title** (optional): Dialog title
-- **default** (optional): Default value
+- **default** (optional): Default value (supports {{variables}})
 - **multiline** (optional): "true"/"false"
-- **saveTo** (required): Variable for input value
+- **saveTo** (required): Variable for input value (string)
+
+#### prompt-file
+Prompt user to select a file from Drive. Returns file **content** as a string.
+- **default** (optional): Default prompt text
+- **saveTo** (optional): Variable for file content (string)
+- **saveFileTo** (optional): Variable for file metadata JSON: \`{path, basename, name, extension}\`
+
+#### prompt-selection
+Prompt user for multiline text input (e.g., a text selection or passage).
+- **title** (optional): Dialog title
+- **saveTo** (required): Variable for input text (string)
 
 ### External Services
 
 #### http
 Make HTTP request.
-- **url** (required): Request URL
+- **url** (required): Request URL (supports {{variables}})
 - **method** (optional): GET, POST, PUT, DELETE, PATCH
-- **contentType** (optional): "json", "form-data", "text"
-- **headers** (optional): JSON headers
-- **body** (optional): Request body
-- **saveTo** (optional): Variable for response
-- **saveStatus** (optional): Variable for status code
-- **throwOnError** (optional): "true" to throw on 4xx/5xx
+- **contentType** (optional): "json" (default), "text", "form-data", "binary"
+  - "json": Body sent as JSON with application/json Content-Type
+  - "text": Body sent as plain text
+  - "form-data": Body is JSON object of field→value pairs (supports FileExplorerData for file uploads)
+  - "binary": Body is a FileExplorerData variable; decoded from base64 and sent with its mimeType
+- **headers** (optional): JSON headers string
+- **body** (optional): Request body (supports {{variables}})
+- **saveTo** (optional): Variable for response (text, JSON, or FileExplorerData for binary)
+- **saveStatus** (optional): Variable for HTTP status code (number)
+- **throwOnError** (optional): "true" to throw error on 4xx/5xx status
+
+Form-data example with file upload:
+\`\`\`yaml
+- id: upload
+  type: http
+  url: "https://api.example.com/upload"
+  method: POST
+  contentType: form-data
+  body: '{"file:image.png": "{{imageData}}", "description": "My image"}'
+  saveTo: uploadResult
+\`\`\`
+
 ${mcpSection}
+#### rag-sync
+Sync a Drive file to a Gemini RAG (File Search) store.
+- **path** (required): File path on Drive
+- **ragSetting** (required): RAG setting name${ragSyncSection}
+- **saveTo** (optional): Variable for result JSON: \`{path, ragSetting, fileId, mode, syncedAt}\`
+
 ### Data Processing
 
 #### json
-Parse JSON string.
+Parse JSON and extract value using dot/bracket path.
 - **source** (required): Variable containing JSON string
-- **saveTo** (required): Variable for parsed object
+- **path** (required): JSON path (e.g., "$.items[0].name", "result.data")
+- **saveTo** (required): Variable for extracted value
 
 ### Integration
 
@@ -191,20 +272,37 @@ Parse JSON string.
 Execute sub-workflow.
 - **path** (required): Workflow file name
 - **name** (optional): Workflow name
-- **input** (optional): JSON mapping
-- **output** (optional): JSON mapping
+- **input** (optional): JSON mapping of parent→child variables
+- **output** (optional): JSON mapping of child→parent variables
 - **prefix** (optional): Prefix for imported variables
 
 ## Control Flow
 
 ### Sequential Flow
-Nodes execute in order. Use **next** to jump:
+Nodes execute in the order listed. Use **next** to jump to a specific node:
+\`\`\`yaml
+- id: step1
+  type: command
+  prompt: "First step"
+  saveTo: result1
+  next: step3
+- id: step2
+  type: command
+  prompt: "Skipped"
+  saveTo: result2
+- id: step3
+  type: command
+  prompt: "Jumped here from step1"
+  saveTo: result3
+\`\`\`
 
 ### Back-Reference Rule
 The \`next\` property can only reference earlier nodes if the target is a **while** node.
+- Valid: \`next: loop\` (where loop is a while node defined earlier)
+- Invalid: \`next: step1\` (where step1 is a non-while node defined earlier)
 
 ### Termination
-Use "end" to explicitly terminate: \`next: end\`
+Use "end" to explicitly terminate a branch: \`next: end\`
 
 ## Complete Loop Example
 \`\`\`yaml
@@ -241,6 +339,11 @@ nodes:
     message: "Processed {{index}} files"
 \`\`\`
 
+Loop key points:
+- Use \`{{fileList.notes[index].name}}\` to access array items by variable index
+- Use \`{{fileList.count}}\` for loop condition
+- Increment with set node and \`next: <while-node-id>\` to return to loop
+
 ## Best Practices
 1. Use descriptive node IDs (e.g., "fetch-data", "check-status" rather than "node-1", "node-2")
 2. Initialize variables before use
@@ -249,28 +352,34 @@ nodes:
 5. One task per command node — break complex tasks into multiple command nodes
 6. Use set node for counter operations in loops
 7. Use json node to parse structured API responses before accessing properties
+8. Use drive-file-picker when the user needs to choose a file interactively
+9. Use prompt-value for simple text input, prompt-selection for longer text, prompt-file when you need file content
+10. When building JSON payloads with user content, use \`{{variable:json}}\` to safely escape strings
 `;
 }
 
 function buildModelList(models: ModelInfo[]): string {
-  const nonImageModels = models.filter((m) => !m.isImageModel);
-  if (nonImageModels.length === 0) return "";
-  const list = nonImageModels
-    .map((m) => `  - \`${m.name}\` — ${m.description}`)
+  if (models.length === 0) return "";
+  const list = models
+    .map((m) => {
+      const tag = m.isImageModel ? " (image generation)" : "";
+      return `  - \`${m.name}\` — ${m.description}${tag}`;
+    })
     .join("\n");
   return `\n  Available models:\n${list}`;
 }
 
 function buildMcpSection(mcpServers?: McpServerConfig[]): string {
-  const enabled = mcpServers?.filter((s) => s.enabled) ?? [];
+  const enabled = mcpServers ?? [];
   if (enabled.length === 0) {
     return `#### mcp
-Call MCP server tool.
+Call MCP server tool via HTTP (Streamable HTTP transport).
 - **url** (required): MCP server endpoint URL
 - **tool** (required): Tool name
 - **args** (optional): JSON arguments
-- **headers** (optional): JSON headers
-- **saveTo** (optional): Variable for result
+- **headers** (optional): JSON headers for authentication
+- **saveTo** (optional): Variable for result text
+- **saveUiTo** (optional): Variable for UI resource data (if server returns _meta.ui.resourceUri)
 
 `;
   }
@@ -305,12 +414,23 @@ Call MCP server tool.
     .join("\n");
 
   return `#### mcp
-Call MCP server tool.
+Call MCP server tool via HTTP (Streamable HTTP transport).
 - **url** (required): MCP server endpoint URL
 - **tool** (required): Tool name
 - **args** (optional): JSON arguments
-- **headers** (optional): JSON headers
-- **saveTo** (optional): Variable for result
+- **headers** (optional): JSON headers for authentication
+- **saveTo** (optional): Variable for result text
+- **saveUiTo** (optional): Variable for UI resource data (if server returns _meta.ui.resourceUri)
+
+Example:
+\`\`\`yaml
+- id: call-tool
+  type: mcp
+  url: "http://localhost:3001"
+  tool: "search_documents"
+  args: '{"query": "{{searchQuery:json}}"}'
+  saveTo: searchResults
+\`\`\`
 
 Available MCP servers:
 ${serverSections}
@@ -318,15 +438,21 @@ ${serverSections}
 `;
 }
 
-function buildRagSection(ragSettingNames?: string[]): string {
+function buildMcpServerList(mcpServers?: McpServerConfig[]): string {
+  const enabled = mcpServers ?? [];
+  if (enabled.length === 0) return "";
+  const names = enabled.map((s) => `\`${s.name}\``).join(", ");
+  return `\n  Available: ${names}`;
+}
+
+function buildCommandRagSection(ragSettingNames?: string[]): string {
   if (!ragSettingNames || ragSettingNames.length === 0) return "";
+  const names = ragSettingNames.map((n) => `\`${n}\``).join(", ");
+  return `\n  Available RAG settings: ${names}`;
+}
 
-  const list = ragSettingNames.map((n) => `  - \`${n}\``).join("\n");
-  return `
-The command node also supports RAG (Retrieval-Augmented Generation):
-- **ragSettingName** (optional): Name of the RAG setting to use for context-aware responses
-  Available RAG settings:
-${list}
-
-`;
+function buildRagSyncSection(ragSettingNames?: string[]): string {
+  if (!ragSettingNames || ragSettingNames.length === 0) return "";
+  const names = ragSettingNames.map((n) => `\`${n}\``).join(", ");
+  return `\n  Available: ${names}`;
 }

@@ -82,4 +82,39 @@ export async function handleMcpNode(
   } else if (saveTo) {
     context.variables.set(saveTo, JSON.stringify(result.result || result));
   }
+
+  // Check for UI resource metadata and save if saveUiTo is set
+  const saveUiTo = node.properties["saveUiTo"];
+  if (saveUiTo && result.result?._meta?.ui?.resourceUri) {
+    const resourceUri = result.result._meta.ui.resourceUri;
+    try {
+      // Fetch the UI resource from the MCP server
+      const uiResponse = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        signal: AbortSignal.timeout(30_000),
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "resources/read",
+          params: { uri: resourceUri },
+          id: Date.now(),
+        }),
+      });
+      if (uiResponse.ok) {
+        const uiResult = await uiResponse.json();
+        const uiContent = uiResult.result?.contents?.[0];
+        if (uiContent) {
+          context.variables.set(saveUiTo, JSON.stringify({
+            serverUrl: url,
+            resourceUri,
+            mimeType: uiContent.mimeType || "text/html",
+            content: uiContent.text || uiContent.blob || "",
+          }));
+        }
+      }
+    } catch { /* UI resource fetch is non-fatal */ }
+  }
 }

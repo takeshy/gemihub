@@ -1,5 +1,6 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
+import * as driveService from "~/services/google-drive.server";
 
 // Handle prompt-value node (was: prompt-file + prompt-selection)
 // SSE-based: sends prompt request to client, waits for response
@@ -23,6 +24,77 @@ export async function handlePromptValueNode(
   }
 
   const result = await promptCallbacks.promptForValue(title, defaultValue, multiline);
+
+  if (result === null) {
+    throw new Error("Input cancelled by user");
+  }
+
+  context.variables.set(saveTo, result);
+}
+
+// Handle prompt-file node - file picker that returns content as string
+export async function handlePromptFileNode(
+  node: WorkflowNode,
+  context: ExecutionContext,
+  serviceContext: ServiceContext,
+  promptCallbacks?: PromptCallbacks
+): Promise<void> {
+  const defaultPath = node.properties["default"]
+    ? replaceVariables(node.properties["default"], context)
+    : undefined;
+  const saveTo = node.properties["saveTo"];
+  const saveFileTo = node.properties["saveFileTo"];
+
+  if (!saveTo && !saveFileTo) throw new Error("prompt-file node missing 'saveTo' or 'saveFileTo' property");
+
+  if (!promptCallbacks?.promptForDriveFile) {
+    throw new Error("Drive file picker callback not available");
+  }
+
+  const result = await promptCallbacks.promptForDriveFile(
+    defaultPath || "Select a file"
+  );
+  if (result === null) throw new Error("File selection cancelled by user");
+
+  // Read the file content
+  const accessToken = serviceContext.driveAccessToken;
+  const content = await driveService.readFile(accessToken, result.id);
+
+  if (saveTo) {
+    context.variables.set(saveTo, content);
+  }
+
+  if (saveFileTo) {
+    const basename = result.name;
+    const dotIdx = basename.lastIndexOf(".");
+    const name = dotIdx > 0 ? basename.substring(0, dotIdx) : basename;
+    const extension = dotIdx > 0 ? basename.substring(dotIdx + 1) : "";
+    context.variables.set(saveFileTo, JSON.stringify({
+      path: result.name,
+      basename,
+      name,
+      extension,
+    }));
+  }
+}
+
+// Handle prompt-selection node - multiline text input
+export async function handlePromptSelectionNode(
+  node: WorkflowNode,
+  context: ExecutionContext,
+  _serviceContext: ServiceContext,
+  promptCallbacks?: PromptCallbacks
+): Promise<void> {
+  const title = replaceVariables(node.properties["title"] || "Enter text", context);
+  const saveTo = node.properties["saveTo"];
+
+  if (!saveTo) throw new Error("prompt-selection node missing 'saveTo' property");
+
+  if (!promptCallbacks?.promptForValue) {
+    throw new Error("Prompt callback not available");
+  }
+
+  const result = await promptCallbacks.promptForValue(title, "", true);
 
   if (result === null) {
     throw new Error("Input cancelled by user");
@@ -113,9 +185,41 @@ export async function handleDriveFilePickerNode(
     : undefined;
   const saveTo = node.properties["saveTo"];
   const savePathTo = node.properties["savePathTo"];
+  const mode = node.properties["mode"] || "select";
+  const defaultValue = node.properties["default"]
+    ? replaceVariables(node.properties["default"], context)
+    : undefined;
 
   if (!saveTo && !savePathTo) {
     throw new Error("drive-file-picker node missing 'saveTo' or 'savePathTo'");
+  }
+
+  // "create" mode: prompt user for a path string instead of picking existing file
+  if (mode === "create") {
+    if (!promptCallbacks?.promptForValue) {
+      throw new Error("Prompt callback not available");
+    }
+    const path = await promptCallbacks.promptForValue(title, defaultValue);
+    if (path === null) throw new Error("File creation cancelled by user");
+
+    if (savePathTo) context.variables.set(savePathTo, path);
+    if (saveTo) {
+      const basename = path.includes("/") ? path.split("/").pop()! : path;
+      const dotIdx = basename.lastIndexOf(".");
+      const name = dotIdx > 0 ? basename.substring(0, dotIdx) : basename;
+      const extension = dotIdx > 0 ? basename.substring(dotIdx + 1) : "";
+      context.variables.set(saveTo, JSON.stringify({
+        id: "",
+        path,
+        basename,
+        name,
+        extension,
+        mimeType: "application/octet-stream",
+        contentType: "text",
+        data: "",
+      }));
+    }
+    return;
   }
 
   // If path is directly specified, use it

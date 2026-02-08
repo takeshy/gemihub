@@ -1,19 +1,37 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
+import { saveEdit } from "~/services/edit-history.server";
 
 // Handle drive-file node (was: note) - write content to a Drive file
 export async function handleDriveFileNode(
   node: WorkflowNode,
   context: ExecutionContext,
   serviceContext: ServiceContext,
-  _promptCallbacks?: PromptCallbacks
+  promptCallbacks?: PromptCallbacks
 ): Promise<void> {
   const path = replaceVariables(node.properties["path"] || "", context);
   const content = replaceVariables(node.properties["content"] || "", context);
   const mode = node.properties["mode"] || "overwrite";
+  const confirm = node.properties["confirm"];
+  const history = node.properties["history"];
 
   if (!path) throw new Error("drive-file node missing 'path' property");
+
+  // Confirm before writing if confirm is set and not "false"
+  if (confirm && confirm !== "false" && promptCallbacks?.promptForDialog) {
+    const confirmResult = await promptCallbacks.promptForDialog(
+      "Confirm Write",
+      `Write to "${path}"?`,
+      [],
+      false,
+      "OK",
+      "Cancel"
+    );
+    if (confirmResult === null || confirmResult.button === "Cancel") {
+      return; // User cancelled, skip write
+    }
+  }
 
   // Only append .md if path has no extension at all
   const baseName = path.includes("/") ? path.split("/").pop()! : path;
@@ -49,6 +67,14 @@ export async function handleDriveFileNode(
     existingFile = await driveService.findFileByExactName(accessToken, fileName) ?? undefined;
   }
 
+  // Read old content for history tracking
+  let oldContent = "";
+  if (history && history !== "false" && existingFile && serviceContext.editHistorySettings) {
+    try {
+      oldContent = await driveService.readFile(accessToken, existingFile.id);
+    } catch { /* file may not be readable */ }
+  }
+
   let finalContent = content;
   if (mode === "create") {
     if (existingFile) return; // File exists, skip
@@ -70,6 +96,17 @@ export async function handleDriveFileNode(
     }
   }
 
+  // Record edit history if enabled
+  if (history && history !== "false" && serviceContext.editHistorySettings) {
+    try {
+      await saveEdit(accessToken, folderId, serviceContext.editHistorySettings, {
+        path: fileName,
+        oldContent,
+        newContent: finalContent,
+        source: "workflow",
+      });
+    } catch { /* history recording is non-fatal */ }
+  }
 }
 
 // Handle drive-read node (was: note-read) - read file from Drive
