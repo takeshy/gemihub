@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { PanelRightClose, PanelRight } from "lucide-react";
+import { PanelRightClose, PanelRight, X } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 
 interface RightSidebarProps {
   children: React.ReactNode;
+  isMobile?: boolean;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+  mobileTitle?: string;
 }
 
 const COLLAPSED_KEY = "ide-right-sidebar-collapsed";
@@ -12,7 +16,7 @@ const DEFAULT_WIDTH = 360;
 const MIN_WIDTH = 240;
 const MAX_WIDTH = 800;
 
-export function RightSidebar({ children }: RightSidebarProps) {
+export function RightSidebar({ children, isMobile = false, mobileOpen = false, onMobileClose, mobileTitle }: RightSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const isDragging = useRef(false);
@@ -69,6 +73,26 @@ export function RightSidebar({ children }: RightSidebarProps) {
     document.addEventListener("mouseup", onMouseUp);
   }, [width]);
 
+  // Mobile: full-screen overlay
+  if (isMobile) {
+    if (!mobileOpen) return null;
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900">
+        <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-800">
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{mobileTitle || "Panel"}</span>
+          <button
+            onClick={onMobileClose}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          >
+            <X size={ICON.LG} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden flex flex-col">{children}</div>
+      </div>
+    );
+  }
+
+  // Desktop: resizable sidebar
   return (
     <div
       className={`relative flex flex-col border-l border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 transition-[width] ${

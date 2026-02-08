@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { PanelLeftClose, PanelLeft } from "lucide-react";
+import { PanelLeftClose, PanelLeft, X } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 
 interface LeftSidebarProps {
   children: React.ReactNode;
+  isMobile?: boolean;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 const COLLAPSED_KEY = "ide-left-sidebar-collapsed";
@@ -12,7 +15,7 @@ const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 600;
 
-export function LeftSidebar({ children }: LeftSidebarProps) {
+export function LeftSidebar({ children, isMobile = false, mobileOpen = false, onMobileClose }: LeftSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const isDragging = useRef(false);
@@ -68,6 +71,26 @@ export function LeftSidebar({ children }: LeftSidebarProps) {
     document.addEventListener("mouseup", onMouseUp);
   }, [width]);
 
+  // Mobile: full-screen overlay
+  if (isMobile) {
+    if (!mobileOpen) return null;
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col bg-white dark:bg-gray-900">
+        <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-800">
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Files</span>
+          <button
+            onClick={onMobileClose}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          >
+            <X size={ICON.LG} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-hidden">{children}</div>
+      </div>
+    );
+  }
+
+  // Desktop: resizable sidebar
   return (
     <div
       className={`relative flex flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 transition-[width] ${

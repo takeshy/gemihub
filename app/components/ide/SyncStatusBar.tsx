@@ -17,6 +17,7 @@ interface SyncStatusBarProps {
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   conflicts: ConflictInfo[];
+  compact?: boolean;
 }
 
 interface FileListItem {
@@ -34,6 +35,7 @@ export function SyncStatusBar({
   onShowConflicts,
   onSelectFile,
   conflicts,
+  compact = false,
 }: SyncStatusBarProps) {
   const conflictCount = conflicts.length;
   const isBusy = syncStatus === "pushing" || syncStatus === "pulling";
@@ -135,7 +137,7 @@ export function SyncStatusBar({
         className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
       >
         <ArrowUp size={ICON.SM} />
-        Push
+        {!compact && "Push"}
       </button>
       {pushCount > 0 && (
         <div className="relative" ref={openList === "push" ? popoverRef : undefined}>
@@ -158,7 +160,7 @@ export function SyncStatusBar({
         className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
       >
         <ArrowDown size={ICON.SM} />
-        Pull
+        {!compact && "Pull"}
       </button>
 
       {/* Conflict indicator */}
@@ -181,7 +183,7 @@ export function SyncStatusBar({
       )}
 
       {/* Last sync time */}
-      {lastSyncTime && !error && (
+      {lastSyncTime && !error && !compact && (
         <span className="text-xs text-gray-400 dark:text-gray-500">
           {formatLastSync(lastSyncTime)}
         </span>
