@@ -928,7 +928,8 @@ export function DriveFileTree({
           const data = await res.json();
           if (data.meta) await updateTreeFromMeta(data.meta);
           try {
-            if (data.webViewLink) await navigator.clipboard.writeText(data.webViewLink);
+            const link = `${window.location.origin}/public/file/${item.id}/${encodeURIComponent(item.name)}`;
+            await navigator.clipboard.writeText(link);
           } catch { /* clipboard may fail in insecure context */ }
           alert(t("contextMenu.published"));
         } else {
@@ -965,8 +966,8 @@ export function DriveFileTree({
 
   const handleCopyLink = useCallback(
     async (fileId: string) => {
-      const link = remoteMeta[fileId]?.webViewLink;
-      if (!link) return;
+      const name = remoteMeta[fileId]?.name?.split("/").pop() ?? fileId;
+      const link = `${window.location.origin}/public/file/${fileId}/${encodeURIComponent(name)}`;
       try {
         await navigator.clipboard.writeText(link);
       } catch { /* clipboard may fail in insecure context */ }
@@ -1171,7 +1172,7 @@ export function DriveFileTree({
         {remoteMeta[item.id]?.shared && (
           <span
             className="ml-auto flex-shrink-0 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer"
-            title={remoteMeta[item.id]?.webViewLink ?? t("contextMenu.copyLink")}
+            title={`${window.location.origin}/public/file/${item.id}/${encodeURIComponent(item.name)}`}
             onClick={(e) => { e.stopPropagation(); handleCopyLink(item.id); }}
           >
             <Globe size={ICON.SM} />

@@ -30,4 +30,6 @@ export default [
   route("api/sync", "routes/api.sync.tsx"),
   route("api/drive/upload", "routes/api.drive.upload.tsx"),
   route("api/drive/temp", "routes/api.drive.temp.tsx"),
+  // Public (no auth) — serves published Drive files with correct Content-Type
+  route("public/file/:fileId/:fileName", "routes/public.file.$fileId.$fileName.tsx"),
 ] satisfies RouteConfig;
