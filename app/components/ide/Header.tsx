@@ -30,6 +30,7 @@ interface HeaderProps {
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   pluginSidebarViews?: PluginView[];
   pluginMainViews?: PluginView[];
+  isMobile?: boolean;
 }
 
 export function Header({
@@ -48,6 +49,7 @@ export function Header({
   onSelectFile,
   pluginSidebarViews = [],
   pluginMainViews = [],
+  isMobile = false,
 }: HeaderProps) {
   const { t } = useI18n();
 
@@ -61,16 +63,16 @@ export function Header({
   return (
     <>
     <header className="flex h-10 items-center justify-between border-b border-gray-200 bg-white px-3 dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        <span className="text-sm font-bold text-gray-900 dark:text-gray-100 shrink-0">
           Gemini Hub
         </span>
         {activeFileName && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
+          <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
             {activeFileName}
           </span>
         )}
-        <div className="mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700" />
+        <div className="hidden sm:block mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700 shrink-0" />
         <SyncStatusBar
           syncStatus={syncStatus}
           lastSyncTime={lastSyncTime}
@@ -81,53 +83,58 @@ export function Header({
           onShowConflicts={onShowConflicts}
           onSelectFile={onSelectFile}
           conflicts={syncConflicts}
+          compact={isMobile}
         />
       </div>
 
-      <div className="flex items-center gap-1">
-        {/* Right panel tab toggles */}
-        <button
-          onClick={() => setRightPanel("chat")}
-          className={tabButtonClass(rightPanel === "chat")}
-        >
-          <MessageSquare size={ICON.MD} />
-          {t("header.chat")}
-        </button>
-        <button
-          onClick={() => setRightPanel("workflow")}
-          className={tabButtonClass(rightPanel === "workflow")}
-        >
-          <GitBranch size={ICON.MD} />
-          {t("header.workflow")}
-        </button>
+      <div className="flex items-center gap-1 shrink-0">
+        {/* Right panel tab toggles - hidden on mobile (bottom nav handles this) */}
+        {!isMobile && (
+          <>
+            <button
+              onClick={() => setRightPanel("chat")}
+              className={tabButtonClass(rightPanel === "chat")}
+            >
+              <MessageSquare size={ICON.MD} />
+              {t("header.chat")}
+            </button>
+            <button
+              onClick={() => setRightPanel("workflow")}
+              className={tabButtonClass(rightPanel === "workflow")}
+            >
+              <GitBranch size={ICON.MD} />
+              {t("header.workflow")}
+            </button>
 
-        {/* Plugin sidebar view tabs */}
-        {pluginSidebarViews.map((view) => (
-          <button
-            key={view.id}
-            onClick={() => setRightPanel(`plugin:${view.id}`)}
-            className={tabButtonClass(rightPanel === `plugin:${view.id}`)}
-            title={view.name}
-          >
-            <Puzzle size={ICON.MD} />
-            {view.name}
-          </button>
-        ))}
+            {/* Plugin sidebar view tabs */}
+            {pluginSidebarViews.map((view) => (
+              <button
+                key={view.id}
+                onClick={() => setRightPanel(`plugin:${view.id}`)}
+                className={tabButtonClass(rightPanel === `plugin:${view.id}`)}
+                title={view.name}
+              >
+                <Puzzle size={ICON.MD} />
+                {view.name}
+              </button>
+            ))}
 
-        {/* Plugin main view buttons */}
-        {pluginMainViews.map((view) => (
-          <button
-            key={view.id}
-            onClick={() => setRightPanel(`main-plugin:${view.id}`)}
-            className={tabButtonClass(rightPanel === `main-plugin:${view.id}`)}
-            title={view.name}
-          >
-            <Puzzle size={ICON.MD} />
-            {view.name}
-          </button>
-        ))}
+            {/* Plugin main view buttons */}
+            {pluginMainViews.map((view) => (
+              <button
+                key={view.id}
+                onClick={() => setRightPanel(`main-plugin:${view.id}`)}
+                className={tabButtonClass(rightPanel === `main-plugin:${view.id}`)}
+                title={view.name}
+              >
+                <Puzzle size={ICON.MD} />
+                {view.name}
+              </button>
+            ))}
 
-        <div className="mx-2 h-4 w-px bg-gray-200 dark:bg-gray-700" />
+            <div className="mx-2 h-4 w-px bg-gray-200 dark:bg-gray-700" />
+          </>
+        )}
 
         {/* Settings */}
         <Link

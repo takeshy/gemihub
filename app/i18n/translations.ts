@@ -10,6 +10,8 @@ export interface TranslationStrings {
   // Header
   "header.chat": string;
   "header.workflow": string;
+  "header.files": string;
+  "header.editor": string;
 
   // Index - unauthenticated
   "index.title": string;
@@ -293,6 +295,8 @@ const en: TranslationStrings = {
   // Header
   "header.chat": "Chat",
   "header.workflow": "Workflow",
+  "header.files": "Files",
+  "header.editor": "Editor",
 
   // Index
   "index.title": "Gemini Hub",
@@ -575,6 +579,8 @@ const ja: TranslationStrings = {
   // Header
   "header.chat": "チャット",
   "header.workflow": "ワークフロー",
+  "header.files": "ファイル",
+  "header.editor": "エディタ",
 
   // Index
   "index.title": "Gemini Hub",

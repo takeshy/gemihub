@@ -6,7 +6,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import type { UserSettings } from "~/types/settings";
-import { LogIn } from "lucide-react";
+import { LogIn, FolderOpen, FileText, MessageSquare, GitBranch } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
@@ -25,6 +25,8 @@ import { ConflictDialog } from "~/components/ide/ConflictDialog";
 import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { useSync } from "~/hooks/useSync";
+import { useIsMobile } from "~/hooks/useIsMobile";
+import { ICON } from "~/utils/icon-sizes";
 
 // ---------------------------------------------------------------------------
 // Loader
@@ -456,7 +458,21 @@ function IDEContent({
   handleAIAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
 }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
   const { sidebarViews, mainViews, slashCommands: pluginSlashCommands, getPluginAPI } = usePlugins();
+
+  // Mobile view state: which panel is shown full-screen
+  type MobileView = "files" | "editor" | "chat" | "workflow";
+  const [mobileView, setMobileView] = useState<MobileView>("editor");
+
+  // Close file panel after selecting a file on mobile
+  const handleSelectFileMobile = useCallback(
+    (fileId: string, fileName: string, mimeType: string) => {
+      handleSelectFile(fileId, fileName, mimeType);
+      if (isMobile) setMobileView("editor");
+    },
+    [handleSelectFile, isMobile]
+  );
 
   // Determine if current right panel is a plugin view
   const activePluginSidebarView = rightPanel.startsWith("plugin:")
@@ -470,6 +486,75 @@ function IDEContent({
 
   // Merge plugin slash commands with settings slash commands for ChatPanel
   const allSlashCommands = settings.slashCommands || [];
+
+  // Shared components
+  const fileTreeContent = (
+    <DriveFileTreeWithContext
+      rootFolderId={rootFolderId}
+      onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
+      activeFileId={activeFileId}
+      encryptionEnabled={settings.encryption.enabled}
+    />
+  );
+
+  const mainViewerContent = (
+    <PanelErrorBoundary fallbackLabel="Error loading main viewer">
+      {activePluginMainView ? (
+        <div className="flex-1 overflow-auto p-4">
+          {getPluginAPI(activePluginMainView.pluginId) ? (
+            <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} />
+          ) : null}
+        </div>
+      ) : (
+        <MainViewer
+          fileId={activeFileId}
+          fileName={activeFileName}
+          fileMimeType={activeFileMimeType}
+          settings={settings}
+          refreshKey={workflowVersion}
+        />
+      )}
+    </PanelErrorBoundary>
+  );
+
+  const rightPanelContent = (
+    <PanelErrorBoundary fallbackLabel="Error loading panel">
+      {activePluginSidebarView ? (
+        <div className="h-full overflow-auto p-2">
+          {getPluginAPI(activePluginSidebarView.pluginId) ? (
+            <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} />
+          ) : null}
+        </div>
+      ) : rightPanel === "chat" ? (
+        <ChatPanel
+          settings={settings}
+          hasApiKey={hasGeminiApiKey}
+          hasEncryptedApiKey={hasEncryptedApiKey}
+          onNeedUnlock={() => setShowPasswordPrompt(true)}
+          slashCommands={allSlashCommands}
+          pluginSlashCommands={pluginSlashCommands}
+        />
+      ) : (
+        <WorkflowPropsPanel
+          activeFileId={activeFileId}
+          activeFileName={activeFileName}
+          onNewWorkflow={handleNewWorkflow}
+          onSelectFile={handleSelectFile}
+          onWorkflowChanged={handleWorkflowChanged}
+          onModifyWithAI={handleModifyWithAI}
+          settings={settings}
+        />
+      )}
+    </PanelErrorBoundary>
+  );
+
+  // Mobile bottom nav button helper
+  const mobileTabClass = (isActive: boolean) =>
+    `flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors ${
+      isActive
+        ? "text-blue-600 dark:text-blue-400"
+        : "text-gray-500 dark:text-gray-400"
+    }`;
 
   return (
     <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-950">
@@ -488,6 +573,7 @@ function IDEContent({
         onShowConflicts={() => setShowConflictDialog(true)}
         pluginSidebarViews={sidebarViews}
         pluginMainViews={mainViews}
+        isMobile={isMobile}
       />
 
       {!hasGeminiApiKey && (
@@ -514,70 +600,78 @@ function IDEContent({
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar - File tree */}
-        <LeftSidebar>
-          <DriveFileTreeWithContext
-            rootFolderId={rootFolderId}
-            onSelectFile={handleSelectFile}
-            activeFileId={activeFileId}
-            encryptionEnabled={settings.encryption.enabled}
-          />
-        </LeftSidebar>
-
-        {/* Main viewer */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <PanelErrorBoundary fallbackLabel="Error loading main viewer">
-            {activePluginMainView ? (
-              <div className="flex-1 overflow-auto p-4">
-                {getPluginAPI(activePluginMainView.pluginId) ? (
-                  <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} />
-                ) : null}
+      {isMobile ? (
+        /* ---- Mobile layout ---- */
+        <>
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {mobileView === "files" && (
+              <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
+                {fileTreeContent}
               </div>
-            ) : (
-              <MainViewer
-                fileId={activeFileId}
-                fileName={activeFileName}
-                fileMimeType={activeFileMimeType}
-                settings={settings}
-                refreshKey={workflowVersion}
-              />
             )}
-          </PanelErrorBoundary>
-        </div>
+            {mobileView === "editor" && (
+              <div className="flex flex-1 flex-col overflow-hidden">
+                {mainViewerContent}
+              </div>
+            )}
+            {(mobileView === "chat" || mobileView === "workflow") && (
+              <div className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-gray-900">
+                {rightPanelContent}
+              </div>
+            )}
+          </div>
 
-        {/* Right sidebar - Chat / Workflow props / Plugin views */}
-        <RightSidebar>
-          <PanelErrorBoundary fallbackLabel="Error loading panel">
-          {activePluginSidebarView ? (
-            <div className="h-full overflow-auto p-2">
-              {getPluginAPI(activePluginSidebarView.pluginId) ? (
-                <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} />
-              ) : null}
-            </div>
-          ) : rightPanel === "chat" ? (
-            <ChatPanel
-              settings={settings}
-              hasApiKey={hasGeminiApiKey}
-              hasEncryptedApiKey={hasEncryptedApiKey}
-              onNeedUnlock={() => setShowPasswordPrompt(true)}
-              slashCommands={allSlashCommands}
-              pluginSlashCommands={pluginSlashCommands}
-            />
-          ) : (
-            <WorkflowPropsPanel
-              activeFileId={activeFileId}
-              activeFileName={activeFileName}
-              onNewWorkflow={handleNewWorkflow}
-              onSelectFile={handleSelectFile}
-              onWorkflowChanged={handleWorkflowChanged}
-              onModifyWithAI={handleModifyWithAI}
-              settings={settings}
-            />
-          )}
-          </PanelErrorBoundary>
-        </RightSidebar>
-      </div>
+          {/* Bottom navigation bar */}
+          <nav className="flex shrink-0 border-t border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 safe-area-bottom">
+            <button
+              onClick={() => setMobileView("files")}
+              className={mobileTabClass(mobileView === "files")}
+            >
+              <FolderOpen size={ICON.LG} />
+              {t("header.files")}
+            </button>
+            <button
+              onClick={() => setMobileView("editor")}
+              className={mobileTabClass(mobileView === "editor")}
+            >
+              <FileText size={ICON.LG} />
+              {t("header.editor")}
+            </button>
+            <button
+              onClick={() => { setRightPanel("chat"); setMobileView("chat"); }}
+              className={mobileTabClass(mobileView === "chat")}
+            >
+              <MessageSquare size={ICON.LG} />
+              {t("header.chat")}
+            </button>
+            <button
+              onClick={() => { setRightPanel("workflow"); setMobileView("workflow"); }}
+              className={mobileTabClass(mobileView === "workflow")}
+            >
+              <GitBranch size={ICON.LG} />
+              {t("header.workflow")}
+            </button>
+          </nav>
+        </>
+      ) : (
+        /* ---- Desktop layout ---- */
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left sidebar - File tree */}
+          <LeftSidebar>
+            {fileTreeContent}
+          </LeftSidebar>
+
+          {/* Main viewer */}
+          <div className="flex flex-1 flex-col overflow-hidden">
+            {mainViewerContent}
+          </div>
+
+          {/* Right sidebar - Chat / Workflow props / Plugin views */}
+          <RightSidebar>
+            {rightPanelContent}
+          </RightSidebar>
+        </div>
+      )}
 
       {/* Conflict dialog */}
       {showConflictDialog && conflicts.length > 0 && (

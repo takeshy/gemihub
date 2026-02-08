@@ -28,3 +28,17 @@ body {
   flex-direction: column !important;
   min-height: 0 !important;
 }
+
+/* Safe area padding for iOS devices with home indicator */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Hide scrollbar for horizontal tab scrolling on mobile */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
