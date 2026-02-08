@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { data, Link, useLoaderData, useFetcher } from "react-router";
 import type { Route } from "./+types/settings";
-import { requireAuth, getSession, commitSession, setGeminiApiKey } from "~/services/session.server";
+import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import type {
@@ -125,9 +125,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
-  const jsonWithCookie = (data: unknown, init: ResponseInit = {}) => {
+  // Build a base session that already includes refreshed tokens (if any).
+  // Action cases that modify the session should build on top of this.
+  const baseSession = setCookieHeader
+    ? await setTokens(request, validTokens)
+    : await getSession(request);
+  const jsonWithCookie = async (data: unknown, init: ResponseInit = {}) => {
     const headers = new Headers(init.headers);
-    if (setCookieHeader) headers.append("Set-Cookie", setCookieHeader);
+    // If tokens were refreshed but no action-specific Set-Cookie was provided,
+    // commit the base session so refreshed tokens are persisted.
+    if (setCookieHeader && !headers.has("Set-Cookie")) {
+      headers.set("Set-Cookie", await commitSession(baseSession));
+    }
     return Response.json(data, { ...init, headers });
   };
   const currentSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
@@ -248,20 +257,20 @@ export async function action({ request }: Route.ActionArgs) {
         await saveSettings(validTokens.accessToken, newRootFolderId, updatedSettings);
 
         // Update session with API key and plan/model
-        const session = await getSession(request);
+        // Use baseSession which already has refreshed tokens if applicable
         if (effectiveApiKey) {
           const keySession = await setGeminiApiKey(request, effectiveApiKey);
-          session.set("geminiApiKey", keySession.get("geminiApiKey"));
+          baseSession.set("geminiApiKey", keySession.get("geminiApiKey"));
         }
-        session.set("apiPlan", apiPlan);
-        session.set("selectedModel", updatedSettings.selectedModel);
+        baseSession.set("apiPlan", apiPlan);
+        baseSession.set("selectedModel", updatedSettings.selectedModel);
         if (rootFolderName !== currentSettings.rootFolderName) {
-          session.set("rootFolderId", newRootFolderId);
+          baseSession.set("rootFolderId", newRootFolderId);
         }
 
         return jsonWithCookie(
           { success: true, message: "General settings saved." },
-          { headers: { "Set-Cookie": await commitSession(session) } }
+          { headers: { "Set-Cookie": await commitSession(baseSession) } }
         );
       }
 
@@ -313,11 +322,11 @@ export async function action({ request }: Route.ActionArgs) {
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
 
         // Clear API key from session too
-        const session = await getSession(request);
-        session.unset("geminiApiKey");
+        // Use baseSession which already has refreshed tokens if applicable
+        baseSession.unset("geminiApiKey");
         return jsonWithCookie(
           { success: true, message: "Encryption has been reset." },
-          { headers: { "Set-Cookie": await commitSession(session) } }
+          { headers: { "Set-Cookie": await commitSession(baseSession) } }
         );
       }
 
