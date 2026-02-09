@@ -13,3 +13,11 @@ resource "google_dns_record_set" "a" {
   managed_zone = google_dns_managed_zone.default.name
   rrdatas      = [google_compute_global_address.default.address]
 }
+
+resource "google_dns_record_set" "txt_verification" {
+  name         = "${var.domain}."
+  type         = "TXT"
+  ttl          = 300
+  managed_zone = google_dns_managed_zone.default.name
+  rrdatas      = ["\"google-site-verification=z_QgqT1jpyik9-fWNWwj6fXJQE5IhulrV2450T37djw\""]
+}
