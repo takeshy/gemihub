@@ -25,7 +25,11 @@ import {
   upsertFileInMeta,
   removeFileFromMeta,
   setFileSharedInMeta,
+  readRemoteSyncMeta,
 } from "~/services/sync-meta.server";
+import { saveSettings } from "~/services/user-settings.server";
+import { deleteSingleFileFromRag } from "~/services/file-search.server";
+import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
@@ -130,12 +134,54 @@ export async function action({ request }: Route.ActionArgs) {
     }
     case "rename": {
       if (!fileId || !name) return jsonWithCookie({ error: "Missing fileId or name" }, { status: 400 });
+
+      // Re-key RAG tracking if file was renamed (best-effort)
+      try {
+        const syncMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+        const oldName = syncMeta?.files[fileId]?.name;
+        if (oldName && oldName !== name) {
+          const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+          const ragSetting = settings.ragSettings[DEFAULT_RAG_STORE_KEY];
+          if (ragSetting?.files?.[oldName]) {
+            ragSetting.files[name] = ragSetting.files[oldName];
+            delete ragSetting.files[oldName];
+            await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
+          }
+        }
+      } catch {
+        // Best-effort: don't block rename
+      }
+
       const renamed = await renameFile(validTokens.accessToken, fileId, name);
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamed);
       return jsonWithCookie({ file: renamed, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "delete": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+
+      // Clean up RAG tracking (best-effort)
+      try {
+        const syncMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+        const fileName = syncMeta?.files[fileId]?.name;
+        if (fileName) {
+          const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+          const ragSetting = settings.ragSettings[DEFAULT_RAG_STORE_KEY];
+          const ragFile = ragSetting?.files?.[fileName];
+          if (ragFile) {
+            let canRemoveTracking = !ragFile.fileId;
+            if (ragFile.fileId && validTokens.geminiApiKey) {
+              canRemoveTracking = await deleteSingleFileFromRag(validTokens.geminiApiKey, ragFile.fileId);
+            }
+            if (canRemoveTracking) {
+              delete ragSetting.files[fileName];
+              await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
+            }
+          }
+        }
+      } catch {
+        // Best-effort: don't block delete
+      }
+
       // Soft delete: move to trash/ subfolder instead of permanent deletion
       const trashFolderId = await ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "trash");
       await moveFile(validTokens.accessToken, fileId, trashFolderId, validTokens.rootFolderId);

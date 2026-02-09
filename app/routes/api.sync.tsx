@@ -1,7 +1,7 @@
 import type { Route } from "./+types/api.sync";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
-import { getSettings } from "~/services/user-settings.server";
+import { getSettings, saveSettings } from "~/services/user-settings.server";
 import {
   listUserFiles,
   readFile,
@@ -22,6 +22,8 @@ import {
   type SyncMeta,
 } from "~/services/sync-meta.server";
 import { parallelProcess } from "~/utils/parallel";
+import { getOrCreateStore, registerSingleFile, calculateChecksum, deleteSingleFileFromRag } from "~/services/file-search.server";
+import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 
 // GET: Fetch remote sync meta + current file list
 export async function loader({ request }: Route.LoaderArgs) {
@@ -65,6 +67,7 @@ export async function action({ request }: Route.ActionArgs) {
     "diff", "push", "pull", "resolve", "fullPush", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
+    "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
   ]);
   if (!actionType || !VALID_ACTIONS.has(actionType)) {
     return jsonWithCookie({ error: `Invalid action: ${actionType}` }, { status: 400 });
@@ -510,6 +513,195 @@ export async function action({ request }: Route.ActionArgs) {
       } catch {
         return jsonWithCookie({ restored: 0, error: "Restore failed" });
       }
+    }
+
+    case "ragRegister": {
+      // Per-file RAG registration during push
+      const { content: ragContent, fileName } = body as {
+        content: string;
+        fileName: string;
+      };
+
+      if (ragContent == null || !fileName) {
+        return jsonWithCookie({ error: "Missing content or fileName" }, { status: 400 });
+      }
+
+      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      const apiKey = validTokens.geminiApiKey;
+
+      // Skip if disabled or no API key
+      if (!apiKey || !settings.ragRegistrationOnPush) {
+        return jsonWithCookie({ ok: true, skipped: true });
+      }
+
+      // Ensure the default "gemihub" RAG setting exists
+      const storeKey = DEFAULT_RAG_STORE_KEY;
+      let ragSetting = settings.ragSettings[storeKey];
+      if (!ragSetting) {
+        ragSetting = structuredClone(DEFAULT_RAG_SETTING);
+        settings.ragSettings[storeKey] = ragSetting;
+      }
+      ragSetting.files ??= {};
+
+      // Ensure store exists
+      if (!ragSetting.storeName) {
+        const storeName = await getOrCreateStore(apiKey, storeKey);
+        ragSetting.storeName = storeName;
+        if (!ragSetting.storeIds.includes(storeName)) {
+          ragSetting.storeIds.push(storeName);
+        }
+        ragSetting.storeId = storeName;
+        // Save settings to persist store name (one-time)
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
+      }
+
+      // Skip if content unchanged (checksum match)
+      const existing = ragSetting.files[fileName];
+      if (existing) {
+        const newChecksum = await calculateChecksum(ragContent);
+        if (existing.checksum === newChecksum) {
+          return jsonWithCookie({ ok: true, skipped: true });
+        }
+      }
+
+      // Register the file
+      const result = await registerSingleFile(
+        apiKey,
+        ragSetting.storeName,
+        fileName,
+        ragContent,
+        existing?.fileId ?? null
+      );
+
+      const ragFileInfo = {
+        checksum: result.checksum,
+        uploadedAt: Date.now(),
+        fileId: result.fileId,
+      };
+
+      return jsonWithCookie({
+        ok: true,
+        ragFileInfo,
+        storeName: ragSetting.storeName,
+      });
+    }
+
+    case "ragSave": {
+      // Batch save RAG tracking info after push completes
+      const { updates, storeName: ragStoreName } = body as {
+        updates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }>;
+        storeName: string;
+      };
+
+      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      const storeKey = DEFAULT_RAG_STORE_KEY;
+      let ragSetting = settings.ragSettings[storeKey];
+      if (!ragSetting) {
+        ragSetting = structuredClone(DEFAULT_RAG_SETTING);
+        ragSetting.storeName = ragStoreName;
+        ragSetting.storeId = ragStoreName;
+        if (ragStoreName) ragSetting.storeIds = [ragStoreName];
+        settings.ragSettings[storeKey] = ragSetting;
+      }
+      ragSetting.files ??= {};
+
+      // Enable RAG if we have newly registered (not just pending) files
+      if (updates.some((u) => u.ragFileInfo.status === "registered")) {
+        settings.ragEnabled = true;
+        if (!settings.selectedRagSetting) {
+          settings.selectedRagSetting = storeKey;
+        }
+      }
+
+      for (const { fileName, ragFileInfo } of updates) {
+        ragSetting.files[fileName] = ragFileInfo;
+      }
+
+      await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
+      const pendingCount = Object.values(ragSetting.files).filter((f) => f.status === "pending").length;
+      return jsonWithCookie({ ok: true, pendingCount });
+    }
+
+    case "ragDeleteDoc": {
+      const { documentId } = body as { documentId: string };
+      if (!documentId) {
+        return jsonWithCookie({ error: "Missing documentId" }, { status: 400 });
+      }
+      const apiKey = validTokens.geminiApiKey;
+      if (!apiKey) {
+        return jsonWithCookie({ ok: false, skipped: true, reason: "no-api-key" });
+      }
+      const ok = await deleteSingleFileFromRag(apiKey, documentId);
+      return jsonWithCookie({ ok });
+    }
+
+    case "ragRetryPending": {
+      const retryApiKey = validTokens.geminiApiKey;
+      if (!retryApiKey) {
+        return jsonWithCookie({ ok: false, skipped: true, reason: "no-api-key" });
+      }
+
+      const retrySettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      if (!retrySettings.ragRegistrationOnPush) {
+        return jsonWithCookie({ ok: true, retried: 0, stillPending: 0 });
+      }
+
+      const retryStoreKey = DEFAULT_RAG_STORE_KEY;
+      const retryRagSetting = retrySettings.ragSettings[retryStoreKey];
+      if (!retryRagSetting?.storeName || !retryRagSetting.files) {
+        return jsonWithCookie({ ok: true, retried: 0, stillPending: 0 });
+      }
+
+      // Find pending entries
+      const pendingEntries = Object.entries(retryRagSetting.files).filter(
+        ([, info]) => info.status === "pending"
+      );
+      if (pendingEntries.length === 0) {
+        return jsonWithCookie({ ok: true, retried: 0, stillPending: 0 });
+      }
+
+      // Resolve file names to Drive file IDs via sync meta
+      const retryRemoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+      const nameToFileId: Record<string, string> = {};
+      for (const [fileId, fileMeta] of Object.entries(retryRemoteMeta.files)) {
+        nameToFileId[fileMeta.name] = fileId;
+      }
+
+      let retriedCount = 0;
+      let stillPendingCount = 0;
+
+      for (const [fileName, info] of pendingEntries) {
+        const driveFileId = nameToFileId[fileName];
+        if (!driveFileId) {
+          // File no longer exists on Drive, remove from tracking
+          delete retryRagSetting.files[fileName];
+          continue;
+        }
+
+        try {
+          const content = await readFile(validTokens.accessToken, driveFileId);
+          const result = await registerSingleFile(
+            retryApiKey,
+            retryRagSetting.storeName,
+            fileName,
+            content,
+            info.fileId
+          );
+          retryRagSetting.files[fileName] = {
+            checksum: result.checksum,
+            uploadedAt: Date.now(),
+            fileId: result.fileId,
+            status: "registered",
+          };
+          retriedCount++;
+        } catch {
+          // Still pending
+          stillPendingCount++;
+        }
+      }
+
+      await saveSettings(validTokens.accessToken, validTokens.rootFolderId, retrySettings);
+      return jsonWithCookie({ ok: true, retried: retriedCount, stillPending: stillPendingCount });
     }
 
     default:

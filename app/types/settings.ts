@@ -321,7 +321,10 @@ export interface RagFileInfo {
   checksum: string;
   uploadedAt: number;
   fileId: string | null;
+  status: "registered" | "pending";
 }
+
+export const DEFAULT_RAG_STORE_KEY = "gemihub";
 
 export const DEFAULT_RAG_SETTING: RagSetting = {
   storeId: null,
@@ -401,6 +404,7 @@ export interface UserSettings {
   theme: Theme;
   slashCommands: SlashCommand[];
   plugins: PluginConfig[];
+  ragRegistrationOnPush: boolean;
   syncExcludePatterns: string[];
   syncConflictFolder: string;
   encryptedApiKey: string;
@@ -426,6 +430,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   theme: "system",
   slashCommands: [],
   plugins: [],
+  ragRegistrationOnPush: false,
   syncExcludePatterns: [],
   syncConflictFolder: "sync_conflicts",
   encryptedApiKey: "",

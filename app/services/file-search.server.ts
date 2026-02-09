@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { readFile } from "./google-drive.server";
 import { getFileListFromMeta } from "./sync-meta.server";
 import type { RagSetting, RagFileInfo } from "~/types/settings";
+export { RAG_ELIGIBLE_EXTENSIONS, isRagEligible } from "~/constants/rag";
 
 export interface SyncResult {
   uploaded: string[];
@@ -17,7 +18,7 @@ export interface SyncResult {
 /**
  * Calculate SHA-256 checksum of content
  */
-async function calculateChecksum(content: string): Promise<string> {
+export async function calculateChecksum(content: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(content);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -211,12 +212,20 @@ export async function smartSync(
         checksum,
         uploadedAt: Date.now(),
         fileId: fileSearchId,
+        status: "registered",
       };
     } catch (error) {
       result.errors.push({
         path: file.name,
         error: error instanceof Error ? error.message : "Upload failed",
       });
+      // Keep the file as pending so it can be retried
+      result.newFiles[file.name] = {
+        checksum: "",
+        uploadedAt: Date.now(),
+        fileId: null,
+        status: "pending",
+      };
     }
   };
 
@@ -234,4 +243,70 @@ export async function smartSync(
 export async function deleteStore(apiKey: string, storeName: string): Promise<void> {
   const ai = new GoogleGenAI({ apiKey });
   await ai.fileSearchStores.delete({ name: storeName, config: { force: true } });
+}
+
+/**
+ * Register a single file's content into a File Search store.
+ * If an existing document is tracked, it is deleted first.
+ * Throws on failure (caller should catch).
+ */
+export async function registerSingleFile(
+  apiKey: string,
+  storeName: string,
+  fileName: string,
+  content: string,
+  existingFileId: string | null
+): Promise<{ checksum: string; fileId: string | null }> {
+  const ai = new GoogleGenAI({ apiKey });
+
+  // Delete previous document if re-uploading
+  if (existingFileId) {
+    try {
+      await ai.fileSearchStores.documents.delete({
+        name: existingFileId,
+        config: { force: true },
+      });
+    } catch {
+      // Ignore deletion failures
+    }
+  }
+
+  const checksum = await calculateChecksum(content);
+
+  const mimeType = fileName.endsWith(".pdf")
+    ? "application/pdf"
+    : fileName.endsWith(".md")
+      ? "text/markdown"
+      : "text/plain";
+
+  const blob = new Blob([content], { type: mimeType });
+
+  const operation = await ai.fileSearchStores.uploadToFileSearchStore({
+    file: blob,
+    fileSearchStoreName: storeName,
+    config: { displayName: fileName },
+  });
+
+  return { checksum, fileId: operation?.name ?? null };
+}
+
+/**
+ * Delete a single file's document from a RAG store.
+ * Returns true if deletion succeeded, false on failure.
+ * Never throws.
+ */
+export async function deleteSingleFileFromRag(
+  apiKey: string,
+  documentId: string
+): Promise<boolean> {
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    await ai.fileSearchStores.documents.delete({
+      name: documentId,
+      config: { force: true },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }

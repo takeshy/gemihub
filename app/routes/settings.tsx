@@ -300,6 +300,7 @@ export async function action({ request }: Route.ActionArgs) {
           return jsonWithCookie({ success: false, message: "Invalid RAG settings JSON." });
         }
         const selectedRagSetting = (formData.get("selectedRagSetting") as string) || null;
+        const ragRegistrationOnPush = formData.get("ragRegistrationOnPush") === "on";
 
         const updatedSettings: UserSettings = {
           ...currentSettings,
@@ -307,6 +308,7 @@ export async function action({ request }: Route.ActionArgs) {
           ragTopK,
           ragSettings,
           selectedRagSetting,
+          ragRegistrationOnPush,
         };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
         return jsonWithCookie({ success: true, message: "RAG settings saved." });
@@ -1934,6 +1936,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
   const { t } = useI18n();
 
   const [ragTopK, setRagTopK] = useState(settings.ragTopK);
+  const [ragRegistrationOnPush, setRagRegistrationOnPush] = useState(settings.ragRegistrationOnPush ?? false);
   const [ragSettings, setRagSettings] = useState<Record<string, RagSetting>>(settings.ragSettings);
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(settings.selectedRagSetting);
   const [syncing, setSyncing] = useState(false);
@@ -2025,6 +2028,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
       fd.set("ragTopK", String(ragTopK));
       fd.set("ragSettings", JSON.stringify(ragSettings));
       fd.set("selectedRagSetting", key);
+      fd.set("ragRegistrationOnPush", ragRegistrationOnPush ? "on" : "off");
       const saveRes = await fetch("/settings", { method: "POST", body: fd });
       if (!saveRes.ok) {
         setSyncMsg("Failed to save settings before sync.");
@@ -2074,7 +2078,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
     } finally {
       setSyncing(false);
     }
-  }, [ragSettings, ragTopK]);
+  }, [ragSettings, ragTopK, ragRegistrationOnPush]);
 
   const handleSubmit = useCallback(() => {
     const hasSettings = Object.keys(ragSettings).length > 0;
@@ -2084,12 +2088,43 @@ function RagTab({ settings }: { settings: UserSettings }) {
     fd.set("ragTopK", String(ragTopK));
     fd.set("ragSettings", JSON.stringify(ragSettings));
     fd.set("selectedRagSetting", selectedRagSetting || "");
+    fd.set("ragRegistrationOnPush", ragRegistrationOnPush ? "on" : "off");
     fetcher.submit(fd, { method: "post" });
-  }, [fetcher, ragTopK, ragSettings, selectedRagSetting]);
+  }, [fetcher, ragTopK, ragSettings, selectedRagSetting, ragRegistrationOnPush]);
 
   return (
     <SectionCard>
       <StatusBanner fetcher={fetcher} />
+
+      {/* Auto-register on push */}
+      <div className="mb-6">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={ragRegistrationOnPush}
+            onChange={(e) => setRagRegistrationOnPush(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <div>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {t("settings.rag.registrationOnPush")}
+            </span>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {t("settings.rag.registrationOnPushDescription")}
+            </p>
+            {(() => {
+              const pendingCount = Object.values(ragSettings).reduce((sum, rs) => {
+                return sum + Object.values(rs.files ?? {}).filter((f) => f.status === "pending").length;
+              }, 0);
+              return pendingCount > 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                  {t("settings.rag.pendingCount").replace("{count}", String(pendingCount))}
+                </p>
+              ) : null;
+            })()}
+          </div>
+        </label>
+      </div>
 
       {/* Top-K */}
       <div className="mb-6">

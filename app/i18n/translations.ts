@@ -89,6 +89,9 @@ export interface TranslationStrings {
   "settings.rag.topK": string;
   "settings.rag.settings": string;
   "settings.rag.save": string;
+  "settings.rag.registrationOnPush": string;
+  "settings.rag.registrationOnPushDescription": string;
+  "settings.rag.pendingCount": string;
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": string;
@@ -373,6 +376,9 @@ const en: TranslationStrings = {
   "settings.rag.topK": "Top-K results",
   "settings.rag.settings": "RAG Settings",
   "settings.rag.save": "Save RAG Settings",
+  "settings.rag.registrationOnPush": "Auto-register files in RAG on push",
+  "settings.rag.registrationOnPushDescription": "When pushing, automatically register/update files in the default 'gemihub' RAG store. Files that fail RAG registration are saved to Drive normally and marked as pending for retry on next push.",
+  "settings.rag.pendingCount": "{count} file(s) pending RAG registration",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "Encrypt Chat History",
@@ -657,6 +663,9 @@ const ja: TranslationStrings = {
   "settings.rag.topK": "Top-K 結果数",
   "settings.rag.settings": "RAG設定",
   "settings.rag.save": "RAG設定を保存",
+  "settings.rag.registrationOnPush": "Push時にファイルをRAGに自動登録",
+  "settings.rag.registrationOnPushDescription": "Push時にファイルをデフォルトの「gemihub」RAGストアに自動登録・更新します。RAG登録に失敗したファイルはDriveには正常に保存され、次回Pushで再試行されます。",
+  "settings.rag.pendingCount": "{count}件のファイルがRAG登録待ちです",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "チャット履歴を暗号化",
