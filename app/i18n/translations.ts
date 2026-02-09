@@ -286,6 +286,7 @@ export interface TranslationStrings {
   "lp.cta.ready": string;
   "lp.footer.terms": string;
   "lp.footer.policy": string;
+  "lp.footer.contact": string;
 
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
@@ -592,6 +593,7 @@ const en: TranslationStrings = {
   "lp.cta.ready": "Ready to get started?",
   "lp.footer.terms": "Terms of Service",
   "lp.footer.policy": "Privacy Policy",
+  "lp.footer.contact": "Contact",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
@@ -898,6 +900,7 @@ const ja: TranslationStrings = {
   "lp.cta.ready": "さあ、始めましょう",
   "lp.footer.terms": "利用規約",
   "lp.footer.policy": "プライバシーポリシー",
+  "lp.footer.contact": "お問い合わせ",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",

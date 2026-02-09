@@ -3,8 +3,11 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 export default [
   index("routes/_index.tsx"),
   route("lp", "routes/lp.tsx"),
+  route("lp/ja", "routes/lp.tsx", { id: "lp-ja" }),
   route("terms", "routes/terms.tsx"),
+  route("terms/ja", "routes/terms.tsx", { id: "terms-ja" }),
   route("policy", "routes/policy.tsx"),
+  route("policy/ja", "routes/policy.tsx", { id: "policy-ja" }),
   route("auth/google", "routes/auth.google.tsx"),
   route("auth/google/callback", "routes/auth.google.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),

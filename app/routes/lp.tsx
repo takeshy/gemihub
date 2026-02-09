@@ -1,21 +1,21 @@
 import { LogIn, MessageSquare, Search, Puzzle, GitBranch, Shield } from "lucide-react";
+import { useLocation } from "react-router";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import type { Language } from "~/types/settings";
+import { LanguageSwitcher } from "~/components/LanguageSwitcher";
 
 export default function LandingPage() {
-  // Read language from localStorage (set by root.tsx inline script)
-  const lang = (typeof document !== "undefined"
-    ? (document.documentElement.lang as Language)
-    : "en") || "en";
+  const { pathname } = useLocation();
+  const lang: Language = pathname.endsWith("/ja") ? "ja" : "en";
 
   return (
     <I18nProvider language={lang}>
-      <LandingContent />
+      <LandingContent lang={lang} />
     </I18nProvider>
   );
 }
 
-function LandingContent() {
+function LandingContent({ lang }: { lang: Language }) {
   const { t } = useI18n();
 
   const features = [
@@ -32,12 +32,19 @@ function LandingContent() {
     { src: "/images/workflow_execution.png", altKey: "lp.screenshots.execution" as const },
   ];
 
+  const jaPrefix = lang === "ja" ? "/ja" : "";
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
+      {/* Language switcher */}
+      <div className="absolute right-4 top-4 z-10">
+        <LanguageSwitcher lang={lang} basePath="/lp" />
+      </div>
+
       {/* Hero */}
       <section className="flex flex-col items-center px-4 pb-16 pt-20 text-center sm:pt-28">
         <img
-          src="/pwa-icons/icon-192x192.png"
+          src="/icons/icon-192x192.png"
           alt="Gemini Hub"
           width={80}
           height={80}
@@ -121,14 +128,17 @@ function LandingContent() {
       <footer className="border-t border-gray-200 bg-gray-50 px-4 py-8 dark:border-gray-800 dark:bg-gray-900">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
           <div className="flex gap-6">
-            <a href="/terms" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+            <a href={`/terms${jaPrefix}`} className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               {t("lp.footer.terms")}
             </a>
-            <a href="/policy" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+            <a href={`/policy${jaPrefix}`} className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               {t("lp.footer.policy")}
             </a>
+            <a href="mailto:takeshy.work@gmail.com" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+              {t("lp.footer.contact")}
+            </a>
           </div>
-          <p>&copy; {new Date().getFullYear()} takeshy.work</p>
+          <p>&copy; {new Date().getFullYear()} <a href="https://takeshy.work" className="hover:text-gray-700 hover:underline dark:hover:text-gray-200">takeshy.work</a></p>
         </div>
       </footer>
     </div>
