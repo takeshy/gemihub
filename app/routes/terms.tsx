@@ -33,7 +33,7 @@ function TermsEn() {
       <h1 className="mb-8 text-3xl font-bold text-gray-900 dark:text-gray-50">Terms of Service</h1>
       <div className="prose prose-gray max-w-none dark:prose-invert text-gray-700 dark:text-gray-300 [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:dark:text-gray-100 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:space-y-2 [&_p]:mb-4 [&_p]:leading-relaxed">
         <p>
-          These Terms of Service (hereinafter referred to as &ldquo;these Terms&rdquo;) set forth the conditions of use for Gemini Hub (hereinafter referred to as &ldquo;the Service&rdquo;) provided by <a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a> (hereinafter referred to as &ldquo;the Company&rdquo;). Users (hereinafter referred to as &ldquo;Users&rdquo;) shall use the Service upon agreeing to these Terms.
+          These Terms of Service (hereinafter referred to as &ldquo;these Terms&rdquo;) set forth the conditions of use for GemiHub (hereinafter referred to as &ldquo;the Service&rdquo;) provided by <a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a> (hereinafter referred to as &ldquo;the Company&rdquo;). Users (hereinafter referred to as &ldquo;Users&rdquo;) shall use the Service upon agreeing to these Terms.
         </p>
 
         <h2>Article 1 (Application)</h2>
@@ -142,7 +142,7 @@ function TermsJa() {
       <h1 className="mb-8 text-3xl font-bold text-gray-900 dark:text-gray-50">利用規約</h1>
       <div className="prose prose-gray max-w-none dark:prose-invert text-gray-700 dark:text-gray-300 [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:dark:text-gray-100 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:space-y-2 [&_p]:mb-4 [&_p]:leading-relaxed">
         <p>
-          この利用規約（以下、「本規約」といいます）は、株式会社<a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a>（以下、「当社」といいます）が提供するGemini Hub（以下、「本サービス」といいます）の利用条件を定めるものです。ユーザーの皆様（以下、「ユーザー」といいます）には、本規約に同意いただいた上で、本サービスをご利用いただきます。
+          この利用規約（以下、「本規約」といいます）は、株式会社<a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a>（以下、「当社」といいます）が提供するGemiHub（以下、「本サービス」といいます）の利用条件を定めるものです。ユーザーの皆様（以下、「ユーザー」といいます）には、本規約に同意いただいた上で、本サービスをご利用いただきます。
         </p>
 
         <h2>第1条（適用）</h2>

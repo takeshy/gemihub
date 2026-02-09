@@ -33,7 +33,7 @@ function PolicyEn() {
       <h1 className="mb-8 text-3xl font-bold text-gray-900 dark:text-gray-50">Privacy Policy</h1>
       <div className="prose prose-gray max-w-none dark:prose-invert text-gray-700 dark:text-gray-300 [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:dark:text-gray-100 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1 [&_p]:mb-4 [&_p]:leading-relaxed">
         <p>
-          <a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a> (hereinafter referred to as &ldquo;the Company&rdquo;) recognizes the importance of protecting personal information in Gemini Hub (hereinafter referred to as &ldquo;the Service&rdquo;) and strives to handle and protect personal information appropriately.
+          <a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a> (hereinafter referred to as &ldquo;the Company&rdquo;) recognizes the importance of protecting personal information in GemiHub (hereinafter referred to as &ldquo;the Service&rdquo;) and strives to handle and protect personal information appropriately.
         </p>
 
         <h2>1. Definition of Personal Information</h2>
@@ -103,7 +103,7 @@ function PolicyJa() {
       <h1 className="mb-8 text-3xl font-bold text-gray-900 dark:text-gray-50">プライバシーポリシー</h1>
       <div className="prose prose-gray max-w-none dark:prose-invert text-gray-700 dark:text-gray-300 [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:dark:text-gray-100 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1 [&_p]:mb-4 [&_p]:leading-relaxed">
         <p>
-          株式会社<a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a>（以下、「当社」といいます。）は、Gemini Hub（以下、「本サービス」といいます。）におけるお客様の個人情報保護の重要性を認識し、適切な個人情報の取り扱いと保護に努めます。
+          株式会社<a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a>（以下、「当社」といいます。）は、GemiHub（以下、「本サービス」といいます。）におけるお客様の個人情報保護の重要性を認識し、適切な個人情報の取り扱いと保護に努めます。
         </p>
 
         <h2>1. 個人情報の定義</h2>

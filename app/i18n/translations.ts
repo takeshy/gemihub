@@ -322,14 +322,14 @@ const en: TranslationStrings = {
   "header.editor": "Editor",
 
   // Index
-  "index.title": "Gemini Hub",
+  "index.title": "GemiHub",
   "index.subtitle": "Build and execute AI-powered workflows visually",
   "index.signIn": "Sign in with Google",
   "index.apiKeyWarning": "Gemini API key is not set. AI features will not work.",
   "index.apiKeyLocked": "Gemini API key is locked. Enter your password to unlock.",
 
   // MainViewer
-  "mainViewer.welcome": "Welcome to Gemini Hub",
+  "mainViewer.welcome": "Welcome to GemiHub",
   "mainViewer.welcomeDescription": "Select a file from the file tree to start editing, or create a new workflow or file using the buttons above.",
   "mainViewer.retry": "Retry",
   "mainViewer.saved": "Saved",
@@ -629,14 +629,14 @@ const ja: TranslationStrings = {
   "header.editor": "エディタ",
 
   // Index
-  "index.title": "Gemini Hub",
+  "index.title": "GemiHub",
   "index.subtitle": "AIワークフローをビジュアルに構築・実行",
   "index.signIn": "Googleでサインイン",
   "index.apiKeyWarning": "Gemini APIキーが設定されていません。AI機能は動作しません。",
   "index.apiKeyLocked": "Gemini APIキーはロックされています。パスワードを入力して解除してください。",
 
   // MainViewer
-  "mainViewer.welcome": "Gemini Hubへようこそ",
+  "mainViewer.welcome": "GemiHubへようこそ",
   "mainViewer.welcomeDescription": "ファイルツリーからファイルを選択して編集を開始するか、上のボタンから新しいワークフローやファイルを作成してください。",
   "mainViewer.retry": "再試行",
   "mainViewer.saved": "保存済み",

@@ -6,7 +6,7 @@ Google Cloud deployment managed by Terraform.
 
 ```
                     ┌─────────────────┐
-                    │  gemini-hub.online│
+                    │  gemihub.online   │
                     │  (Cloud DNS)     │
                     └────────┬────────┘
                              │ A record

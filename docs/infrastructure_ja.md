@@ -6,7 +6,7 @@ Terraform で管理する Google Cloud デプロイ構成。
 
 ```
                     ┌─────────────────┐
-                    │  gemini-hub.online│
+                    │  gemihub.online   │
                     │  (Cloud DNS)     │
                     └────────┬────────┘
                              │ A レコード

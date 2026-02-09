@@ -66,7 +66,7 @@ export function Header({
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         <img src="/icons/icon-192x192.png" alt="" width={20} height={20} className="shrink-0 rounded" />
         <span className="text-sm font-bold text-gray-900 dark:text-gray-100 shrink-0">
-          Gemini Hub
+          GemiHub
         </span>
         {activeFileName && (
           <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">

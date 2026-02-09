@@ -45,13 +45,13 @@ function LandingContent({ lang }: { lang: Language }) {
       <section className="flex flex-col items-center px-4 pb-16 pt-20 text-center sm:pt-28">
         <img
           src="/icons/icon-192x192.png"
-          alt="Gemini Hub"
+          alt="GemiHub"
           width={80}
           height={80}
           className="mb-6 rounded-2xl shadow-lg"
         />
         <h1 className="mb-4 text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-5xl">
-          Gemini Hub
+          GemiHub
         </h1>
         <p className="mx-auto mb-3 max-w-2xl text-lg text-gray-600 dark:text-gray-300 sm:text-xl">
           {t("lp.hero.tagline")}
