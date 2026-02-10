@@ -33,6 +33,7 @@ interface LpStrings {
   dataCards: DataCard[];
   pluginShowcaseTitle: string;
   pluginShowcaseDescription: string;
+  pluginShowcaseInstall: string;
   pluginShowcaseLink: string;
   dataUsageLearnMore: string;
   privacyPolicy: string;
@@ -71,7 +72,8 @@ const en: LpStrings = {
     { icon: ServerCog, title: "Fully Portable", description: "No database — all data lives in your Drive. If this service shuts down, just run your own instance and everything is right where you left it." },
   ],
   pluginShowcaseTitle: "Plugin Showcase",
-  pluginShowcaseDescription: "A debate plugin where multiple AIs discuss a topic from different perspectives. You can jump in and join the conversation too.",
+  pluginShowcaseDescription: "A debate plugin where multiple AIs discuss a topic from different perspectives. You can also participate as a debater.",
+  pluginShowcaseInstall: "Install from Settings > Plugins with:",
   pluginShowcaseLink: "View on GitHub",
   dataUsageLearnMore: "Learn more in our",
   privacyPolicy: "Privacy Policy",
@@ -110,7 +112,8 @@ const ja: LpStrings = {
     { icon: ServerCog, title: "完全なポータビリティ", description: "データベースなし。すべてDriveに保存されているので、サービスが停止しても自分でインスタンスを立ち上げればそのまま使えます。" },
   ],
   pluginShowcaseTitle: "プラグイン紹介",
-  pluginShowcaseDescription: "複数のAIがテーマについてそれぞれの視点で議論するディベートプラグイン。あなたも途中から参加できます。",
+  pluginShowcaseDescription: "複数のAIがテーマについてそれぞれの視点で議論するディベートプラグイン。ユーザーも参加できます。",
+  pluginShowcaseInstall: "Settings > Plugins からインストール:",
   pluginShowcaseLink: "GitHubで見る",
   dataUsageLearnMore: "詳しくは",
   privacyPolicy: "プライバシーポリシー",
@@ -185,28 +188,42 @@ export default function LandingPage() {
         <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
           {s.pluginShowcaseTitle}
         </h2>
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-800 dark:bg-gray-900 sm:flex sm:items-center sm:gap-6">
-          <div className="mb-4 flex shrink-0 items-center justify-center sm:mb-0">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-900/40">
-              <MessagesSquare size={32} className="text-purple-600 dark:text-purple-400" />
+        <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
+          <img
+            src="/images/ronginus.png"
+            alt="Ronginus"
+            className="w-full"
+            loading="lazy"
+          />
+          <div className="bg-gray-50 p-6 dark:bg-gray-900 sm:flex sm:items-center sm:gap-6">
+            <div className="mb-4 flex shrink-0 items-center justify-center sm:mb-0">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-900/40">
+                <MessagesSquare size={32} className="text-purple-600 dark:text-purple-400" />
+              </div>
             </div>
-          </div>
-          <div className="flex-1">
-            <h3 className="mb-1.5 text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Ronginus
-            </h3>
-            <p className="mb-3 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-              {s.pluginShowcaseDescription}
-            </p>
-            <a
-              href="https://github.com/takeshy/hub-ronginus"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
-            >
-              <Github size={16} />
-              {s.pluginShowcaseLink}
-            </a>
+            <div className="flex-1">
+              <h3 className="mb-1.5 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Ronginus
+              </h3>
+              <p className="mb-3 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                {s.pluginShowcaseDescription}
+              </p>
+              <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                {s.pluginShowcaseInstall}{" "}
+                <code className="rounded bg-gray-200 px-1.5 py-0.5 text-xs font-mono text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                  takeshy/hub-ronginus
+                </code>
+              </p>
+              <a
+                href="https://github.com/takeshy/hub-ronginus"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+              >
+                <Github size={16} />
+                {s.pluginShowcaseLink}
+              </a>
+            </div>
           </div>
         </div>
       </section>
