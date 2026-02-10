@@ -21,6 +21,9 @@ import type {
   WorkflowRequestRecordItem,
   WorkflowRequestRecord,
 } from "~/engine/types";
+import { decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
+import { cryptoCache } from "~/services/crypto-cache";
+import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
 
 type TabId = "execution" | "request";
 
@@ -28,12 +31,16 @@ interface ExecutionHistoryModalProps {
   workflowId: string;
   workflowName?: string;
   onClose: () => void;
+  encryptedPrivateKey?: string;
+  salt?: string;
 }
 
 export function ExecutionHistoryModal({
   workflowId,
   workflowName,
   onClose,
+  encryptedPrivateKey,
+  salt,
 }: ExecutionHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>("execution");
 
@@ -81,9 +88,9 @@ export function ExecutionHistoryModal({
         </div>
 
         {activeTab === "execution" ? (
-          <ExecutionHistoryTab workflowId={workflowId} onClose={onClose} />
+          <ExecutionHistoryTab workflowId={workflowId} onClose={onClose} encryptedPrivateKey={encryptedPrivateKey} salt={salt} />
         ) : (
-          <RequestHistoryTab workflowId={workflowId} onClose={onClose} />
+          <RequestHistoryTab workflowId={workflowId} onClose={onClose} encryptedPrivateKey={encryptedPrivateKey} salt={salt} />
         )}
       </div>
     </div>
@@ -97,9 +104,13 @@ export function ExecutionHistoryModal({
 function ExecutionHistoryTab({
   workflowId,
   onClose,
+  encryptedPrivateKey,
+  salt,
 }: {
   workflowId: string;
   onClose: () => void;
+  encryptedPrivateKey?: string;
+  salt?: string;
 }) {
   const [records, setRecords] = useState<ExecutionRecordItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,6 +120,8 @@ function ExecutionHistoryTab({
   );
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [expandedStepIndex, setExpandedStepIndex] = useState<number | null>(null);
+  const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
+  const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -131,6 +144,27 @@ function ExecutionHistoryTab({
     fetchRecords();
   }, [fetchRecords]);
 
+  const tryDecryptExecContent = useCallback(
+    async (content: string): Promise<ExecutionRecord | null> => {
+      const cachedKey = cryptoCache.getPrivateKey();
+      if (cachedKey) {
+        try {
+          const plain = await decryptWithPrivateKey(content, cachedKey);
+          return JSON.parse(plain) as ExecutionRecord;
+        } catch { /* cached key failed */ }
+      }
+      const cachedPw = cryptoCache.getPassword();
+      if (cachedPw) {
+        try {
+          const plain = await decryptFileContent(content, cachedPw);
+          return JSON.parse(plain) as ExecutionRecord;
+        } catch { /* cached password failed */ }
+      }
+      return null;
+    },
+    []
+  );
+
   const handleExpand = useCallback(
     async (record: ExecutionRecordItem) => {
       if (expandedId === record.id) {
@@ -149,7 +183,17 @@ function ExecutionHistoryTab({
         );
         if (res.ok) {
           const data = await res.json();
-          setExpandedRecord(data.record);
+          if (data.encrypted && data.encryptedContent) {
+            const decrypted = await tryDecryptExecContent(data.encryptedContent);
+            if (decrypted) {
+              setExpandedRecord(decrypted);
+            } else {
+              setPendingEncryptedContent(data.encryptedContent);
+              setShowCryptoPrompt(true);
+            }
+          } else {
+            setExpandedRecord(data.record);
+          }
         }
       } catch {
         // ignore
@@ -157,7 +201,23 @@ function ExecutionHistoryTab({
         setLoadingDetail(false);
       }
     },
-    [expandedId]
+    [expandedId, tryDecryptExecContent]
+  );
+
+  const handleCryptoUnlock = useCallback(
+    async (privateKey: string) => {
+      setShowCryptoPrompt(false);
+      if (pendingEncryptedContent) {
+        try {
+          const plain = await decryptWithPrivateKey(pendingEncryptedContent, privateKey);
+          setExpandedRecord(JSON.parse(plain) as ExecutionRecord);
+        } catch {
+          // ignore
+        }
+        setPendingEncryptedContent(null);
+      }
+    },
+    [pendingEncryptedContent]
   );
 
   const handleDelete = useCallback(
@@ -363,6 +423,15 @@ function ExecutionHistoryTab({
           Close
         </button>
       </div>
+
+      {showCryptoPrompt && encryptedPrivateKey && salt && (
+        <CryptoPasswordPrompt
+          encryptedPrivateKey={encryptedPrivateKey}
+          salt={salt}
+          onUnlock={handleCryptoUnlock}
+          onCancel={() => { setShowCryptoPrompt(false); setPendingEncryptedContent(null); }}
+        />
+      )}
     </>
   );
 }
@@ -374,9 +443,13 @@ function ExecutionHistoryTab({
 function RequestHistoryTab({
   workflowId,
   onClose,
+  encryptedPrivateKey,
+  salt,
 }: {
   workflowId: string;
   onClose: () => void;
+  encryptedPrivateKey?: string;
+  salt?: string;
 }) {
   const [records, setRecords] = useState<WorkflowRequestRecordItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -385,6 +458,8 @@ function RequestHistoryTab({
     useState<WorkflowRequestRecord | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
+  const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -407,6 +482,27 @@ function RequestHistoryTab({
     fetchRecords();
   }, [fetchRecords]);
 
+  const tryDecryptReqContent = useCallback(
+    async (content: string): Promise<WorkflowRequestRecord | null> => {
+      const cachedKey = cryptoCache.getPrivateKey();
+      if (cachedKey) {
+        try {
+          const plain = await decryptWithPrivateKey(content, cachedKey);
+          return JSON.parse(plain) as WorkflowRequestRecord;
+        } catch { /* cached key failed */ }
+      }
+      const cachedPw = cryptoCache.getPassword();
+      if (cachedPw) {
+        try {
+          const plain = await decryptFileContent(content, cachedPw);
+          return JSON.parse(plain) as WorkflowRequestRecord;
+        } catch { /* cached password failed */ }
+      }
+      return null;
+    },
+    []
+  );
+
   const handleExpand = useCallback(
     async (record: WorkflowRequestRecordItem) => {
       if (expandedId === record.id) {
@@ -425,7 +521,17 @@ function RequestHistoryTab({
         );
         if (res.ok) {
           const data = await res.json();
-          setExpandedRecord(data.record);
+          if (data.encrypted && data.encryptedContent) {
+            const decrypted = await tryDecryptReqContent(data.encryptedContent);
+            if (decrypted) {
+              setExpandedRecord(decrypted);
+            } else {
+              setPendingEncryptedContent(data.encryptedContent);
+              setShowCryptoPrompt(true);
+            }
+          } else {
+            setExpandedRecord(data.record);
+          }
         }
       } catch {
         // ignore
@@ -433,7 +539,23 @@ function RequestHistoryTab({
         setLoadingDetail(false);
       }
     },
-    [expandedId]
+    [expandedId, tryDecryptReqContent]
+  );
+
+  const handleCryptoUnlock = useCallback(
+    async (privateKey: string) => {
+      setShowCryptoPrompt(false);
+      if (pendingEncryptedContent) {
+        try {
+          const plain = await decryptWithPrivateKey(pendingEncryptedContent, privateKey);
+          setExpandedRecord(JSON.parse(plain) as WorkflowRequestRecord);
+        } catch {
+          // ignore
+        }
+        setPendingEncryptedContent(null);
+      }
+    },
+    [pendingEncryptedContent]
   );
 
   const handleDelete = useCallback(
@@ -628,6 +750,15 @@ function RequestHistoryTab({
           Close
         </button>
       </div>
+
+      {showCryptoPrompt && encryptedPrivateKey && salt && (
+        <CryptoPasswordPrompt
+          encryptedPrivateKey={encryptedPrivateKey}
+          salt={salt}
+          onUnlock={handleCryptoUnlock}
+          onCancel={() => { setShowCryptoPrompt(false); setPendingEncryptedContent(null); }}
+        />
+      )}
     </>
   );
 }

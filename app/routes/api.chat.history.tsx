@@ -6,6 +6,8 @@ import {
   saveChat,
   deleteChat,
 } from "~/services/chat-history.server";
+import { getSettings } from "~/services/user-settings.server";
+import { getEncryptionParams } from "~/types/settings";
 import type { ChatHistory } from "~/types/chat";
 
 // ---------------------------------------------------------------------------
@@ -45,10 +47,20 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
 
+      let encryption;
+      try {
+        const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+        encryption = getEncryptionParams(settings, "chat");
+        if (encryption) {
+          chatHistory.isEncrypted = true;
+        }
+      } catch { /* ignore settings load failure */ }
+
       const fileId = await saveChat(
         validTokens.accessToken,
         validTokens.rootFolderId,
-        chatHistory
+        chatHistory,
+        encryption
       );
 
       return Response.json({ success: true, fileId }, { headers: responseHeaders });

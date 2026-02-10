@@ -17,8 +17,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const workflowId = url.searchParams.get("workflowId");
 
   if (fileId) {
-    const record = await loadExecutionRecord(validTokens.accessToken, fileId);
-    return Response.json({ record }, { headers: responseHeaders });
+    const result = await loadExecutionRecord(validTokens.accessToken, fileId);
+    if ("encrypted" in result) {
+      return Response.json(
+        { encrypted: true, encryptedContent: result.encryptedContent },
+        { headers: responseHeaders }
+      );
+    }
+    return Response.json({ record: result }, { headers: responseHeaders });
   }
 
   const records = await listExecutionRecords(

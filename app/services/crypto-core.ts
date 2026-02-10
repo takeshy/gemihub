@@ -302,6 +302,19 @@ export async function decryptFileContent(
 }
 
 /**
+ * Decrypt file content using an already-decrypted private key.
+ * Unlike decryptFileContent(), this does NOT require a password — it uses the raw private key directly.
+ */
+export async function decryptWithPrivateKey(
+  fileContent: string,
+  privateKeyBase64: string
+): Promise<string> {
+  const encrypted = unwrapEncryptedFile(fileContent);
+  if (!encrypted) throw new Error("Invalid encrypted file format");
+  return decryptData(encrypted.data, privateKeyBase64);
+}
+
+/**
  * Check if file content is an encrypted file (has encrypted YAML frontmatter)
  * Handles both \n and \r\n line endings
  */

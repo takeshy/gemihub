@@ -11,7 +11,6 @@ import {
   Loader2,
   Trash2,
   Lock,
-  Unlock,
   Upload,
   Pencil,
   CheckCircle2,
@@ -192,10 +191,6 @@ export function DriveFileTree({
   const [createFileDialog, setCreateFileDialog] = useState<{
     open: boolean; name: string; ext: string; customExt: string;
   }>({ open: false, name: "", ext: ".md", customExt: "" });
-  const [decryptTarget, setDecryptTarget] = useState<CachedTreeNode | null>(null);
-  const [decryptPassword, setDecryptPassword] = useState("");
-  const [decryptError, setDecryptError] = useState<string | null>(null);
-  const [decrypting, setDecrypting] = useState(false);
   const [tempDiffData, setTempDiffData] = useState<{
     fileName: string;
     fileId: string;
@@ -895,53 +890,6 @@ export function DriveFileTree({
     [fetchAndCacheTree, updateTreeFromMeta, encryptionEnabled, setBusy, clearBusy]
   );
 
-  const handleDecrypt = useCallback(
-    (item: CachedTreeNode) => {
-      if (!encryptionEnabled) {
-        alert("暗号化が未設定です。設定画面から暗号化を設定してください。");
-        window.location.href = "/settings";
-        return;
-      }
-      setDecryptTarget(item);
-      setDecryptPassword("");
-      setDecryptError(null);
-    },
-    [encryptionEnabled]
-  );
-
-  const handleDecryptSubmit = useCallback(async () => {
-    if (!decryptTarget || !decryptPassword) return;
-    setDecrypting(true);
-    setDecryptError(null);
-    try {
-      const res = await fetch("/api/drive/files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "decrypt",
-          fileId: decryptTarget.id,
-          password: decryptPassword,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setDecryptTarget(null);
-        if (data.meta) {
-          await updateTreeFromMeta(data.meta);
-        } else {
-          await fetchAndCacheTree();
-        }
-      } else {
-        const data = await res.json();
-        setDecryptError(data.error || t("crypt.wrongPassword"));
-      }
-    } catch {
-      setDecryptError(t("crypt.wrongPassword"));
-    } finally {
-      setDecrypting(false);
-    }
-  }, [decryptTarget, decryptPassword, fetchAndCacheTree, updateTreeFromMeta, t]);
-
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
     const { fileId, tempContent, tempSavedAt, fileName } = tempDiffData;
@@ -1149,13 +1097,7 @@ export function DriveFileTree({
       const items: ContextMenuItem[] = [];
 
       if (!item.isFolder) {
-        if (item.name.endsWith(".encrypted")) {
-          items.push({
-            label: "Decrypt",
-            icon: <Unlock size={ICON.MD} />,
-            onClick: () => handleDecrypt(item),
-          });
-        } else {
+        if (!item.name.endsWith(".encrypted")) {
           items.push({
             label: "Encrypt",
             icon: <Lock size={ICON.MD} />,
@@ -1258,7 +1200,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -1477,48 +1419,6 @@ export function DriveFileTree({
           filePath={editHistoryFile.filePath}
           onClose={() => setEditHistoryFile(null)}
         />
-      )}
-
-      {decryptTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !decrypting && setDecryptTarget(null)}>
-          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-              {t("crypt.enterPassword")}
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 truncate">
-              {decryptTarget.name}
-            </p>
-            <input
-              type="password"
-              value={decryptPassword}
-              onChange={(e) => { setDecryptPassword(e.target.value); setDecryptError(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter") handleDecryptSubmit(); }}
-              placeholder={t("crypt.passwordPlaceholder")}
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              autoFocus
-              disabled={decrypting}
-            />
-            {decryptError && (
-              <p className="text-xs text-red-500 mt-1">{decryptError}</p>
-            )}
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => setDecryptTarget(null)}
-                disabled={decrypting}
-                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                onClick={handleDecryptSubmit}
-                disabled={!decryptPassword || decrypting}
-                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {decrypting ? t("crypt.decrypting") : t("crypt.unlock")}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {createFileDialog.open && (

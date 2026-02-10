@@ -21,6 +21,9 @@ import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
 import { ChatInput } from "~/components/chat/ChatInput";
 import { useI18n } from "~/i18n/context";
+import { isEncryptedFile, decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
+import { cryptoCache } from "~/services/crypto-cache";
+import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -69,6 +72,8 @@ export function ChatPanel({
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatListOpen, setChatListOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
+  const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
 
   const availableModels = getAvailableModels(settings.apiPlan);
   const defaultModel =
@@ -112,6 +117,17 @@ export function ChatPanel({
     setChatListOpen(false);
   }, []);
 
+  const parseChatContent = useCallback((content: string) => {
+    try {
+      const chat = JSON.parse(content);
+      if (chat.messages) {
+        setMessages(chat.messages);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleSelectChat = useCallback(
     async (chatId: string, fileId: string) => {
       setChatListOpen(false);
@@ -126,9 +142,30 @@ export function ChatPanel({
         if (res.ok) {
           const data = await res.json();
           if (data.content) {
-            const chat = JSON.parse(data.content);
-            if (chat.messages) {
-              setMessages(chat.messages);
+            if (isEncryptedFile(data.content)) {
+              // Try cached private key first
+              const cachedKey = cryptoCache.getPrivateKey();
+              if (cachedKey) {
+                try {
+                  const plain = await decryptWithPrivateKey(data.content, cachedKey);
+                  parseChatContent(plain);
+                  return;
+                } catch { /* cached key failed, try password */ }
+              }
+              // Try cached password
+              const cachedPw = cryptoCache.getPassword();
+              if (cachedPw) {
+                try {
+                  const plain = await decryptFileContent(data.content, cachedPw);
+                  parseChatContent(plain);
+                  return;
+                } catch { /* cached password failed */ }
+              }
+              // No cached credentials — show password prompt
+              setPendingEncryptedContent(data.content);
+              setShowCryptoPrompt(true);
+            } else {
+              parseChatContent(data.content);
             }
           }
         }
@@ -136,7 +173,23 @@ export function ChatPanel({
         // ignore
       }
     },
-    []
+    [parseChatContent]
+  );
+
+  const handleCryptoUnlock = useCallback(
+    async (privateKey: string) => {
+      setShowCryptoPrompt(false);
+      if (pendingEncryptedContent) {
+        try {
+          const plain = await decryptWithPrivateKey(pendingEncryptedContent, privateKey);
+          parseChatContent(plain);
+        } catch {
+          // ignore
+        }
+        setPendingEncryptedContent(null);
+      }
+    },
+    [pendingEncryptedContent, parseChatContent]
   );
 
   const handleDeleteChat = useCallback(
@@ -649,6 +702,15 @@ export function ChatPanel({
         driveToolModeLocked={toolConstraint.locked}
         driveToolModeReasonKey={toolConstraint.reasonKey as keyof TranslationStrings | undefined}
       />
+
+      {showCryptoPrompt && settings.encryption.encryptedPrivateKey && (
+        <CryptoPasswordPrompt
+          encryptedPrivateKey={settings.encryption.encryptedPrivateKey}
+          salt={settings.encryption.salt}
+          onUnlock={handleCryptoUnlock}
+          onCancel={() => { setShowCryptoPrompt(false); setPendingEncryptedContent(null); }}
+        />
+      )}
     </div>
   );
 }

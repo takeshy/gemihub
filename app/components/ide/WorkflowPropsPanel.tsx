@@ -827,6 +827,8 @@ function WorkflowNodeListView({
           workflowId={fileId}
           workflowName={workflowName}
           onClose={() => setShowHistory(false)}
+          encryptedPrivateKey={settings?.encryption?.encryptedPrivateKey}
+          salt={settings?.encryption?.salt}
         />
       )}
     </div>

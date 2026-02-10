@@ -8,7 +8,7 @@ Hybrid RSA+AES encryption for protecting files stored on Google Drive.
 - **Password Protection**: Private key encrypted with PBKDF2-derived key (100,000 iterations)
 - **Per-File AES Key**: Each encryption generates a fresh AES-256 key
 - **Self-Contained Files**: Each encrypted file contains everything needed for decryption (except the password)
-- **Client-Side Decryption**: Files are decrypted in the browser — plaintext never leaves your device
+- **Client-Side Decryption**: Encrypted files and history records are decrypted in the browser using the Web Crypto API
 - **Password Caching**: Enter password once per session
 - **Double-Encryption Prevention**: Already-encrypted content is never re-encrypted
 
@@ -94,14 +94,15 @@ In the encrypted file editor:
 - **Temp Upload**: Re-encrypts the edited content and saves to the temp area (for cross-device transfer without full sync)
 - **Temp Download**: Fetches temp content, decrypts, and shows a diff for review
 
-### Decrypt a File (Remove Encryption)
+### Chat & Workflow History Encryption
 
-Right-click an `.encrypted` file → **Decrypt**. Enter your password. The file is decrypted on the server and renamed back (`.encrypted` extension removed).
+When encryption is enabled and `encryptChatHistory` / `encryptWorkflowHistory` are turned on in settings, new chat histories and workflow execution/request records are encrypted before saving to Drive. Older unencrypted records remain readable. When loading an encrypted record, the app decrypts it client-side using your cached private key or prompts for your password.
 
 ## Security Notes
 
 - **Password is never stored** — only the encrypted private key and salt are saved in settings
-- **Plaintext stays in browser** — server-side encrypt/decrypt operations are used only for file management (rename, update on Drive); the client-side viewer decrypts locally
+- **Decryption happens in the browser** — encrypted files and history records are decrypted client-side using the Web Crypto API; the server never sees plaintext of encrypted content
+- **Encryption uses server-side crypto for saving** — when saving new encrypted content, the server encrypts using the public key (no password needed) before writing to Drive
 - **Each file has a unique AES key** — compromising one file's AES key does not affect others
 - **RSA key pair is generated once** — stored encrypted with your password in settings
 - **Forgetting your password means data loss** — there is no recovery mechanism
@@ -191,7 +192,7 @@ python decrypt.py path/to/file.md.encrypted
 | `app/services/crypto.server.ts` | Server-side re-export of crypto-core |
 | `app/services/crypto-cache.ts` | In-memory password/private key cache (client-side, per session) |
 | `app/components/ide/EncryptedFileViewer.tsx` | Password prompt + decrypted file editor |
-| `app/routes/api.drive.files.tsx` | Server-side encrypt/decrypt actions (encrypt, decrypt) |
+| `app/routes/api.drive.files.tsx` | Server-side encrypt action |
 
 ## Cryptographic Parameters
 

@@ -7,6 +7,8 @@ import {
   saveRequestRecord,
   deleteRequestRecord,
 } from "~/services/workflow-request-history.server";
+import { getSettings } from "~/services/user-settings.server";
+import { getEncryptionParams } from "~/types/settings";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
@@ -18,8 +20,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const workflowId = url.searchParams.get("workflowId");
 
   if (fileId) {
-    const record = await loadRequestRecord(validTokens.accessToken, fileId);
-    return Response.json({ record }, { headers: responseHeaders });
+    const result = await loadRequestRecord(validTokens.accessToken, fileId);
+    if ("encrypted" in result) {
+      return Response.json(
+        { encrypted: true, encryptedContent: result.encryptedContent },
+        { headers: responseHeaders }
+      );
+    }
+    return Response.json({ record: result }, { headers: responseHeaders });
   }
 
   const records = await listRequestRecords(
@@ -39,10 +47,17 @@ export async function action({ request }: Route.ActionArgs) {
   const { action: act, fileId, record } = body;
 
   if (act === "save" && record) {
+    let encryption;
+    try {
+      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      encryption = getEncryptionParams(settings, "workflow");
+    } catch { /* ignore settings load failure */ }
+
     const id = await saveRequestRecord(
       validTokens.accessToken,
       validTokens.rootFolderId,
-      record
+      record,
+      encryption
     );
     return Response.json({ success: true, fileId: id }, { headers: responseHeaders });
   }

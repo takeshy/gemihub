@@ -108,6 +108,7 @@ export interface ExecutionRecord {
   endTime?: string;
   status: ExecutionStatus;
   steps: ExecutionStep[];
+  isEncrypted?: boolean;
 }
 
 export interface ExecutionRecordItem {
@@ -119,6 +120,7 @@ export interface ExecutionRecordItem {
   endTime?: string;
   status: ExecutionStatus;
   stepCount: number;
+  isEncrypted?: boolean;
 }
 
 // Workflow request (AI generation) record
@@ -132,6 +134,7 @@ export interface WorkflowRequestRecord {
   model: string;
   mode: "create" | "modify";
   history?: { role: "user" | "model"; text: string }[];
+  isEncrypted?: boolean;
 }
 
 export interface WorkflowRequestRecordItem {
@@ -143,6 +146,7 @@ export interface WorkflowRequestRecordItem {
   description: string;
   model: string;
   mode: "create" | "modify";
+  isEncrypted?: boolean;
 }
 
 // Workflow input for execution

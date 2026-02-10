@@ -6,6 +6,7 @@ import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflow } from "~/engine/executor";
 import type { ServiceContext, PromptCallbacks, ExecutionLog } from "~/engine/types";
 import { getSettings } from "~/services/user-settings.server";
+import { getEncryptionParams } from "~/types/settings";
 import {
   createExecution,
   addLog,
@@ -130,10 +131,12 @@ export async function action({ request, params }: Route.ActionArgs) {
 
       if (record) {
         try {
+          const encryption = settings ? getEncryptionParams(settings, "workflow") : undefined;
           await saveExecutionRecord(
             validTokens.accessToken,
             validTokens.rootFolderId,
-            record
+            record,
+            encryption
           );
         } catch (e) {
           console.error("Failed to save execution history:", e);

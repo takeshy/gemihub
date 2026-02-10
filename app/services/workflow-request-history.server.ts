@@ -15,6 +15,8 @@ import type {
   WorkflowRequestRecord,
   WorkflowRequestRecordItem,
 } from "~/engine/types";
+import type { EncryptionParams } from "~/types/settings";
+import { encryptFileContent, isEncryptedFile } from "./crypto.server";
 
 const REQUEST_HISTORY_FOLDER = "requests";
 
@@ -48,10 +50,19 @@ function extractRequestItem(
 export async function saveRequestRecord(
   accessToken: string,
   rootFolderId: string,
-  record: WorkflowRequestRecord
+  record: WorkflowRequestRecord,
+  encryption?: EncryptionParams
 ): Promise<string> {
   const folderId = await ensureRequestHistoryFolderId(accessToken, rootFolderId);
-  const content = JSON.stringify(record, null, 2);
+  let content = JSON.stringify(record, null, 2);
+  if (encryption) {
+    content = await encryptFileContent(
+      content,
+      encryption.publicKey,
+      encryption.encryptedPrivateKey,
+      encryption.salt
+    );
+  }
   const fileName = `req_${record.id}.json`;
 
   const file = await createFile(
@@ -73,6 +84,7 @@ export async function saveRequestRecord(
       description: record.description,
       model: record.model,
       mode: record.mode,
+      isEncrypted: !!encryption,
     };
     await upsertHistoryMetaEntry(accessToken, folderId, file.id, item);
   } catch (err) {
@@ -115,8 +127,11 @@ export async function listRequestRecords(
 export async function loadRequestRecord(
   accessToken: string,
   fileId: string
-): Promise<WorkflowRequestRecord> {
+): Promise<WorkflowRequestRecord | { encrypted: true; encryptedContent: string }> {
   const content = await readFile(accessToken, fileId);
+  if (isEncryptedFile(content)) {
+    return { encrypted: true, encryptedContent: content };
+  }
   return JSON.parse(content) as WorkflowRequestRecord;
 }
 

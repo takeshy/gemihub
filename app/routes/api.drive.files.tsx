@@ -18,7 +18,6 @@ import {
 import { getSettings } from "~/services/user-settings.server";
 import {
   encryptFileContent,
-  decryptFileContent,
 } from "~/services/crypto.server";
 import {
   getFileListFromMeta,
@@ -30,6 +29,7 @@ import {
 import { saveSettings } from "~/services/user-settings.server";
 import { deleteSingleFileFromRag } from "~/services/file-search.server";
 import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
+import { saveEdit } from "~/services/edit-history.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
@@ -94,7 +94,7 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   const body = await request.json();
-  const { action: actionType, fileId, name, content, data, password, mimeType } = body;
+  const { action: actionType, fileId, name, content, data, mimeType } = body;
 
   switch (actionType) {
     case "create": {
@@ -123,9 +123,33 @@ export async function action({ request }: Route.ActionArgs) {
     }
     case "update": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
-      const file = await updateFile(validTokens.accessToken, fileId, content, mimeType || "text/plain");
 
+      // Read old content for remote edit history (before update)
+      let oldContent: string | null = null;
+      try {
+        oldContent = await readFile(validTokens.accessToken, fileId);
+      } catch {
+        // File might be new or unreadable, skip history
+      }
+
+      const file = await updateFile(validTokens.accessToken, fileId, content, mimeType || "text/plain");
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+
+      // Save remote edit history (best-effort)
+      if (oldContent != null && content != null && oldContent !== content) {
+        try {
+          const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+          await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
+            path: file.name,
+            oldContent,
+            newContent: content,
+            source: "manual",
+          });
+        } catch {
+          // Best-effort: don't block file update
+        }
+      }
+
       return jsonWithCookie({
         file,
         md5Checksum: file.md5Checksum,
@@ -212,24 +236,6 @@ export async function action({ request }: Route.ActionArgs) {
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamedFile);
       return jsonWithCookie({ file: renamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
-    }
-    case "decrypt": {
-      if (!fileId || !password) {
-        return jsonWithCookie({ error: "Missing fileId or password" }, { status: 400 });
-      }
-      const encryptedContent = await readFile(validTokens.accessToken, fileId);
-      let decrypted: string;
-      try {
-        decrypted = await decryptFileContent(encryptedContent, password);
-      } catch {
-        return jsonWithCookie({ error: "Invalid password" }, { status: 401 });
-      }
-      await updateFile(validTokens.accessToken, fileId, decrypted);
-      const decMeta = await getFileMetadata(validTokens.accessToken, fileId);
-      const newName = decMeta.name.replace(/\.encrypted$/, "");
-      const decRenamedFile = await renameFile(validTokens.accessToken, fileId, newName);
-      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, decRenamedFile);
-      return jsonWithCookie({ file: decRenamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "publish": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });

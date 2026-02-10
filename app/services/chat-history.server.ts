@@ -16,6 +16,8 @@ import {
   removeHistoryMetaEntry,
 } from "./history-meta.server";
 import type { ChatHistory, ChatHistoryItem } from "~/types/chat";
+import type { EncryptionParams } from "~/types/settings";
+import { encryptFileContent } from "./crypto.server";
 
 const CHATS_FOLDER = "chats";
 
@@ -91,10 +93,19 @@ export async function loadChat(
 export async function saveChat(
   accessToken: string,
   rootFolderId: string,
-  chatHistory: ChatHistory
+  chatHistory: ChatHistory,
+  encryption?: EncryptionParams
 ): Promise<string> {
   const chatsFolderId = await ensureChatsFolderId(accessToken, rootFolderId);
-  const content = JSON.stringify(chatHistory, null, 2);
+  let content = JSON.stringify(chatHistory, null, 2);
+  if (encryption) {
+    content = await encryptFileContent(
+      content,
+      encryption.publicKey,
+      encryption.encryptedPrivateKey,
+      encryption.salt
+    );
+  }
   const fileName = `chat_${chatHistory.id}.json`;
 
   // Check if file already exists

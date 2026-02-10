@@ -14,6 +14,8 @@ import {
   removeHistoryMetaEntry,
 } from "./history-meta.server";
 import type { ExecutionRecord, ExecutionRecordItem } from "~/engine/types";
+import type { EncryptionParams } from "~/types/settings";
+import { encryptFileContent, isEncryptedFile } from "./crypto.server";
 
 const EXEC_HISTORY_FOLDER = "execution";
 
@@ -47,10 +49,19 @@ function extractExecItem(
 export async function saveExecutionRecord(
   accessToken: string,
   rootFolderId: string,
-  record: ExecutionRecord
+  record: ExecutionRecord,
+  encryption?: EncryptionParams
 ): Promise<string> {
   const folderId = await ensureExecHistoryFolderId(accessToken, rootFolderId);
-  const content = JSON.stringify(record, null, 2);
+  let content = JSON.stringify(record, null, 2);
+  if (encryption) {
+    content = await encryptFileContent(
+      content,
+      encryption.publicKey,
+      encryption.encryptedPrivateKey,
+      encryption.salt
+    );
+  }
   const fileName = `exec_${record.id}.json`;
 
   const files = await listFiles(accessToken, folderId);
@@ -82,6 +93,7 @@ export async function saveExecutionRecord(
       endTime: record.endTime,
       status: record.status,
       stepCount: record.steps?.length || 0,
+      isEncrypted: !!encryption,
     };
     await upsertHistoryMetaEntry(accessToken, folderId, fileId, item);
   } catch (err) {
@@ -124,8 +136,11 @@ export async function listExecutionRecords(
 export async function loadExecutionRecord(
   accessToken: string,
   fileId: string
-): Promise<ExecutionRecord> {
+): Promise<ExecutionRecord | { encrypted: true; encryptedContent: string }> {
   const content = await readFile(accessToken, fileId);
+  if (isEncryptedFile(content)) {
+    return { encrypted: true, encryptedContent: content };
+  }
   return JSON.parse(content) as ExecutionRecord;
 }
 

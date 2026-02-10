@@ -275,6 +275,26 @@ export interface EncryptionSettings {
   salt: string;
 }
 
+export interface EncryptionParams {
+  publicKey: string;
+  encryptedPrivateKey: string;
+  salt: string;
+}
+
+export function getEncryptionParams(
+  settings: UserSettings,
+  type: "chat" | "workflow"
+): EncryptionParams | undefined {
+  const enc = settings.encryption;
+  const enabled = type === "chat" ? enc.encryptChatHistory : enc.encryptWorkflowHistory;
+  if (!enc.enabled || !enabled || !enc.publicKey) return undefined;
+  return {
+    publicKey: enc.publicKey,
+    encryptedPrivateKey: enc.encryptedPrivateKey,
+    salt: enc.salt,
+  };
+}
+
 export const DEFAULT_ENCRYPTION_SETTINGS: EncryptionSettings = {
   enabled: false,
   encryptChatHistory: false,
