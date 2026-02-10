@@ -226,7 +226,7 @@ The unselected version is always backed up for manual merging if needed.
 ### Backup Naming
 
 ```
-{filename}_{YYYYMMDDTHHmmss}.{ext}
+{filename}_{YYYYMMDD_HHmmss}.{ext}
 ```
 
 Example: `notes/daily.md` → `sync_conflicts/notes_daily_20260207_143000.md`
