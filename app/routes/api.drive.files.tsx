@@ -234,6 +234,42 @@ export async function action({ request }: Route.ActionArgs) {
     case "publish": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
       const webViewLink = await publishFile(validTokens.accessToken, fileId);
+
+      // For markdown/HTML files, find internal image URLs, publish those images,
+      // and replace links with public URLs
+      const fileMeta = await getFileMetadata(validTokens.accessToken, fileId);
+      const ext = fileMeta.name.split(".").pop()?.toLowerCase();
+      if (ext === "md" || ext === "html" || ext === "htm") {
+        const fileContent = await readFile(validTokens.accessToken, fileId);
+        const internalUrlPattern = /\/api\/drive\/files\?action=raw&fileId=([a-zA-Z0-9_-]+)/g;
+        const imageFileIds = new Set<string>();
+        let urlMatch;
+        while ((urlMatch = internalUrlPattern.exec(fileContent)) !== null) {
+          imageFileIds.add(urlMatch[1]);
+        }
+
+        if (imageFileIds.size > 0) {
+          const replacements = new Map<string, string>();
+          for (const imgFileId of imageFileIds) {
+            await publishFile(validTokens.accessToken, imgFileId);
+            const imgMeta = await getFileMetadata(validTokens.accessToken, imgFileId);
+            await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, imgFileId, true);
+            replacements.set(
+              `/api/drive/files?action=raw&fileId=${imgFileId}`,
+              `/public/file/${imgFileId}/${encodeURIComponent(imgMeta.name)}`
+            );
+          }
+
+          let updatedContent = fileContent;
+          for (const [oldUrl, newUrl] of replacements) {
+            updatedContent = updatedContent.replaceAll(oldUrl, newUrl);
+          }
+
+          const updatedFile = await updateFile(validTokens.accessToken, fileId, updatedContent, fileMeta.mimeType);
+          await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, updatedFile);
+        }
+      }
+
       const pubMeta = await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, fileId, true, webViewLink);
       return jsonWithCookie({ webViewLink, meta: { lastUpdatedAt: pubMeta.lastUpdatedAt, files: pubMeta.files } });
     }
