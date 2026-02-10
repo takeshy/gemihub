@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { data, redirect, useLoaderData, useSearchParams } from "react-router";
 import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
@@ -23,6 +23,7 @@ import { PasswordPromptDialog } from "~/components/ide/PasswordPromptDialog";
 import { WorkflowPropsPanel } from "~/components/ide/WorkflowPropsPanel";
 import { ConflictDialog } from "~/components/ide/ConflictDialog";
 import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
+import { SearchPanel } from "~/components/ide/SearchPanel";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { useSync } from "~/hooks/useSync";
 import { useIsMobile } from "~/hooks/useIsMobile";
@@ -426,6 +427,29 @@ function IDEContent({
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const { sidebarViews, mainViews, slashCommands: pluginSlashCommands, getPluginAPI } = usePlugins();
+  const { fileList } = useEditorContext();
+
+  // Search panel state
+  const [showSearch, setShowSearch] = useState(false);
+
+  const ragStoreIds = useMemo(() => {
+    if (!settings.ragEnabled) return [];
+    const rs = settings.ragSettings?.["gemihub"];
+    if (!rs?.storeId) return [];
+    return [rs.storeId];
+  }, [settings.ragEnabled, settings.ragSettings]);
+
+  // Keyboard shortcut: Ctrl+Shift+F / Cmd+Shift+F to open search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Mobile view state: which panel is shown full-screen
   type MobileView = "files" | "editor" | "chat" | "workflow";
@@ -460,8 +484,22 @@ function IDEContent({
       onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
       activeFileId={activeFileId}
       encryptionEnabled={settings.encryption.enabled}
+      onSearchOpen={() => setShowSearch(true)}
     />
   );
+
+  const searchPanelContent = (
+    <SearchPanel
+      apiPlan={settings.apiPlan}
+      ragStoreIds={ragStoreIds}
+      ragTopK={settings.ragTopK}
+      fileList={fileList}
+      onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
+      onClose={() => setShowSearch(false)}
+    />
+  );
+
+  const leftSidebarContent = showSearch ? searchPanelContent : fileTreeContent;
 
   const mainViewerContent = (
     <PanelErrorBoundary fallbackLabel="Error loading main viewer">
@@ -572,7 +610,7 @@ function IDEContent({
           <div className="flex flex-1 flex-col overflow-hidden">
             {mobileView === "files" && (
               <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
-                {fileTreeContent}
+                {leftSidebarContent}
               </div>
             )}
             {mobileView === "editor" && (
@@ -622,9 +660,9 @@ function IDEContent({
       ) : (
         /* ---- Desktop layout ---- */
         <div className="flex flex-1 overflow-hidden">
-          {/* Left sidebar - File tree */}
+          {/* Left sidebar - File tree / Search */}
           <LeftSidebar>
-            {fileTreeContent}
+            {leftSidebarContent}
           </LeftSidebar>
 
           {/* Main viewer */}
@@ -686,6 +724,7 @@ function DriveFileTreeWithContext(props: {
   onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
   activeFileId: string | null;
   encryptionEnabled: boolean;
+  onSearchOpen?: () => void;
 }) {
   const { setFileList } = useEditorContext();
   return (

@@ -33,6 +33,7 @@ export default [
   route("api/settings/edit-history-prune", "routes/api.settings.edit-history-prune.tsx"),
   route("api/mcp/tool-call", "routes/api.mcp.tool-call.tsx"),
   route("api/mcp/resource-read", "routes/api.mcp.resource-read.tsx"),
+  route("api/search", "routes/api.search.tsx"),
   route("api/sync", "routes/api.sync.tsx"),
   route("api/drive/upload", "routes/api.drive.upload.tsx"),
   route("api/drive/temp", "routes/api.drive.temp.tsx"),

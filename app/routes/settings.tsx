@@ -60,6 +60,7 @@ import {
   KeyRound,
   Puzzle,
   X,
+  Search,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
@@ -1911,7 +1912,9 @@ function RagTab({ settings }: { settings: UserSettings }) {
 
   const [ragTopK, setRagTopK] = useState(settings.ragTopK);
   const [ragSettings, setRagSettings] = useState<Record<string, RagSetting>>(settings.ragSettings);
-  const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(settings.selectedRagSetting);
+  const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(
+    settings.ragSettings[DEFAULT_RAG_STORE_KEY] ? DEFAULT_RAG_STORE_KEY : settings.selectedRagSetting
+  );
   const [syncing, setSyncing] = useState(false);
   const [syncingKey, setSyncingKey] = useState<string | null>(null);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
@@ -2110,6 +2113,12 @@ function RagTab({ settings }: { settings: UserSettings }) {
     <SectionCard>
       <StatusBanner fetcher={fetcher} />
 
+      {/* Search tip */}
+      <div className="mb-4 flex items-start gap-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+        <Search size={14} className="mt-0.5 flex-shrink-0" />
+        <span>{t("settings.rag.searchTip")}</span>
+      </div>
+
       {/* Auto RAG Registration button (only when gemihub setting doesn't exist) */}
       {!ragSettings[DEFAULT_RAG_STORE_KEY] && (
         <div className="mb-6">
@@ -2236,21 +2245,26 @@ function RagTab({ settings }: { settings: UserSettings }) {
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              {t("settings.rag.topK")}: <span className="font-medium">{ragTopK}</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setTopKDraft(ragTopK);
-                setEditingTopK(true);
-              }}
-              className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-800"
-              title="Edit"
-            >
-              <Pencil size={14} />
-            </button>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                {t("settings.rag.topK")}: <span className="font-medium">{ragTopK}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setTopKDraft(ragTopK);
+                  setEditingTopK(true);
+                }}
+                className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Edit"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {t("settings.rag.topKDescription")}
+            </p>
           </div>
         )}
       </div>

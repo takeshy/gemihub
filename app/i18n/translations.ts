@@ -85,6 +85,7 @@ export interface TranslationStrings {
   // RAG tab
   "settings.rag.enable": string;
   "settings.rag.topK": string;
+  "settings.rag.topKDescription": string;
   "settings.rag.settings": string;
   "settings.rag.pendingCount": string;
   "settings.rag.enableAutoRag": string;
@@ -278,6 +279,21 @@ export interface TranslationStrings {
   "fileTree.create": string;
   "fileTree.cancel": string;
 
+  // Search
+  "search.title": string;
+  "search.placeholder": string;
+  "search.searching": string;
+  "search.noResults": string;
+  "search.resultCount": string;
+  "search.error": string;
+  "search.backToFiles": string;
+  "search.ragMode": string;
+  "search.driveMode": string;
+  "search.localMode": string;
+  "search.localNote": string;
+  "search.modelLabel": string;
+  "settings.rag.searchTip": string;
+
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
   "settings.sync.trashDescription": string;
@@ -382,6 +398,7 @@ const en: TranslationStrings = {
   // RAG tab
   "settings.rag.enable": "Enable RAG (Retrieval-Augmented Generation)",
   "settings.rag.topK": "Top-K results",
+  "settings.rag.topKDescription": "Number of document chunks retrieved from the RAG store per query. Higher values provide more context but use more tokens.",
   "settings.rag.settings": "RAG Settings",
   "settings.rag.pendingCount": "{count} file(s) pending RAG registration",
   "settings.rag.enableAutoRag": "Enable Auto RAG Registration",
@@ -575,6 +592,21 @@ const en: TranslationStrings = {
   "fileTree.create": "Create",
   "fileTree.cancel": "Cancel",
 
+  // Search
+  "search.title": "Search",
+  "search.placeholder": "Enter search query...",
+  "search.searching": "Searching...",
+  "search.noResults": "No results found.",
+  "search.resultCount": "{count} results found",
+  "search.error": "Search failed. Please try again.",
+  "search.backToFiles": "Back to Files",
+  "search.ragMode": "RAG",
+  "search.driveMode": "Drive",
+  "search.localMode": "Local",
+  "search.localNote": "Only cached files are searched.",
+  "search.modelLabel": "Model",
+  "settings.rag.searchTip": "When RAG is configured, file search (magnifying glass / Ctrl+Shift+F) defaults to semantic RAG search. You can also switch to Drive or Local search.",
+
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
   "settings.sync.trashDescription": "Restore or permanently delete trashed files.",
@@ -679,6 +711,7 @@ const ja: TranslationStrings = {
   // RAG tab
   "settings.rag.enable": "RAG（検索拡張生成）を有効にする",
   "settings.rag.topK": "Top-K 結果数",
+  "settings.rag.topKDescription": "1回の質問でRAGストアから取得するドキュメント断片の数。多いほど文脈が豊富になりますが、トークン消費が増えます。",
   "settings.rag.settings": "RAG設定",
   "settings.rag.pendingCount": "{count}件のファイルがRAG登録待ちです",
   "settings.rag.enableAutoRag": "自動RAG登録を有効にする",
@@ -871,6 +904,21 @@ const ja: TranslationStrings = {
   "fileTree.customExt": "カスタム",
   "fileTree.create": "作成",
   "fileTree.cancel": "キャンセル",
+
+  // Search
+  "search.title": "検索",
+  "search.placeholder": "検索キーワードを入力...",
+  "search.searching": "検索中...",
+  "search.noResults": "結果が見つかりませんでした。",
+  "search.resultCount": "{count}件の結果",
+  "search.error": "検索に失敗しました。もう一度お試しください。",
+  "search.backToFiles": "ファイル一覧に戻る",
+  "search.ragMode": "RAG",
+  "search.driveMode": "Drive",
+  "search.localMode": "ローカル",
+  "search.localNote": "キャッシュ済みファイルのみが検索対象です。",
+  "search.modelLabel": "モデル",
+  "settings.rag.searchTip": "RAGが設定されている場合、ファイル検索（虫めがね / Ctrl+Shift+F）はデフォルトでセマンティックRAG検索を使用します。Drive検索やローカル検索に切り替えることもできます。",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",

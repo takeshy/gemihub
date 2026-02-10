@@ -75,10 +75,14 @@ export function ChatPanel({
     settings.selectedModel || getDefaultModelForPlan(settings.apiPlan);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultModel);
 
-  const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(
-    settings.selectedRagSetting
-  );
-  const initialConstraint = getDriveToolModeConstraint(defaultModel, settings.selectedRagSetting);
+  const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(() => {
+    try {
+      const stored = localStorage.getItem("gemihub:selectedRagSetting");
+      if (stored !== null) return stored || null;
+    } catch { /* ignore */ }
+    return null;
+  });
+  const initialConstraint = getDriveToolModeConstraint(defaultModel, selectedRagSetting);
   const [driveToolMode, setDriveToolMode] = useState<DriveToolMode>(
     initialConstraint.forcedMode ?? initialConstraint.defaultMode
   );
@@ -223,6 +227,7 @@ export function ChatPanel({
   const handleRagSettingChange = useCallback(
     (name: string | null) => {
       setSelectedRagSetting(name);
+      try { localStorage.setItem("gemihub:selectedRagSetting", name ?? ""); } catch { /* ignore */ }
       applyConstraint(selectedModel, name);
     },
     [selectedModel, applyConstraint]
