@@ -310,6 +310,16 @@ export interface TranslationStrings {
 
   // Workflow
   "workflow.pushRequired": string;
+  "workflow.referenceHistory": string;
+  "workflow.historySelect.title": string;
+  "workflow.historySelect.recentExecutions": string;
+  "workflow.historySelect.steps": string;
+  "workflow.historySelect.selectRunToView": string;
+  "workflow.historySelect.includeAll": string;
+  "workflow.historySelect.includeSelected": string;
+  "workflow.historySelect.stepsSelected": string;
+  "workflow.historySelect.skipped": string;
+  "workflow.historySelect.error": string;
 
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
@@ -640,6 +650,16 @@ const en: TranslationStrings = {
 
   // Workflow
   "workflow.pushRequired": "Push to sync changes with server before executing",
+  "workflow.referenceHistory": "Reference Execution History",
+  "workflow.historySelect.title": "Select Execution Steps",
+  "workflow.historySelect.recentExecutions": "Recent Executions",
+  "workflow.historySelect.steps": "Steps",
+  "workflow.historySelect.selectRunToView": "Select a run to view steps",
+  "workflow.historySelect.includeAll": "Include All",
+  "workflow.historySelect.includeSelected": "Include Selected",
+  "workflow.historySelect.stepsSelected": "{count} step(s) selected",
+  "workflow.historySelect.skipped": "Skipped",
+  "workflow.historySelect.error": "Error",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
@@ -970,6 +990,16 @@ const ja: TranslationStrings = {
 
   // Workflow
   "workflow.pushRequired": "Pushしてサーバー側に反映しないと実行できません",
+  "workflow.referenceHistory": "実行履歴を参照",
+  "workflow.historySelect.title": "実行ステップを選択",
+  "workflow.historySelect.recentExecutions": "実行履歴",
+  "workflow.historySelect.steps": "ステップ",
+  "workflow.historySelect.selectRunToView": "実行を選択してステップを表示",
+  "workflow.historySelect.includeAll": "すべて含める",
+  "workflow.historySelect.includeSelected": "選択を含める",
+  "workflow.historySelect.stepsSelected": "{count}件のステップを選択中",
+  "workflow.historySelect.skipped": "スキップ",
+  "workflow.historySelect.error": "エラー",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",

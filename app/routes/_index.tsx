@@ -833,6 +833,7 @@ function IDEContent({
           mode={aiDialog.mode}
           currentYaml={aiDialog.currentYaml}
           currentName={aiDialog.currentName}
+          workflowId={aiDialog.currentFileId}
           apiPlan={settings.apiPlan}
           onAccept={handleAIAccept}
           onClose={() => setAiDialog(null)}

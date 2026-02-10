@@ -6,11 +6,15 @@ import {
   ChevronDown,
   ChevronRight,
   Brain,
+  History,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { ModelType, ApiPlan } from "~/types/settings";
 import { getAvailableModels, getDefaultModelForPlan } from "~/types/settings";
 import { WorkflowPreviewModal } from "./WorkflowPreviewModal";
+import { ExecutionHistorySelectModal } from "./ExecutionHistorySelectModal";
+import { useI18n } from "~/i18n/context";
+import type { ExecutionStep } from "~/engine/types";
 
 export interface AIWorkflowMeta {
   description: string;
@@ -24,6 +28,7 @@ interface AIWorkflowDialogProps {
   mode: "create" | "modify";
   currentYaml?: string;
   currentName?: string;
+  workflowId?: string;
   apiPlan: ApiPlan;
   onAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
   onClose: () => void;
@@ -40,14 +45,21 @@ export function AIWorkflowDialog({
   mode,
   currentYaml,
   currentName,
+  workflowId,
   apiPlan,
   onAccept,
   onClose,
 }: AIWorkflowDialogProps) {
+  const { t } = useI18n();
+
   // Input state
   const [name, setName] = useState(currentName || "");
   const [description, setDescription] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelType>(getDefaultModelForPlan(apiPlan));
+
+  // Execution history reference
+  const [selectedExecutionSteps, setSelectedExecutionSteps] = useState<ExecutionStep[]>([]);
+  const [showHistorySelect, setShowHistorySelect] = useState(false);
 
   // Generation state
   const [phase, setPhase] = useState<Phase>("input");
@@ -110,6 +122,7 @@ export function AIWorkflowDialog({
           currentYaml: mode === "modify" ? currentYaml : undefined,
           model: selectedModel,
           history: history.length > 0 ? history : undefined,
+          executionSteps: selectedExecutionSteps.length > 0 ? selectedExecutionSteps : undefined,
         }),
         signal: controller.signal,
       });
@@ -196,7 +209,7 @@ export function AIWorkflowDialog({
       setError(err instanceof Error ? err.message : "Generation failed");
       setPhase("input");
     }
-  }, [description, name, mode, currentYaml, selectedModel, history, showThinking]);
+  }, [description, name, mode, currentYaml, selectedModel, history, showThinking, selectedExecutionSteps]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -237,6 +250,7 @@ export function AIWorkflowDialog({
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-900">
         {/* Header */}
@@ -306,6 +320,36 @@ export function AIWorkflowDialog({
               }}
             />
           </div>
+
+          {/* Execution History Reference (modify mode only) */}
+          {mode === "modify" && workflowId && (
+            <div>
+              <button
+                onClick={() => setShowHistorySelect(true)}
+                disabled={phase === "generating"}
+                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 disabled:opacity-50"
+              >
+                <History size={ICON.SM} />
+                {t("workflow.referenceHistory")}
+              </button>
+              {selectedExecutionSteps.length > 0 && (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {t("workflow.historySelect.stepsSelected").replace(
+                      "{count}",
+                      String(selectedExecutionSteps.length)
+                    )}
+                  </span>
+                  <button
+                    onClick={() => setSelectedExecutionSteps([])}
+                    className="text-[10px] text-red-500 hover:text-red-700"
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Model selector */}
           <div>
@@ -409,5 +453,16 @@ export function AIWorkflowDialog({
         </div>
       </div>
     </div>
+    {showHistorySelect && workflowId && (
+      <ExecutionHistorySelectModal
+        workflowId={workflowId}
+        onSelect={(steps) => {
+          setSelectedExecutionSteps(steps);
+          setShowHistorySelect(false);
+        }}
+        onClose={() => setShowHistorySelect(false)}
+      />
+    )}
+    </>
   );
 }
