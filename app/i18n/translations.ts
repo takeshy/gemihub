@@ -174,6 +174,7 @@ export interface TranslationStrings {
   "contextMenu.publishFailed": string;
   "contextMenu.unpublishFailed": string;
   "contextMenu.fileAlreadyExists": string;
+  "contextMenu.duplicate": string;
 
   // Temp files
   "settings.general.tempFiles": string;
@@ -499,6 +500,7 @@ const en: TranslationStrings = {
   "contextMenu.publishFailed": "Failed to publish file.",
   "contextMenu.unpublishFailed": "Failed to unpublish file.",
   "contextMenu.fileAlreadyExists": "\"{name}\" already exists. Overwrite?",
+  "contextMenu.duplicate": "Duplicate",
 
   // Temp files
   "settings.general.tempFiles": "Temporary Files",
@@ -824,6 +826,7 @@ const ja: TranslationStrings = {
   "contextMenu.publishFailed": "ファイルの公開に失敗しました。",
   "contextMenu.unpublishFailed": "公開の解除に失敗しました。",
   "contextMenu.fileAlreadyExists": "「{name}」は既に存在します。上書きしますか？",
+  "contextMenu.duplicate": "複製",
 
   // Temp files
   "settings.general.tempFiles": "一時ファイル",

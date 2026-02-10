@@ -1014,6 +1014,53 @@ export function DriveFileTree({
     [modifiedFiles, cachedFiles, collectFileIds, t]
   );
 
+  const handleDuplicate = useCallback(
+    async (item: CachedTreeNode) => {
+      if (item.isFolder) return;
+      const currentFullName = findFullFileName(item.id, treeItems, "");
+      if (!currentFullName) return;
+
+      // Generate "name (copy).ext" style name
+      const lastDot = currentFullName.lastIndexOf(".");
+      const base = lastDot > 0 ? currentFullName.slice(0, lastDot) : currentFullName;
+      const ext = lastDot > 0 ? currentFullName.slice(lastDot) : "";
+      const newName = `${base} (copy)${ext}`;
+
+      setBusy([item.id]);
+      try {
+        // Read content from cache or server
+        let content = "";
+        const cached = await getCachedFile(item.id);
+        if (cached) {
+          content = cached.content;
+        } else {
+          const raw = await fetch(`/api/drive/files?action=raw&fileId=${item.id}`);
+          if (raw.ok) content = await raw.text();
+        }
+
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "create", name: newName, content }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.meta) {
+            await updateTreeFromMeta(data.meta);
+          } else {
+            await fetchAndCacheTree();
+          }
+          onSelectFile(data.file.id, data.file.name, data.file.mimeType);
+        }
+      } catch {
+        // ignore
+      } finally {
+        clearBusy([item.id]);
+      }
+    },
+    [treeItems, findFullFileName, fetchAndCacheTree, updateTreeFromMeta, onSelectFile, setBusy, clearBusy]
+  );
+
   const handlePublish = useCallback(
     async (item: CachedTreeNode) => {
       setBusy([item.id]);
@@ -1171,6 +1218,14 @@ export function DriveFileTree({
         });
       }
 
+      if (!item.isFolder) {
+        items.push({
+          label: t("contextMenu.duplicate"),
+          icon: <Copy size={ICON.MD} />,
+          onClick: () => handleDuplicate(item),
+        });
+      }
+
       items.push({
         label: t("contextMenu.rename"),
         icon: <Pencil size={ICON.MD} />,
@@ -1186,7 +1241,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
