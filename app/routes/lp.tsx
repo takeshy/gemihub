@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -22,13 +22,26 @@ interface DataCard {
   description: string;
 }
 
+interface AgenticPoint {
+  icon: ComponentType<{ size?: number; className?: string }>;
+  title: string;
+  description: string;
+}
+
 interface LpStrings {
   tagline: string;
   description: string;
   signIn: string;
+  agenticTitle: string;
+  agenticIntro: string;
+  agenticPoints: AgenticPoint[];
   features: Feature[];
   screenshotsTitle: string;
   screenshots: Screenshot[];
+  techStackTitle: string;
+  techStackAi: string;
+  techStackCompute: string;
+  techStackStorage: string;
   dataUsageTitle: string;
   dataUsageIntro: string;
   dataCards: DataCard[];
@@ -45,28 +58,40 @@ interface LpStrings {
 }
 
 const en: LpStrings = {
-  tagline: "Note it down. Research it. Automate it.",
-  description: "Capture ideas instantly. AI researches the web, reads your files, and answers questions. Automate routine tasks with workflows. All data stays in your Drive.",
+  tagline: "AI that works for you, right inside Google Drive.",
+  description: "GemiHub is an AI assistant that reads your files, finds what you need, and gets things done on its own. Connect external tools, search across your documents by meaning, and automate repetitive tasks — all while keeping your data in your own Google Drive.",
   signIn: "Sign in with Google",
+  agenticTitle: "AI That Acts, Not Just Answers",
+  agenticIntro: "Most AI chatbots wait for you to copy-paste information. GemiHub's AI thinks for itself — it picks the right tool and takes action without you lifting a finger.",
+  agenticPoints: [
+    { icon: Wrench, title: "Picks Its Own Tools", description: "Ask a question and the AI figures out what to do: read a file, search your Drive, look things up on the web, or call an external service. You just ask — it handles the rest." },
+    { icon: Search, title: "Searches by Meaning", description: "Your files are indexed so the AI can find relevant information even when the exact words don't match. Ask \"when was the budget meeting?\" and it finds your \"Q3 finance review\" notes." },
+    { icon: Bot, title: "Connects to Outside Tools", description: "Hook up web search, databases, or any compatible service. The AI automatically discovers what's available and uses it during your conversation." },
+    { icon: GitBranch, title: "Runs Multi-Step Tasks", description: "String together AI prompts, file edits, web requests, and more into automated workflows. Or just tell the AI what you want and it builds the workflow for you." },
+  ],
   features: [
-    { icon: MessageSquare, title: "AI Chat", description: "Upload images or files to ask questions, or generate images. AI answers using Google Search and your Drive files." },
-    { icon: Search, title: "Ask Your Files", description: "Semantic search across your Drive files. Search for \"meeting\" and get results mentioning \"conference\" too." },
+    { icon: MessageSquare, title: "AI Chat", description: "Have a conversation with AI that can read your files, search the web, generate images, and use external tools — all on its own." },
+    { icon: Search, title: "Ask Your Files", description: "Search your Drive files by meaning, not just keywords. Search for \"meeting\" and get results mentioning \"conference\" too." },
     { icon: BookOpen, title: "Notes & Editor", description: "Jot down notes in Markdown. Save ideas and meeting notes straight to Drive." },
-    { icon: GitBranch, title: "Workflows", description: "Just describe what you want and AI builds an automation workflow. Integrates with Drive, HTTP, and external services." },
-    { icon: Puzzle, title: "Plugins", description: "Install extensions from GitHub. Plugins can use AI and Drive operations, enabling advanced automation and custom tools." },
+    { icon: GitBranch, title: "Workflows", description: "Just describe what you want and AI builds an automation workflow. Works with Drive, the web, and external services." },
+    { icon: Puzzle, title: "Plugins", description: "Add new features from GitHub. Plugins can use AI and Drive, so you can build custom tools and advanced automation." },
     { icon: Globe, title: "One-Click Publishing", description: "Turn any Drive file into a public web page. Share via URL with no hosting required." },
     { icon: Zap, title: "Works Offline", description: "Files are cached in your browser for instant access. Edit offline, sync to Drive when you're back." },
     { icon: Shield, title: "Your Data, Your Control", description: "No external database. Everything stored in your Google Drive. Supports encryption and self-hosting." },
   ],
   screenshotsTitle: "See It in Action",
   screenshots: [
-    { src: "/images/cap.png", alt: "AI Chat & File Management", description: "Write notes in a rich text editor. Have AI proofread or summarize them. Chat with web search, semantic file search, image generation, and external tool connections via MCP." },
-    { src: "/images/visual_workflow.png", alt: "Workflow Builder", description: "Build automation pipelines with a visual node-based editor. Chain AI prompts, Drive operations, and HTTP requests." },
-    { src: "/images/ai_generate_workflow.png", alt: "AI Workflow Generation", description: "Describe what you want in natural language and AI generates the workflow with streaming preview." },
-    { src: "/images/rag_search.png", alt: "RAG Search", description: "Sync your Drive files to semantic search. Ask questions in natural language and get answers from your personal knowledge base." },
-    { src: "/images/push_pull.png", alt: "Push/Pull Sync", description: "All data lives in your Google Drive. Push and pull changes with conflict resolution." },
+    { src: "/images/cap.png", alt: "AI Chat & File Management", description: "Write notes in a rich editor and let AI proofread or summarize them. Chat with web search, file search by meaning, image generation, and connections to external tools." },
+    { src: "/images/visual_workflow.png", alt: "Workflow Builder", description: "Build automation with a drag-and-drop editor. Connect AI prompts, Drive operations, and web requests into a single flow." },
+    { src: "/images/ai_generate_workflow.png", alt: "AI Workflow Generation", description: "Describe what you want in plain language and AI creates the workflow for you, with a live preview." },
+    { src: "/images/rag_search.png", alt: "Smart File Search", description: "Sync your Drive files to meaning-based search. Ask questions naturally and get answers drawn from your own documents." },
+    { src: "/images/push_pull.png", alt: "Push/Pull Sync", description: "All data lives in your Google Drive. Push and pull changes with automatic conflict handling." },
     { src: "/images/pubish_web.png", alt: "One-Click Publishing", description: "Turn any Drive file into a public web page. Share via URL with no hosting required." },
   ],
+  techStackTitle: "Built with Google Cloud",
+  techStackAi: "Gemini API — AI chat, tool use, thinking, image generation, and smart file search (RAG)",
+  techStackCompute: "Cloud Run — App hosting that scales automatically, with Cloud Build for continuous deployment",
+  techStackStorage: "Google Drive API — All your data stored in your own Drive, no separate database needed",
   dataUsageTitle: "How We Handle Your Data",
   dataUsageIntro: "GemiHub uses your Google account to sign in. Here's what we access and why:",
   dataCards: [
@@ -88,28 +113,40 @@ const en: LpStrings = {
 };
 
 const ja: LpStrings = {
-  tagline: "メモして、調べて、自動化する",
-  description: "思いついたらすぐメモ。AIがWebを調べてまとめ、ファイルを読み解いて回答し、定型作業を自動でこなす。データはすべてあなたのDrive上に。",
+  tagline: "AIがあなたの代わりに動く。Google Drive と一緒に。",
+  description: "GemiHub は、ファイルを読んで、必要な情報を探して、作業までこなしてくれる AI アシスタントです。外部ツールとの連携、ドキュメント横断の意味検索、繰り返し作業の自動化まで。データはすべてあなたの Google Drive に保存されます。",
   signIn: "Googleでサインイン",
+  agenticTitle: "答えるだけじゃない、動く AI",
+  agenticIntro: "普通の AI チャットは、あなたが情報をコピペして渡す必要があります。GemiHub の AI は自分で考えて、自分で動きます。",
+  agenticPoints: [
+    { icon: Wrench, title: "必要な道具を自分で選ぶ", description: "質問すると、AI が自分で判断してファイルを読んだり、Drive を検索したり、Web で調べたり、外部サービスに問い合わせたり。あなたは聞くだけ。" },
+    { icon: Search, title: "「意味」で探してくれる", description: "ファイルの中身を意味で検索できます。「予算の会議いつだっけ？」と聞けば、「Q3 財務レビュー」のメモを見つけてきます。" },
+    { icon: Bot, title: "外部ツールも自動で使う", description: "Web 検索やデータベースなどの外部サービスをつなぐだけ。AI が会話の中で必要なツールを見つけて、勝手に使ってくれます。" },
+    { icon: GitBranch, title: "複数ステップの作業を自動化", description: "AI への指示、ファイル編集、Web リクエストなどをつなげて自動化。「こういうことがしたい」と伝えれば、AI がワークフローを組み立てます。" },
+  ],
   features: [
-    { icon: MessageSquare, title: "AIチャット", description: "画像やファイルをアップロードして質問したり、画像を生成したり。Google検索やDriveの資料も活用して回答します。" },
-    { icon: Search, title: "ファイルに質問", description: "Driveの資料を意味ベースで検索。「打ち合わせ」で調べれば「ミーティング」の内容もヒットします。" },
+    { icon: MessageSquare, title: "AIチャット", description: "AI がファイルを読み、Web を調べ、画像を作り、外部ツールまで使って回答。全部おまかせで動きます。" },
+    { icon: Search, title: "ファイルに質問", description: "Drive の資料をキーワードではなく「意味」で検索。「打ち合わせ」で調べれば「ミーティング」の内容もヒット。" },
     { icon: BookOpen, title: "メモ・エディタ", description: "Markdownでさっとメモ。アイデアや議事録をそのままDriveに保存できます。" },
-    { icon: GitBranch, title: "ワークフロー", description: "やりたいことを言葉で伝えるだけでAIが自動化ワークフローを作成。Drive・HTTP・外部サービスとの連携も。" },
-    { icon: Puzzle, title: "プラグイン", description: "GitHubから機能を追加。プラグインからAIやDrive操作を呼び出せるので、本格的な自動化や独自ツールの構築も可能です。" },
+    { icon: GitBranch, title: "ワークフロー", description: "やりたいことを言葉で伝えるだけでAIが自動化ワークフローを作成。Drive や Web、外部サービスとも連携。" },
+    { icon: Puzzle, title: "プラグイン", description: "GitHubから機能を追加。AI や Drive と連携できるので、自分だけのツールや高度な自動化も構築できます。" },
     { icon: Globe, title: "ワンクリック公開", description: "DriveのファイルをそのままWebページに。ホスティング不要でURLを共有できます。" },
     { icon: Zap, title: "オフラインでも快適", description: "ファイルはブラウザにキャッシュされ即座に表示。オフラインでも編集でき、後からDriveに同期。" },
     { icon: Shield, title: "データは自分の手に", description: "外部データベースなし。すべてあなたのGoogle Driveに保存。暗号化やセルフホストにも対応。" },
   ],
   screenshotsTitle: "動作イメージ",
   screenshots: [
-    { src: "/images/cap.png", alt: "AIチャット＆ファイル管理", description: "リッチテキストエディターでメモが書け、AIに校正や要約を任せられます。チャットではWeb検索やファイルの意味検索、画像生成、外部ツール接続（MCP）も可能です。" },
-    { src: "/images/visual_workflow.png", alt: "ワークフロービルダー", description: "ビジュアルなノードベースエディタで自動化パイプラインを構築。AIプロンプト、Drive操作、HTTPリクエストを連結。" },
-    { src: "/images/ai_generate_workflow.png", alt: "AIワークフロー生成", description: "やりたいことを自然言語で伝えるだけでAIがワークフローを生成。ストリーミングプレビュー付き。" },
-    { src: "/images/rag_search.png", alt: "RAG検索", description: "Driveのファイルをセマンティック検索に同期。自然な言葉で質問すれば、あなたのナレッジベースから回答。" },
-    { src: "/images/push_pull.png", alt: "Push/Pull同期", description: "すべてのデータはGoogle Driveに保存。変更をPush/Pullし、コンフリクトも解決。" },
+    { src: "/images/cap.png", alt: "AIチャット＆ファイル管理", description: "エディターでメモを書いて、AI に校正や要約をおまかせ。チャットでは Web 検索、ファイルの意味検索、画像生成、外部ツール連携も。" },
+    { src: "/images/visual_workflow.png", alt: "ワークフロービルダー", description: "ドラッグ＆ドロップで自動化を構築。AI への指示、Drive 操作、Web リクエストをひとつの流れに。" },
+    { src: "/images/ai_generate_workflow.png", alt: "AIワークフロー生成", description: "やりたいことを言葉で伝えるだけで AI がワークフローを作成。リアルタイムでプレビューも確認できます。" },
+    { src: "/images/rag_search.png", alt: "かしこいファイル検索", description: "Drive のファイルを意味で検索できるように同期。自然な言葉で質問すれば、あなたの資料から答えを見つけます。" },
+    { src: "/images/push_pull.png", alt: "Push/Pull同期", description: "すべてのデータは Google Drive に保存。変更の同期も、ぶつかった時の解決もかんたん。" },
     { src: "/images/pubish_web.png", alt: "ワンクリック公開", description: "DriveのファイルをそのままWebページに。ホスティング不要でURLを共有。" },
   ],
+  techStackTitle: "Google Cloud で構築",
+  techStackAi: "Gemini API — AI チャット、ツール自動選択、思考表示、画像生成、ファイル意味検索（RAG）",
+  techStackCompute: "Cloud Run — アクセスに応じて自動でスケールするアプリ実行基盤。Cloud Build で自動デプロイ",
+  techStackStorage: "Google Drive API — すべてのデータをユーザー自身の Drive に保存。外部データベースは不要",
   dataUsageTitle: "データの取り扱いについて",
   dataUsageIntro: "GemiHubはGoogleアカウントでサインインします。アクセスするデータとその理由は以下のとおりです：",
   dataCards: [
@@ -170,6 +207,32 @@ export default function LandingPage() {
         </a>
       </section>
 
+      {/* Agentic AI */}
+      <section className="mx-auto max-w-5xl px-4 pb-20">
+        <h2 className="mb-4 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+          {s.agenticTitle}
+        </h2>
+        <p className="mx-auto mb-10 max-w-2xl text-center text-sm text-gray-500 dark:text-gray-400 sm:text-base">
+          {s.agenticIntro}
+        </p>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {s.agenticPoints.map(({ icon: Icon, title, description }) => (
+            <div
+              key={title}
+              className="rounded-xl border border-purple-200 bg-purple-50 p-6 dark:border-purple-900 dark:bg-purple-950/40"
+            >
+              <Icon size={28} className="mb-3 text-purple-600 dark:text-purple-400" />
+              <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {title}
+              </h3>
+              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                {description}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Features */}
       <section className="mx-auto max-w-6xl px-4 pb-20">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -225,6 +288,25 @@ export default function LandingPage() {
                 <p className="mt-1 text-center text-xs leading-relaxed text-gray-600 dark:text-gray-400">{description}</p>
               </figcaption>
             </figure>
+          ))}
+        </div>
+      </section>
+
+      {/* Tech Stack */}
+      <section className="mx-auto max-w-4xl px-4 pb-20">
+        <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+          {s.techStackTitle}
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { icon: Bot, label: "AI", text: s.techStackAi },
+            { icon: Cloud, label: "Compute", text: s.techStackCompute },
+            { icon: HardDrive, label: "Storage", text: s.techStackStorage },
+          ].map(({ icon: Icon, label, text }) => (
+            <div key={label} className="rounded-xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950/40">
+              <Icon size={24} className="mb-2 text-blue-600 dark:text-blue-400" />
+              <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">{text}</p>
+            </div>
           ))}
         </div>
       </section>

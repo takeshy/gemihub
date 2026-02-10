@@ -6,7 +6,7 @@ Terraform で管理する Google Cloud デプロイ構成。
 
 ```
                     ┌─────────────────┐
-                    │  gemihub.online   │
+                    │  <your-domain>   │
                     │  (Cloud DNS)     │
                     └────────┬────────┘
                              │ A レコード
@@ -33,6 +33,7 @@ Terraform で管理する Google Cloud デプロイ構成。
                                             │
                                  ┌──────────▼─────────┐
                                  │  バックエンドサービス│
+                                 │  (EXTERNAL_MANAGED) │
                                  └──────────┬─────────┘
                                             │
                                  ┌──────────▼─────────┐
@@ -54,8 +55,8 @@ Terraform で管理する Google Cloud デプロイ構成。
 | **Cloud Run** | Node.js SSR アプリケーションホスティング（ゼロスケール対応） |
 | **Artifact Registry** | Docker イメージリポジトリ |
 | **Secret Manager** | OAuth 認証情報、セッションシークレット |
-| **Compute Engine** | グローバル HTTPS ロードバランサー、静的 IP、マネージド SSL |
-| **Cloud DNS** | DNS ゾーン管理 |
+| **Compute Engine** | グローバル外部 Application Load Balancer（`EXTERNAL_MANAGED`）、静的 IP、マネージド SSL |
+| **Cloud DNS** | DNS ゾーン管理（A レコード + TXT 検証） |
 | **Cloud Build** | CI/CD パイプライン（push 時にビルド＆デプロイ） |
 | **IAM** | サービスアカウントと権限管理 |
 
@@ -63,17 +64,17 @@ Terraform で管理する Google Cloud デプロイ構成。
 
 ```
 terraform/
-  main.tf              # プロバイダ設定
+  main.tf              # プロバイダ設定（google ~> 6.0）
   variables.tf         # 入力変数
   terraform.tfvars     # 変数値（git-ignored、シークレット含む）
   outputs.tf           # 出力値（LB IP、Cloud Run URL、ネームサーバー）
-  apis.tf              # GCP API 有効化
+  apis.tf              # GCP API 有効化（8 API）
   artifact-registry.tf # Docker イメージリポジトリ
   secrets.tf           # Secret Manager シークレット
   iam.tf               # サービスアカウントと IAM バインディング
   cloud-run.tf         # Cloud Run サービス
   networking.tf        # ロードバランサー（IP、NEG、バックエンド、URL マップ、SSL、プロキシ、転送ルール）
-  dns.tf               # Cloud DNS マネージドゾーンと A レコード
+  dns.tf               # Cloud DNS マネージドゾーン、A レコード、TXT 検証レコード
   cloud-build.tf       # Cloud Build トリガー（参照用、gcloud で作成）
 ```
 
@@ -92,31 +93,52 @@ terraform/
 
 | 設定 | 値 |
 |------|------|
-| CPU | 1 vCPU（リクエストがない間はアイドル） |
+| CPU | 1 vCPU（リクエストがない間は `cpu_idle = true` でアイドル） |
 | メモリ | 512 Mi |
 | 最小インスタンス数 | 0（ゼロスケール） |
 | 最大インスタンス数 | 3 |
 | ポート | 8080 |
 | Ingress | 全トラフィック |
 | 認証 | パブリック（allUsers） |
+| 削除保護 | 無効 |
+| スタートアッププローブ | HTTP GET `/`、初期遅延 5秒、間隔 10秒、失敗閾値 3 |
 
 ## サービスアカウント
 
 | アカウント | 用途 |
 |---------|------|
-| `gemini-hub-run` | Cloud Run 実行用（シークレット読み取り） |
-| `gemini-hub-build` | Cloud Build トリガー（イメージビルド、Cloud Run デプロイ） |
+| `gemini-hub-run` | Cloud Run 実行用（Secret Manager からシークレット読み取り） |
+| Cloud Build デフォルト SA（`<project-number>@cloudbuild.gserviceaccount.com`） | Cloud Build（イメージビルド、Cloud Run デプロイ）。`roles/run.admin` と `roles/iam.serviceAccountUser` を付与。 |
+
+## 有効化される API
+
+Terraform により以下の GCP API が有効化されます：
+
+- `run.googleapis.com`
+- `artifactregistry.googleapis.com`
+- `secretmanager.googleapis.com`
+- `cloudbuild.googleapis.com`
+- `compute.googleapis.com`
+- `iam.googleapis.com`
+- `cloudresourcemanager.googleapis.com`
+- `dns.googleapis.com`
 
 ## ネットワーク
 
 - **静的 IP**: ロードバランサー用のグローバル外部 IP
-- **HTTP (port 80)**: HTTPS への 301 リダイレクト
-- **HTTPS (port 443)**: Google マネージド SSL 証明書、ロードバランサーで TLS 終端
+- **ロードバランシングスキーム**: `EXTERNAL_MANAGED`（外部 Application Load Balancer）
+- **HTTP (port 80)**: `MOVED_PERMANENTLY_DEFAULT` による HTTPS への 301 リダイレクト
+- **HTTPS (port 443)**: Google マネージド SSL 証明書（`gemihub-cert`）、ロードバランサーで TLS 終端
 - **サーバーレス NEG**: ロードバランサーから Cloud Run へトラフィックをルーティング
 
 ## DNS
 
-Google Cloud DNS で管理。ドメインレジストラでネームサーバーを設定。
+Google Cloud DNS で管理。ゾーンには以下を含む：
+
+- **A レコード**: ドメインをグローバル静的 IP に向ける
+- **TXT レコード**: Google サイト検証
+
+ドメインレジストラでネームサーバーの設定が必要。
 
 ## CI/CD（Cloud Build）
 
@@ -127,6 +149,8 @@ Google Cloud DNS で管理。ドメインレジストラでネームサーバー
 3. `gcloud run deploy` で Cloud Run に**デプロイ**
 
 トリガーは `main` ブランチへの push で自動実行（PR マージも含む）。GitHub 接続は 2nd-gen Cloud Build リポジトリリンクを使用。
+
+> **注意:** Cloud Build トリガーは Cloud Console から手動で作成（GitHub OAuth 接続が必要）。`cloud-build.tf` はリソース定義を参照用として含む。
 
 ## Docker
 
@@ -170,7 +194,7 @@ gcloud run deploy gemini-hub \
 
 ```bash
 # SSL 証明書
-gcloud compute ssl-certificates describe gemini-hub-cert --global \
+gcloud compute ssl-certificates describe gemihub-cert --global \
   --format="table(managed.status,managed.domainStatus)"
 
 # Cloud Run サービス

@@ -88,6 +88,7 @@ Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと�
 | 同期 & オフラインキャッシュ | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
 | ワークフローノードリファレンス | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
 | RAG | [rag.md](./docs/rag.md) | [rag_ja.md](./docs/rag_ja.md) |
+| MCP | [mcp.md](./docs/mcp.md) | [mcp_ja.md](./docs/mcp_ja.md) |
 | 暗号化 | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 | プラグイン | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 | インフラストラクチャ | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
@@ -206,11 +207,12 @@ docker run -p 8080:8080 \
 
 | レイヤー | 技術 |
 |---------|------|
-| フロントエンド | React 19, React Router 7, Tailwind CSS v4, React Flow |
+| フロントエンド | React 19, React Router 7, Tailwind CSS v4, Mermaid |
 | バックエンド | React Router サーバー（SSR + API ルート） |
 | AI | Google Gemini API (`@google/genai`) |
 | ストレージ | Google Drive API |
 | 認証 | Google OAuth 2.0 → セッション Cookie |
+| インフラ | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Secret Manager, Global HTTPS LB |
 | エディタ | wysimark-lite（Slate ベース WYSIWYG） |
 
 ## ライセンス

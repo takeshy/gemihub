@@ -88,6 +88,7 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 | Sync & Offline Cache | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
 | Workflow Node Reference | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
 | RAG | [rag.md](./docs/rag.md) | [rag_ja.md](./docs/rag_ja.md) |
+| MCP | [mcp.md](./docs/mcp.md) | [mcp_ja.md](./docs/mcp_ja.md) |
 | Encryption | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 | Plugins | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 | Infrastructure | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
@@ -206,11 +207,12 @@ docker run -p 8080:8080 \
 
 | Layer | Tech |
 |-------|------|
-| Frontend | React 19, React Router 7, Tailwind CSS v4, React Flow |
+| Frontend | React 19, React Router 7, Tailwind CSS v4, Mermaid |
 | Backend | React Router server (SSR + API routes) |
 | AI | Google Gemini API (`@google/genai`) |
 | Storage | Google Drive API |
 | Auth | Google OAuth 2.0 → session cookies |
+| Infrastructure | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Secret Manager, Global HTTPS LB |
 | Editor | wysimark-lite (Slate-based WYSIWYG) |
 
 ## License
