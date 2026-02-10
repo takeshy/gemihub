@@ -355,7 +355,7 @@ Edit history is split into two layers:
 
 Each file has one `CachedEditHistoryEntry` with a `diffs[]` array. Each array element represents one diff session (commit point).
 
-**Auto-save (every 5s):**
+**Auto-save (every 3s):**
 1. Read old content from IndexedDB cache (before cache update)
 2. If last diff exists: reverse-apply it to old content to reconstruct the base
 3. Compute cumulative diff from base to new content

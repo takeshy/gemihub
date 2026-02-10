@@ -33,14 +33,6 @@ export interface CachedEditHistoryEntry {
   diffs: EditHistoryDiff[];
 }
 
-export interface CachedEditHistorySnapshot {
-  fileId: string; // primary key
-  content: string;      // always latest content (updated by saveLocalEdit)
-  baseContent: string;  // base for diff computation (set by initSnapshot)
-  baseUpdatedAt: number; // when baseContent was set
-  updatedAt: number;
-}
-
 export interface CachedTreeNode {
   id: string;
   name: string;
@@ -90,11 +82,9 @@ function getDB(): Promise<IDBDatabase> {
         db.createObjectStore("syncMeta", { keyPath: "id" });
       }
 
-      // v5: recreate editHistory with fileId as primary key (was id + fileId index)
-      if (db.objectStoreNames.contains("editHistory")) {
-        db.deleteObjectStore("editHistory");
+      if (!db.objectStoreNames.contains("editHistory")) {
+        db.createObjectStore("editHistory", { keyPath: "fileId" });
       }
-      db.createObjectStore("editHistory", { keyPath: "fileId" });
 
       if (!db.objectStoreNames.contains("fileTree")) {
         db.createObjectStore("fileTree", { keyPath: "id" });
@@ -102,10 +92,6 @@ function getDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains("remoteMeta")) {
         db.createObjectStore("remoteMeta", { keyPath: "id" });
-      }
-
-      if (!db.objectStoreNames.contains("editHistorySnapshot")) {
-        db.createObjectStore("editHistorySnapshot", { keyPath: "fileId" });
       }
     };
 
@@ -331,49 +317,12 @@ export async function clearAllEditHistory(): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   try {
     const db = await getDB();
-    const tx = db.transaction(["editHistory", "editHistorySnapshot"], "readwrite");
+    const tx = db.transaction("editHistory", "readwrite");
     tx.objectStore("editHistory").clear();
-    tx.objectStore("editHistorySnapshot").clear();
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-  } catch {
-    // ignore
-  }
-}
-
-// --- editHistorySnapshot store ---
-
-export async function getEditHistorySnapshot(
-  fileId: string
-): Promise<CachedEditHistorySnapshot | undefined> {
-  if (typeof indexedDB === "undefined") return undefined;
-  try {
-    const db = await getDB();
-    return await txGet<CachedEditHistorySnapshot>(db, "editHistorySnapshot", fileId);
-  } catch {
-    return undefined;
-  }
-}
-
-export async function setEditHistorySnapshot(
-  snapshot: CachedEditHistorySnapshot
-): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txPut(db, "editHistorySnapshot", snapshot);
-  } catch {
-    // ignore
-  }
-}
-
-export async function deleteEditHistorySnapshot(fileId: string): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txDelete(db, "editHistorySnapshot", fileId);
   } catch {
     // ignore
   }
@@ -430,13 +379,12 @@ export async function clearAllCache(): Promise<void> {
   try {
     const db = await getDB();
     const tx = db.transaction(
-      ["files", "syncMeta", "editHistory", "editHistorySnapshot", "fileTree", "remoteMeta"],
+      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta"],
       "readwrite"
     );
     tx.objectStore("files").clear();
     tx.objectStore("syncMeta").clear();
     tx.objectStore("editHistory").clear();
-    tx.objectStore("editHistorySnapshot").clear();
     tx.objectStore("fileTree").clear();
     tx.objectStore("remoteMeta").clear();
     await new Promise<void>((resolve, reject) => {

@@ -37,7 +37,6 @@ import {
   getLocallyModifiedFileIds,
   deleteCachedFile,
   deleteEditHistoryEntry,
-  deleteEditHistorySnapshot,
   getLocalSyncMeta,
   setLocalSyncMeta,
   type CachedTreeNode,
@@ -917,7 +916,6 @@ export function DriveFileTree({
         }
         await deleteCachedFile(item.id);
         await deleteEditHistoryEntry(item.id);
-        await deleteEditHistorySnapshot(item.id);
         // Remove from localSyncMeta
         const meta = await getLocalSyncMeta();
         if (meta) {
@@ -954,7 +952,6 @@ export function DriveFileTree({
         for (const id of toDelete) {
           await deleteCachedFile(id);
           await deleteEditHistoryEntry(id);
-          await deleteEditHistorySnapshot(id);
           if (meta) delete meta.files[id];
         }
         if (meta) {

@@ -48,7 +48,7 @@ export async function initSnapshot(
 }
 
 /**
- * Called every 5s auto-save, BEFORE cache is updated.
+ * Called every 3s auto-save, BEFORE cache is updated.
  * Reads old content from IndexedDB cache, computes cumulative diff from base.
  */
 export async function saveLocalEdit(
