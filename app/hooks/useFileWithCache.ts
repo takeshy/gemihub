@@ -90,6 +90,9 @@ export function useFileWithCache(
           cachedAt: Date.now(),
           fileName: meta.name,
         });
+        window.dispatchEvent(
+          new CustomEvent("file-cached", { detail: { fileId: id } })
+        );
 
         // 6. Initialize edit history snapshot
         initSnapshot(id, data.content).catch(() => {});

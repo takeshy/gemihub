@@ -25,6 +25,7 @@ import {
   Globe,
   GlobeLock,
   Copy,
+  Search,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import {
@@ -55,6 +56,7 @@ interface DriveFileTreeProps {
   activeFileId: string | null;
   encryptionEnabled: boolean;
   onFileListChange?: (items: FileListItem[]) => void;
+  onSearchOpen?: () => void;
 }
 
 function getFileIcon(name: string, _mimeType: string) {
@@ -167,6 +169,7 @@ export function DriveFileTree({
   activeFileId,
   encryptionEnabled,
   onFileListChange,
+  onSearchOpen,
 }: DriveFileTreeProps) {
   const [treeItems, setTreeItems] = useState<CachedTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -269,12 +272,18 @@ export function DriveFileTree({
     })();
   }, [treeItems]);
 
-  // Listen for file-modified events from useFileWithCache save
+  // Listen for file-modified / file-cached events from useFileWithCache
   useEffect(() => {
-    const handler = (e: Event) => {
+    const handleModified = (e: Event) => {
       const fileId = (e as CustomEvent).detail?.fileId;
       if (fileId) {
         setModifiedFiles((prev) => new Set(prev).add(fileId));
+      }
+    };
+    const handleCached = (e: Event) => {
+      const fileId = (e as CustomEvent).detail?.fileId;
+      if (fileId) {
+        setCachedFiles((prev) => new Set(prev).add(fileId));
       }
     };
     // After push/pull/sync-check, re-read modified files and refresh tree
@@ -282,10 +291,12 @@ export function DriveFileTree({
       getLocallyModifiedFileIds().then((ids) => setModifiedFiles(ids)).catch(() => {});
       fetchAndCacheTree();
     };
-    window.addEventListener("file-modified", handler);
+    window.addEventListener("file-modified", handleModified);
+    window.addEventListener("file-cached", handleCached);
     window.addEventListener("sync-complete", syncHandler);
     return () => {
-      window.removeEventListener("file-modified", handler);
+      window.removeEventListener("file-modified", handleModified);
+      window.removeEventListener("file-cached", handleCached);
       window.removeEventListener("sync-complete", syncHandler);
     };
   }, [fetchAndCacheTree]);
@@ -1272,6 +1283,15 @@ export function DriveFileTree({
           Files
         </span>
         <div className="flex items-center gap-0.5">
+          {onSearchOpen && (
+            <button
+              onClick={onSearchOpen}
+              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              title="Search"
+            >
+              <Search size={ICON.MD} />
+            </button>
+          )}
           <button
             onClick={handleCreateFile}
             className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
