@@ -841,3 +841,210 @@ nodes:
   assert.ok(fromCheck.some((e) => e.to === "yes" && e.label === "true"));
   assert.ok(fromCheck.some((e) => e.to === "fallthrough" && e.label === "false"));
 });
+
+// ---------------------------------------------------------------------------
+// next: end terminator preservation through round-trip
+// ---------------------------------------------------------------------------
+
+test("round-trip: next: end terminator preserved when not last node", () => {
+  const yaml = `
+name: test
+nodes:
+  - id: a
+    type: command
+    prompt: first
+  - id: b
+    type: command
+    prompt: second
+    next: end
+  - id: c
+    type: command
+    prompt: third
+`;
+  const wf1 = parseWorkflowYaml(yaml);
+  // b has next: end, so no outgoing edge from b
+  assert.equal(wf1.edges.filter((e) => e.from === "b").length, 0);
+  // a → b edge exists
+  assert.ok(wf1.edges.some((e) => e.from === "a" && e.to === "b"));
+
+  const serialized = serializeWorkflow(wf1, "test");
+  const wf2 = parseWorkflowYaml(serialized);
+
+  // b should still have no outgoing edge after round-trip
+  assert.equal(wf2.edges.filter((e) => e.from === "b").length, 0);
+  // a → b should still exist
+  assert.ok(wf2.edges.some((e) => e.from === "a" && e.to === "b"));
+  // c should have no incoming edge from b
+  assert.ok(!wf2.edges.some((e) => e.from === "b" && e.to === "c"));
+});
+
+test("round-trip: while loop with falseNext to later node preserves all edges", () => {
+  const yaml = `
+name: batch
+nodes:
+  - id: init
+    type: variable
+    name: counter
+    value: '0'
+  - id: loop
+    type: while
+    condition: '{{counter}} < 5'
+    trueNext: process
+    falseNext: finish
+  - id: process
+    type: command
+    prompt: do work
+  - id: inc
+    type: set
+    name: counter
+    value: '{{counter}} + 1'
+    next: loop
+  - id: finish
+    type: command
+    prompt: done
+    next: preview
+  - id: preview
+    type: preview
+    path: result.md
+    next: end
+`;
+  const wf1 = parseWorkflowYaml(yaml);
+  assert.equal(wf1.nodes.size, 6);
+
+  // preview has next: end — no outgoing edge
+  assert.equal(wf1.edges.filter((e) => e.from === "preview").length, 0);
+
+  const serialized = serializeWorkflow(wf1, "batch");
+  const wf2 = parseWorkflowYaml(serialized);
+
+  assert.equal(wf2.nodes.size, 6);
+
+  // loop → process (true), loop → finish (false)
+  assert.ok(wf2.edges.some((e) => e.from === "loop" && e.to === "process" && e.label === "true"));
+  assert.ok(wf2.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
+
+  // inc → loop (explicit back-reference)
+  assert.ok(wf2.edges.some((e) => e.from === "inc" && e.to === "loop"));
+
+  // finish → preview
+  assert.ok(wf2.edges.some((e) => e.from === "finish" && e.to === "preview"));
+
+  // preview has NO outgoing edge (next: end preserved)
+  assert.equal(wf2.edges.filter((e) => e.from === "preview").length, 0);
+});
+
+test("round-trip: user-reported tag-batch workflow preserves structure", () => {
+  const yaml = `
+name: タグ提案バッチ
+nodes:
+  - id: initCounter
+    type: variable
+    name: counter
+    value: '0'
+  - id: initReport
+    type: variable
+    name: report
+    value: '# タグ提案'
+  - id: list
+    type: drive-list
+    folder: discussion
+    limit: '5'
+    sortBy: modified
+    sortOrder: desc
+    saveTo: listRaw
+  - id: parse
+    type: json
+    source: listRaw
+    saveTo: list
+  - id: loop
+    type: while
+    condition: '{{counter}} < {{list.count}}'
+    trueNext: read
+    falseNext: finish
+  - id: read
+    type: drive-read
+    path: '{{list.notes[counter].name}}'
+    saveTo: content
+  - id: tag
+    type: command
+    prompt: 'タグを提案: {{content}}'
+    saveTo: tags
+  - id: wait
+    type: sleep
+    duration: '500'
+  - id: append
+    type: set
+    name: report
+    value: '{{report}} ## {{list.notes[counter].name}}'
+  - id: inc
+    type: set
+    name: counter
+    value: '{{counter}} + 1'
+    next: loop
+  - id: finish
+    type: drive-file
+    path: reports/tag-suggestions.md
+    content: '{{report}}'
+    next: preview
+  - id: preview
+    type: preview
+    path: reports/tag-suggestions.md
+    saveTo: previewPath
+    next: end
+`;
+  const wf1 = parseWorkflowYaml(yaml);
+  assert.equal(wf1.nodes.size, 12);
+
+  // Key structural checks on original
+  assert.ok(wf1.edges.some((e) => e.from === "loop" && e.to === "read" && e.label === "true"));
+  assert.ok(wf1.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
+  assert.ok(wf1.edges.some((e) => e.from === "inc" && e.to === "loop"));
+  assert.ok(wf1.edges.some((e) => e.from === "finish" && e.to === "preview"));
+  assert.equal(wf1.edges.filter((e) => e.from === "preview").length, 0); // next: end
+
+  // Round-trip
+  const serialized = serializeWorkflow(wf1, "タグ提案バッチ");
+  const wf2 = parseWorkflowYaml(serialized);
+
+  assert.equal(wf2.nodes.size, 12);
+
+  // All edges must be preserved
+  assert.ok(wf2.edges.some((e) => e.from === "loop" && e.to === "read" && e.label === "true"));
+  assert.ok(wf2.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
+  assert.ok(wf2.edges.some((e) => e.from === "inc" && e.to === "loop"));
+  assert.ok(wf2.edges.some((e) => e.from === "finish" && e.to === "preview"));
+  assert.equal(wf2.edges.filter((e) => e.from === "preview").length, 0); // next: end preserved
+
+  // Sequential chain: read → tag → wait → append → inc
+  assert.ok(wf2.edges.some((e) => e.from === "read" && e.to === "tag"));
+  assert.ok(wf2.edges.some((e) => e.from === "tag" && e.to === "wait"));
+  assert.ok(wf2.edges.some((e) => e.from === "wait" && e.to === "append"));
+  assert.ok(wf2.edges.some((e) => e.from === "append" && e.to === "inc"));
+
+  // Simulate property edit: change folder value
+  const listNode = wf2.nodes.get("list")!;
+  const editedNode: WorkflowNode = {
+    ...listNode,
+    properties: { ...listNode.properties, folder: "corrected-folder" },
+  };
+  const wf3: Workflow = {
+    ...wf2,
+    nodes: new Map(wf2.nodes),
+    edges: [...wf2.edges],
+  };
+  wf3.nodes.set("list", editedNode);
+
+  // Second round-trip after edit
+  const serialized2 = serializeWorkflow(wf3, "タグ提案バッチ");
+  const wf4 = parseWorkflowYaml(serialized2);
+
+  assert.equal(wf4.nodes.size, 12);
+  assert.equal(wf4.nodes.get("list")!.properties.folder, "corrected-folder");
+
+  // Structure must still be intact
+  assert.ok(wf4.edges.some((e) => e.from === "loop" && e.to === "read" && e.label === "true"));
+  assert.ok(wf4.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
+  assert.ok(wf4.edges.some((e) => e.from === "inc" && e.to === "loop"));
+  assert.ok(wf4.edges.some((e) => e.from === "finish" && e.to === "preview"));
+  assert.equal(wf4.edges.filter((e) => e.from === "preview").length, 0);
+});

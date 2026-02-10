@@ -19,6 +19,7 @@ import {
   Info,
   Sparkles,
   AppWindow,
+  AlertTriangle,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Workflow, WorkflowNode } from "~/engine/types";
@@ -37,6 +38,8 @@ import { ExecutionHistoryModal } from "./ExecutionHistoryModal";
 import { PromptModal } from "~/components/execution/PromptModal";
 import yaml from "js-yaml";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
+import { useI18n } from "~/i18n/context";
+import { getLocallyModifiedFileIds } from "~/services/indexeddb-cache";
 
 interface WorkflowFile {
   id: string;
@@ -133,7 +136,7 @@ function WorkflowNodeListView({
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
 }) {
-  const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId, refreshKey);
+  const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId, refreshKey, "PropsPanel");
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [workflowName, setWorkflowName] = useState("");
@@ -158,6 +161,7 @@ function WorkflowNodeListView({
         setWorkflowName(fileName.replace(/\.ya?ml$/, ""));
       }
     } catch (err) {
+      console.error("[PropsPanel] parse error:", err);
       setError(err instanceof Error ? err.message : "Failed to parse workflow");
       setWorkflow(null);
     }
@@ -187,6 +191,35 @@ function WorkflowNodeListView({
   const [promptData, setPromptData] = useState<Record<string, unknown> | null>(null);
   const eventSourceRef = useState<EventSource | null>(null);
 
+  const { t } = useI18n();
+  const [hasLocalChanges, setHasLocalChanges] = useState(false);
+
+  useEffect(() => {
+    const checkModified = () => {
+      getLocallyModifiedFileIds().then((ids) => {
+        setHasLocalChanges(ids.has(fileId));
+      }).catch(() => {});
+    };
+    checkModified();
+
+    const handleModified = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.fileId === fileId) {
+        setHasLocalChanges(true);
+      }
+    };
+    const handleSync = () => {
+      checkModified();
+    };
+
+    window.addEventListener("file-modified", handleModified);
+    window.addEventListener("sync-complete", handleSync);
+    return () => {
+      window.removeEventListener("file-modified", handleModified);
+      window.removeEventListener("sync-complete", handleSync);
+    };
+  }, [fileId]);
+
   const saveWorkflow = useCallback(
     async (updated: Workflow) => {
       try {
@@ -196,6 +229,7 @@ function WorkflowNodeListView({
         setRawYaml(yamlContent);
         onWorkflowChanged?.();
       } catch (err) {
+        console.error("[PropsPanel] saveWorkflow error:", err);
         setError(err instanceof Error ? err.message : "Failed to save");
       }
     },
@@ -333,6 +367,7 @@ function WorkflowNodeListView({
       es.addEventListener("complete", () => {
         setExecutionStatus("completed");
         es.close();
+        window.dispatchEvent(new Event("workflow-completed"));
       });
       es.addEventListener("error", (e) => {
         if (e instanceof MessageEvent) {
@@ -660,6 +695,16 @@ function WorkflowNodeListView({
         </div>
       )}
 
+      {/* Push required warning */}
+      {hasLocalChanges && (
+        <div className="flex items-center gap-1 border-t border-gray-200 px-3 py-1.5 dark:border-gray-800">
+          <AlertTriangle size={ICON.SM} className="flex-shrink-0 text-yellow-500" />
+          <span className="text-[10px] text-yellow-600 dark:text-yellow-400">
+            {t("workflow.pushRequired")}
+          </span>
+        </div>
+      )}
+
       {/* Footer: Execute + History */}
       <div className="flex items-center gap-2 border-t border-gray-200 px-3 py-2 dark:border-gray-800">
         {executionStatus === "running" ||
@@ -674,7 +719,12 @@ function WorkflowNodeListView({
         ) : (
           <button
             onClick={startExecution}
-            className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+            disabled={hasLocalChanges}
+            className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
+              hasLocalChanges
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
           >
             <Play size={ICON.SM} />
             Execute

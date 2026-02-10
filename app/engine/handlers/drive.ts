@@ -102,9 +102,9 @@ export async function handleDriveFileNode(
     existingFile = existingFiles.find(f => f.name === fileName);
   }
 
-  // Fallback: exact name match (handles special chars and files in subfolders)
+  // Fallback: exact name match within root folder (handles special chars)
   if (!existingFile) {
-    existingFile = await driveService.findFileByExactName(accessToken, fileName) ?? undefined;
+    existingFile = await driveService.findFileByExactName(accessToken, fileName, folderId) ?? undefined;
   }
 
   // Read old content for history tracking
@@ -197,11 +197,11 @@ export async function handleDriveReadNode(
   const files = await driveService.searchFiles(accessToken, folderId, path, false);
   let file = files.find(f => f.name === path || f.name === `${path}.md`);
 
-  // Fallback: exact name match (handles special chars and files in subfolders)
+  // Fallback: exact name match within root folder (handles special chars)
   if (!file) {
-    file = await driveService.findFileByExactName(accessToken, path) ?? undefined;
+    file = await driveService.findFileByExactName(accessToken, path, folderId) ?? undefined;
     if (!file && !path.endsWith(".md")) {
-      file = await driveService.findFileByExactName(accessToken, `${path}.md`) ?? undefined;
+      file = await driveService.findFileByExactName(accessToken, `${path}.md`, folderId) ?? undefined;
     }
   }
 

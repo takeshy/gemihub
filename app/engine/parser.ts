@@ -247,19 +247,39 @@ export function serializeWorkflow(workflow: Workflow, name?: string): string {
 
     // Add edge references
     const edgeInfo = edgeMap.get(id);
-    if (edgeInfo) {
-      const nodeIdx = nodeOrder.indexOf(id);
-      const nextNodeId = nodeIdx < nodeOrder.length - 1 ? nodeOrder[nodeIdx + 1] : undefined;
+    const nodeIdx = nodeOrder.indexOf(id);
+    const nextNodeId = nodeIdx < nodeOrder.length - 1 ? nodeOrder[nodeIdx + 1] : undefined;
 
-      if (node.type === "if" || node.type === "while") {
-        if (edgeInfo.trueNext) obj.trueNext = edgeInfo.trueNext;
-        if (edgeInfo.falseNext && edgeInfo.falseNext !== nextNodeId) {
-          obj.falseNext = edgeInfo.falseNext;
-        }
+    if (node.type === "if" || node.type === "while") {
+      const trueTarget = edgeInfo?.trueNext;
+      const falseTarget = edgeInfo?.falseNext;
+
+      if (trueTarget) {
+        obj.trueNext = trueTarget;
       } else {
-        if (edgeInfo.next && edgeInfo.next !== nextNodeId) {
-          obj.next = edgeInfo.next;
+        // trueNext: end — no true edge means termination
+        obj.trueNext = "end";
+      }
+
+      if (falseTarget) {
+        if (falseTarget !== nextNodeId) {
+          obj.falseNext = falseTarget;
         }
+      } else if (nextNodeId) {
+        // No false edge but not the last node — emit explicit end
+        // to prevent implicit fallthrough to the next node
+        obj.falseNext = "end";
+      }
+    } else {
+      const nextTarget = edgeInfo?.next;
+      if (nextTarget) {
+        if (nextTarget !== nextNodeId) {
+          obj.next = nextTarget;
+        }
+      } else if (nextNodeId) {
+        // No outgoing edge but not the last node — emit explicit end
+        // to prevent implicit fallthrough to the next node
+        obj.next = "end";
       }
     }
 

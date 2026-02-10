@@ -27,9 +27,9 @@ export async function handleRagSyncNode(
   const files = await driveService.searchFiles(accessToken, folderId, path, false);
   let file = files.find(f => f.name === path || f.name === `${path}.md`);
   if (!file) {
-    file = await driveService.findFileByExactName(accessToken, path) ?? undefined;
+    file = await driveService.findFileByExactName(accessToken, path, folderId) ?? undefined;
     if (!file && !path.endsWith(".md")) {
-      file = await driveService.findFileByExactName(accessToken, `${path}.md`) ?? undefined;
+      file = await driveService.findFileByExactName(accessToken, `${path}.md`, folderId) ?? undefined;
     }
   }
   if (!file) throw new Error(`File not found on Drive: ${path}`);

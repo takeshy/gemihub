@@ -308,6 +308,9 @@ export interface TranslationStrings {
   "quickOpen.noResults": string;
   "quickOpen.selectFile": string;
 
+  // Workflow
+  "workflow.pushRequired": string;
+
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
   "settings.sync.trashDescription": string;
@@ -635,6 +638,9 @@ const en: TranslationStrings = {
   "quickOpen.noResults": "No matching files",
   "quickOpen.selectFile": "Select a file...",
 
+  // Workflow
+  "workflow.pushRequired": "Push to sync changes with server before executing",
+
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
   "settings.sync.trashDescription": "Restore or permanently delete trashed files.",
@@ -961,6 +967,9 @@ const ja: TranslationStrings = {
   "quickOpen.placeholder": "ファイルを検索...",
   "quickOpen.noResults": "一致するファイルがありません",
   "quickOpen.selectFile": "ファイルを選択...",
+
+  // Workflow
+  "workflow.pushRequired": "Pushしてサーバー側に反映しないと実行できません",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",

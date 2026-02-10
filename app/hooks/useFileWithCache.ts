@@ -10,8 +10,10 @@ import { saveLocalEdit, initSnapshot } from "~/services/edit-history-local";
 
 export function useFileWithCache(
   fileId: string | null,
-  refreshKey?: number
+  refreshKey?: number,
+  _debugLabel?: string
 ) {
+  const label = _debugLabel || "unknown";
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +134,7 @@ export function useFileWithCache(
     if (fileId) {
       fetchFile(fileId);
     }
-  }, [fileId, fetchFile, refreshKey]);
+  }, [fileId, fetchFile, refreshKey, label]);
 
   const save = useCallback(
     async (newContent: string) => {

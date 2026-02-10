@@ -299,13 +299,18 @@ export function DriveFileTree({
       getLocallyModifiedFileIds().then((ids) => setModifiedFiles(ids)).catch(() => {});
       fetchAndCacheTree();
     };
+    const workflowHandler = () => {
+      fetchAndCacheTree(true);
+    };
     window.addEventListener("file-modified", handleModified);
     window.addEventListener("file-cached", handleCached);
     window.addEventListener("sync-complete", syncHandler);
+    window.addEventListener("workflow-completed", workflowHandler);
     return () => {
       window.removeEventListener("file-modified", handleModified);
       window.removeEventListener("file-cached", handleCached);
       window.removeEventListener("sync-complete", syncHandler);
+      window.removeEventListener("workflow-completed", workflowHandler);
     };
   }, [fetchAndCacheTree]);
 
@@ -982,6 +987,9 @@ export function DriveFileTree({
           next.delete(item.id);
           return next;
         });
+        if (item.id === activeFileId) {
+          location.reload();
+        }
       } else {
         // Folder: collect all file IDs
         const allIds = collectFileIds(item);
@@ -1015,9 +1023,12 @@ export function DriveFileTree({
           for (const id of modifiedInFolder) next.delete(id);
           return next;
         });
+        if (activeFileId && toDelete.includes(activeFileId)) {
+          location.reload();
+        }
       }
     },
-    [modifiedFiles, cachedFiles, collectFileIds, t]
+    [modifiedFiles, cachedFiles, collectFileIds, t, activeFileId]
   );
 
   const handleDuplicate = useCallback(

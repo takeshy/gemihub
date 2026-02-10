@@ -170,7 +170,7 @@ function TextBasedViewer({
 }) {
   const { t } = useI18n();
   const { content, loading, error, saveToCache, refresh, forceRefresh } =
-    useFileWithCache(fileId, refreshKey);
+    useFileWithCache(fileId, refreshKey, "MainViewer");
   const { setActiveFileId, setActiveFileContent, setActiveFileName, setActiveSelection } = useEditorContext();
 
   // Push content, file name, and file ID to EditorContext
