@@ -4,6 +4,7 @@ import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
+import { rebuildSyncMeta } from "~/services/sync-meta.server";
 import type {
   UserSettings,
   McpServerConfig,
@@ -336,6 +337,11 @@ export async function action({ request }: Route.ActionArgs) {
         const updatedSettings: UserSettings = { ...currentSettings, slashCommands };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
         return jsonWithCookie({ success: true, message: "Command settings saved." });
+      }
+
+      case "rebuildTree": {
+        await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+        return jsonWithCookie({ success: true, message: "Sync meta rebuilt." });
       }
 
       default:
@@ -1016,6 +1022,26 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     }
   }, []);
 
+  const handleRebuildTree = useCallback(async () => {
+    setActionLoading("rebuildTree");
+    setActionMsg(null);
+    try {
+      const fd = new FormData();
+      fd.set("_action", "rebuildTree");
+      const res = await fetch("/settings", { method: "POST", body: fd });
+      const resData = await res.json();
+      if (res.ok && resData.success) {
+        setActionMsg(resData.message);
+      } else {
+        setActionMsg(resData.message || "Rebuild failed.");
+      }
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : "Rebuild failed.");
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
   const handlePrune = useCallback(async () => {
     setActionLoading("prune");
     setPruneMsg(null);
@@ -1084,6 +1110,22 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           </h3>
         </div>
         <div className="space-y-4">
+          {/* Rebuild Sync Meta */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.sync.rebuildTree")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.sync.rebuildTreeDescription")}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRebuildTree}
+              disabled={actionLoading === "rebuildTree"}
+              className={actionBtnClass}
+            >
+              {actionLoading === "rebuildTree" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {t("settings.sync.rebuild")}
+            </button>
+          </div>
           {/* Temporary Files */}
           <div className="flex items-center justify-between">
             <div>

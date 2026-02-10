@@ -209,6 +209,9 @@ export interface TranslationStrings {
   "settings.sync.restoreSelected": string;
   "settings.sync.save": string;
   "settings.sync.pushRejected": string;
+  "settings.sync.rebuildTree": string;
+  "settings.sync.rebuildTreeDescription": string;
+  "settings.sync.rebuild": string;
   "settings.sync.dangerZone": string;
   "settings.sync.dangerZoneDescription": string;
 
@@ -254,6 +257,7 @@ export interface TranslationStrings {
   "plugins.confirmUninstall": string;
   "plugins.invalidRepo": string;
   "plugins.settings": string;
+  "plugins.reloadConfirm": string;
 
   // Commands tab
   "settings.tab.commands": string;
@@ -530,6 +534,9 @@ const en: TranslationStrings = {
   "settings.sync.restoreSelected": "Restore Selected",
   "settings.sync.save": "Save Sync Settings",
   "settings.sync.pushRejected": "Remote is newer. Pull first.",
+  "settings.sync.rebuildTree": "Rebuild File Tree",
+  "settings.sync.rebuildTreeDescription": "Re-scan Google Drive and rebuild the sync metadata. Use this if the file tree is out of sync.",
+  "settings.sync.rebuild": "Rebuild",
   "settings.sync.dangerZone": "Danger Zone",
   "settings.sync.dangerZoneDescription": "These operations may cause data loss and cannot be undone.",
 
@@ -575,6 +582,7 @@ const en: TranslationStrings = {
   "plugins.confirmUninstall": "Uninstall this plugin? This will remove all plugin data.",
   "plugins.invalidRepo": "Invalid repository format. Use owner/repo.",
   "plugins.settings": "Settings",
+  "plugins.reloadConfirm": "Plugin installed. Reload to activate?",
 
   // Commands tab
   "settings.tab.commands": "Commands",
@@ -851,6 +859,9 @@ const ja: TranslationStrings = {
   "settings.sync.restoreSelected": "選択を復元",
   "settings.sync.save": "同期設定を保存",
   "settings.sync.pushRejected": "リモートが新しいです。先にPullしてください。",
+  "settings.sync.rebuildTree": "ファイルツリーの再構築",
+  "settings.sync.rebuildTreeDescription": "Google Driveを再スキャンして同期メタデータを再構築します。ファイルツリーが実際のDrive内容とズレた場合に使用してください。",
+  "settings.sync.rebuild": "再構築",
   "settings.sync.dangerZone": "危険な操作",
   "settings.sync.dangerZoneDescription": "これらの操作はデータ損失を引き起こす可能性があり、元に戻せません。",
 
@@ -896,6 +907,7 @@ const ja: TranslationStrings = {
   "plugins.confirmUninstall": "このプラグインをアンインストールしますか？すべてのプラグインデータが削除されます。",
   "plugins.invalidRepo": "リポジトリの形式が無効です。owner/repo の形式で入力してください。",
   "plugins.settings": "設定",
+  "plugins.reloadConfirm": "プラグインをインストールしました。リロードして反映しますか？",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

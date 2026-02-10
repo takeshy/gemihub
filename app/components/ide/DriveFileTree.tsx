@@ -8,7 +8,6 @@ import {
   File,
   ChevronRight,
   ChevronDown,
-  RefreshCw,
   Loader2,
   Trash2,
   Lock,
@@ -349,11 +348,6 @@ export function DriveFileTree({
       return next;
     });
   }, []);
-
-  const handleRefresh = useCallback(() => {
-    setLoading(true);
-    fetchAndCacheTree(true); // Force rebuild from Drive API
-  }, [fetchAndCacheTree]);
 
   const handleCreateFolder = useCallback(() => {
     const name = prompt("Folder name:");
@@ -1305,13 +1299,6 @@ export function DriveFileTree({
             title="New Folder"
           >
             <FolderPlus size={ICON.MD} />
-          </button>
-          <button
-            onClick={handleRefresh}
-            className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="Refresh"
-          >
-            <RefreshCw size={ICON.MD} />
           </button>
         </div>
       </div>

@@ -81,6 +81,9 @@ export function PluginsTab({ settings }: PluginsTabProps) {
       setRepoInput("");
       invalidateIndexCache();
       showStatus("success", t("plugins.installSuccess"));
+      if (confirm(t("plugins.reloadConfirm"))) {
+        window.location.reload();
+      }
     } catch (err) {
       showStatus(
         "error",

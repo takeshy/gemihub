@@ -120,6 +120,7 @@ export function createPluginAPI(
         });
         if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
         const data = await res.json();
+        window.dispatchEvent(new Event("sync-complete"));
         return { id: data.file.id, name: data.file.name };
       },
 
