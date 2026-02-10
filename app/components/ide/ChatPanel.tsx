@@ -495,6 +495,9 @@ export function ChatPanel({
                     mcpApps = [...mcpApps, chunk.mcpApp];
                   }
                   break;
+                case "drive_changed":
+                  window.dispatchEvent(new Event("sync-complete"));
+                  break;
                 case "error":
                   accumulatedContent +=
                     `\n\n**Error:** ${chunk.error || "Unknown error"}`;

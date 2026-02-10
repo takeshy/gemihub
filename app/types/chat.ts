@@ -66,7 +66,8 @@ export interface StreamChunk {
     | "rag_used"
     | "web_search_used"
     | "image_generated"
-    | "mcp_app";
+    | "mcp_app"
+    | "drive_changed";
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;

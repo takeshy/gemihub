@@ -120,12 +120,16 @@ export async function action({ request }: Route.ActionArgs) {
         args: Record<string, unknown>
       ): Promise<unknown> => {
         if (driveToolNames.has(name)) {
-          return executeDriveTool(
+          const result = await executeDriveTool(
             name,
             args,
             validTokens.accessToken,
             validTokens.rootFolderId
           );
+          if (name === "create_drive_file" || name === "update_drive_file") {
+            sendChunk({ type: "drive_changed" });
+          }
+          return result;
         }
 
         if (mcpToolNames.has(name) && mcpServers) {
