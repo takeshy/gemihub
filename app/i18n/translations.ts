@@ -86,10 +86,24 @@ export interface TranslationStrings {
   "settings.rag.enable": string;
   "settings.rag.topK": string;
   "settings.rag.settings": string;
-  "settings.rag.save": string;
-  "settings.rag.registrationOnPush": string;
-  "settings.rag.registrationOnPushDescription": string;
   "settings.rag.pendingCount": string;
+  "settings.rag.enableAutoRag": string;
+  "settings.rag.registerAndSync": string;
+  "settings.rag.autoLabel": string;
+  "settings.rag.autoRagModalTitle": string;
+  "settings.rag.autoRagModalExcludeNote": string;
+  "settings.rag.autoRagAllFiles": string;
+  "settings.rag.autoRagAllFilesDescription": string;
+  "settings.rag.autoRagCustomize": string;
+  "settings.rag.autoRagCustomizeDescription": string;
+  "settings.rag.fileCount": string;
+  "settings.rag.fileCountPending": string;
+  "settings.rag.filesDialogTitle": string;
+  "settings.rag.filterPlaceholder": string;
+  "settings.rag.filterAll": string;
+  "settings.rag.filterRegistered": string;
+  "settings.rag.filterPending": string;
+  "settings.rag.noFiles": string;
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": string;
@@ -369,10 +383,24 @@ const en: TranslationStrings = {
   "settings.rag.enable": "Enable RAG (Retrieval-Augmented Generation)",
   "settings.rag.topK": "Top-K results",
   "settings.rag.settings": "RAG Settings",
-  "settings.rag.save": "Save RAG Settings",
-  "settings.rag.registrationOnPush": "Auto-register files in RAG on push",
-  "settings.rag.registrationOnPushDescription": "When pushing, automatically register/update files in the default 'gemihub' RAG store. Files that fail RAG registration are saved to Drive normally and marked as pending for retry on next push.",
   "settings.rag.pendingCount": "{count} file(s) pending RAG registration",
+  "settings.rag.enableAutoRag": "Enable Auto RAG Registration",
+  "settings.rag.registerAndSync": "Register & Sync",
+  "settings.rag.autoLabel": "Auto",
+  "settings.rag.autoRagModalTitle": "Auto RAG Registration",
+  "settings.rag.autoRagModalExcludeNote": "System files (_sync-meta.json, settings.json, etc.), history files (chat history, workflow history), and encrypted files are automatically excluded in both modes.",
+  "settings.rag.autoRagAllFiles": "All files (Recommended)",
+  "settings.rag.autoRagAllFilesDescription": "Register all eligible files in the RAG store and start sync immediately.",
+  "settings.rag.autoRagCustomize": "Customize folders",
+  "settings.rag.autoRagCustomizeDescription": "Configure target folders and exclude patterns before syncing.",
+  "settings.rag.fileCount": "{registered} / {total}",
+  "settings.rag.fileCountPending": "(pending: {count})",
+  "settings.rag.filesDialogTitle": "RAG Files — {name}",
+  "settings.rag.filterPlaceholder": "Filter by filename…",
+  "settings.rag.filterAll": "All",
+  "settings.rag.filterRegistered": "Registered",
+  "settings.rag.filterPending": "Pending",
+  "settings.rag.noFiles": "No files found.",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "Encrypt Chat History",
@@ -652,10 +680,24 @@ const ja: TranslationStrings = {
   "settings.rag.enable": "RAG（検索拡張生成）を有効にする",
   "settings.rag.topK": "Top-K 結果数",
   "settings.rag.settings": "RAG設定",
-  "settings.rag.save": "RAG設定を保存",
-  "settings.rag.registrationOnPush": "Push時にファイルをRAGに自動登録",
-  "settings.rag.registrationOnPushDescription": "Push時にファイルをデフォルトの「gemihub」RAGストアに自動登録・更新します。RAG登録に失敗したファイルはDriveには正常に保存され、次回Pushで再試行されます。",
   "settings.rag.pendingCount": "{count}件のファイルがRAG登録待ちです",
+  "settings.rag.enableAutoRag": "自動RAG登録を有効にする",
+  "settings.rag.registerAndSync": "登録 & Sync",
+  "settings.rag.autoLabel": "自動",
+  "settings.rag.autoRagModalTitle": "自動RAG登録",
+  "settings.rag.autoRagModalExcludeNote": "システム生成ファイル（_sync-meta.json, settings.json等）、履歴ファイル（チャット履歴、ワークフロー履歴）、暗号化ファイルはどちらのモードでも自動的に除外されます。",
+  "settings.rag.autoRagAllFiles": "すべてのファイル（推奨）",
+  "settings.rag.autoRagAllFilesDescription": "対象ファイルをすべてRAGストアに登録し、すぐに同期を開始します。",
+  "settings.rag.autoRagCustomize": "カスタマイズ",
+  "settings.rag.autoRagCustomizeDescription": "対象フォルダや除外パターンを設定してから同期します。",
+  "settings.rag.fileCount": "{registered} / {total}",
+  "settings.rag.fileCountPending": "（未登録: {count}）",
+  "settings.rag.filesDialogTitle": "RAGファイル — {name}",
+  "settings.rag.filterPlaceholder": "ファイル名で絞り込み…",
+  "settings.rag.filterAll": "すべて",
+  "settings.rag.filterRegistered": "登録済",
+  "settings.rag.filterPending": "未登録",
+  "settings.rag.noFiles": "ファイルが見つかりません。",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "チャット履歴を暗号化",

@@ -19,6 +19,7 @@ import type {
 } from "~/types/settings";
 import {
   DEFAULT_RAG_SETTING,
+  DEFAULT_RAG_STORE_KEY,
   DEFAULT_ENCRYPTION_SETTINGS,
   getAvailableModels,
   getDefaultModelForPlan,
@@ -50,6 +51,7 @@ import {
   Scissors,
   Save,
   Check,
+  Copy,
   AlertCircle,
   Loader2,
   Pencil,
@@ -57,6 +59,7 @@ import {
   ShieldCheck,
   KeyRound,
   Puzzle,
+  X,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
@@ -64,6 +67,7 @@ import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
 import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog";
 import { TrashDialog } from "~/components/settings/TrashDialog";
 import { ConflictsDialog } from "~/components/settings/ConflictsDialog";
+import { RagFilesDialog } from "~/components/settings/RagFilesDialog";
 import { invalidateIndexCache } from "~/routes/_index";
 import { PluginProvider } from "~/contexts/PluginContext";
 
@@ -1902,11 +1906,10 @@ function McpTab({ settings }: { settings: UserSettings }) {
 
 function RagTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
-  const loading = fetcher.state !== "idle";
+  const settingsFetcher = useFetcher();
   const { t } = useI18n();
 
   const [ragTopK, setRagTopK] = useState(settings.ragTopK);
-  const [ragRegistrationOnPush, setRagRegistrationOnPush] = useState(settings.ragRegistrationOnPush ?? false);
   const [ragSettings, setRagSettings] = useState<Record<string, RagSetting>>(settings.ragSettings);
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(settings.selectedRagSetting);
   const [syncing, setSyncing] = useState(false);
@@ -1915,8 +1918,36 @@ function RagTab({ settings }: { settings: UserSettings }) {
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [copiedStoreId, setCopiedStoreId] = useState<string | null>(null);
+  const [editingTopK, setEditingTopK] = useState(false);
+  const [topKDraft, setTopKDraft] = useState(settings.ragTopK);
+  const [showAutoRagModal, setShowAutoRagModal] = useState(false);
 
-  const settingNames = Object.keys(ragSettings);
+  const settingNames = Object.keys(ragSettings).sort((a, b) => {
+    if (a === DEFAULT_RAG_STORE_KEY) return -1;
+    if (b === DEFAULT_RAG_STORE_KEY) return 1;
+    return a.localeCompare(b);
+  });
+
+  const saveRagSettings = useCallback((overrides?: {
+    ragSettings?: Record<string, RagSetting>;
+    selectedRagSetting?: string | null;
+    ragTopK?: number;
+  }) => {
+    const rs = overrides?.ragSettings ?? ragSettings;
+    const sel = overrides?.selectedRagSetting !== undefined ? overrides.selectedRagSetting : selectedRagSetting;
+    const topK = overrides?.ragTopK ?? ragTopK;
+    const hasGemihub = !!rs[DEFAULT_RAG_STORE_KEY];
+    const hasSettings = Object.keys(rs).length > 0;
+    const fd = new FormData();
+    fd.set("_action", "saveRag");
+    fd.set("ragEnabled", hasSettings ? "on" : "off");
+    fd.set("ragTopK", String(topK));
+    fd.set("ragSettings", JSON.stringify(rs));
+    fd.set("selectedRagSetting", sel || "");
+    fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
+    fetcher.submit(fd, { method: "post" });
+  }, [fetcher, ragTopK, ragSettings, selectedRagSetting]);
 
   const addRagSetting = useCallback(() => {
     // Auto-generate a unique name
@@ -1936,19 +1967,22 @@ function RagTab({ settings }: { settings: UserSettings }) {
 
   const removeRagSetting = useCallback(
     (name: string) => {
-      setRagSettings((prev) => {
-        const copy = { ...prev };
-        delete copy[name];
-        return copy;
-      });
+      const newSettings: Record<string, RagSetting> = {};
+      for (const [k, v] of Object.entries(ragSettings)) {
+        if (k !== name) newSettings[k] = v;
+      }
+      setRagSettings(newSettings);
+      let newSelected = selectedRagSetting;
       if (selectedRagSetting === name) {
         const remaining = settingNames.filter((n) => n !== name);
-        setSelectedRagSetting(remaining.length > 0 ? remaining[0] : null);
+        newSelected = remaining.length > 0 ? remaining[0] : null;
+        setSelectedRagSetting(newSelected);
       }
       if (editingKey === name) setEditingKey(null);
       if (renamingKey === name) setRenamingKey(null);
+      saveRagSettings({ ragSettings: newSettings, selectedRagSetting: newSelected });
     },
-    [selectedRagSetting, settingNames, renamingKey, editingKey]
+    [selectedRagSetting, settingNames, renamingKey, editingKey, ragSettings, saveRagSettings]
   );
 
   const commitRename = useCallback(() => {
@@ -1963,17 +1997,17 @@ function RagTab({ settings }: { settings: UserSettings }) {
       setRenamingKey(null);
       return;
     }
-    setRagSettings((prev) => {
-      const copy: Record<string, RagSetting> = {};
-      for (const [k, v] of Object.entries(prev)) {
-        copy[k === renamingKey ? newName : k] = v;
-      }
-      return copy;
-    });
+    const newSettings: Record<string, RagSetting> = {};
+    for (const [k, v] of Object.entries(ragSettings)) {
+      newSettings[k === renamingKey ? newName : k] = v;
+    }
+    setRagSettings(newSettings);
+    const newSelected = selectedRagSetting === renamingKey ? newName : selectedRagSetting;
     if (selectedRagSetting === renamingKey) setSelectedRagSetting(newName);
     if (editingKey === renamingKey) setEditingKey(newName);
     setRenamingKey(null);
-  }, [renamingKey, renameValue, ragSettings, selectedRagSetting, editingKey]);
+    saveRagSettings({ ragSettings: newSettings, selectedRagSetting: newSelected });
+  }, [renamingKey, renameValue, ragSettings, selectedRagSetting, editingKey, saveRagSettings]);
 
   const updateCurrentSettingByKey = useCallback(
     (key: string, patch: Partial<RagSetting>) => {
@@ -1985,20 +2019,22 @@ function RagTab({ settings }: { settings: UserSettings }) {
     []
   );
 
-  const handleSyncByKey = useCallback(async (key: string) => {
-    if (!ragSettings[key]) return;
+  const handleSyncByKey = useCallback(async (key: string, settingsOverride?: Record<string, RagSetting>) => {
+    const rs = settingsOverride ?? ragSettings;
+    if (!rs[key]) return;
     setSyncing(true);
     setSyncingKey(key);
     setSyncMsg(null);
     try {
-      const hasSettings = Object.keys(ragSettings).length > 0;
+      const hasGemihub = !!rs[DEFAULT_RAG_STORE_KEY];
+      const hasSettings = Object.keys(rs).length > 0;
       const fd = new FormData();
       fd.set("_action", "saveRag");
       fd.set("ragEnabled", hasSettings ? "on" : "off");
       fd.set("ragTopK", String(ragTopK));
-      fd.set("ragSettings", JSON.stringify(ragSettings));
+      fd.set("ragSettings", JSON.stringify(rs));
       fd.set("selectedRagSetting", key);
-      fd.set("ragRegistrationOnPush", ragRegistrationOnPush ? "on" : "off");
+      fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
       const saveRes = await fetch("/settings", { method: "POST", body: fd });
       if (!saveRes.ok) {
         setSyncMsg("Failed to save settings before sync.");
@@ -2043,71 +2079,180 @@ function RagTab({ settings }: { settings: UserSettings }) {
           }
         }
       }
+      // Re-fetch settings to get updated file statuses
+      settingsFetcher.load("/settings");
     } catch (err) {
       setSyncMsg(err instanceof Error ? err.message : "Sync error.");
     } finally {
       setSyncing(false);
     }
-  }, [ragSettings, ragTopK, ragRegistrationOnPush]);
+  }, [ragSettings, ragTopK, settingsFetcher]);
 
-  const handleSubmit = useCallback(() => {
-    const hasSettings = Object.keys(ragSettings).length > 0;
-    const fd = new FormData();
-    fd.set("_action", "saveRag");
-    fd.set("ragEnabled", hasSettings ? "on" : "off");
-    fd.set("ragTopK", String(ragTopK));
-    fd.set("ragSettings", JSON.stringify(ragSettings));
-    fd.set("selectedRagSetting", selectedRagSetting || "");
-    fd.set("ragRegistrationOnPush", ragRegistrationOnPush ? "on" : "off");
-    fetcher.submit(fd, { method: "post" });
-  }, [fetcher, ragTopK, ragSettings, selectedRagSetting, ragRegistrationOnPush]);
+  useEffect(() => {
+    const d = settingsFetcher.data as { settings?: UserSettings } | undefined;
+    if (d?.settings?.ragSettings) {
+      setRagSettings(d.settings.ragSettings);
+    }
+  }, [settingsFetcher.data]);
+
+  const [ragFilesDialogKey, setRagFilesDialogKey] = useState<string | null>(null);
+
+  const getFileCounts = useCallback((key: string) => {
+    const s = ragSettings[key];
+    if (!s) return { total: 0, registered: 0, pending: 0 };
+    const files = Object.values(s.files ?? {});
+    const total = files.length;
+    const registered = files.filter((f) => f.status === "registered").length;
+    return { total, registered, pending: total - registered };
+  }, [ragSettings]);
 
   return (
     <SectionCard>
       <StatusBanner fetcher={fetcher} />
 
-      {/* Auto-register on push */}
-      <div className="mb-6">
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={ragRegistrationOnPush}
-            onChange={(e) => setRagRegistrationOnPush(e.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <div>
-            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              {t("settings.rag.registrationOnPush")}
-            </span>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {t("settings.rag.registrationOnPushDescription")}
-            </p>
-            {(() => {
-              const pendingCount = Object.values(ragSettings).reduce((sum, rs) => {
-                return sum + Object.values(rs.files ?? {}).filter((f) => f.status === "pending").length;
-              }, 0);
-              return pendingCount > 0 ? (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 font-medium">
-                  {t("settings.rag.pendingCount").replace("{count}", String(pendingCount))}
-                </p>
-              ) : null;
-            })()}
-          </div>
-        </label>
-      </div>
+      {/* Auto RAG Registration button (only when gemihub setting doesn't exist) */}
+      {!ragSettings[DEFAULT_RAG_STORE_KEY] && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setShowAutoRagModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          >
+            <Database size={16} />
+            {t("settings.rag.enableAutoRag")}
+          </button>
+        </div>
+      )}
 
-      {/* Top-K */}
+      {/* Auto RAG Modal */}
+      {showAutoRagModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAutoRagModal(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {t("settings.rag.autoRagModalTitle")}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAutoRagModal(false)}
+                className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {t("settings.rag.autoRagModalExcludeNote")}
+            </p>
+
+            <div className="space-y-3">
+              {/* All files option */}
+              <button
+                type="button"
+                onClick={() => {
+                  const newSettings = { ...ragSettings, [DEFAULT_RAG_STORE_KEY]: { ...DEFAULT_RAG_SETTING } };
+                  setRagSettings(newSettings);
+                  setSelectedRagSetting(DEFAULT_RAG_STORE_KEY);
+                  setShowAutoRagModal(false);
+                  handleSyncByKey(DEFAULT_RAG_STORE_KEY, newSettings);
+                }}
+                className="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                  {t("settings.rag.autoRagAllFiles")}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t("settings.rag.autoRagAllFilesDescription")}
+                </p>
+              </button>
+
+              {/* Customize option */}
+              <button
+                type="button"
+                onClick={() => {
+                  const newSettings = { ...ragSettings, [DEFAULT_RAG_STORE_KEY]: { ...DEFAULT_RAG_SETTING } };
+                  setRagSettings(newSettings);
+                  setSelectedRagSetting(DEFAULT_RAG_STORE_KEY);
+                  saveRagSettings({ ragSettings: newSettings, selectedRagSetting: DEFAULT_RAG_STORE_KEY });
+                  setEditingKey(DEFAULT_RAG_STORE_KEY);
+                  setShowAutoRagModal(false);
+                }}
+                className="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                  {t("settings.rag.autoRagCustomize")}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {t("settings.rag.autoRagCustomizeDescription")}
+                </p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top-K inline edit */}
       <div className="mb-6">
-        <Label htmlFor="ragTopK">{t("settings.rag.topK")}</Label>
-        <input
-          id="ragTopK"
-          type="number"
-          min={1}
-          max={20}
-          value={ragTopK}
-          onChange={(e) => setRagTopK(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
-          className={inputClass + " max-w-[120px]"}
-        />
+        {editingTopK ? (
+          <div className="flex items-center gap-2">
+            <Label>{t("settings.rag.topK")}:</Label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={topKDraft}
+              onChange={(e) => setTopKDraft(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
+              className={inputClass + " max-w-[80px]"}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setRagTopK(topKDraft);
+                  saveRagSettings({ ragTopK: topKDraft });
+                  setEditingTopK(false);
+                }
+                if (e.key === "Escape") setEditingTopK(false);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setRagTopK(topKDraft);
+                saveRagSettings({ ragTopK: topKDraft });
+                setEditingTopK(false);
+              }}
+              className="p-1 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+              title="Apply"
+            >
+              <Check size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingTopK(false)}
+              className="p-1 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+              title="Cancel"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+              {t("settings.rag.topK")}: <span className="font-medium">{ragTopK}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setTopKDraft(ragTopK);
+                setEditingTopK(true);
+              }}
+              className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+              title="Edit"
+            >
+              <Pencil size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* RAG settings list */}
@@ -2163,6 +2308,7 @@ function RagTab({ settings }: { settings: UserSettings }) {
                         <span
                           className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate block"
                           onDoubleClick={(e) => {
+                            if (name === DEFAULT_RAG_STORE_KEY) return;
                             e.stopPropagation();
                             setRenamingKey(name);
                             setRenameValue(name);
@@ -2171,16 +2317,55 @@ function RagTab({ settings }: { settings: UserSettings }) {
                           {name}
                         </span>
                       )}
+                      {s.storeId && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-xs text-gray-400 font-mono truncate">{s.storeId}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(s.storeId!);
+                              setCopiedStoreId(s.storeId!);
+                              setTimeout(() => setCopiedStoreId(null), 1500);
+                            }}
+                            className="shrink-0 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                            title="Copy Store ID"
+                          >
+                            {copiedStoreId === s.storeId ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-gray-400" />}
+                          </button>
+                        </div>
+                      )}
+                      {(() => {
+                        const counts = getFileCounts(name);
+                        if (counts.total === 0) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRagFilesDialogKey(name);
+                            }}
+                            className="text-xs mt-0.5 font-medium block text-left hover:underline cursor-pointer"
+                          >
+                            <span className="text-gray-600 dark:text-gray-300">
+                              {t("settings.rag.fileCount").replace("{registered}", String(counts.registered)).replace("{total}", String(counts.total))}
+                            </span>
+                            {counts.pending > 0 && (
+                              <span className="text-amber-600 dark:text-amber-400 ml-1">
+                                {t("settings.rag.fileCountPending").replace("{count}", String(counts.pending))}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })()}
                     </div>
 
-                    {/* Type badge */}
-                    <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${
-                      s.isExternal
-                        ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
-                        : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                    }`}>
-                      {s.isExternal ? "External" : "Internal"}
-                    </span>
+                    {/* Auto badge for gemihub setting */}
+                    {name === DEFAULT_RAG_STORE_KEY && (
+                      <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                        {t("settings.rag.autoLabel")}
+                      </span>
+                    )}
 
                     {/* Sync button */}
                     <button
@@ -2233,80 +2418,37 @@ function RagTab({ settings }: { settings: UserSettings }) {
                   {/* Expanded editor */}
                   {isEditing && (
                     <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 space-y-4 border-t border-gray-200 dark:border-gray-700">
-                      {/* Internal / External toggle */}
                       <div>
-                        <Label>Type</Label>
-                        <div className="flex gap-4 mt-1">
-                          {[
-                            { value: false, label: "Internal (Google Drive folders)" },
-                            { value: true, label: "External (store IDs)" },
-                          ].map((opt) => (
-                            <label
-                              key={String(opt.value)}
-                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-                            >
-                              <input
-                                type="radio"
-                                checked={s.isExternal === opt.value}
-                                onChange={() => updateCurrentSettingByKey(name, { isExternal: opt.value })}
-                                className="text-blue-600 focus:ring-blue-500"
-                              />
-                              {opt.label}
-                            </label>
-                          ))}
-                        </div>
+                        <Label htmlFor={`rag-targetFolders-${name}`}>Target Folders (one per line, name or ID)</Label>
+                        <textarea
+                          id={`rag-targetFolders-${name}`}
+                          rows={3}
+                          value={s.targetFolders.join("\n")}
+                          onChange={(e) =>
+                            updateCurrentSettingByKey(name, {
+                              targetFolders: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                            })
+                          }
+                          className={inputClass + " font-mono resize-y"}
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
+                        </p>
                       </div>
-
-                      {s.isExternal ? (
-                        <div>
-                          <Label htmlFor={`rag-storeIds-${name}`}>Store IDs (one per line)</Label>
-                          <textarea
-                            id={`rag-storeIds-${name}`}
-                            rows={3}
-                            value={s.storeIds.join("\n")}
-                            onChange={(e) =>
-                              updateCurrentSettingByKey(name, {
-                                storeIds: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
-                              })
-                            }
-                            className={inputClass + " font-mono resize-y"}
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          <div>
-                            <Label htmlFor={`rag-targetFolders-${name}`}>Target Folders (one per line, name or ID)</Label>
-                            <textarea
-                              id={`rag-targetFolders-${name}`}
-                              rows={3}
-                              value={s.targetFolders.join("\n")}
-                              onChange={(e) =>
-                                updateCurrentSettingByKey(name, {
-                                  targetFolders: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
-                                })
-                              }
-                              className={inputClass + " font-mono resize-y"}
-                            />
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
-                            </p>
-                          </div>
-                          <div>
-                            <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line)</Label>
-                            <textarea
-                              id={`rag-excludePatterns-${name}`}
-                              rows={2}
-                              value={s.excludePatterns.join("\n")}
-                              onChange={(e) =>
-                                updateCurrentSettingByKey(name, {
-                                  excludePatterns: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
-                                })
-                              }
-                              className={inputClass + " font-mono resize-y"}
-                            />
-                          </div>
-                        </>
-                      )}
+                      <div>
+                        <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line)</Label>
+                        <textarea
+                          id={`rag-excludePatterns-${name}`}
+                          rows={2}
+                          value={s.excludePatterns.join("\n")}
+                          onChange={(e) =>
+                            updateCurrentSettingByKey(name, {
+                              excludePatterns: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                            })
+                          }
+                          className={inputClass + " font-mono resize-y"}
+                        />
+                      </div>
 
                       {/* Sync message */}
                       {syncMsg && syncingKey === name && (
@@ -2319,17 +2461,31 @@ function RagTab({ settings }: { settings: UserSettings }) {
             })}
           </div>
         )}
+
+        {/* Register & Sync button for new internal settings */}
+        {selectedRagSetting && ragSettings[selectedRagSetting] && !ragSettings[selectedRagSetting].storeId && !ragSettings[selectedRagSetting].isExternal && (
+          <div className="mt-3">
+            <button
+              type="button"
+              disabled={syncing}
+              onClick={() => handleSyncByKey(selectedRagSetting)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50"
+            >
+              <FileBox size={14} className={syncing && syncingKey === selectedRagSetting ? "animate-spin" : ""} />
+              {t("settings.rag.registerAndSync")}
+            </button>
+          </div>
+        )}
       </div>
 
-      <button
-        type="button"
-        disabled={loading}
-        onClick={handleSubmit}
-        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-      >
-        {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-        {t("settings.rag.save")}
-      </button>
+      {/* RAG Files Dialog */}
+      {ragFilesDialogKey && ragSettings[ragFilesDialogKey] && (
+        <RagFilesDialog
+          settingName={ragFilesDialogKey}
+          files={ragSettings[ragFilesDialogKey].files}
+          onClose={() => setRagFilesDialogKey(null)}
+        />
+      )}
     </SectionCard>
   );
 }

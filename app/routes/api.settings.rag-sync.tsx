@@ -122,6 +122,7 @@ export async function action({ request }: Route.ActionArgs) {
           deleted: result.deleted.length,
           errors: result.errors.length,
           errorDetails: result.errors,
+          ragSetting: settings.ragSettings[settingName],
         });
       } catch (error) {
         sendEvent("error", {
