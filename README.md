@@ -6,7 +6,7 @@ GemiHub is a self-hostable web application that turns Google Gemini into a perso
 
 [日本語版 README](./README_ja.md)
 
-![GemiHub](./docs/images/cap.png)
+![GemiHub](./public/images/cap.png)
 
 ## Why GemiHub?
 
@@ -26,13 +26,13 @@ Through the Model Context Protocol (MCP), GemiHub can talk to external services.
 
 Build complex automation pipelines with a visual drag-and-drop editor. Chain together AI prompts, Drive file operations, HTTP requests, user input dialogs, and more. Workflows are stored as YAML, support loops and conditionals, and run in real-time with streaming output.
 
-![Visual Workflow Editor](./docs/images/visual_workflow.png)
+![Visual Workflow Editor](./public/images/visual_workflow.png)
 
 ### Your Data, Your Control
 
 All data — chat history, workflows, settings, edit history — is stored in your own Google Drive under a `gemihub/` folder. No proprietary database, no vendor lock-in. Optional hybrid encryption (RSA + AES) protects sensitive files. A Python decryption script is provided so you can always access your encrypted data independently.
 
-![Push/Pull Sync](./docs/images/push_pull.png)
+![Push/Pull Sync](./public/images/push_pull.png)
 
 ## Screenshots
 
@@ -40,25 +40,25 @@ All data — chat history, workflows, settings, edit history — is stored in yo
 
 Edit workflow nodes with a form-based UI. Configure LLM prompts, models, Drive file operations, and more.
 
-![Edit Workflow Node](./docs/images/edit_workflow.png)
+![Edit Workflow Node](./public/images/edit_workflow.png)
 
 ### Workflow Execution
 
 Run workflows and see real-time streaming output with execution logs.
 
-![Workflow Execution](./docs/images/workflow_execution.png)
+![Workflow Execution](./public/images/workflow_execution.png)
 
 ### AI Workflow Generation
 
 Create and modify workflows using natural language. AI generates the YAML with streaming preview and thinking display.
 
-![AI Workflow Generation](./docs/images/ai_generate_workflow.png)
+![AI Workflow Generation](./public/images/ai_generate_workflow.png)
 
 ### File Management
 
 Manage Drive files with a context menu — publish to web, view history, encrypt, rename, download, and more.
 
-![File Management](./docs/images/pubish_web.png)
+![File Management](./public/images/pubish_web.png)
 
 ## Features
 

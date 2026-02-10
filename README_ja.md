@@ -6,7 +6,7 @@ GemiHub は、Google Gemini を Google Drive と深く統合したセルフホ�
 
 [English README](./README.md)
 
-![GemiHub](./docs/images/cap.png)
+![GemiHub](./public/images/cap.png)
 
 ## GemiHub でできること
 
@@ -26,13 +26,13 @@ Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと�
 
 ビジュアルなドラッグ＆ドロップエディタで複雑な自動化パイプラインを構築できます。AI プロンプト、Drive ファイル操作、HTTP リクエスト、ユーザー入力ダイアログなどを連結。ワークフローは YAML で保存され、ループや条件分岐をサポートし、ストリーミングでリアルタイム実行されます。自然言語による AI ワークフロー生成にも対応しています。
 
-![ビジュアルワークフローエディタ](./docs/images/visual_workflow.png)
+![ビジュアルワークフローエディタ](./public/images/visual_workflow.png)
 
 ### あなたのデータは、あなたの管理下に
 
 チャット履歴、ワークフロー、設定、変更履歴 — すべてのデータは Google Drive の `gemihub/` フォルダに保存されます。独自データベースもベンダーロックインもありません。オプションのハイブリッド暗号化（RSA + AES）で機密ファイルを保護でき、Python 復号スクリプトも提供されているため、暗号化データには常に独立してアクセスできます。
 
-![Push/Pull 同期](./docs/images/push_pull.png)
+![Push/Pull 同期](./public/images/push_pull.png)
 
 ## スクリーンショット
 
@@ -40,25 +40,25 @@ Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと�
 
 フォームベースの UI でワークフローノードを編集。LLM プロンプト、モデル、Drive ファイル操作などを設定できます。
 
-![ワークフローノード編集](./docs/images/edit_workflow.png)
+![ワークフローノード編集](./public/images/edit_workflow.png)
 
 ### ワークフロー実行
 
 ワークフローを実行し、リアルタイムのストリーミング出力と実行ログを確認できます。
 
-![ワークフロー実行](./docs/images/workflow_execution.png)
+![ワークフロー実行](./public/images/workflow_execution.png)
 
 ### AI ワークフロー生成
 
 自然言語でワークフローを作成・修正。AI が YAML を生成し、ストリーミングプレビューと思考過程を表示します。
 
-![AI ワークフロー生成](./docs/images/ai_generate_workflow.png)
+![AI ワークフロー生成](./public/images/ai_generate_workflow.png)
 
 ### ファイル管理
 
 コンテキストメニューから Drive ファイルを管理 — Web 公開、履歴表示、暗号化、リネーム、ダウンロードなど。
 
-![ファイル管理](./docs/images/pubish_web.png)
+![ファイル管理](./public/images/pubish_web.png)
 
 ## 機能一覧
 

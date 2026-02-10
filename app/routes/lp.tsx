@@ -62,6 +62,10 @@ const en: LpStrings = {
     { src: "/images/cap.png", alt: "AI Chat & File Management" },
     { src: "/images/visual_workflow.png", alt: "Workflow Builder" },
     { src: "/images/workflow_execution.png", alt: "Workflow Execution" },
+    { src: "/images/ai_generate_workflow.png", alt: "AI Workflow Generation" },
+    { src: "/images/edit_workflow.png", alt: "Workflow Node Editing" },
+    { src: "/images/push_pull.png", alt: "Push/Pull Sync" },
+    { src: "/images/pubish_web.png", alt: "One-Click Publishing" },
   ],
   dataUsageTitle: "How We Handle Your Data",
   dataUsageIntro: "GemiHub uses your Google account to sign in. Here's what we access and why:",
@@ -102,6 +106,10 @@ const ja: LpStrings = {
     { src: "/images/cap.png", alt: "AIチャット＆ファイル管理" },
     { src: "/images/visual_workflow.png", alt: "ワークフロービルダー" },
     { src: "/images/workflow_execution.png", alt: "ワークフロー実行" },
+    { src: "/images/ai_generate_workflow.png", alt: "AIワークフロー生成" },
+    { src: "/images/edit_workflow.png", alt: "ワークフローノード編集" },
+    { src: "/images/push_pull.png", alt: "Push/Pull同期" },
+    { src: "/images/pubish_web.png", alt: "ワンクリック公開" },
   ],
   dataUsageTitle: "データの取り扱いについて",
   dataUsageIntro: "GemiHubはGoogleアカウントでサインインします。アクセスするデータとその理由は以下のとおりです：",
@@ -188,7 +196,7 @@ export default function LandingPage() {
         <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
           {s.pluginShowcaseTitle}
         </h2>
-        <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
+        <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
           <img
             src="/images/ronginus.png"
             alt="Ronginus"
