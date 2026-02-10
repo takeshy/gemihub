@@ -94,7 +94,7 @@ export function Header({
           >
             <Search size={ICON.MD} className="shrink-0" />
             {activeFilePath && (
-              <span className="hidden sm:inline text-xs truncate max-w-[200px]">{activeFilePath}</span>
+              <span className="hidden sm:inline text-xs whitespace-nowrap">{activeFilePath}</span>
             )}
           </button>
         )}
