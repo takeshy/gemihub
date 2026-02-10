@@ -10,7 +10,7 @@
 | 制御 | `if`, `while`, `sleep` | 条件分岐、ループ、一時停止 |
 | LLM | `command` | Gemini API でプロンプトを実行 |
 | データ | `http`, `json` | HTTP リクエストと JSON パース |
-| Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save` | Google Drive ファイル操作 |
+| Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save`, `drive-delete` | Google Drive ファイル操作 |
 | プロンプト | `prompt-value`, `dialog`, `drive-file-picker` | ユーザー入力ダイアログ |
 | プレビュー | `preview` | ファイルのプレビュー表示 |
 | 合成 | `workflow` | 別のワークフローをサブワークフローとして実行 |
@@ -225,6 +225,9 @@ Google Drive にファイルを書き込みます。
   path: "output/{{filename}}.md"
   content: "{{result}}"
   mode: overwrite
+  confirm: "true"
+  history: "true"
+  open: "true"
 ```
 
 | プロパティ | 必須 | テンプレート | 説明 |
@@ -232,8 +235,9 @@ Google Drive にファイルを書き込みます。
 | `path` | Yes | Yes | ファイルパス（`.md` 拡張子がない場合は自動付与） |
 | `content` | Yes | Yes | 書き込む内容 |
 | `mode` | No | No | `overwrite`（デフォルト）, `append`, `create`（既存ならスキップ） |
-
-設定で有効になっている場合、編集履歴が自動保存されます。
+| `confirm` | No | No | `"true"`（デフォルト）で既存ファイル更新時に差分レビューダイアログを表示、`"false"` で確認なしに書き込み |
+| `history` | No | No | `"true"` で編集履歴を保存 |
+| `open` | No | No | `"true"` でワークフロー完了後にエディタでファイルを開く |
 
 ---
 
@@ -365,6 +369,24 @@ FileExplorerData を Google Drive にファイルとして保存します。
 | `source` | Yes | No | FileExplorerData JSON を含む変数名 |
 | `path` | Yes | Yes | 保存先パス（ソースデータから拡張子を自動付与） |
 | `savePathTo` | No | No | 最終ファイル名を保存する変数 |
+
+---
+
+### drive-delete
+
+ファイルを `trash/` サブフォルダに移動してソフトデリートします。
+
+```yaml
+- id: cleanup
+  type: drive-delete
+  path: "notes/old-file.md"
+```
+
+| プロパティ | 必須 | テンプレート | 説明 |
+|-----------|:----:|:----------:|------|
+| `path` | Yes | Yes | 削除するファイルのパス（`.md` 拡張子がない場合は自動付与） |
+
+ファイルは `trash/` に移動され（完全削除ではなく）、同期メタデータから削除されます。`drive-file` と同じパス解決をサポートします（companion `_fileId` 変数、完全名フォールバック）。
 
 ---
 

@@ -118,7 +118,7 @@ Write/create file on Drive.
 - **path** (required): File name/path (supports {{variables}})
 - **content** (required): Content to write (supports {{variables}})
 - **mode** (optional): "overwrite" (default), "append", "create"
-- **confirm** (optional): "true"/"false" — show confirmation dialog before write
+- **confirm** (optional): "true" (default) / "false" — show diff review dialog when updating existing files
 - **history** (optional): "true"/"false" — record edit in edit history
 - **open** (optional): "true"/"false" — open file in IDE after workflow completes
 
@@ -177,6 +177,10 @@ Save FileExplorerData (e.g., from HTTP download or image generation) to Drive.
 - **source** (required): Variable containing FileExplorerData JSON
 - **path** (required): Save path
 - **savePathTo** (optional): Variable for final saved path
+
+#### drive-delete
+Soft-delete a file by moving it to the trash/ subfolder.
+- **path** (required): File path to delete (supports {{variables}}, .md auto-appended if no extension)
 
 ### User Interaction
 

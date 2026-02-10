@@ -71,7 +71,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "path", label: "Path", required: true, placeholder: "notes/output.md" },
         { key: "content", label: "Content", required: false, multiline: true, placeholder: "{{result}}" },
         { key: "mode", label: "Mode", required: false, options: ["create", "append", "overwrite"], defaultValue: "overwrite" },
-        { key: "confirm", label: "Confirm", required: false, options: ["false", "true"], defaultValue: "false" },
+        { key: "confirm", label: "Confirm", required: false, options: ["true", "false"], defaultValue: "true" },
         { key: "history", label: "History", required: false, options: ["false", "true"], defaultValue: "false" },
         { key: "open", label: "Open after run", required: false, options: ["false", "true"], defaultValue: "false" },
       ];
@@ -116,6 +116,10 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "source", label: "Source", required: true, placeholder: "{{content}}" },
         { key: "path", label: "Path", required: true, placeholder: "output/result.md" },
         { key: "savePathTo", label: "Save Path To", required: false, placeholder: "savedPath" },
+      ];
+    case "drive-delete":
+      return [
+        { key: "path", label: "Path", required: true, placeholder: "notes/old-file.md" },
       ];
     case "dialog":
       return [

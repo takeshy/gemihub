@@ -12,7 +12,7 @@ import { getNextNodes } from "./parser";
 import { replaceVariables, parseCondition } from "./handlers/utils";
 import { handleVariableNode, handleSetNode, handleIfNode, handleWhileNode, handleSleepNode } from "./handlers/controlFlow";
 import { handleHttpNode } from "./handlers/http";
-import { handleDriveFileNode, handleDriveReadNode } from "./handlers/drive";
+import { handleDriveFileNode, handleDriveReadNode, handleDriveDeleteNode } from "./handlers/drive";
 import { handleDriveSearchNode } from "./handlers/driveSearch";
 import { handleDriveListNode, handleDriveFolderListNode } from "./handlers/driveListing";
 import { handleDriveSaveNode } from "./handlers/driveSave";
@@ -326,6 +326,17 @@ export async function executeWorkflow(
           await handleDriveSaveNode(node, context, serviceContext);
           log(node.id, node.type, `File saved`, "success");
           addHistoryStep(node.id, node.type);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "drive-delete": {
+          const deletePath = replaceVariables(node.properties["path"] || "", context);
+          log(node.id, node.type, `Deleting file: ${deletePath}`, "info");
+          await handleDriveDeleteNode(node, context, serviceContext, promptCallbacks);
+          log(node.id, node.type, `File deleted: ${deletePath}`, "success", { path: deletePath });
+          addHistoryStep(node.id, node.type, { path: deletePath });
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;

@@ -10,7 +10,7 @@ This document provides detailed specifications for all workflow node types.
 | Control | `if`, `while`, `sleep` | Conditional branching, loops, pausing |
 | LLM | `command` | Execute prompts via Gemini API |
 | Data | `http`, `json` | HTTP requests and JSON parsing |
-| Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save` | Google Drive file operations |
+| Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save`, `drive-delete` | Google Drive file operations |
 | Prompts | `prompt-value`, `prompt-file`, `prompt-selection`, `dialog`, `drive-file-picker` | User input dialogs |
 | Composition | `workflow` | Execute another workflow as a sub-workflow |
 | External | `mcp` | Call remote MCP servers |
@@ -249,7 +249,7 @@ Write content to a Google Drive file.
 | `path` | Yes | Yes | File path (`.md` extension auto-appended if missing) |
 | `content` | Yes | Yes | Content to write |
 | `mode` | No | No | `overwrite` (default), `append`, `create` (skip if exists) |
-| `confirm` | No | No | `"true"` to show confirmation dialog before writing |
+| `confirm` | No | No | `"true"` (default) to show diff review dialog when updating existing files; `"false"` to write without confirmation |
 | `history` | No | No | `"true"` to save edit history |
 | `open` | No | No | `"true"` to open the file in the editor after workflow completes |
 
@@ -392,6 +392,24 @@ Save FileExplorerData as a file on Google Drive.
 | `source` | Yes | No | Variable name containing FileExplorerData JSON |
 | `path` | Yes | Yes | Target file path (extension auto-added from source data) |
 | `savePathTo` | No | No | Variable to store final file name |
+
+---
+
+### drive-delete
+
+Soft-delete a file by moving it to the `trash/` subfolder.
+
+```yaml
+- id: cleanup
+  type: drive-delete
+  path: "notes/old-file.md"
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `path` | Yes | Yes | File path to delete (`.md` extension auto-appended if missing) |
+
+The file is moved to `trash/` (not permanently deleted) and removed from sync metadata. Supports the same path resolution as `drive-file` (companion `_fileId` variables, exact name fallback).
 
 ---
 

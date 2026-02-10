@@ -5,6 +5,7 @@ import {
   getCachedFileTree,
   type CachedTreeNode,
 } from "~/services/indexeddb-cache";
+import { DiffView } from "~/components/shared/DiffView";
 
 interface PromptModalProps {
   data: Record<string, unknown>;
@@ -74,6 +75,10 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
   };
 
   const handleSubmit = () => {
+    if (promptType === "diff") {
+      onSubmit("OK");
+      return;
+    }
     if (promptType === "drive-file") {
       if (!selectedFile) return;
       onSubmit(JSON.stringify(selectedFile));
@@ -120,7 +125,7 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
+      <div className={`bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full mx-4 max-h-[80vh] flex flex-col ${promptType === "diff" ? "max-w-2xl" : "max-w-md"}`}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -140,6 +145,18 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {message}
             </p>
+          )}
+
+          {/* Diff Review */}
+          {promptType === "diff" && (
+            <div>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                {data.fileName as string}
+              </div>
+              <div className="max-h-96 overflow-auto border border-gray-200 dark:border-gray-700 rounded-md">
+                <DiffView diff={data.diff as string} />
+              </div>
+            </div>
           )}
 
           {/* Drive File Picker */}

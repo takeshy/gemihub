@@ -100,6 +100,18 @@ export async function action({ request, params }: Route.ActionArgs) {
             return { id: result, name: result };
           }
         },
+        promptForDiff: async (title, fileName, oldContent, newContent) => {
+          const { createTwoFilesPatch } = await import("diff");
+          const diffStr = createTwoFilesPatch(
+            fileName, fileName, oldContent, newContent,
+            "Current", "New", { context: 3 }
+          );
+          const result = await requestPrompt(executionId, "diff", {
+            title, fileName, diff: diffStr,
+            button1: "OK", button2: "Cancel",
+          });
+          return result === "OK";
+        },
         promptForPassword: async (title) => {
           if (cachedEncryptionPassword) return cachedEncryptionPassword;
           const result = await requestPrompt(executionId, "password", {

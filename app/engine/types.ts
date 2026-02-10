@@ -14,6 +14,7 @@ export type WorkflowNodeType =
   | "drive-folder-list"// was: folder-list
   | "drive-file-picker"// was: file-explorer
   | "drive-save"       // was: file-save
+  | "drive-delete"     // soft delete (move to trash/)
   | "dialog"
   | "prompt-value"
   | "prompt-file"
@@ -196,6 +197,12 @@ export interface PromptCallbacks {
     title: string,
     extensions?: string[]
   ) => Promise<{ id: string; name: string } | null>;
+  promptForDiff?: (
+    title: string,
+    fileName: string,
+    oldContent: string,
+    newContent: string
+  ) => Promise<boolean>;
   promptForPassword?: (title?: string) => Promise<string | null>;
   executeSubWorkflow?: (
     workflowPath: string,
