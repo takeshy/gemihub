@@ -49,14 +49,16 @@ export async function handleDriveSaveNode(
       fileName,
       Buffer.from(content, "base64"),
       folderId,
-      fileData.mimeType
+      fileData.mimeType,
+      { signal: serviceContext.abortSignal }
     )
     : await driveService.createFile(
       accessToken,
       fileName,
       content,
       folderId,
-      fileData.mimeType
+      fileData.mimeType,
+      { signal: serviceContext.abortSignal }
     );
 
   if (savePathTo) {

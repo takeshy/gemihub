@@ -159,21 +159,25 @@ export async function executeDriveTool(
   toolName: string,
   args: Record<string, unknown>,
   accessToken: string,
-  rootFolderId: string
+  rootFolderId: string,
+  abortSignal?: AbortSignal
 ): Promise<unknown> {
+  if (abortSignal?.aborted) {
+    throw new Error("Execution cancelled");
+  }
   switch (toolName) {
     case "read_drive_file": {
       const fileId = args.fileId;
       if (typeof fileId !== "string" || !fileId) {
         return { error: "read_drive_file: 'fileId' must be a non-empty string" };
       }
-      const metadata = await getFileMetadata(accessToken, fileId);
+      const metadata = await getFileMetadata(accessToken, fileId, { signal: abortSignal });
       if (isGeminiSupportedMedia(metadata.mimeType)) {
         const fileSize = metadata.size ? parseInt(metadata.size, 10) : 0;
         if (fileSize > MAX_INLINE_DATA_BYTES) {
           return { error: `File is too large (${Math.round(fileSize / 1024 / 1024)}MB). Maximum supported size is 20MB.` };
         }
-        const rawRes = await readFileRaw(accessToken, fileId);
+        const rawRes = await readFileRaw(accessToken, fileId, { signal: abortSignal });
         const buf = await rawRes.arrayBuffer();
         const base64 = Buffer.from(buf).toString("base64");
         return {
@@ -187,7 +191,7 @@ export async function executeDriveTool(
       if (!isTextualMimeType(metadata.mimeType)) {
         return { error: `Cannot read file of type '${metadata.mimeType}'. Supported formats: text files, images, audio, video, and PDF.` };
       }
-      const content = await readFile(accessToken, fileId);
+      const content = await readFile(accessToken, fileId, { signal: abortSignal });
       return { content };
     }
 
@@ -198,7 +202,7 @@ export async function executeDriveTool(
       }
       const searchContent = (args.searchContent as boolean) ?? false;
       const folder = args.folder as string | undefined;
-      let files = await searchFiles(accessToken, rootFolderId, query, searchContent);
+      let files = await searchFiles(accessToken, rootFolderId, query, searchContent, { signal: abortSignal });
       // Filter by virtual folder prefix
       if (folder) {
         files = files.filter(
@@ -217,7 +221,7 @@ export async function executeDriveTool(
 
     case "list_drive_files": {
       const folder = args.folder as string | undefined;
-      const { files: allFiles } = await getFileListFromMeta(accessToken, rootFolderId);
+      const { files: allFiles } = await getFileListFromMeta(accessToken, rootFolderId, { signal: abortSignal });
 
       // Filter and extract virtual structure
       const prefix = folder ? folder + "/" : "";
@@ -261,8 +265,8 @@ export async function executeDriveTool(
       if (typeof content !== "string") {
         return { error: "create_drive_file: 'content' must be a string" };
       }
-      const file = await createFile(accessToken, name, content, rootFolderId);
-      await upsertFileInMeta(accessToken, rootFolderId, file);
+      const file = await createFile(accessToken, name, content, rootFolderId, "text/plain", { signal: abortSignal });
+      await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
       return {
         id: file.id,
         name: file.name,
@@ -279,8 +283,8 @@ export async function executeDriveTool(
       if (typeof content !== "string") {
         return { error: "update_drive_file: 'content' must be a string" };
       }
-      const file = await updateFile(accessToken, fileId, content);
-      await upsertFileInMeta(accessToken, rootFolderId, file);
+      const file = await updateFile(accessToken, fileId, content, "text/plain", { signal: abortSignal });
+      await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
       return {
         id: file.id,
         name: file.name,

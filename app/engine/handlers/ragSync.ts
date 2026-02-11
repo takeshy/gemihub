@@ -24,18 +24,26 @@ export async function handleRagSyncNode(
   const folderId = serviceContext.driveRootFolderId;
 
   // Find the file on Drive
-  const files = await driveService.searchFiles(accessToken, folderId, path, false);
+  const files = await driveService.searchFiles(accessToken, folderId, path, false, {
+    signal: serviceContext.abortSignal,
+  });
   let file = files.find(f => f.name === path || f.name === `${path}.md`);
   if (!file) {
-    file = await driveService.findFileByExactName(accessToken, path, folderId) ?? undefined;
+    file = await driveService.findFileByExactName(accessToken, path, folderId, {
+      signal: serviceContext.abortSignal,
+    }) ?? undefined;
     if (!file && !path.endsWith(".md")) {
-      file = await driveService.findFileByExactName(accessToken, `${path}.md`, folderId) ?? undefined;
+      file = await driveService.findFileByExactName(accessToken, `${path}.md`, folderId, {
+        signal: serviceContext.abortSignal,
+      }) ?? undefined;
     }
   }
   if (!file) throw new Error(`File not found on Drive: ${path}`);
 
   // Get or create the RAG store
-  const storeName = await getOrCreateStore(apiKey, ragSettingName);
+  const storeName = await getOrCreateStore(apiKey, ragSettingName, {
+    signal: serviceContext.abortSignal,
+  });
 
   // Update in-memory settings so subsequent command nodes can find the store ID
   if (serviceContext.settings) {
@@ -53,7 +61,14 @@ export async function handleRagSyncNode(
   }
 
   // Upload the file to the RAG store
-  const fileId = await uploadDriveFile(apiKey, accessToken, file.id, file.name, storeName);
+  const fileId = await uploadDriveFile(
+    apiKey,
+    accessToken,
+    file.id,
+    file.name,
+    storeName,
+    { signal: serviceContext.abortSignal }
+  );
 
   const result = {
     path,

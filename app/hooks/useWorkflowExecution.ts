@@ -110,19 +110,38 @@ export function useWorkflowExecution(workflowId: string) {
   }, [workflowId]);
 
   const stop = useCallback(async () => {
-    if (executionId) {
-      try {
-        await fetch(`/api/workflow/${workflowId}/stop`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ executionId }),
-        });
-      } catch {
-        // Best-effort: still close stream locally.
+    if (!executionId) return;
+    try {
+      const res = await fetch(`/api/workflow/${workflowId}/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ executionId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setLogs((prev) => [
+          ...prev,
+          {
+            nodeId: "system",
+            nodeType: "system",
+            message: data.error || "Failed to stop execution",
+            status: "error" as const,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
       }
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          nodeId: "system",
+          nodeType: "system",
+          message: `Failed to stop execution: ${error instanceof Error ? error.message : String(error)}`,
+          status: "error" as const,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
     }
-    eventSourceRef.current?.close();
-    setStatus("cancelled");
   }, [executionId, workflowId]);
 
   const handlePromptResponse = useCallback(

@@ -3,13 +3,14 @@ import test from "node:test";
 import {
   createExecution,
   getExecution,
+  isExecutionOwnedBy,
   requestPrompt,
   stopExecution,
 } from "./execution-store.server";
 
 test("requestPrompt returns null immediately when execution already cancelled", async () => {
   const executionId = `exec-test-${Date.now()}-cancelled`;
-  createExecution(executionId, "wf-1");
+  createExecution(executionId, "wf-1", "root-1");
   stopExecution(executionId);
 
   const result = await requestPrompt(executionId, "value", { title: "Input" });
@@ -19,7 +20,7 @@ test("requestPrompt returns null immediately when execution already cancelled", 
 
 test("stopExecution resolves pending prompt with null", async () => {
   const executionId = `exec-test-${Date.now()}-pending`;
-  createExecution(executionId, "wf-2");
+  createExecution(executionId, "wf-2", "root-1");
 
   const promptPromise = requestPrompt(executionId, "value", { title: "Input" });
   const stopped = stopExecution(executionId);
@@ -28,4 +29,13 @@ test("stopExecution resolves pending prompt with null", async () => {
   assert.equal(stopped, true);
   assert.equal(result, null);
   assert.equal(getExecution(executionId)?.status, "cancelled");
+});
+
+test("isExecutionOwnedBy validates execution owner root folder", () => {
+  const executionId = `exec-test-${Date.now()}-owner`;
+  createExecution(executionId, "wf-owner", "root-abc");
+
+  assert.equal(isExecutionOwnedBy(executionId, "root-abc"), true);
+  assert.equal(isExecutionOwnedBy(executionId, "root-other"), false);
+  assert.equal(isExecutionOwnedBy("missing-exec", "root-abc"), false);
 });

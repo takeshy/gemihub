@@ -3,6 +3,7 @@ import type { ExecutionLog, ExecutionRecord } from "~/engine/types";
 interface ExecutionState {
   id: string;
   workflowId: string;
+  ownerRootFolderId: string;
   status: "running" | "completed" | "error" | "cancelled" | "waiting-prompt";
   logs: ExecutionLog[];
   record?: ExecutionRecord;
@@ -18,10 +19,15 @@ interface ExecutionState {
 // In-memory execution state store
 const executions = new Map<string, ExecutionState>();
 
-export function createExecution(executionId: string, workflowId: string): ExecutionState {
+export function createExecution(
+  executionId: string,
+  workflowId: string,
+  ownerRootFolderId: string
+): ExecutionState {
   const state: ExecutionState = {
     id: executionId,
     workflowId,
+    ownerRootFolderId,
     status: "running",
     logs: [],
     abortController: new AbortController(),
@@ -33,6 +39,12 @@ export function createExecution(executionId: string, workflowId: string): Execut
 
 export function getExecution(executionId: string): ExecutionState | undefined {
   return executions.get(executionId);
+}
+
+export function isExecutionOwnedBy(executionId: string, ownerRootFolderId: string): boolean {
+  const state = executions.get(executionId);
+  if (!state) return false;
+  return state.ownerRootFolderId === ownerRootFolderId;
 }
 
 export function addLog(executionId: string, log: ExecutionLog): void {

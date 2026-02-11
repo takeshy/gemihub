@@ -73,6 +73,7 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
   };
 
   const usedIds = new Set<string>();
+  const resolvedIdsByIndex: string[] = new Array(nodesList.length);
 
   for (let i = 0; i < nodesList.length; i++) {
     const rawNode = nodesList[i];
@@ -89,6 +90,7 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
       id = `${id}_${suffix}`;
     }
     usedIds.add(id);
+    resolvedIdsByIndex[i] = id;
 
     const properties: Record<string, string> = {};
     for (const [key, value] of Object.entries(rawNode)) {
@@ -109,21 +111,21 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
   const nodeIds = new Set<string>(workflow.nodes.keys());
 
   const addEdge = (from: string, to: string, label?: "true" | "false") => {
-    if (!nodeIds.has(from) || !nodeIds.has(to)) {
+    if (!nodeIds.has(from) || (to !== "end" && !nodeIds.has(to))) {
       throw new Error(`Invalid edge reference: ${from} -> ${to}`);
     }
     workflow.edges.push({ from, to, label });
   };
 
-  const isTerminator = (value: string) => value === "end";
-
   for (let i = 0; i < nodesList.length; i++) {
     const rawNode = nodesList[i];
     if (!rawNode || typeof rawNode !== "object") continue;
 
-    const id = normalizeValue(rawNode.id) || `node-${i + 1}`;
-    const typeRaw = rawNode.type;
-    if (!isWorkflowNodeType(typeRaw) || !workflow.nodes.has(id)) continue;
+    const id = resolvedIdsByIndex[i];
+    if (!id) continue;
+    const node = workflow.nodes.get(id);
+    if (!node) continue;
+    const typeRaw = node.type;
 
     if (typeRaw === "if" || typeRaw === "while") {
       const trueNext = normalizeValue(rawNode.trueNext);
@@ -133,29 +135,23 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
         throw new Error(`Node ${id} (${typeRaw}) missing trueNext`);
       }
 
-      if (!isTerminator(trueNext)) {
-        addEdge(id, trueNext, "true");
-      }
+      addEdge(id, trueNext, "true");
 
       if (falseNext) {
-        if (!isTerminator(falseNext)) {
-          addEdge(id, falseNext, "false");
-        }
+        addEdge(id, falseNext, "false");
       } else if (i < nodesList.length - 1) {
-        const fallbackId = normalizeValue(nodesList[i + 1]?.id) || `node-${i + 2}`;
-        if (fallbackId !== id && nodeIds.has(fallbackId)) {
+        const fallbackId = resolvedIdsByIndex[i + 1];
+        if (fallbackId && fallbackId !== id && nodeIds.has(fallbackId)) {
           addEdge(id, fallbackId, "false");
         }
       }
     } else {
       const next = normalizeValue(rawNode.next);
       if (next) {
-        if (!isTerminator(next)) {
-          addEdge(id, next);
-        }
+        addEdge(id, next);
       } else if (i < nodesList.length - 1) {
-        const fallbackId = normalizeValue(nodesList[i + 1]?.id) || `node-${i + 2}`;
-        if (fallbackId !== id && nodeIds.has(fallbackId)) {
+        const fallbackId = resolvedIdsByIndex[i + 1];
+        if (fallbackId && fallbackId !== id && nodeIds.has(fallbackId)) {
           addEdge(id, fallbackId);
         }
       }
@@ -184,12 +180,16 @@ export function getNextNodes(
     if (conditionResult !== undefined) {
       const expectedLabel = conditionResult ? "true" : "false";
       for (const edge of outgoingEdges) {
-        if (edge.label === expectedLabel) nextNodes.push(edge.to);
+        if (edge.label === expectedLabel && edge.to !== "end") {
+          nextNodes.push(edge.to);
+        }
       }
     }
   } else {
     for (const edge of outgoingEdges) {
-      nextNodes.push(edge.to);
+      if (edge.to !== "end") {
+        nextNodes.push(edge.to);
+      }
     }
   }
 
@@ -199,26 +199,11 @@ export function getNextNodes(
 // Serialize workflow back to YAML
 export function serializeWorkflow(workflow: Workflow, name?: string): string {
   const nodes: Record<string, unknown>[] = [];
-  const nodeOrder: string[] = [];
-
-  // Build order from startNode traversal
-  if (workflow.startNode) {
-    const visited = new Set<string>();
-    const queue = [workflow.startNode];
-    while (queue.length > 0) {
-      const id = queue.shift()!;
-      if (visited.has(id)) continue;
-      visited.add(id);
-      nodeOrder.push(id);
-      const edges = workflow.edges.filter((e) => e.from === id);
-      for (const edge of edges) {
-        if (!visited.has(edge.to)) queue.push(edge.to);
-      }
-    }
-    // Add any remaining nodes not reachable from start
-    for (const id of workflow.nodes.keys()) {
-      if (!visited.has(id)) nodeOrder.push(id);
-    }
+  const nodeOrder = Array.from(workflow.nodes.keys());
+  if (workflow.startNode && nodeOrder.includes(workflow.startNode)) {
+    const withoutStart = nodeOrder.filter((id) => id !== workflow.startNode);
+    nodeOrder.length = 0;
+    nodeOrder.push(workflow.startNode, ...withoutStart);
   }
 
   // Build edge lookup for next/trueNext/falseNext
@@ -262,24 +247,16 @@ export function serializeWorkflow(workflow: Workflow, name?: string): string {
       }
 
       if (falseTarget) {
-        if (falseTarget !== nextNodeId) {
+        if (falseTarget === "end" || falseTarget !== nextNodeId) {
           obj.falseNext = falseTarget;
         }
-      } else if (nextNodeId) {
-        // No false edge but not the last node — emit explicit end
-        // to prevent implicit fallthrough to the next node
-        obj.falseNext = "end";
       }
     } else {
       const nextTarget = edgeInfo?.next;
       if (nextTarget) {
-        if (nextTarget !== nextNodeId) {
+        if (nextTarget === "end" || nextTarget !== nextNodeId) {
           obj.next = nextTarget;
         }
-      } else if (nextNodeId) {
-        // No outgoing edge but not the last node — emit explicit end
-        // to prevent implicit fallthrough to the next node
-        obj.next = "end";
       }
     }
 

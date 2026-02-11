@@ -16,6 +16,8 @@ import { getEncryptionParams } from "~/types/settings";
 import {
   createExecution,
   addLog,
+  getExecution,
+  isExecutionOwnedBy,
   setCancelled,
   setCompleted,
   setError,
@@ -36,10 +38,13 @@ function looksLikeWorkflowFile(value: string): boolean {
 async function resolveWorkflowFileId(
   accessToken: string,
   rootFolderId: string,
-  workflowPath: string
+  workflowPath: string,
+  abortSignal?: AbortSignal
 ): Promise<{ id: string; name: string }> {
   if (isDriveId(workflowPath)) {
-    const metadata = await getFileMetadata(accessToken, workflowPath);
+    const metadata = await getFileMetadata(accessToken, workflowPath, {
+      signal: abortSignal,
+    });
     return { id: metadata.id, name: metadata.name };
   }
 
@@ -47,14 +52,22 @@ async function resolveWorkflowFileId(
     ? [workflowPath]
     : [workflowPath, `${workflowPath}.yaml`, `${workflowPath}.yml`];
 
-  const searched = await searchFiles(accessToken, rootFolderId, workflowPath, false);
+  const searched = await searchFiles(
+    accessToken,
+    rootFolderId,
+    workflowPath,
+    false,
+    { signal: abortSignal }
+  );
   const bySearch = candidates
     .map((candidate) => searched.find((f) => f.name === candidate))
     .find(Boolean);
   if (bySearch) return { id: bySearch.id, name: bySearch.name };
 
   for (const candidate of candidates) {
-    const exact = await findFileByExactName(accessToken, candidate, rootFolderId);
+    const exact = await findFileByExactName(accessToken, candidate, rootFolderId, {
+      signal: abortSignal,
+    });
     if (exact) return { id: exact.id, name: exact.name };
   }
 
@@ -101,7 +114,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const executionId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   // Create execution state
-  const executionState = createExecution(executionId, fileId);
+  const executionState = createExecution(executionId, fileId, validTokens.rootFolderId);
 
   // Start workflow execution in background
   (async () => {
@@ -206,7 +219,8 @@ export async function action({ request, params }: Route.ActionArgs) {
           const resolved = await resolveWorkflowFileId(
             validTokens.accessToken,
             validTokens.rootFolderId,
-            workflowPath
+            workflowPath,
+            executionState.abortController.signal
           );
           const subKey = `${resolved.id}:${subWorkflowName ?? ""}`;
           if (subWorkflowStack.length >= MAX_SUBWORKFLOW_DEPTH) {
@@ -304,13 +318,21 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 // GET: SSE stream
 export async function loader({ request, params: _params }: Route.LoaderArgs) {
-  await requireAuth(request);
+  const tokens = await requireAuth(request);
 
   const url = new URL(request.url);
   const executionId = url.searchParams.get("executionId");
 
   if (!executionId) {
     return new Response("Missing executionId", { status: 400 });
+  }
+
+  const execution = getExecution(executionId);
+  if (!execution) {
+    return new Response("Execution not found", { status: 404 });
+  }
+  if (execution.workflowId !== _params.id || !isExecutionOwnedBy(executionId, tokens.rootFolderId)) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const stream = new ReadableStream({

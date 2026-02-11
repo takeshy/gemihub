@@ -79,7 +79,9 @@ export async function handleCommandNode(
     // Fallback: if settings has the RAG name but no store ID, try to find the store by name
     if (!ragStoreIds && apiKey) {
       try {
-        const storeName = await getOrCreateStore(apiKey, ragSettingProp);
+        const storeName = await getOrCreateStore(apiKey, ragSettingProp, {
+          signal: serviceContext.abortSignal,
+        });
         ragStoreIds = [storeName];
         // Cache the store ID in settings for subsequent nodes
         if (rag) {
@@ -128,9 +130,15 @@ export async function handleCommandNode(
   let mcpToolDefs: ToolDefinition[] = [];
   if (enabledMcpServers.length > 0) {
     try {
-      mcpToolDefs = await getMcpToolDefinitions(enabledMcpServers);
+      mcpToolDefs = await getMcpToolDefinitions(enabledMcpServers, serviceContext.abortSignal);
+      if (serviceContext.abortSignal?.aborted) {
+        throw new Error("Execution cancelled");
+      }
       tools.push(...mcpToolDefs);
     } catch (error) {
+      if (serviceContext.abortSignal?.aborted) {
+        throw new Error("Execution cancelled");
+      }
       console.error("Failed to get MCP tool definitions for command node:", error);
     }
   }
@@ -152,11 +160,17 @@ export async function handleCommandNode(
         name,
         args,
         serviceContext.driveAccessToken,
-        serviceContext.driveRootFolderId
+        serviceContext.driveRootFolderId,
+        serviceContext.abortSignal
       );
     }
     if (mcpToolNames.has(name) && enabledMcpServers.length > 0) {
-      const result = await executeMcpTool(enabledMcpServers, name, args);
+      const result = await executeMcpTool(
+        enabledMcpServers,
+        name,
+        args,
+        serviceContext.abortSignal
+      );
       if (result.mcpApp) collectedMcpApps.push(result.mcpApp);
       return result.textResult;
     }
@@ -176,7 +190,11 @@ export async function handleCommandNode(
         const fileData: FileExplorerData = JSON.parse(val);
         // If FileExplorerData has an id but no data, read from Drive
         if (!fileData.data && fileData.id && serviceContext.driveAccessToken) {
-          const res = await readFileRaw(serviceContext.driveAccessToken, fileData.id);
+          const res = await readFileRaw(
+            serviceContext.driveAccessToken,
+            fileData.id,
+            { signal: serviceContext.abortSignal }
+          );
           const buffer = await res.arrayBuffer();
           const bytes = new Uint8Array(buffer);
           let binary = "";
@@ -205,7 +223,12 @@ export async function handleCommandNode(
             data: fileData.data,
           });
         }
-      } catch { /* not valid FileExplorerData, skip */ }
+      } catch {
+        if (serviceContext.abortSignal?.aborted) {
+          throw new Error("Execution cancelled");
+        }
+        // not valid FileExplorerData, skip
+      }
     }
   }
 

@@ -56,7 +56,9 @@ export async function handlePromptFileNode(
 
   // Read the file content
   const accessToken = serviceContext.driveAccessToken;
-  const content = await driveService.readFile(accessToken, result.id);
+  const content = await driveService.readFile(accessToken, result.id, {
+    signal: serviceContext.abortSignal,
+  });
 
   if (saveTo) {
     context.variables.set(saveTo, content);

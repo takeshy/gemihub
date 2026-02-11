@@ -36,7 +36,11 @@ export async function handleDriveListNode(
   const accessToken = serviceContext.driveAccessToken;
 
   // List all user files from meta (fast path)
-  const { files: allFiles } = await getFileListFromMeta(accessToken, serviceContext.driveRootFolderId);
+  const { files: allFiles } = await getFileListFromMeta(
+    accessToken,
+    serviceContext.driveRootFolderId,
+    { signal: serviceContext.abortSignal }
+  );
 
   // Filter by virtual folder prefix
   const prefix = folder ? folder + "/" : "";
@@ -118,7 +122,11 @@ export async function handleDriveFolderListNode(
   if (!saveTo) throw new Error("drive-folder-list node missing 'saveTo' property");
 
   const accessToken = serviceContext.driveAccessToken;
-  const { files: allFiles } = await getFileListFromMeta(accessToken, serviceContext.driveRootFolderId);
+  const { files: allFiles } = await getFileListFromMeta(
+    accessToken,
+    serviceContext.driveRootFolderId,
+    { signal: serviceContext.abortSignal }
+  );
 
   // Extract immediate virtual subfolder names under parentFolder
   const prefix = parentFolder ? parentFolder + "/" : "";

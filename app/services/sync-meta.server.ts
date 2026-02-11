@@ -13,6 +13,10 @@ import {
 
 const SYNC_META_FILE = "_sync-meta.json";
 
+interface SyncMetaOperationOptions {
+  signal?: AbortSignal;
+}
+
 export interface FileSyncMeta {
   name: string;
   mimeType: string;
@@ -48,17 +52,19 @@ export interface SyncDiff {
  */
 export async function readRemoteSyncMeta(
   accessToken: string,
-  rootFolderId: string
+  rootFolderId: string,
+  options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta | null> {
   const metaFile = await findFileByExactName(
     accessToken,
     SYNC_META_FILE,
-    rootFolderId
+    rootFolderId,
+    options
   );
   if (!metaFile) return null;
 
   try {
-    const content = await readFile(accessToken, metaFile.id);
+    const content = await readFile(accessToken, metaFile.id, options);
     return JSON.parse(content) as SyncMeta;
   } catch {
     return null;
@@ -71,24 +77,27 @@ export async function readRemoteSyncMeta(
 export async function writeRemoteSyncMeta(
   accessToken: string,
   rootFolderId: string,
-  meta: SyncMeta
+  meta: SyncMeta,
+  options: SyncMetaOperationOptions = {}
 ): Promise<void> {
   const metaFile = await findFileByExactName(
     accessToken,
     SYNC_META_FILE,
-    rootFolderId
+    rootFolderId,
+    options
   );
   const content = JSON.stringify(meta, null, 2);
 
   if (metaFile) {
-    await updateFile(accessToken, metaFile.id, content, "application/json");
+    await updateFile(accessToken, metaFile.id, content, "application/json", options);
   } else {
     await createFile(
       accessToken,
       SYNC_META_FILE,
       content,
       rootFolderId,
-      "application/json"
+      "application/json",
+      options
     );
   }
 }
@@ -98,12 +107,13 @@ export async function writeRemoteSyncMeta(
  */
 export async function getFileListFromMeta(
   accessToken: string,
-  rootFolderId: string
+  rootFolderId: string,
+  options: SyncMetaOperationOptions = {}
 ): Promise<{ meta: SyncMeta; files: DriveFile[] }> {
-  let meta = await readRemoteSyncMeta(accessToken, rootFolderId);
+  let meta = await readRemoteSyncMeta(accessToken, rootFolderId, options);
   if (!meta) {
     // First time or missing meta — rebuild from Drive API
-    meta = await rebuildSyncMeta(accessToken, rootFolderId);
+    meta = await rebuildSyncMeta(accessToken, rootFolderId, options);
   }
   const files: DriveFile[] = Object.entries(meta.files).map(([id, f]) => ({
     id,
@@ -122,11 +132,12 @@ export async function getFileListFromMeta(
  */
 export async function rebuildSyncMeta(
   accessToken: string,
-  rootFolderId: string
+  rootFolderId: string,
+  options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
   // Preserve shared/webViewLink from existing meta
-  const existing = await readRemoteSyncMeta(accessToken, rootFolderId);
-  const files = await listUserFiles(accessToken, rootFolderId);
+  const existing = await readRemoteSyncMeta(accessToken, rootFolderId, options);
+  const files = await listUserFiles(accessToken, rootFolderId, options);
   const meta: SyncMeta = {
     lastUpdatedAt: new Date().toISOString(),
     files: {},
@@ -143,7 +154,7 @@ export async function rebuildSyncMeta(
       webViewLink: prev?.webViewLink,
     };
   }
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta);
+  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
   return meta;
 }
 
@@ -153,10 +164,11 @@ export async function rebuildSyncMeta(
 export async function upsertFileInMeta(
   accessToken: string,
   rootFolderId: string,
-  file: DriveFile
+  file: DriveFile,
+  options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
   const meta =
-    (await readRemoteSyncMeta(accessToken, rootFolderId)) ?? {
+    (await readRemoteSyncMeta(accessToken, rootFolderId, options)) ?? {
       lastUpdatedAt: new Date().toISOString(),
       files: {},
     };
@@ -168,7 +180,7 @@ export async function upsertFileInMeta(
     createdTime: file.createdTime,
   };
   meta.lastUpdatedAt = new Date().toISOString();
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta);
+  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
   return meta;
 }
 
@@ -178,16 +190,17 @@ export async function upsertFileInMeta(
 export async function removeFileFromMeta(
   accessToken: string,
   rootFolderId: string,
-  fileId: string
+  fileId: string,
+  options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
   const meta =
-    (await readRemoteSyncMeta(accessToken, rootFolderId)) ?? {
+    (await readRemoteSyncMeta(accessToken, rootFolderId, options)) ?? {
       lastUpdatedAt: new Date().toISOString(),
       files: {},
     };
   delete meta.files[fileId];
   meta.lastUpdatedAt = new Date().toISOString();
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta);
+  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
   return meta;
 }
 
@@ -199,9 +212,10 @@ export async function saveConflictBackup(
   rootFolderId: string,
   conflictFolderName: string,
   fileName: string,
-  content: string
+  content: string,
+  options: SyncMetaOperationOptions = {}
 ): Promise<void> {
-  const folderId = await ensureSubFolder(accessToken, rootFolderId, conflictFolderName);
+  const folderId = await ensureSubFolder(accessToken, rootFolderId, conflictFolderName, options);
   const now = new Date();
   const ts = now.toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
   // Convert path separators to underscores and insert timestamp before extension
@@ -210,7 +224,7 @@ export async function saveConflictBackup(
   const backupName = dotIdx > 0
     ? `${safeName.slice(0, dotIdx)}_${ts}${safeName.slice(dotIdx)}`
     : `${safeName}_${ts}`;
-  await createFile(accessToken, backupName, content, folderId, "text/plain");
+  await createFile(accessToken, backupName, content, folderId, "text/plain", options);
 }
 
 /**
@@ -221,10 +235,11 @@ export async function setFileSharedInMeta(
   rootFolderId: string,
   fileId: string,
   shared: boolean,
-  webViewLink?: string
+  webViewLink?: string,
+  options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
   const meta =
-    (await readRemoteSyncMeta(accessToken, rootFolderId)) ?? {
+    (await readRemoteSyncMeta(accessToken, rootFolderId, options)) ?? {
       lastUpdatedAt: new Date().toISOString(),
       files: {},
     };
@@ -233,7 +248,7 @@ export async function setFileSharedInMeta(
     meta.files[fileId].webViewLink = shared ? webViewLink : undefined;
   }
   meta.lastUpdatedAt = new Date().toISOString();
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta);
+  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
   return meta;
 }
 

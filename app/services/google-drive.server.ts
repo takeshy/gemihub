@@ -29,6 +29,10 @@ interface DriveListResponse {
   nextPageToken?: string;
 }
 
+interface DriveOperationOptions {
+  signal?: AbortSignal;
+}
+
 async function driveRequest(
   url: string,
   accessToken: string,
@@ -94,7 +98,8 @@ const subFolderInflight = new Map<string, Promise<string>>();
 export async function ensureSubFolder(
   accessToken: string,
   parentId: string,
-  folderName: string
+  folderName: string,
+  options: DriveOperationOptions = {}
 ): Promise<string> {
   const cacheKey = `${parentId}:${folderName}`;
   const inflight = subFolderInflight.get(cacheKey);
@@ -102,7 +107,7 @@ export async function ensureSubFolder(
     return inflight;
   }
 
-  const promise = ensureSubFolderImpl(accessToken, parentId, folderName).finally(() => {
+  const promise = ensureSubFolderImpl(accessToken, parentId, folderName, options).finally(() => {
     subFolderInflight.delete(cacheKey);
   });
   subFolderInflight.set(cacheKey, promise);
@@ -112,12 +117,14 @@ export async function ensureSubFolder(
 async function ensureSubFolderImpl(
   accessToken: string,
   parentId: string,
-  folderName: string
+  folderName: string,
+  options: DriveOperationOptions = {}
 ): Promise<string> {
   const query = `name='${escapeDriveQuery(folderName)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res = await driveRequest(
     `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`,
-    accessToken
+    accessToken,
+    { signal: options.signal }
   );
   const data: DriveListResponse = await res.json();
 
@@ -127,6 +134,7 @@ async function ensureSubFolderImpl(
 
   const createRes = await driveRequest(`${DRIVE_API}/files`, accessToken, {
     method: "POST",
+    signal: options.signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: folderName,
@@ -140,16 +148,18 @@ async function ensureSubFolderImpl(
 
 export async function getHistoryFolderId(
   accessToken: string,
-  rootFolderId: string
+  rootFolderId: string,
+  options: DriveOperationOptions = {}
 ): Promise<string> {
-  return ensureSubFolder(accessToken, rootFolderId, HISTORY_FOLDER);
+  return ensureSubFolder(accessToken, rootFolderId, HISTORY_FOLDER, options);
 }
 
 // List files in a folder (with pagination for 1000+ files)
 export async function listFiles(
   accessToken: string,
   folderId: string,
-  mimeType?: string
+  mimeType?: string,
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile[]> {
   let query = `'${folderId}' in parents and trashed=false`;
   if (mimeType) {
@@ -167,7 +177,7 @@ export async function listFiles(
     url.searchParams.set("pageSize", "1000");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
 
-    const res = await driveRequest(url.toString(), accessToken);
+    const res = await driveRequest(url.toString(), accessToken, { signal: options.signal });
     const data: DriveListResponse = await res.json();
     allFiles.push(...data.files);
     pageToken = data.nextPageToken;
@@ -179,9 +189,10 @@ export async function listFiles(
 // List user files in rootFolder (excludes folders and system files)
 export async function listUserFiles(
   accessToken: string,
-  rootFolderId: string
+  rootFolderId: string,
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile[]> {
-  const allFiles = await listFiles(accessToken, rootFolderId);
+  const allFiles = await listFiles(accessToken, rootFolderId, undefined, options);
   return allFiles.filter(
     (f) =>
       f.mimeType !== "application/vnd.google-apps.folder" &&
@@ -192,11 +203,13 @@ export async function listUserFiles(
 // Read file content
 export async function readFile(
   accessToken: string,
-  fileId: string
+  fileId: string,
+  options: DriveOperationOptions = {}
 ): Promise<string> {
   const res = await driveRequest(
     `${DRIVE_API}/files/${fileId}?alt=media`,
-    accessToken
+    accessToken,
+    { signal: options.signal }
   );
   return res.text();
 }
@@ -204,20 +217,23 @@ export async function readFile(
 // Read file as raw Response (for binary files like PDF)
 export async function readFileRaw(
   accessToken: string,
-  fileId: string
+  fileId: string,
+  options: DriveOperationOptions = {}
 ): Promise<Response> {
   return driveRequest(
     `${DRIVE_API}/files/${fileId}?alt=media`,
-    accessToken
+    accessToken,
+    { signal: options.signal }
   );
 }
 
 // Read file as raw bytes (for binary files)
 export async function readFileBytes(
   accessToken: string,
-  fileId: string
+  fileId: string,
+  options: DriveOperationOptions = {}
 ): Promise<Uint8Array> {
-  const res = await readFileRaw(accessToken, fileId);
+  const res = await readFileRaw(accessToken, fileId, options);
   const buffer = await res.arrayBuffer();
   return new Uint8Array(buffer);
 }
@@ -225,11 +241,13 @@ export async function readFileBytes(
 // Get file metadata
 export async function getFileMetadata(
   accessToken: string,
-  fileId: string
+  fileId: string,
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const res = await driveRequest(
     `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,parents,webViewLink,md5Checksum,size`,
-    accessToken
+    accessToken,
+    { signal: options.signal }
   );
   return res.json();
 }
@@ -240,7 +258,8 @@ export async function createFile(
   name: string,
   content: string,
   parentId: string,
-  mimeType: string = "text/plain"
+  mimeType: string = "text/plain",
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const metadata = {
     name,
@@ -263,6 +282,7 @@ export async function createFile(
     accessToken,
     {
       method: "POST",
+      signal: options.signal,
       headers: {
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },
@@ -277,13 +297,15 @@ export async function updateFile(
   accessToken: string,
   fileId: string,
   content: string,
-  mimeType: string = "text/plain"
+  mimeType: string = "text/plain",
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const res = await driveRequest(
     `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
     accessToken,
     {
       method: "PATCH",
+      signal: options.signal,
       headers: { "Content-Type": mimeType },
       body: content,
     }
@@ -314,10 +336,11 @@ export async function moveFile(
   accessToken: string,
   fileId: string,
   newParentId: string,
-  oldParentId: string
+  oldParentId: string,
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const url = `${DRIVE_API}/files/${fileId}?addParents=${encodeURIComponent(newParentId)}&removeParents=${encodeURIComponent(oldParentId)}&fields=id,name,mimeType,parents`;
-  const res = await driveRequest(url, accessToken, { method: "PATCH" });
+  const res = await driveRequest(url, accessToken, { method: "PATCH", signal: options.signal });
   return res.json();
 }
 
@@ -336,7 +359,8 @@ export async function searchFiles(
   accessToken: string,
   rootFolderId: string,
   query: string,
-  searchContent: boolean = false
+  searchContent: boolean = false,
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile[]> {
   let driveQuery: string;
   if (searchContent) {
@@ -347,7 +371,8 @@ export async function searchFiles(
 
   const res = await driveRequest(
     `${DRIVE_API}/files?q=${encodeURIComponent(driveQuery)}&fields=files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum)`,
-    accessToken
+    accessToken,
+    { signal: options.signal }
   );
   const data: DriveListResponse = await res.json();
   return data.files;
@@ -375,7 +400,8 @@ export async function findFolderByName(
 export async function findFileByExactName(
   accessToken: string,
   name: string,
-  parentId?: string
+  parentId?: string,
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile | null> {
   let query = `name='${escapeDriveQuery(name)}' and mimeType!='application/vnd.google-apps.folder' and trashed=false`;
   if (parentId) {
@@ -383,7 +409,8 @@ export async function findFileByExactName(
   }
   const res = await driveRequest(
     `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,modifiedTime,md5Checksum)&pageSize=1`,
-    accessToken
+    accessToken,
+    { signal: options.signal }
   );
   const data: DriveListResponse = await res.json();
   return data.files.length > 0 ? data.files[0] : null;
@@ -441,7 +468,8 @@ export async function createFileBinary(
   name: string,
   contentBuffer: Buffer,
   parentId: string,
-  mimeType: string = "application/octet-stream"
+  mimeType: string = "application/octet-stream",
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const metadata = JSON.stringify({
     name,
@@ -462,6 +490,7 @@ export async function createFileBinary(
     accessToken,
     {
       method: "POST",
+      signal: options.signal,
       headers: {
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },

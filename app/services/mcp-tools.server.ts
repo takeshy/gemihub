@@ -74,14 +74,18 @@ export async function getOrCreateClient(config: McpServerConfig): Promise<McpCli
  * Tool names are prefixed with mcp_{serverName}_ to avoid collisions.
  */
 export async function getMcpToolDefinitions(
-  mcpServers: McpServerConfig[]
+  mcpServers: McpServerConfig[],
+  abortSignal?: AbortSignal
 ): Promise<ToolDefinition[]> {
   const allTools: ToolDefinition[] = [];
 
   for (const server of mcpServers) {
+    if (abortSignal?.aborted) {
+      throw new Error("Execution cancelled");
+    }
     try {
       const client = await getOrCreateClient(server);
-      const tools = await client.listTools();
+      const tools = await client.listTools(abortSignal);
       server.tools = tools;
       const serverIdentifier = deriveMcpServerId(server);
 
@@ -90,6 +94,12 @@ export async function getMcpToolDefinitions(
         allTools.push(toolDef);
       }
     } catch (error) {
+      if (
+        abortSignal?.aborted ||
+        (error instanceof Error && /cancelled|aborted/i.test(error.message))
+      ) {
+        throw new Error("Execution cancelled");
+      }
       console.error(`Failed to get tools from MCP server ${server.name}:`, error);
     }
   }
@@ -208,7 +218,8 @@ function buildToolMap(mcpServers: McpServerConfig[]): Map<string, { server: McpS
 export async function executeMcpTool(
   mcpServers: McpServerConfig[],
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  abortSignal?: AbortSignal
 ): Promise<McpToolExecutionResult> {
   // Build tool map for lookup (matches obsidian pattern)
   const toolMap = buildToolMap(mcpServers);
@@ -237,7 +248,7 @@ export async function executeMcpTool(
     let actualToolName = sanitizedToolName;
     try {
       const client = await getOrCreateClient(server);
-      const liveTools = await client.listTools();
+      const liveTools = await client.listTools(abortSignal);
       server.tools = liveTools;
       const matched = liveTools.find((t) => sanitizeMcpName(t.name) === sanitizedToolName);
       if (matched) {
@@ -247,20 +258,24 @@ export async function executeMcpTool(
       // Ignore lookup failures and try the sanitized name as a last resort
     }
 
-    return executeToolOnServer(server, actualToolName, args);
+    return executeToolOnServer(server, actualToolName, args, abortSignal);
   }
 
-  return executeToolOnServer(entry.server, entry.mcpToolName, args);
+  return executeToolOnServer(entry.server, entry.mcpToolName, args, abortSignal);
 }
 
 async function executeToolOnServer(
   server: McpServerConfig,
   actualToolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  abortSignal?: AbortSignal
 ): Promise<McpToolExecutionResult> {
+  if (abortSignal?.aborted) {
+    throw new Error("Execution cancelled");
+  }
   try {
     const client = await getOrCreateClient(server);
-    const appResult = await client.callToolWithUi(actualToolName, args);
+    const appResult = await client.callToolWithUi(actualToolName, args, undefined, abortSignal);
 
     // Extract text content for Gemini
     const textParts = appResult.content
@@ -286,7 +301,7 @@ async function executeToolOnServer(
     if (resourceUri) {
       let uiResource = null;
       try {
-        uiResource = await client.readResource(resourceUri);
+        uiResource = await client.readResource(resourceUri, abortSignal);
       } catch (e) {
         console.error(`Failed to fetch MCP App UI resource (${resourceUri}):`, e);
       }
@@ -302,6 +317,12 @@ async function executeToolOnServer(
 
     return { textResult, mcpApp };
   } catch (error) {
+    if (
+      abortSignal?.aborted ||
+      (error instanceof Error && /cancelled|aborted/i.test(error.message))
+    ) {
+      throw new Error("Execution cancelled");
+    }
     return {
       textResult: {
         error: error instanceof Error ? error.message : "MCP tool call failed",

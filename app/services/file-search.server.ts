@@ -16,6 +16,10 @@ export interface SyncResult {
   lastFullSync: number;
 }
 
+interface FileSearchOperationOptions {
+  signal?: AbortSignal;
+}
+
 function getMimeTypeForFile(fileName: string): string {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".pdf")) return "application/pdf";
@@ -52,13 +56,23 @@ export async function calculateChecksum(content: string | Uint8Array | ArrayBuff
 /**
  * Get or create a File Search store
  */
-export async function getOrCreateStore(apiKey: string, displayName: string): Promise<string> {
+export async function getOrCreateStore(
+  apiKey: string,
+  displayName: string,
+  options: FileSearchOperationOptions = {}
+): Promise<string> {
+  if (options.signal?.aborted) {
+    throw new Error("Execution cancelled");
+  }
   const ai = new GoogleGenAI({ apiKey });
 
   // Try to find existing
   try {
     const pager = await ai.fileSearchStores.list();
     for await (const store of pager) {
+      if (options.signal?.aborted) {
+        throw new Error("Execution cancelled");
+      }
       if (store.displayName === displayName && store.name) {
         return store.name;
       }
@@ -86,10 +100,14 @@ export async function uploadDriveFile(
   accessToken: string,
   fileId: string,
   fileName: string,
-  storeName: string
+  storeName: string,
+  options: FileSearchOperationOptions = {}
 ): Promise<string | null> {
+  if (options.signal?.aborted) {
+    throw new Error("Execution cancelled");
+  }
   const ai = new GoogleGenAI({ apiKey });
-  const content = await readFileBytes(accessToken, fileId);
+  const content = await readFileBytes(accessToken, fileId, options);
   const mimeType = getMimeTypeForFile(fileName);
   const blob = new Blob([content.buffer as ArrayBuffer], { type: mimeType });
 

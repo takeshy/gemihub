@@ -142,7 +142,7 @@ nodes:
   assert.equal(fromBody[0].to, "loop");
 });
 
-test("parse next: end terminates edge", () => {
+test("parse next: end creates explicit terminator edge", () => {
   const yaml = `
 name: test
 nodes:
@@ -158,7 +158,9 @@ nodes:
 `;
   const wf = parseWorkflowYaml(yaml);
   const fromA = wf.edges.filter((e) => e.from === "a");
-  assert.equal(fromA.length, 0); // "end" produces no edge
+  assert.equal(fromA.length, 1);
+  assert.equal(fromA[0].to, "end");
+  assert.deepEqual(getNextNodes(wf, "a"), []);
 });
 
 test("parse drive-delete node type", () => {
@@ -374,6 +376,29 @@ nodes:
   assert.ok(wf.nodes.has("a_2"));
 });
 
+test("duplicate node IDs: edges use resolved source IDs", () => {
+  const yaml = `
+name: test
+nodes:
+  - id: a
+    type: variable
+    name: x
+    value: "1"
+  - id: a
+    type: variable
+    name: y
+    value: "2"
+    next: c
+  - id: c
+    type: variable
+    name: z
+    value: "3"
+`;
+  const wf = parseWorkflowYaml(yaml);
+  assert.ok(wf.edges.some((e) => e.from === "a" && e.to === "a_2"));
+  assert.ok(wf.edges.some((e) => e.from === "a_2" && e.to === "c"));
+});
+
 // ===================================================================
 // parseWorkflowYaml — special characters in values
 // ===================================================================
@@ -509,6 +534,42 @@ test("serialize if node with trueNext and falseNext", () => {
   // BFS: check, positive, negative. falseNext=negative matches BFS-next of positive,
   // but falseNext is for check, and nextNodeId for check is positive. negative !== positive → emitted.
   assert.ok(yaml.includes("falseNext: negative"));
+});
+
+test("serialize keeps implicit auto-fallthrough for non-conditional nodes", () => {
+  const wf = buildWorkflow(
+    [
+      { id: "a", type: "variable", properties: { name: "x", value: "1" } },
+      { id: "b", type: "variable", properties: { name: "y", value: "2" } },
+    ],
+    [],
+    "a"
+  );
+
+  const yaml = serializeWorkflow(wf, "auto");
+  assert.ok(!yaml.includes("next: end"));
+
+  const wf2 = parseWorkflowYaml(yaml);
+  assert.ok(wf2.edges.some((e) => e.from === "a" && e.to === "b"));
+});
+
+test("serialize keeps implicit if false fallthrough when false edge is absent", () => {
+  const wf = buildWorkflow(
+    [
+      { id: "check", type: "if", properties: { condition: "{{x}} > 0" } },
+      { id: "fallthrough", type: "variable", properties: { name: "r", value: "default" } },
+      { id: "yes", type: "variable", properties: { name: "r", value: "positive" } },
+    ],
+    [{ from: "check", to: "yes", label: "true" }],
+    "check"
+  );
+
+  const yaml = serializeWorkflow(wf, "auto-if");
+  assert.ok(!yaml.includes("falseNext: end"));
+
+  const wf2 = parseWorkflowYaml(yaml);
+  assert.ok(wf2.edges.some((e) => e.from === "check" && e.to === "yes" && e.label === "true"));
+  assert.ok(wf2.edges.some((e) => e.from === "check" && e.to === "fallthrough" && e.label === "false"));
 });
 
 // ===================================================================
@@ -877,16 +938,16 @@ nodes:
     prompt: third
 `;
   const wf1 = parseWorkflowYaml(yaml);
-  // b has next: end, so no outgoing edge from b
-  assert.equal(wf1.edges.filter((e) => e.from === "b").length, 0);
+  // b has next: end, so terminator edge is explicit
+  assert.equal(wf1.edges.filter((e) => e.from === "b" && e.to === "end").length, 1);
   // a → b edge exists
   assert.ok(wf1.edges.some((e) => e.from === "a" && e.to === "b"));
 
   const serialized = serializeWorkflow(wf1, "test");
   const wf2 = parseWorkflowYaml(serialized);
 
-  // b should still have no outgoing edge after round-trip
-  assert.equal(wf2.edges.filter((e) => e.from === "b").length, 0);
+  // b terminator should survive round-trip
+  assert.equal(wf2.edges.filter((e) => e.from === "b" && e.to === "end").length, 1);
   // a → b should still exist
   assert.ok(wf2.edges.some((e) => e.from === "a" && e.to === "b"));
   // c should have no incoming edge from b
@@ -928,8 +989,8 @@ nodes:
   const wf1 = parseWorkflowYaml(yaml);
   assert.equal(wf1.nodes.size, 6);
 
-  // save-result has next: end — no outgoing edge
-  assert.equal(wf1.edges.filter((e) => e.from === "save-result").length, 0);
+  // save-result has next: end — explicit terminator edge
+  assert.equal(wf1.edges.filter((e) => e.from === "save-result" && e.to === "end").length, 1);
 
   const serialized = serializeWorkflow(wf1, "batch");
   const wf2 = parseWorkflowYaml(serialized);
@@ -946,8 +1007,8 @@ nodes:
   // finish → save-result
   assert.ok(wf2.edges.some((e) => e.from === "finish" && e.to === "save-result"));
 
-  // save-result has NO outgoing edge (next: end preserved)
-  assert.equal(wf2.edges.filter((e) => e.from === "save-result").length, 0);
+  // save-result keeps explicit next: end after round-trip
+  assert.equal(wf2.edges.filter((e) => e.from === "save-result" && e.to === "end").length, 1);
 });
 
 test("round-trip: user-reported tag-batch workflow preserves structure", () => {

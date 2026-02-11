@@ -21,7 +21,13 @@ export async function handleDriveSearchNode(
   const limitStr = node.properties["limit"];
   const limit = limitStr ? (parseInt(replaceVariables(limitStr, context), 10) || 10) : 10;
 
-  const files = await driveService.searchFiles(accessToken, folderId, query, searchContent);
+  const files = await driveService.searchFiles(
+    accessToken,
+    folderId,
+    query,
+    searchContent,
+    { signal: serviceContext.abortSignal }
+  );
 
   const results = files.slice(0, limit).map(f => ({
     id: f.id,

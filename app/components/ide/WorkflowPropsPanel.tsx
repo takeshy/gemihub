@@ -315,14 +315,14 @@ function WorkflowNodeListView({
 
       // Add new edges
       if (node.type === "if" || node.type === "while") {
-        if (nextInfo.trueNext && nextInfo.trueNext !== "end") {
+        if (nextInfo.trueNext) {
           updated.edges.push({
             from: node.id,
             to: nextInfo.trueNext,
             label: "true",
           });
         }
-        if (nextInfo.falseNext && nextInfo.falseNext !== "end") {
+        if (nextInfo.falseNext) {
           updated.edges.push({
             from: node.id,
             to: nextInfo.falseNext,
@@ -330,7 +330,7 @@ function WorkflowNodeListView({
           });
         }
       } else {
-        if (nextInfo.next && nextInfo.next !== "end") {
+        if (nextInfo.next) {
           updated.edges.push({ from: node.id, to: nextInfo.next });
         }
       }
@@ -419,20 +419,39 @@ function WorkflowNodeListView({
   }, [fileId, eventSourceRef, onSelectFile]);
 
   const stopExecution = useCallback(async () => {
-    if (executionId) {
-      try {
-        await fetch(`/api/workflow/${fileId}/stop`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ executionId }),
-        });
-      } catch {
-        // Best-effort.
+    if (!executionId) return;
+    try {
+      const res = await fetch(`/api/workflow/${fileId}/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ executionId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setLogs((prev) => [
+          ...prev,
+          {
+            nodeId: "system",
+            nodeType: "system",
+            message: data.error || "Failed to stop execution",
+            status: "error" as const,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
       }
+    } catch (error) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          nodeId: "system",
+          nodeType: "system",
+          message: `Failed to stop execution: ${error instanceof Error ? error.message : String(error)}`,
+          status: "error" as const,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
     }
-    eventSourceRef[0]?.close();
-    setExecutionStatus("cancelled");
-  }, [eventSourceRef, executionId, fileId]);
+  }, [executionId, fileId]);
 
   const handlePromptResponse = useCallback(
     async (value: string | null) => {

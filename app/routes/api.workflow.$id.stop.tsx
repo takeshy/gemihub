@@ -1,9 +1,13 @@
 import type { ActionFunctionArgs } from "react-router";
 import { requireAuth } from "~/services/session.server";
-import { getExecution, stopExecution } from "~/services/execution-store.server";
+import {
+  getExecution,
+  isExecutionOwnedBy,
+  stopExecution,
+} from "~/services/execution-store.server";
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  await requireAuth(request);
+  const tokens = await requireAuth(request);
 
   const body = await request.json().catch(() => ({}));
   const executionId = typeof body?.executionId === "string"
@@ -15,7 +19,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const execution = getExecution(executionId);
-  if (!execution || execution.workflowId !== params.id) {
+  if (
+    !execution ||
+    execution.workflowId !== params.id ||
+    !isExecutionOwnedBy(executionId, tokens.rootFolderId)
+  ) {
     return Response.json({ error: "Execution not found" }, { status: 404 });
   }
 

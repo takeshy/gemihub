@@ -80,10 +80,24 @@ export class McpClient {
     this.config = config;
   }
 
+  private createRequestSignal(timeoutMs: number, abortSignal?: AbortSignal): AbortSignal {
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    if (!abortSignal) return timeoutSignal;
+    if (AbortSignal.any) {
+      return AbortSignal.any([timeoutSignal, abortSignal]);
+    }
+    return abortSignal.aborted ? abortSignal : timeoutSignal;
+  }
+
   /**
    * Send a JSON-RPC request to the MCP server
    */
-  private async sendRequest(method: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<unknown> {
+  private async sendRequest(
+    method: string,
+    params?: Record<string, unknown>,
+    timeoutMs?: number,
+    abortSignal?: AbortSignal
+  ): Promise<unknown> {
     const request: JsonRpcRequest = {
       jsonrpc: "2.0",
       id: ++this.requestId,
@@ -105,7 +119,7 @@ export class McpClient {
       method: "POST",
       headers,
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(timeoutMs ?? 30_000),
+      signal: this.createRequestSignal(timeoutMs ?? 30_000, abortSignal),
     });
 
     if (!response.ok) {
@@ -187,7 +201,11 @@ export class McpClient {
   /**
    * Send a notification (no response expected)
    */
-  private async sendNotification(method: string, params?: Record<string, unknown>): Promise<void> {
+  private async sendNotification(
+    method: string,
+    params?: Record<string, unknown>,
+    abortSignal?: AbortSignal
+  ): Promise<void> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...this.config.headers,
@@ -208,7 +226,7 @@ export class McpClient {
         method: "POST",
         headers,
         body: JSON.stringify(notification),
-        signal: AbortSignal.timeout(10_000),
+        signal: this.createRequestSignal(10_000, abortSignal),
       });
     } catch {
       // Notifications may not return anything
@@ -218,7 +236,7 @@ export class McpClient {
   /**
    * Initialize the MCP session
    */
-  async initialize(): Promise<McpInitializeResult> {
+  async initialize(abortSignal?: AbortSignal): Promise<McpInitializeResult> {
     if (this.initialized) {
       return {
         protocolVersion: "2024-11-05",
@@ -234,9 +252,9 @@ export class McpClient {
         name: "gemihub",
         version: "1.0.0",
       },
-    })) as McpInitializeResult;
+    }, undefined, abortSignal)) as McpInitializeResult;
 
-    await this.sendNotification("notifications/initialized");
+    await this.sendNotification("notifications/initialized", undefined, abortSignal);
 
     this.initialized = true;
     return result;
@@ -245,34 +263,44 @@ export class McpClient {
   /**
    * List available tools
    */
-  async listTools(): Promise<McpToolInfo[]> {
+  async listTools(abortSignal?: AbortSignal): Promise<McpToolInfo[]> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.initialize(abortSignal);
     }
 
-    const result = (await this.sendRequest("tools/list")) as McpToolsListResult;
+    const result = (await this.sendRequest("tools/list", undefined, undefined, abortSignal)) as McpToolsListResult;
     return result.tools || [];
   }
 
   /**
    * Call a tool (raw result)
    */
-  async callToolRaw(toolName: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<McpToolCallResult> {
+  async callToolRaw(
+    toolName: string,
+    args?: Record<string, unknown>,
+    timeoutMs?: number,
+    abortSignal?: AbortSignal
+  ): Promise<McpToolCallResult> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.initialize(abortSignal);
     }
 
     return (await this.sendRequest("tools/call", {
       name: toolName,
       arguments: args || {},
-    }, timeoutMs)) as McpToolCallResult;
+    }, timeoutMs, abortSignal)) as McpToolCallResult;
   }
 
   /**
    * Call a tool and return MCP Apps result
    */
-  async callToolWithUi(toolName: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<McpAppResult> {
-    const result = await this.callToolRaw(toolName, args, timeoutMs);
+  async callToolWithUi(
+    toolName: string,
+    args?: Record<string, unknown>,
+    timeoutMs?: number,
+    abortSignal?: AbortSignal
+  ): Promise<McpAppResult> {
+    const result = await this.callToolRaw(toolName, args, timeoutMs, abortSignal);
 
     return {
       content:
@@ -291,15 +319,15 @@ export class McpClient {
   /**
    * Read a resource
    */
-  async readResource(uri: string): Promise<McpAppUiResource | null> {
+  async readResource(uri: string, abortSignal?: AbortSignal): Promise<McpAppUiResource | null> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.initialize(abortSignal);
     }
 
     try {
       const result = (await this.sendRequest("resources/read", {
         uri,
-      })) as McpResourceReadResult;
+      }, undefined, abortSignal)) as McpResourceReadResult;
 
       if (result.contents && result.contents.length > 0) {
         const content = result.contents[0];

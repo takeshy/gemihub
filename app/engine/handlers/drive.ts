@@ -21,8 +21,9 @@ async function readFileAsExplorerData(
   fileId: string,
   fileName: string,
   mimeType: string,
+  abortSignal?: AbortSignal,
 ): Promise<string> {
-  const res = await driveService.readFileRaw(accessToken, fileId);
+  const res = await driveService.readFileRaw(accessToken, fileId, { signal: abortSignal });
   const buffer = await res.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -106,14 +107,20 @@ export async function handleDriveFileNode(
       accessToken,
       folderId,
       fileName,
-      false
+      false,
+      { signal: serviceContext.abortSignal }
     );
     existingFile = existingFiles.find(f => f.name === fileName);
   }
 
   // Fallback: exact name match within root folder (handles special chars)
   if (!existingFile) {
-    existingFile = await driveService.findFileByExactName(accessToken, fileName, folderId) ?? undefined;
+    existingFile = await driveService.findFileByExactName(
+      accessToken,
+      fileName,
+      folderId,
+      { signal: serviceContext.abortSignal }
+    ) ?? undefined;
   }
 
   // Read existing content for history tracking, diff review, and append mode
@@ -125,7 +132,11 @@ export async function handleDriveFileNode(
       (confirm !== "false" && promptCallbacks?.promptForDiff);
     if (needsOldContent) {
       try {
-        oldContent = await driveService.readFile(accessToken, existingFile.id);
+        oldContent = await driveService.readFile(
+          accessToken,
+          existingFile.id,
+          { signal: serviceContext.abortSignal }
+        );
       } catch { /* file may not be readable */ }
     }
   }
@@ -150,22 +161,55 @@ export async function handleDriveFileNode(
   let resultFile: driveService.DriveFile | undefined;
   if (mode === "create") {
     if (existingFile) return; // File exists, skip
-    resultFile = await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+    resultFile = await driveService.createFile(
+      accessToken,
+      fileName,
+      content,
+      folderId,
+      "text/markdown",
+      { signal: serviceContext.abortSignal }
+    );
   } else if (mode === "append") {
     if (existingFile) {
       finalContent = oldContent + "\n" + content;
-      await driveService.updateFile(accessToken, existingFile.id, finalContent, "text/markdown");
+      await driveService.updateFile(
+        accessToken,
+        existingFile.id,
+        finalContent,
+        "text/markdown",
+        { signal: serviceContext.abortSignal }
+      );
       resultFile = existingFile;
     } else {
-      resultFile = await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+      resultFile = await driveService.createFile(
+        accessToken,
+        fileName,
+        content,
+        folderId,
+        "text/markdown",
+        { signal: serviceContext.abortSignal }
+      );
     }
   } else {
     // overwrite
     if (existingFile) {
-      await driveService.updateFile(accessToken, existingFile.id, content, "text/markdown");
+      await driveService.updateFile(
+        accessToken,
+        existingFile.id,
+        content,
+        "text/markdown",
+        { signal: serviceContext.abortSignal }
+      );
       resultFile = existingFile;
     } else {
-      resultFile = await driveService.createFile(accessToken, fileName, content, folderId, "text/markdown");
+      resultFile = await driveService.createFile(
+        accessToken,
+        fileName,
+        content,
+        folderId,
+        "text/markdown",
+        { signal: serviceContext.abortSignal }
+      );
     }
   }
 
@@ -210,11 +254,24 @@ export async function handleDriveReadNode(
 
   // Check if path is a Drive file ID (alphanumeric + hyphens/underscores, 20+ chars)
   if (/^[a-zA-Z0-9_-]{20,}$/.test(path)) {
-    const meta = await driveService.getFileMetadata(accessToken, path);
+    const meta = await driveService.getFileMetadata(accessToken, path, {
+      signal: serviceContext.abortSignal,
+    });
     if (isBinaryMimeType(meta.mimeType)) {
-      context.variables.set(saveTo, await readFileAsExplorerData(accessToken, path, meta.name, meta.mimeType));
+      context.variables.set(
+        saveTo,
+        await readFileAsExplorerData(
+          accessToken,
+          path,
+          meta.name,
+          meta.mimeType,
+          serviceContext.abortSignal
+        )
+      );
     } else {
-      const content = await driveService.readFile(accessToken, path);
+      const content = await driveService.readFile(accessToken, path, {
+        signal: serviceContext.abortSignal,
+      });
       context.variables.set(saveTo, await decryptIfEncrypted(content, meta.name, promptCallbacks));
     }
     return;
@@ -225,11 +282,24 @@ export async function handleDriveReadNode(
   if (varMatch) {
     const fileId = context.variables.get(`${varMatch[1]}_fileId`);
     if (fileId && typeof fileId === "string") {
-      const meta = await driveService.getFileMetadata(accessToken, fileId);
+      const meta = await driveService.getFileMetadata(accessToken, fileId, {
+        signal: serviceContext.abortSignal,
+      });
       if (isBinaryMimeType(meta.mimeType)) {
-        context.variables.set(saveTo, await readFileAsExplorerData(accessToken, fileId, meta.name, meta.mimeType));
+        context.variables.set(
+          saveTo,
+          await readFileAsExplorerData(
+            accessToken,
+            fileId,
+            meta.name,
+            meta.mimeType,
+            serviceContext.abortSignal
+          )
+        );
       } else {
-        const content = await driveService.readFile(accessToken, fileId);
+        const content = await driveService.readFile(accessToken, fileId, {
+          signal: serviceContext.abortSignal,
+        });
         context.variables.set(saveTo, await decryptIfEncrypted(content, meta.name, promptCallbacks));
       }
       return;
@@ -238,23 +308,40 @@ export async function handleDriveReadNode(
 
   // Search by file name
   const folderId = serviceContext.driveRootFolderId;
-  const files = await driveService.searchFiles(accessToken, folderId, path, false);
+  const files = await driveService.searchFiles(accessToken, folderId, path, false, {
+    signal: serviceContext.abortSignal,
+  });
   let file = files.find(f => f.name === path || f.name === `${path}.md`);
 
   // Fallback: exact name match within root folder (handles special chars)
   if (!file) {
-    file = await driveService.findFileByExactName(accessToken, path, folderId) ?? undefined;
+    file = await driveService.findFileByExactName(accessToken, path, folderId, {
+      signal: serviceContext.abortSignal,
+    }) ?? undefined;
     if (!file && !path.endsWith(".md")) {
-      file = await driveService.findFileByExactName(accessToken, `${path}.md`, folderId) ?? undefined;
+      file = await driveService.findFileByExactName(accessToken, `${path}.md`, folderId, {
+        signal: serviceContext.abortSignal,
+      }) ?? undefined;
     }
   }
 
   if (!file) throw new Error(`File not found on Drive: ${path}`);
 
   if (isBinaryMimeType(file.mimeType)) {
-    context.variables.set(saveTo, await readFileAsExplorerData(accessToken, file.id, file.name, file.mimeType));
+    context.variables.set(
+      saveTo,
+      await readFileAsExplorerData(
+        accessToken,
+        file.id,
+        file.name,
+        file.mimeType,
+        serviceContext.abortSignal
+      )
+    );
   } else {
-    const content = await driveService.readFile(accessToken, file.id);
+    const content = await driveService.readFile(accessToken, file.id, {
+      signal: serviceContext.abortSignal,
+    });
     context.variables.set(saveTo, await decryptIfEncrypted(content, file.name, promptCallbacks));
   }
 }
@@ -288,22 +375,32 @@ export async function handleDriveDeleteNode(
 
   // Search for existing file
   if (!existingFile) {
-    const existingFiles = await driveService.searchFiles(accessToken, folderId, fileName, false);
+    const existingFiles = await driveService.searchFiles(accessToken, folderId, fileName, false, {
+      signal: serviceContext.abortSignal,
+    });
     existingFile = existingFiles.find(f => f.name === fileName);
   }
 
   // Fallback: exact name match within root folder (handles special chars)
   if (!existingFile) {
-    existingFile = await driveService.findFileByExactName(accessToken, fileName, folderId) ?? undefined;
+    existingFile = await driveService.findFileByExactName(accessToken, fileName, folderId, {
+      signal: serviceContext.abortSignal,
+    }) ?? undefined;
   }
 
   if (!existingFile) throw new Error(`File not found on Drive: ${path}`);
 
   // Soft delete: move to trash/ subfolder
-  const trashFolderId = await driveService.ensureSubFolder(accessToken, folderId, "trash");
+  const trashFolderId = await driveService.ensureSubFolder(accessToken, folderId, "trash", {
+    signal: serviceContext.abortSignal,
+  });
   const parentId = existingFile.parents?.[0] || folderId;
-  await driveService.moveFile(accessToken, existingFile.id, trashFolderId, parentId);
+  await driveService.moveFile(accessToken, existingFile.id, trashFolderId, parentId, {
+    signal: serviceContext.abortSignal,
+  });
 
   // Remove from sync metadata
-  await removeFileFromMeta(accessToken, folderId, existingFile.id);
+  await removeFileFromMeta(accessToken, folderId, existingFile.id, {
+    signal: serviceContext.abortSignal,
+  });
 }

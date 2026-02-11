@@ -9,7 +9,7 @@ import { replaceVariables } from "./utils";
 export async function handleMcpNode(
   node: WorkflowNode,
   context: ExecutionContext,
-  _serviceContext: ServiceContext
+  serviceContext: ServiceContext
 ): Promise<McpAppInfo | undefined> {
   const url = replaceVariables(node.properties["url"] || "", context);
   const toolName = replaceVariables(node.properties["tool"] || "", context);
@@ -46,8 +46,13 @@ export async function handleMcpNode(
   // Use McpClient for proper MCP lifecycle (initialize → tools/call → close)
   const client = new McpClient({ name: "workflow", url, headers });
   try {
-    await client.initialize();
-    const callResult = await client.callToolWithUi(toolName, args, 60_000);
+    await client.initialize(serviceContext.abortSignal);
+    const callResult = await client.callToolWithUi(
+      toolName,
+      args,
+      60_000,
+      serviceContext.abortSignal
+    );
 
     // Extract text content from result
     const textParts = callResult.content
@@ -73,7 +78,7 @@ export async function handleMcpNode(
 
       let uiResource: McpAppUiResource | null = null;
       try {
-        uiResource = await client.readResource(resourceUri);
+        uiResource = await client.readResource(resourceUri, serviceContext.abortSignal);
 
         if (uiResource && saveUiTo) {
           context.variables.set(saveUiTo, JSON.stringify({
