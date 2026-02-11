@@ -83,7 +83,17 @@ export async function action({ request }: Route.ActionArgs) {
       // Read existing sync meta (snapshot of last sync), fallback to rebuild if missing
       const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
         ?? await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
-      const files = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
+      // Use remoteMeta as the source of truth for current Drive state.
+      // All GemiHub operations update remoteMeta, and drive.file scope means
+      // no external apps can modify our files, so a live listing is unnecessary.
+      const files = Object.entries(remoteMeta.files).map(([id, f]) => ({
+        id,
+        name: f.name,
+        mimeType: f.mimeType,
+        md5Checksum: f.md5Checksum,
+        modifiedTime: f.modifiedTime,
+        createdTime: f.createdTime,
+      }));
       const diff = computeSyncDiff(localMeta, remoteMeta, files, locallyModifiedIds);
       return jsonWithCookie({ diff, remoteMeta });
     }
