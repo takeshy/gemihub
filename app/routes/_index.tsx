@@ -129,9 +129,14 @@ function IDELayout({
   const [searchParams] = useSearchParams();
 
   // Active file state — use local state to avoid React Router navigation on file switch
-  const [activeFileId, setActiveFileId] = useState<string | null>(
-    searchParams.get("file")
-  );
+  const [activeFileId, setActiveFileId] = useState<string | null>(() => {
+    const fromUrl = searchParams.get("file");
+    if (fromUrl) return fromUrl;
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gemihub:lastFileId");
+    }
+    return null;
+  });
   const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [activeFileMimeType, setActiveFileMimeType] = useState<string | null>(
     null
@@ -234,6 +239,8 @@ function IDELayout({
       setActiveFileId(fileId);
       setActiveFileName(fileName);
       setActiveFileMimeType(mimeType);
+      // Remember last opened file for next visit
+      localStorage.setItem("gemihub:lastFileId", fileId);
       // Auto-switch right panel based on file type, but keep plugin views open
       if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
         if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
@@ -559,16 +566,7 @@ function IDEContent({
   }, []);
 
   // Mobile view state: which panel is shown full-screen
-  const [mobileView, setMobileViewRaw] = useState<MobileView>(() => {
-    if (typeof window === "undefined") return "editor";
-    const saved = localStorage.getItem("gemihub:mobileView");
-    if (saved === "files" || saved === "editor" || saved === "chat" || saved === "workflow") return saved;
-    return "editor";
-  });
-  const setMobileView = useCallback((view: MobileView) => {
-    localStorage.setItem("gemihub:mobileView", view);
-    setMobileViewRaw(view);
-  }, []);
+  const [mobileView, setMobileView] = useState<MobileView>("editor");
 
   // Map mobileView to panel index: files=0, editor=1, chat/workflow/plugin=2
   const mobileViewToIndex = useCallback((view: MobileView): number => {
