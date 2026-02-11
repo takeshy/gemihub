@@ -285,6 +285,7 @@ function IDELayout({
     conflicts,
     error: syncError,
     localModifiedCount,
+    remoteModifiedCount,
     push,
     pull,
     resolveConflict,
@@ -475,6 +476,7 @@ function IDELayout({
         syncError={syncError}
         conflicts={conflicts}
         localModifiedCount={localModifiedCount}
+        remoteModifiedCount={remoteModifiedCount}
         push={push}
         pull={pull}
         resolveConflict={resolveConflict}
@@ -524,6 +526,7 @@ function IDEContent({
   syncError,
   conflicts,
   localModifiedCount,
+  remoteModifiedCount,
   push,
   pull,
   resolveConflict,
@@ -559,6 +562,7 @@ function IDEContent({
   syncError: string | null;
   conflicts: import("~/hooks/useSync").ConflictInfo[];
   localModifiedCount: number;
+  remoteModifiedCount: number;
   push: () => void;
   pull: () => void;
   resolveConflict: (fileId: string, resolution: "local" | "remote") => Promise<void>;
@@ -945,6 +949,7 @@ function IDEContent({
         syncError={syncError}
         syncConflicts={conflicts}
         localModifiedCount={localModifiedCount}
+        remoteModifiedCount={remoteModifiedCount}
         onPush={push}
         onPull={pull}
         onShowConflicts={() => setShowConflictDialog(true)}

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   getLocalSyncMeta,
   setLocalSyncMeta,
@@ -69,6 +69,7 @@ export function useSync() {
   const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [localModifiedCount, setLocalModifiedCount] = useState(0);
+  const [remoteModifiedCount, setRemoteModifiedCount] = useState(0);
 
   const refreshLocalModifiedCount = useCallback(async () => {
     try {
@@ -86,6 +87,49 @@ export function useSync() {
     refreshLocalModifiedCount();
     return () => window.removeEventListener("file-modified", handler);
   }, [refreshLocalModifiedCount]);
+
+  // Ref to access syncStatus inside interval without re-creating it
+  const syncStatusRef = useRef(syncStatus);
+  syncStatusRef.current = syncStatus;
+
+  // Check remote changes by comparing remote meta with local sync meta
+  const checkRemoteChanges = useCallback(async () => {
+    try {
+      if (!navigator.onLine) return;
+      if (syncStatusRef.current !== "idle") return;
+      const res = await fetch("/api/sync");
+      if (!res.ok) return;
+      const data = await res.json();
+      const remoteMeta = data.remoteMeta as {
+        files: Record<string, { md5Checksum?: string }>;
+      } | null;
+      if (!remoteMeta) { setRemoteModifiedCount(0); return; }
+
+      const localMeta = await getLocalSyncMeta();
+      const localFiles = localMeta?.files ?? {};
+      let count = 0;
+      for (const [id, rf] of Object.entries(remoteMeta.files)) {
+        const lf = localFiles[id];
+        if (!lf) {
+          // remoteOnly
+          count++;
+        } else if (lf.md5Checksum !== (rf.md5Checksum ?? "")) {
+          // toPull (md5 differs)
+          count++;
+        }
+      }
+      setRemoteModifiedCount(count);
+    } catch {
+      // ignore network errors
+    }
+  }, []);
+
+  // Poll remote changes every 5 minutes + initial check
+  useEffect(() => {
+    checkRemoteChanges();
+    const interval = setInterval(checkRemoteChanges, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [checkRemoteChanges]);
 
   // When all conflicts are resolved, return to idle
   useEffect(() => {
@@ -286,6 +330,7 @@ export function useSync() {
           const remainingModified = await getLocallyModifiedFileIds();
           setLocalModifiedCount(remainingModified.size);
         }
+        setRemoteModifiedCount(0);
         setSyncStatus("idle");
         return;
       }
@@ -338,6 +383,7 @@ export function useSync() {
       }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
+      setRemoteModifiedCount(0);
       setSyncStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pull failed");
@@ -512,6 +558,7 @@ export function useSync() {
       }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
+      setRemoteModifiedCount(0);
       setSyncStatus("idle");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Full pull failed");
@@ -530,6 +577,7 @@ export function useSync() {
     conflicts,
     error,
     localModifiedCount,
+    remoteModifiedCount,
     push,
     pull,
     resolveConflict,

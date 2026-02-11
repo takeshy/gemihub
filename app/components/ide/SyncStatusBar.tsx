@@ -12,6 +12,7 @@ interface SyncStatusBarProps {
   lastSyncTime: string | null;
   error: string | null;
   localModifiedCount: number;
+  remoteModifiedCount: number;
   onPush: () => void;
   onPull: () => void;
   onShowConflicts: () => void;
@@ -30,6 +31,7 @@ export function SyncStatusBar({
   lastSyncTime,
   error,
   localModifiedCount,
+  remoteModifiedCount,
   onPush,
   onPull,
   onShowConflicts,
@@ -153,7 +155,7 @@ export function SyncStatusBar({
         </div>
       )}
 
-      {/* Pull button */}
+      {/* Pull button + remote count badge */}
       <button
         onClick={onPull}
         disabled={isBusy}
@@ -162,6 +164,11 @@ export function SyncStatusBar({
         <ArrowDown size={ICON.SM} />
         {!compact && "Pull"}
       </button>
+      {remoteModifiedCount > 0 && (
+        <span className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white dark:bg-green-500">
+          {remoteModifiedCount}
+        </span>
+      )}
 
       {/* Conflict indicator */}
       {conflictCount > 0 && (
