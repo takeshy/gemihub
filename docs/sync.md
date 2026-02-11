@@ -75,24 +75,29 @@ Uploads locally-changed files to remote.
 ### Flow
 
 ```
-1. PRE-CHECK: Diff check before writing anything
+1. PRE-CHECK: Diff check before writing anything (skipped on first sync)
    ├─ Read LocalSyncMeta from IndexedDB
-   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
-   │   └─ Server: read _sync-meta.json + list Drive files → compute diff
-   ├─ Conflicts found → abort (show conflict dialog)
-   └─ Remote is newer & has pending pulls → error "Pull first"
+   ├─ If localMeta exists:
+   │   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
+   │   │   └─ Server: read _sync-meta.json + list Drive files → compute diff
+   │   ├─ Conflicts found → abort (show conflict dialog)
+   │   └─ Remote is newer & has pending pulls → error "Pull first"
+   └─ If localMeta is null (first sync): skip pre-check, proceed directly
 
 2. UPLOAD: Update files directly on Drive
    ├─ Get modified file IDs from IndexedDB editHistory
-   ├─ Filter to only files tracked in remoteMeta
+   ├─ Filter to only files tracked in cached remoteMeta
    ├─ For each modified file:
    │   ├─ Read content from IndexedDB cache
    │   ├─ (Optional) RAG registration for eligible file types
+   │   │   └─ Failure does NOT block Drive update (recorded as "pending")
    │   ├─ POST /api/drive/files { action: "update", fileId, content }
    │   │   └─ Server: update file on Drive, update _sync-meta.json
    │   │       → return new md5Checksum, modifiedTime
+   │   ├─ If Drive update fails: clean up RAG document if registered
    │   ├─ Update LocalSyncMeta with new md5/modifiedTime
    │   └─ Update IndexedDB cache with new md5/modifiedTime
+   ├─ Batch save RAG tracking info for all updated files
 
 3. CLEANUP
    ├─ Clear IndexedDB editHistory for pushed files only
@@ -103,6 +108,9 @@ Uploads locally-changed files to remote.
    ├─ POST /api/sync { action: "diff", localMeta: null }
    │   └─ Server: return current remoteMeta
    └─ Rebuild LocalSyncMeta from server's remoteMeta
+
+5. RAG RETRY
+   └─ Retry previously pending RAG registrations
 ```
 
 ### Preconditions
@@ -113,6 +121,7 @@ Uploads locally-changed files to remote.
 | - | exists | - | Nothing to push |
 | exists | exists | Yes (with pending pulls) | Error: "Pull required" |
 | exists | exists | No | Proceed with Push |
+| null (first sync) | any | - | Skip pre-check, proceed with Push |
 
 ### Important Notes
 
@@ -194,11 +203,13 @@ Uploads all locally modified files directly to Drive and merges metadata.
 
 ### Flow
 
-1. **Upload modified files** — each modified file is updated directly on Drive via `/api/drive/files`
-2. **Update IndexedDB** — cache and LocalSyncMeta updated with new md5/modifiedTime
-3. **Merge** all local meta entries into remote `_sync-meta.json` via `fullPush` action
-4. **Clear all edit history**
-5. **Fire "sync-complete" event** and update localModifiedCount
+1. **Upload modified files** — each modified file is updated directly on Drive via `/api/drive/files`, with optional RAG registration per file
+2. **Batch save RAG tracking** — save RAG tracking info for all updated files
+3. **Update IndexedDB** — cache and LocalSyncMeta updated with new md5/modifiedTime
+4. **Merge** all local meta entries into remote `_sync-meta.json` via `fullPush` action
+5. **Clear all edit history**
+6. **Fire "sync-complete" event** and update localModifiedCount
+7. **RAG retry** — retry previously pending RAG registrations
 
 ### When to Use
 
@@ -329,12 +340,16 @@ Located in Settings → Sync tab, organized into sections:
 
 ### System Files & Folders (Always Excluded from Sync)
 
+Excluded by name filter in `computeSyncDiff`:
 - `_sync-meta.json` — Sync metadata
 - `settings.json` — User settings
-- `history/*/_meta.json` — History listing metadata (chat, execution, request folders)
+
+Excluded by folder structure (subfolders of root, not listed by `listFiles(rootFolderId)`):
+- `history/` — Chat, execution, and request history (including `_meta.json` and `.history.json` files)
 - `trash/` — Soft-deleted files (managed via Trash dialog)
 - `sync_conflicts/` — Conflict backup files (managed via Conflict Backups dialog)
 - `__TEMP__/` — Temporary sync files (managed via Temp Files dialog)
+- `plugins/` — Installed plugin files
 
 ---
 
@@ -414,7 +429,7 @@ Browser (IndexedDB)          Server                Google Drive
 | `app/routes/api.sync.tsx` | Server-side sync API (17 POST actions) |
 | `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
-| `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory) |
+| `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory, remoteMeta) |
 | `app/services/edit-history-local.ts` | Client-side edit history (reverse-apply diffs in IndexedDB) |
 | `app/services/edit-history.server.ts` | Server-side edit history (Drive `.history.json` read/write) |
 | `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |

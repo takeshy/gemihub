@@ -75,24 +75,29 @@ Diff アルゴリズムは3つのデータソースを比較します:
 ### フロー
 
 ```
-1. 事前チェック: 書き込み前に Diff を確認
+1. 事前チェック: 書き込み前に Diff を確認（初回同期時はスキップ）
    ├─ IndexedDB から LocalSyncMeta を読み取り
-   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
-   │   └─ サーバー: _sync-meta.json を読み取り + Drive ファイル一覧 → diff を計算
-   ├─ コンフリクトあり → 中断（コンフリクトダイアログを表示）
-   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
+   ├─ localMeta がある場合:
+   │   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
+   │   │   └─ サーバー: _sync-meta.json を読み取り + Drive ファイル一覧 → diff を計算
+   │   ├─ コンフリクトあり → 中断（コンフリクトダイアログを表示）
+   │   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
+   └─ localMeta が null（初回同期）: 事前チェックをスキップし直接続行
 
 2. アップロード: Drive 上のファイルを直接更新
    ├─ IndexedDB の editHistory から変更ファイル ID を取得
-   ├─ remoteMeta で追跡されているファイルのみにフィルタ
+   ├─ キャッシュ済み remoteMeta で追跡されているファイルのみにフィルタ
    ├─ 各変更ファイルについて:
    │   ├─ IndexedDB キャッシュから内容を読み取り
    │   ├─ （オプション）対象ファイルタイプの RAG 登録
+   │   │   └─ 失敗しても Drive 更新はブロックされない（"pending" として記録）
    │   ├─ POST /api/drive/files { action: "update", fileId, content }
    │   │   └─ サーバー: Drive 上のファイルを更新、_sync-meta.json を更新
    │   │       → 新しい md5Checksum, modifiedTime を返す
+   │   ├─ Drive 更新失敗時: 登録済みの RAG ドキュメントをクリーンアップ
    │   ├─ LocalSyncMeta を新しい md5/modifiedTime で更新
    │   └─ IndexedDB キャッシュを新しい md5/modifiedTime で更新
+   ├─ 全更新ファイルの RAG 追跡情報を一括保存
 
 3. クリーンアップ
    ├─ Push したファイルの editHistory のみクリア
@@ -103,6 +108,9 @@ Diff アルゴリズムは3つのデータソースを比較します:
    ├─ POST /api/sync { action: "diff", localMeta: null }
    │   └─ サーバー: 現在の remoteMeta を返す
    └─ サーバーの remoteMeta から LocalSyncMeta を再構築
+
+5. RAG リトライ
+   └─ 以前失敗した RAG 登録をリトライ
 ```
 
 ### 前提条件
@@ -113,6 +121,7 @@ Diff アルゴリズムは3つのデータソースを比較します:
 | - | あり | - | Push するものなし |
 | あり | あり | はい（未 Pull あり） | エラー: 「先に Pull してください」 |
 | あり | あり | いいえ | Push を実行 |
+| null（初回同期） | 任意 | - | 事前チェックをスキップし Push を実行 |
 
 ### 重要事項
 
@@ -194,11 +203,13 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ### フロー
 
-1. **変更ファイルをアップロード** — 各変更ファイルを `/api/drive/files` 経由で Drive に直接更新
-2. **IndexedDB を更新** — キャッシュと LocalSyncMeta を新しい md5/modifiedTime で更新
-3. **ローカルメタの全エントリをリモートの `_sync-meta.json` にマージ**（`fullPush` アクション経由）
-4. **全編集履歴をクリア**
-5. **"sync-complete" イベント発火** + localModifiedCount を更新
+1. **変更ファイルをアップロード** — 各変更ファイルを `/api/drive/files` 経由で Drive に直接更新（対象ファイルはオプションで RAG 登録）
+2. **RAG 追跡情報を一括保存** — 全更新ファイルの RAG 追跡情報を保存
+3. **IndexedDB を更新** — キャッシュと LocalSyncMeta を新しい md5/modifiedTime で更新
+4. **ローカルメタの全エントリをリモートの `_sync-meta.json` にマージ**（`fullPush` アクション経由）
+5. **全編集履歴をクリア**
+6. **"sync-complete" イベント発火** + localModifiedCount を更新
+7. **RAG リトライ** — 以前失敗した RAG 登録をリトライ
 
 ### 使用するタイミング
 
@@ -329,12 +340,16 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 ### システムファイル・フォルダ（常に同期から除外）
 
+`computeSyncDiff` でファイル名フィルタにより除外:
 - `_sync-meta.json` — 同期メタデータ
 - `settings.json` — ユーザー設定
-- `history/*/_meta.json` — 履歴一覧メタデータ（チャット・実行履歴・リクエスト履歴フォルダ）
+
+フォルダ構造により除外（ルートのサブフォルダのため `listFiles(rootFolderId)` の結果に含まれない）:
+- `history/` — チャット・実行履歴・リクエスト履歴（`_meta.json` や `.history.json` を含む）
 - `trash/` — ソフトデリートされたファイル（ゴミ箱ダイアログで管理）
 - `sync_conflicts/` — コンフリクトバックアップファイル（コンフリクトバックアップダイアログで管理）
 - `__TEMP__/` — 一時同期ファイル（一時ファイルダイアログで管理）
+- `plugins/` — インストール済みプラグインファイル
 
 ---
 
@@ -355,7 +370,7 @@ Diff アルゴリズムは3つのデータソースを比較します:
 
 各ファイルに1つの `CachedEditHistoryEntry`（`diffs[]` 配列付き）があります。各配列要素は1つの diff セッション（コミットポイント）を表します。
 
-**自動保存（5秒ごと）:**
+**自動保存（3秒ごと）:**
 1. IndexedDB キャッシュから旧コンテンツを読み取り（キャッシュ更新前）
 2. 最後の diff が存在する場合: 逆適用してベースを復元
 3. ベースから新コンテンツへの累積 diff を計算
@@ -414,7 +429,7 @@ Push 後、diff は Drive に保存済みのため、Push されたファイル�
 | `app/routes/api.sync.tsx` | サーバー側の同期 API（17 POST アクション） |
 | `app/routes/api.drive.files.tsx` | Drive ファイル CRUD（Push 時のファイル直接更新に使用、削除は trash/ に移動） |
 | `app/services/sync-meta.server.ts` | 同期メタデータの読取・書込・再構築・Diff |
-| `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, fileTree, editHistory） |
+| `app/services/indexeddb-cache.ts` | IndexedDB キャッシュ（files, syncMeta, fileTree, editHistory, remoteMeta） |
 | `app/services/edit-history-local.ts` | クライアント側の編集履歴（IndexedDB での逆適用 diff） |
 | `app/services/edit-history.server.ts` | サーバー側の編集履歴（Drive `.history.json` の読取・書込） |
 | `app/components/settings/TrashDialog.tsx` | ゴミ箱管理ダイアログ（復元・削除） |
