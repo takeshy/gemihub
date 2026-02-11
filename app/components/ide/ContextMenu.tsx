@@ -18,7 +18,15 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const mountTime = Date.now();
     function handleClick(e: MouseEvent) {
+      // Ignore synthesized mouse events from the touch that opened this menu
+      if (Date.now() - mountTime < 500) return;
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    function handleTouchStart(e: TouchEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();
       }
@@ -27,9 +35,11 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("mousedown", handleClick);
+    document.addEventListener("touchstart", handleTouchStart);
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("keydown", handleKey);
     };
   }, [onClose]);

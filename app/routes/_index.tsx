@@ -570,7 +570,8 @@ function IDEContent({
     const touch = e.touches[0];
     const edgeThreshold = 30;
     const screenWidth = window.innerWidth;
-    if (touch.clientX <= edgeThreshold || touch.clientX >= screenWidth - edgeThreshold) {
+    // Start away from edges to avoid browser back/forward gestures
+    if (touch.clientX > edgeThreshold && touch.clientX < screenWidth - edgeThreshold) {
       touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     } else {
       touchStartRef.current = null;

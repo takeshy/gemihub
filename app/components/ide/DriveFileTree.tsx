@@ -210,7 +210,7 @@ export function DriveFileTree({
   }, []);
   const { t } = useI18n();
   const isMobile = useIsMobile();
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number; time: number; item: CachedTreeNode } | null>(null);
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
   const { progress, upload, clearProgress } = useFileUpload();
@@ -777,23 +777,27 @@ export function DriveFileTree({
     []
   );
 
-  const handleLongPressStart = useCallback(
+  const handleSwipeStart = useCallback(
     (e: React.TouchEvent, item: CachedTreeNode) => {
       const touch = e.touches[0];
-      const x = touch.clientX;
-      const y = touch.clientY;
-      longPressTimerRef.current = setTimeout(() => {
-        longPressTimerRef.current = null;
-        setContextMenu({ x, y, item });
-      }, 500);
+      swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now(), item };
     },
     []
   );
 
-  const handleLongPressEnd = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
+  const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - swipeStartRef.current.x;
+    const deltaY = touch.clientY - swipeStartRef.current.y;
+    const elapsed = Date.now() - swipeStartRef.current.time;
+    const item = swipeStartRef.current.item;
+    swipeStartRef.current = null;
+
+    // Right swipe: horizontal, quick, mostly horizontal direction
+    if (deltaX > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 2 && elapsed < 400) {
+      e.preventDefault(); // Prevent synthetic click from selecting/opening the item
+      setContextMenu({ x: touch.clientX, y: touch.clientY, item });
     }
   }, []);
 
@@ -1417,9 +1421,8 @@ export function DriveFileTree({
             onClick={() => toggleFolder(item.id)}
             onContextMenu={(e) => handleContextMenu(e, item)}
             {...(isMobile ? {
-              onTouchStart: (e: React.TouchEvent) => handleLongPressStart(e, item),
-              onTouchEnd: handleLongPressEnd,
-              onTouchMove: handleLongPressEnd,
+              onTouchStart: (e: React.TouchEvent) => handleSwipeStart(e, item),
+              onTouchEnd: handleSwipeEnd,
             } : {})}
             onDragStart={(e) => {
               if (isVirtualFolder) { e.preventDefault(); return; }
@@ -1477,9 +1480,8 @@ export function DriveFileTree({
         onClick={() => { setSelectedFolderId(null); onSelectFile(item.id, item.name, item.mimeType); }}
         onContextMenu={(e) => handleContextMenu(e, item)}
         {...(isMobile ? {
-          onTouchStart: (e: React.TouchEvent) => handleLongPressStart(e, item),
-          onTouchEnd: handleLongPressEnd,
-          onTouchMove: handleLongPressEnd,
+          onTouchStart: (e: React.TouchEvent) => handleSwipeStart(e, item),
+          onTouchEnd: handleSwipeEnd,
         } : {})}
         onDragStart={(e) => {
           e.dataTransfer.setData("application/x-tree-node-id", item.id);
