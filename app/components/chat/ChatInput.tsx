@@ -16,6 +16,7 @@ import {
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
 import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, McpServerConfig } from "~/types/settings";
+import { getDriveToolModeConstraint } from "~/types/settings";
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
 import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
@@ -296,8 +297,17 @@ export function ChatInput({
       editorCtx.getActiveSelection()
     );
 
-    // Resolve @filename references — expand content when drive tools are unavailable
-    const effectiveMode = pendingOverrides?.driveToolMode ?? driveToolMode;
+    // Resolve @filename references against the final effective drive tool mode,
+    // including model/RAG-driven forced constraints.
+    const effectiveModel = pendingOverrides?.model || selectedModel;
+    const effectiveSearchSetting =
+      pendingOverrides?.searchSetting !== undefined
+        ? pendingOverrides.searchSetting
+        : selectedRagSetting;
+    const requestedMode = pendingOverrides?.driveToolMode ?? driveToolMode;
+    const effectiveMode =
+      getDriveToolModeConstraint(effectiveModel, effectiveSearchSetting).forcedMode ??
+      requestedMode;
     resolved = await resolveFileReferences(resolved, editorCtx.fileList, effectiveMode === "none");
 
     // If no explicit file context was provided, append active file info so LLM can use drive-read
@@ -322,7 +332,7 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, lastFileIdInMessages, dismissedFileId]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, lastFileIdInMessages, dismissedFileId]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

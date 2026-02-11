@@ -50,20 +50,43 @@ function getToolIcon(name: string) {
   return <Wrench size={10} />;
 }
 
-function getToolLabel(name: string) {
-  if (name.startsWith("mcp_")) {
-    // mcp_{server}_{tool} → server:tool
-    const parts = name.slice(4).split("_");
-    if (parts.length >= 2) {
-      const server = parts[0];
-      const tool = parts.slice(1).join("_");
-      return `${server}:${tool}`;
+function sanitizeToolIdentifier(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function getMcpToolLabel(name: string, mcpServerIds?: string[]) {
+  if (!name.startsWith("mcp_")) return name;
+  const payload = name.slice(4);
+
+  if (mcpServerIds && mcpServerIds.length > 0) {
+    const candidates = Array.from(
+      new Set(mcpServerIds.map((id) => sanitizeToolIdentifier(id)).filter(Boolean))
+    ).sort((a, b) => b.length - a.length);
+
+    for (const candidate of candidates) {
+      const prefix = `${candidate}_`;
+      if (payload.startsWith(prefix)) {
+        const tool = payload.slice(prefix.length);
+        return tool ? `${candidate}:${tool}` : candidate;
+      }
     }
+  }
+
+  // Fallback when server IDs are unavailable.
+  const firstSep = payload.indexOf("_");
+  if (firstSep > 0 && firstSep < payload.length - 1) {
+    return `${payload.slice(0, firstSep)}:${payload.slice(firstSep + 1)}`;
   }
   return name;
 }
 
-function ToolCallBadges({ toolCalls }: { toolCalls: ToolCall[] }) {
+function ToolCallBadges({
+  toolCalls,
+  mcpServerIds,
+}: {
+  toolCalls: ToolCall[];
+  mcpServerIds?: string[];
+}) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
@@ -77,7 +100,7 @@ function ToolCallBadges({ toolCalls }: { toolCalls: ToolCall[] }) {
             title={JSON.stringify(tc.args, null, 2)}
           >
             {getToolIcon(tc.name)}
-            {getToolLabel(tc.name)}
+            {getMcpToolLabel(tc.name, mcpServerIds)}
           </button>
         ))}
       </div>
@@ -240,6 +263,9 @@ function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
 export const MessageBubble = memo(function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [collapsedMcpApps, setCollapsedMcpApps] = useState<Set<number>>(new Set());
+  const mcpServerIds = (message.mcpApps || [])
+    .map((app) => app.serverId)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
 
   const toggleMcpAppExpand = (index: number) => {
     setCollapsedMcpApps((prev) => {
@@ -283,7 +309,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
 
           {/* Tool calls (assistant only) */}
           {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-            <ToolCallBadges toolCalls={message.toolCalls} />
+            <ToolCallBadges toolCalls={message.toolCalls} mcpServerIds={mcpServerIds} />
           )}
 
           {/* RAG sources (assistant only) */}
