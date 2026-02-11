@@ -5,6 +5,7 @@ import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } fr
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
+import { validateMcpServerUrl } from "~/services/url-validator.server";
 import type {
   UserSettings,
   McpServerConfig,
@@ -276,6 +277,23 @@ export async function action({ request }: Route.ActionArgs) {
         } catch {
           return jsonWithCookie({ success: false, message: "Invalid MCP servers JSON." });
         }
+
+        for (const server of mcpServers) {
+          try {
+            if (!server?.url || typeof server.url !== "string") {
+              return jsonWithCookie({ success: false, message: "Each MCP server must include a valid URL." });
+            }
+            validateMcpServerUrl(server.url);
+          } catch (error) {
+            return jsonWithCookie({
+              success: false,
+              message: error instanceof Error
+                ? `Invalid URL for MCP server "${server?.name || "unknown"}": ${error.message}`
+                : "Invalid MCP server URL.",
+            });
+          }
+        }
+
         const updatedSettings: UserSettings = { ...currentSettings, mcpServers };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
         return jsonWithCookie({ success: true, message: "MCP server settings saved." });

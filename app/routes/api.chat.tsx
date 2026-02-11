@@ -2,10 +2,11 @@ import type { Route } from "./+types/api.chat";
 import { z } from "zod";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
+import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat.server";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES, executeDriveTool } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.server";
-import { isImageGenerationModel } from "~/types/settings";
+import { getDriveToolModeConstraint, isImageGenerationModel } from "~/types/settings";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 
@@ -73,12 +74,23 @@ export async function action({ request }: Route.ActionArgs) {
   const enableDriveTools = validData.enableDriveTools;
   const rawDriveToolMode = validData.driveToolMode;
   const enableMcp = validData.enableMcp;
-  const mcpServers = validData.mcpServers as McpServerConfig[] | undefined;
+  const requestedMcpServers = validData.mcpServers as McpServerConfig[] | undefined;
   const webSearchEnabled = validData.webSearchEnabled;
   const requestSettings = validData.settings;
+  const requestedMcpServerNames = requestedMcpServers?.map((s) => s.name) || [];
 
   // Resolve driveToolMode: new field takes precedence, fall back to legacy enableDriveTools
-  const driveToolMode = rawDriveToolMode ?? (enableDriveTools === false ? "none" : "all");
+  const requestedDriveToolMode =
+    rawDriveToolMode ?? (enableDriveTools === false ? "none" : "all");
+  const ragSettingForConstraint = webSearchEnabled
+    ? "__websearch__"
+    : ragStoreIds && ragStoreIds.length > 0
+      ? "__rag__"
+      : null;
+  const toolConstraint = getDriveToolModeConstraint(model, ragSettingForConstraint);
+  const driveToolMode = toolConstraint.forcedMode ?? requestedDriveToolMode;
+  const functionToolsForcedOff =
+    toolConstraint.locked && toolConstraint.forcedMode === "none";
 
   // Build tools array
   const tools: ToolDefinition[] = [];
@@ -91,10 +103,38 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
-  let mcpToolDefs: ToolDefinition[] = [];
-  if (enableMcp && mcpServers && mcpServers.length > 0) {
+  let resolvedMcpServers: McpServerConfig[] | undefined;
+  let settingsForMcpPersistence:
+    | Awaited<ReturnType<typeof getSettings>>
+    | null = null;
+  const mcpTokenSnapshot = new Map<string, string>();
+
+  if (!functionToolsForcedOff && enableMcp && requestedMcpServerNames.length > 0) {
     try {
-      mcpToolDefs = await getMcpToolDefinitions(mcpServers);
+      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      settingsForMcpPersistence = settings;
+      const byName = new Map(settings.mcpServers.map((s) => [s.name, s] as const));
+      const selected: McpServerConfig[] = [];
+      const seen = new Set<string>();
+      for (const name of requestedMcpServerNames) {
+        if (seen.has(name)) continue;
+        const match = byName.get(name);
+        if (match) {
+          seen.add(name);
+          selected.push(match);
+          mcpTokenSnapshot.set(name, JSON.stringify(match.oauthTokens ?? null));
+        }
+      }
+      resolvedMcpServers = selected;
+    } catch (error) {
+      console.error("Failed to resolve MCP servers from user settings:", error);
+    }
+  }
+
+  let mcpToolDefs: ToolDefinition[] = [];
+  if (resolvedMcpServers && resolvedMcpServers.length > 0) {
+    try {
+      mcpToolDefs = await getMcpToolDefinitions(resolvedMcpServers);
       tools.push(...mcpToolDefs);
     } catch (error) {
       console.error("Failed to get MCP tool definitions:", error);
@@ -135,8 +175,8 @@ export async function action({ request }: Route.ActionArgs) {
           return result;
         }
 
-        if (mcpToolNames.has(name) && mcpServers) {
-          const result = await executeMcpTool(mcpServers, name, args);
+        if (mcpToolNames.has(name) && resolvedMcpServers) {
+          const result = await executeMcpTool(resolvedMcpServers, name, args);
           // Send mcp_app chunk if the tool returned UI metadata
           if (result.mcpApp) {
             sendChunk({ type: "mcp_app", mcpApp: result.mcpApp });
@@ -191,6 +231,22 @@ export async function action({ request }: Route.ActionArgs) {
         });
         sendChunk({ type: "done" });
       } finally {
+        if (settingsForMcpPersistence && resolvedMcpServers && resolvedMcpServers.length > 0) {
+          const tokenChanged = resolvedMcpServers.some(
+            (server) => mcpTokenSnapshot.get(server.name) !== JSON.stringify(server.oauthTokens ?? null)
+          );
+          if (tokenChanged) {
+            try {
+              await saveSettings(
+                validTokens.accessToken,
+                validTokens.rootFolderId,
+                settingsForMcpPersistence
+              );
+            } catch (error) {
+              console.error("Failed to persist refreshed MCP OAuth tokens:", error);
+            }
+          }
+        }
         controller.close();
       }
     },

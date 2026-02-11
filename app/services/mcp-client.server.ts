@@ -1,6 +1,7 @@
 // MCP (Model Context Protocol) client - ported from obsidian-gemini-helper (Node.js fetch version)
 
 import type { McpServerConfig, McpToolInfo, McpAppResult, McpAppUiResource } from "~/types/settings";
+import { validateMcpServerUrl } from "./url-validator.server";
 
 // JSON-RPC types
 interface JsonRpcRequest {
@@ -75,6 +76,7 @@ export class McpClient {
   private initialized = false;
 
   constructor(config: McpServerConfig) {
+    validateMcpServerUrl(config.url);
     this.config = config;
   }
 
@@ -135,26 +137,51 @@ export class McpClient {
    * Parse SSE response to extract JSON-RPC result
    */
   private parseSSEResponse(sseText: string): unknown {
-    const lines = sseText.split("\n");
-    let lastData = "";
+    const lines = sseText.split(/\r?\n/);
+    const events: string[] = [];
+    let currentDataLines: string[] = [];
 
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        lastData = line.substring(6);
+      if (line === "") {
+        if (currentDataLines.length > 0) {
+          events.push(currentDataLines.join("\n"));
+          currentDataLines = [];
+        }
+        continue;
+      }
+      if (line.startsWith(":")) continue; // SSE comment line
+      if (line.startsWith("data:")) {
+        const dataLine = line.slice(5).replace(/^ /, "");
+        currentDataLines.push(dataLine);
       }
     }
 
-    if (!lastData) {
-      throw new Error("No data received in SSE response");
+    if (currentDataLines.length > 0) {
+      events.push(currentDataLines.join("\n"));
     }
 
-    const jsonResponse: JsonRpcResponse = JSON.parse(lastData);
-
-    if (jsonResponse.error) {
-      throw new Error(`MCP Error ${jsonResponse.error.code}: ${jsonResponse.error.message}`);
+    let lastJsonRpc: JsonRpcResponse | null = null;
+    for (const payload of events) {
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(payload) as JsonRpcResponse;
+        if (parsed.jsonrpc === "2.0" && ("result" in parsed || "error" in parsed)) {
+          lastJsonRpc = parsed;
+        }
+      } catch {
+        // Ignore non-JSON event payloads and keep scanning
+      }
     }
 
-    return jsonResponse.result;
+    if (!lastJsonRpc) {
+      throw new Error("No JSON-RPC data received in SSE response");
+    }
+
+    if (lastJsonRpc.error) {
+      throw new Error(`MCP Error ${lastJsonRpc.error.code}: ${lastJsonRpc.error.message}`);
+    }
+
+    return lastJsonRpc.result;
   }
 
   /**

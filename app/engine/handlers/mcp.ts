@@ -2,6 +2,7 @@ import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import type { McpAppInfo } from "~/types/chat";
 import type { McpAppResult, McpAppUiResource } from "~/types/settings";
 import { McpClient } from "~/services/mcp-client.server";
+import { validateMcpServerUrl } from "~/services/url-validator.server";
 import { replaceVariables } from "./utils";
 
 // Handle MCP node - call remote MCP server tool via HTTP
@@ -18,6 +19,7 @@ export async function handleMcpNode(
 
   if (!url) throw new Error("MCP node missing 'url' property");
   if (!toolName) throw new Error("MCP node missing 'tool' property");
+  validateMcpServerUrl(url);
 
   // Parse headers
   let headers: Record<string, string> = {};

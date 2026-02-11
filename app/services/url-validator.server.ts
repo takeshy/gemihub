@@ -3,17 +3,15 @@
  * Blocks private/internal IPs and enforces HTTPS in production.
  */
 
-const PRIVATE_IP_RANGES = [
+import { isIP } from "node:net";
+
+const PRIVATE_IPV4_RANGES = [
   /^127\./,
   /^10\./,
   /^172\.(1[6-9]|2\d|3[01])\./,
   /^192\.168\./,
   /^0\./,
   /^169\.254\./,
-  /^::1$/,
-  /^fc00:/,
-  /^fd/,
-  /^fe80:/,
 ];
 
 const BLOCKED_HOSTNAMES = new Set([
@@ -22,9 +20,34 @@ const BLOCKED_HOSTNAMES = new Set([
   "169.254.169.254",
 ]);
 
+function normalizeHostname(hostname: string): string {
+  const withoutBrackets = hostname.replace(/^\[/, "").replace(/\]$/, "");
+  return withoutBrackets.toLowerCase().replace(/\.$/, "");
+}
+
 function isPrivateHost(hostname: string): boolean {
-  if (BLOCKED_HOSTNAMES.has(hostname)) return true;
-  return PRIVATE_IP_RANGES.some((re) => re.test(hostname));
+  const normalized = normalizeHostname(hostname);
+
+  if (BLOCKED_HOSTNAMES.has(normalized)) return true;
+
+  const ipVersion = isIP(normalized);
+  if (ipVersion === 4) {
+    return PRIVATE_IPV4_RANGES.some((re) => re.test(normalized));
+  }
+  if (ipVersion === 6) {
+    // Loopback, unique-local (fc00::/7), link-local (fe80::/10)
+    return (
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe8") ||
+      normalized.startsWith("fe9") ||
+      normalized.startsWith("fea") ||
+      normalized.startsWith("feb")
+    );
+  }
+
+  return false;
 }
 
 /**

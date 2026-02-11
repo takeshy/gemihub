@@ -2,6 +2,7 @@
 
 import { McpClient } from "./mcp-client.server";
 import { isTokenExpired, refreshAccessToken } from "./mcp-oauth.server";
+import { validateMcpServerUrl } from "./url-validator.server";
 import type {
   McpServerConfig,
   McpToolInfo,
@@ -27,6 +28,8 @@ function getClientKey(config: McpServerConfig): string {
 }
 
 export async function getOrCreateClient(config: McpServerConfig): Promise<McpClient> {
+  validateMcpServerUrl(config.url);
+
   // Auto-refresh expired OAuth tokens before creating/reusing a client
   if (config.oauthTokens && config.oauth && isTokenExpired(config.oauthTokens)) {
     if (config.oauthTokens.refreshToken) {
@@ -78,6 +81,7 @@ export async function getMcpToolDefinitions(
     try {
       const client = await getOrCreateClient(server);
       const tools = await client.listTools();
+      server.tools = tools;
 
       for (const tool of tools) {
         const toolDef = mcpToolInfoToDefinition(server.name, tool);
@@ -207,20 +211,34 @@ export async function executeMcpTool(
   if (!entry) {
     // Fallback: try prefix matching for servers without cached tools
     let server: McpServerConfig | undefined;
-    let actualToolName = "";
+    let sanitizedToolName = "";
 
     for (const s of mcpServers) {
       const safeName = sanitizeMcpName(s.name);
       const prefix = `mcp_${safeName}_`;
       if (toolName.startsWith(prefix)) {
         server = s;
-        actualToolName = toolName.slice(prefix.length);
+        sanitizedToolName = toolName.slice(prefix.length);
         break;
       }
     }
 
     if (!server) {
       return { textResult: { error: `MCP server not found for tool: ${toolName}` } };
+    }
+
+    // Recover original tool name from live tools when only sanitized name is available.
+    let actualToolName = sanitizedToolName;
+    try {
+      const client = await getOrCreateClient(server);
+      const liveTools = await client.listTools();
+      server.tools = liveTools;
+      const matched = liveTools.find((t) => sanitizeMcpName(t.name) === sanitizedToolName);
+      if (matched) {
+        actualToolName = matched.name;
+      }
+    } catch {
+      // Ignore lookup failures and try the sanitized name as a last resort
     }
 
     return executeToolOnServer(server, actualToolName, args);
