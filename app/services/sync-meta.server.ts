@@ -307,7 +307,7 @@ export function computeSyncDiff(
     } else if (localChanged && remoteChanged) {
       conflicts.push({
         fileId,
-        fileName: currentRemote?.name ?? fileId,
+        fileName: currentRemote?.name ?? remoteSynced?.name ?? fileId,
         localChecksum: local?.md5Checksum ?? "",
         remoteChecksum: currentRemote?.md5Checksum ?? "",
         localModifiedTime: local?.modifiedTime ?? "",

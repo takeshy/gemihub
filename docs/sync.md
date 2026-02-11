@@ -198,7 +198,7 @@ Downloads all remote files, skipping those with matching hashes.
 
 ## Full Push
 
-Uploads all locally modified files directly to Drive and merges metadata.
+Uploads all locally modified files directly to Drive and merges metadata. **This is a destructive operation** — it does not check for conflicts or remote changes before overwriting. Remote files will be overwritten without warning.
 
 ### Flow
 
@@ -212,6 +212,7 @@ Uploads all locally modified files directly to Drive and merges metadata.
 
 - Force remote metadata to match local state
 - After bulk local edits that bypassed normal sync
+- **Caution:** Unlike incremental Push, Full Push skips conflict detection and may overwrite remote changes made on other devices
 
 ---
 

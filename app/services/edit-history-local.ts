@@ -73,7 +73,18 @@ export async function saveLocalEdit(
     baseContent = oldContent;
   } else {
     // Reverse-apply last diff to old cache content to reconstruct base
-    baseContent = reverseApplyDiff(oldContent, entry.diffs[entry.diffs.length - 1].diff);
+    const reconstructed = reverseApplyDiff(oldContent, entry.diffs[entry.diffs.length - 1].diff);
+    if (reconstructed === null) {
+      // Reverse-apply failed — insert commit boundary and start new session
+      entry.diffs.push({
+        timestamp: new Date().toISOString(),
+        diff: "",
+        stats: { additions: 0, deletions: 0 },
+      });
+      baseContent = oldContent;
+    } else {
+      baseContent = reconstructed;
+    }
   }
 
   const { diff, stats } = createDiffStr(baseContent, newContent, 3);
@@ -146,7 +157,9 @@ export async function restoreToHistoryEntry(
   // Reconstruct content at target entry
   let restoredContent = cached.content;
   for (let i = nonEmptyDiffs.length - 1; i > targetFilteredIndex; i--) {
-    restoredContent = reverseApplyDiff(restoredContent, nonEmptyDiffs[i].diff);
+    const reversed = reverseApplyDiff(restoredContent, nonEmptyDiffs[i].diff);
+    if (reversed === null) return null;
+    restoredContent = reversed;
   }
 
   // Record the restore as a new history entry: diff(current → restored)
@@ -170,7 +183,7 @@ export async function restoreToHistoryEntry(
   return restoredContent;
 }
 
-function reverseApplyDiff(content: string, diffStr: string): string {
+function reverseApplyDiff(content: string, diffStr: string): string | null {
   const lines = diffStr.split("\n");
   const reversed: string[] = [];
 
@@ -192,8 +205,7 @@ function reverseApplyDiff(content: string, diffStr: string): string {
   const fullPatch = `--- original\n+++ modified\n${reversed.join("\n")}\n`;
   const result = Diff.applyPatch(content, fullPatch);
   if (result === false) {
-    // Patch failed — fallback to content as base (starts new session)
-    return content;
+    return null;
   }
   return result;
 }

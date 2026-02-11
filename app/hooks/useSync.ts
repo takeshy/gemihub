@@ -69,10 +69,20 @@ function ragRegisterInBackground(
   filesToPush: Array<{ fileId: string; content: string; fileName: string }>
 ): void {
   (async () => {
+    // Collect eligible files and save as pending first so they survive crashes
+    const eligibleFiles = filesToPush.filter((f) => isRagEligible(f.fileName));
+    if (eligibleFiles.length === 0) return;
+
+    const pendingUpdates = eligibleFiles.map((f) => ({
+      fileName: f.fileName,
+      ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null as string | null, status: "pending" as const },
+    }));
+    await saveRagUpdates(pendingUpdates, "");
+
+    // Now attempt actual registration
     const ragUpdates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }> = [];
     let ragStoreName = "";
-    for (const f of filesToPush) {
-      if (!isRagEligible(f.fileName)) continue;
+    for (const f of eligibleFiles) {
       try {
         const ragResult = await tryRagRegister(f.fileId, f.content, f.fileName);
         if (!ragResult.ok) {

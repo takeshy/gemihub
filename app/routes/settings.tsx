@@ -945,6 +945,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       if (!res.ok) throw new Error("Full push failed");
 
       await clearAllEditHistory();
+      window.dispatchEvent(new Event("sync-complete"));
       setActionMsg("Full push completed.");
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Full push failed.");
@@ -958,7 +959,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     setActionLoading("fullPull");
     setActionMsg(null);
     try {
-      const { getAllCachedFiles, setCachedFile, setLocalSyncMeta } = await import("~/services/indexeddb-cache");
+      const { getAllCachedFiles, getAllCachedFileIds, setCachedFile, deleteCachedFile, setLocalSyncMeta, clearAllEditHistory } = await import("~/services/indexeddb-cache");
       const cachedFiles = await getAllCachedFiles();
       const skipHashes: Record<string, string> = {};
       for (const f of cachedFiles) {
@@ -993,8 +994,26 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           fileName: file.fileName,
         });
       }
+
+      // Delete cached files that no longer exist on remote
+      const remoteFileIds = new Set(Object.keys(data.remoteMeta.files));
+      const allCachedIds = await getAllCachedFileIds();
+      for (const cachedId of allCachedIds) {
+        if (!remoteFileIds.has(cachedId)) {
+          await deleteCachedFile(cachedId);
+        }
+      }
+
+      // Full pull means remote is authoritative — clear all local edit history
+      await clearAllEditHistory();
+
       await setLocalSyncMeta(updatedMeta);
       setLastUpdatedAt(updatedMeta.lastUpdatedAt);
+      window.dispatchEvent(new Event("sync-complete"));
+      const pulledIds = (data.files as { fileId: string }[]).map((f) => f.fileId);
+      if (pulledIds.length > 0) {
+        window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: pulledIds } }));
+      }
       setActionMsg(`Full pull completed. Downloaded ${data.files.length} file(s).`);
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Full pull failed.");
@@ -2416,6 +2435,15 @@ function RagTab({ settings }: { settings: UserSettings }) {
                       })()}
                     </div>
 
+                    {/* Type badge */}
+                    <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${
+                      s.isExternal
+                        ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                        : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                    }`}>
+                      {s.isExternal ? "External" : "Internal"}
+                    </span>
+
                     {/* Auto badge for gemihub setting */}
                     {name === DEFAULT_RAG_STORE_KEY && (
                       <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
@@ -2474,61 +2502,122 @@ function RagTab({ settings }: { settings: UserSettings }) {
                   {/* Expanded editor */}
                   {isEditing && (
                     <div className="px-4 py-4 bg-gray-50 dark:bg-gray-800/50 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      {/* Internal / External toggle */}
                       <div>
-                        <Label htmlFor={`rag-targetFolders-${name}`}>Target Folders (one per line, name or ID)</Label>
-                        <textarea
-                          id={`rag-targetFolders-${name}`}
-                          rows={3}
-                          value={s.targetFolders.join("\n")}
-                          onChange={(e) =>
-                            updateCurrentSettingByKey(name, {
-                              targetFolders: e.target.value.split("\n"),
-                            })
-                          }
-                          onBlur={(e) =>
-                            updateCurrentSettingByKey(name, {
-                              targetFolders: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
-                            })
-                          }
-                          className={inputClass + " font-mono resize-y"}
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
-                        </p>
-                      </div>
-                      <div>
-                        <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line, regex)</Label>
-                        <textarea
-                          id={`rag-excludePatterns-${name}`}
-                          rows={2}
-                          value={s.excludePatterns.join("\n")}
-                          onChange={(e) =>
-                            updateCurrentSettingByKey(name, {
-                              excludePatterns: e.target.value.split("\n"),
-                            })
-                          }
-                          onBlur={(e) =>
-                            updateCurrentSettingByKey(name, {
-                              excludePatterns: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
-                            })
-                          }
-                          className={inputClass + " font-mono resize-y"}
-                        />
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          {t("settings.rag.excludePatternHint")}
-                        </p>
+                        <Label>Type</Label>
+                        <div className="flex gap-4 mt-1">
+                          {[
+                            { value: false, label: "Internal (Google Drive folders)" },
+                            { value: true, label: "External (store IDs)" },
+                          ].map((opt) => (
+                            <label
+                              key={String(opt.value)}
+                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                checked={s.isExternal === opt.value}
+                                onChange={() => updateCurrentSettingByKey(name, { isExternal: opt.value })}
+                                className="text-blue-600 focus:ring-blue-500"
+                              />
+                              {opt.label}
+                            </label>
+                          ))}
+                        </div>
                       </div>
 
-                      {/* Apply & Sync */}
-                      <button
-                        type="button"
-                        disabled={syncing}
-                        onClick={() => handleSyncByKey(name)}
-                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium disabled:opacity-50"
-                      >
-                        <RefreshCw size={12} className={syncing && syncingKey === name ? "animate-spin" : ""} />
-                        {t("settings.rag.applyAndSync")}
-                      </button>
+                      {s.isExternal ? (
+                        <div>
+                          <Label htmlFor={`rag-storeIds-${name}`}>Store IDs (one per line)</Label>
+                          <textarea
+                            id={`rag-storeIds-${name}`}
+                            rows={3}
+                            value={s.storeIds.join("\n")}
+                            onChange={(e) =>
+                              updateCurrentSettingByKey(name, {
+                                storeIds: e.target.value.split("\n"),
+                              })
+                            }
+                            onBlur={(e) =>
+                              updateCurrentSettingByKey(name, {
+                                storeIds: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                              })
+                            }
+                            className={inputClass + " font-mono resize-y"}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <Label htmlFor={`rag-targetFolders-${name}`}>Target Folders (one per line, name or ID)</Label>
+                            <textarea
+                              id={`rag-targetFolders-${name}`}
+                              rows={3}
+                              value={s.targetFolders.join("\n")}
+                              onChange={(e) =>
+                                updateCurrentSettingByKey(name, {
+                                  targetFolders: e.target.value.split("\n"),
+                                })
+                              }
+                              onBlur={(e) =>
+                                updateCurrentSettingByKey(name, {
+                                  targetFolders: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                                })
+                              }
+                              className={inputClass + " font-mono resize-y"}
+                            />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              Folder names (e.g. <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">workflows</code>) or Drive folder IDs. Leave empty to use the root folder.
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor={`rag-excludePatterns-${name}`}>Exclude Patterns (one per line, regex)</Label>
+                            <textarea
+                              id={`rag-excludePatterns-${name}`}
+                              rows={2}
+                              value={s.excludePatterns.join("\n")}
+                              onChange={(e) =>
+                                updateCurrentSettingByKey(name, {
+                                  excludePatterns: e.target.value.split("\n"),
+                                })
+                              }
+                              onBlur={(e) =>
+                                updateCurrentSettingByKey(name, {
+                                  excludePatterns: e.target.value.split("\n").map((v) => v.trim()).filter(Boolean),
+                                })
+                              }
+                              className={inputClass + " font-mono resize-y"}
+                            />
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {t("settings.rag.excludePatternHint")}
+                            </p>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Apply & Sync (Internal only) */}
+                      {!s.isExternal && (
+                        <button
+                          type="button"
+                          disabled={syncing}
+                          onClick={() => handleSyncByKey(name)}
+                          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium disabled:opacity-50"
+                        >
+                          <RefreshCw size={12} className={syncing && syncingKey === name ? "animate-spin" : ""} />
+                          {t("settings.rag.applyAndSync")}
+                        </button>
+                      )}
+
+                      {/* Save (External only) */}
+                      {s.isExternal && (
+                        <button
+                          type="button"
+                          onClick={() => saveRagSettings()}
+                          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium"
+                        >
+                          Save
+                        </button>
+                      )}
 
                       {/* Sync message */}
                       {syncMsg && syncingKey === name && (

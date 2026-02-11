@@ -182,20 +182,19 @@ Push/Pull の sync API 内に RAG 関連の4アクションがある:
 
 ### フロー (`app/hooks/useSync.ts`)
 
+RAG 登録は Push 成功後にバックグラウンドで非同期実行される（Push をブロックしない）。
+
 ```
-Push 開始
+Push 成功後 → ragRegisterInBackground(filesToPush) を fire-and-forget
+├─ 対象ファイルを isRagEligible() でフィルタ
+├─ 全対象ファイルを status: "pending" で先に保存 (ragSave)
+│   └─ 途中で処理が失敗しても ragRetryPending で再試行可能
 ├─ 各ファイルについて:
-│   ├─ isRagEligible(fileName) → 対象外ならスキップ
 │   ├─ POST /api/sync { action: "ragRegister", fileId, content, fileName }
 │   │   ├─ 成功 → ragFileInfo を収集 (status: "registered")
 │   │   └─ 失敗 → ragFileInfo を収集 (status: "pending")
-│   └─ Drive ファイル更新 (RAG 失敗でもブロックしない)
-├─ Drive 更新すべて成功:
-│   ├─ POST /api/sync { action: "ragSave", updates, storeName }
-│   └─ POST /api/sync { action: "ragRetryPending" }
-└─ Drive 更新失敗:
-    ├─ ragSave を試行 (ベストエフォート)
-    └─ 登録済みドキュメントのクリーンアップ (ragDeleteDoc)
+├─ 登録結果を保存 (ragSave)
+└─ POST /api/sync { action: "ragRetryPending" }
 ```
 
 ### ragRegister の詳細

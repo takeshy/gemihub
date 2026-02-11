@@ -704,9 +704,11 @@ export async function action({ request }: Route.ActionArgs) {
       let ragSetting = settings.ragSettings[storeKey];
       if (!ragSetting) {
         ragSetting = structuredClone(DEFAULT_RAG_SETTING);
-        ragSetting.storeName = ragStoreName;
-        ragSetting.storeId = ragStoreName;
-        if (ragStoreName) ragSetting.storeIds = [ragStoreName];
+        if (ragStoreName) {
+          ragSetting.storeName = ragStoreName;
+          ragSetting.storeId = ragStoreName;
+          ragSetting.storeIds = [ragStoreName];
+        }
         settings.ragSettings[storeKey] = ragSetting;
       }
       ragSetting.files ??= {};
@@ -720,6 +722,16 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       for (const { fileName, ragFileInfo } of updates) {
+        // Don't overwrite existing registered entries with empty-checksum pending
+        // (initial pending-first save should not destroy checksum/fileId)
+        const existing = ragSetting.files[fileName];
+        if (
+          ragFileInfo.status === "pending" &&
+          !ragFileInfo.checksum &&
+          existing?.status === "registered"
+        ) {
+          continue;
+        }
         ragSetting.files[fileName] = ragFileInfo;
       }
 
