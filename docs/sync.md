@@ -47,7 +47,7 @@ The diff algorithm compares three data sources:
 |--------|-------------|
 | **Local Meta** | Client's last-synced snapshot (IndexedDB) |
 | **Remote Meta** | Server's last-synced snapshot (`_sync-meta.json`, read-only during diff) |
-| **Current Remote** | Live Drive API file listing (queried on every diff) |
+| **Current Remote** | Derived from Remote Meta (`drive.file` scope ensures only GemiHub can modify these files, so a live listing is unnecessary) |
 
 Detection logic per file:
 
@@ -79,7 +79,7 @@ Uploads locally-changed files to remote.
    ├─ Read LocalSyncMeta from IndexedDB
    ├─ If localMeta exists:
    │   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
-   │   │   └─ Server: read _sync-meta.json + list Drive files → compute diff
+   │   │   └─ Server: read _sync-meta.json → derive file list from meta → compute diff
    │   ├─ Conflicts found → abort (show conflict dialog)
    │   └─ Remote is newer & has pending pulls → error "Pull first"
    └─ If localMeta is null (first sync): skip pre-check, proceed directly

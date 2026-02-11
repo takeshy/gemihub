@@ -47,7 +47,7 @@ Diff アルゴリズムは3つのデータソースを比較します:
 |--------|------|
 | **ローカルメタ** | クライアント側の最終同期スナップショット（IndexedDB） |
 | **リモートメタ** | サーバー側の最終同期スナップショット（`_sync-meta.json`、diff 中は読み取りのみ） |
-| **現在のリモート** | Drive API のリアルタイムファイル一覧（diff のたびにクエリ） |
+| **現在のリモート** | リモートメタから導出（`drive.file` スコープにより GemiHub のみがファイルを変更可能なため、リアルタイム一覧は不要） |
 
 ファイルごとの検出ロジック:
 
@@ -79,7 +79,7 @@ Diff アルゴリズムは3つのデータソースを比較します:
    ├─ IndexedDB から LocalSyncMeta を読み取り
    ├─ localMeta がある場合:
    │   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
-   │   │   └─ サーバー: _sync-meta.json を読み取り + Drive ファイル一覧 → diff を計算
+   │   │   └─ サーバー: _sync-meta.json を読み取り → メタからファイル一覧を導出 → diff を計算
    │   ├─ コンフリクトあり → 中断（コンフリクトダイアログを表示）
    │   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
    └─ localMeta が null（初回同期）: 事前チェックをスキップし直接続行
