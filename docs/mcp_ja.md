@@ -73,12 +73,15 @@ RFC 9728 に基づく OAuth 2.0 認証が必要なサーバーをサポートし
 
 ```
 1. サーバーに POST → 401 Unauthorized
-2. WWW-Authenticate ヘッダーから resource_metadata URL をパース
-3. /.well-known/oauth-protected-resource を取得
-4. /.well-known/oauth-authorization-server を取得
-5. 動的クライアント登録を試行（registration_endpoint がある場合）
-6. 登録失敗時は clientId "gemihub" にフォールバック
+2. WWW-Authenticate ヘッダーから resource_metadata URL をパース → メタデータを取得
+   （フォールバック: サーバーオリジンの /.well-known/oauth-protected-resource を GET）
+3. 認可サーバーオリジンの /.well-known/oauth-authorization-server を取得
+   （フォールバック: authorization_servers[0] URL を直接メタデータとして GET）
+4. 動的クライアント登録を試行（registration_endpoint がある場合）
+5. 登録失敗時は clientId "gemihub" にフォールバック
 ```
+
+すべての OAuth ディスカバリ URL は取得前に SSRF 保護のためバリデーションされます。
 
 ### 認可フロー
 
@@ -94,7 +97,7 @@ RFC 9728 に基づく OAuth 2.0 認証が必要なサーバーをサポートし
 |------|------|
 | 自動注入 | `Authorization` ヘッダーで Bearer トークンをリクエストに追加 |
 | 有効期限チェック | 期限切れの 5 分前にバッファ |
-| 自動リフレッシュ | テスト時にリフレッシュトークンで新しいアクセストークンを取得 |
+| 自動リフレッシュ | テスト時およびチャットツール呼び出し時にリフレッシュトークンで新しいアクセストークンを取得 |
 | ストレージ | Drive 上の `settings.json` にトークンを永続化 |
 
 ---
@@ -277,6 +280,7 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 | `app/routes/api.mcp.resource-read.tsx` | iframe リソース読み取り用サーバーサイドプロキシ |
 | `app/routes/api.settings.mcp-test.tsx` | 接続テスト、ツール検出、401 時の OAuth ディスカバリ |
 | `app/routes/api.settings.mcp-oauth-token.tsx` | OAuth 認可コードをトークンに交換（PKCE） |
+| `app/routes/auth.mcp-oauth-callback.tsx` | OAuth コールバックページ — ポップアップから認可コードを受信 |
 | `app/components/chat/McpAppRenderer.tsx` | MCP App レンダリング — iframe サンドボックス、postMessage、最大化 |
 | `app/engine/handlers/mcp.ts` | ワークフロー MCP ノードハンドラー — 実行ごとに専用 McpClient を使用 |
 

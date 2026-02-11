@@ -1,6 +1,7 @@
 // MCP OAuth service - handles RFC 9728 discovery, token exchange, and refresh
 
 import type { OAuthConfig, OAuthTokens } from "~/types/settings";
+import { validateMcpServerUrl } from "./url-validator.server";
 
 export interface OAuthDiscoveryResult {
   config: OAuthConfig;
@@ -50,6 +51,7 @@ export async function discoverOAuth(serverUrl: string): Promise<OAuthDiscoveryRe
           clientInfo: { name: "gemihub-oauth-probe", version: "1.0.0" },
         },
       }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (probeRes.status === 401) {
@@ -57,7 +59,10 @@ export async function discoverOAuth(serverUrl: string): Promise<OAuthDiscoveryRe
       const metadataMatch = wwwAuth.match(/resource_metadata="([^"]+)"/);
       if (metadataMatch) {
         try {
-          const metaRes = await fetch(metadataMatch[1]);
+          validateMcpServerUrl(metadataMatch[1]);
+          const metaRes = await fetch(metadataMatch[1], {
+            signal: AbortSignal.timeout(10_000),
+          });
           if (metaRes.ok) {
             protectedResource = await metaRes.json();
           }
@@ -77,7 +82,9 @@ export async function discoverOAuth(serverUrl: string): Promise<OAuthDiscoveryRe
   if (!protectedResource) {
     try {
       const wellKnownUrl = `${origin}/.well-known/oauth-protected-resource`;
-      const res = await fetch(wellKnownUrl);
+      const res = await fetch(wellKnownUrl, {
+        signal: AbortSignal.timeout(10_000),
+      });
       if (res.ok) {
         protectedResource = await res.json();
       }
@@ -95,10 +102,14 @@ export async function discoverOAuth(serverUrl: string): Promise<OAuthDiscoveryRe
   let authServerMeta: AuthorizationServerMetadata | null = null;
 
   try {
+    // Validate auth server URL for SSRF before fetching
+    validateMcpServerUrl(authServerUrl);
     // Try well-known at the auth server
     const asUrl = new URL(authServerUrl);
     const wellKnownAsUrl = `${asUrl.origin}/.well-known/oauth-authorization-server`;
-    const res = await fetch(wellKnownAsUrl);
+    const res = await fetch(wellKnownAsUrl, {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (res.ok) {
       authServerMeta = await res.json();
     }
@@ -109,7 +120,10 @@ export async function discoverOAuth(serverUrl: string): Promise<OAuthDiscoveryRe
   if (!authServerMeta) {
     // Try the auth server URL directly as metadata
     try {
-      const res = await fetch(authServerUrl);
+      validateMcpServerUrl(authServerUrl);
+      const res = await fetch(authServerUrl, {
+        signal: AbortSignal.timeout(10_000),
+      });
       if (res.ok) {
         authServerMeta = await res.json();
       }
@@ -141,6 +155,7 @@ export async function registerOAuthClient(
   redirectUri: string,
   clientName: string
 ): Promise<{ clientId: string; clientSecret?: string }> {
+  validateMcpServerUrl(registrationUrl);
   const res = await fetch(registrationUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -151,6 +166,7 @@ export async function registerOAuthClient(
       response_types: ["code"],
       token_endpoint_auth_method: "none",
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -186,10 +202,12 @@ export async function exchangeCodeForTokens(
     params.set("client_secret", config.clientSecret);
   }
 
+  validateMcpServerUrl(config.tokenUrl);
   const res = await fetch(config.tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: params.toString(),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {
@@ -223,10 +241,12 @@ export async function refreshAccessToken(
     params.set("client_secret", config.clientSecret);
   }
 
+  validateMcpServerUrl(config.tokenUrl);
   const res = await fetch(config.tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: params.toString(),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!res.ok) {

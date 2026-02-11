@@ -51,7 +51,7 @@ export async function action({ request }: Route.ActionArgs) {
       headers: serverHeaders,
     };
 
-    const client = getOrCreateClient(config);
+    const client = await getOrCreateClient(config);
     const result = await client.callToolWithUi(toolName, args || {});
 
     return Response.json(result);

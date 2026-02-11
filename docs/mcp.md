@@ -73,12 +73,15 @@ Supports servers requiring OAuth 2.0 authentication per RFC 9728.
 
 ```
 1. POST to server → 401 Unauthorized
-2. Parse WWW-Authenticate header for resource_metadata URL
-3. Fetch /.well-known/oauth-protected-resource
-4. Fetch /.well-known/oauth-authorization-server
-5. Attempt dynamic client registration (if registration_endpoint available)
-6. Fall back to clientId "gemihub" if registration fails
+2. Parse WWW-Authenticate header for resource_metadata URL → fetch metadata
+   (fallback: GET /.well-known/oauth-protected-resource from server origin)
+3. Fetch /.well-known/oauth-authorization-server from auth server origin
+   (fallback: GET authorization_servers[0] URL directly as metadata)
+4. Attempt dynamic client registration (if registration_endpoint available)
+5. Fall back to clientId "gemihub" if registration fails
 ```
+
+All OAuth discovery URLs are validated for SSRF protection before fetching.
 
 ### Authorization Flow
 
@@ -94,7 +97,7 @@ Supports servers requiring OAuth 2.0 authentication per RFC 9728.
 |---------|-------------|
 | Auto-inject | Bearer token added to requests via `Authorization` header |
 | Expiry check | 5-minute buffer before expiration |
-| Auto-refresh | Refresh token used to obtain new access token on test |
+| Auto-refresh | Refresh token used to obtain new access token (on test and during chat tool calls) |
 | Storage | Tokens persisted in `settings.json` on Drive |
 
 ---
@@ -277,6 +280,7 @@ Chat / Workflow                │
 | `app/routes/api.mcp.resource-read.tsx` | Server-side proxy for iframe resource reads |
 | `app/routes/api.settings.mcp-test.tsx` | Test connection, discover tools, OAuth discovery on 401 |
 | `app/routes/api.settings.mcp-oauth-token.tsx` | Exchange authorization code for OAuth tokens (PKCE) |
+| `app/routes/auth.mcp-oauth-callback.tsx` | OAuth callback page — receives authorization code from popup |
 | `app/components/chat/McpAppRenderer.tsx` | MCP App rendering — iframe sandbox, postMessage, maximize |
 | `app/engine/handlers/mcp.ts` | Workflow MCP node handler — dedicated McpClient per execution |
 

@@ -1,6 +1,7 @@
 // MCP tools integration with Gemini Function Calling
 
 import { McpClient } from "./mcp-client.server";
+import { isTokenExpired, refreshAccessToken } from "./mcp-oauth.server";
 import type {
   McpServerConfig,
   McpToolInfo,
@@ -25,7 +26,19 @@ function getClientKey(config: McpServerConfig): string {
   return `${config.url}:${JSON.stringify(config.headers || {})}:${token}`;
 }
 
-export function getOrCreateClient(config: McpServerConfig): McpClient {
+export async function getOrCreateClient(config: McpServerConfig): Promise<McpClient> {
+  // Auto-refresh expired OAuth tokens before creating/reusing a client
+  if (config.oauthTokens && config.oauth && isTokenExpired(config.oauthTokens)) {
+    if (config.oauthTokens.refreshToken) {
+      try {
+        const refreshed = await refreshAccessToken(config.oauth, config.oauthTokens.refreshToken);
+        config.oauthTokens = refreshed;
+      } catch {
+        // Refresh failed, proceed with current (possibly expired) tokens
+      }
+    }
+  }
+
   const key = getClientKey(config);
   let client = mcpClients.get(key);
   if (!client) {
@@ -63,7 +76,7 @@ export async function getMcpToolDefinitions(
 
   for (const server of mcpServers) {
     try {
-      const client = getOrCreateClient(server);
+      const client = await getOrCreateClient(server);
       const tools = await client.listTools();
 
       for (const tool of tools) {
@@ -222,7 +235,7 @@ async function executeToolOnServer(
   args: Record<string, unknown>
 ): Promise<McpToolExecutionResult> {
   try {
-    const client = getOrCreateClient(server);
+    const client = await getOrCreateClient(server);
     const appResult = await client.callToolWithUi(actualToolName, args);
 
     // Extract text content for Gemini

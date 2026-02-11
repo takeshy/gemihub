@@ -45,7 +45,7 @@ export async function action({ request }: Route.ActionArgs) {
       headers: serverHeaders,
     };
 
-    const client = getOrCreateClient(config);
+    const client = await getOrCreateClient(config);
     const resource = await client.readResource(resourceUri);
 
     if (!resource) {
