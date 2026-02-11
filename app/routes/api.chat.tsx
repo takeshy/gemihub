@@ -23,6 +23,7 @@ const ChatRequestSchema = z.object({
   driveToolMode: z.enum(["all", "noSearch", "none"]).optional(),
   enableMcp: z.boolean().optional(),
   mcpServers: z.array(z.object({
+    id: z.string().optional(),
     name: z.string(),
     url: z.string(),
     headers: z.record(z.string(), z.string()).optional(),
@@ -77,7 +78,7 @@ export async function action({ request }: Route.ActionArgs) {
   const requestedMcpServers = validData.mcpServers as McpServerConfig[] | undefined;
   const webSearchEnabled = validData.webSearchEnabled;
   const requestSettings = validData.settings;
-  const requestedMcpServerNames = requestedMcpServers?.map((s) => s.name) || [];
+  const requestedMcpServerIds = requestedMcpServers?.map((s) => s.id || s.name) || [];
 
   // Resolve driveToolMode: new field takes precedence, fall back to legacy enableDriveTools
   const requestedDriveToolMode =
@@ -109,20 +110,22 @@ export async function action({ request }: Route.ActionArgs) {
     | null = null;
   const mcpTokenSnapshot = new Map<string, string>();
 
-  if (!functionToolsForcedOff && enableMcp && requestedMcpServerNames.length > 0) {
+  if (!functionToolsForcedOff && enableMcp && requestedMcpServerIds.length > 0) {
     try {
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       settingsForMcpPersistence = settings;
+      const byId = new Map(settings.mcpServers.map((s) => [s.id || "", s] as const));
       const byName = new Map(settings.mcpServers.map((s) => [s.name, s] as const));
       const selected: McpServerConfig[] = [];
       const seen = new Set<string>();
-      for (const name of requestedMcpServerNames) {
-        if (seen.has(name)) continue;
-        const match = byName.get(name);
+      for (const id of requestedMcpServerIds) {
+        const match = byId.get(id) || byName.get(id);
         if (match) {
-          seen.add(name);
+          const key = match.id || match.name;
+          if (seen.has(key)) continue;
+          seen.add(key);
           selected.push(match);
-          mcpTokenSnapshot.set(name, JSON.stringify(match.oauthTokens ?? null));
+          mcpTokenSnapshot.set(key, JSON.stringify(match.oauthTokens ?? null));
         }
       }
       resolvedMcpServers = selected;
@@ -233,7 +236,8 @@ export async function action({ request }: Route.ActionArgs) {
       } finally {
         if (settingsForMcpPersistence && resolvedMcpServers && resolvedMcpServers.length > 0) {
           const tokenChanged = resolvedMcpServers.some(
-            (server) => mcpTokenSnapshot.get(server.name) !== JSON.stringify(server.oauthTokens ?? null)
+            (server) =>
+              mcpTokenSnapshot.get(server.id || server.name) !== JSON.stringify(server.oauthTokens ?? null)
           );
           if (tokenChanged) {
             try {

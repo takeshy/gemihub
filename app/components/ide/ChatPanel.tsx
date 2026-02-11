@@ -16,6 +16,7 @@ import {
   getAvailableModels,
   getDefaultModelForPlan,
   getDriveToolModeConstraint,
+  normalizeSelectedMcpServerIds,
 } from "~/types/settings";
 import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
@@ -93,7 +94,7 @@ export function ChatPanel({
   const [driveToolMode, setDriveToolMode] = useState<DriveToolMode>(
     initialConstraint.forcedMode ?? initialConstraint.defaultMode
   );
-  const [enabledMcpServerNames, setEnabledMcpServerNames] = useState<string[]>(() => {
+  const [enabledMcpServerIds, setEnabledMcpServerIds] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem("gemihub:enabledMcpServers");
       if (stored) {
@@ -107,9 +108,23 @@ export function ChatPanel({
   // Persist MCP selection to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem("gemihub:enabledMcpServers", JSON.stringify(enabledMcpServerNames));
+      localStorage.setItem("gemihub:enabledMcpServers", JSON.stringify(enabledMcpServerIds));
     } catch { /* ignore */ }
-  }, [enabledMcpServerNames]);
+  }, [enabledMcpServerIds]);
+
+  // Migrate legacy name-based selections to ID-based selections and drop stale entries.
+  useEffect(() => {
+    setEnabledMcpServerIds((prev) => {
+      const normalized = normalizeSelectedMcpServerIds(prev, settings.mcpServers);
+      if (
+        normalized.length === prev.length &&
+        normalized.every((id, i) => id === prev[i])
+      ) {
+        return prev;
+      }
+      return normalized;
+    });
+  }, [settings.mcpServers]);
 
   // ---- Chat history management ----
   const handleNewChat = useCallback(() => {
@@ -303,7 +318,7 @@ export function ChatPanel({
         ragSetting === "__websearch__" ||
         (modelLower.includes("flash-lite") && hasRag)
       ) {
-        setEnabledMcpServerNames([]);
+        setEnabledMcpServerIds([]);
       }
     },
     []
@@ -415,16 +430,16 @@ export function ChatPanel({
               : []
           : [];
 
-      const effectiveMcpNames = functionToolsForcedOff
+      const effectiveMcpIds = functionToolsForcedOff
         ? []
         : mcpOverride
-        ? mcpOverride
-        : isWebSearch ? [] : enabledMcpServerNames;
+        ? normalizeSelectedMcpServerIds(mcpOverride, settings.mcpServers)
+        : isWebSearch ? [] : enabledMcpServerIds;
 
-      const mcpEnabled = effectiveMcpNames.length > 0;
+      const mcpEnabled = effectiveMcpIds.length > 0;
 
       const mcpServersFiltered = mcpEnabled
-        ? settings.mcpServers.filter((s) => effectiveMcpNames.includes(s.name))
+        ? settings.mcpServers.filter((s) => !!s.id && effectiveMcpIds.includes(s.id))
         : undefined;
 
       const body = {
@@ -659,7 +674,7 @@ export function ChatPanel({
       selectedModel,
       selectedRagSetting,
       driveToolMode,
-      enabledMcpServerNames,
+      enabledMcpServerIds,
       settings,
       saveChat,
     ]
@@ -757,8 +772,8 @@ export function ChatPanel({
         driveToolMode={driveToolMode}
         onDriveToolModeChange={setDriveToolMode}
         mcpServers={settings.mcpServers}
-        enabledMcpServerNames={enabledMcpServerNames}
-        onEnabledMcpServerNamesChange={setEnabledMcpServerNames}
+        enabledMcpServerIds={enabledMcpServerIds}
+        onEnabledMcpServerIdsChange={setEnabledMcpServerIds}
         slashCommands={[
           ...slashCommands,
           ...pluginSlashCommands.map((cmd) => ({
