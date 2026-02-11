@@ -75,6 +75,7 @@ export interface StreamChunk {
   ragSources?: string[];
   generatedImage?: GeneratedImage;
   mcpApp?: McpAppInfo;
+  changedFileId?: string;
 }
 
 // Chat history stored in Drive

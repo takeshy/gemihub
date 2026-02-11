@@ -3,6 +3,7 @@ import {
   getCachedFile,
   setCachedFile,
   deleteCachedFile,
+  deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
@@ -259,6 +260,20 @@ export function useFileWithCache(
     },
     [fileId]
   );
+
+  // Listen for drive-file-changed events (from chat function calling)
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.fileId && detail.fileId === fileId) {
+        await deleteCachedFile(detail.fileId);
+        await deleteEditHistoryEntry(detail.fileId);
+        await fetchFile(detail.fileId);
+      }
+    };
+    window.addEventListener("drive-file-changed", handler);
+    return () => window.removeEventListener("drive-file-changed", handler);
+  }, [fileId, fetchFile]);
 
   // Listen for file-restored events (from EditHistoryModal restore)
   useEffect(() => {

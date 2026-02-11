@@ -497,6 +497,13 @@ export function ChatPanel({
                   break;
                 case "drive_changed":
                   window.dispatchEvent(new Event("sync-complete"));
+                  if (chunk.changedFileId) {
+                    window.dispatchEvent(
+                      new CustomEvent("drive-file-changed", {
+                        detail: { fileId: chunk.changedFileId },
+                      })
+                    );
+                  }
                   break;
                 case "error":
                   accumulatedContent +=

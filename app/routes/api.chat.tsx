@@ -127,7 +127,10 @@ export async function action({ request }: Route.ActionArgs) {
             validTokens.rootFolderId
           );
           if (name === "create_drive_file" || name === "update_drive_file") {
-            sendChunk({ type: "drive_changed" });
+            const changedFileId = name === "update_drive_file"
+              ? (args.fileId as string)
+              : (result as { id?: string })?.id;
+            sendChunk({ type: "drive_changed", changedFileId: changedFileId || undefined });
           }
           return result;
         }
