@@ -156,7 +156,7 @@ export async function restoreToHistoryEntry(
 
   // Reconstruct content at target entry
   let restoredContent = cached.content;
-  for (let i = nonEmptyDiffs.length - 1; i > targetFilteredIndex; i--) {
+  for (let i = nonEmptyDiffs.length - 1; i >= targetFilteredIndex; i--) {
     const reversed = reverseApplyDiff(restoredContent, nonEmptyDiffs[i].diff);
     if (reversed === null) return null;
     restoredContent = reversed;
