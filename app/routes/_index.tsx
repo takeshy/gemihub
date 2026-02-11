@@ -415,7 +415,7 @@ function IDELayout({
 // ---------------------------------------------------------------------------
 
 type MobileView = "files" | "editor" | "chat" | "workflow";
-const MOBILE_VIEW_ORDER: MobileView[] = ["files", "editor", "chat", "workflow"];
+const MOBILE_PANEL_COUNT = 3; // files(0), editor(1), right-panel(2)
 
 function IDEContent({
   settings,
@@ -560,7 +560,132 @@ function IDEContent({
 
   // Mobile view state: which panel is shown full-screen
   const [mobileView, setMobileView] = useState<MobileView>("editor");
+
+  // Map mobileView to panel index: files=0, editor=1, chat/workflow/plugin=2
+  const mobileViewToIndex = useCallback((view: MobileView): number => {
+    if (view === "files") return 0;
+    if (view === "editor") return 1;
+    return 2; // chat, workflow
+  }, []);
+  const mobileIndex = mobileViewToIndex(mobileView);
+
+  // Swipe animation state
+  const containerRef = useRef<HTMLDivElement>(null);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const swipeDirRef = useRef<"horizontal" | "vertical" | null>(null);
+  const isAnimatingRef = useRef(false);
+
+  // Apply transform without transition (for drag tracking)
+  const applyTransform = useCallback((index: number, delta = 0) => {
+    if (!containerRef.current) return;
+    const offset = -(index * 100) / MOBILE_PANEL_COUNT;
+    const deltaPct = (delta / window.innerWidth) * (100 / MOBILE_PANEL_COUNT);
+    containerRef.current.style.transition = "none";
+    containerRef.current.style.transform = `translateX(calc(${offset}% + ${deltaPct}%))`;
+  }, []);
+
+  // Animate to a panel index
+  const animateTo = useCallback((index: number) => {
+    if (!containerRef.current) return;
+    isAnimatingRef.current = true;
+    const offset = -(index * 100) / MOBILE_PANEL_COUNT;
+    containerRef.current.style.transition = "transform 300ms ease-out";
+    containerRef.current.style.transform = `translateX(${offset}%)`;
+    const cleanup = () => { isAnimatingRef.current = false; };
+    containerRef.current.addEventListener("transitionend", cleanup, { once: true });
+    setTimeout(cleanup, 350);
+  }, []);
+
+  // When mobileView changes (e.g. bottom nav tap), animate to the target
+  const prevIndexRef = useRef(mobileIndex);
+  useEffect(() => {
+    if (prevIndexRef.current !== mobileIndex) {
+      animateTo(mobileIndex);
+      prevIndexRef.current = mobileIndex;
+    }
+  }, [mobileIndex, animateTo]);
+
+  // Set initial position on mount
+  useEffect(() => {
+    if (containerRef.current) {
+      const offset = -(mobileIndex * 100) / MOBILE_PANEL_COUNT;
+      containerRef.current.style.transform = `translateX(${offset}%)`;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isAnimatingRef.current) return;
+    const touch = e.touches[0];
+    const edgeThreshold = 20;
+    const screenWidth = window.innerWidth;
+    if (touch.clientX > edgeThreshold && touch.clientX < screenWidth - edgeThreshold) {
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+      swipeDirRef.current = null;
+    } else {
+      touchStartRef.current = null;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+
+    // Lock direction once
+    if (!swipeDirRef.current) {
+      if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+      swipeDirRef.current = Math.abs(deltaX) > Math.abs(deltaY) ? "horizontal" : "vertical";
+    }
+
+    if (swipeDirRef.current === "vertical") return;
+
+    // Clamp at boundaries with resistance
+    const idx = mobileIndex;
+    let clamped = deltaX;
+    if (idx === 0 && deltaX > 0) clamped = deltaX * 0.3; // resist left edge
+    if (idx === MOBILE_PANEL_COUNT - 1 && deltaX < 0) clamped = deltaX * 0.3; // resist right edge
+
+    applyTransform(idx, clamped);
+  }, [mobileIndex, applyTransform]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current || swipeDirRef.current !== "horizontal") {
+      touchStartRef.current = null;
+      swipeDirRef.current = null;
+      return;
+    }
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const elapsed = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+    swipeDirRef.current = null;
+
+    const threshold = window.innerWidth * 0.25;
+    const velocity = Math.abs(deltaX) / elapsed; // px/ms
+    const shouldSwipe = Math.abs(deltaX) > threshold || (velocity > 0.3 && Math.abs(deltaX) > 30);
+
+    let nextIndex = mobileIndex;
+    if (shouldSwipe) {
+      if (deltaX > 0 && mobileIndex > 0) nextIndex = mobileIndex - 1;
+      if (deltaX < 0 && mobileIndex < MOBILE_PANEL_COUNT - 1) nextIndex = mobileIndex + 1;
+    }
+
+    animateTo(nextIndex);
+
+    if (nextIndex !== mobileIndex) {
+      if (nextIndex === 0) setMobileView("files");
+      else if (nextIndex === 1) setMobileView("editor");
+      else {
+        // Keep current rightPanel selection (chat/workflow/plugin)
+        if (rightPanel === "chat") setMobileView("chat");
+        else if (rightPanel === "workflow") setMobileView("workflow");
+        else setMobileView("chat");
+      }
+      prevIndexRef.current = nextIndex;
+    }
+  }, [mobileIndex, animateTo, rightPanel]);
 
   // Mobile plugin menu state
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
@@ -578,38 +703,6 @@ function IDEContent({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [pluginMenuOpen]);
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    const edgeThreshold = 30;
-    const screenWidth = window.innerWidth;
-    // Start away from edges to avoid browser back/forward gestures
-    if (touch.clientX > edgeThreshold && touch.clientX < screenWidth - edgeThreshold) {
-      touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
-    } else {
-      touchStartRef.current = null;
-    }
-  }, []);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const touch = e.changedTouches[0];
-    const deltaX = touch.clientX - touchStartRef.current.x;
-    const deltaY = touch.clientY - touchStartRef.current.y;
-    const elapsed = Date.now() - touchStartRef.current.time;
-    touchStartRef.current = null;
-
-    if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) && elapsed < 200) {
-      const currentIndex = MOBILE_VIEW_ORDER.indexOf(mobileView);
-      const nextIndex = deltaX > 0 ? currentIndex - 1 : currentIndex + 1;
-      if (nextIndex >= 0 && nextIndex < MOBILE_VIEW_ORDER.length) {
-        const nextView = MOBILE_VIEW_ORDER[nextIndex];
-        setMobileView(nextView);
-        if (nextView === "chat") setRightPanel("chat");
-        if (nextView === "workflow") setRightPanel("workflow");
-      }
-    }
-  }, [mobileView, setRightPanel]);
 
   // Close file panel after selecting a file on mobile
   const handleSelectFileMobile = useCallback(
@@ -767,13 +860,23 @@ function IDEContent({
       {isMobile ? (
         /* ---- Mobile layout ---- */
         <>
-          <div className="flex flex-1 flex-col overflow-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-            {/* Always mount file tree so create-file dialog stays available */}
-            <div className={`flex-1 overflow-hidden bg-white dark:bg-gray-900 ${mobileView !== "files" ? "hidden" : ""}`}>
-              {leftSidebarContent}
-            </div>
-            {mobileView === "editor" && (
-              <div className="relative flex flex-1 flex-col overflow-hidden">
+          <div
+            className="flex flex-1 overflow-hidden"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div
+              ref={containerRef}
+              className="flex h-full"
+              style={{ width: `${MOBILE_PANEL_COUNT * 100}%` }}
+            >
+              {/* Panel 0: Files */}
+              <div className="h-full overflow-hidden bg-white dark:bg-gray-900" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
+                {leftSidebarContent}
+              </div>
+              {/* Panel 1: Editor */}
+              <div className="relative h-full overflow-hidden" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
                 {mainViewerContent}
                 <button
                   onClick={() => {
@@ -786,12 +889,11 @@ function IDEContent({
                   <FilePlus size={ICON.LG} />
                 </button>
               </div>
-            )}
-            {(mobileView === "chat" || mobileView === "workflow") && (
-              <div className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-gray-900">
+              {/* Panel 2: Right panel (chat / workflow / plugin) */}
+              <div className="flex h-full flex-col overflow-hidden bg-white dark:bg-gray-900" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
                 {rightPanelContent}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Bottom navigation bar */}
