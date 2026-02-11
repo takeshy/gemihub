@@ -185,7 +185,7 @@ function WorkflowNodeListView({
   // Execution
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [executionStatus, setExecutionStatus] = useState<
-    "idle" | "running" | "completed" | "error" | "waiting-prompt"
+    "idle" | "running" | "completed" | "cancelled" | "error" | "waiting-prompt"
   >("idle");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
@@ -378,6 +378,10 @@ function WorkflowNodeListView({
           }
         } catch { /* ignore parse errors */ }
       });
+      es.addEventListener("cancelled", () => {
+        setExecutionStatus("cancelled");
+        es.close();
+      });
       es.addEventListener("error", (e) => {
         if (e instanceof MessageEvent) {
           const data = JSON.parse(e.data);
@@ -414,10 +418,21 @@ function WorkflowNodeListView({
     }
   }, [fileId, eventSourceRef, onSelectFile]);
 
-  const stopExecution = useCallback(() => {
+  const stopExecution = useCallback(async () => {
+    if (executionId) {
+      try {
+        await fetch(`/api/workflow/${fileId}/stop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ executionId }),
+        });
+      } catch {
+        // Best-effort.
+      }
+    }
     eventSourceRef[0]?.close();
-    setExecutionStatus("error");
-  }, [eventSourceRef]);
+    setExecutionStatus("cancelled");
+  }, [eventSourceRef, executionId, fileId]);
 
   const handlePromptResponse = useCallback(
     async (value: string | null) => {
@@ -778,6 +793,9 @@ function WorkflowNodeListView({
             {executionStatus === "error" && (
               <XCircle size={ICON.MD} className="text-red-500" />
             )}
+            {executionStatus === "cancelled" && (
+              <Square size={ICON.MD} className="text-orange-500" />
+            )}
             {executionStatus === "waiting-prompt" && (
               <Loader2
                 size={ICON.MD}
@@ -799,7 +817,7 @@ function WorkflowNodeListView({
           initialNext={editingNextInfo}
           propertyContext={{
             ragSettingNames: settings?.ragSettings ? Object.keys(settings.ragSettings) : [],
-            mcpServerNames: settings?.mcpServers?.map(s => s.name) || [],
+            mcpServerIds: settings?.mcpServers?.map(s => s.id || s.name) || [],
           } satisfies NodePropertyContext}
         />
       )}

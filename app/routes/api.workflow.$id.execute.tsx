@@ -1,8 +1,14 @@
 import type { Route } from "./+types/api.workflow.$id.execute";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
-import { readFile, getDriveContext } from "~/services/google-drive.server";
-import { parseWorkflowYaml } from "~/engine/parser";
+import {
+  readFile,
+  getDriveContext,
+  searchFiles,
+  findFileByExactName,
+  getFileMetadata,
+} from "~/services/google-drive.server";
+import { parseWorkflowData, parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflow } from "~/engine/executor";
 import type { ServiceContext, PromptCallbacks, ExecutionLog } from "~/engine/types";
 import { getSettings } from "~/services/user-settings.server";
@@ -10,6 +16,7 @@ import { getEncryptionParams } from "~/types/settings";
 import {
   createExecution,
   addLog,
+  setCancelled,
   setCompleted,
   setError,
   subscribe,
@@ -17,6 +24,72 @@ import {
 } from "~/services/execution-store.server";
 import { saveExecutionRecord } from "~/services/workflow-history.server";
 import yaml from "js-yaml";
+
+function isDriveId(value: string): boolean {
+  return /^[a-zA-Z0-9_-]{20,}$/.test(value);
+}
+
+function looksLikeWorkflowFile(value: string): boolean {
+  return value.endsWith(".yaml") || value.endsWith(".yml");
+}
+
+async function resolveWorkflowFileId(
+  accessToken: string,
+  rootFolderId: string,
+  workflowPath: string
+): Promise<{ id: string; name: string }> {
+  if (isDriveId(workflowPath)) {
+    const metadata = await getFileMetadata(accessToken, workflowPath);
+    return { id: metadata.id, name: metadata.name };
+  }
+
+  const candidates = looksLikeWorkflowFile(workflowPath)
+    ? [workflowPath]
+    : [workflowPath, `${workflowPath}.yaml`, `${workflowPath}.yml`];
+
+  const searched = await searchFiles(accessToken, rootFolderId, workflowPath, false);
+  const bySearch = candidates
+    .map((candidate) => searched.find((f) => f.name === candidate))
+    .find(Boolean);
+  if (bySearch) return { id: bySearch.id, name: bySearch.name };
+
+  for (const candidate of candidates) {
+    const exact = await findFileByExactName(accessToken, candidate, rootFolderId);
+    if (exact) return { id: exact.id, name: exact.name };
+  }
+
+  throw new Error(`Sub-workflow file not found: ${workflowPath}`);
+}
+
+function parseWorkflowContentByName(
+  content: string,
+  workflowName?: string
+) {
+  if (!workflowName) {
+    return parseWorkflowYaml(content);
+  }
+
+  const parsed = yaml.load(content);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid sub-workflow YAML");
+  }
+
+  const root = parsed as Record<string, unknown>;
+  const workflows = root.workflows;
+  if (Array.isArray(workflows)) {
+    const selected = workflows.find((item) => (
+      item &&
+      typeof item === "object" &&
+      (item as Record<string, unknown>).name === workflowName
+    ));
+    if (!selected || typeof selected !== "object") {
+      throw new Error(`Sub-workflow not found by name: ${workflowName}`);
+    }
+    return parseWorkflowData(selected as Record<string, unknown>);
+  }
+
+  return parseWorkflowYaml(content);
+}
 
 // POST: Start execution
 export async function action({ request, params }: Route.ActionArgs) {
@@ -51,6 +124,8 @@ export async function action({ request, params }: Route.ActionArgs) {
       try {
         settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       } catch { /* ignore */ }
+      const MAX_SUBWORKFLOW_DEPTH = 20;
+      const subWorkflowStack: string[] = [`${fileId}:${workflowName ?? ""}`];
 
       const serviceContext: ServiceContext = {
         driveAccessToken: validTokens.accessToken,
@@ -62,9 +137,13 @@ export async function action({ request, params }: Route.ActionArgs) {
         settings,
       };
 
-      let cachedEncryptionPassword: string | null = null;
+      const onLog = (log: ExecutionLog) => {
+        addLog(executionId, log);
+      };
 
-      const promptCallbacks: PromptCallbacks = {
+      let cachedEncryptionPassword: string | null = null;
+      let promptCallbacks: PromptCallbacks;
+      promptCallbacks = {
         promptForValue: async (title, defaultValue, multiline) => {
           const result = await requestPrompt(executionId, "value", {
             title,
@@ -120,10 +199,59 @@ export async function action({ request, params }: Route.ActionArgs) {
           if (result) cachedEncryptionPassword = result;
           return result;
         },
-      };
+        executeSubWorkflow: async (
+          workflowPath,
+          subWorkflowName,
+          inputVariables
+        ) => {
+          const resolved = await resolveWorkflowFileId(
+            validTokens.accessToken,
+            validTokens.rootFolderId,
+            workflowPath
+          );
+          const subKey = `${resolved.id}:${subWorkflowName ?? ""}`;
+          if (subWorkflowStack.length >= MAX_SUBWORKFLOW_DEPTH) {
+            throw new Error(`Sub-workflow depth exceeded limit (${MAX_SUBWORKFLOW_DEPTH})`);
+          }
+          if (subWorkflowStack.includes(subKey)) {
+            const pathChain = [...subWorkflowStack, subKey].join(" -> ");
+            throw new Error(`Sub-workflow cycle detected: ${pathChain}`);
+          }
 
-      const onLog = (log: ExecutionLog) => {
-        addLog(executionId, log);
+          subWorkflowStack.push(subKey);
+          try {
+            const subContent = await readFile(validTokens.accessToken, resolved.id);
+            const subWorkflow = parseWorkflowContentByName(subContent, subWorkflowName);
+
+            const subResult = await executeWorkflow(
+              subWorkflow,
+              { variables: new Map(inputVariables) },
+              serviceContext,
+              onLog,
+              {
+                workflowId: resolved.id,
+                workflowName: subWorkflowName,
+                abortSignal: executionState.abortController.signal,
+              },
+              promptCallbacks
+            );
+
+            if (subResult.historyRecord?.status === "cancelled") {
+              throw new Error("Sub-workflow execution cancelled");
+            }
+            if (subResult.historyRecord?.status === "error") {
+              const subError = subResult.historyRecord.steps
+                .filter((s) => s.status === "error")
+                .pop()
+                ?.error;
+              throw new Error(subError || "Sub-workflow execution failed");
+            }
+
+            return subResult.context.variables;
+          } finally {
+            subWorkflowStack.pop();
+          }
+        },
       };
 
       const result = await executeWorkflow(
@@ -136,11 +264,11 @@ export async function action({ request, params }: Route.ActionArgs) {
       );
 
       const record = result.historyRecord;
-      if (record?.status === "error") {
+      if (executionState.abortController.signal.aborted || record?.status === "cancelled") {
+        setCancelled(executionId, "Workflow execution was stopped", record);
+      } else if (record?.status === "error") {
         const lastErrorStep = record.steps.filter(s => s.status === "error").pop();
         setError(executionId, lastErrorStep?.error || "Workflow execution failed");
-      } else if (record?.status === "cancelled") {
-        setError(executionId, "Workflow execution was stopped");
       } else {
         // Check for __openFile from drive-file node with open: true
         const openFileRaw = result.context.variables.get("__openFile");

@@ -92,11 +92,28 @@ export function handleWhileNode(
 
 export async function handleSleepNode(
   node: WorkflowNode,
-  context: ExecutionContext
+  context: ExecutionContext,
+  abortSignal?: AbortSignal
 ): Promise<void> {
   const durationStr = replaceVariables(node.properties["duration"] || "0", context);
   const duration = parseInt(durationStr, 10);
-  if (duration > 0) {
-    await new Promise(resolve => setTimeout(resolve, duration));
+  if (duration <= 0) return;
+  if (abortSignal?.aborted) {
+    throw new Error("Execution cancelled");
   }
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      abortSignal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, duration);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      abortSignal?.removeEventListener("abort", onAbort);
+      reject(new Error("Execution cancelled"));
+    };
+
+    abortSignal?.addEventListener("abort", onAbort, { once: true });
+  });
 }

@@ -92,7 +92,7 @@ export async function handleDriveFileNode(
   // Check for companion _fileId variable from drive-file-picker
   let existingFile: driveService.DriveFile | undefined;
   const pathRaw = node.properties["path"] || "";
-  const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}/);
+  const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}$/);
   if (fileVarMatch) {
     const pickerFileId = context.variables.get(`${fileVarMatch[1]}_fileId`);
     if (pickerFileId && typeof pickerFileId === "string") {
@@ -278,7 +278,7 @@ export async function handleDriveDeleteNode(
   // Check for companion _fileId variable from drive-file-picker
   let existingFile: driveService.DriveFile | undefined;
   const pathRaw = node.properties["path"] || "";
-  const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}/);
+  const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}$/);
   if (fileVarMatch) {
     const pickerFileId = context.variables.get(`${fileVarMatch[1]}_fileId`);
     if (pickerFileId && typeof pickerFileId === "string") {

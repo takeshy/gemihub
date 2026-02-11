@@ -14,6 +14,7 @@ type ExecutionHookStatus =
   | "idle"
   | "running"
   | "completed"
+  | "cancelled"
   | "error"
   | "waiting-prompt";
 
@@ -56,6 +57,11 @@ export function useWorkflowExecution(workflowId: string) {
 
       es.addEventListener("complete", () => {
         setStatus("completed");
+        es.close();
+      });
+
+      es.addEventListener("cancelled", () => {
+        setStatus("cancelled");
         es.close();
       });
 
@@ -103,10 +109,21 @@ export function useWorkflowExecution(workflowId: string) {
     }
   }, [workflowId]);
 
-  const stop = useCallback(() => {
+  const stop = useCallback(async () => {
+    if (executionId) {
+      try {
+        await fetch(`/api/workflow/${workflowId}/stop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ executionId }),
+        });
+      } catch {
+        // Best-effort: still close stream locally.
+      }
+    }
     eventSourceRef.current?.close();
-    setStatus("error");
-  }, []);
+    setStatus("cancelled");
+  }, [executionId, workflowId]);
 
   const handlePromptResponse = useCallback(
     async (value: string | null) => {

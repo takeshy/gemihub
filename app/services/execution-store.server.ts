@@ -74,11 +74,51 @@ export function setCompleted(
   }));
 }
 
+export function setCancelled(
+  executionId: string,
+  reason?: string,
+  record?: ExecutionRecord
+): void {
+  const state = executions.get(executionId);
+  if (!state) return;
+  state.status = "cancelled";
+  state.record = record;
+  broadcast(executionId, "status", JSON.stringify({ status: "cancelled" }));
+  broadcast(executionId, "cancelled", JSON.stringify({
+    status: "cancelled",
+    reason,
+    record: record ? { id: record.id, steps: record.steps.length } : undefined,
+  }));
+}
+
 export function setError(executionId: string, error: string): void {
   const state = executions.get(executionId);
   if (!state) return;
   state.status = "error";
   broadcast(executionId, "error", JSON.stringify({ error }));
+}
+
+export function stopExecution(executionId: string): boolean {
+  const state = executions.get(executionId);
+  if (!state) return false;
+  if (state.status === "completed" || state.status === "error" || state.status === "cancelled") {
+    return true;
+  }
+
+  // Unblock pending prompts so executor can observe abort and finish.
+  if (state.promptResolve) {
+    state.promptResolve(null);
+    state.promptResolve = undefined;
+    state.promptType = undefined;
+    state.promptData = undefined;
+  }
+
+  if (!state.abortController.signal.aborted) {
+    state.abortController.abort();
+  }
+
+  setCancelled(executionId, "Workflow execution was stopped");
+  return true;
 }
 
 // SSE prompt request
@@ -89,6 +129,9 @@ export function requestPrompt(
 ): Promise<string | null> {
   const state = executions.get(executionId);
   if (!state) throw new Error("Execution not found");
+  if (state.abortController.signal.aborted || state.status === "cancelled") {
+    return Promise.resolve(null);
+  }
 
   state.status = "waiting-prompt";
   state.promptType = promptType;
@@ -113,7 +156,9 @@ export function resolvePrompt(executionId: string, value: string | null): void {
   state.promptResolve = undefined;
   state.promptType = undefined;
   state.promptData = undefined;
-  state.status = "running";
+  if (state.status !== "cancelled") {
+    state.status = "running";
+  }
 }
 
 // Subscribe to execution events

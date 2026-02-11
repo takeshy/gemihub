@@ -31,7 +31,7 @@ function normalizeValue(value: unknown): string {
 const VALID_NODE_TYPES: Set<string> = new Set([
   "variable", "set", "if", "while", "command", "http", "json",
   "drive-file", "drive-read", "drive-search", "drive-list",
-  "drive-folder-list", "drive-file-picker", "drive-save",
+  "drive-folder-list", "drive-file-picker", "drive-save", "drive-delete",
   "dialog", "prompt-value", "prompt-file", "prompt-selection",
   "workflow", "mcp", "rag-sync", "sleep",
 ]);

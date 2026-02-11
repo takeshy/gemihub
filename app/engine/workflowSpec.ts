@@ -105,7 +105,7 @@ Execute LLM prompt via Gemini API with optional tools.
 - **model** (optional): Model override${modelList}
 - **ragSetting** (optional): "__websearch__", "__none__", or RAG setting name${commandRagSection}
 - **driveToolMode** (optional): "all", "noSearch", "none" (default: "none")
-- **mcpServers** (optional): Comma-separated MCP server names${mcpServerList}
+- **mcpServers** (optional): Comma-separated MCP server IDs${mcpServerList}
 - **systemPrompt** (optional): System prompt override
 - **attachments** (optional): Comma-separated variable names containing FileExplorerData (images, PDFs, etc.)
 - **saveTo** (optional): Variable for text response
@@ -262,10 +262,11 @@ Sync a Drive file to a Gemini RAG (File Search) store.
 ### Data Processing
 
 #### json
-Parse JSON and extract value using dot/bracket path.
+Parse JSON string into an object for property access in templates.
 - **source** (required): Variable containing JSON string
-- **path** (required): JSON path (e.g., "$.items[0].name", "result.data")
-- **saveTo** (required): Variable for extracted value
+- **saveTo** (required): Variable for parsed JSON object
+
+After parsing, access nested values with template syntax such as \`{{data.items[0].name}}\`.
 
 ### Integration
 
@@ -442,8 +443,10 @@ ${serverSections}
 function buildMcpServerList(mcpServers?: McpServerConfig[]): string {
   const enabled = mcpServers ?? [];
   if (enabled.length === 0) return "";
-  const names = enabled.map((s) => `\`${s.name}\``).join(", ");
-  return `\n  Available: ${names}`;
+  const ids = enabled
+    .map((s) => `\`${s.id || s.name}\` (${s.name})`)
+    .join(", ");
+  return `\n  Available: ${ids}`;
 }
 
 function buildCommandRagSection(ragSettingNames?: string[]): string {

@@ -15,7 +15,7 @@ export interface NodePropertyDef {
 
 export interface NodePropertyContext {
   ragSettingNames?: string[];
-  mcpServerNames?: string[];
+  mcpServerIds?: string[];
 }
 
 export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodePropertyContext): NodePropertyDef[] {
@@ -44,7 +44,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "model", label: "Model", required: false, options: ALL_MODEL_OPTIONS },
         { key: "ragSetting", label: "RAG / Search", required: false, options: ["__none__", "__websearch__", ...(context?.ragSettingNames || [])], defaultValue: "__none__" },
         { key: "driveToolMode", label: "Drive Tools", required: false, options: ["none", "all", "noSearch"], defaultValue: "none" },
-        { key: "mcpServers", label: "MCP Servers", required: false, placeholder: context?.mcpServerNames?.length ? context.mcpServerNames.join(", ") : "server1,server2" },
+        { key: "mcpServers", label: "MCP Servers", required: false, placeholder: context?.mcpServerIds?.length ? context.mcpServerIds.join(", ") : "mcp_server_id_1,mcp_server_id_2" },
         { key: "attachments", label: "Attachments", required: false, placeholder: "imageVar,fileVar" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "result" },
         { key: "saveImageTo", label: "Save Image To", required: false, placeholder: "generatedImage" },

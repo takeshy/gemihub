@@ -8,7 +8,7 @@ import { getNodeTypeLabel } from "~/utils/workflow-node-summary";
 const ALL_NODE_TYPES: WorkflowNodeType[] = [
   "variable", "set", "if", "while", "command", "http", "json",
   "drive-file", "drive-read", "drive-search", "drive-list",
-  "drive-folder-list", "drive-file-picker", "drive-save",
+  "drive-folder-list", "drive-file-picker", "drive-save", "drive-delete",
   "dialog", "prompt-value", "prompt-file", "prompt-selection",
   "workflow", "mcp", "rag-sync", "sleep",
 ];

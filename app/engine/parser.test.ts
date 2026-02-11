@@ -161,6 +161,21 @@ nodes:
   assert.equal(fromA.length, 0); // "end" produces no edge
 });
 
+test("parse drive-delete node type", () => {
+  const yaml = `
+name: test
+nodes:
+  - id: cleanup
+    type: drive-delete
+    path: "notes/old-file.md"
+`;
+  const wf = parseWorkflowYaml(yaml);
+  const node = wf.nodes.get("cleanup");
+  assert.ok(node);
+  assert.equal(node!.type, "drive-delete");
+  assert.equal(node!.properties.path, "notes/old-file.md");
+});
+
 // ===================================================================
 // parseWorkflowYaml — DAG convergence (the bug that was fixed)
 // ===================================================================

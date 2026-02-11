@@ -32,6 +32,7 @@ export function ExecutionPanel({ workflowId }: ExecutionPanelProps) {
     idle: null,
     running: <Loader2 size={ICON.SM} className="animate-spin text-blue-500" />,
     completed: <CheckCircle size={ICON.SM} className="text-green-500" />,
+    cancelled: <XCircle size={ICON.SM} className="text-orange-500" />,
     error: <XCircle size={ICON.SM} className="text-red-500" />,
     "waiting-prompt": <Loader2 size={ICON.SM} className="animate-spin text-yellow-500" />,
   };

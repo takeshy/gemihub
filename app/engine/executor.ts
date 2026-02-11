@@ -22,7 +22,8 @@ import { handleWorkflowNode, handleJsonNode } from "./handlers/integration";
 import { handleMcpNode } from "./handlers/mcp";
 import { handleRagSyncNode } from "./handlers/ragSync";
 
-const MAX_ITERATIONS = 1000;
+const MAX_WHILE_ITERATIONS = 1000;
+const MAX_TOTAL_STEPS = 100000;
 
 export interface ExecuteOptions {
   workflowId?: string;
@@ -112,7 +113,7 @@ export async function executeWorkflow(
   const whileLoopStates = new Map<string, { iterationCount: number }>();
   let totalIterations = 0;
 
-  while (stack.length > 0 && totalIterations < MAX_ITERATIONS) {
+  while (stack.length > 0 && totalIterations < MAX_TOTAL_STEPS) {
     if (options?.abortSignal?.aborted) {
       historyRecord.status = "cancelled";
       historyRecord.endTime = new Date().toISOString();
@@ -170,8 +171,8 @@ export async function executeWorkflow(
 
           if (whileResult) {
             state.iterationCount++;
-            if (state.iterationCount > MAX_ITERATIONS) {
-              throw new Error(`While loop exceeded maximum iterations (${MAX_ITERATIONS})`);
+            if (state.iterationCount > MAX_WHILE_ITERATIONS) {
+              throw new Error(`While loop exceeded maximum iterations (${MAX_WHILE_ITERATIONS})`);
             }
             whileLoopStates.set(node.id, state);
             const input = conditionInput
@@ -437,7 +438,7 @@ export async function executeWorkflow(
         case "sleep": {
           const duration = replaceVariables(node.properties["duration"] || "0", context);
           log(node.id, node.type, `Sleeping ${duration}ms`, "info");
-          await handleSleepNode(node, context);
+          await handleSleepNode(node, context, options?.abortSignal);
           log(node.id, node.type, `Sleep completed`, "success", { duration });
           addHistoryStep(node.id, node.type, { duration });
           const next = getNextNodes(workflow, node.id);
@@ -446,6 +447,11 @@ export async function executeWorkflow(
         }
       }
     } catch (error) {
+      if (options?.abortSignal?.aborted) {
+        historyRecord.status = "cancelled";
+        historyRecord.endTime = new Date().toISOString();
+        return { context, historyRecord };
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       log(node.id, node.type, `Error: ${errorMessage}`, "error");
       addHistoryStep(node.id, node.type, undefined, undefined, "error", errorMessage);
@@ -455,10 +461,16 @@ export async function executeWorkflow(
     }
   }
 
-  if (totalIterations >= MAX_ITERATIONS) {
+  if (totalIterations >= MAX_TOTAL_STEPS) {
     historyRecord.status = "error";
     historyRecord.endTime = new Date().toISOString();
-    log("system", "variable", `Workflow exceeded maximum iterations (${MAX_ITERATIONS})`, "error");
+    log("system", "variable", `Workflow exceeded maximum steps (${MAX_TOTAL_STEPS})`, "error");
+    return { context, historyRecord };
+  }
+
+  if (options?.abortSignal?.aborted) {
+    historyRecord.status = "cancelled";
+    historyRecord.endTime = new Date().toISOString();
     return { context, historyRecord };
   }
 

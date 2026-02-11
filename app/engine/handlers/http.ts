@@ -46,7 +46,7 @@ function getMimeExtension(mimeType: string): string {
 export async function handleHttpNode(
   node: WorkflowNode,
   context: ExecutionContext,
-  _serviceContext?: ServiceContext
+  serviceContext?: ServiceContext
 ): Promise<void> {
   const url = replaceVariables(node.properties["url"] || "", context);
   const method = replaceVariables(node.properties["method"] || "GET", context).toUpperCase();
@@ -147,16 +147,27 @@ export async function handleHttpNode(
 
   let response: Response;
   try {
+    const timeoutSignal = AbortSignal.timeout(60_000);
+    let requestSignal: AbortSignal = timeoutSignal;
+    if (serviceContext?.abortSignal) {
+      requestSignal = AbortSignal.any
+        ? AbortSignal.any([timeoutSignal, serviceContext.abortSignal])
+        : timeoutSignal;
+    }
+
     const requestOptions: RequestInit = {
       method,
       headers,
-      signal: AbortSignal.timeout(60_000),
+      signal: requestSignal,
     };
     if (body && ["POST", "PUT", "PATCH"].includes(method)) {
       requestOptions.body = body;
     }
     response = await fetch(url, requestOptions);
   } catch (err) {
+    if (serviceContext?.abortSignal?.aborted) {
+      throw new Error("Execution cancelled");
+    }
     throw new Error(`HTTP request failed: ${method} ${url} - ${err instanceof Error ? err.message : String(err)}`);
   }
 

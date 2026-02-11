@@ -15,9 +15,9 @@ export function getNodeSummary(node: WorkflowNode): string {
     case "http":
       return `${(p.method || "GET").toUpperCase()} ${truncate(p.url || "", 50)}`;
     case "json":
-      return p.path ? `${truncate(p.source || "", 20)} → ${p.path}` : "";
+      return p.saveTo ? `${truncate(p.source || "", 20)} → ${p.saveTo}` : "";
     case "drive-file":
-      return `${truncate(p.path || "", 40)} (${p.mode || "create"})`;
+      return `${truncate(p.path || "", 40)} (${p.mode || "overwrite"})`;
     case "drive-read":
       return p.path
         ? `${truncate(p.path, 30)}${p.saveTo ? ` → ${p.saveTo}` : ""}`
