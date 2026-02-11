@@ -559,7 +559,7 @@ function IDEContent({
   }, []);
 
   // Mobile view state: which panel is shown full-screen
-  const [mobileView, setMobileView] = useState<MobileView>("editor");
+  const [mobileView, setMobileView] = useState<MobileView>("chat");
 
   // Map mobileView to panel index: files=0, editor=1, chat/workflow/plugin=2
   const mobileViewToIndex = useCallback((view: MobileView): number => {
