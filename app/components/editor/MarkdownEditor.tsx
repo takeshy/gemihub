@@ -6,6 +6,7 @@ interface MarkdownEditorProps {
   onChange: (md: string) => void;
   placeholder?: string;
   onFileSelect?: () => Promise<string | null>;
+  onImageChange?: (file: File) => Promise<string>;
 }
 
 export function MarkdownEditor({
@@ -13,6 +14,7 @@ export function MarkdownEditor({
   onChange,
   placeholder = "Write your content here...",
   onFileSelect,
+  onImageChange,
 }: MarkdownEditorProps) {
   const editor = useEditor({});
 
@@ -24,6 +26,8 @@ export function MarkdownEditor({
         onChange={onChange}
         placeholder={placeholder}
         onFileSelect={onFileSelect}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onImageChange={onImageChange as any}
       />
     </div>
   );

@@ -55,6 +55,7 @@ interface MainViewerProps {
   settings: UserSettings;
   refreshKey?: number;
   onFileSelect?: () => Promise<string | null>;
+  onImageChange?: (file: File) => Promise<string>;
 }
 
 const VIDEO_EXTS = [".mp4", ".webm", ".ogg", ".mov", ".avi", ".mkv"];
@@ -77,6 +78,7 @@ export function MainViewer({
   settings,
   refreshKey,
   onFileSelect,
+  onImageChange,
 }: MainViewerProps) {
   const { t } = useI18n();
 
@@ -112,6 +114,7 @@ export function MainViewer({
       settings={settings}
       refreshKey={refreshKey}
       onFileSelect={onFileSelect}
+      onImageChange={onImageChange}
     />
   );
 }
@@ -161,12 +164,14 @@ function TextBasedViewer({
   settings,
   refreshKey,
   onFileSelect,
+  onImageChange,
 }: {
   fileId: string;
   fileName: string | null;
   settings: UserSettings;
   refreshKey?: number;
   onFileSelect?: () => Promise<string | null>;
+  onImageChange?: (file: File) => Promise<string>;
 }) {
   const { t } = useI18n();
   const { content, loading, error, saveToCache, refresh, forceRefresh } =
@@ -248,6 +253,7 @@ function TextBasedViewer({
         initialContent={content}
         saveToCache={saveToCache}
         onFileSelect={onFileSelect}
+        onImageChange={onImageChange}
       />
     );
   }
@@ -288,12 +294,14 @@ function MarkdownFileEditor({
   initialContent,
   saveToCache,
   onFileSelect,
+  onImageChange,
 }: {
   fileId: string;
   fileName: string;
   initialContent: string;
   saveToCache: (content: string) => Promise<void>;
   onFileSelect?: () => Promise<string | null>;
+  onImageChange?: (file: File) => Promise<string>;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -404,6 +412,7 @@ function MarkdownFileEditor({
       onChange: (md: string) => void;
       placeholder?: string;
       onFileSelect?: () => Promise<string | null>;
+      onImageChange?: (file: File) => Promise<string>;
     }> | null
   >(null);
 
@@ -496,6 +505,7 @@ function MarkdownFileEditor({
               onChange={updateContent}
               placeholder="Write your content here..."
               onFileSelect={onFileSelect}
+              onImageChange={onImageChange}
             />
           ) : (
             <Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />
