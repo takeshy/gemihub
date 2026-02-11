@@ -523,6 +523,11 @@ export function useSync() {
     }
   }, []);
 
+  const clearError = useCallback(() => {
+    setError(null);
+    setSyncStatus((prev) => (prev === "error" ? "idle" : prev));
+  }, []);
+
   return {
     syncStatus,
     lastSyncTime,
@@ -533,5 +538,6 @@ export function useSync() {
     pull,
     resolveConflict,
     fullPull,
+    clearError,
   };
 }

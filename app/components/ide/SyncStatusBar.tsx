@@ -175,8 +175,8 @@ export function SyncStatusBar({
         </button>
       )}
 
-      {/* Error / warning */}
-      {error && syncStatus === "error" && (
+      {/* Error / warning (pushRejected is handled by a dedicated dialog) */}
+      {error && syncStatus === "error" && error !== "settings.sync.pushRejected" && (
         <span className="text-xs text-red-500 truncate max-w-[120px]" title={error}>
           Sync error
         </span>

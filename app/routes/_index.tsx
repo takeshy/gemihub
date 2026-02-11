@@ -6,11 +6,11 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
-import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff, AlertTriangle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
-import { setCachedFile, getCachedLoaderData, setCachedLoaderData } from "~/services/indexeddb-cache";
+import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData } from "~/services/indexeddb-cache";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
@@ -211,23 +211,31 @@ function IDELayout({
   useEffect(() => {
     if (activeFileId?.startsWith("new:")) return; // Not yet on Drive
     if (activeFileId && !activeFileName) {
-      fetch(`/api/drive/files?action=metadata&fileId=${activeFileId}`)
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => {
-          if (data?.name) {
-            setActiveFileName(data.name);
-            setActiveFileMimeType(data.mimeType || null);
-            // Don't switch away from plugin views
-            if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
-              if (data.name.endsWith(".yaml") || data.name.endsWith(".yml")) {
-                setRightPanel("workflow");
-              } else {
-                setRightPanel("chat");
-              }
-            }
+      const applyName = (name: string, mimeType?: string | null) => {
+        setActiveFileName(name);
+        setActiveFileMimeType(mimeType || null);
+        if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
+          if (name.endsWith(".yaml") || name.endsWith(".yml")) {
+            setRightPanel("workflow");
+          } else {
+            setRightPanel("chat");
           }
-        })
-        .catch(() => {});
+        }
+      };
+
+      // Cache-first: use IndexedDB if available, otherwise fetch from API
+      getCachedFile(activeFileId).then((cached) => {
+        if (cached?.fileName) {
+          applyName(cached.fileName);
+        } else {
+          fetch(`/api/drive/files?action=metadata&fileId=${activeFileId}`)
+            .then((res) => res.ok ? res.json() : null)
+            .then((data) => {
+              if (data?.name) applyName(data.name, data.mimeType);
+            })
+            .catch(() => {});
+        }
+      }).catch(() => {});
     }
   }, [activeFileId, activeFileName, rightPanel]);
 
@@ -280,10 +288,12 @@ function IDELayout({
     push,
     pull,
     resolveConflict,
+    clearError,
   } = useSync();
 
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [showPushRejected, setShowPushRejected] = useState(false);
 
   // Auto-open conflict dialog when conflicts are detected
   useEffect(() => {
@@ -291,6 +301,13 @@ function IDELayout({
       setShowConflictDialog(true);
     }
   }, [syncStatus, conflicts.length]);
+
+  // Auto-open push rejected dialog
+  useEffect(() => {
+    if (syncError === "settings.sync.pushRejected") {
+      setShowPushRejected(true);
+    }
+  }, [syncError]);
 
   // AI Workflow dialog state
   const [aiDialog, setAiDialog] = useState<AIDialogState | null>(null);
@@ -473,6 +490,9 @@ function IDELayout({
         handleWorkflowChanged={handleWorkflowChanged}
         handleModifyWithAI={handleModifyWithAI}
         handleAIAccept={handleAIAccept}
+        showPushRejected={showPushRejected}
+        setShowPushRejected={setShowPushRejected}
+        clearSyncError={clearError}
       />
       </PluginProvider>
       </EditorContextProvider>
@@ -519,6 +539,9 @@ function IDEContent({
   handleWorkflowChanged,
   handleModifyWithAI,
   handleAIAccept,
+  showPushRejected,
+  setShowPushRejected,
+  clearSyncError,
 }: {
   settings: UserSettings;
   hasGeminiApiKey: boolean;
@@ -551,6 +574,9 @@ function IDEContent({
   handleWorkflowChanged: () => void;
   handleModifyWithAI: (yaml: string, name: string) => void;
   handleAIAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
+  showPushRejected: boolean;
+  setShowPushRejected: (v: boolean) => void;
+  clearSyncError: () => void;
 }) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -1109,6 +1135,32 @@ function IDEContent({
           onResolve={resolveConflict}
           onClose={() => setShowConflictDialog(false)}
         />
+      )}
+
+      {/* Push rejected dialog */}
+      {showPushRejected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+            <div className="mb-4 flex items-center gap-2 text-amber-600 dark:text-amber-400">
+              <AlertTriangle size={20} />
+              <h3 className="text-base font-semibold">{t("settings.sync.pushRejected")}</h3>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setShowPushRejected(false); clearSyncError(); }}
+                className="rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={() => { setShowPushRejected(false); clearSyncError(); pull(); }}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Pull
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* AI Workflow dialog */}
