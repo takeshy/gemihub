@@ -253,28 +253,24 @@ export async function setFileSharedInMeta(
 }
 
 /**
- * Compute sync diff using three-way comparison:
- *   localMeta (last sync snapshot on client) vs remoteMeta (last sync snapshot on server) vs remoteFiles (current Drive state)
- *   locallyModifiedFileIds: set of file IDs that have been edited locally (from editHistory)
+ * Compute sync diff by comparing two metadata snapshots:
+ *   localMeta: client's snapshot from last sync (IndexedDB)
+ *   remoteMeta: server's current snapshot (_sync-meta.json)
+ *   locallyModifiedFileIds: file IDs edited locally (from editHistory)
+ *
+ * - localChanged = file has local edits (in locallyModifiedFileIds)
+ * - remoteChanged = remote meta differs from local meta (another device pushed)
  */
 export function computeSyncDiff(
   localMeta: SyncMeta | null,
   remoteMeta: SyncMeta | null,
-  remoteFiles: DriveFile[],
   locallyModifiedFileIds: Set<string> = new Set()
 ): SyncDiff {
   const localFiles = localMeta?.files ?? {};
-  const remoteMetaFiles = remoteMeta?.files ?? {};
+  const remoteFiles = remoteMeta?.files ?? {};
 
   // System files to exclude from sync diff
   const SYSTEM_FILE_NAMES = new Set([SYNC_META_FILE, "settings.json"]);
-
-  // Build a map of current remote files by id
-  const currentRemoteMap = new Map<string, DriveFile>();
-  for (const f of remoteFiles) {
-    if (SYSTEM_FILE_NAMES.has(f.name)) continue;
-    currentRemoteMap.set(f.id, f);
-  }
 
   const toPush: string[] = [];
   const toPull: string[] = [];
@@ -284,49 +280,36 @@ export function computeSyncDiff(
 
   // Collect all known file IDs
   const allFileIds = new Set<string>();
-  for (const id of Object.keys(localFiles)) {
-    allFileIds.add(id);
+  for (const id of Object.keys(localFiles)) allFileIds.add(id);
+  for (const [id, f] of Object.entries(remoteFiles)) {
+    if (!SYSTEM_FILE_NAMES.has(f.name)) allFileIds.add(id);
   }
-  for (const id of Object.keys(remoteMetaFiles)) {
-    allFileIds.add(id);
-  }
-  for (const id of currentRemoteMap.keys()) allFileIds.add(id);
   for (const id of locallyModifiedFileIds) allFileIds.add(id);
 
   for (const fileId of allFileIds) {
     const local = localFiles[fileId];
-    const remoteSynced = remoteMetaFiles[fileId];
-    const currentRemote = currentRemoteMap.get(fileId);
+    const remote = remoteFiles[fileId];
     const locallyModified = locallyModifiedFileIds.has(fileId);
     const hasLocal = !!local || locallyModified;
+    const hasRemote = !!remote;
 
-    let localChanged = false;
-    if (local && remoteSynced) {
-      localChanged = local.md5Checksum !== remoteSynced.md5Checksum;
-    } else if (local && !remoteSynced) {
-      localChanged = true;
-    }
-    if (locallyModified) {
-      localChanged = true;
-    }
+    const localChanged = locallyModified;
+    const remoteChanged = local && remote
+      ? local.md5Checksum !== remote.md5Checksum
+      : false;
 
-    const remoteChanged =
-      currentRemote && remoteSynced
-        ? currentRemote.md5Checksum !== remoteSynced.md5Checksum
-        : !!currentRemote && !remoteSynced;
-
-    if (hasLocal && !currentRemote) {
+    if (hasLocal && !hasRemote) {
       localOnly.push(fileId);
-    } else if (!hasLocal && currentRemote) {
+    } else if (!hasLocal && hasRemote) {
       remoteOnly.push(fileId);
     } else if (localChanged && remoteChanged) {
       conflicts.push({
         fileId,
-        fileName: currentRemote?.name ?? remoteSynced?.name ?? fileId,
+        fileName: remote?.name ?? fileId,
         localChecksum: local?.md5Checksum ?? "",
-        remoteChecksum: currentRemote?.md5Checksum ?? "",
+        remoteChecksum: remote?.md5Checksum ?? "",
         localModifiedTime: local?.modifiedTime ?? "",
-        remoteModifiedTime: currentRemote?.modifiedTime ?? "",
+        remoteModifiedTime: remote?.modifiedTime ?? "",
       });
     } else if (localChanged) {
       toPush.push(fileId);

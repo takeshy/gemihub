@@ -39,15 +39,15 @@ Each metadata contains:
 
 File contents are cached in the IndexedDB `files` store. All edits update this cache directly (no Drive API call). The MD5 checksum in the metadata is only updated during sync operations (Push/Pull) and file reads — it reflects the last-synced state, not the current local content. Local modifications are tracked separately via the `editHistory` store.
 
-### Three-Way Diff
+### Sync Diff
 
-The diff algorithm compares three data sources:
+The diff algorithm compares two metadata snapshots plus a set of locally edited file IDs:
 
-| Source | Description |
-|--------|-------------|
+| Input | Description |
+|-------|-------------|
 | **Local Meta** | Client's last-synced snapshot (IndexedDB) |
-| **Remote Meta** | Server's last-synced snapshot (`_sync-meta.json`, read-only during diff) |
-| **Current Remote** | Derived from Remote Meta (`drive.file` scope ensures only GemiHub can modify these files, so a live listing is unnecessary) |
+| **Remote Meta** | Server's current snapshot (`_sync-meta.json`, read-only during diff) |
+| **locallyModifiedFileIds** | File IDs from IndexedDB `editHistory` (tracks local edits) |
 
 Detection logic per file:
 
@@ -61,10 +61,10 @@ Detection logic per file:
 | - | Remote only | **remoteOnly** |
 
 Where:
-- `localChanged`: true if any of: (1) `local.md5Checksum !== remoteSynced.md5Checksum`, (2) file exists in local meta but not in remote meta, or (3) `locallyModifiedFileIds.has(fileId)`
-- `remoteChanged = currentRemote.md5Checksum !== remoteSynced.md5Checksum`
+- `localChanged = locallyModifiedFileIds.has(fileId)` — the `editHistory` store tracks which files have been edited locally since the last sync
+- `remoteChanged = localMeta.md5Checksum !== remoteMeta.md5Checksum` — remote meta diverges from local meta when another device has pushed changes
 
-`locallyModifiedFileIds` is the set of file IDs from the client's `editHistory` store, passed alongside `localMeta` in each diff request. This ensures local edits are detected even though the local meta's MD5 checksum is not updated on edit.
+No live Drive API listing is needed: the `drive.file` scope ensures only GemiHub can modify these files, so `_sync-meta.json` is always authoritative.
 
 ---
 
@@ -136,7 +136,7 @@ Downloads only remotely-changed files to local cache.
 
 ### Flow
 
-1. **Compute diff** using three-way comparison (with `locallyModifiedFileIds`)
+1. **Compute diff** using local meta vs remote meta (with `locallyModifiedFileIds`)
 2. **Check conflicts** — if any, stop and show conflict UI
 3. **Clean up `localOnly` files** — files that exist locally but were deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta
 4. **Combine** `toPull` + `remoteOnly` arrays
@@ -159,15 +159,15 @@ Downloads only remotely-changed files to local cache.
 
 #### Files Only in Local Meta (Remote Deleted)
 
-| Local Meta | Remote Meta | Current Remote | Action |
-|:----------:|:-----------:|:--------------:|--------|
-| A | - | - | **localOnly** → Remove from local cache (remote deletion synced) |
+| Local Meta | Remote Meta | Action |
+|:----------:|:-----------:|--------|
+| A | - | **localOnly** → Remove from local cache (remote deletion synced) |
 
 #### Files Only in Remote (New Remote)
 
-| Local Meta | Remote Meta | Current Remote | Action |
-|:----------:|:-----------:|:--------------:|--------|
-| - | - | exists | **remoteOnly** → Download |
+| Local Meta | Remote Meta | Action |
+|:----------:|:-----------:|--------|
+| - | A | **remoteOnly** → Download |
 
 ---
 
@@ -440,7 +440,7 @@ Browser (IndexedDB)          Server                Google Drive
 
 | Action | Method | Description |
 |--------|--------|-------------|
-| `diff` | POST | Three-way diff comparison |
+| `diff` | POST | Compute sync diff (local meta vs remote meta) |
 | `pull` | POST | Download file contents for specified IDs, update/prune sync meta |
 | `resolve` | POST | Resolve conflict (backup loser, update Drive file and meta) |
 | `fullPull` | POST | Download all remote files (skip matching) |
