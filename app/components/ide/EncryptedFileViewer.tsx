@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Lock, Unlock, Loader2, Upload, Download } from "lucide-react";
+import { Lock, Unlock, Loader2, Upload, Download, ShieldOff } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { EncryptionSettings } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
@@ -48,6 +48,7 @@ export function EncryptedFileViewer({
   const [decrypting, setDecrypting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [decryptingPermanent, setDecryptingPermanent] = useState(false);
   const [tempDiffData, setTempDiffData] = useState<{
     fileName: string;
     fileId: string;
@@ -247,6 +248,37 @@ export function EncryptedFileViewer({
     setTempDiffData(null);
   }, [tempDiffData, encryptionSettings, saveToCache]);
 
+  // Permanently decrypt: send plaintext to server, remove .encrypted extension
+  const handlePermanentDecrypt = useCallback(async () => {
+    if (!confirm(t("crypt.decryptConfirm"))) return;
+    setDecryptingPermanent(true);
+    try {
+      const res = await fetch("/api/drive/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "decrypt", fileId, content: editedContent }),
+      });
+      if (!res.ok) {
+        alert(t("crypt.decryptFailed"));
+        return;
+      }
+      const data = await res.json();
+      const newName = data.file?.name as string | undefined;
+      // Update cache with plaintext
+      await saveToCache(editedContent);
+      // Dispatch event so tree and _index update
+      window.dispatchEvent(
+        new CustomEvent("file-decrypted", {
+          detail: { fileId, newName, meta: data.meta },
+        })
+      );
+    } catch {
+      alert(t("crypt.decryptFailed"));
+    } finally {
+      setDecryptingPermanent(false);
+    }
+  }, [fileId, editedContent, saveToCache, t]);
+
   // ---------- Password input UI (only for actually encrypted content) ----------
   if (decryptedContent === null) {
     return (
@@ -338,6 +370,15 @@ export function EncryptedFileViewer({
         >
           <Download size={ICON.SM} />
           {t("contextMenu.tempDownload")}
+        </button>
+        <button
+          onClick={handlePermanentDecrypt}
+          disabled={uploading || decryptingPermanent}
+          className="flex items-center gap-1 px-2 py-1 text-xs text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-600 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30 disabled:opacity-50"
+          title={t("crypt.decrypt")}
+        >
+          {decryptingPermanent ? <Loader2 size={ICON.SM} className="animate-spin" /> : <ShieldOff size={ICON.SM} />}
+          {t("crypt.decrypt")}
         </button>
       </div>
 

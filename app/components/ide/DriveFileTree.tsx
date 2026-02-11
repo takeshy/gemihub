@@ -11,6 +11,7 @@ import {
   Loader2,
   Trash2,
   Lock,
+  Unlock,
   Upload,
   Pencil,
   CheckCircle2,
@@ -43,6 +44,8 @@ import {
   type CachedTreeNode,
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
+import { decryptFileContent, isEncryptedFile } from "~/services/crypto-core";
+import { cryptoCache } from "~/services/crypto-cache";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { useFileUpload } from "~/hooks/useFileUpload";
 import { EditHistoryModal } from "./EditHistoryModal";
@@ -317,19 +320,30 @@ export function DriveFileTree({
         return replaceId(prev);
       });
     };
+    // When a file is decrypted (from EncryptedFileViewer), refresh tree
+    const handleDecrypted = (e: Event) => {
+      const { meta } = (e as CustomEvent).detail;
+      if (meta) {
+        updateTreeFromMeta(meta);
+      } else {
+        fetchAndCacheTree();
+      }
+    };
     window.addEventListener("file-modified", handleModified);
     window.addEventListener("file-cached", handleCached);
     window.addEventListener("sync-complete", syncHandler);
     window.addEventListener("workflow-completed", workflowHandler);
     window.addEventListener("file-id-migrated", handleMigrated);
+    window.addEventListener("file-decrypted", handleDecrypted);
     return () => {
       window.removeEventListener("file-modified", handleModified);
       window.removeEventListener("file-cached", handleCached);
       window.removeEventListener("sync-complete", syncHandler);
       window.removeEventListener("workflow-completed", workflowHandler);
       window.removeEventListener("file-id-migrated", handleMigrated);
+      window.removeEventListener("file-decrypted", handleDecrypted);
     };
-  }, [fetchAndCacheTree]);
+  }, [fetchAndCacheTree, updateTreeFromMeta]);
 
   // Push flattened file list to parent when tree changes
   useEffect(() => {
@@ -1059,6 +1073,85 @@ export function DriveFileTree({
     [fetchAndCacheTree, updateTreeFromMeta, encryptionEnabled, setBusy, clearBusy]
   );
 
+  const handleDecrypt = useCallback(
+    async (item: CachedTreeNode) => {
+      if (!confirm(t("crypt.decryptConfirm"))) return;
+
+      setBusy([item.id]);
+      try {
+        // Get encrypted content from cache or server
+        let encContent = "";
+        const cached = await getCachedFile(item.id);
+        if (cached) {
+          encContent = cached.content;
+        } else {
+          const raw = await fetch(`/api/drive/files?action=read&fileId=${item.id}`);
+          if (!raw.ok) { alert(t("crypt.decryptFailed")); return; }
+          const rawData = await raw.json();
+          encContent = rawData.content;
+        }
+
+        // Decrypt on client side
+        let password = cryptoCache.getPassword();
+        if (!password) {
+          const inputPw = prompt(t("crypt.enterPassword"));
+          if (!inputPw) return;
+          password = inputPw;
+        }
+
+        let plaintext: string;
+        if (isEncryptedFile(encContent)) {
+          try {
+            plaintext = await decryptFileContent(encContent, password);
+          } catch {
+            alert(t("crypt.wrongPassword"));
+            return;
+          }
+          // Password confirmed correct — cache it
+          cryptoCache.setPassword(password);
+        } else {
+          plaintext = encContent;
+        }
+
+        // Send plaintext to server to update file and remove .encrypted
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "decrypt", fileId: item.id, content: plaintext }),
+        });
+        if (!res.ok) {
+          alert(t("crypt.decryptFailed"));
+          return;
+        }
+        const data = await res.json();
+
+        // Update local cache with plaintext
+        await deleteCachedFile(item.id);
+
+        // Update tree
+        if (data.meta) {
+          await updateTreeFromMeta(data.meta);
+        } else {
+          await fetchAndCacheTree();
+        }
+
+        // Dispatch event so _index updates active file name
+        // Note: meta is omitted because tree was already updated above;
+        // the DriveFileTree event listener will skip updateTreeFromMeta when meta is absent.
+        window.dispatchEvent(
+          new CustomEvent("file-decrypted", {
+            detail: { fileId: item.id, newName: data.file?.name },
+          })
+        );
+      } catch {
+        alert(t("crypt.decryptFailed"));
+      } finally {
+        clearBusy([item.id]);
+      }
+    },
+    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy]
+  );
+
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
     const { fileId, tempContent, tempSavedAt, fileName } = tempDiffData;
@@ -1299,6 +1392,12 @@ export function DriveFileTree({
             icon: <Lock size={ICON.MD} />,
             onClick: () => handleEncrypt(item),
           });
+        } else {
+          items.push({
+            label: t("crypt.decrypt"),
+            icon: <Unlock size={ICON.MD} />,
+            onClick: () => handleDecrypt(item),
+          });
         }
 
         items.push({
@@ -1402,7 +1501,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {

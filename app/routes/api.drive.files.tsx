@@ -237,6 +237,20 @@ export async function action({ request }: Route.ActionArgs) {
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamedFile);
       return jsonWithCookie({ file: renamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
+    case "decrypt": {
+      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+      if (!content) return jsonWithCookie({ error: "Missing content" }, { status: 400 });
+      // Update file content with decrypted plaintext
+      const decFile = await updateFile(validTokens.accessToken, fileId, content);
+      // Remove .encrypted extension from filename
+      let decRenamed = decFile;
+      if (decFile.name.endsWith(".encrypted")) {
+        const newName = decFile.name.slice(0, -".encrypted".length);
+        decRenamed = await renameFile(validTokens.accessToken, fileId, newName);
+      }
+      const decUpdatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, decRenamed);
+      return jsonWithCookie({ file: decRenamed, meta: { lastUpdatedAt: decUpdatedMeta.lastUpdatedAt, files: decUpdatedMeta.files } });
+    }
     case "publish": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
       const webViewLink = await publishFile(validTokens.accessToken, fileId);

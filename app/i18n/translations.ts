@@ -241,6 +241,9 @@ export interface TranslationStrings {
   "crypt.decrypting": string;
   "crypt.wrongPassword": string;
   "crypt.encrypting": string;
+  "crypt.decrypt": string;
+  "crypt.decryptConfirm": string;
+  "crypt.decryptFailed": string;
 
   // Plugins tab
   "settings.tab.plugins": string;
@@ -582,6 +585,9 @@ const en: TranslationStrings = {
   "crypt.decrypting": "Decrypting...",
   "crypt.wrongPassword": "Invalid password",
   "crypt.encrypting": "Encrypting & uploading...",
+  "crypt.decrypt": "Decrypt",
+  "crypt.decryptConfirm": "Permanently decrypt this file? The .encrypted extension will be removed.",
+  "crypt.decryptFailed": "Decryption failed",
 
   // Plugins tab
   "settings.tab.plugins": "Plugins",
@@ -923,6 +929,9 @@ const ja: TranslationStrings = {
   "crypt.decrypting": "復号中...",
   "crypt.wrongPassword": "パスワードが正しくありません",
   "crypt.encrypting": "暗号化＆アップロード中...",
+  "crypt.decrypt": "暗号化解除",
+  "crypt.decryptConfirm": "このファイルの暗号化を永続的に解除しますか？.encrypted拡張子が除去されます。",
+  "crypt.decryptFailed": "暗号化解除に失敗しました",
 
   // Plugins tab
   "settings.tab.plugins": "プラグイン",

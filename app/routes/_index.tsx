@@ -184,6 +184,19 @@ function IDELayout({
     return () => window.removeEventListener("file-id-migrated", handler);
   }, []);
 
+  // When a file is permanently decrypted, update active file name (.encrypted removed)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { fileId: decryptedId, newName } = (e as CustomEvent).detail;
+      if (decryptedId === activeFileId && newName) {
+        const baseName = (newName as string).split("/").pop()!;
+        setActiveFileName(baseName);
+      }
+    };
+    window.addEventListener("file-decrypted", handler);
+    return () => window.removeEventListener("file-decrypted", handler);
+  }, [activeFileId]);
+
   // Workflow version for refreshing MainViewer after sidebar edits
   const [workflowVersion, setWorkflowVersion] = useState(0);
   const handleWorkflowChanged = useCallback(() => {
