@@ -175,10 +175,15 @@ export function SyncStatusBar({
         </button>
       )}
 
-      {/* Error */}
+      {/* Error / warning */}
       {error && syncStatus === "error" && (
         <span className="text-xs text-red-500 truncate max-w-[120px]" title={error}>
           Sync error
+        </span>
+      )}
+      {error && syncStatus === "warning" && (
+        <span className="text-xs text-amber-600 truncate max-w-[160px] dark:text-amber-400" title={error}>
+          Sync warning
         </span>
       )}
 

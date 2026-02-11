@@ -23,6 +23,8 @@ import {
   DEFAULT_RAG_SETTING,
   DEFAULT_RAG_STORE_KEY,
   DEFAULT_ENCRYPTION_SETTINGS,
+  normalizeMcpServers,
+  normalizeSelectedMcpServerIds,
   getAvailableModels,
   getDefaultModelForPlan,
   isModelAllowedForPlan,
@@ -81,6 +83,21 @@ import { PluginProvider } from "~/contexts/PluginContext";
 function maskApiKey(key: string): string {
   if (key.length <= 8) return "***";
   return key.slice(0, 4) + "***" + key.slice(-4);
+}
+
+const SYNC_EXCLUDED_FILE_NAMES = new Set(["_sync-meta.json", "settings.json"]);
+const SYNC_EXCLUDED_PREFIXES = [
+  "history/",
+  "trash/",
+  "sync_conflicts/",
+  "__TEMP__/",
+  "plugins/",
+];
+
+function isSyncExcludedPath(fileName: string): boolean {
+  const normalized = fileName.replace(/^\/+/, "");
+  if (SYNC_EXCLUDED_FILE_NAMES.has(normalized)) return true;
+  return SYNC_EXCLUDED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
 type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync";
@@ -278,6 +295,8 @@ export async function action({ request }: Route.ActionArgs) {
           return jsonWithCookie({ success: false, message: "Invalid MCP servers JSON." });
         }
 
+        mcpServers = normalizeMcpServers(mcpServers);
+
         for (const server of mcpServers) {
           try {
             if (!server?.url || typeof server.url !== "string") {
@@ -352,7 +371,22 @@ export async function action({ request }: Route.ActionArgs) {
         } catch {
           return jsonWithCookie({ success: false, message: "Invalid commands JSON." });
         }
-        const updatedSettings: UserSettings = { ...currentSettings, slashCommands };
+        const normalizedMcpServers = normalizeMcpServers(currentSettings.mcpServers || []);
+        const normalizedCommands = (slashCommands as typeof currentSettings.slashCommands).map((cmd) => ({
+          ...cmd,
+          enabledMcpServers: (() => {
+            const normalizedIds = normalizeSelectedMcpServerIds(
+              cmd.enabledMcpServers,
+              normalizedMcpServers
+            );
+            return normalizedIds.length > 0 ? normalizedIds : null;
+          })(),
+        }));
+        const updatedSettings: UserSettings = {
+          ...currentSettings,
+          mcpServers: normalizedMcpServers,
+          slashCommands: normalizedCommands,
+        };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
         return jsonWithCookie({ success: true, message: "Command settings saved." });
       }
@@ -928,7 +962,6 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     setActionMsg(null);
     try {
       const {
-        getLocalSyncMeta,
         setLocalSyncMeta,
         getLocallyModifiedFileIds,
         getCachedFile,
@@ -938,26 +971,21 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         deleteEditHistoryEntry,
       } = await import("~/services/indexeddb-cache");
       const { ragRegisterInBackground } = await import("~/services/rag-sync");
-      const localMeta = (await getLocalSyncMeta()) ?? null;
       const allModifiedIds = await getLocallyModifiedFileIds();
       const cachedRemote = await getCachedRemoteMeta();
-
-      const trackedIds = new Set<string>([
-        ...Object.keys(cachedRemote?.files ?? {}),
-        ...Object.keys(localMeta?.files ?? {}),
-      ]);
-      const modifiedIds = trackedIds.size > 0
-        ? new Set([...allModifiedIds].filter((id) => trackedIds.has(id)))
-        : allModifiedIds;
+      const eligibleModifiedIds = new Set<string>();
 
       const pushedFiles: Array<{ fileId: string; content: string; fileName: string }> = [];
-      for (const fid of modifiedIds) {
+      for (const fid of allModifiedIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
+        const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? fid;
+        if (isSyncExcludedPath(fileName)) continue;
+        eligibleModifiedIds.add(fid);
         pushedFiles.push({
           fileId: fid,
           content: cached.content,
-          fileName: cached.fileName ?? fid,
+          fileName,
         });
       }
 
@@ -972,8 +1000,13 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         });
         if (!res.ok) throw new Error("Full push failed");
         const data = await res.json();
+        const skippedCount = Array.isArray(data.skippedFileIds)
+          ? data.skippedFileIds.length
+          : 0;
 
+        const pushedResultIds = new Set<string>();
         for (const r of data.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+          pushedResultIds.add(r.fileId);
           const cached = await getCachedFile(r.fileId);
           if (cached) {
             await setCachedFile({
@@ -1004,24 +1037,27 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         } else {
           setLastUpdatedAt(new Date().toISOString());
         }
-      }
-
-      if (pushedFiles.length === allModifiedIds.size) {
-        await clearAllEditHistory();
-      } else {
-        for (const { fileId } of pushedFiles) {
-          await deleteEditHistoryEntry(fileId);
+        if (pushedResultIds.size === eligibleModifiedIds.size) {
+          await clearAllEditHistory();
+        } else {
+          for (const fileId of pushedResultIds) {
+            await deleteEditHistoryEntry(fileId);
+          }
         }
+        const successfulFiles = pushedFiles.filter((f) => pushedResultIds.has(f.fileId));
+        ragRegisterInBackground(successfulFiles);
+        setActionMsg(
+          skippedCount > 0
+            ? `Full push completed with warning: skipped ${skippedCount} file(s).`
+            : "Full push completed."
+        );
+      } else if (allModifiedIds.size === 0) {
+        await clearAllEditHistory();
+        setActionMsg("No modified files to push.");
+      } else {
+        setActionMsg("No sync-eligible modified files to push.");
       }
       window.dispatchEvent(new Event("sync-complete"));
-      setActionMsg(
-        pushedFiles.length > 0
-          ? "Full push completed."
-          : "No modified files to push."
-      );
-
-      // RAG registration in background (non-blocking)
-      ragRegisterInBackground(pushedFiles);
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Full push failed.");
     } finally {

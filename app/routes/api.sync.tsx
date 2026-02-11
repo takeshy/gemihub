@@ -656,7 +656,7 @@ export async function action({ request }: Route.ActionArgs) {
 
       return jsonWithCookie({
         results: successful.map((r) => ({
-          fileId,
+          fileId: r.fileId,
           md5Checksum: r.md5Checksum,
           modifiedTime: r.modifiedTime,
         })),

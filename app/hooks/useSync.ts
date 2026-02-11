@@ -25,7 +25,22 @@ export interface ConflictInfo {
   remoteModifiedTime: string;
 }
 
-export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "error";
+export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "warning" | "error";
+
+const SYNC_EXCLUDED_FILE_NAMES = new Set(["_sync-meta.json", "settings.json"]);
+const SYNC_EXCLUDED_PREFIXES = [
+  "history/",
+  "trash/",
+  "sync_conflicts/",
+  "__TEMP__/",
+  "plugins/",
+];
+
+function isSyncExcludedPath(fileName: string): boolean {
+  const normalized = fileName.replace(/^\/+/, "");
+  if (SYNC_EXCLUDED_FILE_NAMES.has(normalized)) return true;
+  return SYNC_EXCLUDED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
 
 function toLocalSyncMeta(remoteMeta: {
   lastUpdatedAt: string;
@@ -121,7 +136,11 @@ export function useSync() {
         }
 
         // Reject push when remote has pending changes that must be pulled first
-        if (diffData.diff.toPull.length > 0 || diffData.diff.remoteOnly.length > 0) {
+        if (
+          diffData.diff.toPull.length > 0
+          || diffData.diff.remoteOnly.length > 0
+          || diffData.diff.localOnly.length > 0
+        ) {
           setError("settings.sync.pushRejected");
           setSyncStatus("error");
           return;
@@ -145,10 +164,14 @@ export function useSync() {
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
-        filesToPush.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
+        const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? fid;
+        if (isSyncExcludedPath(fileName)) continue;
+        filesToPush.push({ fileId: fid, content: cached.content, fileName });
       }
 
       // Batch push files to Drive via single API call
+      const pushedResultIds = new Set<string>();
+      let skippedCount = 0;
       if (filesToPush.length > 0) {
         const pushRes = await fetch("/api/sync", {
           method: "POST",
@@ -160,9 +183,13 @@ export function useSync() {
         });
         if (!pushRes.ok) throw new Error("Failed to push files");
         const pushData = await pushRes.json();
+        skippedCount = Array.isArray(pushData.skippedFileIds)
+          ? pushData.skippedFileIds.length
+          : 0;
 
         // Update IndexedDB cache with new checksums/timestamps
         for (const r of pushData.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+          pushedResultIds.add(r.fileId);
           const cached = await getCachedFile(r.fileId);
           if (cached) {
             await setCachedFile({
@@ -185,8 +212,8 @@ export function useSync() {
         }
       }
 
-      // Clear edit history only for files that were actually pushed
-      for (const { fileId } of filesToPush) {
+      // Clear edit history only for files that were actually pushed successfully
+      for (const fileId of pushedResultIds) {
         await deleteEditHistoryEntry(fileId);
       }
       const remainingModified = await getLocallyModifiedFileIds();
@@ -194,10 +221,16 @@ export function useSync() {
       window.dispatchEvent(new Event("sync-complete"));
 
       setLastSyncTime(new Date().toISOString());
-      setSyncStatus("idle");
+      if (skippedCount > 0) {
+        setError(`Push completed with warning: skipped ${skippedCount} file(s).`);
+        setSyncStatus("warning");
+      } else {
+        setSyncStatus("idle");
+      }
 
       // RAG registration + retry in background (non-blocking)
-      ragRegisterInBackground(filesToPush);
+      const successfulFiles = filesToPush.filter((f) => pushedResultIds.has(f.fileId));
+      ragRegisterInBackground(successfulFiles);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Push failed");
       setSyncStatus("error");
@@ -500,22 +533,23 @@ export function useSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
-      // Collect modified files from IndexedDB (filter to tracked files only)
-      const localMeta = (await getLocalSyncMeta()) ?? null;
+      // Collect all modified files from IndexedDB
       const allModifiedIds = await getLocallyModifiedFileIds();
       const cachedRemote = await getCachedRemoteMeta();
-      const trackedIds = collectTrackedIds(cachedRemote?.files, localMeta?.files);
-      const modifiedIds = trackedIds.size > 0
-        ? new Set([...allModifiedIds].filter((id) => trackedIds.has(id)))
-        : allModifiedIds;
+      const eligibleModifiedIds = new Set<string>();
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
-      for (const fid of modifiedIds) {
+      for (const fid of allModifiedIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
-        filesToPush.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
+        const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? fid;
+        if (isSyncExcludedPath(fileName)) continue;
+        eligibleModifiedIds.add(fid);
+        filesToPush.push({ fileId: fid, content: cached.content, fileName });
       }
 
       // Batch push files to Drive via single API call
+      const pushedResultIds = new Set<string>();
+      let skippedCount = 0;
       if (filesToPush.length > 0) {
         const pushRes = await fetch("/api/sync", {
           method: "POST",
@@ -527,9 +561,13 @@ export function useSync() {
         });
         if (!pushRes.ok) throw new Error("Full push failed");
         const pushData = await pushRes.json();
+        skippedCount = Array.isArray(pushData.skippedFileIds)
+          ? pushData.skippedFileIds.length
+          : 0;
 
         // Update IndexedDB cache with new checksums/timestamps
         for (const r of pushData.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+          pushedResultIds.add(r.fileId);
           const cached = await getCachedFile(r.fileId);
           if (cached) {
             await setCachedFile({
@@ -554,10 +592,10 @@ export function useSync() {
 
       // Clear all history only when every modified file was pushed.
       // If any local edits were not pushed, keep remaining local history.
-      if (filesToPush.length === allModifiedIds.size) {
+      if (eligibleModifiedIds.size > 0 && pushedResultIds.size === eligibleModifiedIds.size) {
         await clearAllEditHistory();
       } else {
-        for (const { fileId } of filesToPush) {
+        for (const fileId of pushedResultIds) {
           await deleteEditHistoryEntry(fileId);
         }
       }
@@ -566,10 +604,16 @@ export function useSync() {
       window.dispatchEvent(new Event("sync-complete"));
 
       setLastSyncTime(new Date().toISOString());
-      setSyncStatus("idle");
+      if (skippedCount > 0) {
+        setError(`Full push completed with warning: skipped ${skippedCount} file(s).`);
+        setSyncStatus("warning");
+      } else {
+        setSyncStatus("idle");
+      }
 
       // RAG registration + retry in background (non-blocking)
-      ragRegisterInBackground(filesToPush);
+      const successfulFiles = filesToPush.filter((f) => pushedResultIds.has(f.fileId));
+      ragRegisterInBackground(successfulFiles);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Full push failed");
       setSyncStatus("error");
