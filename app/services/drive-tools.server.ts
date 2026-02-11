@@ -2,12 +2,55 @@
 
 import {
   readFile,
+  readFileRaw,
+  getFileMetadata,
   searchFiles,
   createFile,
   updateFile,
 } from "./google-drive.server";
 import { getFileListFromMeta, upsertFileInMeta } from "./sync-meta.server";
 import type { ToolDefinition } from "~/types/settings";
+
+const GEMINI_MEDIA_PREFIXES = ["image/", "audio/", "video/"];
+const GEMINI_MEDIA_EXACT = new Set(["application/pdf"]);
+
+function isGeminiSupportedMedia(mimeType: string): boolean {
+  return (
+    GEMINI_MEDIA_PREFIXES.some((p) => mimeType.startsWith(p)) ||
+    GEMINI_MEDIA_EXACT.has(mimeType)
+  );
+}
+
+const TEXT_MIME_PREFIXES = ["text/"];
+const TEXT_MIME_EXACT = new Set([
+  "application/json",
+  "application/xml",
+  "application/javascript",
+  "application/x-yaml",
+  "application/x-sh",
+  "application/sql",
+  "application/graphql",
+  "application/ld+json",
+  "application/xhtml+xml",
+  "application/x-httpd-php",
+]);
+
+function isTextualMimeType(mimeType: string): boolean {
+  return (
+    TEXT_MIME_PREFIXES.some((p) => mimeType.startsWith(p)) ||
+    TEXT_MIME_EXACT.has(mimeType)
+  );
+}
+
+const MAX_INLINE_DATA_BYTES = 20 * 1024 * 1024; // 20MB
+
+export interface DriveToolMediaResult {
+  __mediaData: {
+    mimeType: string;
+    base64: string;
+    fileName: string;
+  };
+}
 
 /**
  * Set of drive tool names that are search/list related.
@@ -123,6 +166,26 @@ export async function executeDriveTool(
       const fileId = args.fileId;
       if (typeof fileId !== "string" || !fileId) {
         return { error: "read_drive_file: 'fileId' must be a non-empty string" };
+      }
+      const metadata = await getFileMetadata(accessToken, fileId);
+      if (isGeminiSupportedMedia(metadata.mimeType)) {
+        const fileSize = metadata.size ? parseInt(metadata.size, 10) : 0;
+        if (fileSize > MAX_INLINE_DATA_BYTES) {
+          return { error: `File is too large (${Math.round(fileSize / 1024 / 1024)}MB). Maximum supported size is 20MB.` };
+        }
+        const rawRes = await readFileRaw(accessToken, fileId);
+        const buf = await rawRes.arrayBuffer();
+        const base64 = Buffer.from(buf).toString("base64");
+        return {
+          __mediaData: {
+            mimeType: metadata.mimeType,
+            base64,
+            fileName: metadata.name,
+          },
+        } satisfies DriveToolMediaResult;
+      }
+      if (!isTextualMimeType(metadata.mimeType)) {
+        return { error: `Cannot read file of type '${metadata.mimeType}'. Supported formats: text files, images, audio, video, and PDF.` };
       }
       const content = await readFile(accessToken, fileId);
       return { content };

@@ -3,6 +3,8 @@
 import {
   GoogleGenAI,
   Type,
+  createPartFromFunctionResponse,
+  createFunctionResponsePartFromBase64,
   type Content,
   type Part,
   type Tool,
@@ -11,6 +13,17 @@ import {
 } from "@google/genai";
 import type { Message, StreamChunk, ToolCall, GeneratedImage } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
+import type { DriveToolMediaResult } from "./drive-tools.server";
+
+function isDriveToolMediaResult(value: unknown): value is DriveToolMediaResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "__mediaData" in value &&
+    typeof (value as DriveToolMediaResult).__mediaData?.mimeType === "string" &&
+    typeof (value as DriveToolMediaResult).__mediaData?.base64 === "string"
+  );
+}
 
 export interface FunctionCallLimitOptions {
   maxFunctionCalls?: number;
@@ -376,18 +389,39 @@ export async function* chatWithToolsStream(
 
         const result = await executeToolCall(fc.name, fc.args);
 
-        yield {
-          type: "tool_result",
-          toolResult: { toolCallId: toolCall.id, result },
-        };
+        if (isDriveToolMediaResult(result)) {
+          yield {
+            type: "tool_result",
+            toolResult: {
+              toolCallId: toolCall.id,
+              result: { mediaFile: result.__mediaData.fileName, mimeType: result.__mediaData.mimeType },
+            },
+          };
+        } else {
+          yield {
+            type: "tool_result",
+            toolResult: { toolCallId: toolCall.id, result },
+          };
+        }
 
-        functionResponseParts.push({
-          functionResponse: {
-            name: fc.name,
-            id: toolCall.id,
-            response: { result } as Record<string, unknown>,
-          },
-        });
+        if (isDriveToolMediaResult(result)) {
+          functionResponseParts.push(
+            createPartFromFunctionResponse(
+              toolCall.id,
+              fc.name,
+              { fileName: result.__mediaData.fileName },
+              [createFunctionResponsePartFromBase64(result.__mediaData.base64, result.__mediaData.mimeType)]
+            )
+          );
+        } else {
+          functionResponseParts.push({
+            functionResponse: {
+              name: fc.name,
+              id: toolCall.id,
+              response: { result } as Record<string, unknown>,
+            },
+          });
+        }
       }
 
       functionCallCount += callsToExecute.length;

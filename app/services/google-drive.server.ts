@@ -21,6 +21,7 @@ export interface DriveFile {
   parents?: string[];
   webViewLink?: string;
   md5Checksum?: string;
+  size?: string;
 }
 
 interface DriveListResponse {
@@ -217,7 +218,7 @@ export async function getFileMetadata(
   fileId: string
 ): Promise<DriveFile> {
   const res = await driveRequest(
-    `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,parents,webViewLink,md5Checksum`,
+    `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,parents,webViewLink,md5Checksum,size`,
     accessToken
   );
   return res.json();
