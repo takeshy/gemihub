@@ -320,6 +320,7 @@ function MarkdownFileEditor({
   // Debounced auto-save to IndexedDB on content change
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
+  const pendingContentRef = useRef<string | null>(null);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -329,13 +330,25 @@ function MarkdownFileEditor({
   useEffect(() => {
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    pendingContentRef.current = content;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
+      pendingContentRef.current = null;
     }, 3000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [content, saveToCache]);
+
+  // Flush pending content on unmount or fileId change (saveToCache identity changes)
+  useEffect(() => {
+    return () => {
+      if (pendingContentRef.current !== null) {
+        saveToCache(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
+    };
+  }, [saveToCache]);
 
   const [uploaded, setUploaded] = useState(false);
 
@@ -574,6 +587,7 @@ function HtmlFileEditor({
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
+  const pendingContentRef = useRef<string | null>(null);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -589,13 +603,25 @@ function HtmlFileEditor({
   useEffect(() => {
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    pendingContentRef.current = content;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
+      pendingContentRef.current = null;
     }, 3000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [content, saveToCache]);
+
+  // Flush pending content on unmount or fileId change (saveToCache identity changes)
+  useEffect(() => {
+    return () => {
+      if (pendingContentRef.current !== null) {
+        saveToCache(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
+    };
+  }, [saveToCache]);
 
   const [uploaded, setUploaded] = useState(false);
 
@@ -790,6 +816,7 @@ function TextFileEditor({
   // Debounced auto-save to IndexedDB on content change
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
+  const pendingContentRef = useRef<string | null>(null);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -804,13 +831,25 @@ function TextFileEditor({
   useEffect(() => {
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    pendingContentRef.current = content;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
+      pendingContentRef.current = null;
     }, 3000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [content, saveToCache]);
+
+  // Flush pending content on unmount or fileId change (saveToCache identity changes)
+  useEffect(() => {
+    return () => {
+      if (pendingContentRef.current !== null) {
+        saveToCache(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
+    };
+  }, [saveToCache]);
 
   const [uploaded, setUploaded] = useState(false);
 
