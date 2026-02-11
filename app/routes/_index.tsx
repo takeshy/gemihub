@@ -762,7 +762,10 @@ function IDEContent({
               <div className="relative flex flex-1 flex-col overflow-hidden">
                 {mainViewerContent}
                 <button
-                  onClick={() => window.dispatchEvent(new CustomEvent("create-file-requested"))}
+                  onClick={() => {
+                    setMobileView("files");
+                    setTimeout(() => window.dispatchEvent(new CustomEvent("create-file-requested")), 0);
+                  }}
                   className="absolute bottom-4 right-4 z-10 rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700 active:bg-blue-800"
                   title={t("fileTree.newFile")}
                 >
