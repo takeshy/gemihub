@@ -876,7 +876,7 @@ function IDEContent({
         /* ---- Mobile layout ---- */
         <>
           <div
-            className="flex-1 overflow-hidden"
+            className="flex-1 overflow-clip"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
