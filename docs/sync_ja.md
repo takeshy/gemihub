@@ -61,7 +61,7 @@ Diff アルゴリズムは3つのデータソースを比較します:
 | - | リモートのみ | **remoteOnly** |
 
 判定条件:
-- `localChanged = local.md5Checksum !== remoteSynced.md5Checksum || locallyModifiedFileIds.has(fileId)`
+- `localChanged`: 以下のいずれかが真の場合: (1) `local.md5Checksum !== remoteSynced.md5Checksum`、(2) ローカルメタにあるがリモートメタにない、(3) `locallyModifiedFileIds.has(fileId)`
 - `remoteChanged = currentRemote.md5Checksum !== remoteSynced.md5Checksum`
 
 `locallyModifiedFileIds` はクライアントの `editHistory` ストアから取得したファイル ID のセットで、各 diff リクエスト時に `localMeta` と共に渡されます。これにより、ローカルメタの MD5 チェックサムが編集時に更新されなくても、ローカル編集が確実に検出されます。

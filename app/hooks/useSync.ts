@@ -14,7 +14,7 @@ import {
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { commitSnapshot } from "~/services/edit-history-local";
-import { isRagEligible } from "~/constants/rag";
+import { ragRegisterInBackground } from "~/services/rag-sync";
 
 export interface ConflictInfo {
   fileId: string;
@@ -27,80 +27,6 @@ export interface ConflictInfo {
 
 export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "error";
 
-
-async function tryRagRegister(
-  fileId: string,
-  content: string,
-  fileName: string
-): Promise<{ ok: boolean; skipped?: boolean; ragFileInfo?: { checksum: string; uploadedAt: number; fileId: string | null }; storeName?: string }> {
-  const res = await fetch("/api/sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "ragRegister", fileId, content, fileName }),
-  });
-  if (!res.ok) return { ok: false };
-  return await res.json();
-}
-
-async function saveRagUpdates(
-  updates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }>,
-  storeName: string
-): Promise<void> {
-  await fetch("/api/sync", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "ragSave", updates, storeName }),
-  });
-}
-
-async function tryRagRetryPending(): Promise<void> {
-  try {
-    await fetch("/api/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "ragRetryPending" }),
-    });
-  } catch {
-    // best-effort retry
-  }
-}
-
-function ragRegisterInBackground(
-  filesToPush: Array<{ fileId: string; content: string; fileName: string }>
-): void {
-  (async () => {
-    // Collect eligible files and save as pending first so they survive crashes
-    const eligibleFiles = filesToPush.filter((f) => isRagEligible(f.fileName));
-    if (eligibleFiles.length === 0) return;
-
-    const pendingUpdates = eligibleFiles.map((f) => ({
-      fileName: f.fileName,
-      ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null as string | null, status: "pending" as const },
-    }));
-    await saveRagUpdates(pendingUpdates, "");
-
-    // Now attempt actual registration
-    const ragUpdates: Array<{ fileName: string; ragFileInfo: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" } }> = [];
-    let ragStoreName = "";
-    for (const f of eligibleFiles) {
-      try {
-        const ragResult = await tryRagRegister(f.fileId, f.content, f.fileName);
-        if (!ragResult.ok) {
-          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
-        } else if (!ragResult.skipped && ragResult.ragFileInfo) {
-          ragUpdates.push({ fileName: f.fileName, ragFileInfo: { ...ragResult.ragFileInfo, status: "registered" } });
-          if (ragResult.storeName) ragStoreName = ragResult.storeName;
-        }
-      } catch {
-        ragUpdates.push({ fileName: f.fileName, ragFileInfo: { checksum: "", uploadedAt: Date.now(), fileId: null, status: "pending" } });
-      }
-    }
-    if (ragUpdates.length > 0) {
-      await saveRagUpdates(ragUpdates, ragStoreName);
-    }
-    await tryRagRetryPending();
-  })().catch(() => {});
-}
 
 export function useSync() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -548,8 +474,11 @@ export function useSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
-      // Collect modified files from IndexedDB
-      const modifiedIds = await getLocallyModifiedFileIds();
+      // Collect modified files from IndexedDB (filter to tracked files only)
+      const allModifiedIds = await getLocallyModifiedFileIds();
+      const cachedRemote = await getCachedRemoteMeta();
+      const trackedFiles = cachedRemote?.files ?? {};
+      const modifiedIds = new Set([...allModifiedIds].filter((id) => trackedFiles[id]));
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);

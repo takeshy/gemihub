@@ -910,6 +910,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     setActionMsg(null);
     try {
       const { getLocalSyncMeta, setLocalSyncMeta, getLocallyModifiedFileIds, getCachedFile, setCachedFile, clearAllEditHistory } = await import("~/services/indexeddb-cache");
+      const { ragRegisterInBackground } = await import("~/services/rag-sync");
       const modifiedIds = await getLocallyModifiedFileIds();
       const localMeta = (await getLocalSyncMeta()) ?? {
         id: "current" as const,
@@ -917,6 +918,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
       };
 
+      const pushedFiles: Array<{ fileId: string; content: string; fileName: string }> = [];
       for (const fid of modifiedIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
@@ -929,6 +931,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         const data = await res.json();
         localMeta.files[fid] = { md5Checksum: data.md5Checksum, modifiedTime: data.file.modifiedTime };
         await setCachedFile({ ...cached, md5Checksum: data.md5Checksum, modifiedTime: data.file.modifiedTime, cachedAt: Date.now() });
+        pushedFiles.push({ fileId: fid, content: cached.content, fileName: cached.fileName ?? fid });
       }
 
       localMeta.lastUpdatedAt = new Date().toISOString();
@@ -947,6 +950,9 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       await clearAllEditHistory();
       window.dispatchEvent(new Event("sync-complete"));
       setActionMsg("Full push completed.");
+
+      // RAG registration in background (non-blocking)
+      ragRegisterInBackground(pushedFiles);
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : "Full push failed.");
     } finally {

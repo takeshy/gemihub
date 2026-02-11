@@ -61,7 +61,7 @@ Detection logic per file:
 | - | Remote only | **remoteOnly** |
 
 Where:
-- `localChanged = local.md5Checksum !== remoteSynced.md5Checksum || locallyModifiedFileIds.has(fileId)`
+- `localChanged`: true if any of: (1) `local.md5Checksum !== remoteSynced.md5Checksum`, (2) file exists in local meta but not in remote meta, or (3) `locallyModifiedFileIds.has(fileId)`
 - `remoteChanged = currentRemote.md5Checksum !== remoteSynced.md5Checksum`
 
 `locallyModifiedFileIds` is the set of file IDs from the client's `editHistory` store, passed alongside `localMeta` in each diff request. This ensures local edits are detected even though the local meta's MD5 checksum is not updated on edit.
