@@ -828,7 +828,7 @@ function IDEContent({
     }`;
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden overscroll-none bg-gray-50 dark:bg-gray-950">
+    <div className="fixed inset-0 flex flex-col overflow-hidden overscroll-none bg-gray-50 dark:bg-gray-950">
       <Header
         rightPanel={rightPanel}
         setRightPanel={setRightPanel}
