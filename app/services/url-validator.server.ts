@@ -25,6 +25,47 @@ function normalizeHostname(hostname: string): string {
   return withoutBrackets.toLowerCase().replace(/\.$/, "");
 }
 
+function parseIpv4MappedIpv6(hostname: string): string | null {
+  let suffix = "";
+  if (hostname.startsWith("::ffff:")) {
+    suffix = hostname.slice("::ffff:".length);
+  } else if (hostname.startsWith("0:0:0:0:0:ffff:")) {
+    suffix = hostname.slice("0:0:0:0:0:ffff:".length);
+  } else {
+    return null;
+  }
+
+  // Common dotted-decimal notation: ::ffff:127.0.0.1
+  if (suffix.includes(".")) {
+    return suffix;
+  }
+
+  // Hex notation from URL parser: ::ffff:7f00:1
+  const parts = suffix.split(":").filter(Boolean);
+  let value: number | null = null;
+
+  if (parts.length === 2) {
+    const hi = Number.parseInt(parts[0], 16);
+    const lo = Number.parseInt(parts[1], 16);
+    if (Number.isFinite(hi) && Number.isFinite(lo)) {
+      value = ((hi & 0xffff) << 16) | (lo & 0xffff);
+    }
+  } else if (parts.length === 1) {
+    const parsed = Number.parseInt(parts[0], 16);
+    if (Number.isFinite(parsed)) {
+      value = parsed >>> 0;
+    }
+  }
+
+  if (value === null) return null;
+
+  const a = (value >>> 24) & 0xff;
+  const b = (value >>> 16) & 0xff;
+  const c = (value >>> 8) & 0xff;
+  const d = value & 0xff;
+  return `${a}.${b}.${c}.${d}`;
+}
+
 function isPrivateHost(hostname: string): boolean {
   const normalized = normalizeHostname(hostname);
 
@@ -35,6 +76,12 @@ function isPrivateHost(hostname: string): boolean {
     return PRIVATE_IPV4_RANGES.some((re) => re.test(normalized));
   }
   if (ipVersion === 6) {
+    const mappedIpv4 = parseIpv4MappedIpv6(normalized);
+    if (mappedIpv4) {
+      if (BLOCKED_HOSTNAMES.has(mappedIpv4)) return true;
+      return PRIVATE_IPV4_RANGES.some((re) => re.test(mappedIpv4));
+    }
+
     // Loopback, unique-local (fc00::/7), link-local (fe80::/10)
     return (
       normalized === "::1" ||
