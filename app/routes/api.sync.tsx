@@ -52,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
 }
 
-// POST: diff / pull / resolve / pushFiles / fullPush / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
+// POST: diff / pull / resolve / pushFiles / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
@@ -66,7 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { action: actionType } = body;
 
   const VALID_ACTIONS = new Set([
-    "diff", "pull", "resolve", "fullPush", "fullPull",
+    "diff", "pull", "resolve", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
     "pushFiles",
@@ -293,51 +293,6 @@ export async function action({ request }: Route.ActionArgs) {
       }, 5);
 
       return jsonWithCookie({ files, remoteMeta });
-    }
-
-    case "fullPush": {
-      // Full push: merge local meta entries into remote meta
-      const localMeta = body.localMeta as SyncMeta | null;
-      if (!localMeta || typeof localMeta !== "object" || typeof localMeta.files !== "object") {
-        return jsonWithCookie({ error: "Missing localMeta" }, { status: 400 });
-      }
-
-      const remoteMeta =
-        (await readRemoteSyncMeta(
-          validTokens.accessToken,
-          validTokens.rootFolderId
-        )) ?? {
-          lastUpdatedAt: new Date().toISOString(),
-          files: {},
-        };
-
-      // Merge only files that currently exist on Drive
-      const currentFiles = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
-      const currentById = new Map(currentFiles.map((f) => [f.id, f]));
-
-      for (const [fileId, fileMeta] of Object.entries(localMeta.files)) {
-        const current = currentById.get(fileId);
-        if (!current) continue;
-        const existing = remoteMeta.files[fileId];
-        remoteMeta.files[fileId] = {
-          ...existing,
-          ...fileMeta,
-          name: fileMeta.name || existing?.name || current.name || "",
-          mimeType: fileMeta.mimeType || existing?.mimeType || current.mimeType || "",
-          md5Checksum: fileMeta.md5Checksum || existing?.md5Checksum || current.md5Checksum || "",
-          modifiedTime: fileMeta.modifiedTime || existing?.modifiedTime || current.modifiedTime || "",
-          createdTime: fileMeta.createdTime || existing?.createdTime || current.createdTime,
-          webViewLink: fileMeta.webViewLink || existing?.webViewLink || current.webViewLink,
-        };
-      }
-      remoteMeta.lastUpdatedAt = new Date().toISOString();
-
-      await writeRemoteSyncMeta(
-        validTokens.accessToken,
-        validTokens.rootFolderId,
-        remoteMeta
-      );
-      return jsonWithCookie({ remoteMeta });
     }
 
     case "clearConflicts": {

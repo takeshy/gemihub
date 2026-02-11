@@ -523,94 +523,6 @@ export function useSync() {
     }
   }, []);
 
-  const fullPush = useCallback(async () => {
-    setSyncStatus("pushing");
-    setError(null);
-    try {
-      // Collect all modified files from IndexedDB
-      const allModifiedIds = await getLocallyModifiedFileIds();
-      const cachedRemote = await getCachedRemoteMeta();
-      const eligibleModifiedIds = new Set<string>();
-      const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
-      for (const fid of allModifiedIds) {
-        const cached = await getCachedFile(fid);
-        if (!cached) continue;
-        const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? fid;
-        if (isSyncExcludedPath(fileName)) continue;
-        eligibleModifiedIds.add(fid);
-        filesToPush.push({ fileId: fid, content: cached.content, fileName });
-      }
-
-      // Batch push files to Drive via single API call
-      const pushedResultIds = new Set<string>();
-      let skippedCount = 0;
-      if (filesToPush.length > 0) {
-        const pushRes = await fetch("/api/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "pushFiles",
-            files: filesToPush.map(({ fileId, content }) => ({ fileId, content })),
-          }),
-        });
-        if (!pushRes.ok) throw new Error("Full push failed");
-        const pushData = await pushRes.json();
-        skippedCount = Array.isArray(pushData.skippedFileIds)
-          ? pushData.skippedFileIds.length
-          : 0;
-
-        // Update IndexedDB cache with new checksums/timestamps
-        for (const r of pushData.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
-          pushedResultIds.add(r.fileId);
-          const cached = await getCachedFile(r.fileId);
-          if (cached) {
-            await setCachedFile({
-              ...cached,
-              md5Checksum: r.md5Checksum,
-              modifiedTime: r.modifiedTime,
-              cachedAt: Date.now(),
-            });
-          }
-        }
-
-        // Update localSyncMeta directly from remoteMeta
-        if (pushData.remoteMeta) {
-          await setLocalSyncMeta(
-            toLocalSyncMeta(pushData.remoteMeta as {
-              lastUpdatedAt: string;
-              files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
-            })
-          );
-        }
-      }
-
-      // Clear all history only when every modified file was pushed.
-      // If any local edits were not pushed, keep remaining local history.
-      if (eligibleModifiedIds.size > 0 && pushedResultIds.size === eligibleModifiedIds.size) {
-        await clearAllEditHistory();
-      } else {
-        for (const fileId of pushedResultIds) {
-          await deleteEditHistoryEntry(fileId);
-        }
-      }
-      const remainingModified = await getLocallyModifiedFileIds();
-      setLocalModifiedCount(remainingModified.size);
-      window.dispatchEvent(new Event("sync-complete"));
-
-      setLastSyncTime(new Date().toISOString());
-      const fullPushCompletion = getSyncCompletionStatus(skippedCount, "Full push");
-      setError(fullPushCompletion.error);
-      setSyncStatus(fullPushCompletion.status);
-
-      // RAG registration + retry in background (non-blocking)
-      const successfulFiles = filesToPush.filter((f) => pushedResultIds.has(f.fileId));
-      ragRegisterInBackground(successfulFiles);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Full push failed");
-      setSyncStatus("error");
-    }
-  }, []);
-
   return {
     syncStatus,
     lastSyncTime,
@@ -620,7 +532,6 @@ export function useSync() {
     push,
     pull,
     resolveConflict,
-    fullPush,
     fullPull,
   };
 }

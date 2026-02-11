@@ -86,7 +86,7 @@ Uploads locally-changed files to remote.
 
 2. BATCH UPLOAD: Update all files via single API call
    ├─ Get modified file IDs from IndexedDB editHistory
-   ├─ Filter to only files tracked in cached remoteMeta
+   ├─ Filter to only files tracked in any known meta (cached remoteMeta, diff remoteMeta, or localMeta)
    ├─ Read all modified file contents from IndexedDB cache
    ├─ POST /api/sync { action: "pushFiles", files: [{ fileId, content }, ...] }
    │   └─ Server:
@@ -144,7 +144,7 @@ Downloads only remotely-changed files to local cache.
 6. **Update IndexedDB cache** with downloaded files
 7. **Update local sync meta** with new checksums
 8. **Update remote sync meta** with pulled files, and **prune `localOnly` entries** from `_sync-meta.json`
-9. **Fire "sync-complete" event** and update localModifiedCount
+9. **Fire "sync-complete" and "files-pulled" events** and update localModifiedCount
 
 ### Decision Tables
 
@@ -204,7 +204,7 @@ Uploads all locally modified files directly to Drive and merges metadata. **This
 
 1. **Batch upload** — all modified files are sent in a single `pushFiles` API call; server updates Drive files in parallel (max 5 concurrent), reads/writes `_sync-meta.json` once, and saves remote edit history in background
 2. **Update IndexedDB** — cache and LocalSyncMeta updated with new md5/modifiedTime from server response
-3. **Clear all edit history**
+3. **Clear edit history** — if all eligible files were pushed, clear all edit history; otherwise clear per-file for successfully pushed files only
 4. **Fire "sync-complete" event** and update localModifiedCount
 5. **RAG registration (background)** — register eligible files, save tracking info, retry pending registrations
 
@@ -411,7 +411,7 @@ Browser (IndexedDB)          Server                Google Drive
 │ files store   │      │ /api/sync    │      │ Root folder  │
 │ syncMeta      │◄────►│ (diff/pull/  │◄────►│ _sync-meta   │
 │ fileTree      │      │  resolve/    │      │ User files   │
-│ editHistory   │      │  fullPush/…) │      │ trash/       │
+│ editHistory   │      │  pushFiles/…)│      │ trash/       │
 │               │      │ /api/drive/  │      │ sync_conflicts│
 │               │      │  files       │      │ .history.json│
 │               │      │              │      │ __TEMP__/    │
@@ -422,9 +422,9 @@ Browser (IndexedDB)          Server                Google Drive
 
 | File | Role |
 |------|------|
-| `app/hooks/useSync.ts` | Client-side sync hook (push, pull, resolveConflict, fullPush, fullPull, localModifiedCount) |
+| `app/hooks/useSync.ts` | Client-side sync hook (push, pull, resolveConflict, fullPull, localModifiedCount) |
 | `app/hooks/useFileWithCache.ts` | IndexedDB cache-first file reads, auto-save with edit history |
-| `app/routes/api.sync.tsx` | Server-side sync API (18 POST actions) |
+| `app/routes/api.sync.tsx` | Server-side sync API (17 POST actions) |
 | `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory, remoteMeta) |
@@ -445,7 +445,6 @@ Browser (IndexedDB)          Server                Google Drive
 | `resolve` | POST | Resolve conflict (backup loser, update Drive file and meta) |
 | `fullPull` | POST | Download all remote files (skip matching) |
 | `pushFiles` | POST | Batch update multiple files on Drive in parallel, read/write sync meta once |
-| `fullPush` | POST | Merge all local meta into remote meta |
 | `clearConflicts` | POST | Delete all files in conflict folder |
 | `detectUntracked` | POST | Find files on Drive not in sync meta |
 | `deleteUntracked` | POST | Delete specified untracked files |
