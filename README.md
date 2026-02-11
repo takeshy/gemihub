@@ -32,6 +32,10 @@ Build complex automation pipelines with a visual drag-and-drop editor. Chain tog
 
 All data — chat history, workflows, settings, edit history — is stored in your own Google Drive under a `gemihub/` folder. No proprietary database, no vendor lock-in. Optional hybrid encryption (RSA + AES) protects sensitive files. A Python decryption script is provided so you can always access your encrypted data independently.
 
+### Works Offline, Syncs on Your Terms
+
+GemiHub is offline-first. All your files are cached in the browser's IndexedDB, so they load instantly — even without an internet connection. Create and edit files offline, and your changes are tracked automatically. When you're back online, push your changes to Google Drive with one click. If someone else edited the same file, GemiHub detects the conflict and lets you choose which version to keep, with the other safely backed up.
+
 ![Push/Pull Sync](./public/images/push_pull.png)
 
 ## Screenshots
@@ -71,7 +75,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, and settings panels
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
-- **Offline Cache & Sync** — IndexedDB caching with Push/Pull synchronization, conflict resolution, temp file staging
+- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup
 - **Encryption** — Optional hybrid RSA + AES encryption for chat history and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
 - **Multi-Model Support** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma; paid and free plan model lists
