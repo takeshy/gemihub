@@ -172,7 +172,7 @@ MCP ツールは設定済み MCP サーバーから動的に検出される。�
 
 ### 保存先
 
-チャット履歴は Google Drive の `history/chat/` に JSON ファイルとして保存。各チャットは以下を持つ：
+チャット履歴は Google Drive の `history/chats/` に JSON ファイルとして保存。各チャットは以下を持つ：
 - `id`: 一意のチャット識別子
 - `title`: 最初のメッセージ内容（50 文字に切り詰め）
 - `messages`: `Message` オブジェクトの配列
