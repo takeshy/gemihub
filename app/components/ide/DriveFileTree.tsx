@@ -26,6 +26,7 @@ import {
   Search,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import {
   getCachedFileTree,
   setCachedFileTree,
@@ -208,6 +209,8 @@ export function DriveFileTree({
     setBusyFileIds((prev) => { const next = new Set(prev); for (const id of ids) next.delete(id); return next; });
   }, []);
   const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
   const { progress, upload, clearProgress } = useFileUpload();
@@ -773,6 +776,26 @@ export function DriveFileTree({
     },
     []
   );
+
+  const handleLongPressStart = useCallback(
+    (e: React.TouchEvent, item: CachedTreeNode) => {
+      const touch = e.touches[0];
+      const x = touch.clientX;
+      const y = touch.clientY;
+      longPressTimerRef.current = setTimeout(() => {
+        longPressTimerRef.current = null;
+        setContextMenu({ x, y, item });
+      }, 500);
+    },
+    []
+  );
+
+  const handleLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
 
   // Collect all real file IDs under a virtual folder node
   const collectFileIds = useCallback(
@@ -1387,6 +1410,11 @@ export function DriveFileTree({
             draggable={!isVirtualFolder}
             onClick={() => toggleFolder(item.id)}
             onContextMenu={(e) => handleContextMenu(e, item)}
+            {...(isMobile ? {
+              onTouchStart: (e: React.TouchEvent) => handleLongPressStart(e, item),
+              onTouchEnd: handleLongPressEnd,
+              onTouchMove: handleLongPressEnd,
+            } : {})}
             onDragStart={(e) => {
               if (isVirtualFolder) { e.preventDefault(); return; }
               e.dataTransfer.setData("application/x-tree-node-id", item.id);
@@ -1442,6 +1470,11 @@ export function DriveFileTree({
         draggable
         onClick={() => { setSelectedFolderId(null); onSelectFile(item.id, item.name, item.mimeType); }}
         onContextMenu={(e) => handleContextMenu(e, item)}
+        {...(isMobile ? {
+          onTouchStart: (e: React.TouchEvent) => handleLongPressStart(e, item),
+          onTouchEnd: handleLongPressEnd,
+          onTouchMove: handleLongPressEnd,
+        } : {})}
         onDragStart={(e) => {
           e.dataTransfer.setData("application/x-tree-node-id", item.id);
           e.dataTransfer.setData("application/x-tree-node-parent", parentId);
