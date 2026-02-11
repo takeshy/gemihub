@@ -155,6 +155,7 @@ export function ChatInput({
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [pendingOverrides, setPendingOverrides] = useState<ChatOverrides | null>(null);
+  const [dismissedFileId, setDismissedFileId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
@@ -164,6 +165,14 @@ export function ChatInput({
 
   // EditorContext for autocomplete data
   const editorCtx = useEditorContext();
+
+  // Show file chip when active file differs from last message and not dismissed
+  const showFileChip = !!(
+    editorCtx.activeFileId &&
+    editorCtx.activeFileName &&
+    editorCtx.activeFileId !== lastFileIdInMessages &&
+    dismissedFileId !== editorCtx.activeFileId
+  );
 
   // Autocomplete
   const autocomplete = useAutocomplete({
@@ -296,7 +305,7 @@ export function ChatInput({
     const hasSelectionRef = trimmed.includes("{selection}");
     const hasFileRef = editorCtx.fileList.some(f => trimmed.includes(`@${f.name}`));
     const fileChanged = editorCtx.activeFileId !== lastFileIdInMessages;
-    if (!hasContentRef && !hasSelectionRef && !hasFileRef && fileChanged && editorCtx.activeFileId && editorCtx.activeFileName) {
+    if (!hasContentRef && !hasSelectionRef && !hasFileRef && fileChanged && editorCtx.activeFileId && editorCtx.activeFileName && dismissedFileId !== editorCtx.activeFileId) {
       resolved += `\n[Currently open file: ${editorCtx.activeFileName}, fileId: ${editorCtx.activeFileId}]`;
     }
 
@@ -313,7 +322,7 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, lastFileIdInMessages]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, lastFileIdInMessages, dismissedFileId]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -407,6 +416,23 @@ export function ChatInput({
   return (
     <div className="border-t border-gray-200 bg-white px-4 pt-3 pb-4 dark:border-gray-800 dark:bg-gray-900">
       <div className="mx-auto max-w-3xl">
+        {/* Current file chip */}
+        {showFileChip && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+              <FileText size={ICON.SM} />
+              <span className="max-w-[200px] truncate">{editorCtx.activeFileName}</span>
+              <button
+                onClick={() => setDismissedFileId(editorCtx.activeFileId)}
+                className="ml-0.5 rounded-full p-0.5 text-blue-400 hover:bg-blue-200 hover:text-blue-600 dark:hover:bg-blue-800 dark:hover:text-blue-200"
+                aria-label={`Dismiss ${editorCtx.activeFileName}`}
+              >
+                <X size={10} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Attachment previews */}
         {attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
