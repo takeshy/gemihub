@@ -259,7 +259,12 @@ export function EncryptedFileViewer({
         body: JSON.stringify({ action: "decrypt", fileId, content: editedContent }),
       });
       if (!res.ok) {
-        alert(t("crypt.decryptFailed"));
+        const errData = await res.json().catch(() => null);
+        if (res.status === 409 && errData?.error === "duplicate") {
+          alert(t("crypt.decryptDuplicate").replace("{name}", errData.name));
+        } else {
+          alert(t("crypt.decryptFailed"));
+        }
         return;
       }
       const data = await res.json();

@@ -244,6 +244,7 @@ export interface TranslationStrings {
   "crypt.decrypt": string;
   "crypt.decryptConfirm": string;
   "crypt.decryptFailed": string;
+  "crypt.decryptDuplicate": string;
 
   // Plugins tab
   "settings.tab.plugins": string;
@@ -588,6 +589,7 @@ const en: TranslationStrings = {
   "crypt.decrypt": "Decrypt",
   "crypt.decryptConfirm": "Permanently decrypt this file? The .encrypted extension will be removed.",
   "crypt.decryptFailed": "Decryption failed",
+  "crypt.decryptDuplicate": "\"{name}\" already exists. Rename or delete it before decrypting.",
 
   // Plugins tab
   "settings.tab.plugins": "Plugins",
@@ -932,6 +934,7 @@ const ja: TranslationStrings = {
   "crypt.decrypt": "暗号化解除",
   "crypt.decryptConfirm": "このファイルの暗号化を永続的に解除しますか？.encrypted拡張子が除去されます。",
   "crypt.decryptFailed": "暗号化解除に失敗しました",
+  "crypt.decryptDuplicate": "「{name}」が既に存在します。暗号化解除する前にリネームまたは削除してください。",
 
   // Plugins tab
   "settings.tab.plugins": "プラグイン",

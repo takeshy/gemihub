@@ -240,6 +240,20 @@ export async function action({ request }: Route.ActionArgs) {
     case "decrypt": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
       if (!content) return jsonWithCookie({ error: "Missing content" }, { status: 400 });
+      // Check for duplicate name before proceeding
+      const decCurrentMeta = await getFileMetadata(validTokens.accessToken, fileId);
+      if (decCurrentMeta.name.endsWith(".encrypted")) {
+        const targetName = decCurrentMeta.name.slice(0, -".encrypted".length);
+        const syncMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+        if (syncMeta) {
+          const duplicate = Object.entries(syncMeta.files).find(
+            ([id, f]) => id !== fileId && f.name === targetName
+          );
+          if (duplicate) {
+            return jsonWithCookie({ error: "duplicate", name: targetName }, { status: 409 });
+          }
+        }
+      }
       // Update file content with decrypted plaintext
       const decFile = await updateFile(validTokens.accessToken, fileId, content);
       // Remove .encrypted extension from filename
