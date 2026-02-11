@@ -347,56 +347,6 @@ Excluded by folder structure (subfolders of root, not listed by `listFiles(rootF
 
 ---
 
-## Edit History
-
-Local edit tracking with reverse-apply diffs, persisted to Drive on Push.
-
-### Overview
-
-Edit history is split into two layers:
-
-| Layer | Storage | Lifetime |
-|-------|---------|----------|
-| **Local** | IndexedDB `editHistory` store | Per-file: cleared on Push for that file; all cleared on Full Push / Full Pull |
-| **Remote** | Drive `.history.json` per file | Retained per edit history settings |
-
-### Local Edit History (IndexedDB)
-
-Each file has one `CachedEditHistoryEntry` with a `diffs[]` array. Each array element represents one diff session (commit point).
-
-**Auto-save (every 3s):**
-1. Read old content from IndexedDB cache (before cache update)
-2. If last diff exists: reverse-apply it to old content to reconstruct the base
-3. Compute cumulative diff from base to new content
-4. Overwrite the last `diffs[]` entry (same session updates accumulate into one diff)
-
-**Commit boundary (explicit save events):**
-- Adds an empty entry to `diffs[]` as a boundary marker
-- Next auto-save starts a new diff session (appends instead of overwriting)
-- Triggered by: file open/reload, Pull, temp download accept, workflow commands
-
-**Memory efficiency:**
-- Only stores cache (latest content) + diffs (no full base content copy)
-- Base content is reconstructed via reverse-apply when needed
-- Reverse-apply: swap `+`/`-` lines and hunk header counts, then apply patch
-
-### Remote Edit History (Drive)
-
-When Push updates a file on Drive, the server:
-1. Reads the old file content from Drive before updating
-2. Computes diff (old → new)
-3. Appends the diff entry to the file's `.history.json` on Drive
-
-After Push, IndexedDB edit history is cleared for the pushed files since diffs are now in Drive.
-
-### Viewing History
-
-The Edit History modal shows:
-- **Local entries** (IndexedDB) by default — current editing session diffs
-- **Remote entries** (Drive) on demand — click "Show remote history" to load past diffs from Drive
-
----
-
 ## Architecture
 
 ### Data Flow
