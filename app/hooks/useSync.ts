@@ -102,37 +102,37 @@ export function useSync() {
       let diffRemoteFiles: Record<string, unknown> | null = null;
 
       // Check diff BEFORE writing anything to Drive
-      if (localMeta) {
-        const modifiedIdsForDiff = await getLocallyModifiedFileIds();
-        const diffRes = await fetch("/api/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "diff",
-            localMeta: { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files },
-            locallyModifiedFileIds: [...modifiedIdsForDiff],
-          }),
-        });
+      const modifiedIdsForDiff = await getLocallyModifiedFileIds();
+      const diffRes = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "diff",
+          localMeta: localMeta
+            ? { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files }
+            : null,
+          locallyModifiedFileIds: [...modifiedIdsForDiff],
+        }),
+      });
 
-        if (!diffRes.ok) throw new Error("Failed to compute diff");
-        const diffData = await diffRes.json();
-        diffRemoteFiles = (diffData.remoteMeta?.files as Record<string, unknown> | undefined) ?? null;
+      if (!diffRes.ok) throw new Error("Failed to compute diff");
+      const diffData = await diffRes.json();
+      diffRemoteFiles = (diffData.remoteMeta?.files as Record<string, unknown> | undefined) ?? null;
 
-        if (diffData.diff.conflicts.length > 0) {
-          setConflicts(diffData.diff.conflicts);
-          setSyncStatus("conflict");
-          return;
-        }
+      if (diffData.diff.conflicts.length > 0) {
+        setConflicts(diffData.diff.conflicts);
+        setSyncStatus("conflict");
+        return;
+      }
 
-        // Reject push when remote has pending changes that must be pulled first
-        if (
-          diffData.diff.toPull.length > 0
-          || diffData.diff.remoteOnly.length > 0
-        ) {
-          setError("settings.sync.pushRejected");
-          setSyncStatus("error");
-          return;
-        }
+      // Reject push when remote has pending changes that must be pulled first
+      if (
+        diffData.diff.toPull.length > 0
+        || diffData.diff.remoteOnly.length > 0
+      ) {
+        setError("settings.sync.pushRejected");
+        setSyncStatus("error");
+        return;
       }
 
       // Safe to push — collect modified files and batch update on Drive

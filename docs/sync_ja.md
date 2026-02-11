@@ -75,14 +75,12 @@ Drive API のリアルタイム一覧は不要: `drive.file` スコープによ�
 ### フロー
 
 ```
-1. 事前チェック: 書き込み前に Diff を確認（初回同期時はスキップ）
-   ├─ IndexedDB から LocalSyncMeta を読み取り
-   ├─ localMeta がある場合:
-   │   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
-   │   │   └─ サーバー: _sync-meta.json を読み取り → メタからファイル一覧を導出 → diff を計算
-   │   ├─ コンフリクトあり → 中断（コンフリクトダイアログを表示）
-   │   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
-   └─ localMeta が null（初回同期）: 事前チェックをスキップし直接続行
+1. 事前チェック: 書き込み前に Diff を確認
+   ├─ IndexedDB から LocalSyncMeta を読み取り（初回同期時は null）
+   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
+   │   └─ サーバー: _sync-meta.json を読み取り → diff を計算
+   ├─ コンフリクトあり → 中断（コンフリクトダイアログを表示）
+   └─ リモートが新しい & 未 Pull の変更あり → エラー「先に Pull して」
 
 2. バッチアップロード: 全ファイルを単一 API コールで更新
    ├─ IndexedDB の editHistory から変更ファイル ID を取得
@@ -118,9 +116,8 @@ Drive API のリアルタイム一覧は不要: `drive.file` スコープによ�
 |:----------:|:----------:|:----------:|--------|
 | - | - | - | Push するものなし |
 | - | あり | - | Push するものなし |
-| あり | あり | はい（未 Pull あり） | エラー: 「先に Pull してください」 |
-| あり | あり | いいえ | Push を実行 |
-| null（初回同期） | 任意 | - | 事前チェックをスキップし Push を実行 |
+| 任意 | 任意 | はい（未 Pull あり） | エラー: 「先に Pull してください」 |
+| 任意 | 任意 | いいえ | Push を実行 |
 
 ### 重要事項
 

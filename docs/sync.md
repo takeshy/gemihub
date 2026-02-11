@@ -75,14 +75,12 @@ Uploads locally-changed files to remote.
 ### Flow
 
 ```
-1. PRE-CHECK: Diff check before writing anything (skipped on first sync)
-   ├─ Read LocalSyncMeta from IndexedDB
-   ├─ If localMeta exists:
-   │   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
-   │   │   └─ Server: read _sync-meta.json → derive file list from meta → compute diff
-   │   ├─ Conflicts found → abort (show conflict dialog)
-   │   └─ Remote is newer & has pending pulls → error "Pull first"
-   └─ If localMeta is null (first sync): skip pre-check, proceed directly
+1. PRE-CHECK: Diff check before writing anything
+   ├─ Read LocalSyncMeta from IndexedDB (may be null on first sync)
+   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
+   │   └─ Server: read _sync-meta.json → compute diff
+   ├─ Conflicts found → abort (show conflict dialog)
+   └─ Remote is newer & has pending pulls → error "Pull first"
 
 2. BATCH UPLOAD: Update all files via single API call
    ├─ Get modified file IDs from IndexedDB editHistory
@@ -118,9 +116,8 @@ Uploads locally-changed files to remote.
 |:----------:|:-----------:|:------------:|--------|
 | - | - | - | Nothing to push |
 | - | exists | - | Nothing to push |
-| exists | exists | Yes (with pending pulls) | Error: "Pull required" |
-| exists | exists | No | Proceed with Push |
-| null (first sync) | any | - | Skip pre-check, proceed with Push |
+| any | any | Yes (with pending pulls) | Error: "Pull required" |
+| any | any | No | Proceed with Push |
 
 ### Important Notes
 
