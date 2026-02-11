@@ -78,17 +78,21 @@ export function normalizeSelectedMcpServerIds(
 ): string[] {
   if (!selected || selected.length === 0) return [];
   const byId = new Map<string, string>();
-  const byName = new Map<string, string>();
+  const byNameCounts = new Map<string, number>();
+  const byNameUniqueId = new Map<string, string>();
 
   for (const server of normalizeMcpServers(servers)) {
     if (!server.id) continue;
     byId.set(server.id, server.id);
-    byName.set(server.name, server.id);
+    byNameCounts.set(server.name, (byNameCounts.get(server.name) || 0) + 1);
+    byNameUniqueId.set(server.name, server.id);
   }
 
   const resolved: string[] = [];
   for (const value of selected) {
-    const id = byId.get(value) || byName.get(value);
+    const uniqueNameId =
+      byNameCounts.get(value) === 1 ? byNameUniqueId.get(value) : undefined;
+    const id = byId.get(value) || uniqueNameId;
     if (id && !resolved.includes(id)) {
       resolved.push(id);
     }

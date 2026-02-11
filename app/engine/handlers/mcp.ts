@@ -89,6 +89,7 @@ export async function handleMcpNode(
 
       mcpAppInfo = {
         serverUrl: url,
+        serverHeaders: Object.keys(headers).length > 0 ? headers : undefined,
         toolResult,
         uiResource,
       };

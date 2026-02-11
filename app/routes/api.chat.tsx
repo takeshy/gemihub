@@ -78,7 +78,9 @@ export async function action({ request }: Route.ActionArgs) {
   const requestedMcpServers = validData.mcpServers as McpServerConfig[] | undefined;
   const webSearchEnabled = validData.webSearchEnabled;
   const requestSettings = validData.settings;
-  const requestedMcpServerIds = requestedMcpServers?.map((s) => s.id || s.name) || [];
+  const requestedMcpServerIds = (requestedMcpServers || [])
+    .map((s) => s.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
 
   // Resolve driveToolMode: new field takes precedence, fall back to legacy enableDriveTools
   const requestedDriveToolMode =
@@ -115,11 +117,10 @@ export async function action({ request }: Route.ActionArgs) {
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       settingsForMcpPersistence = settings;
       const byId = new Map(settings.mcpServers.map((s) => [s.id || "", s] as const));
-      const byName = new Map(settings.mcpServers.map((s) => [s.name, s] as const));
       const selected: McpServerConfig[] = [];
       const seen = new Set<string>();
       for (const id of requestedMcpServerIds) {
-        const match = byId.get(id) || byName.get(id);
+        const match = byId.get(id);
         if (match) {
           const key = match.id || match.name;
           if (seen.has(key)) continue;

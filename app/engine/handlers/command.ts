@@ -122,7 +122,7 @@ export async function handleCommandNode(
     : [];
   const enabledMcpServers = !functionToolsForcedOff && mcpServerIds.length > 0 && settings?.mcpServers
     ? settings.mcpServers.filter(
-        (s) => mcpServerIds.includes(s.id || "") || mcpServerIds.includes(s.name)
+        (s) => mcpServerIds.includes(s.id || "")
       )
     : [];
   let mcpToolDefs: ToolDefinition[] = [];
