@@ -6,7 +6,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import type { UserSettings } from "~/types/settings";
-import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
@@ -494,6 +494,29 @@ function IDEContent({
     });
   }, []);
 
+  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    const res = await fetch("/api/drive/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create-image",
+        name: file.name,
+        data: base64,
+        mimeType: file.type || "image/png",
+      }),
+    });
+    if (!res.ok) throw new Error("Upload failed");
+    const { file: driveFile } = await res.json();
+    return `/api/drive/files?action=raw&fileId=${driveFile.id}`;
+  }, []);
+
   const activeFilePath = useMemo(() => {
     if (!activeFileId) return null;
     return fileList.find((f) => f.id === activeFileId)?.path ?? null;
@@ -629,6 +652,7 @@ function IDEContent({
           settings={settings}
           refreshKey={workflowVersion}
           onFileSelect={handleImageFileSelect}
+          onImageChange={handleImageUpload}
         />
       )}
     </PanelErrorBoundary>
@@ -723,14 +747,20 @@ function IDEContent({
         /* ---- Mobile layout ---- */
         <>
           <div className="flex flex-1 flex-col overflow-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-            {mobileView === "files" && (
-              <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
-                {leftSidebarContent}
-              </div>
-            )}
+            {/* Always mount file tree so create-file dialog stays available */}
+            <div className={`flex-1 overflow-hidden bg-white dark:bg-gray-900 ${mobileView !== "files" ? "hidden" : ""}`}>
+              {leftSidebarContent}
+            </div>
             {mobileView === "editor" && (
-              <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="relative flex flex-1 flex-col overflow-hidden">
                 {mainViewerContent}
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent("create-file-requested"))}
+                  className="absolute bottom-4 right-4 z-10 rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700 active:bg-blue-800"
+                  title={t("fileTree.newFile")}
+                >
+                  <FilePlus size={ICON.LG} />
+                </button>
               </div>
             )}
             {(mobileView === "chat" || mobileView === "workflow") && (

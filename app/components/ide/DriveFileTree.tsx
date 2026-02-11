@@ -575,6 +575,13 @@ export function DriveFileTree({
     }).catch(() => {});
   }, [createFileDialog, selectedFolderId, onSelectFile, treeItems, t]);
 
+  // Listen for create-file-requested event (from mobile editor FAB)
+  useEffect(() => {
+    const handler = () => handleCreateFile();
+    window.addEventListener("create-file-requested", handler);
+    return () => window.removeEventListener("create-file-requested", handler);
+  }, [handleCreateFile]);
+
   // Auto-clear progress after 3 seconds when all done
   useEffect(() => {
     if (progress.length === 0) return;
