@@ -559,7 +559,16 @@ function IDEContent({
   }, []);
 
   // Mobile view state: which panel is shown full-screen
-  const [mobileView, setMobileView] = useState<MobileView>("chat");
+  const [mobileView, setMobileViewRaw] = useState<MobileView>(() => {
+    if (typeof window === "undefined") return "editor";
+    const saved = localStorage.getItem("gemihub:mobileView");
+    if (saved === "files" || saved === "editor" || saved === "chat" || saved === "workflow") return saved;
+    return "editor";
+  });
+  const setMobileView = useCallback((view: MobileView) => {
+    localStorage.setItem("gemihub:mobileView", view);
+    setMobileViewRaw(view);
+  }, []);
 
   // Map mobileView to panel index: files=0, editor=1, chat/workflow/plugin=2
   const mobileViewToIndex = useCallback((view: MobileView): number => {
@@ -610,7 +619,7 @@ function IDEContent({
       animateTo(mobileIndex);
     }
     prevIndexRef.current = mobileIndex;
-  }, [mobileIndex, animateTo]);
+  }, [mobileIndex, animateTo, isMobile]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (isAnimatingRef.current) return;
