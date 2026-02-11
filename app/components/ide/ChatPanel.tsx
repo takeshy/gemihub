@@ -260,6 +260,18 @@ export function ChatPanel({
     [activeChatId]
   );
 
+  // Extract the last fileId mentioned in user messages via [Currently open file: ..., fileId: ...]
+  const lastFileIdInMessages = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "user") {
+        const match = msg.content.match(/\[Currently open file: .+?, fileId: (.+?)\]/);
+        if (match) return match[1];
+      }
+    }
+    return null;
+  }, [messages]);
+
   // ---- Constraint-based auto-control ----
   const toolConstraint = useMemo(
     () => getDriveToolModeConstraint(selectedModel, selectedRagSetting),
@@ -712,6 +724,7 @@ export function ChatPanel({
             execute: cmd.execute,
           })),
         ]}
+        lastFileIdInMessages={lastFileIdInMessages}
         driveToolModeLocked={toolConstraint.locked}
         driveToolModeReasonKey={toolConstraint.reasonKey as keyof TranslationStrings | undefined}
       />

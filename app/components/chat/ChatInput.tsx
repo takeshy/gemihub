@@ -42,6 +42,7 @@ interface ChatInputProps {
   slashCommands?: (SlashCommand & { execute?: (args: string) => Promise<string> })[];
   driveToolModeLocked?: boolean;
   driveToolModeReasonKey?: keyof TranslationStrings;
+  lastFileIdInMessages?: string | null;
 }
 
 function fileToAttachment(file: File): Promise<Attachment> {
@@ -145,6 +146,7 @@ export function ChatInput({
   slashCommands = [],
   driveToolModeLocked = false,
   driveToolModeReasonKey,
+  lastFileIdInMessages = null,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -293,7 +295,8 @@ export function ChatInput({
     const hasContentRef = trimmed.includes("{content}");
     const hasSelectionRef = trimmed.includes("{selection}");
     const hasFileRef = editorCtx.fileList.some(f => trimmed.includes(`@${f.name}`));
-    if (!hasContentRef && !hasSelectionRef && !hasFileRef && editorCtx.activeFileId && editorCtx.activeFileName) {
+    const fileChanged = editorCtx.activeFileId !== lastFileIdInMessages;
+    if (!hasContentRef && !hasSelectionRef && !hasFileRef && fileChanged && editorCtx.activeFileId && editorCtx.activeFileName) {
       resolved += `\n[Currently open file: ${editorCtx.activeFileName}, fileId: ${editorCtx.activeFileId}]`;
     }
 
@@ -310,7 +313,7 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, lastFileIdInMessages]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
