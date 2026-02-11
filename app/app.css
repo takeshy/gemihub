@@ -12,6 +12,8 @@
 html,
 body {
   @apply bg-white dark:bg-gray-950;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Make wysimark-lite editor fill its container.
@@ -19,6 +21,7 @@ body {
      > div[position:relative]   (entry wrapper)
        > div[display:block]     (visual editor toggle)
          > div.$OuterContainer  (emotion styled, already flex-col)
+           > div.$Editable      (scrollable content area)
 */
 .wysimark-fill > div,
 .wysimark-fill > div > div:last-child,
@@ -27,6 +30,12 @@ body {
   display: flex !important;
   flex-direction: column !important;
   min-height: 0 !important;
+}
+
+/* Ensure $Editable (the scrollable Slate content area) is height-constrained */
+.wysimark-fill > div > div:last-child > div > div:last-child {
+  min-height: 0 !important;
+  overscroll-behavior: contain;
 }
 
 /* Safe area padding for iOS devices with home indicator */
