@@ -246,6 +246,7 @@ export async function* chatWithToolsStream(
   const lastMessage = messages[messages.length - 1];
   if (!lastMessage || lastMessage.role !== "user") {
     yield { type: "error", error: "No user message to send" };
+    yield { type: "done" };
     return;
   }
 
@@ -494,6 +495,7 @@ export async function* generateImageStream(
   const lastMessage = messages[messages.length - 1];
   if (!lastMessage || lastMessage.role !== "user") {
     yield { type: "error", error: "No user message to send" };
+    yield { type: "done" };
     return;
   }
 
@@ -551,5 +553,6 @@ export async function* generateImageStream(
       type: "error",
       error: error instanceof Error ? error.message : "Image generation failed",
     };
+    yield { type: "done" };
   }
 }

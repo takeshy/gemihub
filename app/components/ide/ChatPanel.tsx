@@ -63,6 +63,7 @@ export function ChatPanel({
   }, []);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeChatFileId, setActiveChatFileId] = useState<string | null>(null);
+  const [activeChatCreatedAt, setActiveChatCreatedAt] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
@@ -115,14 +116,18 @@ export function ChatPanel({
     setMessages([]);
     setActiveChatId(null);
     setActiveChatFileId(null);
+    setActiveChatCreatedAt(null);
     setChatListOpen(false);
   }, []);
 
   const parseChatContent = useCallback((content: string) => {
     try {
-      const chat = JSON.parse(content);
+      const chat = JSON.parse(content) as Partial<ChatHistory>;
       if (chat.messages) {
-        setMessages(chat.messages);
+        setMessages(chat.messages as Message[]);
+      }
+      if (typeof chat.createdAt === "number") {
+        setActiveChatCreatedAt(chat.createdAt);
       }
     } catch {
       // ignore
@@ -134,6 +139,9 @@ export function ChatPanel({
       setChatListOpen(false);
       setActiveChatId(chatId);
       setActiveChatFileId(fileId);
+      setActiveChatCreatedAt(
+        histories.find((h) => h.id === chatId)?.createdAt ?? null
+      );
       setMessages([]);
 
       try {
@@ -174,7 +182,7 @@ export function ChatPanel({
         // ignore
       }
     },
-    [parseChatContent]
+    [histories, parseChatContent]
   );
 
   const handleCryptoUnlock = useCallback(
@@ -215,7 +223,9 @@ export function ChatPanel({
   // ---- Save chat ----
   const saveChat = useCallback(
     async (updatedMessages: Message[], title?: string) => {
+      const now = Date.now();
       const chatId = activeChatId || `chat-${Date.now()}`;
+      const createdAt = activeChatCreatedAt ?? now;
       const chatHistory: ChatHistory = {
         id: chatId,
         title:
@@ -223,8 +233,8 @@ export function ChatPanel({
           updatedMessages[0]?.content?.slice(0, 50) ||
           "Untitled Chat",
         messages: updatedMessages,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        createdAt,
+        updatedAt: now,
       };
 
       try {
@@ -235,29 +245,32 @@ export function ChatPanel({
         });
         if (res.ok) {
           const data = await res.json();
+          const fileId =
+            typeof data.fileId === "string" ? data.fileId : activeChatFileId ?? "";
           if (!activeChatId) {
             setActiveChatId(chatId);
-            if (data.fileId) {
-              setActiveChatFileId(data.fileId);
-            }
-            // Add to histories
-            setHistories((prev) => [
-              {
-                id: chatId,
-                fileId: data.fileId || "",
-                title: chatHistory.title,
-                createdAt: chatHistory.createdAt,
-                updatedAt: chatHistory.updatedAt,
-              },
-              ...prev,
-            ]);
+            setActiveChatCreatedAt(createdAt);
           }
+          if (fileId) {
+            setActiveChatFileId(fileId);
+          }
+          setHistories((prev) => [
+            {
+              id: chatId,
+              fileId,
+              title: chatHistory.title,
+              createdAt: chatHistory.createdAt,
+              updatedAt: chatHistory.updatedAt,
+              isEncrypted: chatHistory.isEncrypted,
+            },
+            ...prev.filter((h) => h.id !== chatId),
+          ]);
         }
       } catch {
         // ignore
       }
     },
-    [activeChatId]
+    [activeChatCreatedAt, activeChatFileId, activeChatId]
   );
 
   // Extract the last fileId mentioned in user messages via [Currently open file: ..., fileId: ...]
@@ -282,8 +295,14 @@ export function ChatPanel({
     (model: string, ragSetting: string | null) => {
       const c = getDriveToolModeConstraint(model, ragSetting);
       setDriveToolMode(c.forcedMode ?? c.defaultMode);
-      // Gemma or WebSearch: disable MCP (no function calling)
-      if (model.toLowerCase().includes("gemma") || ragSetting === "__websearch__") {
+      // Modes that disable function calling should also disable MCP.
+      const modelLower = model.toLowerCase();
+      const hasRag = !!(ragSetting && ragSetting !== "__websearch__");
+      if (
+        modelLower.includes("gemma") ||
+        ragSetting === "__websearch__" ||
+        (modelLower.includes("flash-lite") && hasRag)
+      ) {
         setEnabledMcpServerNames([]);
       }
     },
@@ -354,7 +373,15 @@ export function ChatPanel({
       // Apply overrides from slash commands
       const effectiveModel = overrides?.model || selectedModel;
       const effectiveRagSetting = overrides?.searchSetting !== undefined ? overrides.searchSetting : selectedRagSetting;
-      const effectiveDriveToolMode = overrides?.driveToolMode || driveToolMode;
+      const requestedDriveToolMode = overrides?.driveToolMode || driveToolMode;
+      const effectiveConstraint = getDriveToolModeConstraint(
+        effectiveModel,
+        effectiveRagSetting
+      );
+      const effectiveDriveToolMode =
+        effectiveConstraint.forcedMode ?? requestedDriveToolMode;
+      const functionToolsForcedOff =
+        effectiveConstraint.locked && effectiveConstraint.forcedMode === "none";
       const mcpOverride = overrides?.enabledMcpServers !== undefined ? overrides.enabledMcpServers : null;
 
       const userMessage: Message = {
@@ -388,7 +415,9 @@ export function ChatPanel({
               : []
           : [];
 
-      const effectiveMcpNames = mcpOverride
+      const effectiveMcpNames = functionToolsForcedOff
+        ? []
+        : mcpOverride
         ? mcpOverride
         : isWebSearch ? [] : enabledMcpServerNames;
 
@@ -416,6 +445,17 @@ export function ChatPanel({
         },
       };
 
+      let buffer = "";
+      let accumulatedContent = "";
+      let accumulatedThinking = "";
+      let accumulatedToolCalls: Message["toolCalls"] = [];
+      let accumulatedToolResults: Message["toolResults"] = [];
+      let ragUsed = false;
+      let webSearchUsed = false;
+      let ragSources: string[] = [];
+      let generatedImages: GeneratedImage[] = [];
+      let mcpApps: McpAppInfo[] = [];
+
       try {
         const response = await fetch("/api/chat", {
           method: "POST",
@@ -433,16 +473,6 @@ export function ChatPanel({
         if (!reader) throw new Error("No response body");
 
         const decoder = new TextDecoder();
-        let buffer = "";
-        let accumulatedContent = "";
-        let accumulatedThinking = "";
-        let accumulatedToolCalls: Message["toolCalls"] = [];
-        let accumulatedToolResults: Message["toolResults"] = [];
-        let ragUsed = false;
-        let webSearchUsed = false;
-        let ragSources: string[] = [];
-        let generatedImages: GeneratedImage[] = [];
-        let mcpApps: McpAppInfo[] = [];
 
         while (true) {
           const { done, value } = await reader.read();
@@ -530,7 +560,7 @@ export function ChatPanel({
                     role: "assistant",
                     content: accumulatedContent,
                     timestamp: Date.now(),
-                    model: selectedModel,
+                    model: effectiveModel,
                     thinking: accumulatedThinking || undefined,
                     toolCalls:
                       accumulatedToolCalls && accumulatedToolCalls.length > 0
@@ -576,15 +606,31 @@ export function ChatPanel({
         }
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          if (streamingContent) {
+          if (accumulatedContent) {
             const partialMessage: Message = {
               role: "assistant",
-              content: streamingContent + "\n\n*(Generation stopped)*",
+              content: accumulatedContent + "\n\n*(Generation stopped)*",
               timestamp: Date.now(),
-              model: selectedModel,
+              model: effectiveModel,
+              thinking: accumulatedThinking || undefined,
+              toolCalls:
+                accumulatedToolCalls && accumulatedToolCalls.length > 0
+                  ? accumulatedToolCalls
+                  : undefined,
+              toolResults:
+                accumulatedToolResults && accumulatedToolResults.length > 0
+                  ? accumulatedToolResults
+                  : undefined,
+              ragUsed: ragUsed || undefined,
+              webSearchUsed: webSearchUsed || undefined,
+              ragSources: ragSources.length > 0 ? ragSources : undefined,
+              generatedImages:
+                generatedImages.length > 0 ? generatedImages : undefined,
+              mcpApps: mcpApps.length > 0 ? mcpApps : undefined,
             };
             const finalMessages = [...updatedMessages, partialMessage];
             setMessages(finalMessages);
+            await saveChat(finalMessages);
           }
         } else {
           const errorMessage: Message = {
@@ -616,7 +662,6 @@ export function ChatPanel({
       enabledMcpServerNames,
       settings,
       saveChat,
-      streamingContent,
     ]
   );
 
