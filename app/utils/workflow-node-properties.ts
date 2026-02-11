@@ -78,14 +78,14 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
     case "drive-read":
       return [
         { key: "path", label: "Path", required: true, placeholder: "notes/input.md" },
-        { key: "saveTo", label: "Save To", required: false, placeholder: "fileContent" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "fileContent" },
       ];
     case "drive-search":
       return [
         { key: "query", label: "Query", required: true, placeholder: "search keywords" },
         { key: "searchContent", label: "Search Content", required: false, options: ["false", "true"], defaultValue: "false" },
         { key: "limit", label: "Limit", required: false, placeholder: "10" },
-        { key: "saveTo", label: "Save To", required: false, placeholder: "results" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "results" },
       ];
     case "drive-list":
       return [
@@ -95,12 +95,12 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "sortOrder", label: "Sort Order", required: false, options: ["desc", "asc"], defaultValue: "desc" },
         { key: "modifiedWithin", label: "Modified Within", required: false, placeholder: "7d" },
         { key: "createdWithin", label: "Created Within", required: false, placeholder: "30d" },
-        { key: "saveTo", label: "Save To", required: false, placeholder: "files" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "files" },
       ];
     case "drive-folder-list":
       return [
         { key: "folder", label: "Folder", required: false, placeholder: "/" },
-        { key: "saveTo", label: "Save To", required: false, placeholder: "folders" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "folders" },
       ];
     case "drive-file-picker":
       return [
@@ -140,7 +140,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "title", label: "Title", required: false, placeholder: "Enter a value" },
         { key: "default", label: "Default", required: false },
         { key: "multiline", label: "Multiline", required: false, options: ["false", "true"], defaultValue: "false" },
-        { key: "saveTo", label: "Save To", required: false, placeholder: "userInput" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "userInput" },
       ];
     case "prompt-file":
       return [
@@ -158,6 +158,9 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
       return [
         { key: "path", label: "Path", required: false, placeholder: "sub-workflow.yaml" },
         { key: "name", label: "Name", required: false, placeholder: "Sub Workflow" },
+        { key: "input", label: "Input", required: false, multiline: true, placeholder: '{"subVar": "{{parentValue}}"}' },
+        { key: "output", label: "Output", required: false, multiline: true, placeholder: '{"parentVar": "subResultVar"}' },
+        { key: "prefix", label: "Prefix", required: false, placeholder: "sub_" },
       ];
     case "mcp":
       return [

@@ -34,7 +34,7 @@ Declare and initialize a variable.
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `name` | Yes | No | Variable name |
-| `value` | Yes | Yes | Initial value |
+| `value` | No | Yes | Initial value (default: empty string) |
 
 Numeric values are auto-detected: if the value parses as a number, it's stored as a number.
 
@@ -247,7 +247,7 @@ Write content to a Google Drive file.
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `path` | Yes | Yes | File path (`.md` extension auto-appended if missing) |
-| `content` | Yes | Yes | Content to write |
+| `content` | No | Yes | Content to write (default: empty string) |
 | `mode` | No | No | `overwrite` (default), `append`, `create` (skip if exists) |
 | `confirm` | No | No | `"true"` (default) to show diff review dialog when updating existing files; `"false"` to write without confirmation |
 | `history` | No | No | `"true"` to save edit history |
@@ -452,7 +452,7 @@ Show a file picker and read the selected file's content.
 
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
-| `title` | No | No | Picker dialog title (default: `"Select a file"`) |
+| `title` | No | Yes | Picker dialog title (default: `"Select a file"`) |
 | `default` | No | Yes | Default file path |
 | `saveTo` | No | No | Variable to store file content (text) |
 | `saveFileTo` | No | No | Variable to store file info JSON (`{path, basename, name, extension}`) |
