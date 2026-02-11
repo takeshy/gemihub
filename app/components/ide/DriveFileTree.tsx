@@ -439,7 +439,7 @@ export function DriveFileTree({
   }, [selectedFolderId]);
 
   const handleCreateFile = useCallback(() => {
-    setCreateFileDialog({ open: true, name: "", ext: ".txt", customExt: "" });
+    setCreateFileDialog({ open: true, name: "", ext: ".md", customExt: "" });
   }, []);
 
   const handleCreateFileSubmit = useCallback(async () => {
@@ -1660,8 +1660,8 @@ export function DriveFileTree({
                   onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, ext: e.target.value }))}
                   className="w-full px-2 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value=".txt">.txt</option>
                   <option value=".md">.md</option>
+                  <option value=".txt">.txt</option>
                   <option value=".yaml">.yaml</option>
                   <option value=".json">.json</option>
                   <option value=".html">.html</option>
