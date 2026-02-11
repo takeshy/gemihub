@@ -172,7 +172,12 @@ MCP App HTML is rendered in a sandboxed iframe:
 { "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "toolName", "arguments": {} } }
 ```
 
-Tool calls from the iframe are proxied through `POST /api/mcp/tool-call` to avoid CORS.
+**Iframe → Parent** (context update):
+```json
+{ "jsonrpc": "2.0", "id": 2, "method": "context/update", "params": { ... } }
+```
+
+Tool calls from the iframe are proxied through `POST /api/mcp/tool-call` to avoid CORS. `context/update` is acknowledged with `{ ok: true }`.
 
 ### UI Controls
 
@@ -199,12 +204,14 @@ The `mcp` workflow node calls an MCP server tool directly.
 
 ### Workflow Execution
 
-Unlike chat, the workflow MCP handler makes direct JSON-RPC calls without using the cached `McpClient` class:
+The workflow MCP handler creates a dedicated `McpClient` per execution (not cached):
 
-1. POST `tools/call` to server URL (60s timeout)
-2. Extract text content from result
-3. If `_meta.ui.resourceUri` present, POST `resources/read` (30s timeout)
-4. Return `McpAppInfo` for display in execution log
+1. Initialize MCP session (handshake + `notifications/initialized`)
+2. Call `tools/call` via `McpClient` (60s timeout)
+3. Extract text content from result
+4. If `_meta.ui.resourceUri` present, call `resources/read` (30s timeout)
+5. Return `McpAppInfo` for display in execution log
+6. Close session
 
 ### Command Node
 
@@ -221,7 +228,9 @@ All MCP server URLs are validated before use. Blocked targets:
 | Category | Blocked |
 |----------|---------|
 | Loopback | `127.*`, `::1`, `localhost` |
-| Private networks | `10.*`, `172.16-31.*`, `192.168.*` |
+| Default route | `0.*` |
+| Private networks (IPv4) | `10.*`, `172.16-31.*`, `192.168.*` |
+| Private networks (IPv6) | `fc00:*`, `fd*` |
 | Link-local | `169.254.*`, `fe80:*` |
 | Cloud metadata | `metadata.google.internal`, `169.254.169.254` |
 | Protocol | HTTP blocked in production (HTTPS required) |
@@ -269,7 +278,7 @@ Chat / Workflow                │
 | `app/routes/api.settings.mcp-test.tsx` | Test connection, discover tools, OAuth discovery on 401 |
 | `app/routes/api.settings.mcp-oauth-token.tsx` | Exchange authorization code for OAuth tokens (PKCE) |
 | `app/components/chat/McpAppRenderer.tsx` | MCP App rendering — iframe sandbox, postMessage, maximize |
-| `app/engine/handlers/mcp.ts` | Workflow MCP node handler — direct JSON-RPC calls |
+| `app/engine/handlers/mcp.ts` | Workflow MCP node handler — dedicated McpClient per execution |
 
 ### API Routes
 

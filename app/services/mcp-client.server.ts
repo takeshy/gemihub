@@ -81,7 +81,7 @@ export class McpClient {
   /**
    * Send a JSON-RPC request to the MCP server
    */
-  private async sendRequest(method: string, params?: Record<string, unknown>): Promise<unknown> {
+  private async sendRequest(method: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<unknown> {
     const request: JsonRpcRequest = {
       jsonrpc: "2.0",
       id: ++this.requestId,
@@ -103,7 +103,7 @@ export class McpClient {
       method: "POST",
       headers,
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(timeoutMs ?? 30_000),
     });
 
     if (!response.ok) {
@@ -230,7 +230,7 @@ export class McpClient {
   /**
    * Call a tool (raw result)
    */
-  async callToolRaw(toolName: string, args?: Record<string, unknown>): Promise<McpToolCallResult> {
+  async callToolRaw(toolName: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<McpToolCallResult> {
     if (!this.initialized) {
       await this.initialize();
     }
@@ -238,14 +238,14 @@ export class McpClient {
     return (await this.sendRequest("tools/call", {
       name: toolName,
       arguments: args || {},
-    })) as McpToolCallResult;
+    }, timeoutMs)) as McpToolCallResult;
   }
 
   /**
    * Call a tool and return MCP Apps result
    */
-  async callToolWithUi(toolName: string, args?: Record<string, unknown>): Promise<McpAppResult> {
-    const result = await this.callToolRaw(toolName, args);
+  async callToolWithUi(toolName: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<McpAppResult> {
+    const result = await this.callToolRaw(toolName, args, timeoutMs);
 
     return {
       content:

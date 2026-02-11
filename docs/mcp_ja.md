@@ -172,7 +172,12 @@ MCP App の HTML はサンドボックス化された iframe でレンダリン�
 { "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "toolName", "arguments": {} } }
 ```
 
-iframe からのツール呼び出しは CORS を回避するため `POST /api/mcp/tool-call` 経由でサーバーサイドにプロキシされます。
+**Iframe → 親**（コンテキスト更新）：
+```json
+{ "jsonrpc": "2.0", "id": 2, "method": "context/update", "params": { ... } }
+```
+
+iframe からのツール呼び出しは CORS を回避するため `POST /api/mcp/tool-call` 経由でサーバーサイドにプロキシされます。`context/update` は `{ ok: true }` で応答されます。
 
 ### UI コントロール
 
@@ -199,12 +204,14 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 
 ### ワークフロー実行
 
-チャットとは異なり、ワークフローの MCP ハンドラーはキャッシュされた `McpClient` クラスを使用せず、直接 JSON-RPC 呼び出しを行います：
+ワークフローの MCP ハンドラーは実行ごとに専用の `McpClient` を作成します（キャッシュなし）：
 
-1. サーバー URL に `tools/call` を POST（60秒タイムアウト）
-2. 結果からテキストコンテンツを抽出
-3. `_meta.ui.resourceUri` がある場合、`resources/read` を POST（30秒タイムアウト）
-4. 実行ログ表示用に `McpAppInfo` を返す
+1. MCP セッションを初期化（ハンドシェイク + `notifications/initialized`）
+2. `McpClient` 経由で `tools/call` を呼び出し（60秒タイムアウト）
+3. 結果からテキストコンテンツを抽出
+4. `_meta.ui.resourceUri` がある場合、`resources/read` を呼び出し（30秒タイムアウト）
+5. 実行ログ表示用に `McpAppInfo` を返す
+6. セッションを終了
 
 ### Command ノード
 
@@ -221,7 +228,9 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 | カテゴリ | ブロック対象 |
 |---------|------------|
 | ループバック | `127.*`、`::1`、`localhost` |
-| プライベートネットワーク | `10.*`、`172.16-31.*`、`192.168.*` |
+| デフォルトルート | `0.*` |
+| プライベートネットワーク (IPv4) | `10.*`、`172.16-31.*`、`192.168.*` |
+| プライベートネットワーク (IPv6) | `fc00:*`、`fd*` |
 | リンクローカル | `169.254.*`、`fe80:*` |
 | クラウドメタデータ | `metadata.google.internal`、`169.254.169.254` |
 | プロトコル | 本番では HTTP をブロック（HTTPS 必須） |
@@ -269,7 +278,7 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 | `app/routes/api.settings.mcp-test.tsx` | 接続テスト、ツール検出、401 時の OAuth ディスカバリ |
 | `app/routes/api.settings.mcp-oauth-token.tsx` | OAuth 認可コードをトークンに交換（PKCE） |
 | `app/components/chat/McpAppRenderer.tsx` | MCP App レンダリング — iframe サンドボックス、postMessage、最大化 |
-| `app/engine/handlers/mcp.ts` | ワークフロー MCP ノードハンドラー — 直接 JSON-RPC 呼び出し |
+| `app/engine/handlers/mcp.ts` | ワークフロー MCP ノードハンドラー — 実行ごとに専用 McpClient を使用 |
 
 ### API ルート
 

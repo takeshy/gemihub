@@ -21,13 +21,23 @@ function sanitizeMcpName(name: string): string {
 }
 
 function getClientKey(config: McpServerConfig): string {
-  return `${config.url}:${JSON.stringify(config.headers || {})}`;
+  const token = config.oauthTokens?.accessToken || "";
+  return `${config.url}:${JSON.stringify(config.headers || {})}:${token}`;
 }
 
 export function getOrCreateClient(config: McpServerConfig): McpClient {
   const key = getClientKey(config);
   let client = mcpClients.get(key);
   if (!client) {
+    // Evict stale client for the same URL+headers but different (old) token
+    const baseKey = `${config.url}:${JSON.stringify(config.headers || {})}:`;
+    for (const [k, old] of mcpClients) {
+      if (k.startsWith(baseKey) && k !== key) {
+        old.close().catch(() => {});
+        mcpClients.delete(k);
+      }
+    }
+
     // Inject OAuth Authorization header if tokens are present
     const effectiveConfig = { ...config };
     if (config.oauthTokens) {
