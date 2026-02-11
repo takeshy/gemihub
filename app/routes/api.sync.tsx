@@ -519,7 +519,7 @@ export async function action({ request }: Route.ActionArgs) {
         (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
         ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
 
-      // Update files in parallel: read old content (for edit history), then update
+      // Update files in parallel: read old content, skip upload if unchanged
       const pushResults = await parallelProcess(files, async ({ fileId, content }) => {
         let oldContent: string | null = null;
         try {
@@ -528,12 +528,29 @@ export async function action({ request }: Route.ActionArgs) {
           // File might be new or unreadable, skip history
         }
 
+        // Skip upload if content is identical to remote
+        if (oldContent !== null && oldContent === content) {
+          const existingMeta = pushRemoteMeta.files[fileId];
+          return {
+            ok: true as const,
+            uploaded: false,
+            fileId,
+            md5Checksum: existingMeta?.md5Checksum ?? "",
+            modifiedTime: existingMeta?.modifiedTime ?? "",
+            name: existingMeta?.name ?? "",
+            mimeType: existingMeta?.mimeType ?? "",
+            oldContent,
+            newContent: content,
+          };
+        }
+
         const existingMeta = pushRemoteMeta.files[fileId];
         const mimeType = existingMeta?.mimeType || "text/plain";
         try {
           const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
           return {
             ok: true as const,
+            uploaded: true,
             fileId,
             md5Checksum: updated.md5Checksum ?? "",
             modifiedTime: updated.modifiedTime ?? "",
@@ -556,6 +573,7 @@ export async function action({ request }: Route.ActionArgs) {
 
       const successful = pushResults.filter((r): r is {
         ok: true;
+        uploaded: boolean;
         fileId: string;
         md5Checksum: string;
         modifiedTime: string;
@@ -565,9 +583,10 @@ export async function action({ request }: Route.ActionArgs) {
         newContent: string;
       } => r.ok);
       const skippedFileIds = pushResults.filter((r) => !r.ok).map((r) => r.fileId);
+      const actuallyUploaded = successful.filter((r) => r.uploaded);
 
-      // Update meta entries from successful results
-      for (const r of successful) {
+      // Update meta entries only for files that were actually uploaded
+      for (const r of actuallyUploaded) {
         const existing = pushRemoteMeta.files[r.fileId];
         pushRemoteMeta.files[r.fileId] = {
           ...existing,
@@ -578,7 +597,7 @@ export async function action({ request }: Route.ActionArgs) {
         };
       }
 
-      if (successful.length > 0) {
+      if (actuallyUploaded.length > 0) {
         pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
         // Write sync meta once
         await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
