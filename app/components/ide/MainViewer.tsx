@@ -109,7 +109,7 @@ export function MainViewer({
   const mediaType = getMediaType(fileName, fileMimeType);
   if (mediaType) {
     return (
-      <MediaViewer fileId={fileId} fileName={fileName || "file"} mediaType={mediaType} />
+      <MediaViewer fileId={fileId} fileName={fileName || "file"} mediaType={mediaType} fileMimeType={fileMimeType} />
     );
   }
 
@@ -129,8 +129,67 @@ export function MainViewer({
 // Media Viewer (PDF, Video, Audio, Image)
 // ---------------------------------------------------------------------------
 
-function MediaViewer({ fileId, fileName, mediaType }: { fileId: string; fileName: string; mediaType: "pdf" | "video" | "audio" | "image" }) {
-  const src = `/api/drive/files?action=raw&fileId=${fileId}`;
+function guessMimeType(fileName: string): string {
+  const ext = fileName.toLowerCase().split(".").pop() || "";
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg", mov: "video/quicktime", avi: "video/x-msvideo", mkv: "video/x-matroska",
+    mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac", aac: "audio/aac", m4a: "audio/mp4", opus: "audio/opus",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", ico: "image/x-icon",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
+function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: string; fileName: string; mediaType: "pdf" | "video" | "audio" | "image"; fileMimeType: string | null }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Revoke previous blob URL
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+    setSrc(null);
+
+    let cancelled = false;
+    (async () => {
+      const cached = await getCachedFile(fileId);
+      if (cancelled) return;
+      if (cached?.encoding === "base64" && cached.content) {
+        const mime = fileMimeType || guessMimeType(fileName);
+        const byteString = atob(cached.content);
+        const bytes = new Uint8Array(byteString.length);
+        for (let i = 0; i < byteString.length; i++) {
+          bytes[i] = byteString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: mime });
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        blobUrlRef.current = url;
+        setSrc(url);
+      } else {
+        setSrc(`/api/drive/files?action=raw&fileId=${fileId}`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fileId, fileName, fileMimeType]);
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
@@ -138,23 +197,31 @@ function MediaViewer({ fileId, fileName, mediaType }: { fileId: string; fileName
           {fileName}
         </span>
       </div>
-      {mediaType === "pdf" && (
-        <iframe src={src} className="flex-1 w-full border-0" title={fileName} />
-      )}
-      {mediaType === "video" && (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <video src={src} controls className="max-w-full max-h-full" />
+      {src === null ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
         </div>
-      )}
-      {mediaType === "audio" && (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <audio src={src} controls />
-        </div>
-      )}
-      {mediaType === "image" && (
-        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-          <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
-        </div>
+      ) : (
+        <>
+          {mediaType === "pdf" && (
+            <iframe src={src} className="flex-1 w-full border-0" title={fileName} />
+          )}
+          {mediaType === "video" && (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <video src={src} controls className="max-w-full max-h-full" />
+            </div>
+          )}
+          {mediaType === "audio" && (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <audio src={src} controls />
+            </div>
+          )}
+          {mediaType === "image" && (
+            <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+              <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
