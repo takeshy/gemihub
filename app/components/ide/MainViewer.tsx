@@ -497,6 +497,7 @@ function MarkdownFileEditor({
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
   const editorCtx = useEditorContext();
+
   const [uploading, setUploading] = useState(false);
   const [tempDiffData, setTempDiffData] = useState<{
     fileName: string;
