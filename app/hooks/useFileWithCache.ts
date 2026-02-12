@@ -259,21 +259,6 @@ export function useFileWithCache(
     [fileId]
   );
 
-  // Listen for drive-file-changed events (from chat function calling)
-  // ChatPanel also deletes cache/editHistory (fire-and-forget) for non-viewed files.
-  // Here we await deletion to avoid race with fetchFile's cache-first read.
-  useEffect(() => {
-    const handler = async (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.fileId && detail.fileId === fileId) {
-        await deleteCachedFile(detail.fileId);
-        await fetchFile(detail.fileId);
-      }
-    };
-    window.addEventListener("drive-file-changed", handler);
-    return () => window.removeEventListener("drive-file-changed", handler);
-  }, [fileId, fetchFile]);
-
   // Listen for file-restored events (from EditHistoryModal restore)
   useEffect(() => {
     const handler = (e: Event) => {

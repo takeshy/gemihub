@@ -68,7 +68,8 @@ export interface StreamChunk {
     | "web_search_used"
     | "image_generated"
     | "mcp_app"
-    | "drive_changed";
+    | "drive_file_updated"
+    | "drive_file_created";
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;
@@ -76,7 +77,8 @@ export interface StreamChunk {
   ragSources?: string[];
   generatedImage?: GeneratedImage;
   mcpApp?: McpAppInfo;
-  changedFileId?: string;
+  updatedFile?: { fileId: string; fileName: string; content: string };
+  createdFile?: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string };
 }
 
 // Chat history stored in Drive

@@ -6,7 +6,6 @@ import {
   getFileMetadata,
   searchFiles,
   createFile,
-  updateFile,
 } from "./google-drive.server";
 import { getFileListFromMeta, upsertFileInMeta } from "./sync-meta.server";
 import type { ToolDefinition } from "~/types/settings";
@@ -271,6 +270,9 @@ export async function executeDriveTool(
         id: file.id,
         name: file.name,
         webViewLink: file.webViewLink,
+        content,
+        md5Checksum: file.md5Checksum,
+        modifiedTime: file.modifiedTime,
       };
     }
 
@@ -283,12 +285,12 @@ export async function executeDriveTool(
       if (typeof content !== "string") {
         return { error: "update_drive_file: 'content' must be a string" };
       }
-      const file = await updateFile(accessToken, fileId, content, "text/plain", { signal: abortSignal });
-      await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
+      const fileMeta = await getFileMetadata(accessToken, fileId, { signal: abortSignal });
       return {
-        id: file.id,
-        name: file.name,
-        webViewLink: file.webViewLink,
+        id: fileMeta.id,
+        name: fileMeta.name,
+        webViewLink: fileMeta.webViewLink,
+        content,
       };
     }
 

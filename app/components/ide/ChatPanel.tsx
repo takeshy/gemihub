@@ -25,7 +25,13 @@ import { useI18n } from "~/i18n/context";
 import { isEncryptedFile, decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
 import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
-import { deleteCachedFile, deleteEditHistoryEntry } from "~/services/indexeddb-cache";
+import {
+  getCachedFile,
+  setCachedFile,
+  getLocalSyncMeta,
+  setLocalSyncMeta,
+} from "~/services/indexeddb-cache";
+import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -553,16 +559,61 @@ export function ChatPanel({
                     mcpApps = [...mcpApps, chunk.mcpApp];
                   }
                   break;
-                case "drive_changed":
-                  window.dispatchEvent(new Event("sync-complete"));
-                  if (chunk.changedFileId) {
-                    deleteCachedFile(chunk.changedFileId);
-                    deleteEditHistoryEntry(chunk.changedFileId);
-                    window.dispatchEvent(
-                      new CustomEvent("drive-file-changed", {
-                        detail: { fileId: chunk.changedFileId },
-                      })
-                    );
+                case "drive_file_updated":
+                  if (chunk.updatedFile) {
+                    const { fileId: ufId, fileName: ufName, content: ufContent } = chunk.updatedFile;
+                    (async () => {
+                      try {
+                        await addCommitBoundary(ufId);
+                        await saveLocalEdit(ufId, ufName, ufContent);
+                        const cached = await getCachedFile(ufId);
+                        await setCachedFile({
+                          fileId: ufId,
+                          content: ufContent,
+                          md5Checksum: cached?.md5Checksum ?? "",
+                          modifiedTime: cached?.modifiedTime ?? "",
+                          cachedAt: Date.now(),
+                          fileName: ufName,
+                        });
+                        await addCommitBoundary(ufId);
+                        window.dispatchEvent(
+                          new CustomEvent("file-modified", { detail: { fileId: ufId } })
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent("file-restored", {
+                            detail: { fileId: ufId, content: ufContent },
+                          })
+                        );
+                      } catch { /* ignore */ }
+                    })();
+                  }
+                  break;
+                case "drive_file_created":
+                  if (chunk.createdFile) {
+                    const { fileId: cfId, fileName: cfName, content: cfContent, md5Checksum: cfMd5, modifiedTime: cfMt } = chunk.createdFile;
+                    (async () => {
+                      try {
+                        await setCachedFile({
+                          fileId: cfId,
+                          content: cfContent,
+                          md5Checksum: cfMd5,
+                          modifiedTime: cfMt,
+                          cachedAt: Date.now(),
+                          fileName: cfName,
+                        });
+                        const syncMeta = (await getLocalSyncMeta()) ?? {
+                          id: "current" as const,
+                          lastUpdatedAt: new Date().toISOString(),
+                          files: {},
+                        };
+                        syncMeta.files[cfId] = {
+                          md5Checksum: cfMd5,
+                          modifiedTime: cfMt,
+                        };
+                        await setLocalSyncMeta(syncMeta);
+                        window.dispatchEvent(new Event("sync-complete"));
+                      } catch { /* ignore */ }
+                    })();
                   }
                   break;
                 case "error":

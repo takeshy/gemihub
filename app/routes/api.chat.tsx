@@ -170,11 +170,34 @@ export async function action({ request }: Route.ActionArgs) {
             validTokens.accessToken,
             validTokens.rootFolderId
           );
-          if (name === "create_drive_file" || name === "update_drive_file") {
-            const changedFileId = name === "update_drive_file"
-              ? (args.fileId as string)
-              : (result as { id?: string })?.id;
-            sendChunk({ type: "drive_changed", changedFileId: changedFileId || undefined });
+          if (name === "update_drive_file") {
+            const r = result as { id?: string; name?: string; content?: string };
+            if (r.id && r.content != null) {
+              sendChunk({
+                type: "drive_file_updated",
+                updatedFile: { fileId: r.id, fileName: r.name || "", content: r.content },
+              });
+            }
+            // Strip content from result returned to Gemini (token savings)
+            const { content: _content, ...geminiResult } = result as Record<string, unknown>;
+            return geminiResult;
+          }
+          if (name === "create_drive_file") {
+            const r = result as { id?: string; name?: string; content?: string; md5Checksum?: string; modifiedTime?: string };
+            if (r.id && r.content != null) {
+              sendChunk({
+                type: "drive_file_created",
+                createdFile: {
+                  fileId: r.id,
+                  fileName: r.name || "",
+                  content: r.content,
+                  md5Checksum: r.md5Checksum || "",
+                  modifiedTime: r.modifiedTime || "",
+                },
+              });
+            }
+            const { content: _content, md5Checksum: _md5, modifiedTime: _mt, ...geminiResult } = result as Record<string, unknown>;
+            return geminiResult;
           }
           return result;
         }
