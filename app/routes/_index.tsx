@@ -598,6 +598,30 @@ function IDEContent({
   const { sidebarViews, mainViews, slashCommands: pluginSlashCommands, getPluginAPI } = usePlugins();
   const { fileList } = useEditorContext();
 
+  // On iOS Safari the layout viewport (and 100dvh) does NOT shrink when the
+  // virtual keyboard appears.  Override the root container height with the
+  // actual visible height so the entire flex layout (header + editor + nav)
+  // fits within the visible area without body scroll.
+  const [vvHeight, setVvHeight] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isMobile) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      const isKeyboardOpen = vv.height < window.innerHeight * 0.75;
+      setVvHeight(isKeyboardOpen ? vv.height : null);
+      if (isKeyboardOpen) {
+        window.scrollTo(0, 0);
+      }
+    };
+    vv.addEventListener("resize", handler);
+    vv.addEventListener("scroll", handler);
+    return () => {
+      vv.removeEventListener("resize", handler);
+      vv.removeEventListener("scroll", handler);
+    };
+  }, [isMobile]);
+
   // Online/offline state — starts from loader detection, updates with browser events
   const [isOffline, setIsOffline] = useState(initialOffline);
   useEffect(() => {
@@ -824,6 +848,29 @@ function IDEContent({
     }
   }, [mobileIndex, animateTo, rightPanel]);
 
+  // Listen for swipe events from iframes (e.g. HTML preview) via postMessage
+  useEffect(() => {
+    if (!isMobile) return;
+    const handler = (e: Event) => {
+      const dir = (e as CustomEvent).detail?.direction;
+      let nextIndex = mobileIndex;
+      if (dir === "right" && mobileIndex > 0) nextIndex = mobileIndex - 1;
+      if (dir === "left" && mobileIndex < MOBILE_PANEL_COUNT - 1) nextIndex = mobileIndex + 1;
+      if (nextIndex === mobileIndex) return;
+      animateTo(nextIndex);
+      if (nextIndex === 0) setMobileView("files");
+      else if (nextIndex === 1) setMobileView("editor");
+      else {
+        if (rightPanel === "chat") setMobileView("chat");
+        else if (rightPanel === "workflow") setMobileView("workflow");
+        else setMobileView("chat");
+      }
+      prevIndexRef.current = nextIndex;
+    };
+    window.addEventListener("iframe-swipe", handler);
+    return () => window.removeEventListener("iframe-swipe", handler);
+  }, [isMobile, mobileIndex, animateTo, rightPanel]);
+
   // Mobile plugin menu state
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
   const pluginMenuRef = useRef<HTMLDivElement>(null);
@@ -950,7 +997,10 @@ function IDEContent({
     }`;
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden overscroll-none bg-gray-50 dark:bg-gray-950">
+    <div
+      className="flex h-dvh flex-col overflow-hidden overscroll-none bg-gray-50 dark:bg-gray-950"
+      style={vvHeight !== null ? { height: `${vvHeight}px` } : undefined}
+    >
       <Header
         rightPanel={rightPanel}
         setRightPanel={setRightPanel}

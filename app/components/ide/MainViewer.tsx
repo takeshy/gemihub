@@ -16,6 +16,7 @@ import { getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
 import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditHistoryModal } from "./EditHistoryModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
+import { useIsMobile } from "~/hooks/useIsMobile";
 
 function WysiwygSelectionTracker({
   setActiveSelection,
@@ -886,6 +887,40 @@ function HtmlFileEditor({
     }
   }, [saveToCache]);
 
+  const isMobile = useIsMobile();
+
+  // Inject touch tracking script into srcDoc so swipe gestures are forwarded
+  // to the parent via postMessage. The script is tiny and harmless on desktop
+  // (touch events simply don't fire). sandbox="allow-scripts" (without
+  // allow-same-origin) keeps the iframe in an opaque origin — safe.
+  const srcDocWithTouch = useMemo(() => {
+    const script = `<script>
+var _sx,_sy,_st;
+document.addEventListener('touchstart',function(e){var t=e.touches[0];_sx=t.clientX;_sy=t.clientY;_st=Date.now();});
+document.addEventListener('touchend',function(e){var t=e.changedTouches[0];
+parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.clientX,ey:t.clientY,et:Date.now()},'*');});
+</script>`;
+    return content + script;
+  }, [content]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type !== "gemihub-iframe-touch") return;
+      const { sx, sy, st, ex, ey, et } = e.data;
+      const dx = ex - sx;
+      const dy = ey - sy;
+      const elapsed = et - st;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && elapsed < 300) {
+        window.dispatchEvent(
+          new CustomEvent("iframe-swipe", { detail: { direction: dx > 0 ? "right" : "left" } })
+        );
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [isMobile]);
+
   const modes: { key: HtmlEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
     { key: "raw", icon: <Code size={ICON.MD} />, label: t("mainViewer.raw") },
@@ -927,10 +962,10 @@ function HtmlFileEditor({
       {/* Content area */}
       {mode === "preview" && (
         <iframe
-          srcDoc={content}
+          srcDoc={srcDocWithTouch}
           className="flex-1 w-full border-0 bg-white"
           title={fileName}
-          sandbox="allow-same-origin"
+          sandbox="allow-scripts"
         />
       )}
 
