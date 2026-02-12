@@ -20,6 +20,29 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Constrain wysimark-lite to parent height; toolbar stays fixed, editable scrolls.
+   DOM: .wysimark-fill > div (entry) > div:last-child (toggle) > div ($OuterContainer)
+        $OuterContainer children: toolbar (fixed) + $Editable (scrolls) */
+.wysimark-fill > div {
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.wysimark-fill > div > div:last-child,
+.wysimark-fill > div > div:last-child > div {
+  flex: 1 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.wysimark-fill > div > div:last-child > div > div:last-child {
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
 /* Hide scrollbar for horizontal tab scrolling on mobile */
 .scrollbar-hide {
   -ms-overflow-style: none;
