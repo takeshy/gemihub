@@ -221,6 +221,41 @@ export async function handleGemihubCommandNode(
       break;
     }
 
+    case "convert-to-html": {
+      const file = await resolveExistingFile(pathRaw, context, serviceContext);
+      const lowerName = file.name.toLowerCase();
+      if (!lowerName.endsWith(".md") && file.mimeType !== "text/markdown") {
+        throw new Error("Only markdown files are supported for HTML conversion");
+      }
+
+      const sourceContent = await driveService.readFile(accessToken, file.id, {
+        signal: serviceContext.abortSignal,
+      });
+      const sourceBaseName = file.name.split("/").pop() ?? file.name;
+      const sourceStem = sourceBaseName.replace(/\.md$/i, "");
+      const htmlName = `temporaries/${sourceStem}.html`;
+
+      const html = renderMarkdownToPrintableHtml(sourceContent, sourceStem || sourceBaseName);
+      const htmlFile = await driveService.createFile(
+        accessToken,
+        htmlName,
+        html,
+        folderId,
+        "text/html",
+        { signal: serviceContext.abortSignal },
+      );
+      await upsertFileInMeta(accessToken, folderId, htmlFile, { signal: serviceContext.abortSignal });
+      serviceContext.onDriveFileCreated?.({
+        fileId: htmlFile.id,
+        fileName: htmlFile.name,
+        content: html,
+        md5Checksum: htmlFile.md5Checksum || "",
+        modifiedTime: htmlFile.modifiedTime || "",
+      });
+      result = htmlFile.name;
+      break;
+    }
+
     case "rename": {
       if (!text) throw new Error("gemihub-command 'rename' requires 'text' property (new name)");
       const file = await resolveExistingFile(pathRaw, context, serviceContext);

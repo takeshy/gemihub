@@ -182,7 +182,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
       ];
     case "gemihub-command":
       return [
-        { key: "command", label: "Command", required: true, options: ["encrypt", "publish", "unpublish", "duplicate", "convert-to-pdf", "rename"] },
+        { key: "command", label: "Command", required: true, options: ["encrypt", "publish", "unpublish", "duplicate", "convert-to-pdf", "convert-to-html", "rename"] },
         { key: "path", label: "Path", required: true, placeholder: "notes/file.md" },
         { key: "text", label: "Text", required: false, placeholder: "new-name.md (for rename)" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "result" },

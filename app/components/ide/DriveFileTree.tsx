@@ -157,6 +157,11 @@ function flattenTree(nodes: CachedTreeNode[], parentPath: string): FileListItem[
   return result;
 }
 
+function canConvertToHtml(name: string, mimeType: string): boolean {
+  const lowerName = name.toLowerCase();
+  return lowerName.endsWith(".md") || mimeType === "text/markdown";
+}
+
 function canConvertToPdf(name: string, mimeType: string): boolean {
   const lowerName = name.toLowerCase();
   return (
@@ -1527,6 +1532,69 @@ export function DriveFileTree({
     [findFullFileName, treeItems, t, setBusy, clearBusy, updateTreeFromMeta, fetchAndCacheTree, onSelectFile]
   );
 
+  const handleConvertMarkdownToHtml = useCallback(
+    async (item: CachedTreeNode) => {
+      if (item.isFolder) return;
+      if (!canConvertToHtml(item.name, item.mimeType)) return;
+
+      const fullName = findFullFileName(item.id, treeItems, "") ?? item.name;
+      const sourceBaseName = fullName.split("/").pop() ?? fullName;
+      const sourceStem = sourceBaseName.replace(/\.md$/i, "");
+      const targetBaseName = `${sourceStem}.html`;
+      const targetFullPath = `temporaries/${targetBaseName}`;
+      const existing = findFileByPath(treeItems, targetFullPath);
+
+      if (existing) {
+        const msg = t("contextMenu.fileAlreadyExists").replace("{name}", targetBaseName);
+        if (!confirm(msg)) return;
+      }
+
+      // Read local content from cache so unsaved edits are reflected
+      let localContent: string | undefined;
+      const cached = await getCachedFile(item.id);
+      if (cached?.content) {
+        localContent = cached.content;
+      }
+
+      const busyIds = existing ? [item.id, existing.id] : [item.id];
+      setBusy(busyIds);
+      try {
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create-markdown-html",
+            fileId: item.id,
+            overwriteFileId: existing?.id,
+            content: localContent,
+          }),
+        });
+
+        if (!res.ok) {
+          alert(t("contextMenu.convertHtmlFailed"));
+          return;
+        }
+
+        const data = await res.json();
+        if (data.meta) {
+          await updateTreeFromMeta(data.meta);
+        } else {
+          await fetchAndCacheTree();
+        }
+
+        const file = data.file;
+        const fileBaseName = (file.name as string).split("/").pop() ?? file.name;
+        onSelectFile(file.id, fileBaseName, file.mimeType);
+        alert(t("contextMenu.convertedHtml"));
+      } catch {
+        alert(t("contextMenu.convertHtmlFailed"));
+      } finally {
+        clearBusy(busyIds);
+      }
+    },
+    [findFullFileName, treeItems, t, setBusy, clearBusy, updateTreeFromMeta, fetchAndCacheTree, onSelectFile]
+  );
+
   const getContextMenuItems = useCallback(
     (item: CachedTreeNode): ContextMenuItem[] => {
       const items: ContextMenuItem[] = [];
@@ -1611,6 +1679,14 @@ export function DriveFileTree({
           });
         }
 
+        if (canConvertToHtml(item.name, item.mimeType)) {
+          items.push({
+            label: t("contextMenu.convertToHtml"),
+            icon: <FileCode size={ICON.MD} />,
+            onClick: () => handleConvertMarkdownToHtml(item),
+          });
+        }
+
         // Publish / unpublish — not for encrypted files
         if (!item.name.endsWith(".encrypted")) {
           const fileMeta = remoteMeta[item.id];
@@ -1673,7 +1749,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, remoteMeta, cachedFiles, t, findFullFileName, treeItems]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, t, findFullFileName, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {

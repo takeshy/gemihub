@@ -186,6 +186,27 @@ export async function action({ request }: Route.ActionArgs) {
         }
       }
     }
+    case "create-markdown-html": {
+      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+
+      const htmlSourceMeta = await getFileMetadata(validTokens.accessToken, fileId);
+      const htmlLowerName = htmlSourceMeta.name.toLowerCase();
+      if (!htmlLowerName.endsWith(".md") && htmlSourceMeta.mimeType !== "text/markdown") {
+        return jsonWithCookie({ error: "Only markdown files are supported" }, { status: 400 });
+      }
+
+      const htmlSourceContent = content ?? await readFile(validTokens.accessToken, fileId);
+      const htmlSourceBaseName = htmlSourceMeta.name.split("/").pop() ?? htmlSourceMeta.name;
+      const htmlSourceStem = htmlSourceBaseName.replace(/\.md$/i, "");
+      const htmlFileName = `temporaries/${htmlSourceStem}.html`;
+
+      const htmlContent = renderMarkdownToPrintableHtml(htmlSourceContent, htmlSourceStem || htmlSourceBaseName);
+      const file = overwriteFileId
+        ? await updateFile(validTokens.accessToken, overwriteFileId, htmlContent, "text/html")
+        : await createFile(validTokens.accessToken, htmlFileName, htmlContent, validTokens.rootFolderId, "text/html");
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+    }
     case "update": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
 

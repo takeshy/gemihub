@@ -188,6 +188,9 @@ export interface TranslationStrings {
   "contextMenu.convertToPdf": string;
   "contextMenu.convertedPdf": string;
   "contextMenu.convertPdfFailed": string;
+  "contextMenu.convertToHtml": string;
+  "contextMenu.convertedHtml": string;
+  "contextMenu.convertHtmlFailed": string;
 
   // Temp files
   "settings.general.tempFiles": string;
@@ -567,6 +570,9 @@ const en: TranslationStrings = {
   "contextMenu.convertToPdf": "Convert to PDF",
   "contextMenu.convertedPdf": "PDF created in temporaries/.",
   "contextMenu.convertPdfFailed": "Failed to convert file to PDF.",
+  "contextMenu.convertToHtml": "Convert to HTML",
+  "contextMenu.convertedHtml": "HTML created in temporaries/.",
+  "contextMenu.convertHtmlFailed": "Failed to convert file to HTML.",
 
   // Temp files
   "settings.general.tempFiles": "Temporary Files",
@@ -946,6 +952,9 @@ const ja: TranslationStrings = {
   "contextMenu.convertToPdf": "PDFに変換",
   "contextMenu.convertedPdf": "temporaries/ にPDFを作成しました。",
   "contextMenu.convertPdfFailed": "PDF変換に失敗しました。",
+  "contextMenu.convertToHtml": "HTMLに変換",
+  "contextMenu.convertedHtml": "temporaries/ にHTMLを作成しました。",
+  "contextMenu.convertHtmlFailed": "HTML変換に失敗しました。",
 
   // Temp files
   "settings.general.tempFiles": "一時ファイル",
