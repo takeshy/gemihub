@@ -69,6 +69,8 @@ import {
   Puzzle,
   X,
   Search,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
@@ -1462,6 +1464,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
   const [testResults, setTestResults] = useState<Record<number, { ok: boolean; msg: string }>>({});
   const [addTestResult, setAddTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [addTesting, setAddTesting] = useState(false);
+  const [detailServer, setDetailServer] = useState<McpServerConfig | null>(null);
 
   // --- OAuth redirect-flow completion (mobile fallback) ---
   const oauthResumeRef = useRef(false);
@@ -2145,7 +2148,11 @@ function McpTab({ settings }: { settings: UserSettings }) {
             key={idx}
             className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50"
           >
-            <div className="flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => setDetailServer(server)}
+              className="flex-1 min-w-0 text-left cursor-pointer hover:opacity-70 transition-opacity"
+            >
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                   {server.name}
@@ -2159,7 +2166,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{server.url}</p>
               {server.tools && server.tools.length > 0 && (
-                <p className="text-xs text-gray-400 dark:text-gray-500 truncate" title={server.tools.map(t => t.name).join(", ")}>
+                <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
                   {t("settings.mcp.tools").replace("{{tools}}", server.tools.map(t => t.name).join(", "))}
                 </p>
               )}
@@ -2172,7 +2179,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
                   {testResults[idx].msg}
                 </p>
               )}
-            </div>
+            </button>
             <div className="flex items-center gap-1">
               {server.oauthTokens && (
                 <button
@@ -2283,7 +2290,124 @@ function McpTab({ settings }: { settings: UserSettings }) {
         </button>
       )}
 
+      {detailServer && (
+        <McpServerDetailModal server={detailServer} onClose={() => setDetailServer(null)} />
+      )}
+
     </SectionCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MCP Server Detail Modal
+// ---------------------------------------------------------------------------
+
+function McpServerDetailModal({
+  server,
+  onClose,
+}: {
+  server: McpServerConfig;
+  onClose: () => void;
+}) {
+  const [expandedTool, setExpandedTool] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="mx-4 w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+              {server.name}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{server.url}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 flex-shrink-0 ml-2"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {server.tools && server.tools.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                Tools ({server.tools.length})
+              </p>
+              <div className="space-y-1">
+                {server.tools.map((tool) => {
+                  const isExpanded = expandedTool === tool.name;
+                  return (
+                    <div key={tool.name} className="rounded border border-gray-200 dark:border-gray-700">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedTool(isExpanded ? null : tool.name)}
+                        className="flex items-start gap-2 w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown size={14} className="flex-shrink-0 mt-0.5 text-gray-400" />
+                        ) : (
+                          <ChevronRight size={14} className="flex-shrink-0 mt-0.5 text-gray-400" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {tool.name}
+                          </p>
+                          {tool.description && !isExpanded && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
+                              {tool.description}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 px-3 py-2 space-y-2">
+                          {tool.description && (
+                            <p className="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                              {tool.description}
+                            </p>
+                          )}
+                          {tool.inputSchema && (
+                            <div>
+                              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                                Input Schema
+                              </p>
+                              <pre className="text-xs bg-gray-100 dark:bg-gray-800 rounded p-2 overflow-auto max-h-[300px] text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                {JSON.stringify(tool.inputSchema, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+              No tools available
+            </p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+          <button
+            onClick={onClose}
+            className="rounded px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
