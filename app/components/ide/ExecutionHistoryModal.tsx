@@ -294,14 +294,16 @@ function ExecutionHistoryTab({
                   <div className="flex items-center gap-2 px-3 py-2">
                     <button
                       onClick={() => handleExpand(record)}
-                      className="flex flex-1 items-center gap-2 text-left"
+                      className="flex flex-1 items-center gap-1.5 flex-wrap text-left min-w-0"
                     >
-                      {isExpanded ? (
-                        <ChevronDown size={ICON.MD} className="text-gray-400" />
-                      ) : (
-                        <ChevronRight size={ICON.MD} className="text-gray-400" />
-                      )}
-                      <StatusIcon status={record.status} />
+                      <span className="flex items-center gap-1.5 flex-shrink-0">
+                        {isExpanded ? (
+                          <ChevronDown size={ICON.MD} className="text-gray-400" />
+                        ) : (
+                          <ChevronRight size={ICON.MD} className="text-gray-400" />
+                        )}
+                        <StatusIcon status={record.status} />
+                      </span>
                       <span className="text-xs text-gray-700 dark:text-gray-300">
                         {formatDate(record.startTime)}
                       </span>
@@ -316,7 +318,7 @@ function ExecutionHistoryTab({
                     </button>
                     <button
                       onClick={() => handleDelete(record)}
-                      className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900"
+                      className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 flex-shrink-0"
                       title="Delete"
                     >
                       <Trash2 size={ICON.SM} />
@@ -343,26 +345,28 @@ function ExecutionHistoryTab({
                                 <div key={i}>
                                   <div
                                     onClick={() => hasDetail && setExpandedStepIndex(isStepExpanded ? null : i)}
-                                    className={`flex items-start gap-2 text-xs ${hasDetail ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-1" : ""}`}
+                                    className={`flex items-start gap-1.5 flex-wrap text-xs min-w-0 ${hasDetail ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-1" : ""}`}
                                   >
-                                    <StepStatusIcon status={step.status} />
-                                    {hasDetail && (isStepExpanded
-                                      ? <ChevronDown size={ICON.SM} className="flex-shrink-0 mt-0.5 text-gray-400" />
-                                      : <ChevronRight size={ICON.SM} className="flex-shrink-0 mt-0.5 text-gray-400" />
-                                    )}
-                                    <span className="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">
+                                    <span className="flex items-center gap-1 flex-shrink-0">
+                                      <StepStatusIcon status={step.status} />
+                                      {hasDetail && (isStepExpanded
+                                        ? <ChevronDown size={ICON.SM} className="flex-shrink-0 mt-0.5 text-gray-400" />
+                                        : <ChevronRight size={ICON.SM} className="flex-shrink-0 mt-0.5 text-gray-400" />
+                                      )}
+                                    </span>
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">
                                       {step.nodeId}
                                     </span>
-                                    <span className="text-gray-500 dark:text-gray-400 min-w-[60px]">
+                                    <span className="text-gray-500 dark:text-gray-400">
                                       {step.nodeType}
                                     </span>
                                     {step.error && !isStepExpanded && (
-                                      <span className="text-red-500 truncate">
+                                      <span className="text-red-500 truncate min-w-0">
                                         {step.error}
                                       </span>
                                     )}
                                     {!!step.output && !step.error && !isStepExpanded && (
-                                      <span className="truncate text-gray-400">
+                                      <span className="truncate text-gray-400 min-w-0">
                                         {typeof step.output === "string"
                                           ? step.output.slice(0, 80)
                                           : JSON.stringify(step.output).slice(0, 80)}
@@ -458,6 +462,7 @@ function RequestHistoryTab({
     useState<WorkflowRequestRecord | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const [expandedHistoryEntries, setExpandedHistoryEntries] = useState<Set<number>>(new Set());
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
 
@@ -509,11 +514,13 @@ function RequestHistoryTab({
         setExpandedId(null);
         setExpandedRecord(null);
         setShowThinking(false);
+        setExpandedHistoryEntries(new Set());
         return;
       }
 
       setExpandedId(record.id);
       setShowThinking(false);
+      setExpandedHistoryEntries(new Set());
       setLoadingDetail(true);
       try {
         const res = await fetch(
@@ -628,35 +635,37 @@ function RequestHistoryTab({
                   <div className="flex items-center gap-2 px-3 py-2">
                     <button
                       onClick={() => handleExpand(record)}
-                      className="flex flex-1 items-center gap-2 text-left"
+                      className="flex flex-1 items-center gap-1.5 flex-wrap text-left min-w-0"
                     >
-                      {isExpanded ? (
-                        <ChevronDown size={ICON.MD} className="text-gray-400" />
-                      ) : (
-                        <ChevronRight size={ICON.MD} className="text-gray-400" />
-                      )}
-                      {record.mode === "create" ? (
-                        <Sparkles size={ICON.MD} className="flex-shrink-0 text-purple-500" />
-                      ) : (
-                        <Wrench size={ICON.MD} className="flex-shrink-0 text-blue-500" />
-                      )}
+                      <span className="flex items-center gap-1.5 flex-shrink-0">
+                        {isExpanded ? (
+                          <ChevronDown size={ICON.MD} className="text-gray-400" />
+                        ) : (
+                          <ChevronRight size={ICON.MD} className="text-gray-400" />
+                        )}
+                        {record.mode === "create" ? (
+                          <Sparkles size={ICON.MD} className="text-purple-500" />
+                        ) : (
+                          <Wrench size={ICON.MD} className="text-blue-500" />
+                        )}
+                      </span>
                       <span className="text-xs text-gray-700 dark:text-gray-300">
                         {formatDate(record.createdAt)}
                       </span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded flex-shrink-0 ${
                         record.mode === "create"
                           ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
                           : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                       }`}>
                         {record.mode === "create" ? "Create" : "Modify"}
                       </span>
-                      <span className="text-xs text-gray-400 truncate">
+                      <span className="text-xs text-gray-400 truncate min-w-0">
                         {record.model}
                       </span>
                     </button>
                     <button
                       onClick={() => handleDelete(record)}
-                      className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900"
+                      className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 flex-shrink-0"
                       title="Delete"
                     >
                       <Trash2 size={ICON.SM} />
@@ -700,25 +709,45 @@ function RequestHistoryTab({
                                 Refinement History
                               </span>
                               <div className="mt-1 space-y-1">
-                                {expandedRecord.history.map((entry, i) => (
-                                  <div
-                                    key={i}
-                                    className={`text-xs rounded px-2 py-1 ${
-                                      entry.role === "user"
-                                        ? "bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-                                        : "bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                                    }`}
-                                  >
-                                    <span className="font-medium">
-                                      {entry.role === "user" ? "User: " : "AI: "}
-                                    </span>
-                                    <span className="whitespace-pre-wrap">
-                                      {entry.role === "model"
-                                        ? entry.text.slice(0, 200) + (entry.text.length > 200 ? "..." : "")
-                                        : entry.text}
-                                    </span>
-                                  </div>
-                                ))}
+                                {expandedRecord.history.map((entry, i) => {
+                                  const isModelLong = entry.role === "model" && entry.text.length > 200;
+                                  const isEntryExpanded = expandedHistoryEntries.has(i);
+                                  return (
+                                    <div
+                                      key={i}
+                                      className={`text-xs rounded px-2 py-1 ${
+                                        entry.role === "user"
+                                          ? "bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
+                                          : "bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                                      }`}
+                                    >
+                                      <span className="font-medium">
+                                        {entry.role === "user" ? "User: " : "AI: "}
+                                      </span>
+                                      <span className="whitespace-pre-wrap">
+                                        {isModelLong && !isEntryExpanded
+                                          ? entry.text.slice(0, 200) + "..."
+                                          : entry.text}
+                                      </span>
+                                      {isModelLong && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedHistoryEntries((prev) => {
+                                              const next = new Set(prev);
+                                              if (next.has(i)) next.delete(i);
+                                              else next.add(i);
+                                              return next;
+                                            });
+                                          }}
+                                          className="ml-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                                        >
+                                          {isEntryExpanded ? "Show less" : "Show more"}
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
