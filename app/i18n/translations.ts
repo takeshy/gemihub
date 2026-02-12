@@ -345,6 +345,22 @@ export interface TranslationStrings {
   "trash.softDeleteFolderConfirm": string;
   "trash.conflictInfo": string;
 
+  // Conflict dialog
+  "conflict.title": string;
+  "conflict.description": string;
+  "conflict.keepLocal": string;
+  "conflict.keepRemote": string;
+  "conflict.local": string;
+  "conflict.remote": string;
+  "conflict.unknownTime": string;
+  "conflict.resolveAll": string;
+  "conflict.resolving": string;
+  "conflict.close": string;
+  "conflict.diff": string;
+  "conflict.hideDiff": string;
+  "conflict.diffError": string;
+  "conflict.backupNote": string;
+
   // Offline
   "offline.indicator": string;
   "offline.banner": string;
@@ -694,6 +710,22 @@ const en: TranslationStrings = {
   "trash.softDeleteFolderConfirm": "Move all {count} file(s) in folder \"{name}\" to trash?",
   "trash.conflictInfo": "Conflict backups created during sync resolution.",
 
+  // Conflict dialog
+  "conflict.title": "Sync Conflicts ({count})",
+  "conflict.description": "A conflict occurs when the same file has been modified both locally and on Drive since the last sync. Choose which version to keep for each file.",
+  "conflict.keepLocal": "Keep Local",
+  "conflict.keepRemote": "Keep Remote",
+  "conflict.local": "Local",
+  "conflict.remote": "Remote",
+  "conflict.unknownTime": "unknown",
+  "conflict.resolveAll": "Resolve All",
+  "conflict.resolving": "Resolving...",
+  "conflict.close": "Close",
+  "conflict.diff": "Diff",
+  "conflict.hideDiff": "Hide",
+  "conflict.diffError": "Failed to load diff",
+  "conflict.backupNote": "The overwritten version is backed up and can be restored from Settings > Sync > Conflict Backups.",
+
   // Offline
   "offline.indicator": "Offline",
   "offline.banner": "You are in offline mode. Some features are unavailable.",
@@ -1042,6 +1074,22 @@ const ja: TranslationStrings = {
   "trash.softDeleteConfirm": "「{name}」をゴミ箱に移動しますか？",
   "trash.softDeleteFolderConfirm": "フォルダ「{name}」内の{count}件のファイルをゴミ箱に移動しますか？",
   "trash.conflictInfo": "同期コンフリクト解決時に作成されたバックアップです。",
+
+  // Conflict dialog
+  "conflict.title": "同期コンフリクト ({count})",
+  "conflict.description": "コンフリクトは、前回の同期以降に同じファイルがローカルと Drive の両方で変更された場合に発生します。各ファイルについて保持するバージョンを選択してください。",
+  "conflict.keepLocal": "ローカルを保持",
+  "conflict.keepRemote": "リモートを保持",
+  "conflict.local": "ローカル",
+  "conflict.remote": "リモート",
+  "conflict.unknownTime": "不明",
+  "conflict.resolveAll": "すべて解決",
+  "conflict.resolving": "解決中...",
+  "conflict.close": "閉じる",
+  "conflict.diff": "差分",
+  "conflict.hideDiff": "非表示",
+  "conflict.diffError": "差分の読み込みに失敗しました",
+  "conflict.backupNote": "上書きされたバージョンはバックアップされ、設定 > 同期 > コンフリクトバックアップから復元できます。",
 
   // Offline
   "offline.indicator": "オフライン",
