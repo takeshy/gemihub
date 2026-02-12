@@ -226,6 +226,28 @@ export async function action({ request }: Route.ActionArgs) {
       if (!encSettings.encryption.enabled || !encSettings.encryption.publicKey) {
         return jsonWithCookie({ error: "Encryption not configured" }, { status: 400 });
       }
+      // Clean up RAG tracking for old filename before encrypting (best-effort)
+      try {
+        const syncMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+        const oldName = syncMeta?.files[fileId]?.name;
+        if (oldName) {
+          const ragSetting = encSettings.ragSettings[DEFAULT_RAG_STORE_KEY];
+          const ragFile = ragSetting?.files?.[oldName];
+          if (ragFile) {
+            let canRemoveTracking = !ragFile.fileId;
+            if (ragFile.fileId && validTokens.geminiApiKey) {
+              canRemoveTracking = await deleteSingleFileFromRag(validTokens.geminiApiKey, ragFile.fileId);
+            }
+            if (canRemoveTracking) {
+              delete ragSetting.files[oldName];
+              await saveSettings(validTokens.accessToken, validTokens.rootFolderId, encSettings);
+            }
+          }
+        }
+      } catch {
+        // Best-effort: don't block encrypt
+      }
+
       const plainContent = await readFile(validTokens.accessToken, fileId);
       const encrypted = await encryptFileContent(
         plainContent,
