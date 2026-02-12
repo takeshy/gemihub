@@ -5,6 +5,7 @@ import { getSettings } from "~/services/user-settings.server";
 import {
   listUserFiles,
   readFile,
+  readFileBase64,
   createFile,
   updateFile,
   getFileMetadata,
@@ -15,6 +16,7 @@ import {
   listFiles,
   findFileByExactName,
 } from "~/services/google-drive.server";
+import { isBinaryMimeType } from "~/services/sync-client-utils";
 import {
   readRemoteSyncMeta,
   writeRemoteSyncMeta,
@@ -93,7 +95,12 @@ export async function action({ request }: Route.ActionArgs) {
     case "pullDirect": {
       // Download file contents only — no meta read/write on server
       const fileIds = body.fileIds as string[];
+      const mimeTypes = (body.mimeTypes ?? {}) as Record<string, string>;
       const files = await parallelProcess(fileIds, async (fileId) => {
+        if (isBinaryMimeType(mimeTypes[fileId])) {
+          const content = await readFileBase64(validTokens.accessToken, fileId);
+          return { fileId, content, encoding: "base64" as const };
+        }
         const content = await readFile(validTokens.accessToken, fileId);
         return { fileId, content };
       }, 5);
@@ -220,20 +227,27 @@ export async function action({ request }: Route.ActionArgs) {
     case "fullPull": {
       // Full pull: rebuild meta, download all files (skip matching hashes)
       const skipHashes = (body.skipHashes ?? {}) as Record<string, string>;
+      const skipBinaryContent = body.skipBinaryContent === true;
       const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
 
       const fileEntries = Object.entries(remoteMeta.files).filter(
         ([_id, f]) => f.name !== "_sync-meta.json" && f.name !== "settings.json"
       );
 
-      // Skip files where local hash matches remote
+      // Skip files where local hash matches remote, or binary content on mobile
       const toDownload = fileEntries.filter(
-        ([id, f]) => !skipHashes[id] || skipHashes[id] !== f.md5Checksum
+        ([id, f]) => {
+          if (skipBinaryContent && isBinaryMimeType(f.mimeType)) return false;
+          return !skipHashes[id] || skipHashes[id] !== f.md5Checksum;
+        }
       );
 
-      const files = await parallelProcess(toDownload, async ([fileId]) => {
+      const files = await parallelProcess(toDownload, async ([fileId, fileMeta]) => {
+        const binary = isBinaryMimeType(fileMeta.mimeType);
         const [content, meta] = await Promise.all([
-          readFile(validTokens.accessToken, fileId),
+          binary
+            ? readFileBase64(validTokens.accessToken, fileId)
+            : readFile(validTokens.accessToken, fileId),
           getFileMetadata(validTokens.accessToken, fileId),
         ]);
         return {
@@ -242,6 +256,7 @@ export async function action({ request }: Route.ActionArgs) {
           md5Checksum: meta.md5Checksum ?? "",
           modifiedTime: meta.modifiedTime ?? "",
           fileName: meta.name,
+          ...(binary ? { encoding: "base64" as const } : {}),
         };
       }, 5);
 
@@ -565,8 +580,10 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       // Save remote edit history in background (best-effort, does not block response)
+      // Skip binary files — they have no meaningful text diff
       const historyEntries = successful.filter(
         (r) => r.oldContent != null && r.newContent != null && r.oldContent !== r.newContent
+          && !isBinaryMimeType(r.mimeType)
       );
       if (historyEntries.length > 0) {
         (async () => {

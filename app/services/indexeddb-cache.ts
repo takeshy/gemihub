@@ -13,6 +13,7 @@ export interface CachedFile {
   modifiedTime: string;
   cachedAt: number;
   fileName?: string;
+  encoding?: "base64"; // present for binary files stored as base64
 }
 
 export interface LocalSyncMeta {

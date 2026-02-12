@@ -46,6 +46,8 @@ import {
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
 import { decryptFileContent, isEncryptedFile } from "~/services/crypto-core";
+import { saveLocalEdit } from "~/services/edit-history-local";
+import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { cryptoCache } from "~/services/crypto-cache";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { useFileUpload } from "~/hooks/useFileUpload";
@@ -722,16 +724,96 @@ export function DriveFileTree({
         if (!confirm(msg)) return;
       }
 
-      const success = await upload(files, rootFolderId, namePrefix);
-      if (success) {
-        // Expand folder if dropping into a subfolder
-        if (folderId !== rootFolderId) {
-          setExpandedFolders((prev) => new Set(prev).add(folderId));
+      // Split duplicates into text and binary
+      const duplicateSet = new Set(duplicates.map((d) => d.file));
+      const textDuplicates = duplicates.filter((d) => !isBinaryMimeType(d.existing.mimeType));
+      const binaryDuplicates = duplicates.filter((d) => isBinaryMimeType(d.existing.mimeType));
+      const newFiles = files.filter((f) => !duplicateSet.has(f));
+
+      // Handle text duplicates: local cache update only (yellow dot)
+      for (const { file, existing } of textDuplicates) {
+        const content = await file.text();
+        const fullPath = namePrefix ? `${namePrefix}/${file.name}` : file.name;
+        // saveLocalEdit must be called BEFORE setCachedFile (reads old content from cache)
+        const saved = await saveLocalEdit(existing.id, fullPath, content);
+        if (!saved) continue; // Content unchanged — skip
+        const existingCache = await getCachedFile(existing.id);
+        await setCachedFile({
+          fileId: existing.id,
+          content,
+          md5Checksum: existingCache?.md5Checksum ?? "",
+          modifiedTime: new Date().toISOString(),
+          cachedAt: Date.now(),
+          fileName: fullPath,
+        });
+        window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: existing.id } }));
+        if (existing.id === activeFileId) {
+          window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: [existing.id] } }));
         }
-        await fetchAndCacheTree();
+      }
+
+      // Handle binary duplicates: server update via replaceMap (green dot)
+      if (binaryDuplicates.length > 0) {
+        const replaceMap: Record<string, string> = {};
+        const binaryFiles = binaryDuplicates.map((d) => {
+          replaceMap[d.file.name] = d.existing.id;
+          return d.file;
+        });
+        const result = await upload(binaryFiles, rootFolderId, namePrefix, replaceMap);
+        if (result.ok) {
+          await fetchAndCacheTree();
+          const meta = await getCachedRemoteMeta();
+          // Cache binary content as base64 and update localSyncMeta — only for files that succeeded
+          const localMeta = await getLocalSyncMeta();
+          for (const { file, existing } of binaryDuplicates) {
+            if (result.failedNames.has(file.name)) continue;
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                const dataUrl = reader.result as string;
+                resolve(dataUrl.split(",")[1]);
+              };
+              reader.readAsDataURL(file);
+            });
+            const rm = meta?.files?.[existing.id];
+            await setCachedFile({
+              fileId: existing.id,
+              content: base64,
+              md5Checksum: rm?.md5Checksum ?? "",
+              modifiedTime: rm?.modifiedTime ?? "",
+              cachedAt: Date.now(),
+              fileName: rm?.name ?? file.name,
+              encoding: "base64",
+            });
+            window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: existing.id } }));
+            if (localMeta) {
+              localMeta.files[existing.id] = {
+                md5Checksum: rm?.md5Checksum ?? "",
+                modifiedTime: rm?.modifiedTime ?? "",
+              };
+            }
+          }
+          if (localMeta) {
+            localMeta.lastUpdatedAt = new Date().toISOString();
+            await setLocalSyncMeta(localMeta);
+          }
+        }
+      }
+
+      // Handle new files (no duplicates): normal upload
+      if (newFiles.length > 0) {
+        const result = await upload(newFiles, rootFolderId, namePrefix);
+        if (result.ok) {
+          await fetchAndCacheTree();
+        }
+      }
+
+      // Expand folder if dropping into a subfolder
+      if (folderId !== rootFolderId && (newFiles.length > 0 || binaryDuplicates.length > 0 || textDuplicates.length > 0)) {
+        setExpandedFolders((prev) => new Set(prev).add(folderId));
       }
     },
-    [upload, rootFolderId, fetchAndCacheTree, handleMoveItem, getFolderPath, treeItems, t]
+    [upload, rootFolderId, fetchAndCacheTree, handleMoveItem, getFolderPath, treeItems, t, activeFileId]
   );
 
   const handleTreeDragOver = useCallback((e: React.DragEvent) => {
@@ -1395,13 +1477,27 @@ export function DriveFileTree({
           icon: <Download size={ICON.MD} />,
           onClick: async () => {
             const fileName = item.name.split("/").pop() || item.name;
-            const isBinary = item.mimeType?.startsWith("image/") ||
-              item.mimeType?.startsWith("video/") ||
-              item.mimeType?.startsWith("audio/") ||
-              item.mimeType === "application/pdf";
-            if (!isBinary) {
-              const cached = await getCachedFile(item.id);
-              if (cached) {
+            const cached = await getCachedFile(item.id);
+            if (cached) {
+              if (cached.encoding === "base64") {
+                // Decode base64 to binary blob
+                const byteString = atob(cached.content);
+                const bytes = new Uint8Array(byteString.length);
+                for (let i = 0; i < byteString.length; i++) {
+                  bytes[i] = byteString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: item.mimeType || "application/octet-stream" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                return;
+              }
+              if (!isBinaryMimeType(item.mimeType)) {
                 const blob = new Blob([cached.content], { type: item.mimeType || "text/plain" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -1414,6 +1510,7 @@ export function DriveFileTree({
                 return;
               }
             }
+            // Fallback to API download (binary without cache, or no cache at all)
             const a = document.createElement("a");
             a.href = `/api/drive/files?action=raw&fileId=${item.id}`;
             a.download = fileName;

@@ -21,6 +21,11 @@ export function ConflictsDialog({ onClose }: ConflictsDialogProps) {
   const [initialLoading, setInitialLoading] = useState(true);
   const [renames, setRenames] = useState<Record<string, string>>({});
 
+  // Strip timestamp from conflict backup names: "file_20260208_123456.md" → "file.md"
+  const stripTimestamp = useCallback((name: string) => {
+    return name.replace(/_\d{8}_\d{6}(?=\.)/, "");
+  }, []);
+
   const loadFiles = useCallback(async () => {
     try {
       const res = await fetch("/api/sync", {
@@ -31,16 +36,16 @@ export function ConflictsDialog({ onClose }: ConflictsDialogProps) {
       const data = await res.json();
       const fileList: FileEntry[] = data.files ?? [];
       setFiles(fileList);
-      // Pre-fill rename map with backup file names as-is
+      // Pre-fill rename map with timestamp-stripped names
       const newRenames: Record<string, string> = {};
       for (const f of fileList) {
-        newRenames[f.id] = f.name;
+        newRenames[f.id] = stripTimestamp(f.name);
       }
       setRenames((prev) => ({ ...newRenames, ...prev }));
     } catch {
       setFiles([]);
     }
-  }, []);
+  }, [stripTimestamp]);
 
   useEffect(() => {
     loadFiles().finally(() => setInitialLoading(false));
@@ -174,7 +179,7 @@ export function ConflictsDialog({ onClose }: ConflictsDialogProps) {
                         </span>
                         <input
                           type="text"
-                          value={renames[f.id] ?? f.name}
+                          value={renames[f.id] ?? stripTimestamp(f.name)}
                           onChange={(e) => setRenames((prev) => ({ ...prev, [f.id]: e.target.value }))}
                           className="flex-1 px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                         />

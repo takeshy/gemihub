@@ -227,6 +227,16 @@ export async function readFileRaw(
   );
 }
 
+// Read file as base64 string (for binary files in sync pipeline)
+export async function readFileBase64(
+  accessToken: string,
+  fileId: string,
+  options: DriveOperationOptions = {}
+): Promise<string> {
+  const bytes = await readFileBytes(accessToken, fileId, options);
+  return Buffer.from(bytes).toString("base64");
+}
+
 // Read file as raw bytes (for binary files)
 export async function readFileBytes(
   accessToken: string,
@@ -495,6 +505,27 @@ export async function createFileBinary(
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },
       body,
+    }
+  );
+  return res.json();
+}
+
+// Update file with binary content (for replacing uploaded files)
+export async function updateFileBinary(
+  accessToken: string,
+  fileId: string,
+  contentBuffer: Buffer,
+  mimeType: string = "application/octet-stream",
+  options: DriveOperationOptions = {}
+): Promise<DriveFile> {
+  const res = await driveRequest(
+    `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    accessToken,
+    {
+      method: "PATCH",
+      signal: options.signal,
+      headers: { "Content-Type": mimeType },
+      body: new Uint8Array(contentBuffer),
     }
   );
   return res.json();

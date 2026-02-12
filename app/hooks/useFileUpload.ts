@@ -8,13 +8,19 @@ export interface UploadProgress {
   error?: string;
 }
 
+export interface UploadReturn {
+  ok: boolean;
+  failedNames: Set<string>;
+}
+
 export function useFileUpload() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress[]>([]);
 
   const upload = useCallback(
-    async (files: File[], folderId: string, namePrefix?: string): Promise<boolean> => {
-      if (files.length === 0) return false;
+    async (files: File[], folderId: string, namePrefix?: string, replaceMap?: Record<string, string>): Promise<UploadReturn> => {
+      const fail: UploadReturn = { ok: false, failedNames: new Set() };
+      if (files.length === 0) return fail;
 
       setUploading(true);
 
@@ -34,13 +40,16 @@ export function useFileUpload() {
       const validFiles = files.filter((f) => f.size <= MAX_FILE_SIZE);
       if (validFiles.length === 0) {
         setUploading(false);
-        return false;
+        return fail;
       }
 
       const formData = new FormData();
       formData.set("folderId", folderId);
       if (namePrefix) {
         formData.set("namePrefix", namePrefix);
+      }
+      if (replaceMap && Object.keys(replaceMap).length > 0) {
+        formData.set("replaceMap", JSON.stringify(replaceMap));
       }
       for (const f of validFiles) {
         formData.append("files", f);
@@ -62,13 +71,18 @@ export function useFileUpload() {
             )
           );
           setUploading(false);
-          return false;
+          return fail;
         }
 
         const data = await res.json();
         const resultMap = new Map<string, { file?: unknown; error?: string }>();
         for (const r of data.results) {
           resultMap.set(r.name, r);
+        }
+
+        const failedNames = new Set<string>();
+        for (const [name, result] of resultMap) {
+          if (result.error) failedNames.add(name);
         }
 
         setProgress((prev) =>
@@ -83,7 +97,7 @@ export function useFileUpload() {
         );
 
         setUploading(false);
-        return true;
+        return { ok: true, failedNames };
       } catch {
         setProgress((prev) =>
           prev.map((p) =>
@@ -93,7 +107,7 @@ export function useFileUpload() {
           )
         );
         setUploading(false);
-        return false;
+        return fail;
       }
     },
     []

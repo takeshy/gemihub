@@ -18,6 +18,7 @@ import { addCommitBoundary } from "~/services/edit-history-local";
 import { ragRegisterInBackground } from "~/services/rag-sync";
 import {
   isSyncExcludedPath,
+  isBinaryMimeType,
   getSyncCompletionStatus,
 } from "~/services/sync-client-utils";
 import { computeSyncDiff, type SyncMeta } from "~/services/sync-diff";
@@ -179,11 +180,17 @@ export function useSync() {
         : modifiedIds;
 
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
+      const binarySkippedIds: string[] = [];
       for (const fid of filteredIds) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
         const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? remoteMeta?.files?.[fid]?.name ?? fid;
         if (isSyncExcludedPath(fileName)) continue;
+        // Skip base64-encoded files (binary files already updated on Drive via upload)
+        if (cached.encoding === "base64") {
+          binarySkippedIds.push(fid);
+          continue;
+        }
         filesToPush.push({ fileId: fid, content: cached.content, fileName });
       }
 
@@ -234,6 +241,10 @@ export function useSync() {
 
       // Clear edit history only for files that were actually pushed successfully
       for (const fileId of pushedResultIds) {
+        await deleteEditHistoryEntry(fileId);
+      }
+      // Clear edit history for binary files skipped during push (already up-to-date on Drive)
+      for (const fileId of binarySkippedIds) {
         await deleteEditHistoryEntry(fileId);
       }
       const remainingModified = await getLocallyModifiedFileIds();
@@ -316,37 +327,66 @@ export function useSync() {
         return;
       }
 
-      const pullRes = await fetch("/api/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "pullDirect", fileIds: filesToPull }),
-      });
-      if (!pullRes.ok) throw new Error("Failed to pull changes");
-      const pullData = await pullRes.json();
-
-      // 7. Update IndexedDB with content + metadata from remoteMeta
       const remoteFiles = remoteMeta?.files ?? {};
+      const isMobile = window.matchMedia("(max-width: 768px)").matches;
+
+      // On mobile, skip downloading binary file content (save storage)
+      const filesToDownload = isMobile
+        ? filesToPull.filter((id) => !isBinaryMimeType(remoteFiles[id]?.mimeType))
+        : filesToPull;
+
+      // Build mimeTypes map so server can use readFileBase64 for binary files
+      const mimeTypes: Record<string, string> = {};
+      for (const id of filesToDownload) {
+        if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
+      }
+
       const updatedMeta: LocalSyncMeta = baseMeta ?? {
         id: "current",
         lastUpdatedAt: new Date().toISOString(),
         files: {},
       };
 
-      for (const file of pullData.files as Array<{ fileId: string; content: string }>) {
-        const rm = remoteFiles[file.fileId];
-        await addCommitBoundary(file.fileId);
-        await setCachedFile({
-          fileId: file.fileId,
-          content: file.content,
-          md5Checksum: rm?.md5Checksum ?? "",
-          modifiedTime: rm?.modifiedTime ?? "",
-          cachedAt: Date.now(),
-          fileName: rm?.name,
+      // On mobile, track binary files in localSyncMeta without caching content
+      if (isMobile) {
+        for (const id of filesToPull) {
+          if (isBinaryMimeType(remoteFiles[id]?.mimeType)) {
+            const rm = remoteFiles[id];
+            updatedMeta.files[id] = {
+              md5Checksum: rm?.md5Checksum ?? "",
+              modifiedTime: rm?.modifiedTime ?? "",
+            };
+          }
+        }
+      }
+
+      if (filesToDownload.length > 0) {
+        const pullRes = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "pullDirect", fileIds: filesToDownload, mimeTypes }),
         });
-        updatedMeta.files[file.fileId] = {
-          md5Checksum: rm?.md5Checksum ?? "",
-          modifiedTime: rm?.modifiedTime ?? "",
-        };
+        if (!pullRes.ok) throw new Error("Failed to pull changes");
+        const pullData = await pullRes.json();
+
+        // 7. Update IndexedDB with content + metadata from remoteMeta
+        for (const file of pullData.files as Array<{ fileId: string; content: string; encoding?: "base64" }>) {
+          const rm = remoteFiles[file.fileId];
+          if (!file.encoding) await addCommitBoundary(file.fileId);
+          await setCachedFile({
+            fileId: file.fileId,
+            content: file.content,
+            md5Checksum: rm?.md5Checksum ?? "",
+            modifiedTime: rm?.modifiedTime ?? "",
+            cachedAt: Date.now(),
+            fileName: rm?.name,
+            ...(file.encoding ? { encoding: file.encoding } : {}),
+          });
+          updatedMeta.files[file.fileId] = {
+            md5Checksum: rm?.md5Checksum ?? "",
+            modifiedTime: rm?.modifiedTime ?? "",
+          };
+        }
       }
 
       // 8. Save localMeta
@@ -478,10 +518,16 @@ export function useSync() {
         }
       }
 
+      const isMobile = window.matchMedia("(max-width: 768px)").matches;
+
       const res = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "fullPull", skipHashes }),
+        body: JSON.stringify({
+          action: "fullPull",
+          skipHashes,
+          skipBinaryContent: isMobile,
+        }),
       });
 
       if (!res.ok) throw new Error("Full pull failed");
@@ -494,7 +540,7 @@ export function useSync() {
         files: {},
       };
 
-      // Include skipped files in meta too
+      // Include skipped files in meta too (including binary files not downloaded on mobile)
       for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { md5Checksum: string; modifiedTime: string }>)) {
         updatedMeta.files[fileId] = {
           md5Checksum: fileMeta.md5Checksum,
@@ -502,8 +548,8 @@ export function useSync() {
         };
       }
 
-      for (const file of data.files) {
-        await addCommitBoundary(file.fileId);
+      for (const file of data.files as Array<{ fileId: string; content: string; md5Checksum: string; modifiedTime: string; fileName: string; encoding?: "base64" }>) {
+        if (!file.encoding) await addCommitBoundary(file.fileId);
         await setCachedFile({
           fileId: file.fileId,
           content: file.content,
@@ -511,14 +557,19 @@ export function useSync() {
           modifiedTime: file.modifiedTime,
           cachedAt: Date.now(),
           fileName: file.fileName,
+          ...(file.encoding ? { encoding: file.encoding } : {}),
         });
       }
 
-      // Delete cached files that no longer exist on remote
-      const remoteFileIds = new Set(Object.keys(data.remoteMeta.files));
+      // Delete cached files that no longer exist on remote,
+      // or binary files that should not be cached on mobile
+      const remoteMetaFiles = data.remoteMeta.files as Record<string, { mimeType?: string }>;
+      const remoteFileIds = new Set(Object.keys(remoteMetaFiles));
       const allCachedIds = await getAllCachedFileIds();
       for (const cachedId of allCachedIds) {
         if (!remoteFileIds.has(cachedId)) {
+          await deleteCachedFile(cachedId);
+        } else if (isMobile && isBinaryMimeType(remoteMetaFiles[cachedId]?.mimeType)) {
           await deleteCachedFile(cachedId);
         }
       }

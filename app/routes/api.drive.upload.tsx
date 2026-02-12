@@ -1,7 +1,7 @@
 import type { Route } from "./+types/api.drive.upload";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
-import { createFileBinary } from "~/services/google-drive.server";
+import { createFileBinary, updateFileBinary, getFileMetadata } from "~/services/google-drive.server";
 import { upsertFileInMeta } from "~/services/sync-meta.server";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file (Drive multipart limit)
@@ -14,6 +14,15 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const folderId = formData.get("folderId") as string | null;
   const namePrefix = formData.get("namePrefix") as string | null;
+  const replaceMapRaw = formData.get("replaceMap") as string | null;
+  let replaceMap: Record<string, string> = {};
+  if (replaceMapRaw) {
+    try {
+      replaceMap = JSON.parse(replaceMapRaw);
+    } catch {
+      return Response.json({ error: "Invalid replaceMap JSON" }, { status: 400, headers: responseHeaders });
+    }
+  }
   const files = formData.getAll("files") as File[];
 
   if (files.length === 0) {
@@ -40,13 +49,31 @@ export async function action({ request }: Route.ActionArgs) {
       const safePrefix = namePrefix?.replace(/\.\.\//g, "").replace(/^\/+/, "") || "";
       const safeName = file.name.replace(/\.\.\//g, "").replace(/^\/+/, "");
       const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
-      const driveFile = await createFileBinary(
-        validTokens.accessToken,
-        uploadName,
-        buffer,
-        targetFolderId,
-        file.type || "application/octet-stream"
-      );
+      const existingFileId = replaceMap[file.name];
+      let driveFile;
+      if (existingFileId) {
+        // Verify the file belongs to the target folder before overwriting
+        const fileMeta = await getFileMetadata(validTokens.accessToken, existingFileId);
+        if (!fileMeta.parents?.includes(targetFolderId)) {
+          results.push({ name: file.name, error: "File does not belong to target folder" });
+          continue;
+        }
+        // Replace existing file content (keep same file ID)
+        driveFile = await updateFileBinary(
+          validTokens.accessToken,
+          existingFileId,
+          buffer,
+          file.type || "application/octet-stream"
+        );
+      } else {
+        driveFile = await createFileBinary(
+          validTokens.accessToken,
+          uploadName,
+          buffer,
+          targetFolderId,
+          file.type || "application/octet-stream"
+        );
+      }
       await upsertFileInMeta(validTokens.accessToken, targetFolderId, driveFile);
       results.push({ name: file.name, file: driveFile });
     } catch (e) {
