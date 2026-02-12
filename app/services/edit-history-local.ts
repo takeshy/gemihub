@@ -10,11 +10,9 @@
 //   - If last diff is non-empty:
 //     reverse-apply last diff to oldContent → base, diff(base, newContent), overwrite last.
 //
-// Commit (commitSnapshot):
+// addCommitBoundary:
 //   Adds empty diff entry as commit boundary. Next saveLocalEdit starts new session.
-//
-// initSnapshot:
-//   Called on file open/reload/pull. If entry has non-empty last diff, adds commit boundary.
+//   Called on file open/reload/pull, temp diff accept, resolve conflict (remote).
 
 import * as Diff from "diff";
 import {
@@ -26,13 +24,12 @@ import {
 } from "./indexeddb-cache";
 
 /**
- * Called on file open, reload, pull, temp download.
- * If current session has changes, adds a commit boundary.
+ * If current session has changes, adds a commit boundary so the next
+ * auto-save starts a new diff session.
+ *
+ * Called on: file open/reload, pull, temp diff accept, resolve conflict (remote).
  */
-export async function initSnapshot(
-  fileId: string,
-  _content: string
-): Promise<void> {
+export async function addCommitBoundary(fileId: string): Promise<void> {
   const existing = await getEditHistoryForFile(fileId);
   if (existing && existing.diffs.length > 0) {
     const lastDiff = existing.diffs[existing.diffs.length - 1];
@@ -107,28 +104,6 @@ export async function saveLocalEdit(
   entry.filePath = filePath;
   await setEditHistoryEntry(entry);
   return entry;
-}
-
-/**
- * Called on explicit save events (workflow command, temp download accept, pull).
- * Adds a commit boundary so the next auto-save starts a new diff session.
- */
-export async function commitSnapshot(
-  fileId: string,
-  _newContent: string
-): Promise<void> {
-  const existing = await getEditHistoryForFile(fileId);
-  if (existing && existing.diffs.length > 0) {
-    const lastDiff = existing.diffs[existing.diffs.length - 1];
-    if (lastDiff.diff !== "") {
-      existing.diffs.push({
-        timestamp: new Date().toISOString(),
-        diff: "",
-        stats: { additions: 0, deletions: 0 },
-      });
-      await setEditHistoryEntry(existing);
-    }
-  }
 }
 
 /**

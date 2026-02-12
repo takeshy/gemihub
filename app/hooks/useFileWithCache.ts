@@ -6,7 +6,7 @@ import {
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
-import { saveLocalEdit, initSnapshot } from "~/services/edit-history-local";
+import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
 
 export function useFileWithCache(
   fileId: string | null,
@@ -63,7 +63,7 @@ export function useFileWithCache(
         if (cached && currentFileId.current === id) {
           setContent(cached.content);
           setLoading(false);
-          initSnapshot(id, cached.content).catch(() => {});
+          addCommitBoundary(id).catch(() => {});
           return; // Trust the cache. Remote changes are handled by Push/Pull sync.
         } else if (currentFileId.current === id) {
           setLoading(true);
@@ -114,7 +114,7 @@ export function useFileWithCache(
         );
 
         // 6. Initialize edit history snapshot
-        initSnapshot(id, data.content).catch(() => {});
+        addCommitBoundary(id).catch(() => {});
 
         // 7. Update local sync meta
         if (md5) {
@@ -295,7 +295,7 @@ export function useFileWithCache(
       const cached = await getCachedFile(fileId);
       if (cached && currentFileId.current === fileId) {
         setContent(cached.content);
-        initSnapshot(fileId, cached.content).catch(() => {});
+        addCommitBoundary(fileId).catch(() => {});
       }
     };
     window.addEventListener("files-pulled", handler);

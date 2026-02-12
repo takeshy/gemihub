@@ -6,7 +6,7 @@
 
 | レイヤー | ストレージ | diff の生成方法 | 保持期間 |
 |---------|-----------|---------------|---------|
-| **ローカル** | IndexedDB `editHistory` ストア | クライアントの自動保存がベースから現在の内容への diff を計算 | ファイル単位: Push 時にクリア。Full Push / Full Pull で全クリア |
+| **ローカル** | IndexedDB `editHistory` ストア | クライアントの自動保存がベースから現在の内容への diff を計算 | ファイル単位: Push 時にクリア。Full Pull で全クリア |
 | **リモート** | Drive のファイルごとの `.history.json` | サーバーが Drive 上の旧コンテンツと Push された新コンテンツの diff を計算 | 編集履歴設定に従い保持 |
 
 2つのレイヤーは独立しており、ローカルの diff は Drive にアップロード **されません**。Push 時、サーバーが Drive 側の旧コンテンツと Push された新コンテンツから独自に diff を計算し、`.history.json` に追記します。
@@ -24,13 +24,21 @@
 3. ベースから新コンテンツへの累積 diff を計算
 4. `diffs[]` の最後のエントリを上書き（同セッションの更新は1つの diff に累積）
 
+逆適用に失敗した場合（例: 外部からの内容変更によるパッチ不一致）、コミット境界が挿入されて破損した diff が確定され、現在の旧キャッシュ内容から新セッションが開始されます。
+
 セッション中は最後の diff が継続的に上書きされるため、アクティブなセッションは常に `base → 現在の内容` を表す **1つの非空 diff エントリ** のみを持ちます。
 
 ### コミット境界
 
 明示的な保存イベントにより、コミット境界（空の diff エントリ）が `diffs[]` に挿入されます。これにより次の自動保存は前回の diff を上書きせず **新しい diff を追加** し、新セッションが開始されます。
 
-トリガー: ファイル開く/リロード、Pull、一時ダウンロード受入、ワークフローコマンド、リストア。
+`addCommitBoundary(fileId)` は最後の diff が非空であれば空の境界を追加します。
+
+トリガー:
+- ファイル開く、リロード、Pull 後のエディタ更新（`useFileWithCache`）
+- Pull（ダウンロードファイルごと）、コンフリクト解決（remote 選択時）、Full Pull（`useSync`）
+- 一時 diff 受入（`MainViewer`、`WorkflowEditor`）
+- `restoreToHistoryEntry` はリストア diff エントリの前後に直接境界を追加
 
 ### データモデル
 
@@ -63,12 +71,16 @@
 
 ## リモート編集履歴（Drive）
 
-リモート編集履歴はローカル編集履歴とは独立してサーバー側で計算されます。Push でファイルを Drive に更新する際、サーバーは:
+リモート編集履歴はローカル編集履歴とは独立してサーバー側で計算されます。Drive 上のファイルが更新される際、サーバーは:
 1. 上書き前に Drive から旧ファイル内容を読み取り
-2. diff（Drive 上の旧コンテンツ → Push された新コンテンツ）を計算
-3. ファイルの `.history.json` に diff エントリを追記（バックグラウンド、best-effort）
+2. diff（Drive 上の旧コンテンツ → 新コンテンツ）を計算
+3. ファイルの `.history.json` に diff エントリを追記
 
-Push 後、ローカルの IndexedDB 編集履歴は Push されたファイル分がクリアされます（キャッシュが Drive と一致するため、ローカル diff は不要になります）。
+この処理は2つの経路で発生します:
+- **Push**（`api.sync.tsx` `pushFiles` アクション）: バックグラウンドで履歴保存（fire-and-forget、best-effort）
+- **直接ファイル更新**（`api.drive.files.tsx` `update` アクション）: インラインで履歴保存（await、best-effort）
+
+Push 後、ローカルの IndexedDB 編集履歴は Push に成功したファイル分がクリアされます（キャッシュが Drive と一致するため、ローカル diff は不要になります）。Push に失敗したファイルはローカル編集履歴が保持されます。
 
 リモートエントリにはメタデータが含まれます: `id`、`timestamp`、`source`（workflow/propose_edit/manual/auto）、オプションの `workflowName` と `model`。
 
@@ -92,13 +104,15 @@ Push 後、ローカルの IndexedDB 編集履歴は Push されたファイル�
 
 ### 仕組み
 
+`restoreToHistoryEntry`（ステップ 1-4）が復元内容を計算し編集履歴を更新します。呼び出し元（`EditHistoryModal.handleRestore`）がステップ 5-6 を実行します。
+
 1. IndexedDB キャッシュから現在の内容を読み取り
 2. 最新の非空 diff から選択したエントリまで（そのエントリを含む）各 diff を逆適用:
    - `+`/`-` 行を入れ替え、ハンクヘッダーを反転し、パッチを適用
 3. リストアを新しい履歴エントリとして記録: `diff(現在 → 復元後)`
 4. リストアエントリの前後にコミット境界を追加
-5. IndexedDB キャッシュを復元された内容で更新
-6. `file-restored` イベントを発行してエディタを更新
+5. IndexedDB キャッシュを復元された内容で更新 *（呼び出し元）*
+6. `file-restored` イベントを発行してエディタを更新 *（呼び出し元）*
 
 ### 例: 1エントリのリストア
 
@@ -155,13 +169,16 @@ index 1 にリストア (filteredIndex=1):
 - `maxEntriesPerFile`: ファイルごとの最大エントリ数（0 = 無制限）
 - `maxAgeInDays`: 最大保持日数（0 = 無制限）
 
+diff 設定:
+- `contextLines`: リモート diff のコンテキスト行数（デフォルト: 3）。ローカル diff は固定値 3 を使用。
+
 ---
 
 ## 主要ファイル
 
 | ファイル | 役割 |
 |---------|------|
-| `app/services/edit-history-local.ts` | クライアント側の編集履歴: 自動保存（`saveLocalEdit`）、コミット境界（`initSnapshot`/`commitSnapshot`）、リストア（`restoreToHistoryEntry`）、逆適用 diff |
+| `app/services/edit-history-local.ts` | クライアント側の編集履歴: 自動保存（`saveLocalEdit`）、コミット境界（`addCommitBoundary`）、リストア（`restoreToHistoryEntry`）、逆適用 diff |
 | `app/services/edit-history.server.ts` | サーバー側の編集履歴: Push 時に Drive `.history.json` に保存、履歴読込、保持ポリシー |
 | `app/services/indexeddb-cache.ts` | IndexedDB ストア: `editHistory` CRUD、`CachedEditHistoryEntry` / `EditHistoryDiff` 型定義 |
 | `app/hooks/useFileWithCache.ts` | キャッシュ優先のファイル読取、自動保存連携（`saveToCache` が `saveLocalEdit` を呼出）、`file-restored` イベントハンドラ |

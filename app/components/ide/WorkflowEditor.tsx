@@ -5,7 +5,7 @@ import type { UserSettings } from "~/types/settings";
 import { MermaidPreview } from "~/components/flow/MermaidPreview";
 import { useI18n } from "~/i18n/context";
 import { TempDiffModal } from "./TempDiffModal";
-import { commitSnapshot } from "~/services/edit-history-local";
+import { addCommitBoundary } from "~/services/edit-history-local";
 
 
 interface WorkflowEditorProps {
@@ -166,7 +166,7 @@ export function WorkflowEditor({
 
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
-    await commitSnapshot(fileId, tempDiffData.tempContent);
+    await addCommitBoundary(fileId);
     contentFromProps.current = false;
     setYamlContent(tempDiffData.tempContent);
     await saveToCache(tempDiffData.tempContent);

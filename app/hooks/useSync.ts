@@ -14,7 +14,7 @@ import {
   deleteEditHistoryEntry,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
-import { commitSnapshot } from "~/services/edit-history-local";
+import { addCommitBoundary } from "~/services/edit-history-local";
 import { ragRegisterInBackground } from "~/services/rag-sync";
 import {
   isSyncExcludedPath,
@@ -334,7 +334,7 @@ export function useSync() {
 
       for (const file of pullData.files as Array<{ fileId: string; content: string }>) {
         const rm = remoteFiles[file.fileId];
-        await commitSnapshot(file.fileId, file.content);
+        await addCommitBoundary(file.fileId);
         await setCachedFile({
           fileId: file.fileId,
           content: file.content,
@@ -402,7 +402,7 @@ export function useSync() {
 
         // If remote wins, update local cache with remote content
         if (choice === "remote" && data.file) {
-          await commitSnapshot(data.file.fileId, data.file.content);
+          await addCommitBoundary(data.file.fileId);
           await setCachedFile({
             fileId: data.file.fileId,
             content: data.file.content,
@@ -503,7 +503,7 @@ export function useSync() {
       }
 
       for (const file of data.files) {
-        await commitSnapshot(file.fileId, file.content);
+        await addCommitBoundary(file.fileId);
         await setCachedFile({
           fileId: file.fileId,
           content: file.content,
