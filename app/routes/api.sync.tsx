@@ -18,7 +18,6 @@ import {
   readRemoteSyncMeta,
   writeRemoteSyncMeta,
   rebuildSyncMeta,
-  computeSyncDiff,
   saveConflictBackup,
   type SyncMeta,
 } from "~/services/sync-meta.server";
@@ -52,7 +51,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
 }
 
-// POST: diff / pull / resolve / pushFiles / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
+// POST: pullDirect / resolve / pushFiles / fullPull / clearConflicts / detectUntracked / deleteUntracked / restoreUntracked
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
@@ -66,7 +65,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { action: actionType } = body;
 
   const VALID_ACTIONS = new Set([
-    "diff", "pull", "resolve", "fullPull",
+    "pullDirect", "resolve", "fullPull",
     "clearConflicts", "detectUntracked", "deleteUntracked", "restoreUntracked",
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
     "pushFiles",
@@ -77,73 +76,14 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   switch (actionType) {
-    case "diff": {
-      const localMeta = body.localMeta as SyncMeta | null;
-      const locallyModifiedIds = new Set<string>(body.locallyModifiedFileIds ?? []);
-      // Read existing sync meta (snapshot of last sync), fallback to rebuild if missing
-      const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
-        ?? await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
-      const diff = computeSyncDiff(localMeta, remoteMeta, locallyModifiedIds);
-      return jsonWithCookie({ diff, remoteMeta });
-    }
-
-    case "pull": {
-      // Return file contents + metadata for specified file IDs (parallelized)
+    case "pullDirect": {
+      // Download file contents only — no meta read/write on server
       const fileIds = body.fileIds as string[];
-      const localOnlyIds: string[] = Array.isArray(body.localOnlyIds)
-        ? (body.localOnlyIds as unknown[]).filter((v): v is string => typeof v === "string")
-        : [];
-
-      const results = await parallelProcess(fileIds, async (fileId) => {
-        const [content, meta] = await Promise.all([
-          readFile(validTokens.accessToken, fileId),
-          getFileMetadata(validTokens.accessToken, fileId),
-        ]);
-        return {
-          fileId,
-          content,
-          md5Checksum: meta.md5Checksum ?? "",
-          modifiedTime: meta.modifiedTime ?? "",
-          fileName: meta.name,
-          mimeType: meta.mimeType,
-          createdTime: meta.createdTime,
-          webViewLink: meta.webViewLink,
-        };
+      const files = await parallelProcess(fileIds, async (fileId) => {
+        const content = await readFile(validTokens.accessToken, fileId);
+        return { fileId, content };
       }, 5);
-
-      if (results.length > 0 || localOnlyIds.length > 0) {
-        // Update remote sync meta for pulled files and prune deleted entries
-        const remoteMeta =
-          (await readRemoteSyncMeta(
-            validTokens.accessToken,
-            validTokens.rootFolderId
-          )) ?? await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
-
-        for (const fileId of localOnlyIds) {
-          delete remoteMeta.files[fileId];
-        }
-
-        for (const file of results) {
-          const existing = remoteMeta.files[file.fileId];
-          remoteMeta.files[file.fileId] = {
-            ...existing,
-            name: file.fileName || existing?.name || "",
-            mimeType: file.mimeType || existing?.mimeType || "",
-            md5Checksum: file.md5Checksum,
-            modifiedTime: file.modifiedTime,
-            createdTime: file.createdTime ?? existing?.createdTime,
-            webViewLink: file.webViewLink ?? existing?.webViewLink,
-          };
-        }
-        remoteMeta.lastUpdatedAt = new Date().toISOString();
-        await writeRemoteSyncMeta(
-          validTokens.accessToken,
-          validTokens.rootFolderId,
-          remoteMeta
-        );
-      }
-
-      return jsonWithCookie({ files: results });
+      return jsonWithCookie({ files });
     }
 
     case "resolve": {

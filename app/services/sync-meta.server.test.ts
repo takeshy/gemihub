@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computeSyncDiff, type SyncMeta } from "./sync-meta.server.ts";
+import { computeSyncDiff, type SyncMeta } from "./sync-diff.ts";
 
 function makeMeta(id: string, md5Checksum: string): SyncMeta {
   return {

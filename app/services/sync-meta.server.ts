@@ -10,41 +10,15 @@ import {
   ensureSubFolder,
   type DriveFile,
 } from "./google-drive.server";
+import { SYNC_META_FILE_NAME } from "./sync-diff";
 
-const SYNC_META_FILE = "_sync-meta.json";
+export { SYNC_META_FILE_NAME, computeSyncDiff } from "./sync-diff";
+export type { FileSyncMeta, SyncMeta, SyncDiff } from "./sync-diff";
+
+import type { SyncMeta } from "./sync-diff";
 
 interface SyncMetaOperationOptions {
   signal?: AbortSignal;
-}
-
-export interface FileSyncMeta {
-  name: string;
-  mimeType: string;
-  md5Checksum: string;
-  modifiedTime: string;
-  createdTime?: string;
-  shared?: boolean;
-  webViewLink?: string;
-}
-
-export interface SyncMeta {
-  lastUpdatedAt: string;
-  files: Record<string, FileSyncMeta>; // key = fileId
-}
-
-export interface SyncDiff {
-  toPush: string[]; // locally changed file IDs
-  toPull: string[]; // remotely changed file IDs
-  conflicts: Array<{
-    fileId: string;
-    fileName: string;
-    localChecksum: string;
-    remoteChecksum: string;
-    localModifiedTime: string;
-    remoteModifiedTime: string;
-  }>;
-  localOnly: string[]; // exists only locally
-  remoteOnly: string[]; // exists only remotely
 }
 
 /**
@@ -57,7 +31,7 @@ export async function readRemoteSyncMeta(
 ): Promise<SyncMeta | null> {
   const metaFile = await findFileByExactName(
     accessToken,
-    SYNC_META_FILE,
+    SYNC_META_FILE_NAME,
     rootFolderId,
     options
   );
@@ -82,7 +56,7 @@ export async function writeRemoteSyncMeta(
 ): Promise<void> {
   const metaFile = await findFileByExactName(
     accessToken,
-    SYNC_META_FILE,
+    SYNC_META_FILE_NAME,
     rootFolderId,
     options
   );
@@ -93,7 +67,7 @@ export async function writeRemoteSyncMeta(
   } else {
     await createFile(
       accessToken,
-      SYNC_META_FILE,
+      SYNC_META_FILE_NAME,
       content,
       rootFolderId,
       "application/json",
@@ -252,71 +226,3 @@ export async function setFileSharedInMeta(
   return meta;
 }
 
-/**
- * Compute sync diff by comparing two metadata snapshots:
- *   localMeta: client's snapshot from last sync (IndexedDB)
- *   remoteMeta: server's current snapshot (_sync-meta.json)
- *   locallyModifiedFileIds: file IDs edited locally (from editHistory)
- *
- * - localChanged = file has local edits (in locallyModifiedFileIds)
- * - remoteChanged = remote meta differs from local meta (another device pushed)
- */
-export function computeSyncDiff(
-  localMeta: SyncMeta | null,
-  remoteMeta: SyncMeta | null,
-  locallyModifiedFileIds: Set<string> = new Set()
-): SyncDiff {
-  const localFiles = localMeta?.files ?? {};
-  const remoteFiles = remoteMeta?.files ?? {};
-
-  // System files to exclude from sync diff
-  const SYSTEM_FILE_NAMES = new Set([SYNC_META_FILE, "settings.json"]);
-
-  const toPush: string[] = [];
-  const toPull: string[] = [];
-  const conflicts: SyncDiff["conflicts"] = [];
-  const localOnly: string[] = [];
-  const remoteOnly: string[] = [];
-
-  // Collect all known file IDs
-  const allFileIds = new Set<string>();
-  for (const id of Object.keys(localFiles)) allFileIds.add(id);
-  for (const [id, f] of Object.entries(remoteFiles)) {
-    if (!SYSTEM_FILE_NAMES.has(f.name)) allFileIds.add(id);
-  }
-  for (const id of locallyModifiedFileIds) allFileIds.add(id);
-
-  for (const fileId of allFileIds) {
-    const local = localFiles[fileId];
-    const remote = remoteFiles[fileId];
-    const locallyModified = locallyModifiedFileIds.has(fileId);
-    const hasLocal = !!local || locallyModified;
-    const hasRemote = !!remote;
-
-    const localChanged = locallyModified;
-    const remoteChanged = local && remote
-      ? local.md5Checksum !== remote.md5Checksum
-      : false;
-
-    if (hasLocal && !hasRemote) {
-      localOnly.push(fileId);
-    } else if (!hasLocal && hasRemote) {
-      remoteOnly.push(fileId);
-    } else if (localChanged && remoteChanged) {
-      conflicts.push({
-        fileId,
-        fileName: remote?.name ?? fileId,
-        localChecksum: local?.md5Checksum ?? "",
-        remoteChecksum: remote?.md5Checksum ?? "",
-        localModifiedTime: local?.modifiedTime ?? "",
-        remoteModifiedTime: remote?.modifiedTime ?? "",
-      });
-    } else if (localChanged) {
-      toPush.push(fileId);
-    } else if (remoteChanged) {
-      toPull.push(fileId);
-    }
-  }
-
-  return { toPush, toPull, conflicts, localOnly, remoteOnly };
-}
