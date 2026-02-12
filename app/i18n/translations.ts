@@ -250,11 +250,13 @@ export interface TranslationStrings {
   "crypt.unlock": string;
   "crypt.decrypting": string;
   "crypt.wrongPassword": string;
+  "crypt.encrypt": string;
   "crypt.encrypting": string;
   "crypt.decrypt": string;
   "crypt.decryptConfirm": string;
   "crypt.decryptFailed": string;
   "crypt.decryptDuplicate": string;
+  "crypt.encryptEmptyFile": string;
 
   // Plugins tab
   "settings.tab.plugins": string;
@@ -625,11 +627,13 @@ const en: TranslationStrings = {
   "crypt.unlock": "Unlock",
   "crypt.decrypting": "Decrypting...",
   "crypt.wrongPassword": "Invalid password",
+  "crypt.encrypt": "Encrypt",
   "crypt.encrypting": "Encrypting & uploading...",
   "crypt.decrypt": "Decrypt",
   "crypt.decryptConfirm": "Permanently decrypt this file? The .encrypted extension will be removed.",
   "crypt.decryptFailed": "Decryption failed",
   "crypt.decryptDuplicate": "\"{name}\" already exists. Rename or delete it before decrypting.",
+  "crypt.encryptEmptyFile": "Cannot encrypt an empty file.",
 
   // Plugins tab
   "settings.tab.plugins": "Plugins",
@@ -1000,11 +1004,13 @@ const ja: TranslationStrings = {
   "crypt.unlock": "解除",
   "crypt.decrypting": "復号中...",
   "crypt.wrongPassword": "パスワードが正しくありません",
+  "crypt.encrypt": "暗号化",
   "crypt.encrypting": "暗号化＆アップロード中...",
   "crypt.decrypt": "暗号化解除",
   "crypt.decryptConfirm": "このファイルの暗号化を永続的に解除しますか？.encrypted拡張子が除去されます。",
   "crypt.decryptFailed": "暗号化解除に失敗しました",
   "crypt.decryptDuplicate": "「{name}」が既に存在します。暗号化解除する前にリネームまたは削除してください。",
+  "crypt.encryptEmptyFile": "空のファイルは暗号化できません。",
 
   // Plugins tab
   "settings.tab.plugins": "プラグイン",

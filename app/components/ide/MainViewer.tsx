@@ -582,6 +582,14 @@ function MarkdownFileEditor({
     }
   }, [mode, MarkdownEditorComponent]);
 
+  const flushOnBlur = useCallback(() => {
+    if (pendingContentRef.current !== null) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      saveToCache(pendingContentRef.current);
+      pendingContentRef.current = null;
+    }
+  }, [saveToCache]);
+
   const modes: { key: MdEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
     { key: "wysiwyg", icon: <PenLine size={ICON.MD} />, label: t("mainViewer.wysiwyg") },
@@ -589,7 +597,7 @@ function MarkdownFileEditor({
   ];
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         {/* Mode selector */}
@@ -817,13 +825,21 @@ function HtmlFileEditor({
     initialContent ? "preview" : "raw"
   );
 
+  const flushOnBlur = useCallback(() => {
+    if (pendingContentRef.current !== null) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      saveToCache(pendingContentRef.current);
+      pendingContentRef.current = null;
+    }
+  }, [saveToCache]);
+
   const modes: { key: HtmlEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
     { key: "raw", icon: <Code size={ICON.MD} />, label: t("mainViewer.raw") },
   ];
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         {/* Mode selector */}
@@ -1028,8 +1044,16 @@ function TextFileEditor({
     [editorCtx]
   );
 
+  const flushOnBlur = useCallback(() => {
+    if (pendingContentRef.current !== null) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      saveToCache(pendingContentRef.current);
+      pendingContentRef.current = null;
+    }
+  }, [saveToCache]);
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       <div className="flex items-center justify-end px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <EditorToolbarActions
           onDiffClick={onDiffClick}
@@ -1174,8 +1198,16 @@ function DiffEditor({
     return createTwoFilesPatch(targetFileName, fileName, targetContent, content);
   }, [content, targetContent, fileName, targetFileName]);
 
+  const flushOnBlur = useCallback(() => {
+    if (pendingContentRef.current !== null) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      saveToCache(pendingContentRef.current);
+      pendingContentRef.current = null;
+    }
+  }, [saveToCache]);
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">

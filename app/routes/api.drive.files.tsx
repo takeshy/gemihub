@@ -307,7 +307,10 @@ export async function action({ request }: Route.ActionArgs) {
         // Best-effort: don't block encrypt
       }
 
-      const plainContent = await readFile(validTokens.accessToken, fileId);
+      const plainContent = content != null ? content : await readFile(validTokens.accessToken, fileId);
+      if (!plainContent) {
+        return jsonWithCookie({ error: "File is empty" }, { status: 400 });
+      }
       const encrypted = await encryptFileContent(
         plainContent,
         encSettings.encryption.publicKey,

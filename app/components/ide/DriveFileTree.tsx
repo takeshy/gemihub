@@ -1115,16 +1115,24 @@ export function DriveFileTree({
 
       setBusy([item.id]);
       try {
+        // Send cached content so server encrypts latest local edits (not stale Drive content)
+        const cached = await getCachedFile(item.id);
+        if (cached && !cached.content) {
+          alert(t("crypt.encryptEmptyFile"));
+          return;
+        }
         const res = await fetch("/api/drive/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "encrypt",
             fileId: item.id,
+            ...(cached?.content != null ? { content: cached.content } : {}),
           }),
         });
         if (res.ok) {
           const data = await res.json();
+          await deleteCachedFile(item.id);
           if (data.meta) {
             await updateTreeFromMeta(data.meta);
           } else {
@@ -1140,7 +1148,7 @@ export function DriveFileTree({
         clearBusy([item.id]);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, encryptionEnabled, setBusy, clearBusy]
+    [fetchAndCacheTree, updateTreeFromMeta, encryptionEnabled, setBusy, clearBusy, t]
   );
 
   const handleDecrypt = useCallback(
@@ -1526,7 +1534,7 @@ export function DriveFileTree({
       if (!item.isFolder) {
         if (!item.name.endsWith(".encrypted")) {
           items.push({
-            label: "Encrypt",
+            label: t("crypt.encrypt"),
             icon: <Lock size={ICON.MD} />,
             onClick: () => handleEncrypt(item),
           });
