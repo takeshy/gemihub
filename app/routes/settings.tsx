@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { data, Link, useLoaderData, useFetcher } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
@@ -403,6 +403,18 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
   useApplySettings(settings.language, settings.fontSize, settings.theme);
+
+  // Detect OAuth redirect return from mobile flow
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("mcp-oauth-return")) {
+      setActiveTab("mcp");
+      // Clean up the URL without triggering a navigation
+      const url = new URL(window.location.href);
+      url.searchParams.delete("mcp-oauth-return");
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+  }, []);
 
   return (
     <I18nProvider language={settings.language}>
@@ -1407,6 +1419,21 @@ interface McpFormEntry {
 
 const emptyMcpEntry: McpFormEntry = { name: "", url: "", headers: "{}" };
 
+// Redirect-fallback types for mobile OAuth (popup blocked)
+interface PendingMcpOAuth {
+  codeVerifier: string;
+  state: string;
+  redirectUri: string;
+  oauthConfig: OAuthConfig;
+  flowType: "add" | "testExisting" | "reauthorize";
+  newEntry?: McpFormEntry;           // flowType === "add"
+  serverIndex?: number;              // flowType !== "add"
+  serverUrl?: string;                // identity check on return
+  createdAt: number;
+}
+const MCP_OAUTH_PENDING_KEY = "mcp-oauth-pending";
+const MCP_OAUTH_CALLBACK_KEY = "mcp-oauth-callback-result";
+
 // PKCE utilities for OAuth flow
 
 function generateRandomString(length: number): string {
@@ -1436,6 +1463,175 @@ function McpTab({ settings }: { settings: UserSettings }) {
   const [addTestResult, setAddTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [addTesting, setAddTesting] = useState(false);
 
+  // --- OAuth redirect-flow completion (mobile fallback) ---
+  const oauthResumeRef = useRef(false);
+  useEffect(() => {
+    if (oauthResumeRef.current) return;
+
+    const pendingRaw = sessionStorage.getItem(MCP_OAUTH_PENDING_KEY);
+    const callbackRaw = sessionStorage.getItem(MCP_OAUTH_CALLBACK_KEY);
+    if (!pendingRaw || !callbackRaw) return;
+
+    // Mark as processing immediately to prevent double execution
+    oauthResumeRef.current = true;
+    sessionStorage.removeItem(MCP_OAUTH_PENDING_KEY);
+    sessionStorage.removeItem(MCP_OAUTH_CALLBACK_KEY);
+
+    let pending: PendingMcpOAuth;
+    let callback: { code?: string; state?: string; error?: string; errorDescription?: string };
+    try {
+      pending = JSON.parse(pendingRaw);
+      callback = JSON.parse(callbackRaw);
+    } catch {
+      return;
+    }
+
+    // Expiry check (10 minutes)
+    if (Date.now() - pending.createdAt > 10 * 60 * 1000) return;
+
+    // State verification
+    if (callback.state !== pending.state) {
+      setAddTestResult({ ok: false, msg: "OAuth state mismatch" });
+      return;
+    }
+
+    if (callback.error) {
+      setAddTestResult({ ok: false, msg: `OAuth failed: ${callback.errorDescription || callback.error}` });
+      return;
+    }
+
+    const setError = (msg: string) => {
+      if (pending.flowType === "add") {
+        setAddTestResult({ ok: false, msg });
+      } else if (pending.serverIndex != null) {
+        setTestResults((r) => ({ ...r, [pending.serverIndex!]: { ok: false, msg } }));
+      }
+    };
+
+    // Token exchange and flow completion
+    (async () => {
+      try {
+        const tokenRes = await fetch("/api/settings/mcp-oauth-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokenUrl: pending.oauthConfig.tokenUrl,
+            clientId: pending.oauthConfig.clientId,
+            clientSecret: pending.oauthConfig.clientSecret,
+            code: callback.code,
+            codeVerifier: pending.codeVerifier,
+            redirectUri: pending.redirectUri,
+          }),
+        });
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok || !tokenData.tokens) {
+          setError(`Token exchange failed: ${tokenData.error || "unknown"}`);
+          return;
+        }
+        const tokens = tokenData.tokens as OAuthTokens;
+
+        if (pending.flowType === "add" && pending.newEntry) {
+          // Complete add-server flow
+          const entry = pending.newEntry;
+          let headers: Record<string, string> = {};
+          try { headers = JSON.parse(entry.headers); } catch { /* use empty */ }
+
+          setAddTesting(true);
+          setAdding(true);
+          setAddTestResult({ ok: false, msg: "Retesting with OAuth tokens..." });
+
+          const retryRes = await fetch("/api/settings/mcp-test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: entry.url.trim(),
+              headers,
+              oauth: pending.oauthConfig,
+              oauthTokens: tokens,
+              origin: window.location.origin,
+            }),
+          });
+          const retryData = await retryRes.json();
+
+          if (retryRes.ok && retryData.success) {
+            const newServer: McpServerConfig = {
+              name: entry.name.trim(),
+              url: entry.url.trim(),
+              headers,
+              tools: retryData.tools as McpToolInfo[],
+              oauth: pending.oauthConfig,
+              oauthTokens: tokens,
+            };
+            const updated = [...servers, newServer];
+            setServers(updated);
+            const fd = new FormData();
+            fd.set("_action", "saveMcp");
+            fd.set("mcpServers", JSON.stringify(updated));
+            fetcher.submit(fd, { method: "post" });
+            setNewEntry({ ...emptyMcpEntry });
+            setAdding(false);
+            setAddTestResult(null);
+          } else {
+            setAddTestResult({ ok: false, msg: retryData.message || "Connection failed after OAuth" });
+          }
+          setAddTesting(false);
+        } else {
+          // Complete testExisting / reauthorize flow
+          const idx = pending.serverIndex;
+          if (idx == null) return;
+          if (idx >= servers.length) return;
+          if (pending.serverUrl && servers[idx].url !== pending.serverUrl) return;
+
+          // Update tokens on the server entry
+          const updated = servers.map((s, i) =>
+            i === idx ? { ...s, oauth: pending.oauthConfig, oauthTokens: tokens } : s
+          );
+          setServers(updated);
+          const fd = new FormData();
+          fd.set("_action", "saveMcp");
+          fd.set("mcpServers", JSON.stringify(updated));
+          fetcher.submit(fd, { method: "post" });
+
+          if (pending.flowType === "reauthorize") {
+            setTestResults((r) => ({ ...r, [idx]: { ok: true, msg: "Re-authorized successfully" } }));
+          } else {
+            // testExisting: retry the test
+            setTestResults((r) => ({ ...r, [idx]: { ok: false, msg: "Retesting with OAuth tokens..." } }));
+            try {
+              const retryRes = await fetch("/api/settings/mcp-test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  url: servers[idx].url,
+                  headers: servers[idx].headers,
+                  oauth: pending.oauthConfig,
+                  oauthTokens: tokens,
+                  origin: window.location.origin,
+                }),
+              });
+              const retryData = await retryRes.json();
+              setTestResults((r) => ({
+                ...r,
+                [idx]: { ok: retryRes.ok, msg: retryData.message || (retryRes.ok ? "Connected" : "Failed") },
+              }));
+              if (retryRes.ok && retryData.tools) {
+                setServers((p) => p.map((s, i) => i === idx ? { ...s, tools: retryData.tools as McpToolInfo[] } : s));
+              }
+            } catch (err) {
+              setTestResults((r) => ({
+                ...r,
+                [idx]: { ok: false, msg: err instanceof Error ? err.message : "Network error" },
+              }));
+            }
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "OAuth resume failed");
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const saveServers = useCallback((updated: McpServerConfig[]) => {
     const fd = new FormData();
     fd.set("_action", "saveMcp");
@@ -1456,6 +1652,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
 
   const startAddOAuthFlow = useCallback(async (
     oauthConfig: OAuthConfig,
+    pendingNewEntry: McpFormEntry,
   ): Promise<OAuthTokens | null> => {
     const codeVerifier = generateRandomString(64);
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -1479,6 +1676,19 @@ function McpTab({ settings }: { settings: UserSettings }) {
     setAddTestResult({ ok: false, msg: t("settings.mcp.oauthAuthenticating") });
 
     const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
+
+    // Redirect fallback when popup is blocked (common on mobile)
+    if (!popup) {
+      const pending: PendingMcpOAuth = {
+        codeVerifier, state, redirectUri, oauthConfig,
+        flowType: "add",
+        newEntry: pendingNewEntry,
+        createdAt: Date.now(),
+      };
+      sessionStorage.setItem(MCP_OAUTH_PENDING_KEY, JSON.stringify(pending));
+      window.location.href = authUrl;
+      return new Promise(() => {}); // page will navigate away
+    }
 
     return new Promise((resolve) => {
       let resolved = false;
@@ -1609,7 +1819,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
           return;
         }
 
-        const tokens = await startAddOAuthFlow(oauthConfig);
+        const tokens = await startAddOAuthFlow(oauthConfig, newEntry);
         if (!tokens) return;
 
         setAddTestResult({ ok: false, msg: t("settings.mcp.oauthSuccess") + " Retesting..." });
@@ -1658,6 +1868,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
   const startOAuthFlow = useCallback(async (
     idx: number,
     oauthConfig: OAuthConfig,
+    flowType: "testExisting" | "reauthorize" = "testExisting",
   ): Promise<OAuthTokens | null> => {
     const codeVerifier = generateRandomString(64);
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -1684,6 +1895,20 @@ function McpTab({ settings }: { settings: UserSettings }) {
     }));
 
     const popup = window.open(authUrl, "mcp-oauth", "width=600,height=700,popup=yes");
+
+    // Redirect fallback when popup is blocked (common on mobile)
+    if (!popup) {
+      const pending: PendingMcpOAuth = {
+        codeVerifier, state, redirectUri, oauthConfig,
+        flowType,
+        serverIndex: idx,
+        serverUrl: servers[idx]?.url,
+        createdAt: Date.now(),
+      };
+      sessionStorage.setItem(MCP_OAUTH_PENDING_KEY, JSON.stringify(pending));
+      window.location.href = authUrl;
+      return new Promise(() => {}); // page will navigate away
+    }
 
     return new Promise((resolve) => {
       let resolved = false;
@@ -1889,7 +2114,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
     const server = servers[idx];
     if (!server?.oauth) return;
 
-    const tokens = await startOAuthFlow(idx, server.oauth);
+    const tokens = await startOAuthFlow(idx, server.oauth, "reauthorize");
     if (!tokens) return;
 
     const updated = servers.map((s, i) =>

@@ -17,16 +17,26 @@ export default function McpOAuthCallback() {
       errorDescription: params.get("error_description"),
     };
 
-    // Try postMessage to opener (popup flow)
-    if (window.opener) {
+    // Redirect flow: no opener means we arrived via same-tab redirect (mobile)
+    if (!window.opener) {
       try {
-        window.opener.postMessage(msg, window.location.origin);
+        sessionStorage.setItem("mcp-oauth-callback-result", JSON.stringify(msg));
       } catch {
-        // postMessage failed, fall through to localStorage
+        // sessionStorage unavailable
       }
+      setStatus("Redirecting back to settings...");
+      window.location.href = "/settings?mcp-oauth-return=1";
+      return;
     }
 
-    // Always write to localStorage as fallback
+    // Popup flow: try postMessage to opener
+    try {
+      window.opener.postMessage(msg, window.location.origin);
+    } catch {
+      // postMessage failed, fall through to localStorage
+    }
+
+    // Popup flow: write to localStorage as fallback
     try {
       localStorage.setItem("mcp-oauth-callback", JSON.stringify(msg));
       setTimeout(() => {
