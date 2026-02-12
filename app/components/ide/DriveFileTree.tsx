@@ -21,6 +21,7 @@ import {
   History,
   Eraser,
   Download,
+  FileOutput,
   Globe,
   GlobeLock,
   Copy,
@@ -154,6 +155,17 @@ function flattenTree(nodes: CachedTreeNode[], parentPath: string): FileListItem[
     }
   }
   return result;
+}
+
+function canConvertToPdf(name: string, mimeType: string): boolean {
+  const lowerName = name.toLowerCase();
+  return (
+    lowerName.endsWith(".md")
+    || lowerName.endsWith(".html")
+    || lowerName.endsWith(".htm")
+    || mimeType === "text/markdown"
+    || mimeType === "text/html"
+  );
 }
 
 /** Find a file node by its full path (e.g. "folder/file.txt") */
@@ -1444,6 +1456,69 @@ export function DriveFileTree({
     [remoteMeta]
   );
 
+  const handleConvertMarkdownToPdf = useCallback(
+    async (item: CachedTreeNode) => {
+      if (item.isFolder) return;
+      if (!canConvertToPdf(item.name, item.mimeType)) return;
+
+      const fullName = findFullFileName(item.id, treeItems, "") ?? item.name;
+      const sourceBaseName = fullName.split("/").pop() ?? fullName;
+      const sourceStem = sourceBaseName.replace(/\.(md|html?)$/i, "");
+      const targetBaseName = `${sourceStem}.pdf`;
+      const targetFullPath = `temporaries/${targetBaseName}`;
+      const existing = findFileByPath(treeItems, targetFullPath);
+
+      if (existing) {
+        const msg = t("contextMenu.fileAlreadyExists").replace("{name}", targetBaseName);
+        if (!confirm(msg)) return;
+      }
+
+      // Read local content from cache so unsaved edits are reflected
+      let localContent: string | undefined;
+      const cached = await getCachedFile(item.id);
+      if (cached?.content) {
+        localContent = cached.content;
+      }
+
+      const busyIds = existing ? [item.id, existing.id] : [item.id];
+      setBusy(busyIds);
+      try {
+        const res = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create-markdown-pdf",
+            fileId: item.id,
+            overwriteFileId: existing?.id,
+            content: localContent,
+          }),
+        });
+
+        if (!res.ok) {
+          alert(t("contextMenu.convertPdfFailed"));
+          return;
+        }
+
+        const data = await res.json();
+        if (data.meta) {
+          await updateTreeFromMeta(data.meta);
+        } else {
+          await fetchAndCacheTree();
+        }
+
+        const file = data.file;
+        const fileBaseName = (file.name as string).split("/").pop() ?? file.name;
+        onSelectFile(file.id, fileBaseName, file.mimeType);
+        alert(t("contextMenu.convertedPdf"));
+      } catch {
+        alert(t("contextMenu.convertPdfFailed"));
+      } finally {
+        clearBusy(busyIds);
+      }
+    },
+    [findFullFileName, treeItems, t, setBusy, clearBusy, updateTreeFromMeta, fetchAndCacheTree, onSelectFile]
+  );
+
   const getContextMenuItems = useCallback(
     (item: CachedTreeNode): ContextMenuItem[] => {
       const items: ContextMenuItem[] = [];
@@ -1520,6 +1595,14 @@ export function DriveFileTree({
           },
         });
 
+        if (canConvertToPdf(item.name, item.mimeType)) {
+          items.push({
+            label: t("contextMenu.convertToPdf"),
+            icon: <FileOutput size={ICON.MD} />,
+            onClick: () => handleConvertMarkdownToPdf(item),
+          });
+        }
+
         // Publish / unpublish — not for encrypted files
         if (!item.name.endsWith(".encrypted")) {
           const fileMeta = remoteMeta[item.id];
@@ -1582,7 +1665,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, remoteMeta, cachedFiles, t, findFullFileName, treeItems]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, remoteMeta, cachedFiles, t, findFullFileName, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {

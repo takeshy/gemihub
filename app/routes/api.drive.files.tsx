@@ -4,9 +4,13 @@ import { getValidTokens } from "~/services/google-auth.server";
 import {
   readFile,
   readFileRaw,
+  deleteFile,
   createFile,
   createFileBinary,
+  createGoogleDocFromHtml,
+  exportFile,
   updateFile,
+  updateFileBinary,
   moveFile,
   renameFile,
   searchFiles,
@@ -16,6 +20,7 @@ import {
   unpublishFile,
   ensureSubFolder,
 } from "~/services/google-drive.server";
+import { renderHtmlToPrintableHtml, renderMarkdownToPrintableHtml } from "~/services/markdown-pdf.server";
 import { getSettings } from "~/services/user-settings.server";
 import {
   encryptFileContent,
@@ -100,7 +105,7 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   const body = await request.json();
-  const { action: actionType, fileId, name, content, data, mimeType } = body;
+  const { action: actionType, fileId, name, content, data, mimeType, overwriteFileId } = body;
 
   switch (actionType) {
     case "create": {
@@ -126,6 +131,60 @@ export async function action({ request }: Route.ActionArgs) {
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
       return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+    }
+    case "create-markdown-pdf": {
+      if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });
+
+      const sourceMeta = await getFileMetadata(validTokens.accessToken, fileId);
+      const lowerName = sourceMeta.name.toLowerCase();
+      const isMarkdown = lowerName.endsWith(".md") || sourceMeta.mimeType === "text/markdown";
+      const isHtml = lowerName.endsWith(".html") || lowerName.endsWith(".htm") || sourceMeta.mimeType === "text/html";
+      if (!isMarkdown && !isHtml) {
+        return jsonWithCookie({ error: "Only markdown/html files are supported" }, { status: 400 });
+      }
+
+      // Use client-provided content (local cache) if available, otherwise read from Drive
+      const sourceContent = content ?? await readFile(validTokens.accessToken, fileId);
+      const sourceBaseName = sourceMeta.name.split("/").pop() ?? sourceMeta.name;
+      const sourceStem = sourceBaseName.replace(/\.(md|html?)$/i, "");
+      const pdfName = `temporaries/${sourceStem}.pdf`;
+
+      const html = isMarkdown
+        ? renderMarkdownToPrintableHtml(sourceContent, sourceStem || sourceBaseName)
+        : renderHtmlToPrintableHtml(sourceContent, sourceStem || sourceBaseName);
+      const tmpFolderId = await ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "tmp");
+      const tempGoogleDoc = await createGoogleDocFromHtml(
+        validTokens.accessToken,
+        `${sourceStem || "document"}.gdoc.tmp`,
+        html,
+        tmpFolderId
+      );
+
+      try {
+        const pdfBuffer = await exportFile(validTokens.accessToken, tempGoogleDoc.id, "application/pdf");
+        const file = overwriteFileId
+          ? await updateFileBinary(
+            validTokens.accessToken,
+            overwriteFileId,
+            pdfBuffer,
+            "application/pdf"
+          )
+          : await createFileBinary(
+            validTokens.accessToken,
+            pdfName,
+            pdfBuffer,
+            validTokens.rootFolderId,
+            "application/pdf"
+          );
+        const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+        return jsonWithCookie({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+      } finally {
+        try {
+          await deleteFile(validTokens.accessToken, tempGoogleDoc.id);
+        } catch {
+          // best-effort cleanup of temporary Google Doc
+        }
+      }
     }
     case "update": {
       if (!fileId) return jsonWithCookie({ error: "Missing fileId" }, { status: 400 });

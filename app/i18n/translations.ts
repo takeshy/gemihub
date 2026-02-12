@@ -182,6 +182,9 @@ export interface TranslationStrings {
   "contextMenu.unpublishFailed": string;
   "contextMenu.fileAlreadyExists": string;
   "contextMenu.duplicate": string;
+  "contextMenu.convertToPdf": string;
+  "contextMenu.convertedPdf": string;
+  "contextMenu.convertPdfFailed": string;
 
   // Temp files
   "settings.general.tempFiles": string;
@@ -553,6 +556,9 @@ const en: TranslationStrings = {
   "contextMenu.unpublishFailed": "Failed to unpublish file.",
   "contextMenu.fileAlreadyExists": "\"{name}\" already exists. Overwrite?",
   "contextMenu.duplicate": "Duplicate",
+  "contextMenu.convertToPdf": "Convert to PDF",
+  "contextMenu.convertedPdf": "PDF created in temporaries/.",
+  "contextMenu.convertPdfFailed": "Failed to convert file to PDF.",
 
   // Temp files
   "settings.general.tempFiles": "Temporary Files",
@@ -924,6 +930,9 @@ const ja: TranslationStrings = {
   "contextMenu.unpublishFailed": "公開の解除に失敗しました。",
   "contextMenu.fileAlreadyExists": "「{name}」は既に存在します。上書きしますか？",
   "contextMenu.duplicate": "複製",
+  "contextMenu.convertToPdf": "PDFに変換",
+  "contextMenu.convertedPdf": "temporaries/ にPDFを作成しました。",
+  "contextMenu.convertPdfFailed": "PDF変換に失敗しました。",
 
   // Temp files
   "settings.general.tempFiles": "一時ファイル",

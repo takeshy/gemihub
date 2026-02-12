@@ -227,6 +227,21 @@ export async function readFileRaw(
   );
 }
 
+export async function exportFile(
+  accessToken: string,
+  fileId: string,
+  mimeType: string,
+  options: DriveOperationOptions = {}
+): Promise<Buffer> {
+  const res = await driveRequest(
+    `${DRIVE_API}/files/${fileId}/export?mimeType=${encodeURIComponent(mimeType)}`,
+    accessToken,
+    { signal: options.signal }
+  );
+  const buffer = await res.arrayBuffer();
+  return Buffer.from(buffer);
+}
+
 // Read file as base64 string (for binary files in sync pipeline)
 export async function readFileBase64(
   accessToken: string,
@@ -494,6 +509,44 @@ export async function createFileBinary(
   );
   const epilogue = Buffer.from(`\r\n--${boundary}--`, "utf-8");
   const body = Buffer.concat([preamble, contentBuffer, epilogue]);
+
+  const res = await driveRequest(
+    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    accessToken,
+    {
+      method: "POST",
+      signal: options.signal,
+      headers: {
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    }
+  );
+  return res.json();
+}
+
+export async function createGoogleDocFromHtml(
+  accessToken: string,
+  name: string,
+  html: string,
+  parentId: string,
+  options: DriveOperationOptions = {}
+): Promise<DriveFile> {
+  const metadata = JSON.stringify({
+    name,
+    parents: [parentId],
+    mimeType: "application/vnd.google-apps.document",
+  });
+
+  const boundary = "-------boundary" + Date.now();
+  const body =
+    `--${boundary}\r\n` +
+    "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+    `${metadata}\r\n` +
+    `--${boundary}\r\n` +
+    "Content-Type: text/html; charset=UTF-8\r\n\r\n" +
+    `${html}\r\n` +
+    `--${boundary}--`;
 
   const res = await driveRequest(
     `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
