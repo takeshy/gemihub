@@ -508,8 +508,8 @@ const en: TranslationStrings = {
   // Context menu
   "contextMenu.rename": "Rename",
   "contextMenu.download": "Download",
-  "contextMenu.tempDownload": "Temp Download",
-  "contextMenu.tempUpload": "Temp Upload",
+  "contextMenu.tempDownload": "Temp DL",
+  "contextMenu.tempUpload": "Temp UP",
   "contextMenu.tempUploaded": "Uploaded to temp",
   "contextMenu.noTempFile": "No temp file found for this file.",
   "contextMenu.clearCache": "Clear Cache",
@@ -857,8 +857,8 @@ const ja: TranslationStrings = {
   // Context menu
   "contextMenu.rename": "名前を変更",
   "contextMenu.download": "ダウンロード",
-  "contextMenu.tempDownload": "一時ダウンロード",
-  "contextMenu.tempUpload": "一時アップロード",
+  "contextMenu.tempDownload": "一時DL",
+  "contextMenu.tempUpload": "一時UP",
   "contextMenu.tempUploaded": "一時ファイルにアップロードしました",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
   "contextMenu.clearCache": "キャッシュクリア",

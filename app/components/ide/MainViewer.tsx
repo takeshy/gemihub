@@ -482,7 +482,7 @@ function MarkdownFileEditor({
           <button
             onClick={handleTempUpload}
             disabled={uploading}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
             title={t("contextMenu.tempUpload")}
           >
             <Upload size={ICON.SM} />
@@ -729,7 +729,7 @@ function HtmlFileEditor({
           <button
             onClick={handleTempUpload}
             disabled={uploading}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
             title={t("contextMenu.tempUpload")}
           >
             <Upload size={ICON.SM} />
@@ -926,7 +926,7 @@ function TextFileEditor({
         <button
           onClick={handleTempUpload}
           disabled={uploading}
-          className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
           title={t("contextMenu.tempUpload")}
         >
           <Upload size={ICON.SM} />

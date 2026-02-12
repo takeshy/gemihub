@@ -109,7 +109,7 @@ export function EditHistoryModal({ fileId, filePath, onClose }: EditHistoryModal
   const handleRestore = useCallback(
     async (entry: DisplayEntry) => {
       if (entry.origin !== "local" || entry.filteredIndex == null) return;
-      if (!confirm(t("editHistory.confirmRestore"))) return;
+
 
       const restoredContent = await restoreToHistoryEntry(fileId, entry.filteredIndex);
       if (restoredContent == null) return;
