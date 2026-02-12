@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { decryptPrivateKey } from "~/services/crypto-core";
@@ -39,7 +40,7 @@ export function CryptoPasswordPrompt({
     }
   }, [password, encryptedPrivateKey, salt, onUnlock, t]);
 
-  return (
+  const modal = (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={() => !loading && onCancel()}
@@ -84,4 +85,9 @@ export function CryptoPasswordPrompt({
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }

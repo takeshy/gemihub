@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { DiffView } from "~/components/shared/DiffView";
@@ -43,7 +44,7 @@ export function TempDiffModal({
 
   const noDiff = !isBinary && currentContent === tempContent;
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
         {/* Header */}
@@ -110,4 +111,9 @@ export function TempDiffModal({
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }

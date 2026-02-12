@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, FileText, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import {
@@ -123,7 +124,7 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
     }
   };
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className={`bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full mx-4 max-h-[80vh] flex flex-col ${promptType === "diff" ? "max-w-2xl" : "max-w-md"}`}>
         {/* Header */}
@@ -276,6 +277,11 @@ export function PromptModal({ data, onSubmit, onCancel }: PromptModalProps) {
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }
 
 function DriveFilePickerTree({

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import type { FileListItem } from "~/contexts/EditorContext";
 import { useI18n } from "~/i18n/context";
@@ -94,7 +95,7 @@ export function QuickOpenDialog({ open, onClose, fileList, onSelectFile, zClass 
 
   if (!open) return null;
 
-  return (
+  const modal = (
     <div
       className={`fixed inset-0 flex justify-center ${zClass}`}
       onClick={onClose}
@@ -155,4 +156,9 @@ export function QuickOpenDialog({ open, onClose, fileList, onSelectFile, zClass 
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }

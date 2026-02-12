@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Loader2,
@@ -243,7 +244,7 @@ export function EditHistoryModal({
     [expandedId]
   );
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
         {/* Header */}
@@ -432,6 +433,11 @@ export function EditHistoryModal({
       )}
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }
 
 function OriginBadge({ origin }: { origin: "local" | "remote" }) {

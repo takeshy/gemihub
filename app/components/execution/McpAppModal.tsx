@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { McpAppRenderer } from "~/components/chat/McpAppRenderer";
@@ -23,7 +24,7 @@ export function McpAppModal({ mcpApps, onClose }: McpAppModalProps) {
     });
   };
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] flex flex-col">
         {/* Header */}
@@ -57,4 +58,9 @@ export function McpAppModal({ mcpApps, onClose }: McpAppModalProps) {
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }

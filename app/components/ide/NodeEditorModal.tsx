@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { WorkflowNode, WorkflowNodeType } from "~/engine/types";
@@ -92,7 +93,7 @@ export function NodeEditorModal({
 
   const nextOptions = ["", "end", ...allNodeIds.filter((nid) => nid !== id)];
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[90vh] flex flex-col">
         {/* Header */}
@@ -273,4 +274,9 @@ export function NodeEditorModal({
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }

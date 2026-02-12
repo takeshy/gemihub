@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Loader2,
@@ -111,7 +112,7 @@ export function ExecutionHistorySelectModal({
     onSelect(selectedRecord.steps);
   }, [selectedRecord, onSelect]);
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
       <div className="mx-4 w-full max-w-3xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
         {/* Header */}
@@ -263,6 +264,11 @@ export function ExecutionHistorySelectModal({
       </div>
     </div>
   );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modal, document.body);
+  }
+  return modal;
 }
 
 // Helpers (re-used patterns from ExecutionHistoryModal)
