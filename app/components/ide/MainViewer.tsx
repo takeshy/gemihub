@@ -12,7 +12,7 @@ import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
 import { TempDiffModal } from "./TempDiffModal";
 import { QuickOpenDialog } from "./QuickOpenDialog";
 import { DiffView } from "~/components/shared/DiffView";
-import { getCachedFile } from "~/services/indexeddb-cache";
+import { getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
 import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditHistoryModal } from "./EditHistoryModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
@@ -140,9 +140,29 @@ function guessMimeType(fileName: string): string {
   return map[ext] || "application/octet-stream";
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 8192;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const byteString = atob(base64);
+  const bytes = new Uint8Array(byteString.length);
+  for (let i = 0; i < byteString.length; i++) {
+    bytes[i] = byteString.charCodeAt(i);
+  }
+  return bytes;
+}
+
 function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: string; fileName: string; mediaType: "pdf" | "video" | "audio" | "image"; fileMimeType: string | null }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const blobUrlRef = useRef<string | null>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     // Revoke previous blob URL
@@ -151,19 +171,17 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
       blobUrlRef.current = null;
     }
     setSrc(null);
+    setError(null);
 
     let cancelled = false;
     (async () => {
       const cached = await getCachedFile(fileId);
       if (cancelled) return;
-      if (cached?.encoding === "base64" && cached.content) {
+
+      // Helper: create blob URL from bytes and set as src
+      const showBlob = (buf: ArrayBuffer) => {
         const mime = fileMimeType || guessMimeType(fileName);
-        const byteString = atob(cached.content);
-        const bytes = new Uint8Array(byteString.length);
-        for (let i = 0; i < byteString.length; i++) {
-          bytes[i] = byteString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: mime });
+        const blob = new Blob([buf], { type: mime });
         const url = URL.createObjectURL(blob);
         if (cancelled) {
           URL.revokeObjectURL(url);
@@ -171,15 +189,45 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
         }
         blobUrlRef.current = url;
         setSrc(url);
+      };
+
+      if (cached?.encoding === "base64" && cached.content) {
+        showBlob(base64ToBytes(cached.content).buffer as ArrayBuffer);
       } else {
-        setSrc(`/api/drive/files?action=raw&fileId=${fileId}`);
+        // Fetch binary and cache to IndexedDB for offline use
+        try {
+          const res = await fetch(`/api/drive/files?action=raw&fileId=${fileId}`);
+          if (cancelled) return;
+          if (!res.ok) {
+            setError(t("mainViewer.loadError"));
+            return;
+          }
+          const arrayBuffer = await res.arrayBuffer();
+          if (cancelled) return;
+          const bytes = new Uint8Array(arrayBuffer);
+          // Cache in IndexedDB for offline use
+          await setCachedFile({
+            fileId,
+            content: bytesToBase64(bytes),
+            md5Checksum: "",
+            modifiedTime: new Date().toISOString(),
+            cachedAt: Date.now(),
+            fileName,
+            encoding: "base64",
+          });
+          if (cancelled) return;
+          showBlob(arrayBuffer);
+        } catch {
+          // Network error (offline) - no cache available
+          setError(t("mainViewer.offlineNoCache"));
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [fileId, fileName, fileMimeType]);
+  }, [fileId, fileName, fileMimeType, t]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -197,7 +245,11 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
           {fileName}
         </span>
       </div>
-      {src === null ? (
+      {error ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-red-500">{error}</p>
+        </div>
+      ) : src === null ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 size={24} className="animate-spin text-gray-400" />
         </div>

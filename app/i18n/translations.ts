@@ -27,6 +27,8 @@ export interface TranslationStrings {
   "mainViewer.welcome": string;
   "mainViewer.welcomeDescription": string;
   "mainViewer.retry": string;
+  "mainViewer.loadError": string;
+  "mainViewer.offlineNoCache": string;
   "mainViewer.saved": string;
   "mainViewer.saving": string;
   "mainViewer.preview": string;
@@ -403,6 +405,8 @@ const en: TranslationStrings = {
   "mainViewer.welcome": "Welcome to GemiHub",
   "mainViewer.welcomeDescription": "Select a file from the file tree to start editing, or create a new workflow or file using the buttons above.",
   "mainViewer.retry": "Retry",
+  "mainViewer.loadError": "Failed to load file",
+  "mainViewer.offlineNoCache": "This file is not available offline. Please sync while online to cache it.",
   "mainViewer.saved": "Saved",
   "mainViewer.saving": "Saving...",
   "mainViewer.preview": "Preview",
@@ -780,6 +784,8 @@ const ja: TranslationStrings = {
   "mainViewer.welcome": "GemiHubへようこそ",
   "mainViewer.welcomeDescription": "ファイルツリーからファイルを選択して編集を開始するか、上のボタンから新しいワークフローやファイルを作成してください。",
   "mainViewer.retry": "再試行",
+  "mainViewer.loadError": "ファイルの読み込みに失敗しました",
+  "mainViewer.offlineNoCache": "このファイルはオフラインでは利用できません。オンライン時に同期してキャッシュしてください。",
   "mainViewer.saved": "保存済み",
   "mainViewer.saving": "保存中...",
   "mainViewer.preview": "プレビュー",
