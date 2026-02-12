@@ -11,10 +11,11 @@
 | LLM | `command` | Gemini API でプロンプトを実行 |
 | データ | `http`, `json` | HTTP リクエストと JSON パース |
 | Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save`, `drive-delete` | Google Drive ファイル操作 |
-| プロンプト | `prompt-value`, `dialog`, `drive-file-picker` | ユーザー入力ダイアログ |
-| プレビュー | `preview` | ファイルのプレビュー表示 |
+| プロンプト | `prompt-value`, `prompt-file`, `prompt-selection`, `dialog`, `drive-file-picker` | ユーザー入力ダイアログ |
 | 合成 | `workflow` | 別のワークフローをサブワークフローとして実行 |
 | 外部連携 | `mcp` | リモート MCP サーバーを呼び出し |
+| RAG | `rag-sync` | ファイルを RAG ストアに同期 |
+| コマンド | `gemihub-command` | GemiHub ファイル操作を実行 |
 
 ---
 
@@ -133,14 +134,30 @@ Gemini API を使用して LLM プロンプトを実行します。
   type: command
   prompt: "要約してください: {{content}}"
   model: gemini-2.5-flash
+  ragSetting: __websearch__
+  driveToolMode: all
+  mcpServers: "mcp_server_id_1,mcp_server_id_2"
+  attachments: "imageVar"
   saveTo: summary
+  saveImageTo: generatedImage
+  systemPrompt: "あなたは親切なアシスタントです。"
 ```
 
 | プロパティ | 必須 | テンプレート | 説明 |
 |-----------|:----:|:----------:|------|
 | `prompt` | Yes | Yes | LLM に送信するプロンプトテキスト |
-| `model` | No | Yes | モデル名（デフォルト: `gemini-2.5-flash`） |
+| `model` | No | Yes | モデル名（デフォルト: ユーザーが選択したモデル） |
+| `ragSetting` | No | No | RAG 設定名、`__websearch__` でウェブ検索、`__none__`（デフォルト） |
+| `driveToolMode` | No | No | `none`（デフォルト）、`all`、`noSearch` — Drive ツール呼び出しを有効化 |
+| `mcpServers` | No | No | 有効にする MCP サーバー ID（カンマ区切り） |
+| `attachments` | No | Yes | FileExplorerData を含む変数名（カンマ区切り） |
 | `saveTo` | No | No | テキスト応答を保存する変数 |
+| `saveImageTo` | No | No | 生成画像を保存する変数（FileExplorerData JSON） |
+| `systemPrompt` | No | Yes | LLM のシステムプロンプト |
+
+`command` ノードはチャットと同じツール制約を使用します:
+- Gemma モデルはファンクションツール（Drive/MCP）を強制的に無効化
+- ウェブ検索モードはファンクションツール（Drive/MCP）を強制的に無効化
 
 ---
 
@@ -165,7 +182,7 @@ HTTP リクエストを実行します。
 |-----------|:----:|:----------:|------|
 | `url` | Yes | Yes | リクエスト URL |
 | `method` | No | No | `GET`（デフォルト）, `POST`, `PUT`, `PATCH`, `DELETE` |
-| `contentType` | No | No | `json`（デフォルト）, `form-data`, `text` |
+| `contentType` | No | No | `json`（デフォルト）, `form-data`, `text`, `binary` |
 | `headers` | No | Yes | JSON オブジェクトまたは `Key: Value` 形式（1行1ペア） |
 | `body` | No | Yes | リクエストボディ（POST/PUT/PATCH 用） |
 | `saveTo` | No | No | レスポンスボディを保存する変数 |
@@ -173,6 +190,8 @@ HTTP リクエストを実行します。
 | `throwOnError` | No | No | `"true"` で 4xx/5xx 時にエラーをスロー |
 
 **バイナリレスポンス**は自動検出され、FileExplorerData JSON（Base64 エンコード）として保存されます。
+
+**binary contentType:** FileExplorerData を元の mimeType で生バイナリとして送信します。`drive-file-picker` や画像生成の結果と組み合わせて使用します。
 
 **form-data の例:**
 ```yaml
@@ -272,6 +291,7 @@ Google Drive でファイルを検索します。
   type: drive-search
   query: "{{searchTerm}}"
   searchContent: "true"
+  limit: "10"
   saveTo: results
 ```
 
@@ -279,6 +299,7 @@ Google Drive でファイルを検索します。
 |-----------|:----:|:----------:|------|
 | `query` | Yes | Yes | 検索クエリ文字列 |
 | `searchContent` | No | No | `"true"` でファイル内容も検索（デフォルト: 名前のみ） |
+| `limit` | No | Yes | 最大件数（デフォルト: 10） |
 | `saveTo` | Yes | No | 結果を保存する変数 |
 
 **出力形式:**
@@ -299,6 +320,9 @@ Google Drive でファイルを検索します。
   type: drive-list
   folder: "Projects"
   limit: "20"
+  sortBy: modified
+  sortOrder: desc
+  modifiedWithin: "7d"
   saveTo: fileList
 ```
 
@@ -306,6 +330,10 @@ Google Drive でファイルを検索します。
 |-----------|:----:|:----------:|------|
 | `folder` | No | Yes | 仮想フォルダプレフィックス（例: `"Projects"`） |
 | `limit` | No | Yes | 最大件数（デフォルト: 50） |
+| `sortBy` | No | No | `modified`（デフォルト）、`created`、`name` |
+| `sortOrder` | No | No | `desc`（デフォルト）、`asc` |
+| `modifiedWithin` | No | Yes | 時間フィルタ（例: `"7d"`, `"24h"`, `"30m"`） |
+| `createdWithin` | No | Yes | 時間フィルタ（例: `"30d"`） |
 | `saveTo` | Yes | No | 結果を保存する変数 |
 
 **出力形式:**
@@ -414,6 +442,50 @@ FileExplorerData を Google Drive にファイルとして保存します。
 
 ---
 
+### prompt-file
+
+ファイルピッカーを表示し、選択されたファイルの内容を読み取ります。
+
+```yaml
+- id: pickFile
+  type: prompt-file
+  title: "ファイルを選択"
+  saveTo: fileContent
+  saveFileTo: fileInfo
+```
+
+| プロパティ | 必須 | テンプレート | 説明 |
+|-----------|:----:|:----------:|------|
+| `title` | No | Yes | ピッカーダイアログのタイトル（デフォルト: `"Select a file"`） |
+| `saveTo` | No | No | ファイル内容を保存する変数（テキスト） |
+| `saveFileTo` | No | No | ファイル情報 JSON を保存する変数（`{path, basename, name, extension}`） |
+
+`saveTo` または `saveFileTo` のいずれかが必須です。`drive-file-picker` と異なり、このノードはファイル内容を自動的に読み取ります。
+
+ユーザーがキャンセルした場合はエラーがスローされます。
+
+---
+
+### prompt-selection
+
+複数行テキスト入力ダイアログを表示します。
+
+```yaml
+- id: getText
+  type: prompt-selection
+  title: "テキストを入力してください"
+  saveTo: selection
+```
+
+| プロパティ | 必須 | テンプレート | 説明 |
+|-----------|:----:|:----------:|------|
+| `title` | No | Yes | プロンプトラベル（デフォルト: `"Enter text"`） |
+| `saveTo` | Yes | No | ユーザー入力を保存する変数 |
+
+常に複数行テキストエリアを表示します。ユーザーがキャンセルした場合はエラーがスローされます。
+
+---
+
 ### dialog
 
 オプション、ボタン、テキスト入力を含むダイアログを表示します。
@@ -471,6 +543,7 @@ FileExplorerData を Google Drive にファイルとして保存します。
 - id: selectFile
   type: drive-file-picker
   title: "ファイルを選択"
+  mode: select
   extensions: "pdf,doc,md"
   saveTo: fileData
   savePathTo: filePath
@@ -479,6 +552,8 @@ FileExplorerData を Google Drive にファイルとして保存します。
 | プロパティ | 必須 | テンプレート | 説明 |
 |-----------|:----:|:----------:|------|
 | `title` | No | Yes | ピッカーダイアログのタイトル（デフォルト: `"Select a file"`） |
+| `mode` | No | No | `select`（デフォルト）で既存ファイルを選択、`create` で新しいパスを入力 |
+| `default` | No | Yes | デフォルトファイルパス（`create` モードの初期値として使用） |
 | `extensions` | No | No | カンマ区切りの許可拡張子 |
 | `path` | No | Yes | 直接ファイルパス（設定時はピッカーをバイパス） |
 | `saveTo` | No | No | FileExplorerData JSON を保存する変数 |
@@ -486,25 +561,21 @@ FileExplorerData を Google Drive にファイルとして保存します。
 
 `saveTo` または `savePathTo` のいずれかが必須です。
 
-> **注意:** ピッカーはメタデータのみを返します。`data` フィールドは空です。ファイル内容を取得するには `drive-read` を使用してください。
-
----
-
-### preview
-
-クライアント側プレビュー用にファイルパスを保存します。
-
-```yaml
-- id: show
-  type: preview
-  path: "{{outputPath}}"
-  saveTo: previewPath
+**FileExplorerData の形式:**
+```json
+{
+  "id": "abc123",
+  "path": "notes/file.md",
+  "basename": "file.md",
+  "name": "file",
+  "extension": "md",
+  "mimeType": "application/octet-stream",
+  "contentType": "text",
+  "data": ""
+}
 ```
 
-| プロパティ | 必須 | テンプレート | 説明 |
-|-----------|:----:|:----------:|------|
-| `path` | Yes | Yes | プレビューするファイルパス |
-| `saveTo` | No | No | パスを保存する変数 |
+> **注意:** ピッカーはメタデータのみを返します。`data` フィールドは空です。ファイル内容を取得するには `drive-read` を使用してください。
 
 ---
 
@@ -550,6 +621,7 @@ HTTP 経由でリモート MCP（Model Context Protocol）サーバーのツー�
   args: '{"query": "{{searchTerm:json}}"}'
   headers: '{"Authorization": "Bearer {{apiKey}}"}'
   saveTo: searchResults
+  saveUiTo: uiData
 ```
 
 | プロパティ | 必須 | テンプレート | 説明 |
@@ -559,8 +631,116 @@ HTTP 経由でリモート MCP（Model Context Protocol）サーバーのツー�
 | `args` | No | Yes | ツール引数の JSON オブジェクト |
 | `headers` | No | Yes | HTTP ヘッダーの JSON オブジェクト |
 | `saveTo` | No | No | 結果を保存する変数 |
+| `saveUiTo` | No | No | UI リソースデータを保存する変数（サーバーが `_meta.ui.resourceUri` を返す場合） |
 
 JSON-RPC 2.0 プロトコル（`tools/call` メソッド）を使用。レスポンスのテキストコンテンツパーツは改行で結合されます。
+
+---
+
+### rag-sync
+
+Drive ファイルを Gemini RAG ストア（File Search）に同期します。
+
+```yaml
+- id: sync
+  type: rag-sync
+  path: "notes/knowledge-base.md"
+  ragSetting: "myRagStore"
+  saveTo: syncResult
+```
+
+| プロパティ | 必須 | テンプレート | 説明 |
+|-----------|:----:|:----------:|------|
+| `path` | Yes | Yes | Drive 上のファイルパス |
+| `ragSetting` | Yes | Yes | RAG 設定名（設定 > RAG から） |
+| `saveTo` | No | No | 同期結果を保存する変数 |
+
+指定した Drive ファイルを RAG ストアにアップロードします。ストアが存在しない場合は作成します。結果には `{path, ragSetting, fileId, storeName, mode, syncedAt}` が含まれます。
+
+RAG 対応の `command` ノード（同じ設定名を `ragSetting` に指定）でファイルを利用する準備に使用します。
+
+---
+
+### gemihub-command
+
+GemiHub のファイル操作（暗号化、公開、名前変更など）をワークフローノードとして実行します。
+
+```yaml
+- id: pub
+  type: gemihub-command
+  command: publish
+  path: "notes/readme.md"
+  saveTo: url
+```
+
+| プロパティ | 必須 | テンプレート | 説明 |
+|-----------|:----:|:----------:|------|
+| `command` | Yes | Yes | コマンド名（下表参照） |
+| `path` | Yes | Yes | ファイルパス、Drive ファイル ID、または `{{variable}}` |
+| `text` | No | Yes | 追加テキスト引数（用途はコマンドにより異なる） |
+| `saveTo` | No | No | 結果を保存する変数 |
+
+**利用可能なコマンド:**
+
+| コマンド | `text` の用途 | `saveTo` の結果 |
+|---------|-------------|-----------------|
+| `encrypt` | — | 新しいファイル名（`.encrypted` サフィックス付き） |
+| `publish` | — | 公開 URL |
+| `unpublish` | — | `"ok"` |
+| `duplicate` | カスタム名（任意; デフォルト: `"name (copy).ext"`） | 新しいファイル名 |
+| `convert-to-pdf` | — | PDF ファイル名（`temporaries/` に保存） |
+| `convert-to-html` | — | HTML ファイル名（`temporaries/` に保存） |
+| `rename` | 新しい名前（**必須**） | 新しいファイル名 |
+
+**パス解決**は `drive-read` と同じパターンに従います:
+- 直接 Drive ファイル ID（20文字以上の英数字）
+- `drive-file-picker` からの companion `_fileId` 変数
+- ファイル名検索 → `findFileByExactName` フォールバック
+
+**例:**
+
+```yaml
+# ファイルを暗号化
+- id: enc
+  type: gemihub-command
+  command: encrypt
+  path: "notes/secret.md"
+  saveTo: encryptedName
+
+# カスタム名で複製
+- id: dup
+  type: gemihub-command
+  command: duplicate
+  path: "templates/report.md"
+  text: "reports/2026-report.md"
+  saveTo: newFile
+
+# ユーザーが選択したファイルの名前を変更
+- id: pick
+  type: drive-file-picker
+  title: "名前を変更するファイルを選択"
+  savePathTo: filePath
+- id: ren
+  type: gemihub-command
+  command: rename
+  path: "{{filePath}}"
+  text: "{{filePath}}-archived.md"
+  saveTo: renamedName
+
+# マークダウンを PDF に変換
+- id: pdf
+  type: gemihub-command
+  command: convert-to-pdf
+  path: "notes/report.md"
+  saveTo: pdfName
+
+# マークダウンを HTML に変換
+- id: html
+  type: gemihub-command
+  command: convert-to-html
+  path: "notes/report.md"
+  saveTo: htmlName
+```
 
 ---
 

@@ -268,6 +268,24 @@ Parse JSON string into an object for property access in templates.
 
 After parsing, access nested values with template syntax such as \`{{data.items[0].name}}\`.
 
+### GemiHub Commands
+
+#### gemihub-command
+Execute GemiHub file operations (encrypt, publish, rename, etc.).
+- **command** (required): Command name: "encrypt", "publish", "unpublish", "duplicate", "convert-to-pdf", "convert-to-html", "rename"
+- **path** (required): File path, Drive file ID, or \`{{variable}}\`
+- **text** (optional): Additional text argument (e.g., new name for "rename", custom name for "duplicate")
+- **saveTo** (optional): Variable for result
+
+Command results:
+- encrypt → new file name (with .encrypted suffix)
+- publish → public URL
+- unpublish → "ok"
+- duplicate → new file name
+- convert-to-pdf → PDF file name (saved to temporaries/)
+- convert-to-html → HTML file name (saved to temporaries/)
+- rename → new file name
+
 ### Integration
 
 #### workflow
