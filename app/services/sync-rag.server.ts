@@ -47,7 +47,7 @@ export async function handleRagAction(
 
   switch (actionType) {
     case "ragRegister": {
-      // Per-file RAG registration during push
+      // Per-file RAG registration during push or file creation
       const { content: ragContent, fileName, fileId } = body as {
         content?: string;
         fileName?: string;
@@ -74,6 +74,12 @@ export async function handleRagAction(
         settings.ragSettings[storeKey] = ragSetting;
       }
       ragSetting.files ??= {};
+
+      // Skip if file matches exclude patterns
+      const excludePatterns = ragSetting.excludePatterns || [];
+      if (excludePatterns.some((p) => new RegExp(p).test(fileName))) {
+        return jsonWithCookie({ ok: true, skipped: true });
+      }
 
       // Ensure store exists
       if (!ragSetting.storeName) {

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { ragRegisterNewFile } from "~/services/rag-sync";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -82,7 +83,12 @@ export function useFileUpload() {
 
         const failedNames = new Set<string>();
         for (const [name, result] of resultMap) {
-          if (result.error) failedNames.add(name);
+          if (result.error) {
+            failedNames.add(name);
+          } else if (result.file) {
+            const f = result.file as { id: string; name: string };
+            ragRegisterNewFile(f.id, f.name);
+          }
         }
 
         setProgress((prev) =>

@@ -2096,6 +2096,19 @@ function RagTab({ settings }: { settings: UserSettings }) {
     ragTopK?: number;
   }) => {
     const rs = overrides?.ragSettings ?? ragSettings;
+
+    // Validate exclude patterns are valid regex
+    for (const [, s] of Object.entries(rs)) {
+      for (const p of s.excludePatterns || []) {
+        try {
+          new RegExp(p);
+        } catch {
+          setSyncMsg(t("settings.rag.invalidExcludePattern").replace("{pattern}", p));
+          return;
+        }
+      }
+    }
+
     const sel = overrides?.selectedRagSetting !== undefined ? overrides.selectedRagSetting : selectedRagSetting;
     const topK = overrides?.ragTopK ?? ragTopK;
     const hasGemihub = !!rs[DEFAULT_RAG_STORE_KEY];
@@ -2183,6 +2196,18 @@ function RagTab({ settings }: { settings: UserSettings }) {
   const handleSyncByKey = useCallback(async (key: string, settingsOverride?: Record<string, RagSetting>) => {
     const rs = settingsOverride ?? ragSettings;
     if (!rs[key]) return;
+
+    // Validate exclude patterns are valid regex
+    const patterns = rs[key].excludePatterns || [];
+    for (const p of patterns) {
+      try {
+        new RegExp(p);
+      } catch {
+        setSyncMsg(t("settings.rag.invalidExcludePattern").replace("{pattern}", p));
+        return;
+      }
+    }
+
     setSyncing(true);
     setSyncingKey(key);
     setSyncMsg(null);

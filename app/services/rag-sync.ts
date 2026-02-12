@@ -39,6 +39,15 @@ async function tryRagRetryPending(): Promise<void> {
   }
 }
 
+/**
+ * Register a single newly created/uploaded file for RAG (best-effort, fire-and-forget).
+ * Extension eligibility is checked client-side; exclude patterns are checked server-side.
+ */
+export function ragRegisterNewFile(fileId: string, fileName: string, content?: string): void {
+  if (!isRagEligible(fileName)) return;
+  ragRegisterInBackground([{ fileId, fileName, content: content ?? "" }]);
+}
+
 export function ragRegisterInBackground(
   filesToPush: Array<{ fileId: string; content: string; fileName: string }>
 ): void {

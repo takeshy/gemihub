@@ -108,6 +108,7 @@ export interface TranslationStrings {
   "settings.rag.filterRegistered": string;
   "settings.rag.filterPending": string;
   "settings.rag.excludePatternHint": string;
+  "settings.rag.invalidExcludePattern": string;
   "settings.rag.applyAndSync": string;
   "settings.rag.noFiles": string;
 
@@ -482,6 +483,7 @@ const en: TranslationStrings = {
   "settings.rag.filterRegistered": "Registered",
   "settings.rag.filterPending": "Pending",
   "settings.rag.excludePatternHint": "Regex supported. e.g. \\.copy\\., _backup, ^temp/",
+  "settings.rag.invalidExcludePattern": "Invalid exclude pattern regex: {pattern}",
   "settings.rag.applyAndSync": "Apply & Sync",
   "settings.rag.noFiles": "No files found.",
 
@@ -856,6 +858,7 @@ const ja: TranslationStrings = {
   "settings.rag.filterRegistered": "登録済",
   "settings.rag.filterPending": "未登録",
   "settings.rag.excludePatternHint": "正規表現が使えます。例: \\.copy\\., _backup, ^temp/",
+  "settings.rag.invalidExcludePattern": "除外パターンの正規表現が不正です: {pattern}",
   "settings.rag.applyAndSync": "適用 & 同期",
   "settings.rag.noFiles": "ファイルが見つかりません。",
 
