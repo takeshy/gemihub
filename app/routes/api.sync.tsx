@@ -13,12 +13,14 @@ import {
   renameFile,
   ensureSubFolder,
   listFiles,
+  findFileByExactName,
 } from "~/services/google-drive.server";
 import {
   readRemoteSyncMeta,
   writeRemoteSyncMeta,
   rebuildSyncMeta,
   saveConflictBackup,
+  SYNC_META_FILE_NAME,
   type SyncMeta,
 } from "~/services/sync-meta.server";
 import { parallelProcess } from "~/utils/parallel";
@@ -36,11 +38,23 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 
   // Read existing sync meta (snapshot of last sync), fallback to rebuild if missing
-  const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
-    ?? await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+  const syncMetaFile = await findFileByExactName(
+    validTokens.accessToken, SYNC_META_FILE_NAME, validTokens.rootFolderId
+  );
+  let remoteMeta: SyncMeta | null = null;
+  if (syncMetaFile) {
+    try {
+      const content = await readFile(validTokens.accessToken, syncMetaFile.id);
+      remoteMeta = JSON.parse(content) as SyncMeta;
+    } catch { /* fall through to rebuild */ }
+  }
+  if (!remoteMeta) {
+    remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+  }
 
   return jsonWithCookie({
     remoteMeta,
+    syncMetaFileId: syncMetaFile?.id ?? null,
     files: Object.entries(remoteMeta.files).map(([id, f]) => ({
       id,
       name: f.name,
@@ -454,9 +468,11 @@ export async function action({ request }: Route.ActionArgs) {
       const isNotFoundError = (err: unknown) =>
         err instanceof Error && /\b404\b/.test(err.message);
 
-      // Read sync meta once
-      const pushRemoteMeta =
-        (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
+      // Use client-provided remoteMeta/syncMetaFileId to avoid redundant Drive API calls
+      const clientRemoteMeta = body.remoteMeta as SyncMeta | undefined;
+      const syncMetaFileId = (body.syncMetaFileId as string) ?? null;
+      const pushRemoteMeta: SyncMeta = clientRemoteMeta
+        ?? (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
         ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
 
       // Update files in parallel: read old content, skip upload if unchanged
@@ -539,8 +555,13 @@ export async function action({ request }: Route.ActionArgs) {
 
       if (actuallyUploaded.length > 0) {
         pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
-        // Write sync meta once
-        await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
+        // Write sync meta once, using fileId directly if available to skip findFileByExactName
+        if (syncMetaFileId) {
+          await updateFile(validTokens.accessToken, syncMetaFileId,
+            JSON.stringify(pushRemoteMeta, null, 2), "application/json");
+        } else {
+          await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
+        }
       }
 
       // Save remote edit history in background (best-effort, does not block response)

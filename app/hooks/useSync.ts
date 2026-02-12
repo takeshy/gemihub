@@ -148,6 +148,7 @@ export function useSync() {
       if (!syncRes.ok) throw new Error("Failed to fetch remote meta");
       const syncData = await syncRes.json();
       const remoteMeta = syncData.remoteMeta as SyncMeta | null;
+      const syncMetaFileId = syncData.syncMetaFileId as string | null;
 
       // 2. Get local state
       const localMeta = (await getLocalSyncMeta()) ?? null;
@@ -196,6 +197,8 @@ export function useSync() {
           body: JSON.stringify({
             action: "pushFiles",
             files: filesToPush.map(({ fileId, content }) => ({ fileId, content })),
+            remoteMeta,
+            syncMetaFileId,
           }),
         });
         if (!pushRes.ok) throw new Error("Failed to push files");

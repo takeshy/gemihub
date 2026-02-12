@@ -77,21 +77,22 @@ Uploads locally-changed files to remote.
 ```
 1. PRE-CHECK: Diff check before writing anything
    ├─ Read LocalSyncMeta from IndexedDB (may be null on first sync)
-   ├─ POST /api/sync { action: "diff", localMeta, locallyModifiedFileIds }
-   │   └─ Server: read _sync-meta.json → compute diff
+   ├─ GET /api/sync → { remoteMeta, syncMetaFileId }
+   │   └─ Server: find + read _sync-meta.json, return meta and its file ID
+   ├─ Compute diff client-side (localMeta vs remoteMeta + locallyModifiedFileIds)
    └─ Remote has any pending changes (conflicts, toPull, or remoteOnly) → error "Pull first"
 
 2. BATCH UPLOAD: Update all files via single API call
    ├─ Get modified file IDs from IndexedDB editHistory
    ├─ Filter to only files tracked in any known meta (cached remoteMeta, diff remoteMeta, or localMeta)
    ├─ Read all modified file contents from IndexedDB cache
-   ├─ POST /api/sync { action: "pushFiles", files: [{ fileId, content }, ...] }
+   ├─ POST /api/sync { action: "pushFiles", files, remoteMeta, syncMetaFileId }
    │   └─ Server:
-   │       ├─ Read _sync-meta.json once
+   │       ├─ Use client-provided remoteMeta (skip re-reading _sync-meta.json)
    │       ├─ For each file (parallel, max 5 concurrent):
    │       │   ├─ Read old content from Drive (for edit history)
    │       │   └─ Update file on Drive
-   │       ├─ Write _sync-meta.json once (with all new md5/modifiedTime)
+   │       ├─ Write _sync-meta.json once via syncMetaFileId (skip findFileByExactName)
    │       ├─ Save remote edit history in background (best-effort)
    │       └─ Return results + updated remoteMeta
    ├─ Update IndexedDB cache with new md5/modifiedTime
@@ -386,11 +387,11 @@ Browser (IndexedDB)          Server                Google Drive
 
 | Action | Method | Description |
 |--------|--------|-------------|
-| `diff` | POST | Compute sync diff (local meta vs remote meta) |
-| `pull` | POST | Download file contents for specified IDs, update/prune sync meta |
+| *(loader)* | GET | Return `remoteMeta`, `syncMetaFileId`, and file list |
+| `pullDirect` | POST | Download file contents for specified IDs (no meta read/write) |
 | `resolve` | POST | Resolve conflict (backup loser, update Drive file and meta) |
 | `fullPull` | POST | Download all remote files (skip matching) |
-| `pushFiles` | POST | Batch update multiple files on Drive in parallel, read/write sync meta once |
+| `pushFiles` | POST | Batch update multiple files on Drive in parallel; accepts `remoteMeta` and `syncMetaFileId` from client to skip redundant meta reads/lookups |
 | `clearConflicts` | POST | Delete all files in conflict folder |
 | `detectUntracked` | POST | Find files on Drive not in sync meta |
 | `deleteUntracked` | POST | Delete specified untracked files |
