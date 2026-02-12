@@ -1,20 +1,10 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
+import { isBinaryMimeType, resolveExistingFile } from "./driveUtils";
 import * as driveService from "~/services/google-drive.server";
 import { saveEdit } from "~/services/edit-history.server";
 import { removeFileFromMeta, upsertFileInMeta } from "~/services/sync-meta.server";
 import { isEncryptedFile, decryptFileContent } from "~/services/crypto-core";
-
-const BINARY_MIME_PREFIXES = ["image/", "audio/", "video/"];
-const BINARY_MIME_TYPES = new Set([
-  "application/pdf",
-  "application/zip",
-  "application/octet-stream",
-]);
-
-function isBinaryMimeType(mimeType: string): boolean {
-  return BINARY_MIME_PREFIXES.some(p => mimeType.startsWith(p)) || BINARY_MIME_TYPES.has(mimeType);
-}
 
 async function readFileAsExplorerData(
   accessToken: string,
@@ -269,83 +259,8 @@ export async function handleDriveReadNode(
   if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
   if (!pathRaw.trim()) throw new Error("drive-read node missing 'path' property");
 
-  const path = replaceVariables(pathRaw, context);
   const accessToken = serviceContext.driveAccessToken;
-
-  // Check if path is a Drive file ID (alphanumeric + hyphens/underscores, 20+ chars)
-  if (/^[a-zA-Z0-9_-]{20,}$/.test(path)) {
-    const meta = await driveService.getFileMetadata(accessToken, path, {
-      signal: serviceContext.abortSignal,
-    });
-    if (isBinaryMimeType(meta.mimeType)) {
-      context.variables.set(
-        saveTo,
-        await readFileAsExplorerData(
-          accessToken,
-          path,
-          meta.name,
-          meta.mimeType,
-          serviceContext.abortSignal
-        )
-      );
-    } else {
-      const content = await driveService.readFile(accessToken, path, {
-        signal: serviceContext.abortSignal,
-      });
-      context.variables.set(saveTo, await decryptIfEncrypted(content, meta.name, promptCallbacks));
-    }
-    return;
-  }
-
-  // Check for companion _fileId variable from drive-file-picker
-  const varMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}$/);
-  if (varMatch) {
-    const fileId = context.variables.get(`${varMatch[1]}_fileId`);
-    if (fileId && typeof fileId === "string") {
-      const meta = await driveService.getFileMetadata(accessToken, fileId, {
-        signal: serviceContext.abortSignal,
-      });
-      if (isBinaryMimeType(meta.mimeType)) {
-        context.variables.set(
-          saveTo,
-          await readFileAsExplorerData(
-            accessToken,
-            fileId,
-            meta.name,
-            meta.mimeType,
-            serviceContext.abortSignal
-          )
-        );
-      } else {
-        const content = await driveService.readFile(accessToken, fileId, {
-          signal: serviceContext.abortSignal,
-        });
-        context.variables.set(saveTo, await decryptIfEncrypted(content, meta.name, promptCallbacks));
-      }
-      return;
-    }
-  }
-
-  // Search by file name
-  const folderId = serviceContext.driveRootFolderId;
-  const files = await driveService.searchFiles(accessToken, folderId, path, false, {
-    signal: serviceContext.abortSignal,
-  });
-  let file = files.find(f => f.name === path || f.name === `${path}.md`);
-
-  // Fallback: exact name match within root folder (handles special chars)
-  if (!file) {
-    file = await driveService.findFileByExactName(accessToken, path, folderId, {
-      signal: serviceContext.abortSignal,
-    }) ?? undefined;
-    if (!file && !path.endsWith(".md")) {
-      file = await driveService.findFileByExactName(accessToken, `${path}.md`, folderId, {
-        signal: serviceContext.abortSignal,
-      }) ?? undefined;
-    }
-  }
-
-  if (!file) throw new Error(`File not found on Drive: ${path}`);
+  const file = await resolveExistingFile(pathRaw, context, serviceContext, { tryMdExtension: true });
 
   if (isBinaryMimeType(file.mimeType)) {
     context.variables.set(
@@ -373,42 +288,11 @@ export async function handleDriveDeleteNode(
   serviceContext: ServiceContext,
   _promptCallbacks?: PromptCallbacks
 ): Promise<void> {
-  const path = replaceVariables(node.properties["path"] || "", context);
-  if (!path) throw new Error("drive-delete node missing 'path' property");
-
-  const baseName = path.includes("/") ? path.split("/").pop()! : path;
-  const hasExtension = baseName.includes(".");
-  const fileName = hasExtension ? path : `${path}.md`;
+  const pathRaw = node.properties["path"] || "";
   const accessToken = serviceContext.driveAccessToken;
   const folderId = serviceContext.driveRootFolderId;
 
-  // Check for companion _fileId variable from drive-file-picker
-  let existingFile: driveService.DriveFile | undefined;
-  const pathRaw = node.properties["path"] || "";
-  const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}$/);
-  if (fileVarMatch) {
-    const pickerFileId = context.variables.get(`${fileVarMatch[1]}_fileId`);
-    if (pickerFileId && typeof pickerFileId === "string") {
-      existingFile = { id: pickerFileId, name: fileName, mimeType: "text/plain" };
-    }
-  }
-
-  // Search for existing file
-  if (!existingFile) {
-    const existingFiles = await driveService.searchFiles(accessToken, folderId, fileName, false, {
-      signal: serviceContext.abortSignal,
-    });
-    existingFile = existingFiles.find(f => f.name === fileName);
-  }
-
-  // Fallback: exact name match within root folder (handles special chars)
-  if (!existingFile) {
-    existingFile = await driveService.findFileByExactName(accessToken, fileName, folderId, {
-      signal: serviceContext.abortSignal,
-    }) ?? undefined;
-  }
-
-  if (!existingFile) throw new Error(`File not found on Drive: ${path}`);
+  const existingFile = await resolveExistingFile(pathRaw, context, serviceContext, { tryMdExtension: true });
 
   // Soft delete: move to trash/ subfolder
   const trashFolderId = await driveService.ensureSubFolder(accessToken, folderId, "trash", {

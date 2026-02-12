@@ -49,6 +49,8 @@ export function getNodeSummary(node: WorkflowNode): string {
       return p.path ? `${truncate(p.path, 30)} → ${p.ragSetting || ""}` : "";
     case "sleep":
       return p.duration ? `${p.duration}ms` : "";
+    case "gemihub-command":
+      return p.command ? `${p.command} ${truncate(p.path || "", 40)}` : "";
     default:
       return "";
   }
@@ -84,6 +86,7 @@ export function getNodeTypeLabel(type: WorkflowNodeType): string {
     mcp: "MCP",
     "rag-sync": "RAG Sync",
     sleep: "Sleep",
+    "gemihub-command": "GemiHub Command",
   };
   return labels[type] || type;
 }
@@ -126,6 +129,9 @@ export function getNodeTypeColor(type: WorkflowNodeType): string {
     // Sub-workflow: indigo
     case "workflow":
       return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300";
+    // GemHub commands: rose
+    case "gemihub-command":
+      return "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300";
     // Misc
     case "sleep":
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";

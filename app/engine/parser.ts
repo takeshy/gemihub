@@ -33,7 +33,7 @@ const VALID_NODE_TYPES: Set<string> = new Set([
   "drive-file", "drive-read", "drive-search", "drive-list",
   "drive-folder-list", "drive-file-picker", "drive-save", "drive-delete",
   "dialog", "prompt-value", "prompt-file", "prompt-selection",
-  "workflow", "mcp", "rag-sync", "sleep",
+  "workflow", "mcp", "rag-sync", "sleep", "gemihub-command",
 ]);
 
 function isWorkflowNodeType(value: unknown): value is WorkflowNodeType {

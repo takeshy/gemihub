@@ -21,6 +21,7 @@ import { handlePromptValueNode, handlePromptFileNode, handlePromptSelectionNode,
 import { handleWorkflowNode, handleJsonNode } from "./handlers/integration";
 import { handleMcpNode } from "./handlers/mcp";
 import { handleRagSyncNode } from "./handlers/ragSync";
+import { handleGemihubCommandNode } from "./handlers/gemihubCommand";
 
 const MAX_WHILE_ITERATIONS = 1000;
 const MAX_TOTAL_STEPS = 100000;
@@ -441,6 +442,20 @@ export async function executeWorkflow(
           await handleSleepNode(node, context, options?.abortSignal);
           log(node.id, node.type, `Sleep completed`, "success", { duration });
           addHistoryStep(node.id, node.type, { duration });
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "gemihub-command": {
+          const ghCmd = replaceVariables(node.properties["command"] || "", context);
+          const ghPath = replaceVariables(node.properties["path"] || "", context);
+          log(node.id, node.type, `Command: ${ghCmd} ${ghPath}`, "info");
+          await handleGemihubCommandNode(node, context, serviceContext);
+          const ghSaveTo = node.properties["saveTo"];
+          const ghOutput = ghSaveTo ? context.variables.get(ghSaveTo) : undefined;
+          log(node.id, node.type, `Command completed: ${ghCmd}`, "success", { command: ghCmd, path: ghPath }, ghOutput);
+          addHistoryStep(node.id, node.type, { command: ghCmd, path: ghPath }, ghOutput);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;

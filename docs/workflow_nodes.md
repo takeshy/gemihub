@@ -15,6 +15,7 @@ This document provides detailed specifications for all workflow node types.
 | Composition | `workflow` | Execute another workflow as a sub-workflow |
 | External | `mcp` | Call remote MCP servers |
 | RAG | `rag-sync` | Sync files to RAG stores |
+| Commands | `gemihub-command` | Execute GemiHub file operations |
 
 ---
 
@@ -657,6 +658,81 @@ Sync a Drive file to a Gemini RAG store (File Search).
 Uploads the specified Drive file to the RAG store. Creates the store if it doesn't already exist. The result contains `{path, ragSetting, fileId, storeName, mode, syncedAt}`.
 
 Use this to prepare files for RAG-powered `command` nodes (set `ragSetting` on the command node to the same setting name).
+
+---
+
+### gemihub-command
+
+Execute GemiHub file operations (encrypt, publish, rename, etc.) as workflow nodes.
+
+```yaml
+- id: pub
+  type: gemihub-command
+  command: publish
+  path: "notes/readme.md"
+  saveTo: url
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `command` | Yes | Yes | Command name (see table below) |
+| `path` | Yes | Yes | File path, Drive file ID, or `{{variable}}` |
+| `text` | No | Yes | Additional text argument (usage depends on command) |
+| `saveTo` | No | No | Variable to store the result |
+
+**Available commands:**
+
+| Command | `text` usage | `saveTo` result |
+|---------|-------------|-----------------|
+| `encrypt` | — | New file name (with `.encrypted` suffix) |
+| `publish` | — | Public URL |
+| `unpublish` | — | `"ok"` |
+| `duplicate` | Custom name (optional; default: `"name (copy).ext"`) | New file name |
+| `convert-to-pdf` | — | PDF file name (saved to `temporaries/`) |
+| `rename` | New name (**required**) | New file name |
+
+**Path resolution** follows the same pattern as `drive-read`:
+- Direct Drive file ID (20+ alphanumeric chars)
+- Companion `_fileId` variable from `drive-file-picker`
+- Search by file name → `findFileByExactName` fallback
+
+**Examples:**
+
+```yaml
+# Encrypt a file
+- id: enc
+  type: gemihub-command
+  command: encrypt
+  path: "notes/secret.md"
+  saveTo: encryptedName
+
+# Duplicate with custom name
+- id: dup
+  type: gemihub-command
+  command: duplicate
+  path: "templates/report.md"
+  text: "reports/2026-report.md"
+  saveTo: newFile
+
+# Rename a file picked by user
+- id: pick
+  type: drive-file-picker
+  title: "Select file to rename"
+  savePathTo: filePath
+- id: ren
+  type: gemihub-command
+  command: rename
+  path: "{{filePath}}"
+  text: "{{filePath}}-archived.md"
+  saveTo: renamedName
+
+# Convert markdown to PDF
+- id: pdf
+  type: gemihub-command
+  command: convert-to-pdf
+  path: "notes/report.md"
+  saveTo: pdfName
+```
 
 ---
 

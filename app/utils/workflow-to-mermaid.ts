@@ -72,6 +72,8 @@ function getNodeLabel(node: WorkflowNode): string {
       return `**${id}**\nRAG: ${p.path || ""}\n→ ${p.ragSetting || ""}`;
     case "sleep":
       return `**${id}**\nSleep ${p.duration || ""}ms`;
+    case "gemihub-command":
+      return `**${id}**\nCmd: ${p.command || ""}\n${p.path || ""}`;
     default:
       return `**${id}**\n${node.type}`;
   }
