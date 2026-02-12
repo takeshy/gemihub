@@ -25,20 +25,6 @@ export function EditorToolbarActions({
 
   return (
     <div className="flex items-center gap-1 sm:gap-2">
-      {uploaded && (
-        <span className="text-xs text-green-600 dark:text-green-400">
-          {t("contextMenu.tempUploaded")}
-        </span>
-      )}
-      <button
-        onClick={onTempUpload}
-        disabled={uploading}
-        className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
-        title={t("contextMenu.tempUpload")}
-      >
-        <Upload size={ICON.SM} />
-        <span className="hidden sm:inline">{t("contextMenu.tempUpload")}</span>
-      </button>
       {onHistoryClick && (
         <button
           onClick={onHistoryClick}
@@ -49,7 +35,7 @@ export function EditorToolbarActions({
           <span className="hidden sm:inline">{t("editHistory.menuLabel")}</span>
         </button>
       )}
-      {/* Desktop only: diff and temp download */}
+      {/* Desktop only: diff */}
       {onDiffClick && (
         <button
           onClick={onDiffClick}
@@ -60,6 +46,21 @@ export function EditorToolbarActions({
           {t("mainViewer.diff")}
         </button>
       )}
+      {/* Desktop only: temp upload and temp download side by side */}
+      {uploaded && (
+        <span className="hidden sm:inline text-xs text-green-600 dark:text-green-400">
+          {t("contextMenu.tempUploaded")}
+        </span>
+      )}
+      <button
+        onClick={onTempUpload}
+        disabled={uploading}
+        className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+        title={t("contextMenu.tempUpload")}
+      >
+        <Upload size={ICON.SM} />
+        {t("contextMenu.tempUpload")}
+      </button>
       <button
         onClick={onTempDownload}
         className="hidden sm:flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -67,6 +68,20 @@ export function EditorToolbarActions({
       >
         <Download size={ICON.SM} />
         {t("contextMenu.tempDownload")}
+      </button>
+      {/* Mobile: temp upload button always visible */}
+      {uploaded && (
+        <span className="sm:hidden text-xs text-green-600 dark:text-green-400">
+          {t("contextMenu.tempUploaded")}
+        </span>
+      )}
+      <button
+        onClick={onTempUpload}
+        disabled={uploading}
+        className="sm:hidden flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+        title={t("contextMenu.tempUpload")}
+      >
+        <Upload size={ICON.SM} />
       </button>
       {/* Mobile more menu */}
       <div className="relative sm:hidden">
