@@ -1583,7 +1583,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
       const res = await fetch("/api/settings/mcp-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: newEntry.url.trim(), headers }),
+        body: JSON.stringify({ url: newEntry.url.trim(), headers, origin: window.location.origin }),
       });
       const data = await res.json();
 
@@ -1622,6 +1622,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
             headers,
             oauth: oauthConfig,
             oauthTokens: tokens,
+            origin: window.location.origin,
           }),
         });
         const retryData = await retryRes.json();
@@ -1797,6 +1798,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
           headers: server.headers,
           oauth: server.oauth,
           oauthTokens: server.oauthTokens,
+          origin: window.location.origin,
         }),
       });
       const data = await res.json();
@@ -1845,6 +1847,7 @@ function McpTab({ settings }: { settings: UserSettings }) {
             headers: server.headers,
             oauth: oauthConfig,
             oauthTokens: tokens,
+            origin: window.location.origin,
           }),
         });
         const retryData = await retryRes.json();

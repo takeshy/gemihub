@@ -22,11 +22,12 @@ export async function action({ request }: Route.ActionArgs) {
   await requireAuth(request);
 
   const body = await request.json();
-  const { url, headers, oauth, oauthTokens } = body as {
+  const { url, headers, oauth, oauthTokens, origin } = body as {
     url: string;
     headers?: Record<string, string>;
     oauth?: OAuthConfig;
     oauthTokens?: OAuthTokens;
+    origin?: string;
   };
 
   if (!url) {
@@ -107,8 +108,8 @@ export async function action({ request }: Route.ActionArgs) {
           // Attempt dynamic client registration if available and no clientId yet
           if (discovery.registrationUrl && !discovery.config.clientId) {
             try {
-              const origin = new URL(request.url).origin;
-              const redirectUri = `${origin}/auth/mcp-oauth-callback`;
+              const effectiveOrigin = origin || new URL(request.url).origin;
+              const redirectUri = `${effectiveOrigin}/auth/mcp-oauth-callback`;
               const registration = await registerOAuthClient(
                 discovery.registrationUrl,
                 redirectUri,
