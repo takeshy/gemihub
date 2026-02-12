@@ -1,40 +1,10 @@
-import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, PromptCallbacks } from "../types";
+import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
-import { isBinaryMimeType, resolveExistingFile } from "./driveUtils";
+import { isBinaryMimeType, resolveExistingFile, readBinaryFileAsExplorerData } from "./driveUtils";
 import * as driveService from "~/services/google-drive.server";
 import { saveEdit } from "~/services/edit-history.server";
 import { removeFileFromMeta, upsertFileInMeta } from "~/services/sync-meta.server";
 import { isEncryptedFile, decryptFileContent } from "~/services/crypto-core";
-
-async function readFileAsExplorerData(
-  accessToken: string,
-  fileId: string,
-  fileName: string,
-  mimeType: string,
-  abortSignal?: AbortSignal,
-): Promise<string> {
-  const res = await driveService.readFileRaw(accessToken, fileId, { signal: abortSignal });
-  const buffer = await res.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const base64 = btoa(binary);
-  const ext = fileName.includes(".") ? fileName.split(".").pop()! : "";
-  const name = fileName.includes(".") ? fileName.slice(0, fileName.lastIndexOf(".")) : fileName;
-  const fileData: FileExplorerData = {
-    id: fileId,
-    path: fileName,
-    basename: fileName,
-    name,
-    extension: ext,
-    mimeType,
-    contentType: "binary",
-    data: base64,
-  };
-  return JSON.stringify(fileData);
-}
 
 async function decryptIfEncrypted(
   content: string,
@@ -265,7 +235,7 @@ export async function handleDriveReadNode(
   if (isBinaryMimeType(file.mimeType)) {
     context.variables.set(
       saveTo,
-      await readFileAsExplorerData(
+      await readBinaryFileAsExplorerData(
         accessToken,
         file.id,
         file.name,

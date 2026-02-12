@@ -537,7 +537,7 @@ FileExplorerData を Google Drive にファイルとして保存します。
 
 ### drive-file-picker
 
-ファイル選択ダイアログを表示して Drive ファイルを選択します。
+ファイル選択ダイアログを表示して Drive ファイルを選択します。`saveTo` を使用すると、ファイル内容が自動的に読み込まれます。バイナリファイル（PDF、画像など）は Base64 エンコード、テキストファイルはそのまま読み込まれます。
 
 ```yaml
 - id: selectFile
@@ -556,7 +556,7 @@ FileExplorerData を Google Drive にファイルとして保存します。
 | `default` | No | Yes | デフォルトファイルパス（`create` モードの初期値として使用） |
 | `extensions` | No | No | カンマ区切りの許可拡張子 |
 | `path` | No | Yes | 直接ファイルパス（設定時はピッカーをバイパス） |
-| `saveTo` | No | No | FileExplorerData JSON を保存する変数 |
+| `saveTo` | No | No | FileExplorerData JSON を保存する変数（ファイル内容を含む） |
 | `savePathTo` | No | No | ファイル名/パスを保存する変数 |
 
 `saveTo` または `savePathTo` のいずれかが必須です。
@@ -565,17 +565,41 @@ FileExplorerData を Google Drive にファイルとして保存します。
 ```json
 {
   "id": "abc123",
-  "path": "notes/file.md",
-  "basename": "file.md",
-  "name": "file",
-  "extension": "md",
-  "mimeType": "application/octet-stream",
-  "contentType": "text",
-  "data": ""
+  "path": "notes/report.pdf",
+  "basename": "report.pdf",
+  "name": "report",
+  "extension": "pdf",
+  "mimeType": "application/pdf",
+  "contentType": "binary",
+  "data": "JVBERi0xLjQg..."
 }
 ```
 
-> **注意:** ピッカーはメタデータのみを返します。`data` フィールドは空です。ファイル内容を取得するには `drive-read` を使用してください。
+- `contentType`: バイナリファイル（PDF、画像など）は `"binary"`、テキストファイルは `"text"`
+- `data`: バイナリファイルは Base64 エンコード、テキストファイルはプレーンテキスト
+- `create` モードでは `data` は空（ファイルがまだ存在しないため）
+
+**例 — 画像分析:**
+```yaml
+- id: select-image
+  type: drive-file-picker
+  title: "分析する画像を選択"
+  extensions: "png,jpg,jpeg,gif,webp"
+  saveTo: imageData
+- id: analyze
+  type: command
+  prompt: "この画像を詳しく説明してください"
+  attachments: imageData
+  saveTo: analysis
+```
+
+**例 — ダイアログなしでファイル読み込み:**
+```yaml
+- id: load-pdf
+  type: drive-file-picker
+  path: "{{pdfPath}}"
+  saveTo: pdfData
+```
 
 ---
 

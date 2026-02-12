@@ -537,7 +537,7 @@ Display a dialog with options, buttons, and/or text input.
 
 ### drive-file-picker
 
-Show a file picker dialog to select a Drive file.
+Show a file picker dialog to select a Drive file. When `saveTo` is used, the file content is automatically loaded — binary files (PDF, images, etc.) are Base64-encoded, text files are read as-is.
 
 ```yaml
 - id: selectFile
@@ -556,7 +556,7 @@ Show a file picker dialog to select a Drive file.
 | `default` | No | Yes | Default file path (used as initial value in `create` mode) |
 | `extensions` | No | No | Comma-separated allowed extensions |
 | `path` | No | Yes | Direct file path (bypasses picker when set) |
-| `saveTo` | No | No | Variable for FileExplorerData JSON |
+| `saveTo` | No | No | Variable for FileExplorerData JSON (includes file content) |
 | `savePathTo` | No | No | Variable for file name/path |
 
 At least one of `saveTo` or `savePathTo` is required.
@@ -565,17 +565,41 @@ At least one of `saveTo` or `savePathTo` is required.
 ```json
 {
   "id": "abc123",
-  "path": "notes/file.md",
-  "basename": "file.md",
-  "name": "file",
-  "extension": "md",
-  "mimeType": "application/octet-stream",
-  "contentType": "text",
-  "data": ""
+  "path": "notes/report.pdf",
+  "basename": "report.pdf",
+  "name": "report",
+  "extension": "pdf",
+  "mimeType": "application/pdf",
+  "contentType": "binary",
+  "data": "JVBERi0xLjQg..."
 }
 ```
 
-> **Note:** The picker returns metadata only. The `data` field is empty. Use `drive-read` to fetch file content.
+- `contentType`: `"binary"` for binary files (PDF, images, etc.), `"text"` for text files
+- `data`: Base64-encoded content for binary files, plain text for text files
+- In `create` mode, `data` is empty (file does not exist yet)
+
+**Example — image analysis:**
+```yaml
+- id: select-image
+  type: drive-file-picker
+  title: "Select an image to analyze"
+  extensions: "png,jpg,jpeg,gif,webp"
+  saveTo: imageData
+- id: analyze
+  type: command
+  prompt: "Describe this image in detail"
+  attachments: imageData
+  saveTo: analysis
+```
+
+**Example — load file without dialog:**
+```yaml
+- id: load-pdf
+  type: drive-file-picker
+  path: "{{pdfPath}}"
+  saveTo: pdfData
+```
 
 ---
 

@@ -161,16 +161,40 @@ Result structure:
 \`\`\`
 
 #### drive-file-picker
-Interactive file picker dialog.
+Interactive file picker dialog. When saveTo is used, file content is automatically loaded (binary files as Base64, text files as-is).
 - **title** (optional): Dialog title
 - **mode** (optional): "select" (default) — pick existing file; "create" — enter new path
 - **default** (optional): Default path value
 - **path** (optional): Direct path (skip dialog entirely)
 - **extensions** (optional): Comma-separated extensions filter
-- **saveTo** (optional): Variable for FileExplorerData JSON
+- **saveTo** (optional): Variable for FileExplorerData JSON (includes file content)
 - **savePathTo** (optional): Variable for file path string
 
 FileExplorerData structure: \`{id, path, basename, name, extension, mimeType, contentType, data}\`
+- contentType: "binary" for PDF/images/etc., "text" for text files
+- data: Base64 string for binary, plain text for text files
+
+Example — image analysis with attachments:
+\`\`\`yaml
+- id: select-image
+  type: drive-file-picker
+  title: "Select an image to analyze"
+  extensions: "png,jpg,jpeg,gif,webp"
+  saveTo: imageData
+- id: analyze
+  type: command
+  prompt: "Describe this image in detail"
+  attachments: imageData
+  saveTo: analysis
+\`\`\`
+
+Example — load file without dialog (e.g., from a previous step):
+\`\`\`yaml
+- id: load-pdf
+  type: drive-file-picker
+  path: "{{pdfPath}}"
+  saveTo: pdfData
+\`\`\`
 
 #### drive-save
 Save FileExplorerData (e.g., from HTTP download or image generation) to Drive.
@@ -415,13 +439,16 @@ Call MCP server tool via HTTP (Streamable HTTP transport).
             if (tool.inputSchema) {
               const schema = tool.inputSchema as { properties?: Record<string, { type?: string; description?: string }>; required?: string[] };
               if (schema.properties) {
-                const params = Object.entries(schema.properties)
+                const paramLines = Object.entries(schema.properties)
                   .map(([k, v]) => {
                     const req = schema.required?.includes(k) ? " (required)" : "";
-                    return `${k}: ${v.type || "string"}${req}${v.description ? " — " + v.description : ""}`;
-                  })
-                  .join("; ");
-                if (params) line += ` | args: { ${params} }`;
+                    let paramLine = `          - **${k}**: ${v.type || "string"}${req}`;
+                    if (v.description) paramLine += ` — ${v.description}`;
+                    return paramLine;
+                  });
+                if (paramLines.length > 0) {
+                  line += `\n        args:\n${paramLines.join("\n")}`;
+                }
               }
             }
             return line;

@@ -1,4 +1,4 @@
-import type { ExecutionContext, ServiceContext } from "../types";
+import type { ExecutionContext, ServiceContext, FileExplorerData } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
 
@@ -90,4 +90,38 @@ export async function resolveExistingFile(
 
   if (!file) throw new Error(`File not found on Drive: ${path}`);
   return { id: file.id, name: file.name, mimeType: file.mimeType, parents: file.parents };
+}
+
+/**
+ * Read a binary file from Drive and return it as a FileExplorerData JSON string
+ * with base64-encoded data. Used by drive-read and drive-file-picker handlers.
+ */
+export async function readBinaryFileAsExplorerData(
+  accessToken: string,
+  fileId: string,
+  fileName: string,
+  mimeType: string,
+  abortSignal?: AbortSignal,
+): Promise<string> {
+  const res = await driveService.readFileRaw(accessToken, fileId, { signal: abortSignal });
+  const buffer = await res.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+  const ext = fileName.includes(".") ? fileName.split(".").pop()! : "";
+  const name = fileName.includes(".") ? fileName.slice(0, fileName.lastIndexOf(".")) : fileName;
+  const fileData: FileExplorerData = {
+    id: fileId,
+    path: fileName,
+    basename: fileName,
+    name,
+    extension: ext,
+    mimeType,
+    contentType: "binary",
+    data: base64,
+  };
+  return JSON.stringify(fileData);
 }

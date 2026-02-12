@@ -1,5 +1,6 @@
-import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
+import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
+import { isBinaryMimeType, resolveExistingFile, readBinaryFileAsExplorerData } from "./driveUtils";
 import * as driveService from "~/services/google-drive.server";
 
 // Handle prompt-value node (was: prompt-file + prompt-selection)
@@ -159,7 +160,7 @@ export async function handleDialogNode(
 export async function handleDriveFilePickerNode(
   node: WorkflowNode,
   context: ExecutionContext,
-  _serviceContext: ServiceContext,
+  serviceContext: ServiceContext,
   promptCallbacks?: PromptCallbacks
 ): Promise<void> {
   const title = replaceVariables(node.properties["title"] || "Select a file", context);
@@ -214,20 +215,8 @@ export async function handleDriveFilePickerNode(
   if (directPath) {
     if (savePathTo) context.variables.set(savePathTo, directPath);
     if (saveTo) {
-      const basename = directPath.includes("/") ? directPath.split("/").pop()! : directPath;
-      const dotIdx = basename.lastIndexOf(".");
-      const name = dotIdx > 0 ? basename.substring(0, dotIdx) : basename;
-      const extension = dotIdx > 0 ? basename.substring(dotIdx + 1) : "";
-      context.variables.set(saveTo, JSON.stringify({
-        id: "",
-        path: directPath,
-        basename,
-        name,
-        extension,
-        mimeType: "application/octet-stream",
-        contentType: "text",
-        data: "",
-      }));
+      const explorerData = await readDriveFileAsExplorerData(directPath, context, serviceContext);
+      context.variables.set(saveTo, JSON.stringify(explorerData));
     }
     return;
   }
@@ -245,15 +234,55 @@ export async function handleDriveFilePickerNode(
     context.variables.set(`${savePathTo}_fileId`, result.id);
   }
   if (saveTo) {
-    context.variables.set(saveTo, JSON.stringify({
-      id: result.id,
-      path: result.name,
-      basename: result.name,
-      name: result.name.replace(/\.[^.]+$/, ""),
-      extension: result.name.split(".").pop() || "",
-      mimeType: "application/octet-stream",
-      contentType: "text",
-      data: "",
-    }));
+    const meta = await driveService.getFileMetadata(serviceContext.driveAccessToken, result.id, {
+      signal: serviceContext.abortSignal,
+    });
+    const explorerData = await readDriveFileAsExplorerDataById(
+      result.id, result.name, meta.mimeType || "application/octet-stream", serviceContext
+    );
+    context.variables.set(saveTo, JSON.stringify(explorerData));
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers: read Drive file content into FileExplorerData
+// ---------------------------------------------------------------------------
+
+async function readDriveFileAsExplorerData(
+  path: string,
+  context: ExecutionContext,
+  serviceContext: ServiceContext,
+): Promise<FileExplorerData> {
+  const file = await resolveExistingFile(path, context, serviceContext, { tryMdExtension: true });
+  return readDriveFileAsExplorerDataById(file.id, file.name, file.mimeType, serviceContext);
+}
+
+async function readDriveFileAsExplorerDataById(
+  fileId: string,
+  fileName: string,
+  mimeType: string,
+  serviceContext: ServiceContext,
+): Promise<FileExplorerData> {
+  const accessToken = serviceContext.driveAccessToken;
+  const isBinary = isBinaryMimeType(mimeType);
+
+  if (isBinary) {
+    return JSON.parse(
+      await readBinaryFileAsExplorerData(accessToken, fileId, fileName, mimeType, serviceContext.abortSignal)
+    );
+  }
+
+  const ext = fileName.includes(".") ? fileName.split(".").pop()! : "";
+  const name = fileName.includes(".") ? fileName.slice(0, fileName.lastIndexOf(".")) : fileName;
+  const data = await driveService.readFile(accessToken, fileId, { signal: serviceContext.abortSignal });
+  return {
+    id: fileId,
+    path: fileName,
+    basename: fileName,
+    name,
+    extension: ext,
+    mimeType,
+    contentType: "text",
+    data,
+  };
 }
