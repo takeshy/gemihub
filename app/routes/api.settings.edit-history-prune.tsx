@@ -25,7 +25,11 @@ export async function action({ request }: Route.ActionArgs) {
       settings.editHistory
     );
     return Response.json(
-      { message: `Pruned ${result.deletedCount} entries.` },
+      {
+        deletedCount: result.deletedCount,
+        remainingEntries: result.remainingEntries,
+        totalFiles: result.totalFiles,
+      },
       { headers: responseHeaders }
     );
   } catch (error) {

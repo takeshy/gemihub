@@ -1173,18 +1173,35 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   }, []);
 
   const handlePrune = useCallback(async () => {
+    if (!window.confirm(t("settings.editHistory.pruneConfirm"))) return;
     setActionLoading("prune");
     setPruneMsg(null);
     try {
       const res = await fetch("/api/settings/edit-history-prune", { method: "POST" });
-      const data = await res.json();
-      setPruneMsg(data.message || (res.ok ? "Prune complete." : "Prune failed."));
+      const resData = await res.json();
+      if (!res.ok) {
+        setPruneMsg(resData.error || "Prune failed.");
+        return;
+      }
+      const { deletedCount, remainingEntries, totalFiles } = resData as {
+        deletedCount: number; remainingEntries: number; totalFiles: number;
+      };
+      if (deletedCount > 0) {
+        setPruneMsg(t("settings.editHistory.pruneResult")
+          .replace("{count}", String(deletedCount))
+          .replace("{total}", String(remainingEntries))
+          .replace("{files}", String(totalFiles)));
+      } else {
+        setPruneMsg(t("settings.editHistory.pruneResultNone")
+          .replace("{total}", String(remainingEntries))
+          .replace("{files}", String(totalFiles)));
+      }
     } catch (err) {
       setPruneMsg(err instanceof Error ? err.message : "Prune error.");
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [t]);
 
   const handleHistoryStats = useCallback(async () => {
     setActionLoading("historyStats");
@@ -1320,7 +1337,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.editHistory.pruneLabel")}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.editHistory.pruneDescription")}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.editHistory.pruneDescription").replace("{days}", String(_settings.editHistory.retention.maxAgeInDays)).replace("{max}", String(_settings.editHistory.retention.maxEntriesPerFile))}</p>
             </div>
             <div className="flex items-center gap-2">
               {pruneMsg && <span className="text-xs text-gray-500 dark:text-gray-400">{pruneMsg}</span>}

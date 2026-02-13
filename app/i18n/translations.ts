@@ -144,8 +144,11 @@ export interface TranslationStrings {
   // Edit History (in Sync tab)
   "settings.editHistory.sectionTitle": string;
   "settings.editHistory.prune": string;
+  "settings.editHistory.pruneConfirm": string;
   "settings.editHistory.pruneLabel": string;
   "settings.editHistory.pruneDescription": string;
+  "settings.editHistory.pruneResult": string;
+  "settings.editHistory.pruneResultNone": string;
   "settings.editHistory.stats": string;
   "settings.editHistory.statsLabel": string;
   "settings.editHistory.statsDescription": string;
@@ -538,8 +541,11 @@ const en: TranslationStrings = {
   // Edit History (in Sync tab)
   "settings.editHistory.sectionTitle": "Edit History",
   "settings.editHistory.prune": "Prune",
+  "settings.editHistory.pruneConfirm": "Remove edit history entries older than the retention period?\nThis action cannot be undone.",
   "settings.editHistory.pruneLabel": "Prune Old Entries",
-  "settings.editHistory.pruneDescription": "Remove old edit history entries to free up storage.",
+  "settings.editHistory.pruneDescription": "Remove entries older than {days} days or exceeding {max} entries per file.",
+  "settings.editHistory.pruneResult": "Pruned {count} entries. ({total} remaining across {files} files)",
+  "settings.editHistory.pruneResultNone": "No entries to prune. ({total} entries across {files} files, all within retention period)",
   "settings.editHistory.stats": "Stats",
   "settings.editHistory.statsLabel": "Storage Statistics",
   "settings.editHistory.statsDescription": "View edit history storage usage and entry counts.",
@@ -932,8 +938,11 @@ const ja: TranslationStrings = {
   // Edit History (in Sync tab)
   "settings.editHistory.sectionTitle": "編集履歴",
   "settings.editHistory.prune": "整理",
+  "settings.editHistory.pruneConfirm": "保持期間を超えた編集履歴エントリを削除しますか？\nこの操作は元に戻せません。",
   "settings.editHistory.pruneLabel": "古いエントリを整理",
-  "settings.editHistory.pruneDescription": "古い編集履歴を削除してストレージを解放します。",
+  "settings.editHistory.pruneDescription": "{days}日以上経過、またはファイルあたり{max}件を超えるエントリを削除します。",
+  "settings.editHistory.pruneResult": "{count}件のエントリを削除しました。（{files}ファイル中 残り{total}件）",
+  "settings.editHistory.pruneResultNone": "削除対象のエントリはありません。（{files}ファイル中 {total}件、すべて保持期間内）",
   "settings.editHistory.stats": "統計",
   "settings.editHistory.statsLabel": "ストレージ統計",
   "settings.editHistory.statsDescription": "編集履歴のストレージ使用量とエントリ数を表示します。",

@@ -227,7 +227,7 @@ export async function prune(
   accessToken: string,
   rootFolderId: string,
   settings: EditHistorySettings
-): Promise<{ deletedCount: number }> {
+): Promise<{ deletedCount: number; remainingEntries: number; totalFiles: number }> {
   const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
   const files = await listFiles(accessToken, historyFolderId);
   const maxAgeMs =
@@ -236,6 +236,8 @@ export async function prune(
       : 0;
   const now = Date.now();
   let deletedCount = 0;
+  let remainingEntries = 0;
+  let totalFiles = 0;
 
   for (const file of files) {
     if (!file.name.endsWith(".history.json")) continue;
@@ -256,18 +258,22 @@ export async function prune(
       }
 
       deletedCount += originalCount - history.entries.length;
+      remainingEntries += history.entries.length;
 
       if (history.entries.length === 0) {
         await deleteFile(accessToken, file.id);
-      } else if (history.entries.length !== originalCount) {
-        await updateFile(accessToken, file.id, JSON.stringify(history, null, 2), "application/json");
+      } else {
+        totalFiles++;
+        if (history.entries.length !== originalCount) {
+          await updateFile(accessToken, file.id, JSON.stringify(history, null, 2), "application/json");
+        }
       }
     } catch {
       // Skip
     }
   }
 
-  return { deletedCount };
+  return { deletedCount, remainingEntries, totalFiles };
 }
 
 /**
