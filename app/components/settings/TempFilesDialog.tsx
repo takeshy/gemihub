@@ -374,13 +374,13 @@ function BinaryConfirmDialog({
         <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <button
             onClick={onCancel}
-            className="rounded px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+            className="rounded px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             {t("tempFiles.binaryConfirmCancel")}
           </button>
           <button
             onClick={onConfirm}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="inline-flex items-center gap-1 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             {t("tempFiles.binaryConfirmApply")}
           </button>
