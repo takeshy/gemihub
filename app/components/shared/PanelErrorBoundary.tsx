@@ -11,6 +11,16 @@ interface State {
   error: Error | null;
 }
 
+function isChunkLoadError(error: Error | null): boolean {
+  if (!error) return false;
+  const msg = error.message;
+  return (
+    msg.includes("dynamically imported module") ||
+    msg.includes("Loading chunk") ||
+    msg.includes("Loading CSS chunk")
+  );
+}
+
 export class PanelErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false, error: null };
 
@@ -24,6 +34,7 @@ export class PanelErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const chunkError = isChunkLoadError(this.state.error);
       return (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
           <AlertTriangle size={32} className="text-amber-500" />
@@ -31,14 +42,25 @@ export class PanelErrorBoundary extends Component<Props, State> {
             {this.props.fallbackLabel ?? "Something went wrong in this panel."}
           </p>
           <p className="max-w-sm text-xs text-gray-500 dark:text-gray-400">
-            {this.state.error?.message}
+            {chunkError
+              ? "A newer version is available. Please reload the page."
+              : this.state.error?.message}
           </p>
-          <button
-            onClick={() => this.setState({ hasError: false, error: null })}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
-          >
-            Try again
-          </button>
+          {chunkError ? (
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
+            >
+              Reload page
+            </button>
+          ) : (
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
+            >
+              Try again
+            </button>
+          )}
         </div>
       );
     }
