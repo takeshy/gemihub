@@ -20,6 +20,9 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 - `docs/infrastructure.md` — インフラ構成（Cloud Run等）
 - `docs/editor.md` — エディタシステム（WYSIWYG、ワークフロー編集、ファイルタイプ別表示等）（`editor_ja.md` は日本語版）
 - `docs/history.md` — 編集履歴の仕組み
+- `docs/utils.md` — 右クリックメニュー、ゴミ箱、スラッシュコマンド等のユーティリティ
+- `docs/workflow_execution.md` — ワークフロー実行エンジン（パーサー、エグゼキューター、SSE、プロンプト、AI生成）
+- `docs/search.md` — 検索機能（ローカル/Drive/RAG検索、Quick Open）
 
 ## Commands
 

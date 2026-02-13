@@ -98,6 +98,9 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 | Infrastructure | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
 | Editor | [editor.md](./docs/editor.md) | [editor_ja.md](./docs/editor_ja.md) |
 | Edit History | [history.md](./docs/history.md) | [history_ja.md](./docs/history_ja.md) |
+| Utils (Context Menu, Trash, Commands) | [utils.md](./docs/utils.md) | [utils_ja.md](./docs/utils_ja.md) |
+| Workflow Execution Engine | [workflow_execution.md](./docs/workflow_execution.md) | [workflow_execution_ja.md](./docs/workflow_execution_ja.md) |
+| Search | [search.md](./docs/search.md) | [search_ja.md](./docs/search_ja.md) |
 
 ## Getting Started
 

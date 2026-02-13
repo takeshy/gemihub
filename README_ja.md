@@ -97,6 +97,10 @@ GemiHub はオフラインファーストです。すべてのファイルはブ
 | プラグイン | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
 | インフラストラクチャ | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
 | エディタ | [editor.md](./docs/editor.md) | [editor_ja.md](./docs/editor_ja.md) |
+| 編集履歴 | [history.md](./docs/history.md) | [history_ja.md](./docs/history_ja.md) |
+| ユーティリティ（右クリックメニュー、ゴミ箱、コマンド） | [utils.md](./docs/utils.md) | [utils_ja.md](./docs/utils_ja.md) |
+| ワークフロー実行エンジン | [workflow_execution.md](./docs/workflow_execution.md) | [workflow_execution_ja.md](./docs/workflow_execution_ja.md) |
+| 検索 | [search.md](./docs/search.md) | [search_ja.md](./docs/search_ja.md) |
 
 ## はじめかた
 
