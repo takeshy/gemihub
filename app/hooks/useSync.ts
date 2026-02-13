@@ -217,6 +217,22 @@ export function useSync() {
         || diff.toPull.length > 0
         || diff.remoteOnly.length > 0
       ) {
+        // Update cached remoteMeta so subsequent pull uses the fresh data
+        if (remoteMeta) {
+          const existingCached = await getCachedRemoteMeta();
+          if (existingCached?.rootFolderId) {
+            await setCachedRemoteMeta({
+              id: "current",
+              rootFolderId: existingCached.rootFolderId,
+              lastUpdatedAt: remoteMeta.lastUpdatedAt,
+              files: remoteMeta.files,
+              cachedAt: Date.now(),
+            });
+          }
+          const localFiles = localMeta?.files ?? {};
+          const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
+          setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length);
+        }
         setError("settings.sync.pushRejected");
         setSyncStatus("error");
         return;
