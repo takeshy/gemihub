@@ -9,7 +9,7 @@
     "typecheck": "react-router typegen && tsc",
     "lint": "eslint app/",
     "lint:fix": "eslint app/ --fix",
-    "test": "tsx --test app/services/sync-meta.server.test.ts app/services/sync-client-utils.test.ts app/engine/parser.test.ts app/engine/handlers/mcp.test.ts app/services/google-drive.server.test.ts app/services/mcp-proxy-server-resolver.test.ts app/types/settings.mcp.test.ts app/services/plugin-manager.server.test.ts app/services/plugin-api.test.ts app/services/file-search.server.test.ts app/routes/api.sync.rag.test.ts",
+    "test": "tsx --test 'app/**/*.test.ts'",
     "test:sync-diff": "tsx --test app/services/sync-meta.server.test.ts app/services/sync-client-utils.test.ts",
     "test:parser": "tsx --test app/engine/parser.test.ts"
   },
