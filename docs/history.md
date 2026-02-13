@@ -150,7 +150,6 @@ Restore to index 1 (filteredIndex=1):
 
 ### Limitations
 
-- Restore is only available for **local** entries (not remote)
 - If `reverseApplyDiff` fails (patch mismatch), restore returns null and nothing changes
 - After restore, the editor immediately reflects the restored content; the change is local-only until the next Push
 

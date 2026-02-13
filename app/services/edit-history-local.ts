@@ -139,6 +139,38 @@ export async function recordRestoreDiff(
   await setEditHistoryEntry(entry);
 }
 
+/**
+ * Reconstruct content and record the restore as a new history entry.
+ */
+export async function restoreToHistoryEntry(
+  fileId: string,
+  currentContent: string,
+  diffsToApply: string[]
+): Promise<string | null> {
+  const restoredContent = reconstructContent(currentContent, diffsToApply);
+  if (restoredContent === null) return null;
+
+  await recordRestoreDiff(fileId, currentContent, restoredContent);
+  return restoredContent;
+}
+
+/**
+ * Reconstruct file content at a specific point in history by reverse-applying diffs.
+ * diffs should be ordered from newest to oldest.
+ */
+export function reconstructContent(
+  currentContent: string,
+  diffs: string[]
+): string | null {
+  let content = currentContent;
+  for (const diff of diffs) {
+    const reversed = reverseApplyDiff(content, diff);
+    if (reversed === null) return null;
+    content = reversed;
+  }
+  return content;
+}
+
 export function reverseApplyDiff(content: string, diffStr: string): string | null {
   const lines = diffStr.split("\n");
   const reversed: string[] = [];

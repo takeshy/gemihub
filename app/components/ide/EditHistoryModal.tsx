@@ -12,7 +12,7 @@ import {
 import { ICON } from "~/utils/icon-sizes";
 import type { EditHistoryEntry } from "~/services/edit-history.server";
 import { getEditHistoryForFile, getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
-import { reverseApplyDiff, recordRestoreDiff } from "~/services/edit-history-local";
+import { reconstructContent, restoreToHistoryEntry } from "~/services/edit-history-local";
 import { useI18n } from "~/i18n/context";
 import { DiffView } from "~/components/shared/DiffView";
 
@@ -31,24 +31,6 @@ type DisplayEntry = {
   stats: { additions: number; deletions: number };
   origin: "local" | "remote";
 };
-
-/**
- * Reconstruct file content at a specific index in the sorted entries array.
- * Reverse-applies diffs from entries[0] (newest) through entries[targetIdx] (inclusive).
- */
-function reconstructAtIndex(
-  currentContent: string,
-  sortedEntries: DisplayEntry[],
-  targetIdx: number
-): string | null {
-  let content = currentContent;
-  for (let i = 0; i <= targetIdx; i++) {
-    const reversed = reverseApplyDiff(content, sortedEntries[i].diff);
-    if (reversed === null) return null;
-    content = reversed;
-  }
-  return content;
-}
 
 export function EditHistoryModal({
   fileId,
@@ -155,14 +137,12 @@ export function EditHistoryModal({
       const targetIdx = allEntries.indexOf(entry);
       if (targetIdx < 0) return;
 
-      const restoredContent = reconstructAtIndex(cached.content, allEntries, targetIdx);
+      const diffsToApply = allEntries.slice(0, targetIdx + 1).map((e) => e.diff);
+      const restoredContent = await restoreToHistoryEntry(fileId, cached.content, diffsToApply);
       if (restoredContent == null) {
         alert(t("editHistory.restoreFailed"));
         return;
       }
-
-      // Record the restore diff in local history
-      await recordRestoreDiff(fileId, cached.content, restoredContent);
 
       // Update IndexedDB cache
       await setCachedFile({
@@ -195,7 +175,8 @@ export function EditHistoryModal({
       const targetIdx = allEntries.indexOf(entry);
       if (targetIdx < 0) return;
 
-      const restoredContent = reconstructAtIndex(cached.content, allEntries, targetIdx);
+      const diffsToApply = allEntries.slice(0, targetIdx + 1).map((e) => e.diff);
+      const restoredContent = reconstructContent(cached.content, diffsToApply);
       if (restoredContent == null) {
         alert(t("editHistory.restoreFailed"));
         return;
