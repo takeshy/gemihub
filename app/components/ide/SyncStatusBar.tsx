@@ -120,41 +120,35 @@ export function SyncStatusBar({
         <Loader2 size={ICON.SM} className="animate-spin text-gray-400" />
       )}
 
-      {/* Push button + count badge */}
+      {/* Push button (opens modal) */}
       <button
-        onClick={onPush}
-        disabled={isBusy}
+        onClick={() => openDiffDialog("push")}
+        disabled={isBusy || pushCount === 0}
         className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
       >
         <ArrowUp size={ICON.SM} />
         {!compact && "Push"}
+        {pushCount > 0 && (
+          <span className="rounded-full bg-blue-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white dark:bg-blue-500">
+            {pushCount}
+          </span>
+        )}
       </button>
-      {pushCount > 0 && (
-        <button
-          onClick={() => openDiffDialog("push")}
-          className="rounded-full bg-blue-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-        >
-          {pushCount}
-        </button>
-      )}
 
-      {/* Pull button + remote count badge */}
+      {/* Pull button (opens modal) */}
       <button
-        onClick={onPull}
-        disabled={isBusy}
+        onClick={() => openDiffDialog("pull")}
+        disabled={isBusy || remoteModifiedCount === 0}
         className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
       >
         <ArrowDown size={ICON.SM} />
         {!compact && "Pull"}
+        {remoteModifiedCount > 0 && (
+          <span className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white dark:bg-green-500">
+            {remoteModifiedCount}
+          </span>
+        )}
       </button>
-      {remoteModifiedCount > 0 && (
-        <button
-          onClick={() => openDiffDialog("pull")}
-          className="rounded-full bg-green-600 px-1.5 py-0 text-[10px] font-bold leading-4 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
-        >
-          {remoteModifiedCount}
-        </button>
-      )}
 
       {/* Conflict indicator */}
       {conflictCount > 0 && (
