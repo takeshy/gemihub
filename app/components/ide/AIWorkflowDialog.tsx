@@ -30,6 +30,8 @@ interface AIWorkflowDialogProps {
   currentName?: string;
   workflowId?: string;
   apiPlan: ApiPlan;
+  encryptedPrivateKey?: string;
+  salt?: string;
   onAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
   onClose: () => void;
 }
@@ -47,6 +49,8 @@ export function AIWorkflowDialog({
   currentName,
   workflowId,
   apiPlan,
+  encryptedPrivateKey,
+  salt,
   onAccept,
   onClose,
 }: AIWorkflowDialogProps) {
@@ -456,6 +460,8 @@ export function AIWorkflowDialog({
     {showHistorySelect && workflowId && (
       <ExecutionHistorySelectModal
         workflowId={workflowId}
+        encryptedPrivateKey={encryptedPrivateKey}
+        salt={salt}
         onSelect={(steps) => {
           setSelectedExecutionSteps(steps);
           setShowHistorySelect(false);

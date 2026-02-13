@@ -115,6 +115,11 @@ export async function executeWorkflow(
   let totalIterations = 0;
 
   while (stack.length > 0 && totalIterations < MAX_TOTAL_STEPS) {
+    // Yield to event loop periodically so stop requests can be processed
+    if (totalIterations > 0 && totalIterations % 100 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
     if (options?.abortSignal?.aborted) {
       historyRecord.status = "cancelled";
       historyRecord.endTime = new Date().toISOString();
@@ -195,6 +200,7 @@ export async function executeWorkflow(
         }
 
         case "command": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const promptPreview = (node.properties["prompt"] || "").substring(0, 50);
           log(node.id, node.type, `Executing LLM: ${promptPreview}...`, "info");
           const cmdResult = await handleCommandNode(node, context, serviceContext, promptCallbacks);
@@ -227,6 +233,7 @@ export async function executeWorkflow(
         }
 
         case "http": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const httpUrl = replaceVariables(node.properties["url"] || "", context);
           const httpMethod = node.properties["method"] || "GET";
           log(node.id, node.type, `HTTP ${httpMethod} ${httpUrl}`, "info");
@@ -253,6 +260,7 @@ export async function executeWorkflow(
         }
 
         case "drive-file": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const drivePath = node.properties["path"] || "";
           log(node.id, node.type, `Writing file: ${drivePath}`, "info");
           await handleDriveFileNode(node, context, serviceContext, promptCallbacks);
@@ -264,6 +272,7 @@ export async function executeWorkflow(
         }
 
         case "drive-read": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const readPath = node.properties["path"] || "";
           log(node.id, node.type, `Reading file: ${readPath}`, "info");
           await handleDriveReadNode(node, context, serviceContext, promptCallbacks);
@@ -277,6 +286,7 @@ export async function executeWorkflow(
         }
 
         case "drive-search": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const searchQuery = node.properties["query"] || "";
           log(node.id, node.type, `Searching: ${searchQuery}`, "info");
           await handleDriveSearchNode(node, context, serviceContext);
@@ -290,6 +300,7 @@ export async function executeWorkflow(
         }
 
         case "drive-list": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           log(node.id, node.type, `Listing files`, "info");
           await handleDriveListNode(node, context, serviceContext);
           const listSaveTo = node.properties["saveTo"] || "";
@@ -302,6 +313,7 @@ export async function executeWorkflow(
         }
 
         case "drive-folder-list": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           log(node.id, node.type, `Listing folders`, "info");
           await handleDriveFolderListNode(node, context, serviceContext);
           const flSaveTo = node.properties["saveTo"] || "";
@@ -314,6 +326,7 @@ export async function executeWorkflow(
         }
 
         case "drive-file-picker": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           log(node.id, node.type, `File picker`, "info");
           await handleDriveFilePickerNode(node, context, serviceContext, promptCallbacks);
           log(node.id, node.type, `File selected`, "success");
@@ -324,6 +337,7 @@ export async function executeWorkflow(
         }
 
         case "drive-save": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           log(node.id, node.type, `Saving file`, "info");
           await handleDriveSaveNode(node, context, serviceContext);
           log(node.id, node.type, `File saved`, "success");
@@ -334,6 +348,7 @@ export async function executeWorkflow(
         }
 
         case "drive-delete": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const deletePath = replaceVariables(node.properties["path"] || "", context);
           log(node.id, node.type, `Deleting file: ${deletePath}`, "info");
           await handleDriveDeleteNode(node, context, serviceContext, promptCallbacks);
@@ -345,6 +360,7 @@ export async function executeWorkflow(
         }
 
         case "dialog": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const dialogTitle = node.properties["title"] || "Dialog";
           log(node.id, node.type, `Showing dialog: ${dialogTitle}`, "info");
           await handleDialogNode(node, context, serviceContext, promptCallbacks);
@@ -358,6 +374,7 @@ export async function executeWorkflow(
         }
 
         case "prompt-value": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const promptTitle = node.properties["title"] || "Input";
           log(node.id, node.type, `Prompting: ${promptTitle}`, "info");
           await handlePromptValueNode(node, context, serviceContext, promptCallbacks);
@@ -371,6 +388,7 @@ export async function executeWorkflow(
         }
 
         case "prompt-file": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const pfTitle = node.properties["title"] || "Select a file";
           log(node.id, node.type, `Prompt file: ${pfTitle}`, "info");
           await handlePromptFileNode(node, context, serviceContext, promptCallbacks);
@@ -384,6 +402,7 @@ export async function executeWorkflow(
         }
 
         case "prompt-selection": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const psTitle = node.properties["title"] || "Input";
           log(node.id, node.type, `Prompt selection: ${psTitle}`, "info");
           await handlePromptSelectionNode(node, context, serviceContext, promptCallbacks);
@@ -397,6 +416,7 @@ export async function executeWorkflow(
         }
 
         case "workflow": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const subPath = replaceVariables(node.properties["path"] || "", context);
           log(node.id, node.type, `Sub-workflow: ${subPath}`, "info");
           await handleWorkflowNode(node, context, serviceContext, promptCallbacks);
@@ -408,6 +428,7 @@ export async function executeWorkflow(
         }
 
         case "mcp": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const mcpUrl = replaceVariables(node.properties["url"] || "", context);
           const mcpTool = replaceVariables(node.properties["tool"] || "", context);
           log(node.id, node.type, `MCP: ${mcpTool} @ ${mcpUrl}`, "info");
@@ -423,6 +444,7 @@ export async function executeWorkflow(
         }
 
         case "rag-sync": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const ragPath = replaceVariables(node.properties["path"] || "", context);
           const ragSettingName = replaceVariables(node.properties["ragSetting"] || "", context);
           log(node.id, node.type, `RAG sync: ${ragPath} → ${ragSettingName}`, "info");
@@ -437,6 +459,7 @@ export async function executeWorkflow(
         }
 
         case "sleep": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const duration = replaceVariables(node.properties["duration"] || "0", context);
           log(node.id, node.type, `Sleeping ${duration}ms`, "info");
           await handleSleepNode(node, context, options?.abortSignal);
@@ -448,6 +471,7 @@ export async function executeWorkflow(
         }
 
         case "gemihub-command": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const ghCmd = replaceVariables(node.properties["command"] || "", context);
           const ghPath = replaceVariables(node.properties["path"] || "", context);
           log(node.id, node.type, `Command: ${ghCmd} ${ghPath}`, "info");

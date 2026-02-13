@@ -1248,6 +1248,8 @@ function IDEContent({
           currentName={aiDialog.currentName}
           workflowId={aiDialog.currentFileId}
           apiPlan={settings.apiPlan}
+          encryptedPrivateKey={settings.encryption?.encryptedPrivateKey}
+          salt={settings.encryption?.salt}
           onAccept={handleAIAccept}
           onClose={() => setAiDialog(null)}
         />

@@ -3,6 +3,7 @@ import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import {
   readFile,
+  readFileBase64,
   readFileRaw,
   deleteFile,
   createFile,
@@ -343,22 +344,37 @@ export async function action({ request }: Route.ActionArgs) {
         // Best-effort: don't block encrypt
       }
 
-      const plainContent = content != null ? content : await readFile(validTokens.accessToken, fileId);
-      if (!plainContent) {
-        return logAndReturn({ error: "File is empty" }, { status: 400 });
+      // Get file metadata to determine if binary
+      const encFileMeta = await getFileMetadata(validTokens.accessToken, fileId);
+      const isBinary = /^(image|video|audio)\/|^application\/(pdf|octet-stream)$/.test(encFileMeta.mimeType ?? "");
+
+      let contentToEncrypt: string;
+      if (isBinary) {
+        // Binary files: read as base64 and prefix with marker so decryption knows the format
+        const base64Content = content != null ? content : await readFileBase64(validTokens.accessToken, fileId);
+        if (!base64Content) {
+          return logAndReturn({ error: "File is empty" }, { status: 400 });
+        }
+        contentToEncrypt = `BINARY:${encFileMeta.mimeType}\n${base64Content}`;
+      } else {
+        const plainContent = content != null ? content : await readFile(validTokens.accessToken, fileId);
+        if (!plainContent) {
+          return logAndReturn({ error: "File is empty" }, { status: 400 });
+        }
+        contentToEncrypt = plainContent;
       }
+
       const encrypted = await encryptFileContent(
-        plainContent,
+        contentToEncrypt,
         encSettings.encryption.publicKey,
         encSettings.encryption.encryptedPrivateKey,
         encSettings.encryption.salt
       );
       await updateFile(validTokens.accessToken, fileId, encrypted);
-      const meta = await getFileMetadata(validTokens.accessToken, fileId);
       const renamedFile = await renameFile(
         validTokens.accessToken,
         fileId,
-        meta.name + ".encrypted"
+        encFileMeta.name + ".encrypted"
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamedFile);
       return logAndReturn({ file: renamedFile, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
@@ -380,8 +396,17 @@ export async function action({ request }: Route.ActionArgs) {
           }
         }
       }
-      // Update file content with decrypted plaintext
-      const decFile = await updateFile(validTokens.accessToken, fileId, content);
+      // Update file content with decrypted plaintext (or binary)
+      let decFile;
+      if (content.startsWith("BINARY:")) {
+        const newlineIdx = content.indexOf("\n");
+        const binaryMimeType = content.slice(7, newlineIdx);
+        const base64Data = content.slice(newlineIdx + 1);
+        const buffer = Buffer.from(base64Data, "base64");
+        decFile = await updateFileBinary(validTokens.accessToken, fileId, buffer, binaryMimeType);
+      } else {
+        decFile = await updateFile(validTokens.accessToken, fileId, content);
+      }
       // Remove .encrypted extension from filename
       let decRenamed = decFile;
       if (decFile.name.endsWith(".encrypted")) {

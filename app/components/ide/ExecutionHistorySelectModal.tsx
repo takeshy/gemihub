@@ -14,15 +14,22 @@ import type {
   ExecutionRecord,
   ExecutionStep,
 } from "~/engine/types";
+import { decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
+import { cryptoCache } from "~/services/crypto-cache";
+import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
 
 interface ExecutionHistorySelectModalProps {
   workflowId: string;
+  encryptedPrivateKey?: string;
+  salt?: string;
   onSelect: (steps: ExecutionStep[]) => void;
   onClose: () => void;
 }
 
 export function ExecutionHistorySelectModal({
   workflowId,
+  encryptedPrivateKey,
+  salt,
   onSelect,
   onClose,
 }: ExecutionHistorySelectModalProps) {
@@ -36,6 +43,10 @@ export function ExecutionHistorySelectModal({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<ExecutionRecord | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Encryption
+  const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
+  const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
 
   // Checkboxes
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
@@ -60,6 +71,52 @@ export function ExecutionHistorySelectModal({
     })();
   }, [workflowId]);
 
+  const tryDecryptContent = useCallback(
+    async (content: string): Promise<ExecutionRecord | null> => {
+      const cachedKey = cryptoCache.getPrivateKey();
+      if (cachedKey) {
+        try {
+          const plain = await decryptWithPrivateKey(content, cachedKey);
+          return JSON.parse(plain) as ExecutionRecord;
+        } catch { /* cached key failed */ }
+      }
+      const cachedPw = cryptoCache.getPassword();
+      if (cachedPw) {
+        try {
+          const plain = await decryptFileContent(content, cachedPw);
+          return JSON.parse(plain) as ExecutionRecord;
+        } catch { /* cached password failed */ }
+      }
+      return null;
+    },
+    []
+  );
+
+  const applyRecord = useCallback((rec: ExecutionRecord) => {
+    setSelectedRecord(rec);
+    const errorIndices = new Set<number>();
+    rec.steps.forEach((step, i) => {
+      if (step.status === "error") errorIndices.add(i);
+    });
+    setCheckedIndices(errorIndices);
+  }, []);
+
+  const handleCryptoUnlock = useCallback(
+    async (privateKey: string) => {
+      setShowCryptoPrompt(false);
+      if (pendingEncryptedContent) {
+        try {
+          const plain = await decryptWithPrivateKey(pendingEncryptedContent, privateKey);
+          applyRecord(JSON.parse(plain) as ExecutionRecord);
+        } catch {
+          // ignore
+        }
+        setPendingEncryptedContent(null);
+      }
+    },
+    [pendingEncryptedContent, applyRecord]
+  );
+
   // Select a run and load its detail
   const handleSelectRun = useCallback(
     async (record: ExecutionRecordItem) => {
@@ -74,14 +131,17 @@ export function ExecutionHistorySelectModal({
         );
         if (res.ok) {
           const data = await res.json();
-          const rec = data.record as ExecutionRecord;
-          setSelectedRecord(rec);
-          // Pre-select error steps
-          const errorIndices = new Set<number>();
-          rec.steps.forEach((step, i) => {
-            if (step.status === "error") errorIndices.add(i);
-          });
-          setCheckedIndices(errorIndices);
+          if (data.encrypted && data.encryptedContent) {
+            const decrypted = await tryDecryptContent(data.encryptedContent);
+            if (decrypted) {
+              applyRecord(decrypted);
+            } else {
+              setPendingEncryptedContent(data.encryptedContent);
+              setShowCryptoPrompt(true);
+            }
+          } else {
+            applyRecord(data.record as ExecutionRecord);
+          }
         }
       } catch {
         // ignore
@@ -89,7 +149,7 @@ export function ExecutionHistorySelectModal({
         setLoadingDetail(false);
       }
     },
-    [selectedRunId]
+    [selectedRunId, tryDecryptContent, applyRecord]
   );
 
   const toggleCheck = useCallback((index: number) => {
@@ -266,7 +326,20 @@ export function ExecutionHistorySelectModal({
   );
 
   if (typeof document !== "undefined") {
-    return createPortal(modal, document.body);
+    return createPortal(
+      <>
+        {modal}
+        {showCryptoPrompt && encryptedPrivateKey && salt && (
+          <CryptoPasswordPrompt
+            encryptedPrivateKey={encryptedPrivateKey}
+            salt={salt}
+            onUnlock={handleCryptoUnlock}
+            onCancel={() => { setShowCryptoPrompt(false); setPendingEncryptedContent(null); }}
+          />
+        )}
+      </>,
+      document.body
+    );
   }
   return modal;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Lock, Unlock, Loader2, ShieldOff } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { EncryptionSettings } from "~/types/settings";
@@ -12,6 +12,7 @@ import {
   unwrapEncryptedFile,
 } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
+import { deleteCachedFile } from "~/services/indexeddb-cache";
 import { TempDiffModal } from "./TempDiffModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
 
@@ -124,14 +125,55 @@ export function EncryptedFileViewer({
     return () => { cancelled = true; };
   }, [encryptedContent, fileId, decryptedContent]);
 
-  // Push decrypted content to EditorContext
+  // Detect binary content (BINARY:{mimeType}\n{base64data})
+  const binaryInfo = useMemo(() => {
+    if (!decryptedContent || !decryptedContent.startsWith("BINARY:")) return null;
+    const newlineIdx = decryptedContent.indexOf("\n");
+    if (newlineIdx === -1) return null;
+    return {
+      mimeType: decryptedContent.slice(7, newlineIdx),
+      base64Data: decryptedContent.slice(newlineIdx + 1),
+    };
+  }, [decryptedContent]);
+
+  // Create blob URL for binary content
+  const blobUrlRef = useRef<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
   useEffect(() => {
-    if (decryptedContent !== null) {
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+    if (!binaryInfo) {
+      setBlobUrl(null);
+      return;
+    }
+    const byteString = atob(binaryInfo.base64Data);
+    const bytes = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) {
+      bytes[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: binaryInfo.mimeType });
+    const url = URL.createObjectURL(blob);
+    blobUrlRef.current = url;
+    setBlobUrl(url);
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, [binaryInfo]);
+
+  // Push decrypted content to EditorContext (text files only)
+  useEffect(() => {
+    if (decryptedContent !== null && !binaryInfo) {
       setActiveFileContent(editedContent);
       setActiveFileName(fileName);
       setActiveSelection(null);
     }
-  }, [editedContent, fileName, decryptedContent, setActiveFileContent, setActiveFileName, setActiveSelection]);
+  }, [editedContent, fileName, decryptedContent, binaryInfo, setActiveFileContent, setActiveFileName, setActiveSelection]);
 
   const handleUnlock = useCallback(async () => {
     if (!password) return;
@@ -272,8 +314,12 @@ export function EncryptedFileViewer({
       }
       const data = await res.json();
       const newName = data.file?.name as string | undefined;
-      // Update cache with plaintext
-      await saveToCache(editedContent);
+      // Update cache: for text save plaintext, for binary delete stale cache (MediaViewer will re-fetch)
+      if (editedContent.startsWith("BINARY:")) {
+        await deleteCachedFile(fileId);
+      } else {
+        await saveToCache(editedContent);
+      }
       // Dispatch event so tree and _index update
       window.dispatchEvent(
         new CustomEvent("file-decrypted", {
@@ -340,6 +386,51 @@ export function EncryptedFileViewer({
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ---------- Decrypted binary media viewer ----------
+  if (binaryInfo) {
+    const mime = binaryInfo.mimeType;
+    return (
+      <div className="relative flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+        {/* Toolbar */}
+        <div className="flex items-center justify-end px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button
+              onClick={handlePermanentDecrypt}
+              disabled={decryptingPermanent}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-600 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30 disabled:opacity-50"
+              title={t("crypt.decrypt")}
+            >
+              {decryptingPermanent ? <Loader2 size={ICON.SM} className="animate-spin" /> : <ShieldOff size={ICON.SM} />}
+              <span className="hidden sm:inline">{t("crypt.decrypt")}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Media content */}
+        {blobUrl ? (
+          <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+            {mime.startsWith("image/") && (
+              <img src={blobUrl} alt={fileName} className="max-w-full max-h-full object-contain" />
+            )}
+            {mime.startsWith("video/") && (
+              <video src={blobUrl} controls className="max-w-full max-h-full" />
+            )}
+            {mime.startsWith("audio/") && (
+              <audio src={blobUrl} controls />
+            )}
+            {mime === "application/pdf" && (
+              <iframe src={blobUrl} className="w-full h-full border-0" title={fileName} />
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 size={24} className="animate-spin text-gray-400" />
+          </div>
+        )}
       </div>
     );
   }
