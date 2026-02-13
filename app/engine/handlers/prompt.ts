@@ -76,6 +76,7 @@ export async function handlePromptFileNode(
       name,
       extension,
     }));
+    context.variables.set(`${saveFileTo}_fileId`, result.id);
   }
 }
 

@@ -50,14 +50,29 @@ export async function handleDriveFileNode(
   const accessToken = serviceContext.driveAccessToken;
   const folderId = serviceContext.driveRootFolderId;
 
-  // Check for companion _fileId variable from drive-file-picker
   let existingFile: driveService.DriveFile | undefined;
-  const pathRaw = node.properties["path"] || "";
-  const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}$/);
-  if (fileVarMatch) {
-    const pickerFileId = context.variables.get(`${fileVarMatch[1]}_fileId`);
-    if (pickerFileId && typeof pickerFileId === "string") {
-      existingFile = { id: pickerFileId, name: fileName, mimeType: "text/plain" };
+
+  // Check for direct Drive file ID
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(path)) {
+    try {
+      const meta = await driveService.getFileMetadata(accessToken, path, {
+        signal: serviceContext.abortSignal,
+      });
+      existingFile = { id: meta.id, name: meta.name, mimeType: meta.mimeType };
+    } catch {
+      // Not a valid ID or not found, proceed to search
+    }
+  }
+
+  // Check for companion _fileId variable from drive-file-picker
+  if (!existingFile) {
+    const pathRaw = node.properties["path"] || "";
+    const fileVarMatch = pathRaw.trim().match(/^\{\{(\w+)\}\}$/);
+    if (fileVarMatch) {
+      const pickerFileId = context.variables.get(`${fileVarMatch[1]}_fileId`);
+      if (pickerFileId && typeof pickerFileId === "string") {
+        existingFile = { id: pickerFileId, name: fileName, mimeType: "text/plain" };
+      }
     }
   }
 
@@ -140,6 +155,9 @@ export async function handleDriveFileNode(
   } else if (mode === "append") {
     if (existingFile) {
       finalContent = oldContent + "\n" + content;
+      await driveService.updateFile(accessToken, existingFile.id, finalContent, "text/markdown", {
+        signal: serviceContext.abortSignal,
+      });
       serviceContext.onDriveFileUpdated?.({
         fileId: existingFile.id,
         fileName: existingFile.name || fileName,
@@ -167,6 +185,9 @@ export async function handleDriveFileNode(
   } else {
     // overwrite
     if (existingFile) {
+      await driveService.updateFile(accessToken, existingFile.id, content, "text/markdown", {
+        signal: serviceContext.abortSignal,
+      });
       serviceContext.onDriveFileUpdated?.({
         fileId: existingFile.id,
         fileName: existingFile.name || fileName,

@@ -38,28 +38,75 @@ export async function handleDriveSaveNode(
   const accessToken = serviceContext.driveAccessToken;
   const folderId = serviceContext.driveRootFolderId;
 
-  // Create or update the file
-  const content = fileData.contentType === "binary"
-    ? fileData.data  // Base64 encoded
-    : fileData.data;
+  // Search for existing file to avoid duplicates
+  const existingFiles = await driveService.searchFiles(accessToken, folderId, fileName, false, {
+    signal: serviceContext.abortSignal,
+  });
+  const existingFile = existingFiles.find(f => f.name === fileName);
 
-  const driveFile = fileData.contentType === "binary"
-    ? await driveService.createFileBinary(
-      accessToken,
-      fileName,
-      Buffer.from(content, "base64"),
-      folderId,
-      fileData.mimeType,
-      { signal: serviceContext.abortSignal }
-    )
-    : await driveService.createFile(
-      accessToken,
-      fileName,
-      content,
-      folderId,
-      fileData.mimeType,
-      { signal: serviceContext.abortSignal }
-    );
+  // Create or update the file
+  let driveFile: driveService.DriveFile;
+  const content = fileData.data;
+
+  if (fileData.contentType === "binary") {
+    const buffer = Buffer.from(content, "base64");
+    if (existingFile) {
+      driveFile = await driveService.updateFileBinary(
+        accessToken,
+        existingFile.id,
+        buffer,
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal }
+      );
+    } else {
+      driveFile = await driveService.createFileBinary(
+        accessToken,
+        fileName,
+        buffer,
+        folderId,
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal }
+      );
+    }
+  } else {
+    if (existingFile) {
+      driveFile = await driveService.updateFile(
+        accessToken,
+        existingFile.id,
+        content,
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal }
+      );
+    } else {
+      driveFile = await driveService.createFile(
+        accessToken,
+        fileName,
+        content,
+        folderId,
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal }
+      );
+    }
+  }
+
+  const { upsertFileInMeta } = await import("~/services/sync-meta.server");
+  await upsertFileInMeta(accessToken, folderId, driveFile, { signal: serviceContext.abortSignal });
+
+  if (existingFile) {
+    serviceContext.onDriveFileUpdated?.({
+      fileId: driveFile.id,
+      fileName: driveFile.name,
+      content: fileData.contentType === "binary" ? "" : content,
+    });
+  } else {
+    serviceContext.onDriveFileCreated?.({
+      fileId: driveFile.id,
+      fileName: driveFile.name,
+      content: fileData.contentType === "binary" ? "" : content,
+      md5Checksum: driveFile.md5Checksum || "",
+      modifiedTime: driveFile.modifiedTime || "",
+    });
+  }
 
   if (savePathTo) {
     context.variables.set(savePathTo, driveFile.name);

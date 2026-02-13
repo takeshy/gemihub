@@ -105,12 +105,7 @@ export async function readBinaryFileAsExplorerData(
 ): Promise<string> {
   const res = await driveService.readFileRaw(accessToken, fileId, { signal: abortSignal });
   const buffer = await res.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const base64 = btoa(binary);
+  const base64 = Buffer.from(buffer).toString("base64");
   const ext = fileName.includes(".") ? fileName.split(".").pop()! : "";
   const name = fileName.includes(".") ? fileName.slice(0, fileName.lastIndexOf(".")) : fileName;
   const fileData: FileExplorerData = {

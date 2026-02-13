@@ -196,12 +196,7 @@ export async function handleCommandNode(
             { signal: serviceContext.abortSignal }
           );
           const buffer = await res.arrayBuffer();
-          const bytes = new Uint8Array(buffer);
-          let binary = "";
-          for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          fileData.data = btoa(binary);
+          fileData.data = Buffer.from(buffer).toString("base64");
           // Infer mimeType from extension if generic
           if (!fileData.mimeType || fileData.mimeType === "application/octet-stream") {
             const ext = (fileData.extension || "").toLowerCase();
