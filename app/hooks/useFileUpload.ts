@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { ragRegisterNewFile } from "~/services/rag-sync";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export interface UploadProgress {
   name: string;
@@ -41,7 +41,7 @@ export function useFileUpload() {
           return {
             name: f.name,
             status: "error" as const,
-            error: `Too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 5MB.`,
+            error: `Too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 10MB.`,
           };
         }
         return { name: f.name, status: "uploading" as const };

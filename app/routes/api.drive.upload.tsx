@@ -4,7 +4,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { createFileBinary, updateFileBinary, getFileMetadata } from "~/services/google-drive.server";
 import { upsertFileInMeta } from "~/services/sync-meta.server";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file (Drive multipart limit)
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
@@ -37,7 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
     if (file.size > MAX_FILE_SIZE) {
       results.push({
         name: file.name,
-        error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 5MB per file.`,
+        error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 10MB per file.`,
       });
       continue;
     }
