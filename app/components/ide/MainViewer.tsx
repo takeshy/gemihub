@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { FileText, Loader2, Eye, PenLine, Code, X } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { ICON } from "~/utils/icon-sizes";
@@ -426,7 +427,7 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
       )}
 
       {/* Binary temp file preview modal */}
-      {tempPreview && (
+      {tempPreview && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
           <div className="mx-4 w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col">
             {/* Header */}
@@ -481,7 +482,8 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
