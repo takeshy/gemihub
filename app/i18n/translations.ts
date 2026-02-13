@@ -1163,12 +1163,12 @@ const ja: TranslationStrings = {
   "conflict.backupNote": "上書きされたバージョンはバックアップされ、設定 > 同期 > コンフリクトバックアップから復元できます。",
 
   // Sync diff dialog
-  "sync.pushLabel": "Drive反映",
+  "sync.pushLabel": "ドライブ反映",
   "sync.pullLabel": "ローカル反映",
-  "sync.pushChanges": "Drive反映 — 変更一覧",
+  "sync.pushChanges": "ドライブ反映 — 変更一覧",
   "sync.pullChanges": "ローカル反映 — 変更一覧",
-  "sync.pushDirection": "ローカル \u2192 Drive",
-  "sync.pullDirection": "Drive \u2192 ローカル",
+  "sync.pushDirection": "ローカル \u2192 ドライブ",
+  "sync.pullDirection": "ドライブ \u2192 ローカル",
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
 
