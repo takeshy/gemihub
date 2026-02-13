@@ -34,7 +34,8 @@ Gemini ストリーミング、Function Calling、RAG、画像生成、MCP 連�
 | `web_search_used` | 使用された Web 検索ソース |
 | `image_generated` | Base64 エンコードされた生成画像 |
 | `mcp_app` | MCP ツール UI メタデータ |
-| `drive_changed` | Drive ファイルが作成/更新された（ファイルツリー更新をトリガー） |
+| `drive_file_created` | 新規ファイルが作成された（ファイルツリー更新をトリガー） |
+| `drive_file_updated` | 既存のファイルが更新された（コンテンツ/メタデータを更新） |
 | `error` | エラーメッセージ |
 | `done` | ストリーム完了 |
 
@@ -42,8 +43,9 @@ Gemini ストリーミング、Function Calling、RAG、画像生成、MCP 連�
 
 1. `POST /api/chat` を SSE ストリームとして開く
 2. `data:` 行をパースし、text/thinking/toolCalls を蓄積
-3. `drive_changed` を受信 → `sync-complete` イベントを dispatch（ファイルツリーを更新）
-4. `done` を受信 → 最終 `Message` オブジェクトを構築し履歴に保存
+3. `drive_file_created` を受信 → `sync-complete` イベントを dispatch（ファイルツリーを更新）
+4. `drive_file_updated` を受信 → ローカルキャッシュ/メタデータを更新し `file-restored` を dispatch（エディタを更新）
+5. `done` を受信 → 最終 `Message` オブジェクトを構築し履歴に保存
 
 ---
 
@@ -61,7 +63,7 @@ Gemini ストリーミング、Function Calling、RAG、画像生成、MCP 連�
 | `create_drive_file` | 新規ファイル作成（パス区切りで仮想フォルダ対応） |
 | `update_drive_file` | 既存ファイルの内容を更新 |
 
-`create_drive_file` または `update_drive_file` の後、サーバーは `_sync-meta.json` を更新し `drive_changed` SSE チャンクを送信。クライアントは `sync-complete` を dispatch し、手動 Pull なしでファイルツリーが更新される。
+`create_drive_file` または `update_drive_file` の後、サーバーは `_sync-meta.json` を更新し `drive_file_created` または `drive_file_updated` SSE チャンクを送信。クライアントはローカル状態を更新し、ファイルツリーやエディタに即座に変更が反映される。
 
 ### Drive ツールモード
 
@@ -206,7 +208,7 @@ MCP ツールは設定済み MCP サーバーから動的に検出される。�
 │ streaming state   │◄──►│ executeToolCall   │◄──►│ Stream       │
 │ tool call display │    │  ├─ Drive tools   │    │ Function calls│
 │ autocomplete      │    │  ├─ MCP tools     │    └──────────────┘
-│ chat history      │    │  └─ drive_changed │
+│ chat history      │    │  ├─ drive_file_*  │
 └──────────────────┘    └──────────────────┘
                               │
                         ┌─────▼──────┐
@@ -220,7 +222,7 @@ MCP ツールは設定済み MCP サーバーから動的に検出される。�
 
 | ファイル | 役割 |
 |----------|------|
-| `app/routes/api.chat.tsx` | Chat SSE API — ストリーミング、ツールディスパッチ、`drive_changed` 送信 |
+| `app/routes/api.chat.tsx` | Chat SSE API — ストリーミング、ツールディスパッチ、Drive 更新通知送信 |
 | `app/routes/api.chat.history.tsx` | チャット履歴 CRUD（一覧、保存、削除） |
 | `app/services/gemini-chat.server.ts` | Gemini ストリーミング + Function Calling、RAG、思考、画像生成 |
 | `app/services/drive-tools.server.ts` | Drive ツール定義と実行 |

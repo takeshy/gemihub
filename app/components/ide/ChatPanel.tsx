@@ -30,8 +30,9 @@ import {
   setCachedFile,
   getLocalSyncMeta,
   setLocalSyncMeta,
+  deleteEditHistoryEntry,
 } from "~/services/indexeddb-cache";
-import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
+import { addCommitBoundary } from "~/services/edit-history-local";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -561,20 +562,30 @@ export function ChatPanel({
                   break;
                 case "drive_file_updated":
                   if (chunk.updatedFile) {
-                    const { fileId: ufId, fileName: ufName, content: ufContent } = chunk.updatedFile;
+                    const { fileId: ufId, fileName: ufName, content: ufContent, md5Checksum: ufMd5, modifiedTime: ufMt } = chunk.updatedFile;
                     (async () => {
                       try {
                         await addCommitBoundary(ufId);
-                        await saveLocalEdit(ufId, ufName, ufContent);
-                        const cached = await getCachedFile(ufId);
+                        // Clear local edit history so it's no longer marked as modified
+                        await deleteEditHistoryEntry(ufId);
                         await setCachedFile({
                           fileId: ufId,
                           content: ufContent,
-                          md5Checksum: cached?.md5Checksum ?? "",
-                          modifiedTime: cached?.modifiedTime ?? "",
+                          md5Checksum: ufMd5,
+                          modifiedTime: ufMt,
                           cachedAt: Date.now(),
                           fileName: ufName,
                         });
+                        const syncMeta = (await getLocalSyncMeta()) ?? {
+                          id: "current" as const,
+                          lastUpdatedAt: new Date().toISOString(),
+                          files: {},
+                        };
+                        syncMeta.files[ufId] = {
+                          md5Checksum: ufMd5,
+                          modifiedTime: ufMt,
+                        };
+                        await setLocalSyncMeta(syncMeta);
                         await addCommitBoundary(ufId);
                         window.dispatchEvent(
                           new CustomEvent("file-modified", { detail: { fileId: ufId } })

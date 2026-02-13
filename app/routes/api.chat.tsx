@@ -184,15 +184,21 @@ export async function action({ request }: Route.ActionArgs) {
             validTokens.rootFolderId
           );
           if (name === "update_drive_file") {
-            const r = result as { id?: string; name?: string; content?: string };
+            const r = result as { id?: string; name?: string; content?: string; md5Checksum?: string; modifiedTime?: string };
             if (r.id && r.content != null) {
               sendChunk({
                 type: "drive_file_updated",
-                updatedFile: { fileId: r.id, fileName: r.name || "", content: r.content },
+                updatedFile: {
+                  fileId: r.id,
+                  fileName: r.name || "",
+                  content: r.content,
+                  md5Checksum: r.md5Checksum || "",
+                  modifiedTime: r.modifiedTime || "",
+                },
               });
             }
             // Strip content from result returned to Gemini (token savings)
-            const { content: _content, ...geminiResult } = result as Record<string, unknown>;
+            const { content: _content, md5Checksum: _md5, modifiedTime: _mt, ...geminiResult } = result as Record<string, unknown>;
             return geminiResult;
           }
           if (name === "create_drive_file") {

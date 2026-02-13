@@ -77,7 +77,7 @@ export interface StreamChunk {
   ragSources?: string[];
   generatedImage?: GeneratedImage;
   mcpApp?: McpAppInfo;
-  updatedFile?: { fileId: string; fileName: string; content: string };
+  updatedFile?: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string };
   createdFile?: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string };
 }
 

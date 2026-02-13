@@ -286,12 +286,15 @@ export async function executeDriveTool(
       if (typeof content !== "string") {
         return { error: "update_drive_file: 'content' must be a string" };
       }
-      const fileMeta = await getFileMetadata(accessToken, fileId, { signal: abortSignal });
+      const file = await updateFile(accessToken, fileId, content, "text/plain", { signal: abortSignal });
+      await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
       return {
-        id: fileMeta.id,
-        name: fileMeta.name,
-        webViewLink: fileMeta.webViewLink,
+        id: file.id,
+        name: file.name,
+        webViewLink: file.webViewLink,
         content,
+        md5Checksum: file.md5Checksum,
+        modifiedTime: file.modifiedTime,
       };
     }
 
