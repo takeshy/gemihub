@@ -30,6 +30,7 @@ import { useSync } from "~/hooks/useSync";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { usePendingFileMigration } from "~/hooks/usePendingFileMigration";
 import { ICON } from "~/utils/icon-sizes";
+import { PluginIcon } from "~/components/shared/PluginIcon";
 
 // ---------------------------------------------------------------------------
 // Loader
@@ -1156,7 +1157,7 @@ function IDEContent({
                             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         }`}
                       >
-                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        <PluginIcon icon={view.icon} size={ICON.SM} className="shrink-0" />
                         {view.name}
                       </button>
                     ))}
@@ -1174,7 +1175,7 @@ function IDEContent({
                             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         }`}
                       >
-                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        <PluginIcon icon={view.icon} size={ICON.SM} className="shrink-0" />
                         {view.name}
                       </button>
                     ))}

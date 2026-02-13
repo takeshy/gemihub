@@ -29,6 +29,7 @@ export function createPluginAPI(
         name: view.name,
         icon: view.icon,
         location: view.location,
+        extensions: view.extensions,
         component: view.component,
       });
     },
@@ -122,8 +123,21 @@ export function createPluginAPI(
           yaml: "text/yaml",
           yml: "text/yaml",
           js: "application/javascript",
+          ts: "application/x-typescript",
           css: "text/css",
           html: "text/html",
+          csv: "text/csv",
+          xml: "application/xml",
+          pdf: "application/pdf",
+          png: "image/png",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          gif: "image/gif",
+          webp: "image/webp",
+          svg: "image/svg+xml",
+          mp4: "video/mp4",
+          mp3: "audio/mpeg",
+          wav: "audio/wav",
         };
         const mimeType = (ext && mimeMap[ext]) || "text/plain";
         const res = await fetch("/api/drive/files", {

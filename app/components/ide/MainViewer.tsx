@@ -17,6 +17,7 @@ import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditHistoryModal } from "./EditHistoryModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { usePlugins } from "~/contexts/PluginContext";
 
 function WysiwygSelectionTracker({
   setActiveSelection,
@@ -88,6 +89,7 @@ export function MainViewer({
   onImageChange,
 }: MainViewerProps) {
   const { t } = useI18n();
+  const { mainViews, getPluginAPI } = usePlugins();
 
   // No file selected - welcome screen
   if (!fileId) {
@@ -104,6 +106,29 @@ export function MainViewer({
         </div>
       </div>
     );
+  }
+
+  // Check if any plugin can handle this file
+  if (fileName) {
+    const ext = fileName.split(".").pop()?.toLowerCase();
+    if (ext) {
+      const pluginView = mainViews.find((v) => v.extensions?.includes(ext));
+      const api = pluginView ? getPluginAPI(pluginView.pluginId) : null;
+      if (pluginView && api) {
+        return (
+          <div className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-gray-900">
+            <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+              <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                {fileName} ({pluginView.name})
+              </span>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <pluginView.component api={api} />
+            </div>
+          </div>
+        );
+      }
+    }
   }
 
   // Binary files (PDF, video, audio, image) - don't load via useFileWithCache

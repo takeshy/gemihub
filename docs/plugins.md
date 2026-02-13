@@ -121,8 +121,9 @@ const lang = api.language;
 api.registerView({
   id: "my-view",
   name: "My View",
-  icon: "puzzle",       // optional icon identifier
+  icon: "puzzle",       // Lucide icon identifier (puzzle, message-square, etc.)
   location: "sidebar", // or "main"
+  extensions: ["csv"], // optional: file extensions to handle (for location: "main")
   component: MyReactComponent, // receives { api } as props
 });
 
@@ -217,7 +218,7 @@ function MyPanel({ api }) {
 ```
 
 - **Sidebar views** appear as tabs in the right panel (alongside Chat and Workflow)
-- **Main views** replace the file editor in the main area
+- **Main views** replace the file editor in the main area. If `extensions` are provided, the view will automatically open for those file types.
 
 ### Security
 

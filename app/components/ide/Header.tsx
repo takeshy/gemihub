@@ -14,6 +14,7 @@ import { SyncStatusBar } from "./SyncStatusBar";
 import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import type { PluginView } from "~/types/plugin";
 import { useI18n } from "~/i18n/context";
+import { PluginIcon } from "~/components/shared/PluginIcon";
 
 export type RightPanelId = "chat" | "workflow" | `plugin:${string}` | `main-plugin:${string}`;
 
@@ -173,7 +174,7 @@ export function Header({
                             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         }`}
                       >
-                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        <PluginIcon icon={view.icon} size={ICON.SM} className="shrink-0" />
                         {view.name}
                       </button>
                     ))}
@@ -187,7 +188,7 @@ export function Header({
                             : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         }`}
                       >
-                        <Puzzle size={ICON.SM} className="shrink-0" />
+                        <PluginIcon icon={view.icon} size={ICON.SM} className="shrink-0" />
                         {view.name}
                       </button>
                     ))}

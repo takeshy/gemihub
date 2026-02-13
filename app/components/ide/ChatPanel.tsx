@@ -362,7 +362,9 @@ export function ChatPanel({
         setMessages(updatedMessages);
         setIsStreaming(true);
         try {
-          const result = await overrides.pluginExecute(content);
+          // Strip command name: "/cmd args" -> "args"
+          const args = content.replace(/^\/[^\s]+\s*/, "");
+          const result = await overrides.pluginExecute(args);
           const assistantMessage: Message = {
             role: "assistant",
             content: result,
@@ -831,7 +833,7 @@ export function ChatPanel({
             id: `plugin-${cmd.pluginId}-${cmd.name}`,
             name: cmd.name,
             description: cmd.description,
-            promptTemplate: "",
+            promptTemplate: `/${cmd.name} `,
             execute: cmd.execute,
           })),
         ]}
