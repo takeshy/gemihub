@@ -46,6 +46,7 @@ import {
   deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
+  removeLocalSyncMetaEntry,
   type CachedTreeNode,
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
@@ -1149,6 +1150,7 @@ export function DriveFileTree({
             }
             // Clean local caches
             await deleteCachedFile(fid);
+            await removeLocalSyncMetaEntry(fid);
           }
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
@@ -1173,6 +1175,7 @@ export function DriveFileTree({
           if (res.ok) {
             // Clean local caches
             await deleteCachedFile(item.id);
+            await removeLocalSyncMetaEntry(item.id);
             const data = await res.json();
             if (data.meta) {
               await updateTreeFromMeta(data.meta);
