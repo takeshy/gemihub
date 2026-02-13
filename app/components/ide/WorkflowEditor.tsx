@@ -129,12 +129,18 @@ export function WorkflowEditor({
   const handleTempUpload = useCallback(async () => {
     setUploading(true);
     setUploaded(false);
+    const fullFileName = fileName + ".yaml";
     try {
-      await fetch("/api/drive/temp", {
+      const res = await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save", fileName: fileName + ".yaml", fileId, content: yamlContent }),
+        body: JSON.stringify({ action: "generateEditUrl", fileName: fullFileName, fileId, content: yamlContent }),
       });
+      if (res.ok) {
+        const { uuid } = await res.json();
+        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fullFileName)}`;
+        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
+      }
       await saveToCache(yamlContent);
       setUploaded(true);
       setTimeout(() => setUploaded(false), 2000);

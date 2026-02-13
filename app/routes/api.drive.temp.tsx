@@ -8,7 +8,9 @@ import {
   saveTempFile,
   applyAllTempFiles,
   deleteTempFiles,
+  addTempEditEntry,
 } from "~/services/temp-file.server";
+import { saveTempEditFile, cleanupExpired } from "~/services/temp-edit-file.server";
 import {
   upsertFileInMeta,
 } from "~/services/sync-meta.server";
@@ -113,6 +115,37 @@ export async function action({ request }: Route.ActionArgs) {
       }
       await deleteTempFiles(validTokens.accessToken, tempFileIds);
       return Response.json({ success: true }, { headers: responseHeaders });
+    }
+
+    case "generateEditUrl": {
+      const { fileId, fileName, content } = body;
+      if (!fileId || !fileName) {
+        return Response.json(
+          { error: "Missing fileId or fileName" },
+          { status: 400, headers: responseHeaders }
+        );
+      }
+
+      // Also save to Drive temp (combines save + generateEditUrl into one call)
+      await saveTempFile(
+        validTokens.accessToken,
+        validTokens.rootFolderId,
+        fileName,
+        { fileId, content: content ?? "", savedAt: new Date().toISOString() }
+      );
+
+      const uuid = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+      saveTempEditFile(uuid, fileId, fileName, content ?? "");
+      await addTempEditEntry(validTokens.accessToken, validTokens.rootFolderId, {
+        uuid,
+        fileId,
+        fileName,
+        createdAt,
+      });
+      // Clean up expired local files (async, non-blocking)
+      cleanupExpired().catch(() => {});
+      return Response.json({ uuid }, { headers: responseHeaders });
     }
 
     default:

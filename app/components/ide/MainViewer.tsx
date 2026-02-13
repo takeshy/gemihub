@@ -575,11 +575,16 @@ function MarkdownFileEditor({
     setUploading(true);
     setUploaded(false);
     try {
-      await fetch("/api/drive/temp", {
+      const res = await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save", fileName, fileId, content }),
+        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
       });
+      if (res.ok) {
+        const { uuid } = await res.json();
+        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
+        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
+      }
       setUploaded(true);
       setTimeout(() => setUploaded(false), 2000);
     } finally {
@@ -843,11 +848,16 @@ function HtmlFileEditor({
     setUploading(true);
     setUploaded(false);
     try {
-      await fetch("/api/drive/temp", {
+      const res = await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save", fileName, fileId, content }),
+        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
       });
+      if (res.ok) {
+        const { uuid } = await res.json();
+        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
+        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
+      }
       setUploaded(true);
       setTimeout(() => setUploaded(false), 2000);
     } finally {
@@ -1100,11 +1110,16 @@ function TextFileEditor({
     setUploading(true);
     setUploaded(false);
     try {
-      await fetch("/api/drive/temp", {
+      const res = await fetch("/api/drive/temp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save", fileName, fileId, content }),
+        body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
       });
+      if (res.ok) {
+        const { uuid } = await res.json();
+        const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
+        try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
+      }
       setUploaded(true);
       setTimeout(() => setUploaded(false), 2000);
     } finally {

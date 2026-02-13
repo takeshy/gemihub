@@ -6,6 +6,9 @@
 /.react-router/
 /build/
 
+# Server-side temp data
+/data/
+
 # Local dev plugins
 /plugins/
 

@@ -49,7 +49,7 @@ export function EditorToolbarActions({
       {/* Desktop only: temp upload and temp download side by side */}
       {uploaded && (
         <span className="hidden sm:inline text-xs text-green-600 dark:text-green-400">
-          {t("contextMenu.tempUploaded")}
+          {t("contextMenu.tempUrlCopied")}
         </span>
       )}
       <button
@@ -72,7 +72,7 @@ export function EditorToolbarActions({
       {/* Mobile: temp upload button always visible */}
       {uploaded && (
         <span className="sm:hidden text-xs text-green-600 dark:text-green-400">
-          {t("contextMenu.tempUploaded")}
+          {t("contextMenu.tempUrlCopied")}
         </span>
       )}
       <button
