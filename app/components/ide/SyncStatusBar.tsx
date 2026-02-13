@@ -4,6 +4,7 @@ import { ICON } from "~/utils/icon-sizes";
 import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import {
   getCachedRemoteMeta,
+  getCachedFile,
   getLocallyModifiedFileIds,
   getLocalSyncMeta,
 } from "~/services/indexeddb-cache";
@@ -46,7 +47,7 @@ export function SyncStatusBar({
   const [openList, setOpenList] = useState<"push" | "pull" | null>(null);
   const [listFiles, setListFiles] = useState<FileListItem[]>([]);
   const [listLoading, setListLoading] = useState(false);
-  // Filtered local modified count (only files tracked in remoteMeta)
+  // Filtered local modified count (only files tracked in remoteMeta or localSyncMeta)
   const [filteredLocalModifiedCount, setFilteredLocalModifiedCount] = useState(0);
   const pushCount = filteredLocalModifiedCount;
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -63,7 +64,7 @@ export function SyncStatusBar({
     return () => document.removeEventListener("mousedown", handler);
   }, [openList]);
 
-  // Filter localModifiedCount to exclude files not in remoteMeta (e.g. history/logs)
+  // Filter localModifiedCount to exclude files not tracked by sync (e.g. history/logs)
   useEffect(() => {
     if (localModifiedCount === 0) {
       setFilteredLocalModifiedCount(0);
@@ -72,11 +73,13 @@ export function SyncStatusBar({
     (async () => {
       try {
         const remoteMeta = await getCachedRemoteMeta();
-        const tracked = remoteMeta?.files ?? {};
+        const localMeta = await getLocalSyncMeta();
+        const trackedRemote = remoteMeta?.files ?? {};
+        const trackedLocal = localMeta?.files ?? {};
         const localModified = await getLocallyModifiedFileIds();
         let count = 0;
         for (const id of localModified) {
-          if (tracked[id]) count++;
+          if (trackedRemote[id] || trackedLocal[id]) count++;
         }
         setFilteredLocalModifiedCount(count);
       } catch {
@@ -100,11 +103,16 @@ export function SyncStatusBar({
 
       if (type === "push") {
         const localModified = await getLocallyModifiedFileIds();
+        const localMeta = await getLocalSyncMeta();
+        const localFiles = localMeta?.files ?? {};
         const files: FileListItem[] = [];
-        // Only include files tracked in remoteMeta (exclude history/logs)
+        // Include files tracked in remoteMeta or localSyncMeta (exclude history/logs)
         for (const id of localModified) {
           if (remoteFiles[id]) {
             files.push({ id, name: remoteFiles[id].name ?? id });
+          } else if (localFiles[id]) {
+            const cached = await getCachedFile(id);
+            files.push({ id, name: cached?.fileName ?? id });
           }
         }
         files.sort((a, b) => a.name.localeCompare(b.name));

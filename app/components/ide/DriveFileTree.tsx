@@ -41,6 +41,8 @@ import {
   getAllCachedFileIds,
   getLocallyModifiedFileIds,
   deleteCachedFile,
+  getEditHistoryForFile,
+  setEditHistoryEntry,
   deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
@@ -585,30 +587,74 @@ export function DriveFileTree({
       const cached = await getCachedFile(tempId);
       if (!cached) return; // temp entry was removed (e.g. file renamed/deleted before migration)
       const currentContent = cached.content;
+
+      // Migrate editHistory entry (new: → real ID)
+      const editHistory = await getEditHistoryForFile(tempId);
+      if (editHistory) {
+        await deleteEditHistoryEntry(tempId);
+        await setEditHistoryEntry({
+          ...editHistory,
+          fileId: file.id,
+          filePath: file.name,
+        });
+      }
+
+      // If user edited before migration, push content to Drive and get final checksum
+      let finalMd5 = file.md5Checksum ?? "";
+      let finalModifiedTime = file.modifiedTime ?? "";
+      if (currentContent) {
+        try {
+          const updateRes = await fetch("/api/drive/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "update", fileId: file.id, content: currentContent }),
+          });
+          if (updateRes.ok) {
+            const updateData = await updateRes.json();
+            finalMd5 = updateData.md5Checksum ?? finalMd5;
+            finalModifiedTime = updateData.file?.modifiedTime ?? finalModifiedTime;
+          }
+        } catch {
+          // Content upload failed — file exists on Drive with empty content
+        }
+      }
+
       // Swap cache entries: delete temp, create real
       await deleteCachedFile(tempId);
       await setCachedFile({
         fileId: file.id,
         content: currentContent,
-        md5Checksum: file.md5Checksum ?? "",
-        modifiedTime: file.modifiedTime ?? "",
+        md5Checksum: finalMd5,
+        modifiedTime: finalModifiedTime,
         cachedAt: Date.now(),
         fileName: file.name,
       });
+
+      // Update localSyncMeta so push/pull recognizes this file
+      try {
+        const localMeta = await getLocalSyncMeta();
+        if (localMeta) {
+          localMeta.files[file.id] = {
+            md5Checksum: finalMd5,
+            modifiedTime: finalModifiedTime,
+          };
+          localMeta.lastUpdatedAt = new Date().toISOString();
+          await setLocalSyncMeta(localMeta);
+        }
+      } catch {
+        // Non-critical — next pull will fix the inconsistency
+      }
+
       // Notify tree, _index, and useFileWithCache to migrate
       window.dispatchEvent(
         new CustomEvent("file-id-migrated", {
           detail: { oldId: tempId, newId: file.id, fileName: file.name, mimeType: file.mimeType },
         })
       );
-      // If user edited before migration, push content to Drive
-      if (currentContent) {
-        fetch("/api/drive/files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update", fileId: file.id, content: currentContent }),
-        }).catch(() => {});
-      }
+      // Trigger push count recalculation
+      window.dispatchEvent(
+        new CustomEvent("file-modified", { detail: { fileId: file.id } })
+      );
     }).catch(() => {});
   }, [createFileDialog, selectedFolderId, onSelectFile, treeItems, t]);
 
