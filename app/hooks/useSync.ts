@@ -514,6 +514,14 @@ export function useSync() {
         // Remove resolved conflict (idle transition handled by useEffect)
         setConflicts((prev) => prev.filter((c) => c.fileId !== fileId));
 
+        // Recalculate remote modified count after conflict resolution
+        if (data.remoteMeta) {
+          const updatedLocalMeta = (await getLocalSyncMeta()) ?? null;
+          const rMeta = data.remoteMeta as SyncMeta;
+          const newDiff = computeSyncDiff(updatedLocalMeta, rMeta);
+          setRemoteModifiedCount(newDiff.toPull.length + newDiff.remoteOnly.length + newDiff.localOnly.length);
+        }
+
         // Notify file tree to refresh
         window.dispatchEvent(new Event("sync-complete"));
         if (choice === "remote") {
