@@ -17,7 +17,6 @@ variable "region" {
 variable "domain" {
   description = "Custom domain for the application"
   type        = string
-  default     = "gemihub.online"
 }
 
 variable "google_client_id" {
