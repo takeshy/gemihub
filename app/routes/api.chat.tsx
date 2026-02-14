@@ -176,7 +176,12 @@ export async function action({ request }: Route.ActionArgs) {
 
       const sendChunk = (chunk: StreamChunk) => {
         if (aborted) return;
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+        } catch {
+          // Stream already closed (e.g. client disconnected between aborted check and enqueue)
+          aborted = true;
+        }
       };
 
       // executeToolCall defined here so it can send mcp_app chunks via sendChunk

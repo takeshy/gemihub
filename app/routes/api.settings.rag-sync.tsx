@@ -55,19 +55,31 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   // Create SSE stream for progress reporting
+  const abortSignal = request.signal;
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
+      let aborted = false;
+
+      abortSignal.addEventListener("abort", () => {
+        aborted = true;
+        try { controller.close(); } catch { /* already closed */ }
+      });
 
       const sendEvent = (
         type: string,
         data: Record<string, unknown>
       ) => {
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type, ...data })}\n\n`
-          )
-        );
+        if (aborted) return;
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ type, ...data })}\n\n`
+            )
+          );
+        } catch {
+          aborted = true;
+        }
       };
 
       try {
@@ -143,7 +155,7 @@ export async function action({ request }: Route.ActionArgs) {
             error instanceof Error ? error.message : "Sync failed",
         });
       } finally {
-        controller.close();
+        try { controller.close(); } catch { /* already closed by abort */ }
       }
     },
   });

@@ -222,7 +222,7 @@ test("reconstructContent: UI restore — click on remote push 1, get state AT th
   // Actually: reverse local(v3→v4), local(v2→v3), remote(v1→v2) → v1
   //   v1 is the state AT remote push 1 (after the v0→v1 change was applied)
 
-  const _v0 = "line1\n"; // base state (unused in this test, but kept for readability)
+  // v0 = "line1\n" (base state, not used directly in this test)
   const v1 = "line1\nline2\n";
   const v2 = "line1\nline2\nline3\n";
   const v3 = "line1\nline2\nline3\nline4\n";

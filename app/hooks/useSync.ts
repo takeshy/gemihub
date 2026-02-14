@@ -199,7 +199,7 @@ export function useSync() {
   }, [syncStatus, conflicts.length]);
 
   const push = useCallback(async () => {
-    if (syncLockRef.current) return;
+    if (syncLockRef.current) { console.warn("[useSync] push skipped: sync already in progress"); return; }
     syncLockRef.current = true;
     setSyncStatus("pushing");
     setError(null);
@@ -355,7 +355,7 @@ export function useSync() {
   }, []);
 
   const pull = useCallback(async () => {
-    if (syncLockRef.current) return;
+    if (syncLockRef.current) { console.warn("[useSync] pull skipped: sync already in progress"); return; }
     syncLockRef.current = true;
     setSyncStatus("pulling");
     setError(null);
@@ -504,7 +504,7 @@ export function useSync() {
 
   const resolveConflict = useCallback(
     async (fileId: string, choice: "local" | "remote") => {
-      if (syncLockRef.current) return;
+      if (syncLockRef.current) { console.warn("[useSync] resolveConflict skipped: sync already in progress"); return; }
       syncLockRef.current = true;
       setError(null);
       try {
@@ -619,7 +619,7 @@ export function useSync() {
   );
 
   const fullPull = useCallback(async () => {
-    if (syncLockRef.current) return;
+    if (syncLockRef.current) { console.warn("[useSync] fullPull skipped: sync already in progress"); return; }
     syncLockRef.current = true;
     setSyncStatus("pulling");
     setError(null);

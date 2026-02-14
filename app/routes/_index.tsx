@@ -408,14 +408,18 @@ function IDELayout({
             const resData = await res.json();
             console.log("[AI Accept] Drive update OK, md5:", resData.md5Checksum);
             // Update IndexedDB cache so the viewer picks up the new content
-            await setCachedFile({
-              fileId: dialogState.currentFileId,
-              content: yamlContent,
-              md5Checksum: resData.md5Checksum ?? "",
-              modifiedTime: resData.file?.modifiedTime ?? "",
-              cachedAt: Date.now(),
-              fileName: resData.file?.name,
-            });
+            try {
+              await setCachedFile({
+                fileId: dialogState.currentFileId,
+                content: yamlContent,
+                md5Checksum: resData.md5Checksum ?? "",
+                modifiedTime: resData.file?.modifiedTime ?? "",
+                cachedAt: Date.now(),
+                fileName: resData.file?.name,
+              });
+            } catch {
+              // IndexedDB write failed — Drive update already succeeded
+            }
             // Notify all useFileWithCache hooks so they pick up the new content
             window.dispatchEvent(
               new CustomEvent("file-restored", {
@@ -447,14 +451,18 @@ function IDELayout({
             workflowId = data.file.id;
             finalName = data.file.name;
             // Cache content in IndexedDB so MainViewer can load it instantly
-            await setCachedFile({
-              fileId: data.file.id,
-              content: yamlContent,
-              md5Checksum: data.file.md5Checksum ?? "",
-              modifiedTime: data.file.modifiedTime ?? "",
-              cachedAt: Date.now(),
-              fileName: data.file.name,
-            });
+            try {
+              await setCachedFile({
+                fileId: data.file.id,
+                content: yamlContent,
+                md5Checksum: data.file.md5Checksum ?? "",
+                modifiedTime: data.file.modifiedTime ?? "",
+                cachedAt: Date.now(),
+                fileName: data.file.name,
+              });
+            } catch {
+              // IndexedDB write failed — Drive create already succeeded
+            }
             // Refresh file tree so the new file appears
             window.dispatchEvent(new Event("sync-complete"));
             handleSelectFile(data.file.id, data.file.name, "text/yaml");
