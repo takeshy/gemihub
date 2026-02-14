@@ -453,6 +453,17 @@ function WorkflowNodeListView({
     }
   }, [executionId, fileId]);
 
+  // Listen for shortcut-triggered execution
+  useEffect(() => {
+    const handler = () => {
+      if (executionStatus !== "running" && executionStatus !== "waiting-prompt" && workflow && !hasLocalChanges) {
+        startExecution();
+      }
+    };
+    window.addEventListener("shortcut-execute-workflow", handler);
+    return () => window.removeEventListener("shortcut-execute-workflow", handler);
+  }, [executionStatus, workflow, hasLocalChanges, startExecution]);
+
   const handlePromptResponse = useCallback(
     async (value: string | null) => {
       if (!executionId) return;

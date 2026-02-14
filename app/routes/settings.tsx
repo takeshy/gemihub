@@ -22,6 +22,8 @@ import type {
   OAuthConfig,
   OAuthTokens,
   McpToolInfo,
+  ShortcutKeyBinding,
+  ShortcutAction,
 } from "~/types/settings";
 import {
   DEFAULT_RAG_SETTING,
@@ -35,6 +37,7 @@ import {
   SUPPORTED_LANGUAGES,
   FONT_SIZE_OPTIONS,
   THEME_OPTIONS,
+  SHORTCUT_ACTIONS,
 } from "~/types/settings";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
@@ -71,6 +74,7 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
+  Keyboard,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
@@ -91,7 +95,7 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync";
+type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shortcuts";
 
 import type { TranslationStrings } from "~/i18n/translations";
 
@@ -102,6 +106,7 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
   { id: "plugins", labelKey: "settings.tab.plugins", icon: Puzzle },
+  { id: "shortcuts", labelKey: "settings.tab.shortcuts", icon: Keyboard },
 ];
 
 // ---------------------------------------------------------------------------
@@ -387,6 +392,19 @@ export async function action({ request }: Route.ActionArgs) {
         return jsonWithCookie({ success: true, message: "Sync meta rebuilt." });
       }
 
+      case "saveShortcuts": {
+        const shortcutsJson = formData.get("shortcutKeys") as string;
+        let shortcutKeys: ShortcutKeyBinding[];
+        try {
+          shortcutKeys = shortcutsJson ? JSON.parse(shortcutsJson) : [];
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid shortcuts JSON." });
+        }
+        const updatedSettings: UserSettings = { ...currentSettings, shortcutKeys };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        return jsonWithCookie({ success: true, message: "Shortcut settings saved." });
+      }
+
       default:
         return jsonWithCookie({ success: false, message: "Unknown action." });
     }
@@ -499,6 +517,7 @@ function SettingsInner({
         {activeTab === "rag" && <RagTab settings={settings} />}
         {activeTab === "commands" && <CommandsTab settings={settings} />}
         {activeTab === "plugins" && <PluginsTab settings={settings} />}
+        {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}
       </main>
     </div>
   );
@@ -3152,6 +3171,279 @@ function RagTab({ settings }: { settings: UserSettings }) {
           onClose={() => setRagFilesDialogKey(null)}
         />
       )}
+    </SectionCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shortcuts Tab
+// ---------------------------------------------------------------------------
+
+function formatShortcutDisplay(binding: ShortcutKeyBinding): string {
+  const parts: string[] = [];
+  if (binding.ctrlOrMeta) parts.push("Ctrl/Cmd");
+  if (binding.shift) parts.push("Shift");
+  if (binding.alt) parts.push("Alt");
+  if (binding.key) parts.push(binding.key.length === 1 ? binding.key.toUpperCase() : binding.key);
+  return parts.join(" + ") || "—";
+}
+
+function ShortcutKeyInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (key: string) => void;
+  placeholder: string;
+}) {
+  const [listening, setListening] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!listening) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Ignore modifier-only presses
+      if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+      onChange(e.key);
+      setListening(false);
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [listening, onChange]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      readOnly
+      value={listening ? "" : (value.length === 1 ? value.toUpperCase() : value)}
+      placeholder={listening ? placeholder : "—"}
+      onClick={() => setListening(true)}
+      onBlur={() => setListening(false)}
+      className={`${inputClass} cursor-pointer text-center w-32 ${listening ? "ring-2 ring-blue-500" : ""}`}
+    />
+  );
+}
+
+function ShortcutsTab({ settings }: { settings: UserSettings }) {
+  const fetcher = useFetcher();
+  const loading = fetcher.state !== "idle";
+  const { t } = useI18n();
+
+  const [bindings, setBindings] = useState<ShortcutKeyBinding[]>(
+    settings.shortcutKeys || []
+  );
+
+  const addBinding = useCallback(() => {
+    setBindings((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        action: "executeWorkflow",
+        key: "",
+        ctrlOrMeta: false,
+        shift: false,
+        alt: false,
+      },
+    ]);
+  }, []);
+
+  const removeBinding = useCallback((id: string) => {
+    setBindings((prev) => prev.filter((b) => b.id !== id));
+  }, []);
+
+  const updateBinding = useCallback(
+    (id: string, patch: Partial<ShortcutKeyBinding>) => {
+      setBindings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, ...patch } : b))
+      );
+    },
+    []
+  );
+
+  // Check for duplicate key combinations
+  const getDuplicateIds = useCallback((list: ShortcutKeyBinding[]): Set<string> => {
+    const dupes = new Set<string>();
+    for (let i = 0; i < list.length; i++) {
+      if (!list[i].key) continue;
+      for (let j = i + 1; j < list.length; j++) {
+        if (!list[j].key) continue;
+        if (
+          list[i].key.toLowerCase() === list[j].key.toLowerCase() &&
+          list[i].ctrlOrMeta === list[j].ctrlOrMeta &&
+          list[i].shift === list[j].shift &&
+          list[i].alt === list[j].alt
+        ) {
+          dupes.add(list[i].id);
+          dupes.add(list[j].id);
+        }
+      }
+    }
+    return dupes;
+  }, []);
+
+  const duplicateIds = getDuplicateIds(bindings);
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (duplicateIds.size > 0) return;
+      const fd = new FormData();
+      fd.set("_action", "saveShortcuts");
+      fd.set("shortcutKeys", JSON.stringify(bindings.filter((b) => b.key)));
+      fetcher.submit(fd, { method: "post" });
+    },
+    [bindings, duplicateIds, fetcher]
+  );
+
+  return (
+    <SectionCard>
+      <StatusBanner fetcher={fetcher} />
+
+      <form onSubmit={handleSubmit}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+            <Keyboard size={16} />
+            {t("settings.tab.shortcuts")}
+          </h3>
+          <button
+            type="button"
+            onClick={addBinding}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50"
+          >
+            <Plus size={14} />
+            {t("settings.shortcuts.addShortcut")}
+          </button>
+        </div>
+
+        {bindings.length === 0 && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 py-4">
+            {t("settings.shortcuts.noShortcuts")}
+          </p>
+        )}
+
+        <div className="space-y-3">
+          {bindings.map((binding) => (
+            <div
+              key={binding.id}
+              className={`border rounded-lg p-4 ${
+                duplicateIds.has(binding.id)
+                  ? "border-red-300 dark:border-red-700 bg-red-50/50 dark:bg-red-900/10"
+                  : "border-gray-200 dark:border-gray-700"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Action select */}
+                <div className="flex-shrink-0">
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    {t("settings.shortcuts.action")}
+                  </label>
+                  <select
+                    value={binding.action}
+                    onChange={(e) =>
+                      updateBinding(binding.id, { action: e.target.value as ShortcutAction })
+                    }
+                    className={inputClass + " w-48"}
+                  >
+                    {SHORTCUT_ACTIONS.map((a) => (
+                      <option key={a.value} value={a.value}>
+                        {t(a.labelKey as keyof TranslationStrings)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Modifier checkboxes */}
+                <div className="flex items-end gap-4">
+                  <label className="flex flex-col items-center gap-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {t("settings.shortcuts.ctrlOrMeta")}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={binding.ctrlOrMeta}
+                      onChange={(e) =>
+                        updateBinding(binding.id, { ctrlOrMeta: e.target.checked })
+                      }
+                      className={checkboxClass}
+                    />
+                  </label>
+                  <label className="flex flex-col items-center gap-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {t("settings.shortcuts.shift")}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={binding.shift}
+                      onChange={(e) =>
+                        updateBinding(binding.id, { shift: e.target.checked })
+                      }
+                      className={checkboxClass}
+                    />
+                  </label>
+                  <label className="flex flex-col items-center gap-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {t("settings.shortcuts.alt")}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={binding.alt}
+                      onChange={(e) =>
+                        updateBinding(binding.id, { alt: e.target.checked })
+                      }
+                      className={checkboxClass}
+                    />
+                  </label>
+                </div>
+
+                {/* Key input */}
+                <div className="flex-shrink-0">
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    {t("settings.shortcuts.key")}
+                  </label>
+                  <ShortcutKeyInput
+                    value={binding.key}
+                    onChange={(key) => updateBinding(binding.id, { key })}
+                    placeholder={t("settings.shortcuts.pressKey")}
+                  />
+                </div>
+
+                {/* Preview */}
+                <div className="flex-shrink-0 flex items-end pb-0.5">
+                  <kbd className="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                    {formatShortcutDisplay(binding)}
+                  </kbd>
+                </div>
+
+                {/* Delete button */}
+                <div className="flex-shrink-0 flex items-end ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => removeBinding(binding.id)}
+                    className="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {duplicateIds.has(binding.id) && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  {t("settings.shortcuts.duplicate")}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6">
+          <SaveButton loading={loading} />
+        </div>
+      </form>
     </SectionCard>
   );
 }

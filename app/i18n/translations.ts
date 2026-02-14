@@ -401,6 +401,20 @@ export interface TranslationStrings {
   "sync.openFile": string;
   "sync.noDiff": string;
 
+  // Shortcuts tab
+  "settings.tab.shortcuts": string;
+  "settings.shortcuts.noShortcuts": string;
+  "settings.shortcuts.addShortcut": string;
+  "settings.shortcuts.action": string;
+  "settings.shortcuts.key": string;
+  "settings.shortcuts.ctrlOrMeta": string;
+  "settings.shortcuts.shift": string;
+  "settings.shortcuts.alt": string;
+  "settings.shortcuts.pressKey": string;
+  "settings.shortcuts.actionExecuteWorkflow": string;
+  "settings.shortcuts.duplicate": string;
+  "settings.shortcuts.save": string;
+
   // Offline
   "offline.indicator": string;
   "offline.banner": string;
@@ -806,6 +820,20 @@ const en: TranslationStrings = {
   "sync.openFile": "Open",
   "sync.noDiff": "Binary file",
 
+  // Shortcuts tab
+  "settings.tab.shortcuts": "Shortcuts",
+  "settings.shortcuts.noShortcuts": "No shortcut keys configured.",
+  "settings.shortcuts.addShortcut": "Add Shortcut",
+  "settings.shortcuts.action": "Action",
+  "settings.shortcuts.key": "Key",
+  "settings.shortcuts.ctrlOrMeta": "Ctrl / Cmd",
+  "settings.shortcuts.shift": "Shift",
+  "settings.shortcuts.alt": "Alt",
+  "settings.shortcuts.pressKey": "Press a key...",
+  "settings.shortcuts.actionExecuteWorkflow": "Execute Workflow",
+  "settings.shortcuts.duplicate": "This key combination is already assigned.",
+  "settings.shortcuts.save": "Save Shortcut Settings",
+
   // Offline
   "offline.indicator": "Offline",
   "offline.banner": "You are in offline mode. Some features are unavailable.",
@@ -1210,6 +1238,20 @@ const ja: TranslationStrings = {
   "sync.pullDirection": "ドライブ \u2192 ローカル",
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
+
+  // Shortcuts tab
+  "settings.tab.shortcuts": "ショートカット",
+  "settings.shortcuts.noShortcuts": "ショートカットキーは設定されていません。",
+  "settings.shortcuts.addShortcut": "ショートカットを追加",
+  "settings.shortcuts.action": "アクション",
+  "settings.shortcuts.key": "キー",
+  "settings.shortcuts.ctrlOrMeta": "Ctrl / Cmd",
+  "settings.shortcuts.shift": "Shift",
+  "settings.shortcuts.alt": "Alt",
+  "settings.shortcuts.pressKey": "キーを押してください...",
+  "settings.shortcuts.actionExecuteWorkflow": "ワークフロー実行",
+  "settings.shortcuts.duplicate": "このキーの組み合わせは既に割り当てられています。",
+  "settings.shortcuts.save": "ショートカット設定を保存",
 
   // Offline
   "offline.indicator": "オフライン",

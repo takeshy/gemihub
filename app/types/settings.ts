@@ -478,6 +478,23 @@ export interface SlashCommand {
   enabledMcpServers?: string[] | null;
 }
 
+// Shortcut key actions
+export type ShortcutAction = "executeWorkflow";
+
+export const SHORTCUT_ACTIONS: { value: ShortcutAction; labelKey: string }[] = [
+  { value: "executeWorkflow", labelKey: "settings.shortcuts.actionExecuteWorkflow" },
+];
+
+// Shortcut key binding
+export interface ShortcutKeyBinding {
+  id: string;
+  action: ShortcutAction;
+  key: string;        // e.g. "F5", "e", "r"
+  ctrlOrMeta: boolean; // Ctrl (Win/Linux) / Cmd (Mac)
+  shift: boolean;
+  alt: boolean;
+}
+
 // User settings (stored in Drive as settings.json)
 export interface UserSettings {
   apiPlan: ApiPlan;
@@ -502,6 +519,7 @@ export interface UserSettings {
   syncConflictFolder: string;
   encryptedApiKey: string;
   apiKeySalt: string;
+  shortcutKeys: ShortcutKeyBinding[];
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -527,4 +545,5 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   syncConflictFolder: "sync_conflicts",
   encryptedApiKey: "",
   apiKeySalt: "",
+  shortcutKeys: [],
 };
