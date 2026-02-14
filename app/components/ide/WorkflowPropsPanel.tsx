@@ -20,6 +20,7 @@ import {
   Sparkles,
   AppWindow,
   AlertTriangle,
+  GripVertical,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Workflow, WorkflowNode } from "~/engine/types";
@@ -213,6 +214,10 @@ function WorkflowNodeListView({
   const { t } = useI18n();
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
 
+  // Drag and drop
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ index: number; position: "above" | "below" } | null>(null);
+
   useEffect(() => {
     const checkModified = () => {
       getLocallyModifiedFileIds().then((ids) => {
@@ -301,6 +306,76 @@ function WorkflowNodeListView({
         updated.startNode = remaining.length > 0 ? remaining[0] : null;
       }
       saveWorkflow(updated);
+    },
+    [workflow, saveWorkflow]
+  );
+
+  const handleMoveNode = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (!workflow || fromIndex === toIndex) return;
+      const order = getNodeOrder(workflow);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= order.length || toIndex >= order.length) return;
+
+      const movedId = order[fromIndex];
+
+      // Old neighbors
+      const oldPrevId = fromIndex > 0 ? order[fromIndex - 1] : null;
+      const oldNextId = fromIndex < order.length - 1 ? order[fromIndex + 1] : null;
+
+      // Build new order
+      const newOrder = [...order];
+      newOrder.splice(fromIndex, 1);
+      newOrder.splice(toIndex, 0, movedId);
+
+      // New neighbors
+      const newPos = newOrder.indexOf(movedId);
+      const newPrevId = newPos > 0 ? newOrder[newPos - 1] : null;
+      const newNextId = newPos < newOrder.length - 1 ? newOrder[newPos + 1] : null;
+
+      let edges = [...workflow.edges];
+
+      // 1. Bridge the gap at old position: oldPrev → oldNext
+      if (oldPrevId) {
+        const prevNode = workflow.nodes.get(oldPrevId);
+        if (prevNode && prevNode.type !== "if" && prevNode.type !== "while") {
+          edges = edges.filter((e) => !(e.from === oldPrevId && !e.label));
+          if (oldNextId) edges.push({ from: oldPrevId, to: oldNextId });
+        }
+      }
+
+      // 2. Remove moved node's old sequential edge
+      const movedNode = workflow.nodes.get(movedId);
+      if (movedNode && movedNode.type !== "if" && movedNode.type !== "while") {
+        edges = edges.filter((e) => !(e.from === movedId && !e.label));
+      }
+
+      // 3. Insert at new position: newPrev → moved
+      if (newPrevId) {
+        const prevNode = workflow.nodes.get(newPrevId);
+        if (prevNode && prevNode.type !== "if" && prevNode.type !== "while") {
+          edges = edges.filter((e) => !(e.from === newPrevId && !e.label));
+          edges.push({ from: newPrevId, to: movedId });
+        }
+      }
+
+      // 4. Moved → newNext
+      if (movedNode && movedNode.type !== "if" && movedNode.type !== "while" && newNextId) {
+        edges.push({ from: movedId, to: newNextId });
+      }
+
+      // Rebuild Map in new order
+      const newNodes = new Map<string, WorkflowNode>();
+      for (const id of newOrder) {
+        const node = workflow.nodes.get(id);
+        if (node) newNodes.set(id, node);
+      }
+
+      saveWorkflow({
+        ...workflow,
+        nodes: newNodes,
+        edges,
+        startNode: newOrder[0] || null,
+      });
     },
     [workflow, saveWorkflow]
   );
@@ -679,7 +754,7 @@ function WorkflowNodeListView({
             </button>
           </div>
         ) : (
-          nodeOrder.map((nodeId) => {
+          nodeOrder.map((nodeId, index) => {
             const node = workflow.nodes.get(nodeId);
             if (!node) return null;
             const summary = getNodeSummary(node);
@@ -690,6 +765,9 @@ function WorkflowNodeListView({
             const isExecuting = currentNodeId === nodeId;
             const isCompleted = completedNodeIds.has(nodeId);
             const isError = errorNodeIds.has(nodeId);
+            const isDragging = draggedIndex === index;
+            const isDropAbove = dropTarget?.index === index && dropTarget.position === "above";
+            const isDropBelow = dropTarget?.index === index && dropTarget.position === "below";
 
             let borderClass = "border-gray-200 dark:border-gray-800";
             if (isExecuting)
@@ -700,12 +778,44 @@ function WorkflowNodeListView({
               borderClass = "border-green-400 dark:border-green-500";
 
             return (
-              <div key={nodeId} className="px-2 py-0.5">
+              <div
+                key={nodeId}
+                className={`px-2 py-0.5 ${isDropAbove ? "border-t-2 border-t-blue-500" : ""} ${isDropBelow ? "border-b-2 border-b-blue-500" : ""}`}
+                draggable={executionStatus === "idle"}
+                onDragStart={() => { if (executionStatus !== "idle") return; setDraggedIndex(index); }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggedIndex === null || draggedIndex === index) {
+                    setDropTarget(null);
+                    return;
+                  }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const midY = rect.top + rect.height / 2;
+                  setDropTarget({ index, position: e.clientY < midY ? "above" : "below" });
+                }}
+                onDragEnd={() => { setDraggedIndex(null); setDropTarget(null); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedIndex === null || draggedIndex === index) {
+                    setDraggedIndex(null);
+                    setDropTarget(null);
+                    return;
+                  }
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const midY = rect.top + rect.height / 2;
+                  let newIndex = e.clientY < midY ? index : index + 1;
+                  if (draggedIndex < newIndex) newIndex--;
+                  handleMoveNode(draggedIndex, newIndex);
+                  setDraggedIndex(null);
+                  setDropTarget(null);
+                }}
+              >
                 <div
-                  className={`rounded border ${borderClass} bg-white px-2 py-1.5 dark:bg-gray-900 transition-colors`}
+                  className={`rounded border ${borderClass} bg-white px-2 py-1.5 dark:bg-gray-900 transition-colors ${isDragging ? "opacity-40" : ""}`}
                 >
                   {/* Node header */}
                   <div className="flex items-center gap-1.5">
+                    <GripVertical size={12} className="shrink-0 cursor-grab text-gray-300 dark:text-gray-600" />
                     <span
                       className={`inline-block rounded px-1 py-0.5 text-[10px] font-medium leading-none ${typeColor}`}
                     >
