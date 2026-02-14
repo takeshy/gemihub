@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import crypto from "node:crypto";
-import { getSession, commitSession, setTokens, type SessionTokens } from "./session.server";
+import { getSession, commitSession, destroySession, setTokens, type SessionTokens } from "./session.server";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
@@ -86,7 +86,18 @@ export async function getValidTokens(
   }
 
   // Refresh the token
-  const refreshed = await refreshAccessToken(tokens.refreshToken);
+  let refreshed: { accessToken: string; expiryTime: number };
+  try {
+    refreshed = await refreshAccessToken(tokens.refreshToken);
+  } catch {
+    // Token revoked or expired — destroy session and return 401
+    const session = await getSession(request);
+    const setCookieHeader = await destroySession(session);
+    throw new Response(JSON.stringify({ error: "Session expired" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json", "Set-Cookie": setCookieHeader },
+    });
+  }
   const newTokens: SessionTokens = {
     ...tokens,
     accessToken: refreshed.accessToken,

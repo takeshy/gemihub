@@ -92,6 +92,9 @@ export function useSync() {
   const [localModifiedCount, setLocalModifiedCount] = useState(0);
   const [remoteModifiedCount, setRemoteModifiedCount] = useState(0);
 
+  // Mutex to prevent concurrent sync operations (push/pull/resolve/fullPull)
+  const syncLockRef = useRef(false);
+
   const refreshLocalModifiedCount = useCallback(async () => {
     try {
       const ids = await getLocallyModifiedFileIds();
@@ -196,6 +199,8 @@ export function useSync() {
   }, [syncStatus, conflicts.length]);
 
   const push = useCallback(async () => {
+    if (syncLockRef.current) return;
+    syncLockRef.current = true;
     setSyncStatus("pushing");
     setError(null);
     try {
@@ -344,10 +349,14 @@ export function useSync() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Push failed");
       setSyncStatus("error");
+    } finally {
+      syncLockRef.current = false;
     }
   }, []);
 
   const pull = useCallback(async () => {
+    if (syncLockRef.current) return;
+    syncLockRef.current = true;
     setSyncStatus("pulling");
     setError(null);
     try {
@@ -488,11 +497,15 @@ export function useSync() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pull failed");
       setSyncStatus("error");
+    } finally {
+      syncLockRef.current = false;
     }
   }, []);
 
   const resolveConflict = useCallback(
     async (fileId: string, choice: "local" | "remote") => {
+      if (syncLockRef.current) return;
+      syncLockRef.current = true;
       setError(null);
       try {
         const localMeta = (await getLocalSyncMeta()) ?? null;
@@ -598,12 +611,16 @@ export function useSync() {
       } catch (err) {
         setError(err instanceof Error ? err.message : "Resolve failed");
         setSyncStatus("error");
+      } finally {
+        syncLockRef.current = false;
       }
     },
     []
   );
 
   const fullPull = useCallback(async () => {
+    if (syncLockRef.current) return;
+    syncLockRef.current = true;
     setSyncStatus("pulling");
     setError(null);
     try {
@@ -690,6 +707,8 @@ export function useSync() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Full pull failed");
       setSyncStatus("error");
+    } finally {
+      syncLockRef.current = false;
     }
   }, []);
 

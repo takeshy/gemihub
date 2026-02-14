@@ -1519,7 +1519,7 @@ export function DriveFileTree({
         }
       }
     },
-    [treeItems, rootFolderId, collectFileIds, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy]
+    [treeItems, collectFileIds, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy]
   );
 
   const handleEncrypt = useCallback(
@@ -1655,14 +1655,18 @@ export function DriveFileTree({
   const handleTempDiffAccept = useCallback(async () => {
     if (!tempDiffData) return;
     const { fileId, tempContent, tempSavedAt, fileName } = tempDiffData;
-    await setCachedFile({
-      fileId,
-      content: tempContent,
-      md5Checksum: "",
-      modifiedTime: tempSavedAt,
-      cachedAt: Date.now(),
-      fileName,
-    });
+    try {
+      await setCachedFile({
+        fileId,
+        content: tempContent,
+        md5Checksum: "",
+        modifiedTime: tempSavedAt,
+        cachedAt: Date.now(),
+        fileName,
+      });
+    } catch {
+      // IndexedDB write failed — ignore to avoid blocking the UI
+    }
     // If this is the currently open file, trigger a refresh
     if (fileId === activeFileId) {
       window.dispatchEvent(new CustomEvent("temp-file-downloaded", { detail: { fileId } }));
@@ -1672,68 +1676,72 @@ export function DriveFileTree({
 
   const handleClearCache = useCallback(
     async (item: CachedTreeNode) => {
-      if (!item.isFolder) {
-        // Single file
-        if (modifiedFiles.has(item.id)) {
-          if (!confirm(t("contextMenu.clearCacheModified"))) return;
-        }
-        await deleteCachedFile(item.id);
-        await deleteEditHistoryEntry(item.id);
-        // Remove from localSyncMeta
-        const meta = await getLocalSyncMeta();
-        if (meta) {
-          delete meta.files[item.id];
-          meta.lastUpdatedAt = new Date().toISOString();
-          await setLocalSyncMeta(meta);
-        }
-        setCachedFiles((prev) => {
-          const next = new Set(prev);
-          next.delete(item.id);
-          return next;
-        });
-        setModifiedFiles((prev) => {
-          const next = new Set(prev);
-          next.delete(item.id);
-          return next;
-        });
-        if (item.id === activeFileId) {
-          location.reload();
-        }
-      } else {
-        // Folder: collect all file IDs
-        const allIds = collectFileIds(item);
-        const modifiedInFolder = allIds.filter((id) => modifiedFiles.has(id));
-        const toDelete = allIds.filter((id) => cachedFiles.has(id));
+      try {
+        if (!item.isFolder) {
+          // Single file
+          if (modifiedFiles.has(item.id)) {
+            if (!confirm(t("contextMenu.clearCacheModified"))) return;
+          }
+          await deleteCachedFile(item.id);
+          await deleteEditHistoryEntry(item.id);
+          // Remove from localSyncMeta
+          const meta = await getLocalSyncMeta();
+          if (meta) {
+            delete meta.files[item.id];
+            meta.lastUpdatedAt = new Date().toISOString();
+            await setLocalSyncMeta(meta);
+          }
+          setCachedFiles((prev) => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+          setModifiedFiles((prev) => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+          if (item.id === activeFileId) {
+            location.reload();
+          }
+        } else {
+          // Folder: collect all file IDs
+          const allIds = collectFileIds(item);
+          const modifiedInFolder = allIds.filter((id) => modifiedFiles.has(id));
+          const toDelete = allIds.filter((id) => cachedFiles.has(id));
 
-        if (modifiedInFolder.length > 0) {
-          if (!confirm(t("contextMenu.clearCacheSkipModified"))) return;
-        }
+          if (modifiedInFolder.length > 0) {
+            if (!confirm(t("contextMenu.clearCacheSkipModified"))) return;
+          }
 
-        if (toDelete.length === 0) return;
+          if (toDelete.length === 0) return;
 
-        const meta = await getLocalSyncMeta();
-        for (const id of toDelete) {
-          await deleteCachedFile(id);
-          await deleteEditHistoryEntry(id);
-          if (meta) delete meta.files[id];
+          const meta = await getLocalSyncMeta();
+          for (const id of toDelete) {
+            await deleteCachedFile(id);
+            await deleteEditHistoryEntry(id);
+            if (meta) delete meta.files[id];
+          }
+          if (meta) {
+            meta.lastUpdatedAt = new Date().toISOString();
+            await setLocalSyncMeta(meta);
+          }
+          setCachedFiles((prev) => {
+            const next = new Set(prev);
+            for (const id of toDelete) next.delete(id);
+            return next;
+          });
+          setModifiedFiles((prev) => {
+            const next = new Set(prev);
+            for (const id of modifiedInFolder) next.delete(id);
+            return next;
+          });
+          if (activeFileId && toDelete.includes(activeFileId)) {
+            location.reload();
+          }
         }
-        if (meta) {
-          meta.lastUpdatedAt = new Date().toISOString();
-          await setLocalSyncMeta(meta);
-        }
-        setCachedFiles((prev) => {
-          const next = new Set(prev);
-          for (const id of toDelete) next.delete(id);
-          return next;
-        });
-        setModifiedFiles((prev) => {
-          const next = new Set(prev);
-          for (const id of modifiedInFolder) next.delete(id);
-          return next;
-        });
-        if (activeFileId && toDelete.includes(activeFileId)) {
-          location.reload();
-        }
+      } catch {
+        // IndexedDB error — ignore to avoid blocking the UI
       }
     },
     [modifiedFiles, cachedFiles, collectFileIds, t, activeFileId]

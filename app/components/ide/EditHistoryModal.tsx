@@ -146,14 +146,19 @@ export function EditHistoryModal({
       }
 
       // Update IndexedDB cache
-      await setCachedFile({
-        fileId,
-        content: restoredContent,
-        md5Checksum: cached.md5Checksum ?? "",
-        modifiedTime: cached.modifiedTime ?? "",
-        cachedAt: Date.now(),
-        fileName: cached.fileName,
-      });
+      try {
+        await setCachedFile({
+          fileId,
+          content: restoredContent,
+          md5Checksum: cached.md5Checksum ?? "",
+          modifiedTime: cached.modifiedTime ?? "",
+          cachedAt: Date.now(),
+          fileName: cached.fileName,
+        });
+      } catch {
+        alert(t("editHistory.restoreFailed"));
+        return;
+      }
 
       // Notify editor to update content
       window.dispatchEvent(

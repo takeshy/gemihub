@@ -163,11 +163,19 @@ export async function action({ request }: Route.ActionArgs) {
   emitLog(logCtx, 200);
 
   // Create SSE stream
+  const abortSignal = request.signal;
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
+      let aborted = false;
+
+      abortSignal.addEventListener("abort", () => {
+        aborted = true;
+        try { controller.close(); } catch { /* already closed */ }
+      });
 
       const sendChunk = (chunk: StreamChunk) => {
+        if (aborted) return;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
       };
 
@@ -301,7 +309,7 @@ export async function action({ request }: Route.ActionArgs) {
             }
           }
         }
-        controller.close();
+        try { controller.close(); } catch { /* already closed by abort */ }
       }
     },
   });

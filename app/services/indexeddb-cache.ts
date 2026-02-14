@@ -199,12 +199,8 @@ export async function getCachedFile(
 
 export async function setCachedFile(file: CachedFile): Promise<void> {
   if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txPut(db, "files", file);
-  } catch {
-    // ignore write errors
-  }
+  const db = await getDB();
+  await txPut(db, "files", file);
 }
 
 export async function deleteCachedFile(fileId: string): Promise<void> {
@@ -267,12 +263,8 @@ export async function getLocalSyncMeta(): Promise<LocalSyncMeta | undefined> {
 
 export async function setLocalSyncMeta(meta: LocalSyncMeta): Promise<void> {
   if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txPut(db, "syncMeta", meta);
-  } catch {
-    // ignore
-  }
+  const db = await getDB();
+  await txPut(db, "syncMeta", meta);
 }
 
 export async function removeLocalSyncMetaEntry(fileId: string): Promise<void> {
@@ -305,12 +297,8 @@ export async function setEditHistoryEntry(
   entry: CachedEditHistoryEntry
 ): Promise<void> {
   if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txPut(db, "editHistory", entry);
-  } catch {
-    // ignore
-  }
+  const db = await getDB();
+  await txPut(db, "editHistory", entry);
 }
 
 export async function deleteEditHistoryEntry(fileId: string): Promise<void> {
@@ -351,17 +339,13 @@ export async function getAllEditHistory(): Promise<CachedEditHistoryEntry[]> {
 
 export async function clearAllEditHistory(): Promise<void> {
   if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    const tx = db.transaction("editHistory", "readwrite");
-    tx.objectStore("editHistory").clear();
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {
-    // ignore
-  }
+  const db = await getDB();
+  const tx = db.transaction("editHistory", "readwrite");
+  tx.objectStore("editHistory").clear();
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 // --- fileTree store ---

@@ -1417,7 +1417,6 @@ function DiffEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
   const pendingContentRef = useRef<string | null>(null);
-  const prevFileIdRef = useRef(fileId);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;

@@ -486,12 +486,12 @@ export async function executeWorkflow(
         }
       }
     } catch (error) {
-      if (options?.abortSignal?.aborted) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (options?.abortSignal?.aborted || errorMessage === "Execution cancelled") {
         historyRecord.status = "cancelled";
         historyRecord.endTime = new Date().toISOString();
         return { context, historyRecord };
       }
-      const errorMessage = error instanceof Error ? error.message : String(error);
       log(node.id, node.type, `Error: ${errorMessage}`, "error");
       addHistoryStep(node.id, node.type, undefined, undefined, "error", errorMessage);
       historyRecord.status = "error";

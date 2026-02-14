@@ -733,8 +733,10 @@ function IDEContent({
     (async () => {
       try {
         const res = await fetch(`/api/workflow/${workflowId}/execute`, { method: "POST" });
+        if (!res.ok) throw new Error("Failed to start workflow execution");
         const data = await res.json();
-        const execId = data.executionId as string;
+        const execId = data.executionId;
+        if (typeof execId !== "string" || !execId) throw new Error("Invalid executionId");
         const es = new EventSource(`/api/workflow/${workflowId}/execute?executionId=${execId}`);
         silentExecEsRef.current = es;
         es.addEventListener("complete", () => {
@@ -756,7 +758,12 @@ function IDEContent({
         });
         // Prompt requested: auto-respond for drive-file with active file, otherwise hand off
         es.addEventListener("prompt-request", (e) => {
-          const promptData = JSON.parse(e.data);
+          let promptData: Record<string, unknown>;
+          try {
+            promptData = JSON.parse(e.data);
+          } catch {
+            return;
+          }
           if (promptData.type === "drive-file" && activeFileIdRef.current) {
             // Auto-respond with the currently open file
             fetch("/api/prompt-response", {
@@ -786,7 +793,7 @@ function IDEContent({
         silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 5000);
       }
     })();
-  }, [handleSelectFile]);
+  }, [handleSelectFile, setPendingReconnect]);
   // Cleanup silent execution EventSource on unmount
   useEffect(() => {
     return () => {
@@ -797,7 +804,7 @@ function IDEContent({
 
   // Keyboard shortcut: Ctrl+Shift+F / Cmd+Shift+F to open search, Ctrl+P / Cmd+P to quick open
   // Also handles user-configured shortcut keys from settings
-  const shortcutKeys = settings.shortcutKeys ?? [];
+  const shortcutKeys = useMemo(() => settings.shortcutKeys ?? [], [settings.shortcutKeys]);
   const activeFileIdRef = useRef(activeFileId);
   activeFileIdRef.current = activeFileId;
   const activeFileNameRef = useRef(activeFileName);
@@ -853,7 +860,7 @@ function IDEContent({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [shortcutKeys, handleSelectFile, isMobile]);
+  }, [shortcutKeys, handleSelectFile, executeSilentWorkflow, isMobile]);
 
   // Mobile view state: which panel is shown full-screen
   const [mobileView, setMobileView] = useState<MobileView>("editor");

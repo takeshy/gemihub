@@ -31,7 +31,9 @@ export function attachDriveFileHandlers(es: EventSource): void {
         window.dispatchEvent(
           new CustomEvent("file-restored", { detail: { fileId, content } })
         );
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.warn("[drive-file-sse] Failed to handle drive-file-updated:", err);
+      }
     })();
   });
 
@@ -57,7 +59,9 @@ export function attachDriveFileHandlers(es: EventSource): void {
         syncMeta.files[fileId] = { md5Checksum, modifiedTime };
         await setLocalSyncMeta(syncMeta);
         window.dispatchEvent(new Event("sync-complete"));
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.warn("[drive-file-sse] Failed to handle drive-file-created:", err);
+      }
     })();
   });
 }
