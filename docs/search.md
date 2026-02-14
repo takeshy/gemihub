@@ -28,7 +28,7 @@ Accessible from the left sidebar. Replaces the file tree when active.
 
 Searches files cached in IndexedDB (offline-capable).
 
-- **Multi-term search**: Splits query by whitespace, ALL terms must match (AND logic)
+- **Multi-term search**: Splits query by whitespace (including full-width space), ALL terms must match (AND logic)
 - **Matching**: Searches both file name and content (case-insensitive)
 - **Snippets**: Shows 40 characters before/after the first matching term in content
 - **Limitation**: Only searches locally cached files, not live Drive content
@@ -37,8 +37,9 @@ Searches files cached in IndexedDB (offline-capable).
 
 Full-text search via Google Drive API.
 
-- Searches file names and content within the user's `gemihub/` folder
+- Searches file names and content within the user's `gemihub/` folder (direct children only; subfolders are not searched)
 - Network-dependent, returns real-time results
+- Results are paginated automatically (capped at 1000 files)
 - Returns file ID, name, and MIME type
 
 ### RAG Mode
@@ -58,6 +59,8 @@ Available models depend on API plan:
 |------|--------|
 | Free | gemini-2.5-flash-lite, gemini-2.5-flash |
 | Paid | gemini-3-flash-preview, gemini-3-pro-preview |
+
+If the selected model does not support File Search, the system automatically falls back to the other model for the same plan.
 
 #### RAG Result Matching
 
@@ -108,7 +111,7 @@ POST `/api/search`
   query: string              // Search query (required)
   mode: "rag" | "drive"     // Search mode (required)
   ragStoreIds?: string[]    // RAG store IDs (required for RAG mode)
-  topK?: number             // Result limit, 1-20 (default: 5, RAG mode only)
+  topK?: number             // Result limit, 1-20 (default from user's RAG settings ragTopK, clamped on server)
   model?: string            // Gemini model name (RAG mode only)
 }
 ```
@@ -136,6 +139,19 @@ POST `/api/search`
 }
 ```
 
+### Error Responses
+
+Errors return JSON with an `error` field (except 405 which returns plain text):
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing or invalid `query` |
+| 400 | Missing `ragStoreIds` for RAG mode |
+| 400 | Gemini API key not configured |
+| 400 | Invalid `mode` |
+| 405 | Non-POST method (plain text) |
+| 500 | Server/upstream error (message included) |
+
 ---
 
 ## Key Files
@@ -146,3 +162,6 @@ POST `/api/search`
 | `app/components/ide/SearchPanel.tsx` | Search panel UI (Local / Drive / RAG tabs) |
 | `app/components/ide/QuickOpenDialog.tsx` | Quick Open dialog (Cmd+P) |
 | `app/routes/_index.tsx` | Keyboard shortcut registration |
+| `app/services/google-drive.server.ts` | Drive search implementation (`searchFiles()`) |
+| `app/services/indexeddb-cache.ts` | Local search data source (IndexedDB cache) |
+| `app/services/file-search.server.ts` | RAG store management |

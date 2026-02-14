@@ -137,7 +137,8 @@ export function SearchPanel({
           }),
         });
         if (!res.ok) {
-          throw new Error("Search request failed");
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.error || "Search request failed");
         }
         const data = await res.json();
 
@@ -162,8 +163,10 @@ export function SearchPanel({
           );
         }
       }
-    } catch {
-      setError(t("search.error"));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      const isServerError = msg && msg !== "Search request failed" && !/^(Failed to fetch|NetworkError|Load failed)/.test(msg);
+      setError(isServerError ? msg : t("search.error"));
     } finally {
       setSearching(false);
     }
@@ -262,7 +265,7 @@ export function SearchPanel({
             />
             <div className="mt-1 flex items-center justify-between">
               <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                {typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd" : "Ctrl"}+Enter
+                {typeof navigator !== "undefined" && /Macintosh|Mac OS|iPhone|iPad/.test(navigator.userAgent) ? "Cmd" : "Ctrl"}+Enter
               </p>
               <button
                 onClick={handleSearch}

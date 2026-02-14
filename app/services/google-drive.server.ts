@@ -381,7 +381,7 @@ export async function deleteFile(
   });
 }
 
-// Search files by name or content
+// Search files by name or content (with pagination, capped at 1000 results)
 export async function searchFiles(
   accessToken: string,
   rootFolderId: string,
@@ -396,13 +396,23 @@ export async function searchFiles(
     driveQuery = `name contains '${escapeDriveQuery(query)}' and '${rootFolderId}' in parents and trashed=false`;
   }
 
-  const res = await driveRequest(
-    `${DRIVE_API}/files?q=${encodeURIComponent(driveQuery)}&fields=files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum)`,
-    accessToken,
-    { signal: options.signal }
-  );
-  const data: DriveListResponse = await res.json();
-  return data.files;
+  const allFiles: DriveFile[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const url = new URL(`${DRIVE_API}/files`);
+    url.searchParams.set("q", driveQuery);
+    url.searchParams.set("fields", "nextPageToken,files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum)");
+    url.searchParams.set("pageSize", "100");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await driveRequest(url.toString(), accessToken, { signal: options.signal });
+    const data: DriveListResponse = await res.json();
+    allFiles.push(...data.files);
+    pageToken = data.nextPageToken;
+  } while (pageToken && allFiles.length < 1000);
+
+  return allFiles;
 }
 
 // Find a folder by name (searches recursively under a parent)
