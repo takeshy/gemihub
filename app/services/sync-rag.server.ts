@@ -267,6 +267,13 @@ export async function handleRagAction(
         }
       }
 
+      if (retriedCount > 0) {
+        retrySettings.ragEnabled = true;
+        if (!retrySettings.selectedRagSetting) {
+          retrySettings.selectedRagSetting = retryStoreKey;
+        }
+      }
+
       await deps.saveSettings(validTokens.accessToken, validTokens.rootFolderId, retrySettings);
       return jsonWithCookie({ ok: true, retried: retriedCount, stillPending: stillPendingCount });
     }

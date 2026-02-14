@@ -23,7 +23,7 @@ interface RagSetting {
   storeName: string | null;         // Gemini API リソース名 (API コール時に使用、storeId と同値)
   isExternal: boolean;              // External モードフラグ
   targetFolders: string[];          // Internal: 対象フォルダの仮想パスプレフィクス
-  excludePatterns: string[];        // Internal: 除外パターン (正規表現)
+  excludePatterns: string[];        // Internal: 除外パターン (正規表現)。デフォルト: ["^temporaries/", "^workflows/"]
   files: Record<string, RagFileInfo>; // ファイル名 → 登録状態のマップ
   lastFullSync: number | null;      // 最終フル同期タイムスタンプ
 }
@@ -180,9 +180,9 @@ Push/Pull の sync API 内に RAG 関連の4アクションがある:
 
 **注意**: Push 連動登録は `DEFAULT_RAG_STORE_KEY = "gemihub"` の RAG 設定のみが対象。ユーザーが複数の Internal RAG 設定を作成していても、自動登録されるのは `"gemihub"` 設定だけ。他の Internal RAG 設定は設定画面の Sync ボタン (`/api/settings/rag-sync`) から手動でフル同期する必要がある。
 
-### フロー (`app/hooks/useSync.ts`)
+### フロー (`app/services/rag-sync.ts`)
 
-RAG 登録は Push 成功後にバックグラウンドで非同期実行される（Push をブロックしない）。
+RAG 登録は Push 成功後にバックグラウンドで非同期実行される（Push をブロックしない）。`app/hooks/useSync.ts` が `ragRegisterInBackground()` を呼び出し、実装は `app/services/rag-sync.ts` にある。
 
 ```
 Push 成功後 → ragRegisterInBackground(filesToPush) を fire-and-forget
@@ -201,9 +201,10 @@ Push 成功後 → ragRegisterInBackground(filesToPush) を fire-and-forget
 
 1. `ragRegistrationOnPush` が無効 or API キーなし → スキップ
 2. デフォルト RAG 設定 (`"gemihub"`) がなければ自動作成
-3. Store がなければ `getOrCreateStore()` で作成し設定を保存
-4. チェックサムが一致 → スキップ
-5. `registerSingleFile()` でアップロード
+3. `excludePatterns` に一致するファイル名 → スキップ
+4. Store がなければ `getOrCreateStore()` で作成し設定を保存
+5. チェックサムが一致 → スキップ
+6. `registerSingleFile()` でアップロード
 
 ### ragRetryPending の詳細
 
@@ -215,6 +216,10 @@ Push 成功後 → ragRegisterInBackground(filesToPush) を fire-and-forget
 ---
 
 ## Drive ファイル操作時の RAG 連携 (`app/routes/api.drive.files.tsx`)
+
+### ファイルアップロード時の RAG 登録
+
+`app/hooks/useFileUpload.ts` からファイルアップロード時に `ragRegisterNewFile()` (`app/services/rag-sync.ts`) が呼ばれ、Push を経由せずに個別に RAG 登録される。対象は `isRagEligible()` を満たすファイルのみ。
 
 ### ファイルリネーム
 
@@ -231,7 +236,8 @@ Push 成功後 → ragRegisterInBackground(filesToPush) を fire-and-forget
 ### RAG Setting → Store ID の解決 (`app/components/ide/ChatPanel.tsx`)
 
 ```
-selectedRagSetting の値:
+ragEnabled が false → ragStoreIds = [] (RAG なし)
+ragEnabled が true の場合、selectedRagSetting の値:
 ├─ "__websearch__" → Web Search モード (googleSearch tool)
 ├─ null → RAG なし (localStorage に空文字保存 → 読み込み時 null に変換)
 └─ RAG設定名 → ragStoreIds を解決:
@@ -288,7 +294,7 @@ Gemini の応答に含まれる `groundingMetadata.groundingChunks` から RAG �
 |--------|---------|--------|------|
 | Local | 常時 | IndexedDB (クライアント) | キャッシュ済みファイルの名前・内容を複数キーワード AND 検索 |
 | Drive | 常時 | Google Drive API | フルテキスト検索 |
-| RAG | `ragStoreIds` が存在 | Gemini File Search API | 意味検索。モデル選択可能 |
+| RAG | `ragStoreIds` が存在 | Gemini File Search API | 意味検索。モデル選択可能。常に `"gemihub"` 設定の storeId を使用 |
 
 ### RAG モードの詳細
 
@@ -425,10 +431,12 @@ Browser                    Server                  Google (Gemini API / Drive)
 | `app/constants/rag.ts` | 対象拡張子リスト, `isRagEligible()` |
 | `app/services/file-search.server.ts` | Store CRUD, ファイルアップロード, smartSync, 単一ファイル登録/削除 |
 | `app/routes/api.settings.rag-sync.tsx` | フル同期 API (SSE) |
-| `app/routes/api.sync.tsx` | Push 連動 RAG アクション (ragRegister/ragSave/ragDeleteDoc/ragRetryPending) |
+| `app/routes/api.sync.tsx` | Push 連動 RAG アクション (ragRegister/ragSave/ragDeleteDoc/ragRetryPending) のルーティング |
+| `app/services/sync-rag.server.ts` | サーバー側 RAG アクションハンドラ (ragRegister/ragSave/ragDeleteDoc/ragRetryPending の実装) |
+| `app/services/rag-sync.ts` | クライアント側 RAG 登録ロジック (`ragRegisterInBackground`, `ragRegisterNewFile`) |
 | `app/routes/api.search.tsx` | 検索パネル API (RAG / Drive モード) |
 | `app/routes/api.drive.files.tsx` | ファイルリネーム/削除時の RAG tracking 連携 |
-| `app/hooks/useSync.ts` | クライアント側 Push 連動 RAG 登録ロジック |
+| `app/hooks/useSync.ts` | Push 完了後の `ragRegisterInBackground()` 呼び出し |
 | `app/services/gemini-chat.server.ts` | チャットでの fileSearch ツール統合, グラウンディングメタデータ処理 |
 | `app/components/ide/ChatPanel.tsx` | RAG 設定選択, ragStoreIds 解決, ソース表示 |
 | `app/components/ide/SearchPanel.tsx` | 検索パネル UI (RAG / Drive / Local モード) |
