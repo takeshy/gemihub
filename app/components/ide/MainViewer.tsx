@@ -730,14 +730,16 @@ function MarkdownFileEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
+    // Shorter debounce for new files so content is in cache before migration
+    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, 3000);
+    }, delay);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, saveToCache]);
+  }, [content, saveToCache, fileId]);
 
   // Flush pending content on unmount or fileId change (saveToCache identity changes)
   useEffect(() => {
@@ -990,14 +992,16 @@ function HtmlFileEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
+    // Shorter debounce for new files so content is in cache before migration
+    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, 3000);
+    }, delay);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, saveToCache]);
+  }, [content, saveToCache, fileId]);
 
   // Flush pending content on unmount or fileId change (saveToCache identity changes)
   useEffect(() => {
@@ -1242,14 +1246,16 @@ function TextFileEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
+    // Shorter debounce for new files so content is in cache before migration
+    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, 3000);
+    }, delay);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, saveToCache]);
+  }, [content, saveToCache, fileId]);
 
   // Flush pending content on unmount or fileId change (saveToCache identity changes)
   useEffect(() => {
@@ -1381,7 +1387,7 @@ interface DiffEditorProps {
 }
 
 function DiffEditor({
-  fileId: _fileId,
+  fileId,
   fileName,
   currentContent,
   targetFileId,
@@ -1414,14 +1420,16 @@ function DiffEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
+    // Shorter debounce for new files so content is in cache before migration
+    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, 3000);
+    }, delay);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, saveToCache]);
+  }, [content, saveToCache, fileId]);
 
   // Flush pending content on unmount
   useEffect(() => {

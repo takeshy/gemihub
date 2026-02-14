@@ -25,12 +25,17 @@ export function useFileWithCache(
   // Track fileId changes — reset saved, but keep content (avoid null flash)
   const [prevFileId, setPrevFileId] = useState(fileId);
   const [prevRefreshKey, setPrevRefreshKey] = useState(refreshKey);
+  // Skip fetchFile when migrating from new: → real ID (content already in React state)
+  const skipFetchRef = useRef(false);
   if (fileId !== prevFileId) {
     const wasMigration = prevFileId?.startsWith("new:") && !fileId?.startsWith("new:");
     setPrevFileId(fileId);
     currentFileId.current = fileId;
     // Don't clear content when migrating from new: to real ID (same content, avoids flash)
-    if (!wasMigration) {
+    if (wasMigration) {
+      skipFetchRef.current = true;
+    } else {
+      skipFetchRef.current = false;
       setContent(null);
     }
     setSaved(false);
@@ -147,6 +152,10 @@ export function useFileWithCache(
 
   // Trigger async fetch when fileId or refreshKey changes
   useEffect(() => {
+    if (skipFetchRef.current) {
+      skipFetchRef.current = false;
+      return;
+    }
     if (fileId) {
       fetchFile(fileId);
     }

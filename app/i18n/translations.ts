@@ -316,6 +316,7 @@ export interface TranslationStrings {
   "fileTree.newFile": string;
   "fileTree.fileName": string;
   "fileTree.fileNamePlaceholder": string;
+  "fileTree.fileNameDefault": string;
   "fileTree.extension": string;
   "fileTree.customExt": string;
   "fileTree.create": string;
@@ -719,7 +720,8 @@ const en: TranslationStrings = {
   // File tree - new file dialog
   "fileTree.newFile": "New File",
   "fileTree.fileName": "File name",
-  "fileTree.fileNamePlaceholder": "Empty = yyyymmdd_hhmmss",
+  "fileTree.fileNamePlaceholder": "",
+  "fileTree.fileNameDefault": "Default: {name}",
   "fileTree.extension": "Extension",
   "fileTree.customExt": "Custom",
   "fileTree.create": "Create",
@@ -1123,7 +1125,8 @@ const ja: TranslationStrings = {
   // File tree - new file dialog
   "fileTree.newFile": "新規ファイル",
   "fileTree.fileName": "ファイル名",
-  "fileTree.fileNamePlaceholder": "空欄 = 年月日_時分秒",
+  "fileTree.fileNamePlaceholder": "",
+  "fileTree.fileNameDefault": "デフォルト: {name}",
   "fileTree.extension": "拡張子",
   "fileTree.customExt": "カスタム",
   "fileTree.create": "作成",

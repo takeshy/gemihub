@@ -625,9 +625,14 @@ export function DriveFileTree({
     input.click();
   }, [selectedFolderId, treeItems, t, activeFileId, upload, rootFolderId, fetchAndCacheTree]);
 
-  const handleCreateFileSubmit = useCallback(async () => {
+  const buildDefaultName = useCallback(() => {
     const now = new Date();
-    const defaultName = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}_${String(now.getMinutes()).padStart(2, "0")}_${String(now.getSeconds()).padStart(2, "0")}`;
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}/${p(now.getMonth() + 1)}/${p(now.getDate())}_${p(now.getHours())}_${p(now.getMinutes())}_${p(now.getSeconds())}`;
+  }, []);
+
+  const handleCreateFileSubmit = useCallback(async () => {
+    const defaultName = buildDefaultName();
     const name = createFileDialog.name.trim() || defaultName;
     const ext = createFileDialog.ext === "custom"
       ? (createFileDialog.customExt.startsWith(".") ? createFileDialog.customExt : "." + createFileDialog.customExt)
@@ -678,48 +683,95 @@ export function DriveFileTree({
     });
 
     // Add the new file to the tree optimistically
-    const folderId = selectedFolderId;
+    // fullName may contain "/" (e.g. "2026/02/14_15_30_45.md") — split into
+    // virtual folder path + base name, creating intermediate vfolder nodes
+    const fullParts = fullName.split("/");
+    const baseName = fullParts.pop()!;
+    // folderParts = all path segments that should be virtual folders
+    const folderParts = fullParts; // e.g. ["2026", "02"]
+
     const newNode: CachedTreeNode = {
       id: tempId,
-      name: fileName,
+      name: baseName,
       mimeType,
       isFolder: false,
       modifiedTime: new Date().toISOString(),
     };
 
+    const sortNodes = (nodes: CachedTreeNode[]) =>
+      nodes.sort((a, b) => {
+        if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
     setTreeItems((prev) => {
-      if (!folderPath) {
-        return [...prev, newNode].sort((a, b) => {
-          if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
-          return a.name.localeCompare(b.name);
-        });
-      }
-      const insertIntoFolder = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
-        nodes.map((n) => {
-          if (n.id === folderId && n.children) {
-            return {
-              ...n,
-              children: [...n.children, newNode].sort((a, b) => {
-                if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
-                return a.name.localeCompare(b.name);
-              }),
-            };
-          }
-          if (n.children) {
-            return { ...n, children: insertIntoFolder(n.children) };
-          }
-          return n;
-        });
-      return insertIntoFolder(prev);
+      // Ensure all intermediate virtual folders exist, then insert the file
+      const ensureAndInsert = (
+        nodes: CachedTreeNode[],
+        remainingParts: string[],
+        pathSoFar: string,
+      ): CachedTreeNode[] => {
+        if (remainingParts.length === 0) {
+          // Leaf level — insert the file here
+          return sortNodes([...nodes, newNode]);
+        }
+        const [nextPart, ...rest] = remainingParts;
+        const nextPath = pathSoFar ? `${pathSoFar}/${nextPart}` : nextPart;
+        const vfolderId = `vfolder:${nextPath}`;
+        const existing = nodes.find((n) => n.id === vfolderId);
+        if (existing) {
+          // Folder exists — recurse into it
+          return nodes.map((n) =>
+            n.id === vfolderId
+              ? { ...n, children: ensureAndInsert(n.children ?? [], rest, nextPath) }
+              : n,
+          );
+        }
+        // Create new virtual folder node with nested children
+        // Build the chain of remaining folders
+        let innerChildren: CachedTreeNode[] = [newNode];
+        for (let i = rest.length - 1; i >= 0; i--) {
+          const partPath = nextPath + "/" + rest.slice(0, i + 1).join("/");
+          const innerFolderId = `vfolder:${partPath}`;
+          innerChildren = [{
+            id: innerFolderId,
+            name: rest[i],
+            mimeType: "application/vnd.google-apps.folder",
+            isFolder: true,
+            children: innerChildren,
+          }];
+        }
+        const newFolder: CachedTreeNode = {
+          id: vfolderId,
+          name: nextPart,
+          mimeType: "application/vnd.google-apps.folder",
+          isFolder: true,
+          children: rest.length === 0 ? [newNode] : innerChildren,
+        };
+        return sortNodes([...nodes, newFolder]);
+      };
+      return ensureAndInsert(prev, folderParts, "");
     });
 
-    // Expand parent folder
-    if (folderId) {
-      setExpandedFolders((prev) => new Set(prev).add(folderId));
+    // Expand all intermediate virtual folders + parent
+    {
+      const foldersToExpand: string[] = [];
+      let pathAcc = "";
+      for (const part of folderParts) {
+        pathAcc = pathAcc ? `${pathAcc}/${part}` : part;
+        foldersToExpand.push(`vfolder:${pathAcc}`);
+      }
+      if (foldersToExpand.length > 0) {
+        setExpandedFolders((prev) => {
+          const next = new Set(prev);
+          for (const f of foldersToExpand) next.add(f);
+          return next;
+        });
+      }
     }
 
     // Open the file immediately
-    onSelectFile(tempId, fileName, mimeType);
+    onSelectFile(tempId, baseName, mimeType);
 
     // Create Drive file in background — migrate IDs when done
     fetch("/api/drive/files", {
@@ -803,7 +855,7 @@ export function DriveFileTree({
         new CustomEvent("file-modified", { detail: { fileId: file.id } })
       );
     }).catch(() => {});
-  }, [createFileDialog, selectedFolderId, onSelectFile, treeItems, t]);
+  }, [createFileDialog, selectedFolderId, onSelectFile, treeItems, t, buildDefaultName]);
 
   // Listen for create-file-requested event (from mobile editor FAB)
   useEffect(() => {
@@ -2285,10 +2337,14 @@ export function DriveFileTree({
                     if (e.key === "Enter") handleCreateFileSubmit();
                     if (e.key === "Escape") setCreateFileDialog((prev) => ({ ...prev, open: false }));
                   }}
-                  placeholder={t("fileTree.fileNamePlaceholder")}
                   className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoFocus
                 />
+                {!createFileDialog.name.trim() && (
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                    {t("fileTree.fileNameDefault").replace("{name}", buildDefaultName())}
+                  </p>
+                )}
               </div>
               <div className="w-24">
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t("fileTree.extension")}</label>
