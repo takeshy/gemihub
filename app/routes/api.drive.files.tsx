@@ -39,6 +39,7 @@ import { saveSettings } from "~/services/user-settings.server";
 import { deleteSingleFileFromRag } from "~/services/file-search.server";
 import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 import { saveEdit } from "~/services/edit-history.server";
+import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { createLogContext, emitLog } from "~/services/logger.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -236,15 +237,19 @@ export async function action({ request }: Route.ActionArgs) {
     case "update": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
 
-      // Read old content for remote edit history (before update)
+      const effectiveMimeType = mimeType || "text/plain";
+
+      // Read old content for remote edit history (before update, skip binary)
       let oldContent: string | null = null;
-      try {
-        oldContent = await readFile(validTokens.accessToken, fileId);
-      } catch {
-        // File might be new or unreadable, skip history
+      if (!isBinaryMimeType(effectiveMimeType)) {
+        try {
+          oldContent = await readFile(validTokens.accessToken, fileId);
+        } catch {
+          // File might be new or unreadable, skip history
+        }
       }
 
-      const file = await updateFile(validTokens.accessToken, fileId, content, mimeType || "text/plain");
+      const file = await updateFile(validTokens.accessToken, fileId, content, effectiveMimeType);
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
 
       // Save remote edit history (best-effort)

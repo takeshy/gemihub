@@ -62,6 +62,7 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 - **Streaming:** Chat (`/api/chat`) and workflow execution (`/api/workflow/:id/execute`) use SSE (Server-Sent Events). Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used.
 - **Function Calling:** Gemini calls Drive tools (read/search/list/create/update), Google Search, RAG/File Search, and dynamically-discovered MCP tools (prefixed `mcp_{server}_{tool}`).
 - **Cache-First Sync:** Files cached in IndexedDB. MD5 hash comparison detects changes. Manual push/pull with conflict resolution dialog.
+- **Local-First File Updates:** ファイルを更新する機能（チャットの `update_drive_file`、ワークフローの `drive-save` ノード等）は、Google Driveに直接書き込まず、IndexedDB のキャッシュと editHistory のみを更新する。Drive への反映は Push フローで行う。詳細は `docs/sync.md`「Chat-Initiated File Operations」を参照。
 - **Encryption:** Optional hybrid RSA+AES encryption for chat history and workflow logs (`crypto.server.ts`).
 - **Auth Flow:** Google OAuth 2.0 → session cookies (httpOnly, 30-day). Tokens stored in session, refreshed automatically.
 - **Settings:** Stored as `settings.json` in the user's Drive (`gemihub/` folder). Six tab categories: General, MCP Servers, RAG, Plugins, Commands, Encryption.
