@@ -1,6 +1,7 @@
 import type { WorkflowNode, ExecutionContext, FileExplorerData, ServiceContext } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
+import { upsertFileInMeta } from "~/services/sync-meta.server";
 
 // Handle drive-save node (was: file-save) - save FileExplorerData to Drive
 export async function handleDriveSaveNode(
@@ -60,6 +61,15 @@ export async function handleDriveSaveNode(
       fileData.mimeType,
       { signal: serviceContext.abortSignal }
     );
+
+  await upsertFileInMeta(accessToken, folderId, driveFile, { signal: serviceContext.abortSignal });
+  serviceContext.onDriveFileCreated?.({
+    fileId: driveFile.id,
+    fileName: driveFile.name,
+    content: fileData.contentType === "binary" ? "" : content,
+    md5Checksum: driveFile.md5Checksum || "",
+    modifiedTime: driveFile.modifiedTime || "",
+  });
 
   if (savePathTo) {
     context.variables.set(savePathTo, driveFile.name);

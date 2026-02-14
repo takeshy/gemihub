@@ -55,14 +55,25 @@ export async function handlePromptFileNode(
   const result = await promptCallbacks.promptForDriveFile(title);
   if (result === null) throw new Error("File selection cancelled by user");
 
-  // Read the file content
-  const accessToken = serviceContext.driveAccessToken;
-  const content = await driveService.readFile(accessToken, result.id, {
-    signal: serviceContext.abortSignal,
-  });
-
+  // Read the file content (with binary support)
   if (saveTo) {
-    context.variables.set(saveTo, content);
+    const accessToken = serviceContext.driveAccessToken;
+    const meta = await driveService.getFileMetadata(accessToken, result.id, {
+      signal: serviceContext.abortSignal,
+    });
+    const mimeType = meta.mimeType || "application/octet-stream";
+
+    if (isBinaryMimeType(mimeType)) {
+      const explorerDataJson = await readBinaryFileAsExplorerData(
+        accessToken, result.id, result.name, mimeType, serviceContext.abortSignal
+      );
+      context.variables.set(saveTo, explorerDataJson);
+    } else {
+      const content = await driveService.readFile(accessToken, result.id, {
+        signal: serviceContext.abortSignal,
+      });
+      context.variables.set(saveTo, content);
+    }
   }
 
   if (saveFileTo) {

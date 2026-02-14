@@ -65,7 +65,7 @@ export async function executeWorkflow(
 
   const log = (
     nodeId: string,
-    nodeType: WorkflowNode["type"],
+    nodeType: WorkflowNode["type"] | "system",
     message: string,
     status: ExecutionLog["status"] = "info",
     input?: Record<string, unknown>,
@@ -503,7 +503,7 @@ export async function executeWorkflow(
   if (totalIterations >= MAX_TOTAL_STEPS) {
     historyRecord.status = "error";
     historyRecord.endTime = new Date().toISOString();
-    log("system", "variable", `Workflow exceeded maximum steps (${MAX_TOTAL_STEPS})`, "error");
+    log("system", "system", `Workflow exceeded maximum steps (${MAX_TOTAL_STEPS})`, "error");
     return { context, historyRecord };
   }
 

@@ -59,6 +59,8 @@ Update a variable with an expression.
 
 Supports arithmetic operators: `+`, `-`, `*`, `/`, `%`. Variables are resolved first, then the result is evaluated as arithmetic if it matches the pattern `number operator number`.
 
+> **Note:** Only a single binary operation is supported (e.g., `{{counter}} + 1`). Compound expressions like `5 + 3 * 2` are treated as a plain string because they don't match the `number operator number` pattern.
+
 ---
 
 ### if
@@ -397,6 +399,8 @@ Save FileExplorerData as a file on Google Drive.
 | `source` | Yes | Yes | Variable name or template containing FileExplorerData JSON |
 | `path` | Yes | Yes | Target file path (extension auto-added from source data) |
 | `savePathTo` | No | No | Variable to store final file name |
+
+> **Note:** `drive-save` always creates a new file, even if a file with the same path already exists. This differs from `drive-file`, which supports `overwrite` and `append` modes. Running the same workflow repeatedly may create duplicate files.
 
 ---
 
