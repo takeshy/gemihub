@@ -145,10 +145,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     return new Response("Payload too large", { status: 413 });
   }
 
-  const content = await request.text();
-  if (content.length > MAX_PUT_BODY) {
+  const raw = await request.text();
+  if (raw.length > MAX_PUT_BODY) {
     return new Response("Payload too large", { status: 413 });
   }
+
+  // Normalize CRLF → LF (external editors on Windows may add \r\n)
+  const content = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
   // Update the Drive __TEMP__ file directly
   await saveTempFile(data.accessToken, data.rootFolderId, data.fileName, {
