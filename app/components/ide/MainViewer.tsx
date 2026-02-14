@@ -734,12 +734,10 @@ function MarkdownFileEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
-    // Shorter debounce for new files so content is in cache before migration
-    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, delay);
+    }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -1004,12 +1002,10 @@ function HtmlFileEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
-    // Shorter debounce for new files so content is in cache before migration
-    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, delay);
+    }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -1262,12 +1258,10 @@ function TextFileEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
-    // Shorter debounce for new files so content is in cache before migration
-    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, delay);
+    }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -1436,12 +1430,10 @@ function DiffEditor({
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
-    // Shorter debounce for new files so content is in cache before migration
-    const delay = fileId.startsWith("new:") ? 1000 : 3000;
     debounceRef.current = setTimeout(() => {
       saveToCache(content);
       pendingContentRef.current = null;
-    }, delay);
+    }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };

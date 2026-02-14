@@ -7,7 +7,7 @@ File editing system with a WYSIWYG markdown editor, visual workflow editor, HTML
 - **File-Type-Specific Editors**: Automatically selects the best editor based on file extension
 - **Markdown 3-Mode Editing**: Switch between Preview / WYSIWYG / Raw
 - **Visual Workflow Editing**: Display and edit YAML as a Mermaid flowchart
-- **Auto-Save**: Debounced (3 seconds, 1 second for new files) auto-save to IndexedDB cache
+- **Auto-Save**: Debounced (1 second) auto-save to IndexedDB cache
 - **Edit History**: Maintain local change history with restore to any version
 - **Diff View**: Compare with any file and view unified diffs
 - **Temp File Sharing**: Generate shareable temporary edit URLs via Temp Upload
@@ -101,7 +101,7 @@ Workflow files (`.yaml`, `.yml`) have two editing modes.
 ### YAML Mode
 
 - Direct YAML editing in a raw textarea
-- Auto-save with 3-second debounce
+- Auto-save with 1-second debounce
 
 ---
 
@@ -109,7 +109,7 @@ Workflow files (`.yaml`, `.yml`) have two editing modes.
 
 All editors use a common auto-save pattern.
 
-1. Save to IndexedDB cache after a **3-second** debounce from content change (1-second for newly created files). Encrypted files use a **5-second** debounce due to re-encryption overhead.
+1. Save to IndexedDB cache after a **1-second** debounce from content change. Encrypted files use a **5-second** debounce due to re-encryption overhead.
 2. Flush unsaved content when the editor loses focus (blur)
 3. Emit a `file-modified` event on save to update the file tree badge
 4. Record changes in the `editHistory` store (for Sync)

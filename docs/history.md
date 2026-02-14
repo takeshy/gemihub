@@ -17,7 +17,7 @@ The two layers are independent: local diffs are **not** uploaded to Drive. On Pu
 
 Each file has one `CachedEditHistoryEntry` with a `diffs[]` array. Each array element represents one diff session (commit point).
 
-### Auto-Save (every 3s)
+### Auto-Save (every 1s)
 
 1. Read old content from IndexedDB cache (before cache update)
 2. If last diff exists: reverse-apply it to old content to reconstruct the base

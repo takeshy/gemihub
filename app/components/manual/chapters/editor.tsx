@@ -33,7 +33,7 @@ function EditorEn() {
 
         <h2>Auto-Save</h2>
         <p>
-          Changes are automatically saved to the local IndexedDB cache with a 3-second debounce (1 second for new files, 5 seconds for encrypted files). The &quot;Saved&quot; indicator appears in the top bar when changes are committed. Changes are synced to Drive via Push to Drive.
+          Changes are automatically saved to the local IndexedDB cache with a 1-second debounce (5 seconds for encrypted files). The &quot;Saved&quot; indicator appears in the top bar when changes are committed. Changes are synced to Drive via Push to Drive.
         </p>
 
         <h2>Diff View</h2>

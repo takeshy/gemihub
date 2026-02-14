@@ -68,7 +68,7 @@ export function WorkflowEditor({
     debounceRef.current = setTimeout(() => {
       saveToCache(yamlContent);
       pendingContentRef.current = null;
-    }, 3000);
+    }, 1000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
