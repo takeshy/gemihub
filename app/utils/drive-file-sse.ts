@@ -1,4 +1,4 @@
-import { getCachedFile, setCachedFile, deleteCachedFile, getLocalSyncMeta, setLocalSyncMeta, removeLocalSyncMetaEntry } from "~/services/indexeddb-cache";
+import { getCachedFile, setCachedFile, deleteCachedFile, deleteEditHistoryEntry, getLocalSyncMeta, setLocalSyncMeta, removeLocalSyncMetaEntry } from "~/services/indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
 
 /**
@@ -82,6 +82,7 @@ export function attachDriveFileHandlers(es: EventSource): void {
       try {
         await deleteCachedFile(fileId);
         await removeLocalSyncMetaEntry(fileId);
+        await deleteEditHistoryEntry(fileId);
         window.dispatchEvent(new Event("sync-complete"));
       } catch (err) {
         console.warn("[drive-file-sse] Failed to handle drive-file-deleted:", err);
