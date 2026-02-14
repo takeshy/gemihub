@@ -195,7 +195,8 @@ function GeneratedImageDisplay({ image }: { image: GeneratedImage }) {
       if (!res.ok) throw new Error("Failed to save");
       setSaveState("saved");
       window.dispatchEvent(new Event("sync-complete"));
-    } catch {
+    } catch (e) {
+      console.error("Failed to save image to Drive:", e);
       setSaveState("idle");
     }
   };

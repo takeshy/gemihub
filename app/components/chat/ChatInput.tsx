@@ -376,8 +376,8 @@ export function ChatInput({
           try {
             const att = await fileToAttachment(file);
             newAttachments.push(att);
-          } catch {
-            // skip failed files
+          } catch (e) {
+            console.error("Failed to process attachment:", file.name, e);
           }
         }
       }

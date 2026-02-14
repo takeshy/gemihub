@@ -176,7 +176,7 @@ When an image-capable model is selected (e.g., `gemini-2.5-flash-image`), the ch
 
 ### Storage
 
-Chat histories are stored as JSON files in `history/chats/` on Google Drive. Each chat has:
+Chat histories are stored as JSON files in `history/chats/` on Google Drive, named `chat_{id}.json`. Each chat has:
 - `id`: Unique chat identifier
 - `title`: First message content (truncated to 50 chars)
 - `messages`: Array of `Message` objects

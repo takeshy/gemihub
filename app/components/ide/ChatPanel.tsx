@@ -66,7 +66,7 @@ export function ChatPanel({
     fetch("/api/chat/history")
       .then((res) => (res.ok ? res.json() : []))
       .then((data: ChatHistoryItem[]) => setHistories(data))
-      .catch(() => {});
+      .catch((e) => console.error("Failed to fetch chat histories:", e));
   }, []);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeChatFileId, setActiveChatFileId] = useState<string | null>(null);
@@ -318,9 +318,15 @@ export function ChatPanel({
       setDriveToolMode(c.forcedMode ?? c.defaultMode);
       // Modes that disable function calling should also disable MCP.
       const modelLower = model.toLowerCase();
+      const isGemma = modelLower.includes("gemma");
       const hasRag = !!(ragSetting && ragSetting !== "__websearch__");
+      // Gemma models don't support tools including RAG; reset RAG setting.
+      if (isGemma && ragSetting) {
+        setSelectedRagSetting(null);
+        try { localStorage.setItem("gemihub:selectedRagSetting", ""); } catch { /* ignore */ }
+      }
       if (
-        modelLower.includes("gemma") ||
+        isGemma ||
         ragSetting === "__websearch__" ||
         (modelLower.includes("flash-lite") && hasRag)
       ) {
@@ -706,7 +712,9 @@ export function ChatPanel({
             content: `**Error:** ${(error as Error).message || "Failed to get response"}`,
             timestamp: Date.now(),
           };
-          setMessages([...updatedMessages, errorMessage]);
+          const finalMessages = [...updatedMessages, errorMessage];
+          setMessages(finalMessages);
+          await saveChat(finalMessages);
         }
       } finally {
         setStreamingContent("");
