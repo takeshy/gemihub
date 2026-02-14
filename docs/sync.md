@@ -294,7 +294,7 @@ Temp files can be managed from Settings → Sync → Temporary Files.
 
 ### Edit URL
 
-After "Temp UP" saves the file, a confirmation dialog asks whether to generate an edit URL. If confirmed, the URL is copied to the clipboard. The edit URL allows editing the file from other apps (view: 30 min, edit: 1 day).
+After "Temp UP" saves the file, a confirmation dialog asks whether to generate an edit URL. If confirmed, the URL is copied to the clipboard. The edit URL allows editing the file from other apps (valid for 1 hour).
 
 ### Preserving Files Across a Pull
 
