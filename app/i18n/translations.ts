@@ -50,6 +50,15 @@ export interface TranslationStrings {
   "chat.saveToDrive": string;
   "chat.savedToDrive": string;
 
+  // Chat workflow execution
+  "chat.workflowExecution": string;
+  "chat.workflowRunning": string;
+  "chat.workflowCompleted": string;
+  "chat.workflowError": string;
+  "chat.workflowCancelled": string;
+  "chat.workflowWaitingPrompt": string;
+  "chat.workflowLogs": string;
+
   // Settings page
   "settings.title": string;
   "settings.tab.general": string;
@@ -451,6 +460,15 @@ const en: TranslationStrings = {
 
   "chat.saveToDrive": "Save to Drive",
   "chat.savedToDrive": "Saved to Drive",
+
+  // Chat workflow execution
+  "chat.workflowExecution": "Workflow Execution",
+  "chat.workflowRunning": "Running...",
+  "chat.workflowCompleted": "Completed",
+  "chat.workflowError": "Error",
+  "chat.workflowCancelled": "Cancelled",
+  "chat.workflowWaitingPrompt": "Waiting for input...",
+  "chat.workflowLogs": "Logs",
 
   // Settings
   "settings.title": "Settings",
@@ -854,6 +872,15 @@ const ja: TranslationStrings = {
 
   "chat.saveToDrive": "Driveに保存",
   "chat.savedToDrive": "Drive保存済み",
+
+  // Chat workflow execution
+  "chat.workflowExecution": "ワークフロー実行",
+  "chat.workflowRunning": "実行中...",
+  "chat.workflowCompleted": "完了",
+  "chat.workflowError": "エラー",
+  "chat.workflowCancelled": "キャンセル",
+  "chat.workflowWaitingPrompt": "入力待ち...",
+  "chat.workflowLogs": "ログ",
 
   // Settings
   "settings.title": "設定",

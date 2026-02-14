@@ -7,6 +7,7 @@ import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
 import { McpAppRenderer } from "./McpAppRenderer";
+import { WorkflowExecutionBubble } from "./WorkflowExecutionBubble";
 
 interface MessageBubbleProps {
   message: Message;
@@ -344,8 +345,16 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
               </div>
             )}
 
+          {/* Workflow execution (assistant only) */}
+          {!isUser && message.workflowExecution && (
+            <WorkflowExecutionBubble
+              execution={message.workflowExecution}
+              isStreaming={isStreaming}
+            />
+          )}
+
           {/* Streaming indicator */}
-          {isStreaming && !isUser && (
+          {isStreaming && !isUser && !message.workflowExecution && (
             <div className="mt-1 flex items-center gap-1">
               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms]" />

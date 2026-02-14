@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
-import type { Message, ToolCall } from "~/types/chat";
+import type { Message, ToolCall, WorkflowExecutionInfo } from "~/types/chat";
 
 interface MessageListProps {
   messages: Message[];
@@ -12,6 +12,7 @@ interface MessageListProps {
   streamingRagSources?: string[];
   streamingRagUsed?: boolean;
   streamingWebSearchUsed?: boolean;
+  streamingWorkflowExecution?: WorkflowExecutionInfo | null;
   isStreaming?: boolean;
 }
 
@@ -23,6 +24,7 @@ export function MessageList({
   streamingRagSources,
   streamingRagUsed,
   streamingWebSearchUsed,
+  streamingWorkflowExecution,
   isStreaming,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -33,7 +35,7 @@ export function MessageList({
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamingContent, streamingThinking]);
+  }, [messages, streamingContent, streamingThinking, streamingWorkflowExecution]);
 
   // Build a partial assistant message from streaming data
   const streamingMessage: Message | null =
@@ -50,12 +52,25 @@ export function MessageList({
         }
       : null;
 
+  // Build a partial assistant message for workflow execution streaming
+  const streamingWorkflowMessage: Message | null =
+    isStreaming && streamingWorkflowExecution
+      ? {
+          role: "assistant",
+          content: "",
+          timestamp: Date.now(),
+          workflowExecution: streamingWorkflowExecution,
+        }
+      : null;
+
+  const hasStreamingMessage = !!(streamingMessage || streamingWorkflowMessage);
+
   return (
     <div
       ref={containerRef}
       className="flex-1 overflow-y-auto px-4 py-4"
     >
-      {messages.length === 0 && !streamingMessage ? (
+      {messages.length === 0 && !hasStreamingMessage ? (
         <div className="flex h-full items-center justify-center">
           <div className="text-center">
             <div className="mb-2 text-4xl text-gray-300 dark:text-gray-600">
@@ -72,10 +87,18 @@ export function MessageList({
             <MessageBubble key={`${msg.timestamp}-${i}`} message={msg} />
           ))}
 
-          {/* Streaming partial message */}
+          {/* Streaming partial message (regular chat) */}
           {streamingMessage && (
             <MessageBubble
               message={streamingMessage}
+              isStreaming={true}
+            />
+          )}
+
+          {/* Streaming workflow execution message */}
+          {streamingWorkflowMessage && (
+            <MessageBubble
+              message={streamingWorkflowMessage}
               isStreaming={true}
             />
           )}

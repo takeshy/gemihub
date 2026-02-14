@@ -53,6 +53,7 @@ export interface Message {
   thinking?: string;
   generatedImages?: GeneratedImage[];
   mcpApps?: McpAppInfo[];
+  workflowExecution?: WorkflowExecutionInfo;
 }
 
 // Streaming chunk types
@@ -79,6 +80,25 @@ export interface StreamChunk {
   mcpApp?: McpAppInfo;
   updatedFile?: { fileId: string; fileName: string; content: string };
   createdFile?: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string };
+}
+
+// Workflow execution log entry (for chat inline display)
+export interface WorkflowExecutionLog {
+  nodeId: string;
+  nodeType: string;
+  message: string;
+  status: "info" | "success" | "error";
+  timestamp: string;
+  mcpApps?: McpAppInfo[];
+}
+
+// Workflow execution info embedded in a chat message
+export interface WorkflowExecutionInfo {
+  workflowId: string;
+  workflowName: string;
+  executionId: string;
+  status: "running" | "completed" | "error" | "cancelled" | "waiting-prompt";
+  logs: WorkflowExecutionLog[];
 }
 
 // Chat history stored in Drive

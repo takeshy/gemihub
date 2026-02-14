@@ -9,6 +9,8 @@ import type {
   ChatHistoryItem,
   GeneratedImage,
   McpAppInfo,
+  WorkflowExecutionLog,
+  WorkflowExecutionInfo,
 } from "~/types/chat";
 import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
 import type { PluginSlashCommand } from "~/types/plugin";
@@ -25,6 +27,7 @@ import { useI18n } from "~/i18n/context";
 import { isEncryptedFile, decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
 import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
+import { PromptModal } from "~/components/execution/PromptModal";
 import {
   getCachedFile,
   setCachedFile,
@@ -83,6 +86,11 @@ export function ChatPanel({
   const abortControllerRef = useRef<AbortController | null>(null);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
+
+  // Workflow execution state
+  const [streamingWorkflowExecution, setStreamingWorkflowExecution] = useState<WorkflowExecutionInfo | null>(null);
+  const [workflowPromptData, setWorkflowPromptData] = useState<Record<string, unknown> | null>(null);
+  const workflowExecutionRef = useRef<{ executionId: string; workflowId: string; eventSource: EventSource } | null>(null);
 
   const availableModels = getAvailableModels(settings.apiPlan);
   const defaultModel =
@@ -347,6 +355,216 @@ export function ChatPanel({
     [selectedRagSetting, applyConstraint]
   );
 
+  // ---- Workflow execution from chat ----
+  const handleWorkflowRun = useCallback(
+    async (userContent: string, workflowFileId: string, workflowName: string) => {
+      const userMessage: Message = {
+        role: "user",
+        content: userContent,
+        timestamp: Date.now(),
+      };
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
+      setIsStreaming(true);
+
+      const executionInfo: WorkflowExecutionInfo = {
+        workflowId: workflowFileId,
+        workflowName,
+        executionId: "",
+        status: "running",
+        logs: [],
+      };
+      setStreamingWorkflowExecution(executionInfo);
+
+      try {
+        const startRes = await fetch(`/api/workflow/${workflowFileId}/execute`, {
+          method: "POST",
+        });
+        if (!startRes.ok) {
+          throw new Error(`Failed to start workflow: ${startRes.status}`);
+        }
+        const { executionId } = await startRes.json();
+        executionInfo.executionId = executionId;
+        setStreamingWorkflowExecution({ ...executionInfo });
+
+        const es = new EventSource(
+          `/api/workflow/${workflowFileId}/execute?executionId=${executionId}`
+        );
+        workflowExecutionRef.current = { executionId, workflowId: workflowFileId, eventSource: es };
+
+        let logs: WorkflowExecutionLog[] = [];
+        let finalStatus: WorkflowExecutionInfo["status"] = "running";
+
+        es.addEventListener("log", (e) => {
+          const log = JSON.parse(e.data) as WorkflowExecutionLog;
+          logs = [...logs, log];
+          setStreamingWorkflowExecution((prev) =>
+            prev ? { ...prev, logs: [...logs], status: finalStatus } : null
+          );
+        });
+
+        es.addEventListener("status", (e) => {
+          const data = JSON.parse(e.data);
+          finalStatus = data.status;
+          setStreamingWorkflowExecution((prev) =>
+            prev ? { ...prev, status: data.status } : null
+          );
+        });
+
+        es.addEventListener("prompt-request", (e) => {
+          const data = JSON.parse(e.data);
+          finalStatus = "waiting-prompt";
+          setStreamingWorkflowExecution((prev) =>
+            prev ? { ...prev, status: "waiting-prompt" } : null
+          );
+          setWorkflowPromptData(data);
+        });
+
+        es.addEventListener("drive-file-updated", (e) => {
+          const { fileId, fileName, content } = JSON.parse(e.data) as {
+            fileId: string; fileName: string; content: string;
+          };
+          (async () => {
+            try {
+              await addCommitBoundary(fileId);
+              await saveLocalEdit(fileId, fileName, content);
+              const cached = await getCachedFile(fileId);
+              await setCachedFile({
+                fileId,
+                content,
+                md5Checksum: cached?.md5Checksum ?? "",
+                modifiedTime: cached?.modifiedTime ?? "",
+                cachedAt: Date.now(),
+                fileName,
+              });
+              await addCommitBoundary(fileId);
+              window.dispatchEvent(
+                new CustomEvent("file-modified", { detail: { fileId } })
+              );
+              window.dispatchEvent(
+                new CustomEvent("file-restored", {
+                  detail: { fileId, content },
+                })
+              );
+            } catch { /* ignore */ }
+          })();
+        });
+
+        es.addEventListener("drive-file-created", (e) => {
+          const { fileId, fileName, content, md5Checksum, modifiedTime } = JSON.parse(e.data) as {
+            fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string;
+          };
+          (async () => {
+            try {
+              await setCachedFile({
+                fileId,
+                content,
+                md5Checksum,
+                modifiedTime,
+                cachedAt: Date.now(),
+                fileName,
+              });
+              const syncMeta = (await getLocalSyncMeta()) ?? {
+                id: "current" as const,
+                lastUpdatedAt: new Date().toISOString(),
+                files: {},
+              };
+              syncMeta.files[fileId] = { md5Checksum, modifiedTime };
+              await setLocalSyncMeta(syncMeta);
+              window.dispatchEvent(new Event("sync-complete"));
+            } catch { /* ignore */ }
+          })();
+        });
+
+        await new Promise<void>((resolve) => {
+          es.addEventListener("complete", () => {
+            finalStatus = "completed";
+            es.close();
+            resolve();
+          });
+
+          es.addEventListener("cancelled", () => {
+            finalStatus = "cancelled";
+            es.close();
+            resolve();
+          });
+
+          es.addEventListener("error", (e) => {
+            if (e instanceof MessageEvent) {
+              const data = JSON.parse(e.data);
+              logs = [...logs, {
+                nodeId: "system",
+                nodeType: "system",
+                message: data.error || "Execution error",
+                status: "error" as const,
+                timestamp: new Date().toISOString(),
+              }];
+            }
+            finalStatus = "error";
+            es.close();
+            resolve();
+          });
+
+          es.onerror = () => {
+            if (es.readyState === EventSource.CLOSED) {
+              if (finalStatus === "running") finalStatus = "error";
+              resolve();
+            }
+          };
+        });
+
+        // Build final assistant message
+        const assistantMessage: Message = {
+          role: "assistant",
+          content: "",
+          timestamp: Date.now(),
+          workflowExecution: {
+            workflowId: workflowFileId,
+            workflowName,
+            executionId,
+            status: finalStatus,
+            logs,
+          },
+        };
+
+        const finalMessages = [...updatedMessages, assistantMessage];
+        setMessages(finalMessages);
+        setStreamingWorkflowExecution(null);
+        setIsStreaming(false);
+        workflowExecutionRef.current = null;
+        await saveChat(finalMessages);
+      } catch (err) {
+        const errorMessage: Message = {
+          role: "assistant",
+          content: `**Error:** ${err instanceof Error ? err.message : "Failed to execute workflow"}`,
+          timestamp: Date.now(),
+        };
+        setMessages([...updatedMessages, errorMessage]);
+        setStreamingWorkflowExecution(null);
+        setIsStreaming(false);
+        workflowExecutionRef.current = null;
+      }
+    },
+    [messages, saveChat]
+  );
+
+  const handleWorkflowPromptResponse = useCallback(
+    async (value: string | null) => {
+      const ref = workflowExecutionRef.current;
+      if (!ref) return;
+      setWorkflowPromptData(null);
+      setStreamingWorkflowExecution((prev) =>
+        prev ? { ...prev, status: "running" } : null
+      );
+      await fetch("/api/prompt-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ executionId: ref.executionId, value }),
+      });
+    },
+    []
+  );
+
   // ---- Send message ----
   const handleSend = useCallback(
     async (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => {
@@ -384,6 +602,19 @@ export function ChatPanel({
           setIsStreaming(false);
         }
         return;
+      }
+
+      // Handle /run command for workflow execution
+      const runMatch = content.match(
+        /^\/run\s+(?:\[file:\s*(.+?),\s*fileId:\s*(.+?)\]|(\S+))/
+      );
+      if (runMatch) {
+        const fileName = runMatch[1] || runMatch[3] || "workflow";
+        const fileId = runMatch[2] || runMatch[3] || "";
+        if (fileId) {
+          await handleWorkflowRun(content, fileId, fileName);
+          return;
+        }
       }
 
       if (!hasApiKey) {
@@ -730,10 +961,21 @@ export function ChatPanel({
       enabledMcpServerIds,
       settings,
       saveChat,
+      handleWorkflowRun,
     ]
   );
 
   const handleStop = useCallback(() => {
+    if (workflowExecutionRef.current) {
+      const { executionId, workflowId, eventSource } = workflowExecutionRef.current;
+      fetch(`/api/workflow/${workflowId}/stop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ executionId }),
+      }).catch(() => {});
+      eventSource.close();
+      return;
+    }
     abortControllerRef.current?.abort();
   }, []);
 
@@ -807,8 +1049,18 @@ export function ChatPanel({
         streamingRagSources={streamingRagSources}
         streamingRagUsed={streamingRagUsed}
         streamingWebSearchUsed={streamingWebSearchUsed}
+        streamingWorkflowExecution={streamingWorkflowExecution}
         isStreaming={isStreaming}
       />
+
+      {/* Workflow execution prompt modal */}
+      {workflowPromptData && (
+        <PromptModal
+          data={workflowPromptData}
+          onSubmit={handleWorkflowPromptResponse}
+          onCancel={() => handleWorkflowPromptResponse(null)}
+        />
+      )}
 
       {/* Input */}
       <ChatInput
