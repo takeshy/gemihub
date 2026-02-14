@@ -321,6 +321,8 @@ export interface TranslationStrings {
   "fileTree.customExt": string;
   "fileTree.create": string;
   "fileTree.cancel": string;
+  "fileTree.addDateTime": string;
+  "fileTree.addLocation": string;
 
   // Search
   "search.title": string;
@@ -742,6 +744,8 @@ const en: TranslationStrings = {
   "fileTree.customExt": "Custom",
   "fileTree.create": "Create",
   "fileTree.cancel": "Cancel",
+  "fileTree.addDateTime": "Add date/time",
+  "fileTree.addLocation": "Add location",
 
   // Search
   "search.title": "Search",
@@ -1163,6 +1167,8 @@ const ja: TranslationStrings = {
   "fileTree.customExt": "カスタム",
   "fileTree.create": "作成",
   "fileTree.cancel": "キャンセル",
+  "fileTree.addDateTime": "日時を追加",
+  "fileTree.addLocation": "位置情報を追加",
 
   // Search
   "search.title": "検索",

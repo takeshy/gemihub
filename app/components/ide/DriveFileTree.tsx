@@ -256,8 +256,8 @@ export function DriveFileTree({
   const [cachedFiles, setCachedFiles] = useState<Set<string>>(new Set());
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set());
   const [createFileDialog, setCreateFileDialog] = useState<{
-    open: boolean; name: string; ext: string; customExt: string;
-  }>({ open: false, name: "", ext: ".md", customExt: "" });
+    open: boolean; name: string; ext: string; customExt: string; addDateTime: boolean; addLocation: boolean;
+  }>({ open: false, name: "", ext: ".md", customExt: "", addDateTime: false, addLocation: false });
   const [tempDiffData, setTempDiffData] = useState<{
     fileName: string;
     fileId: string;
@@ -558,7 +558,9 @@ export function DriveFileTree({
   }, [selectedFolderId]);
 
   const handleCreateFile = useCallback(() => {
-    setCreateFileDialog({ open: true, name: "", ext: ".md", customExt: "" });
+    const saved = localStorage.getItem("createFileOptions");
+    const opts = saved ? JSON.parse(saved) : {};
+    setCreateFileDialog({ open: true, name: "", ext: ".md", customExt: "", addDateTime: !!opts.addDateTime, addLocation: !!opts.addLocation });
   }, []);
 
   const handleUploadClick = useCallback(() => {
@@ -726,8 +728,28 @@ export function DriveFileTree({
       ? (createFileDialog.customExt.startsWith(".") ? createFileDialog.customExt : "." + createFileDialog.customExt)
       : createFileDialog.ext;
     const fileName = name + ext;
+    const { addDateTime, addLocation } = createFileDialog;
 
+    localStorage.setItem("createFileOptions", JSON.stringify({ addDateTime, addLocation }));
     setCreateFileDialog((prev) => ({ ...prev, open: false }));
+
+    // Build initial content from optional metadata
+    const contentParts: string[] = [];
+    if (addDateTime) {
+      const now = new Date();
+      contentParts.push(`Date: ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`);
+    }
+    if (addLocation) {
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+        });
+        contentParts.push(`Latitude: ${pos.coords.latitude}, Longitude: ${pos.coords.longitude}`);
+      } catch {
+        // Location unavailable — skip
+      }
+    }
+    const initialContent = contentParts.length > 0 ? contentParts.join("\n") + "\n\n" : "";
 
     // Prepend selected folder path
     const folderPath = selectedFolderId?.startsWith("vfolder:")
@@ -745,9 +767,18 @@ export function DriveFileTree({
         const res = await fetch("/api/drive/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update", fileId: existing.id, content: "" }),
+          body: JSON.stringify({ action: "update", fileId: existing.id, content: initialContent }),
         });
         if (res.ok) {
+          const data = await res.json();
+          await setCachedFile({
+            fileId: existing.id,
+            content: initialContent,
+            md5Checksum: data.md5Checksum ?? "",
+            modifiedTime: data.file?.modifiedTime ?? "",
+            cachedAt: Date.now(),
+            fileName: existing.name,
+          });
           onSelectFile(existing.id, existing.name, existing.mimeType);
         }
       } catch { /* ignore */ }
@@ -760,10 +791,10 @@ export function DriveFileTree({
       ? "text/yaml"
       : "text/plain";
 
-    // Seed IndexedDB cache with empty content
+    // Seed IndexedDB cache with initial content
     await setCachedFile({
       fileId: tempId,
-      content: "",
+      content: initialContent,
       md5Checksum: "",
       modifiedTime: "",
       cachedAt: Date.now(),
@@ -865,7 +896,7 @@ export function DriveFileTree({
     fetch("/api/drive/files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create", name: fullName, content: "", mimeType }),
+      body: JSON.stringify({ action: "create", name: fullName, content: initialContent, mimeType }),
     }).then(async (res) => {
       if (!res.ok) return;
       const data = await res.json();
@@ -889,7 +920,7 @@ export function DriveFileTree({
       // If user edited before migration, push content to Drive and get final checksum
       let finalMd5 = file.md5Checksum ?? "";
       let finalModifiedTime = file.modifiedTime ?? "";
-      if (currentContent) {
+      if (currentContent && currentContent !== initialContent) {
         try {
           const updateRes = await fetch("/api/drive/files", {
             method: "POST",
@@ -2467,6 +2498,24 @@ export function DriveFileTree({
                   />
                 </div>
               )}
+            </div>
+            <div className="flex flex-col gap-1 mb-4">
+              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createFileDialog.addDateTime}
+                  onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, addDateTime: e.target.checked }))}
+                />
+                {t("fileTree.addDateTime")}
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createFileDialog.addLocation}
+                  onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, addLocation: e.target.checked }))}
+                />
+                {t("fileTree.addLocation")}
+              </label>
             </div>
             <div className="flex justify-end gap-2">
               <button
