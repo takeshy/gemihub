@@ -16,6 +16,7 @@ import {
   moveFile,
   renameFile,
   searchFiles,
+  findFileByExactName,
   listFiles,
   getFileMetadata,
   publishFile,
@@ -120,19 +121,27 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   const body = await request.json();
-  const { action: actionType, fileId, name, content, data, mimeType, overwriteFileId } = body;
+  const { action: actionType, fileId, name, content, data, mimeType, overwriteFileId, dedup } = body;
   logCtx.action = actionType;
   logCtx.details = { fileId };
 
   switch (actionType) {
     case "create": {
-      const file = await createFile(
-        validTokens.accessToken,
-        name,
-        content || "",
-        validTokens.rootFolderId,
-        mimeType || "text/yaml"
-      );
+      // When dedup is true, check for existing file with same name to avoid duplicates
+      // (used by usePendingFileMigration to handle reload-during-migration)
+      let file: DriveFile | null = null;
+      if (dedup) {
+        file = await findFileByExactName(validTokens.accessToken, name, validTokens.rootFolderId);
+      }
+      if (!file) {
+        file = await createFile(
+          validTokens.accessToken,
+          name,
+          content || "",
+          validTokens.rootFolderId,
+          mimeType || "text/yaml"
+        );
+      }
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
       return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }

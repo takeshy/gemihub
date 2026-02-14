@@ -369,6 +369,14 @@ export function DriveFileTree({
     };
   }, [fetchAndCacheTree, updateTreeFromMeta]);
 
+  // Persist tree to IndexedDB cache when it changes
+  // (covers optimistic insert, migration ID swap, rename, delete, etc.)
+  useEffect(() => {
+    if (treeItems.length > 0 && rootFolderId) {
+      setCachedFileTree({ id: "current", rootFolderId, items: treeItems, cachedAt: Date.now() });
+    }
+  }, [treeItems, rootFolderId]);
+
   // Push flattened file list to parent when tree changes
   useEffect(() => {
     if (onFileListChange && treeItems.length > 0) {

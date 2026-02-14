@@ -42,6 +42,8 @@ export function usePendingFileMigration(isOffline: boolean) {
                 : "text/plain";
 
             // Create file on Drive (empty — content uploaded separately below)
+            // Use dedup to avoid duplicates when the previous session's background
+            // create completed on server but the client reloaded before migration
             const createRes = await fetch("/api/drive/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -50,6 +52,7 @@ export function usePendingFileMigration(isOffline: boolean) {
                 name: fullName,
                 content: "",
                 mimeType,
+                dedup: true,
               }),
             });
             if (!createRes.ok) continue;
