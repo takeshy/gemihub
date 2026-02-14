@@ -19,6 +19,8 @@ import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditHistoryModal } from "./EditHistoryModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
 import { performTempUpload } from "~/services/temp-upload";
+import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
+import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { usePlugins } from "~/contexts/PluginContext";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
@@ -197,6 +199,7 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
   const { t } = useI18n();
   const [uploading, setUploading] = useState(false);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const tempEditConfirm = useTempEditConfirm();
   const [tempPreview, setTempPreview] = useState<{ content: string; savedAt: string } | null>(null);
   const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
 
@@ -286,17 +289,16 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
   }, []);
 
   const handleTempUpload = useCallback(async () => {
-    setUploading(true);
     setUploadFeedback(null);
     try {
       const cached = await getCachedFile(fileId);
       const content = cached?.content ?? "";
-      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
       setUploadFeedback(feedback);
       setTimeout(() => setUploadFeedback(null), 2000);
     } catch { /* ignore */ }
     finally { setUploading(false); }
-  }, [fileName, fileId, t]);
+  }, [fileName, fileId, t, tempEditConfirm.confirm]);
 
   const [downloading, setDownloading] = useState(false);
 
@@ -423,6 +425,10 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
             </div>
           )}
         </>
+      )}
+
+      {tempEditConfirm.visible && (
+        <TempEditUrlDialog t={t} onYes={tempEditConfirm.onYes} onNo={tempEditConfirm.onNo} />
       )}
 
       {/* Binary temp file preview modal */}
@@ -754,17 +760,17 @@ function MarkdownFileEditor({
   }, [saveToCache]);
 
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploading(true);
     setUploadFeedback(null);
     try {
-      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
       setUploadFeedback(feedback);
       setTimeout(() => setUploadFeedback(null), 2000);
     } catch { /* ignore */ }
     finally { setUploading(false); }
-  }, [content, fileName, fileId, t]);
+  }, [content, fileName, fileId, t, tempEditConfirm.confirm]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -928,6 +934,9 @@ function MarkdownFileEditor({
         </div>
       )}
 
+      {tempEditConfirm.visible && (
+        <TempEditUrlDialog t={t} onYes={tempEditConfirm.onYes} onNo={tempEditConfirm.onNo} />
+      )}
       {tempDiffData && (
         <TempDiffModal
           fileName={tempDiffData.fileName}
@@ -1022,17 +1031,17 @@ function HtmlFileEditor({
   }, [saveToCache]);
 
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploading(true);
     setUploadFeedback(null);
     try {
-      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
       setUploadFeedback(feedback);
       setTimeout(() => setUploadFeedback(null), 2000);
     } catch { /* ignore */ }
     finally { setUploading(false); }
-  }, [content, fileName, fileId, t]);
+  }, [content, fileName, fileId, t, tempEditConfirm.confirm]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -1186,6 +1195,9 @@ parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.client
         </div>
       )}
 
+      {tempEditConfirm.visible && (
+        <TempEditUrlDialog t={t} onYes={tempEditConfirm.onYes} onNo={tempEditConfirm.onNo} />
+      )}
       {tempDiffData && (
         <TempDiffModal
           fileName={tempDiffData.fileName}
@@ -1278,17 +1290,17 @@ function TextFileEditor({
   }, [saveToCache]);
 
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploading(true);
     setUploadFeedback(null);
     try {
-      const feedback = await performTempUpload({ fileName, fileId, content, t });
+      const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
       setUploadFeedback(feedback);
       setTimeout(() => setUploadFeedback(null), 2000);
     } catch { /* ignore */ }
     finally { setUploading(false); }
-  }, [content, fileName, fileId, t]);
+  }, [content, fileName, fileId, t, tempEditConfirm.confirm]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -1366,6 +1378,9 @@ function TextFileEditor({
         />
       </div>
 
+      {tempEditConfirm.visible && (
+        <TempEditUrlDialog t={t} onYes={tempEditConfirm.onYes} onNo={tempEditConfirm.onNo} />
+      )}
       {tempDiffData && (
         <TempDiffModal
           fileName={tempDiffData.fileName}

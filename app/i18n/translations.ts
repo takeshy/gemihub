@@ -203,6 +203,9 @@ export interface TranslationStrings {
   "contextMenu.tempUploaded": string;
   "contextMenu.tempUrlCopied": string;
   "contextMenu.tempEditUrlConfirm": string;
+  "contextMenu.tempEditUrlHint": string;
+  "contextMenu.tempEditUrlYes": string;
+  "contextMenu.tempEditUrlNo": string;
   "contextMenu.noTempFile": string;
   "contextMenu.clearCache": string;
   "contextMenu.clearCacheModified": string;
@@ -663,6 +666,9 @@ const en: TranslationStrings = {
   "contextMenu.tempUploaded": "Uploaded",
   "contextMenu.tempUrlCopied": "Edit URL copied",
   "contextMenu.tempEditUrlConfirm": "Generate an edit URL so the file can be edited in other apps? (valid for 1 hour)",
+  "contextMenu.tempEditUrlHint": "Downloads between GemiHub instances are always available without issuing a URL.",
+  "contextMenu.tempEditUrlYes": "Issue URL",
+  "contextMenu.tempEditUrlNo": "No URL",
   "contextMenu.noTempFile": "No temp file found for this file.",
   "contextMenu.clearCache": "Clear Cache",
   "contextMenu.clearCacheModified": "This file has unsaved changes that will be lost. Continue?",
@@ -1123,6 +1129,9 @@ const ja: TranslationStrings = {
   "contextMenu.tempUploaded": "UP済",
   "contextMenu.tempUrlCopied": "編集URLをコピーしました",
   "contextMenu.tempEditUrlConfirm": "別アプリでも編集できるようURLを発行しますか？（有効期限1時間）",
+  "contextMenu.tempEditUrlHint": "GemiHub同士のダウンロードはURL発行なしでいつでも利用できます。",
+  "contextMenu.tempEditUrlYes": "発行必要",
+  "contextMenu.tempEditUrlNo": "発行不要",
   "contextMenu.noTempFile": "このファイルの一時ファイルが見つかりません。",
   "contextMenu.clearCache": "キャッシュクリア",
   "contextMenu.clearCacheModified": "未保存の変更がありますが、変更は失われます。続行しますか？",

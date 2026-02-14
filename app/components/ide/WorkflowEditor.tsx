@@ -7,6 +7,8 @@ import { useI18n } from "~/i18n/context";
 import { TempDiffModal } from "./TempDiffModal";
 import { EditorToolbarActions } from "./EditorToolbarActions";
 import { performTempUpload } from "~/services/temp-upload";
+import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
+import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { addCommitBoundary } from "~/services/edit-history-local";
 
 
@@ -147,19 +149,19 @@ export function WorkflowEditor({
   }, [saveToCache]);
 
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploading(true);
     setUploadFeedback(null);
     const fullFileName = fileName + ".yaml";
     try {
-      const feedback = await performTempUpload({ fileName: fullFileName, fileId, content: yamlContent, t });
+      const feedback = await performTempUpload({ fileName: fullFileName, fileId, content: yamlContent, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
       await saveToCache(yamlContent);
       setUploadFeedback(feedback);
       setTimeout(() => setUploadFeedback(null), 2000);
     } catch { /* ignore */ }
     finally { setUploading(false); }
-  }, [yamlContent, fileName, fileId, saveToCache, t]);
+  }, [yamlContent, fileName, fileId, saveToCache, t, tempEditConfirm.confirm]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -277,6 +279,9 @@ export function WorkflowEditor({
 
       </div>
 
+      {tempEditConfirm.visible && (
+        <TempEditUrlDialog t={t} onYes={tempEditConfirm.onYes} onNo={tempEditConfirm.onNo} />
+      )}
       {tempDiffData && (
         <TempDiffModal
           fileName={tempDiffData.fileName}

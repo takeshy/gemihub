@@ -3,9 +3,9 @@ import type { TranslationStrings } from "~/i18n/translations";
 /**
  * Perform a temp upload with an optional edit URL.
  *
- * Shows a confirm dialog asking whether to generate an edit URL.
- * - Yes → calls `generateEditUrl` action (save + URL generation + clipboard copy)
- * - No  → calls `save` action (save only)
+ * `confirm` is a function that returns a Promise resolving to true (issue URL)
+ * or false (no URL). Callers provide their own UI (e.g. portal dialog).
+ * `onStart` is called after the user confirms, right before the upload begins.
  *
  * Returns a feedback message string on success, or throws on failure.
  */
@@ -14,9 +14,12 @@ export async function performTempUpload(opts: {
   fileId: string;
   content: string;
   t: (key: keyof TranslationStrings) => string;
+  confirm: () => Promise<boolean>;
+  onStart?: () => void;
 }): Promise<string> {
   const { fileName, fileId, content, t } = opts;
-  const wantUrl = confirm(t("contextMenu.tempEditUrlConfirm"));
+  const wantUrl = await opts.confirm();
+  opts.onStart?.();
 
   if (wantUrl) {
     const res = await fetch("/api/drive/temp", {
