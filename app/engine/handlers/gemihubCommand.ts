@@ -59,8 +59,8 @@ export async function handleGemihubCommandNode(
         settings.encryption.encryptedPrivateKey,
         settings.encryption.salt,
       );
-      await driveService.updateFile(accessToken, file.id, encrypted);
-      const renamedFile = await driveService.renameFile(accessToken, file.id, file.name + ".encrypted");
+      await driveService.updateFile(accessToken, file.id, encrypted, undefined, { signal: serviceContext.abortSignal });
+      const renamedFile = await driveService.renameFile(accessToken, file.id, file.name + ".encrypted", { signal: serviceContext.abortSignal });
       await upsertFileInMeta(accessToken, folderId, renamedFile, { signal: serviceContext.abortSignal });
       serviceContext.onDriveFileUpdated?.({
         fileId: file.id,
@@ -73,7 +73,7 @@ export async function handleGemihubCommandNode(
 
     case "publish": {
       const file = await resolveExistingFile(pathRaw, context, serviceContext);
-      const webViewLink = await driveService.publishFile(accessToken, file.id);
+      const webViewLink = await driveService.publishFile(accessToken, file.id, { signal: serviceContext.abortSignal });
 
       // For markdown/HTML files, publish internal images and rewrite URLs
       const ext = file.name.split(".").pop()?.toLowerCase();
@@ -91,7 +91,7 @@ export async function handleGemihubCommandNode(
         if (imageFileIds.size > 0) {
           const replacements = new Map<string, string>();
           for (const imgFileId of imageFileIds) {
-            await driveService.publishFile(accessToken, imgFileId);
+            await driveService.publishFile(accessToken, imgFileId, { signal: serviceContext.abortSignal });
             const imgMeta = await driveService.getFileMetadata(accessToken, imgFileId, {
               signal: serviceContext.abortSignal,
             });
@@ -105,7 +105,7 @@ export async function handleGemihubCommandNode(
           for (const [oldUrl, newUrl] of replacements) {
             updatedContent = updatedContent.replaceAll(oldUrl, newUrl);
           }
-          const updatedFile = await driveService.updateFile(accessToken, file.id, updatedContent, file.mimeType);
+          const updatedFile = await driveService.updateFile(accessToken, file.id, updatedContent, file.mimeType, { signal: serviceContext.abortSignal });
           await upsertFileInMeta(accessToken, folderId, updatedFile, { signal: serviceContext.abortSignal });
           serviceContext.onDriveFileUpdated?.({
             fileId: file.id,
@@ -122,7 +122,7 @@ export async function handleGemihubCommandNode(
 
     case "unpublish": {
       const file = await resolveExistingFile(pathRaw, context, serviceContext);
-      await driveService.unpublishFile(accessToken, file.id);
+      await driveService.unpublishFile(accessToken, file.id, { signal: serviceContext.abortSignal });
       await setFileSharedInMeta(accessToken, folderId, file.id, false);
       result = "ok";
       break;
@@ -192,10 +192,11 @@ export async function handleGemihubCommandNode(
         `${sourceStem || "document"}.gdoc.tmp`,
         html,
         tmpFolderId,
+        { signal: serviceContext.abortSignal },
       );
 
       try {
-        const pdfBuffer = await driveService.exportFile(accessToken, tempGoogleDoc.id, "application/pdf");
+        const pdfBuffer = await driveService.exportFile(accessToken, tempGoogleDoc.id, "application/pdf", { signal: serviceContext.abortSignal });
         const pdfFile = await driveService.createFileBinary(
           accessToken,
           pdfName,
@@ -275,7 +276,7 @@ export async function handleGemihubCommandNode(
         }
       } catch { /* best-effort */ }
 
-      const renamed = await driveService.renameFile(accessToken, file.id, text);
+      const renamed = await driveService.renameFile(accessToken, file.id, text, { signal: serviceContext.abortSignal });
       await upsertFileInMeta(accessToken, folderId, renamed, { signal: serviceContext.abortSignal });
       serviceContext.onDriveFileUpdated?.({
         fileId: file.id,

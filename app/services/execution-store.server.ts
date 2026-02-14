@@ -5,6 +5,7 @@ interface ExecutionState {
   workflowId: string;
   ownerRootFolderId: string;
   status: "running" | "completed" | "error" | "cancelled" | "waiting-prompt";
+  createdAt: number;
   logs: ExecutionLog[];
   record?: ExecutionRecord;
   abortController: AbortController;
@@ -24,11 +25,13 @@ export function createExecution(
   workflowId: string,
   ownerRootFolderId: string
 ): ExecutionState {
+  cleanup();
   const state: ExecutionState = {
     id: executionId,
     workflowId,
     ownerRootFolderId,
     status: "running",
+    createdAt: Date.now(),
     logs: [],
     abortController: new AbortController(),
     subscribers: new Set(),
@@ -231,15 +234,16 @@ export function broadcastDriveFileCreated(executionId: string, data: { fileId: s
   broadcast(executionId, "drive-file-created", JSON.stringify(data));
 }
 
-// Cleanup old executions (call periodically)
+// Cleanup old executions (called on each new execution)
 export function cleanup(maxAge: number = 30 * 60 * 1000): void {
   const now = Date.now();
   for (const [id, state] of executions) {
-    if (state.logs.length > 0) {
-      const lastLog = state.logs[state.logs.length - 1];
-      if (now - lastLog.timestamp.getTime() > maxAge) {
-        executions.delete(id);
-      }
+    if (state.status === "running" || state.status === "waiting-prompt") continue;
+    const lastActivity = state.logs.length > 0
+      ? state.logs[state.logs.length - 1].timestamp.getTime()
+      : state.createdAt;
+    if (now - lastActivity > maxAge) {
+      executions.delete(id);
     }
   }
 }

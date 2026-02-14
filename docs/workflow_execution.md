@@ -302,7 +302,7 @@ All 24 node types are dispatched to isolated handler functions in `app/engine/ha
 
 | Handler | Node Type | Description |
 |---------|-----------|-------------|
-| `handleDriveFileNode` | `drive-file` | Create/update Drive file (overwrite/append, diff review, encryption) |
+| `handleDriveFileNode` | `drive-file` | Create/update Drive file (create/overwrite/append modes, diff review) |
 | `handleDriveReadNode` | `drive-read` | Read Drive file content (text or binary as FileExplorerData) |
 | `handleDriveSearchNode` | `drive-search` | Search Drive files by query |
 | `handleDriveListNode` | `drive-list` | List files with sort/filter (by name, created, modified, time range) |

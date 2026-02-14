@@ -342,13 +342,15 @@ export async function updateFile(
 export async function renameFile(
   accessToken: string,
   fileId: string,
-  newName: string
+  newName: string,
+  options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const res = await driveRequest(
     `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
     accessToken,
     {
       method: "PATCH",
+      signal: options.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newName }),
     }
@@ -587,7 +589,8 @@ export async function updateFileBinary(
 // Publish a file (make it accessible to anyone with the link)
 export async function publishFile(
   accessToken: string,
-  fileId: string
+  fileId: string,
+  options: DriveOperationOptions = {}
 ): Promise<string> {
   // Create "anyone" reader permission
   await driveRequest(
@@ -595,6 +598,7 @@ export async function publishFile(
     accessToken,
     {
       method: "POST",
+      signal: options.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: "reader", type: "anyone" }),
     }
@@ -602,7 +606,8 @@ export async function publishFile(
   // Fetch the webViewLink
   const res = await driveRequest(
     `${DRIVE_API}/files/${fileId}?fields=webViewLink`,
-    accessToken
+    accessToken,
+    { signal: options.signal }
   );
   const data: { webViewLink: string } = await res.json();
   return data.webViewLink;
@@ -611,13 +616,14 @@ export async function publishFile(
 // Unpublish a file (remove "anyone" permission)
 export async function unpublishFile(
   accessToken: string,
-  fileId: string
+  fileId: string,
+  options: DriveOperationOptions = {}
 ): Promise<void> {
   try {
     await driveRequest(
       `${DRIVE_API}/files/${fileId}/permissions/anyoneWithLink`,
       accessToken,
-      { method: "DELETE" }
+      { method: "DELETE", signal: options.signal }
     );
   } catch (err) {
     // 404 means permission doesn't exist — that's fine
