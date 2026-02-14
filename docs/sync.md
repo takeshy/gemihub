@@ -96,6 +96,7 @@ Uploads locally-changed files to remote.
    ├─ Get modified file IDs from IndexedDB editHistory
    ├─ Filter to only files tracked in any known meta (remoteMeta or localMeta)
    ├─ Filter out system files and excluded paths (history/, plugins/, etc.)
+   ├─ Filter out binary files (base64-encoded, already uploaded directly to Drive)
    ├─ Filter out reverted files (hasNetContentChange = false)
    ├─ Read all modified file contents from IndexedDB cache
    ├─ POST /api/sync { action: "pushFiles", files, remoteMeta, syncMetaFileId }
@@ -103,6 +104,7 @@ Uploads locally-changed files to remote.
    │       ├─ Use client-provided remoteMeta (skip re-reading _sync-meta.json)
    │       ├─ For each file (parallel, max 5 concurrent):
    │       │   ├─ Read old content from Drive (for edit history)
+   │       │   ├─ Skip upload if content is identical to remote (optimization)
    │       │   └─ Update file on Drive
    │       ├─ Write _sync-meta.json once via syncMetaFileId (skip findFileByExactName)
    │       ├─ Save remote edit history in background (best-effort)
@@ -152,7 +154,7 @@ Downloads only remotely-changed files to local cache.
 4. **Combine** `toPull` + `remoteOnly` arrays
 5. **Mobile Optimization**: On mobile devices, binary file contents (images, PDF, etc.) are NOT downloaded to save storage. Metadata is updated so they appear in the file tree, but content is fetched only when opened.
 6. **Download file contents** in parallel (max 5 concurrent)
-7. **Update IndexedDB cache** with downloaded files
+7. **Update IndexedDB cache** with downloaded files (for text files, `addCommitBoundary` is called before updating to preserve edit history session boundaries)
 8. **Update local sync meta** with new checksums
 9. **Fire "sync-complete" and "files-pulled" events** and update localModifiedCount
 
@@ -237,7 +239,7 @@ Conflicts occur during Push or Pull when both local and remote versions of a fil
 
 After resolution:
 - The resolved file's edit history entry is cleared
-- Local sync meta is updated from the server's remote meta
+- Local sync meta is partially merged — only the resolved file's entry is updated from the server's remote meta (other remote changes are not applied until the next Pull)
 - localModifiedCount is updated
 
 The unselected version is always backed up for manual merging if needed.
@@ -411,7 +413,7 @@ Excluded by name filter in `computeSyncDiff`:
 - `_sync-meta.json` — Sync metadata
 - `settings.json` — User settings
 
-Excluded by folder structure (subfolders of root, not listed by `listFiles(rootFolderId)`):
+Excluded by folder structure — these are actual Google Drive subfolders created via `ensureSubFolder()`. Files inside subfolders are not returned by `listUserFiles(rootFolderId)`. As a safety net, `isSyncExcludedPath()` also filters these prefixes on the client side:
 - `history/` — Chat, execution, and request history (including `_meta.json` and `.history.json` files)
 - `trash/` — Soft-deleted files (managed via Trash dialog)
 - `sync_conflicts/` — Conflict backup files (managed via Conflict Backups dialog)
@@ -452,8 +454,13 @@ Browser (IndexedDB)          Server                Google Drive
 | `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |
 | `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog (restore/rename/delete) |
 | `app/services/history-meta.server.ts` | History listing metadata (`_meta.json`) read/write/rebuild for chat, execution, and request history folders |
+| `app/services/sync-diff.ts` | `computeSyncDiff` implementation (re-exported from `sync-meta.server.ts`) |
+| `app/services/sync-client-utils.ts` | `isSyncExcludedPath`, `isBinaryMimeType`, binary temp file upload |
 | `app/services/google-drive.server.ts` | Google Drive API wrapper |
 | `app/utils/parallel.ts` | Parallel processing utility (concurrency limit) |
+| `app/components/ide/SyncStatusBar.tsx` | Push/Pull badges, diff dialog trigger |
+| `app/components/ide/SyncDiffDialog.tsx` | Push/Pull file list with diff preview |
+| `app/components/ide/ConflictDialog.tsx` | Conflict resolution UI |
 
 ### API Actions
 

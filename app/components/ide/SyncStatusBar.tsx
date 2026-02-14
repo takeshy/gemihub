@@ -58,7 +58,8 @@ export function SyncStatusBar({
     try {
       const remoteMeta = await getCachedRemoteMeta();
       const localMeta = await getLocalSyncMeta();
-      const diff = computeSyncDiff(localMeta ?? null, remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null, await getLocallyModifiedFileIds());
+      const modifiedIds = await getLocallyModifiedFileIds();
+      const diff = computeSyncDiff(localMeta ?? null, remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null, modifiedIds);
 
       if (type === "push") {
         const files: FileListItem[] = [];
@@ -78,6 +79,7 @@ export function SyncStatusBar({
           }
         }
         for (const id of diff.localOnly) {
+          if (!modifiedIds.has(id)) continue;  // Skip remotely-deleted files
           const cached = await getCachedFile(id);
           files.push({ id, name: cached?.fileName || id, type: "new" });
         }
