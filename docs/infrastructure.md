@@ -59,6 +59,8 @@ Google Cloud deployment managed by Terraform.
 | **Cloud DNS** | DNS zone management (A record + TXT verification) |
 | **Cloud Build** | CI/CD pipeline (build & deploy on push) |
 | **IAM** | Service accounts and permissions |
+| **BigQuery** | API request log storage (90-day retention) |
+| **Cloud Logging** | Log sink from Cloud Run to BigQuery |
 
 ## Terraform Structure
 
@@ -68,13 +70,14 @@ terraform/
   variables.tf         # Input variables
   terraform.tfvars     # Variable values (git-ignored, contains secrets)
   outputs.tf           # Output values (LB IP, Cloud Run URL, nameservers)
-  apis.tf              # GCP API enablement (8 APIs)
+  apis.tf              # GCP API enablement (10 APIs)
   artifact-registry.tf # Docker image repository
   secrets.tf           # Secret Manager secrets
   iam.tf               # Service accounts and IAM bindings
   cloud-run.tf         # Cloud Run service
   networking.tf        # Load Balancer (IP, NEG, backend, URL map, SSL, proxies, forwarding rules)
   dns.tf               # Cloud DNS managed zone, A record, optional TXT verification record
+  bigquery-logging.tf  # Cloud Logging → BigQuery pipeline
   cloud-build.tf       # Cloud Build trigger (reference only, created via gcloud)
 ```
 
@@ -122,6 +125,8 @@ The following GCP APIs are enabled via Terraform:
 - `iam.googleapis.com`
 - `cloudresourcemanager.googleapis.com`
 - `dns.googleapis.com`
+- `bigquery.googleapis.com`
+- `logging.googleapis.com`
 
 ## Networking
 
@@ -130,6 +135,7 @@ The following GCP APIs are enabled via Terraform:
 - **HTTP (port 80)**: 301 redirect to HTTPS via `MOVED_PERMANENTLY_DEFAULT`
 - **HTTPS (port 443)**: Google-managed SSL certificate (`gemihub-cert`), terminates TLS at the load balancer
 - **Serverless NEG**: Routes traffic from the load balancer to Cloud Run
+- **CDN**: Cloud CDN enabled with `USE_ORIGIN_HEADERS` cache mode (respects origin Cache-Control headers)
 - **Cloud Run ingress**: Direct public `run.app` access is blocked; traffic must come via the load balancer
 
 ## DNS
