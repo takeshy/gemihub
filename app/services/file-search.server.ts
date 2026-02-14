@@ -48,7 +48,7 @@ export async function calculateChecksum(content: string | Uint8Array | ArrayBuff
     : content instanceof Uint8Array
       ? content
       : new Uint8Array(content);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data.buffer as ArrayBuffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", (data.buffer as ArrayBuffer).slice(data.byteOffset, data.byteOffset + data.byteLength));
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }

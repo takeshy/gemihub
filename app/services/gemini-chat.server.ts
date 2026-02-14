@@ -204,8 +204,9 @@ export async function* chatWithToolsStream(
   let warningEmitted = false;
   let geminiTools: Tool[] | undefined;
 
+  const isGemma = model.toLowerCase().includes("gemma");
   const isFlashLite = model.toLowerCase().includes("flash-lite");
-  const ragEnabled = ragStoreIds && ragStoreIds.length > 0;
+  const ragEnabled = !isGemma && ragStoreIds && ragStoreIds.length > 0;
   const webSearchEnabled = options?.webSearchEnabled ?? false;
 
   if (webSearchEnabled) {

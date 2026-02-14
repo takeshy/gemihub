@@ -201,10 +201,11 @@ Push 成功後 → ragRegisterInBackground(filesToPush) を fire-and-forget
 
 1. `ragRegistrationOnPush` が無効 or API キーなし → スキップ
 2. デフォルト RAG 設定 (`"gemihub"`) がなければ自動作成
-3. `excludePatterns` に一致するファイル名 → スキップ
+3. `excludePatterns` に一致するファイル名 → スキップ（不正な正規表現は無視）
 4. Store がなければ `getOrCreateStore()` で作成し設定を保存
-5. チェックサムが一致 → スキップ
-6. `registerSingleFile()` でアップロード
+5. コンテンツ解決: `fileId` が渡された場合は `readFileBytes()` で Drive からコンテンツを読み込む。失敗時は `content` パラメータにフォールバック。どちらもない場合はエラー
+6. チェックサムが一致 → スキップ
+7. `registerSingleFile()` でアップロード
 
 ### ragRetryPending の詳細
 
@@ -220,6 +221,8 @@ Push 成功後 → ragRegisterInBackground(filesToPush) を fire-and-forget
 ### ファイルアップロード時の RAG 登録
 
 `app/hooks/useFileUpload.ts` からファイルアップロード時に `ragRegisterNewFile()` (`app/services/rag-sync.ts`) が呼ばれ、Push を経由せずに個別に RAG 登録される。対象は `isRagEligible()` を満たすファイルのみ。
+
+**注意**: `ragRegisterNewFile(fileId, fileName)` は `content` パラメータを渡さないため、サーバー側で `readFileBytes()` が失敗した場合はエラーとなり登録されない。この場合、次回の Push 時に `ragRegister` がコンテンツ付きで再試行される。
 
 ### ファイルリネーム
 
@@ -294,7 +297,7 @@ Gemini の応答に含まれる `groundingMetadata.groundingChunks` から RAG �
 |--------|---------|--------|------|
 | Local | 常時 | IndexedDB (クライアント) | キャッシュ済みファイルの名前・内容を複数キーワード AND 検索 |
 | Drive | 常時 | Google Drive API | フルテキスト検索 |
-| RAG | `ragStoreIds` が存在 | Gemini File Search API | 意味検索。モデル選択可能。常に `"gemihub"` 設定の storeId を使用 |
+| RAG | `ragStoreIds` が存在 | Gemini File Search API | 意味検索。モデル選択可能。常に `"gemihub"` 設定の storeId を使用。External RAG 設定や `"gemihub"` 以外の Internal RAG 設定は検索パネルの RAG モードでは使用できない |
 
 ### RAG モードの詳細
 

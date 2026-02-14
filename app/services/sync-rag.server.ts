@@ -77,7 +77,7 @@ export async function handleRagAction(
 
       // Skip if file matches exclude patterns
       const excludePatterns = ragSetting.excludePatterns || [];
-      if (excludePatterns.some((p) => new RegExp(p).test(fileName))) {
+      if (excludePatterns.some((p) => { try { return new RegExp(p).test(fileName); } catch { return false; } })) {
         return jsonWithCookie({ ok: true, skipped: true });
       }
 
@@ -156,7 +156,6 @@ export async function handleRagAction(
         if (ragStoreName) {
           ragSetting.storeName = ragStoreName;
           ragSetting.storeId = ragStoreName;
-          ragSetting.storeIds = [ragStoreName];
         }
         settings.ragSettings[storeKey] = ragSetting;
       }
