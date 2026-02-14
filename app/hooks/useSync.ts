@@ -67,7 +67,7 @@ function collectTrackedIds(
 
 /**
  * Keep cachedRemoteMeta in sync after push/pull/resolve/fullPull.
- * Without this, refreshLocalModifiedCount uses stale cachedRemoteMeta
+ * Without this, refreshSyncCounts uses stale cachedRemoteMeta
  * and may misclassify pushed files as localOnly or conflicts.
  */
 async function updateCachedRemoteMetaFromSyncMeta(remoteMeta: SyncMeta): Promise<void> {
@@ -95,59 +95,74 @@ export function useSync() {
   // Mutex to prevent concurrent sync operations (push/pull/resolve/fullPull)
   const syncLockRef = useRef(false);
 
-  const refreshLocalModifiedCount = useCallback(async () => {
+  /**
+   * Compute both push and pull counts from a single diff to keep them in sync.
+   * Accepts optional freshRemoteMeta so callers with fresh server data (e.g.
+   * checkRemoteChanges, push rejection) can avoid reading stale cached meta.
+   */
+  const refreshSyncCounts = useCallback(async (freshRemoteMeta?: SyncMeta | null) => {
     try {
       const ids = await getLocallyModifiedFileIds();
-      if (ids.size === 0) {
-        setLocalModifiedCount(0);
-        return;
-      }
-
-      // Use sync diff to count push-eligible files (modified + new local)
-      const remoteMeta = await getCachedRemoteMeta();
+      const cachedRemote = await getCachedRemoteMeta();
+      const remoteMeta = freshRemoteMeta !== undefined
+        ? freshRemoteMeta
+        : cachedRemote
+          ? { lastUpdatedAt: cachedRemote.lastUpdatedAt, files: cachedRemote.files }
+          : null;
       const localMeta = await getLocalSyncMeta();
       const diff = computeSyncDiff(
         localMeta ?? null,
-        remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null,
+        remoteMeta,
         ids
       );
       const remoteFiles = remoteMeta?.files ?? {};
+      const localFiles = localMeta?.files ?? {};
 
-      let count = 0;
-      // Only count localOnly files that have editHistory (new local files).
-      // Files in localMeta but not editHistory are remotely deleted — shown in pull badge.
-      const pushLocalOnly = diff.localOnly.filter(id => ids.has(id));
-      for (const id of [...diff.toPush, ...pushLocalOnly]) {
-        const cached = await getCachedFile(id);
-        const name = cached?.fileName || remoteFiles[id]?.name;
-        if (name && isSyncExcludedPath(name)) continue;
-        // Skip files whose content was reverted to the synced state (no net change)
-        if (!pushLocalOnly.includes(id) && !(await hasNetContentChange(id))) continue;
-        count++;
+      // --- Push count ---
+      let pushCount = 0;
+      if (ids.size > 0) {
+        // Only count localOnly files that have editHistory (new local files).
+        // Files in localMeta but not editHistory are remotely deleted — shown in pull badge.
+        const pushLocalOnly = diff.localOnly.filter(id => ids.has(id));
+        for (const id of [...diff.toPush, ...pushLocalOnly]) {
+          const cached = await getCachedFile(id);
+          const name = cached?.fileName || remoteFiles[id]?.name;
+          if (name && isSyncExcludedPath(name)) continue;
+          // Skip files whose content was reverted to the synced state (no net change)
+          if (!pushLocalOnly.includes(id) && !(await hasNetContentChange(id))) continue;
+          pushCount++;
+        }
       }
-      setLocalModifiedCount(count);
+      setLocalModifiedCount(pushCount);
+
+      // --- Pull count ---
+      // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
+      // Exclude localOnly files only in editHistory (new local files — shown in push badge).
+      // Exclude conflicts — they are shown in the conflict dialog, not pull.
+      const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
+      setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length);
     } catch {
       // ignore
     }
   }, []);
 
-  // Listen for file-modified events to update count in real-time
+  // Listen for file-modified events to update counts in real-time
   useEffect(() => {
-    const handler = () => { refreshLocalModifiedCount(); };
+    const handler = () => { refreshSyncCounts(); };
     window.addEventListener("file-modified", handler);
     window.addEventListener("sync-complete", handler);
-    refreshLocalModifiedCount();
+    refreshSyncCounts();
     return () => {
       window.removeEventListener("file-modified", handler);
       window.removeEventListener("sync-complete", handler);
     };
-  }, [refreshLocalModifiedCount]);
+  }, [refreshSyncCounts]);
 
   // Ref to access syncStatus inside interval without re-creating it
   const syncStatusRef = useRef(syncStatus);
   syncStatusRef.current = syncStatus;
 
-  // Check remote changes by comparing remote meta with local sync meta
+  // Check remote changes by fetching fresh remoteMeta, then recompute both counts
   const checkRemoteChanges = useCallback(async () => {
     try {
       if (!navigator.onLine) return;
@@ -156,33 +171,27 @@ export function useSync() {
       if (!res.ok) return;
       const data = await res.json();
       const remoteMeta = data.remoteMeta as SyncMeta | null;
-      if (!remoteMeta) { setRemoteModifiedCount(0); return; }
 
       // Cache remoteMeta in IndexedDB for pull to use
-      const existingCached = await getCachedRemoteMeta();
-      if (existingCached?.rootFolderId) {
-        await setCachedRemoteMeta({
-          id: "current",
-          rootFolderId: existingCached.rootFolderId,
-          lastUpdatedAt: remoteMeta.lastUpdatedAt,
-          files: remoteMeta.files,
-          cachedAt: Date.now(),
-        });
+      if (remoteMeta) {
+        const existingCached = await getCachedRemoteMeta();
+        if (existingCached?.rootFolderId) {
+          await setCachedRemoteMeta({
+            id: "current",
+            rootFolderId: existingCached.rootFolderId,
+            lastUpdatedAt: remoteMeta.lastUpdatedAt,
+            files: remoteMeta.files,
+            cachedAt: Date.now(),
+          });
+        }
       }
 
-      const localMeta = await getLocalSyncMeta();
-      const locallyModifiedIds = await getLocallyModifiedFileIds();
-      const diff = computeSyncDiff(localMeta ?? null, remoteMeta, locallyModifiedIds);
-      // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
-      // Exclude localOnly files only in editHistory (new local files — shown in push badge).
-      // Exclude conflicts — they are shown in the conflict dialog, not pull.
-      const localFiles = localMeta?.files ?? {};
-      const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
-      setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length);
+      // Recompute both push and pull counts from the fresh remoteMeta
+      await refreshSyncCounts(remoteMeta ?? null);
     } catch {
       // ignore network errors
     }
-  }, []);
+  }, [refreshSyncCounts]);
 
   // Poll remote changes every 5 minutes + initial check
   useEffect(() => {
@@ -236,9 +245,8 @@ export function useSync() {
               cachedAt: Date.now(),
             });
           }
-          const localFiles = localMeta?.files ?? {};
-          const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
-          setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length);
+          // Recompute both push and pull counts from the fresh remoteMeta
+          await refreshSyncCounts(remoteMeta);
         }
         setError("settings.sync.pushRejected");
         setSyncStatus("error");
@@ -352,7 +360,7 @@ export function useSync() {
     } finally {
       syncLockRef.current = false;
     }
-  }, []);
+  }, [refreshSyncCounts]);
 
   const pull = useCallback(async () => {
     if (syncLockRef.current) { console.warn("[useSync] pull skipped: sync already in progress"); return; }
@@ -588,15 +596,9 @@ export function useSync() {
         // Remove resolved conflict (idle transition handled by useEffect)
         setConflicts((prev) => prev.filter((c) => c.fileId !== fileId));
 
-        // Recalculate remote modified count after conflict resolution
+        // Recompute both push and pull counts after conflict resolution
         if (data.remoteMeta) {
-          const updatedLocalMeta = (await getLocalSyncMeta()) ?? null;
-          const rMeta = data.remoteMeta as SyncMeta;
-          const remainingModifiedIds = await getLocallyModifiedFileIds();
-          const newDiff = computeSyncDiff(updatedLocalMeta, rMeta, remainingModifiedIds);
-          const resolveLocalFiles = updatedLocalMeta?.files ?? {};
-          const resolvePullLocalOnly = newDiff.localOnly.filter(id => id in resolveLocalFiles);
-          setRemoteModifiedCount(newDiff.toPull.length + newDiff.remoteOnly.length + resolvePullLocalOnly.length);
+          await refreshSyncCounts(data.remoteMeta as SyncMeta);
         }
 
         // Notify file tree to refresh
@@ -604,10 +606,6 @@ export function useSync() {
         if (choice === "remote") {
           window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: [fileId] } }));
         }
-
-        // Update modified count after clearing edit history
-        const remainingModified = await getLocallyModifiedFileIds();
-        setLocalModifiedCount(remainingModified.size);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Resolve failed");
         setSyncStatus("error");
@@ -615,7 +613,7 @@ export function useSync() {
         syncLockRef.current = false;
       }
     },
-    []
+    [refreshSyncCounts]
   );
 
   const fullPull = useCallback(async () => {
