@@ -28,6 +28,8 @@ If reverse-apply fails (e.g. patch mismatch due to external content change), a c
 
 Because the last diff is continuously overwritten during a session, a single active session always has exactly **one non-empty diff** entry representing `base → current content`.
 
+> **Note:** `saveLocalEdit` is also called from outside auto-save: AI chat file updates (`ChatPanel`), workflow execution file updates (`useWorkflowExecution`), file imports via drag-and-drop (`DriveFileTree`), and temp file merges (`TempFilesDialog`). All callers invoke `saveLocalEdit` before `setCachedFile`.
+
 ### Commit Boundary
 
 Explicit save events insert a commit boundary (empty diff entry) into `diffs[]`. This causes the next auto-save to **append** a new diff rather than overwriting the previous one, starting a new session.
@@ -38,6 +40,7 @@ Triggered by:
 - File open, file reload, after pull updates editor content (`useFileWithCache`)
 - Pull (per downloaded file), resolve conflict (remote), Full Pull (`useSync`)
 - Temp diff accept (`MainViewer`, `WorkflowEditor`)
+- Chat file update (`ChatPanel`), Workflow execution file update (`useWorkflowExecution`)
 - `restoreToHistoryEntry` adds boundaries directly around the restore diff entry
 
 ### Data Model
@@ -92,7 +95,7 @@ Right-click a file in the tree → "History" to open the Edit History modal.
 
 The modal shows:
 - **Local entries** (IndexedDB) by default — editing session diffs with Restore button
-- **Remote entries** (Drive) on demand — click "Show remote history" to load past diffs from Drive (read-only)
+- **Remote entries** (Drive) on demand — click "Show remote history" to load past diffs from Drive
 
 Each entry displays: timestamp, origin badge (local/remote), addition/deletion stats, and an expandable diff view.
 
@@ -100,15 +103,16 @@ Each entry displays: timestamp, origin badge (local/remote), addition/deletion s
 
 ## Restore
 
-Restore reverts a file to the state **before** the selected history entry by reverse-applying diffs from the most recent entry back through the selected one.
+Restore reverts a file to the state **at** the selected history entry — i.e., the state after that entry's change was applied. It reverse-applies diffs newer than the selected entry.
 
 ### How It Works
 
 `restoreToHistoryEntry` (steps 1-4) computes the restored content and updates edit history. The caller (`EditHistoryModal.handleRestore`) performs steps 5-6.
 
 1. Read current content from IndexedDB cache
-2. For each non-empty diff from the most recent down to (and including) the target entry:
-   - Reverse-apply the diff (swap `+`/`-` lines, invert hunk headers, apply patch)
+2. For each non-empty diff **newer than** the target entry (the target itself is NOT reversed):
+   - **Local diffs**: always reverse-apply (swap `+`/`-` lines, invert hunk headers, apply patch)
+   - **Remote diffs**: try reverse-apply first; if it fails (content is at the OLD side, not yet pulled), skip
 3. Record the restore as a new history entry: `diff(current → restored)`
 4. Add commit boundaries around the restore entry
 5. Update IndexedDB cache with restored content *(caller)*
@@ -123,11 +127,11 @@ diffs: [{ diff: "base → current" }]
 cache: current
 
 Restore (filteredIndex=0):
-  reverse-apply diff[0] on "current" → "base"
-  result: "base"
+  no diffs newer than index 0 → nothing to reverse
+  result: "current" (no change)
 ```
 
-The file is restored to its state before any edits in the current session.
+Restoring to the only entry is a no-op since the file is already at that state.
 
 ### Example: Multi-Entry Restore
 
@@ -140,12 +144,12 @@ cache: current
 
 Restore to index 0 (filteredIndex=0):
   reverse-apply diff[1] on "current" → "v1"
-  reverse-apply diff[0] on "v1" → "base"
-  result: "base"
+  result: "v1"
+  (the state at the end of session 0, i.e. after "base → v1" was applied)
 
 Restore to index 1 (filteredIndex=1):
-  reverse-apply diff[1] on "current" → "v1"
-  result: "v1"
+  no diffs newer than index 1 → nothing to reverse
+  result: "current" (no change)
 ```
 
 ### Limitations

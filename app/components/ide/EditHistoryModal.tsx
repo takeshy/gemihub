@@ -12,7 +12,7 @@ import {
 import { ICON } from "~/utils/icon-sizes";
 import type { EditHistoryEntry } from "~/services/edit-history.server";
 import { getEditHistoryForFile, getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
-import { reconstructContent, restoreToHistoryEntry } from "~/services/edit-history-local";
+import { reconstructContent, restoreToHistoryEntry, type DiffWithOrigin } from "~/services/edit-history-local";
 import { useI18n } from "~/i18n/context";
 import { DiffView } from "~/components/shared/DiffView";
 
@@ -137,7 +137,8 @@ export function EditHistoryModal({
       const targetIdx = allEntries.indexOf(entry);
       if (targetIdx < 0) return;
 
-      const diffsToApply = allEntries.slice(0, targetIdx + 1).map((e) => e.diff);
+      // Reverse diffs NEWER than the target to restore to the state AT this entry
+      const diffsToApply: DiffWithOrigin[] = allEntries.slice(0, targetIdx).map((e) => ({ diff: e.diff, origin: e.origin }));
       const restoredContent = await restoreToHistoryEntry(fileId, cached.content, diffsToApply);
       if (restoredContent == null) {
         alert(t("editHistory.restoreFailed"));
@@ -175,7 +176,8 @@ export function EditHistoryModal({
       const targetIdx = allEntries.indexOf(entry);
       if (targetIdx < 0) return;
 
-      const diffsToApply = allEntries.slice(0, targetIdx + 1).map((e) => e.diff);
+      // Reverse diffs NEWER than the target to restore to the state AT this entry
+      const diffsToApply: DiffWithOrigin[] = allEntries.slice(0, targetIdx).map((e) => ({ diff: e.diff, origin: e.origin }));
       const restoredContent = reconstructContent(cached.content, diffsToApply);
       if (restoredContent == null) {
         alert(t("editHistory.restoreFailed"));
@@ -258,8 +260,9 @@ export function EditHistoryModal({
             </div>
           ) : (
             <div className="space-y-1">
-              {allEntries.map((entry) => {
+              {allEntries.map((entry, entryIdx) => {
                 const isExpanded = expandedId === entry.id;
+                const isNewest = entryIdx === 0;
 
                 return (
                   <div
@@ -289,6 +292,7 @@ export function EditHistoryModal({
                           -{entry.stats.deletions}
                         </span>
                       </span>
+                      {!isNewest && (
                       <span className="ml-auto flex items-center gap-1">
                         <span
                           role="button"
@@ -319,6 +323,7 @@ export function EditHistoryModal({
                           <Copy size={10} className="inline -mt-0.5" />
                         </span>
                       </span>
+                      )}
                     </button>
 
                     {/* Expanded diff */}

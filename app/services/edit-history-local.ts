@@ -139,13 +139,15 @@ export async function recordRestoreDiff(
   await setEditHistoryEntry(entry);
 }
 
+export type DiffWithOrigin = { diff: string; origin: "local" | "remote" };
+
 /**
  * Reconstruct content and record the restore as a new history entry.
  */
 export async function restoreToHistoryEntry(
   fileId: string,
   currentContent: string,
-  diffsToApply: string[]
+  diffsToApply: DiffWithOrigin[]
 ): Promise<string | null> {
   const restoredContent = reconstructContent(currentContent, diffsToApply);
   if (restoredContent === null) return null;
@@ -157,13 +159,26 @@ export async function restoreToHistoryEntry(
 /**
  * Reconstruct file content at a specific point in history by reverse-applying diffs.
  * diffs should be ordered from newest to oldest.
+ *
+ * Local diffs are always reverse-applied (cache is the newest content).
+ * Remote diffs: try reverse-apply first (content is at NEW side after pull).
+ * If reverse-apply fails, the content is at the OLD side (not yet pulled) — skip.
  */
 export function reconstructContent(
   currentContent: string,
-  diffs: string[]
+  diffs: DiffWithOrigin[]
 ): string | null {
   let content = currentContent;
-  for (const diff of diffs) {
+  for (const { diff, origin } of diffs) {
+    if (origin === "remote") {
+      const reversed = reverseApplyDiff(content, diff);
+      if (reversed !== null) {
+        content = reversed;
+      }
+      // else: content is at the OLD side (not pulled) — skip
+      continue;
+    }
+    // Local: always reverse-apply
     const reversed = reverseApplyDiff(content, diff);
     if (reversed === null) return null;
     content = reversed;
