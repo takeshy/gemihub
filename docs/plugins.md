@@ -62,7 +62,7 @@ A plugin release must contain these assets:
   "id": "my-plugin",
   "name": "My Plugin",
   "version": "1.0.0",
-  "minAppVersion": "1.0.0",
+  "minAppVersion": "1.0.0",  // reserved for future use
   "description": "What my plugin does",
   "author": "Your Name"
 }
@@ -125,8 +125,8 @@ api.registerView({
   name: "My View",
   icon: "puzzle",       // optional icon identifier
   location: "sidebar", // or "main"
-  extensions: [".csv", ".tsv"], // optional: bind to specific file extensions (main views only)
-  component: MyReactComponent, // receives { api } as props
+  extensions: [".csv", ".tsv"], // optional: dot-prefixed file extensions (main views only)
+  component: MyReactComponent, // receives { api, fileId?, fileName? } as props
 });
 
 // Register a slash command for the chat
@@ -204,18 +204,20 @@ const ReactDOM = api.ReactDOM;
 
 ### View Components
 
-View components receive `{ api }` as props:
+View components receive `{ api, fileId?, fileName? }` as props. `fileId` and `fileName` are provided when a file is currently open (always set for extension-matched views, optional for panel-selected main views):
 
 ```tsx
-function MyPanel({ api }) {
+function MyPanel({ api, fileId, fileName }) {
   const React = api.React;
   const [data, setData] = React.useState(null);
 
   React.useEffect(() => {
-    api.storage.getAll().then(setData);
-  }, []);
+    if (fileId) {
+      api.drive.readFile(fileId).then(setData);
+    }
+  }, [fileId]);
 
-  return <div>{JSON.stringify(data)}</div>;
+  return <div>{fileName}: {JSON.stringify(data)}</div>;
 }
 ```
 
@@ -260,6 +262,6 @@ To publish an update, create a new release with an updated version tag. Users cl
 |--------|------|-------------|
 | GET | `/api/plugins` | List installed plugins |
 | POST | `/api/plugins` | Install plugin `{ repo }` |
-| GET | `/api/plugins/:id?file=main.js` | Serve plugin file |
+| GET | `/api/plugins/:id?file={name}` | Serve plugin file (main.js, styles.css, manifest.json) |
 | POST | `/api/plugins/:id` | Actions: `toggle`, `getData`, `setData`, `update`, `checkUpdate` |
 | DELETE | `/api/plugins/:id` | Uninstall plugin |

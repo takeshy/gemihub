@@ -1090,7 +1090,7 @@ function IDEContent({
       {activePluginMainView ? (
         <div className="flex-1 overflow-auto p-4">
           {getPluginAPI(activePluginMainView.pluginId) ? (
-            <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} />
+            <activePluginMainView.component api={getPluginAPI(activePluginMainView.pluginId)!} fileId={activeFileId ?? undefined} fileName={activeFileName ?? undefined} />
           ) : null}
         </div>
       ) : (

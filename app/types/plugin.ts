@@ -21,7 +21,7 @@ export interface PluginView {
   icon?: string;
   location: "sidebar" | "main";
   extensions?: string[];
-  component: React.ComponentType<{ api: PluginAPI }>;
+  component: React.ComponentType<{ api: PluginAPI; fileId?: string; fileName?: string }>;
 }
 
 /** Slash command registered by a plugin */
@@ -50,7 +50,7 @@ export interface PluginAPI {
     icon?: string;
     location: "sidebar" | "main";
     extensions?: string[];
-    component: React.ComponentType<{ api: PluginAPI }>;
+    component: React.ComponentType<{ api: PluginAPI; fileId?: string; fileName?: string }>;
   }): void;
   registerSlashCommand(cmd: {
     name: string;
