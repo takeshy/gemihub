@@ -22,6 +22,7 @@ import type {
   OAuthConfig,
   OAuthTokens,
   McpToolInfo,
+  ShortcutKeyBinding,
 } from "~/types/settings";
 import {
   DEFAULT_RAG_SETTING,
@@ -71,9 +72,11 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
+  Keyboard,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
+import { ShortcutsTab } from "~/components/settings/ShortcutsTab";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
 import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog";
 import { TrashDialog } from "~/components/settings/TrashDialog";
@@ -91,7 +94,7 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync";
+type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shortcuts";
 
 import type { TranslationStrings } from "~/i18n/translations";
 
@@ -102,6 +105,7 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
   { id: "plugins", labelKey: "settings.tab.plugins", icon: Puzzle },
+  { id: "shortcuts", labelKey: "settings.tab.shortcuts", icon: Keyboard },
 ];
 
 // ---------------------------------------------------------------------------
@@ -387,6 +391,19 @@ export async function action({ request }: Route.ActionArgs) {
         return jsonWithCookie({ success: true, message: "Sync meta rebuilt." });
       }
 
+      case "saveShortcuts": {
+        const shortcutsJson = formData.get("shortcutKeys") as string;
+        let shortcutKeys: ShortcutKeyBinding[];
+        try {
+          shortcutKeys = shortcutsJson ? JSON.parse(shortcutsJson) : [];
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid shortcuts JSON." });
+        }
+        const updatedSettings: UserSettings = { ...currentSettings, shortcutKeys };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        return jsonWithCookie({ success: true, message: "Shortcut settings saved." });
+      }
+
       default:
         return jsonWithCookie({ success: false, message: "Unknown action." });
     }
@@ -499,6 +516,7 @@ function SettingsInner({
         {activeTab === "rag" && <RagTab settings={settings} />}
         {activeTab === "commands" && <CommandsTab settings={settings} />}
         {activeTab === "plugins" && <PluginsTab settings={settings} />}
+        {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}
       </main>
     </div>
   );
@@ -3155,3 +3173,4 @@ function RagTab({ settings }: { settings: UserSettings }) {
     </SectionCard>
   );
 }
+

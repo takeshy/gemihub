@@ -12,6 +12,7 @@ Workflow execution engine with YAML parsing, handler-based node dispatch, SSE st
 - **Variable Templating**: `{{var}}` syntax with nested access, array indexing, and JSON escaping
 - **AI Workflow Generation**: Generate/modify workflows from natural language via Gemini
 - **Execution History**: Records saved to Google Drive with per-step details
+- **Shortcut Key Execution**: Configure custom keyboard shortcuts to execute specific workflows
 
 ---
 
@@ -397,6 +398,46 @@ Renders different UI based on prompt type:
 
 ---
 
+## Shortcut Key Execution
+
+Users can configure custom keyboard shortcuts in **Settings > Shortcuts** to execute specific workflows.
+
+### Configuration
+
+Each shortcut binding includes:
+
+| Field | Description |
+|-------|-------------|
+| `action` | Action type (currently `executeWorkflow`) |
+| `targetFileId` | Drive file ID of the target workflow |
+| `targetFileName` | Display name of the target workflow |
+| `key` | Key to press (e.g. `F5`, `e`, `r`) |
+| `ctrlOrMeta` | Require Ctrl (Win/Linux) / Cmd (Mac) |
+| `shift` | Require Shift |
+| `alt` | Require Alt |
+
+### Validation Rules
+
+- **Modifier required**: Single character keys (a–z, 0–9, etc.) require Ctrl/Cmd or Alt. Shift alone is not sufficient. Function keys (F1–F12) can be used alone.
+- **Built-in conflict protection**: Key combinations reserved by the application (Ctrl+Shift+F for search, Ctrl+P for Quick Open) cannot be assigned.
+- **Duplicate detection**: The same key combination cannot be assigned to multiple shortcuts.
+
+### Execution Flow
+
+1. User presses configured shortcut key in the IDE
+2. `_index.tsx` keydown handler matches the binding
+3. If the target workflow is not already active, `handleSelectFile()` navigates to it
+4. A `shortcut-execute-workflow` CustomEvent is dispatched with the target `fileId`
+5. `WorkflowPropsPanel` receives the event:
+   - If workflow is loaded and ready → executes immediately via `startExecution()`
+   - If workflow is still loading (just navigated) → defers execution via `pendingExecutionRef`, which fires once the workflow finishes loading
+
+### Settings Storage
+
+Shortcut bindings are stored in `settings.json` on Drive as the `shortcutKeys` field (array of `ShortcutKeyBinding`). Saved via the `saveShortcuts` action in the Settings route.
+
+---
+
 ## Key Files
 
 | File | Description |
@@ -414,3 +455,5 @@ Renders different UI based on prompt type:
 | `app/components/execution/ExecutionPanel.tsx` | Execution log UI |
 | `app/components/execution/PromptModal.tsx` | Interactive prompt modals |
 | `app/components/ide/AIWorkflowDialog.tsx` | AI generation dialog UI |
+| `app/components/settings/ShortcutsTab.tsx` | Shortcut key settings UI |
+| `app/types/settings.ts` | `ShortcutKeyBinding` type, validation helpers (`isBuiltinShortcut`, `isValidShortcutKey`) |

@@ -12,6 +12,7 @@ YAML パース、ハンドラベースのノードディスパッチ、SSE ス�
 - **変数テンプレート**: `{{var}}` 構文でネストアクセス、配列インデックス、JSON エスケープ対応
 - **AI ワークフロー生成**: 自然言語から Gemini でワークフローを生成・修正
 - **実行履歴**: ステップ単位の詳細を含む実行記録を Google Drive に保存
+- **ショートカットキー実行**: カスタムキーボードショートカットで特定ワークフローを実行
 
 ---
 
@@ -397,6 +398,46 @@ IDE 右サイドバーのメイン実行ビュー:
 
 ---
 
+## ショートカットキー実行
+
+**設定 > ショートカット** でカスタムキーボードショートカットを設定し、特定のワークフローを実行できる。
+
+### 設定項目
+
+各ショートカットバインディングの構成:
+
+| フィールド | 説明 |
+|-----------|------|
+| `action` | アクション種別（現在は `executeWorkflow` のみ） |
+| `targetFileId` | 対象ワークフローの Drive ファイル ID |
+| `targetFileName` | 対象ワークフローの表示名 |
+| `key` | 押下するキー（例: `F5`, `e`, `r`） |
+| `ctrlOrMeta` | Ctrl（Win/Linux）/ Cmd（Mac）を要求 |
+| `shift` | Shift を要求 |
+| `alt` | Alt を要求 |
+
+### バリデーションルール
+
+- **修飾キー必須**: 単一文字キー（a〜z, 0〜9 等）には Ctrl/Cmd または Alt が必要。Shift のみでは不十分。ファンクションキー（F1〜F12）は単独で使用可能。
+- **ビルトイン衝突防止**: アプリケーションで予約されているキーの組み合わせ（検索の Ctrl+Shift+F、Quick Open の Ctrl+P）は割り当て不可。
+- **重複検出**: 同じキーの組み合わせを複数のショートカットに割り当てることはできない。
+
+### 実行フロー
+
+1. ユーザーが IDE で設定済みショートカットキーを押下
+2. `_index.tsx` の keydown ハンドラがバインディングにマッチ
+3. 対象ワークフローがアクティブでない場合、`handleSelectFile()` でナビゲーション
+4. `shortcut-execute-workflow` CustomEvent を対象 `fileId` 付きでディスパッチ
+5. `WorkflowPropsPanel` がイベントを受信:
+   - ワークフローが読み込み済み → `startExecution()` で即時実行
+   - ワークフローが読み込み中（ナビゲーション直後）→ `pendingExecutionRef` で遅延実行し、ワークフロー読み込み完了後に発火
+
+### 設定の保存先
+
+ショートカットバインディングは Drive の `settings.json` 内の `shortcutKeys` フィールド（`ShortcutKeyBinding` の配列）に保存される。Settings ルートの `saveShortcuts` アクションで保存。
+
+---
+
 ## Key Files
 
 | File | Description |
@@ -414,3 +455,5 @@ IDE 右サイドバーのメイン実行ビュー:
 | `app/components/execution/ExecutionPanel.tsx` | 実行ログ UI |
 | `app/components/execution/PromptModal.tsx` | インタラクティブプロンプトモーダル |
 | `app/components/ide/AIWorkflowDialog.tsx` | AI 生成ダイアログ UI |
+| `app/components/settings/ShortcutsTab.tsx` | ショートカットキー設定 UI |
+| `app/types/settings.ts` | `ShortcutKeyBinding` 型、バリデーションヘルパー（`isBuiltinShortcut`, `isValidShortcutKey`） |

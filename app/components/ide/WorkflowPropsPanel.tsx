@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   GitBranch,
   Plus,
@@ -452,6 +452,40 @@ function WorkflowNodeListView({
       ]);
     }
   }, [executionId, fileId]);
+
+  // Listen for shortcut-triggered execution
+  const pendingExecutionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const targetFileId = (e as CustomEvent).detail?.fileId as string | undefined;
+      // If this event targets a different file, ignore
+      if (targetFileId && targetFileId !== fileId) return;
+      if (executionStatus !== "running" && executionStatus !== "waiting-prompt" && workflow && !hasLocalChanges) {
+        startExecution();
+      } else if (!workflow) {
+        // Workflow not loaded yet (just navigated) — defer execution
+        pendingExecutionRef.current = fileId;
+      }
+    };
+    window.addEventListener("shortcut-execute-workflow", handler);
+    return () => window.removeEventListener("shortcut-execute-workflow", handler);
+  }, [executionStatus, workflow, hasLocalChanges, startExecution, fileId]);
+
+  // Deferred execution: run when workflow finishes loading after a shortcut navigation
+  useEffect(() => {
+    if (pendingExecutionRef.current !== fileId) return;
+    if (!workflow) return;
+    // Clear immediately so it won't re-fire on subsequent state changes
+    pendingExecutionRef.current = null;
+    if (
+      !hasLocalChanges &&
+      executionStatus !== "running" &&
+      executionStatus !== "waiting-prompt"
+    ) {
+      startExecution();
+    }
+  }, [workflow, fileId, hasLocalChanges, executionStatus, startExecution]);
 
   const handlePromptResponse = useCallback(
     async (value: string | null) => {

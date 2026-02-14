@@ -711,20 +711,52 @@ function IDEContent({
   }, [settings.ragEnabled, settings.ragSettings]);
 
   // Keyboard shortcut: Ctrl+Shift+F / Cmd+Shift+F to open search, Ctrl+P / Cmd+P to quick open
+  // Also handles user-configured shortcut keys from settings
+  const shortcutKeys = settings.shortcutKeys ?? [];
+  const activeFileIdRef = useRef(activeFileId);
+  activeFileIdRef.current = activeFileId;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
         e.preventDefault();
         setShowSearch(true);
+        return;
       }
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "P" || e.key === "p")) {
         e.preventDefault();
         setShowQuickOpen(true);
+        return;
+      }
+
+      // User-configured shortcut keys
+      for (const binding of shortcutKeys) {
+        if (!binding.key) continue;
+        const keyMatch = e.key.toLowerCase() === binding.key.toLowerCase();
+        const ctrlMatch = binding.ctrlOrMeta ? (e.ctrlKey || e.metaKey) : !(e.ctrlKey || e.metaKey);
+        const shiftMatch = binding.shift ? e.shiftKey : !e.shiftKey;
+        const altMatch = binding.alt ? e.altKey : !e.altKey;
+
+        if (keyMatch && ctrlMatch && shiftMatch && altMatch) {
+          e.preventDefault();
+          if (binding.action === "executeWorkflow") {
+            const targetId = binding.targetFileId;
+            const targetName = binding.targetFileName;
+            // Force-open the target workflow if it's not the active file
+            if (targetId && targetName && activeFileIdRef.current !== targetId) {
+              handleSelectFile(targetId, targetName, "text/yaml");
+            }
+            window.dispatchEvent(
+              new CustomEvent("shortcut-execute-workflow", {
+                detail: { fileId: targetId },
+              })
+            );
+          }
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [shortcutKeys, handleSelectFile]);
 
   // Mobile view state: which panel is shown full-screen
   const [mobileView, setMobileView] = useState<MobileView>("editor");

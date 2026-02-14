@@ -401,6 +401,24 @@ export interface TranslationStrings {
   "sync.openFile": string;
   "sync.noDiff": string;
 
+  // Shortcuts tab
+  "settings.tab.shortcuts": string;
+  "settings.shortcuts.noShortcuts": string;
+  "settings.shortcuts.addShortcut": string;
+  "settings.shortcuts.action": string;
+  "settings.shortcuts.key": string;
+  "settings.shortcuts.ctrlOrMeta": string;
+  "settings.shortcuts.shift": string;
+  "settings.shortcuts.alt": string;
+  "settings.shortcuts.pressKey": string;
+  "settings.shortcuts.actionExecuteWorkflow": string;
+  "settings.shortcuts.duplicate": string;
+  "settings.shortcuts.requireModifier": string;
+  "settings.shortcuts.builtinConflict": string;
+  "settings.shortcuts.targetWorkflow": string;
+  "settings.shortcuts.selectWorkflow": string;
+  "settings.shortcuts.save": string;
+
   // Offline
   "offline.indicator": string;
   "offline.banner": string;
@@ -806,6 +824,24 @@ const en: TranslationStrings = {
   "sync.openFile": "Open",
   "sync.noDiff": "Binary file",
 
+  // Shortcuts tab
+  "settings.tab.shortcuts": "Shortcuts",
+  "settings.shortcuts.noShortcuts": "No shortcut keys configured.",
+  "settings.shortcuts.addShortcut": "Add Shortcut",
+  "settings.shortcuts.action": "Action",
+  "settings.shortcuts.key": "Key",
+  "settings.shortcuts.ctrlOrMeta": "Ctrl / Cmd",
+  "settings.shortcuts.shift": "Shift",
+  "settings.shortcuts.alt": "Alt",
+  "settings.shortcuts.pressKey": "Press a key...",
+  "settings.shortcuts.actionExecuteWorkflow": "Execute Workflow",
+  "settings.shortcuts.duplicate": "This key combination is already assigned.",
+  "settings.shortcuts.requireModifier": "Ctrl/Cmd or Alt modifier is required. Shift alone is not sufficient. Function keys (F1–F12) can be used alone.",
+  "settings.shortcuts.builtinConflict": "This key combination is reserved by the application.",
+  "settings.shortcuts.targetWorkflow": "Target Workflow",
+  "settings.shortcuts.selectWorkflow": "Select a workflow…",
+  "settings.shortcuts.save": "Save Shortcut Settings",
+
   // Offline
   "offline.indicator": "Offline",
   "offline.banner": "You are in offline mode. Some features are unavailable.",
@@ -1210,6 +1246,24 @@ const ja: TranslationStrings = {
   "sync.pullDirection": "ドライブ \u2192 ローカル",
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
+
+  // Shortcuts tab
+  "settings.tab.shortcuts": "ショートカット",
+  "settings.shortcuts.noShortcuts": "ショートカットキーは設定されていません。",
+  "settings.shortcuts.addShortcut": "ショートカットを追加",
+  "settings.shortcuts.action": "アクション",
+  "settings.shortcuts.key": "キー",
+  "settings.shortcuts.ctrlOrMeta": "Ctrl / Cmd",
+  "settings.shortcuts.shift": "Shift",
+  "settings.shortcuts.alt": "Alt",
+  "settings.shortcuts.pressKey": "キーを押してください...",
+  "settings.shortcuts.actionExecuteWorkflow": "ワークフロー実行",
+  "settings.shortcuts.duplicate": "このキーの組み合わせは既に割り当てられています。",
+  "settings.shortcuts.requireModifier": "Ctrl/Cmd または Alt 修飾キーが必要です。Shift のみでは不十分です。ファンクションキー（F1〜F12）は単独で使用できます。",
+  "settings.shortcuts.builtinConflict": "このキーの組み合わせはアプリケーションで予約されています。",
+  "settings.shortcuts.targetWorkflow": "対象ワークフロー",
+  "settings.shortcuts.selectWorkflow": "ワークフローを選択…",
+  "settings.shortcuts.save": "ショートカット設定を保存",
 
   // Offline
   "offline.indicator": "オフライン",

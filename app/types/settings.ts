@@ -478,6 +478,55 @@ export interface SlashCommand {
   enabledMcpServers?: string[] | null;
 }
 
+// Shortcut key actions
+export type ShortcutAction = "executeWorkflow";
+
+export const SHORTCUT_ACTIONS: { value: ShortcutAction; labelKey: string }[] = [
+  { value: "executeWorkflow", labelKey: "settings.shortcuts.actionExecuteWorkflow" },
+];
+
+// Shortcut key binding
+export interface ShortcutKeyBinding {
+  id: string;
+  action: ShortcutAction;
+  key: string;        // e.g. "F5", "e", "r"
+  ctrlOrMeta: boolean; // Ctrl (Win/Linux) / Cmd (Mac)
+  shift: boolean;
+  alt: boolean;
+  targetFileId?: string;   // For executeWorkflow: which workflow to run
+  targetFileName?: string; // For executeWorkflow: display name
+}
+
+// Built-in shortcuts that cannot be overridden
+export const BUILTIN_SHORTCUTS: { key: string; ctrlOrMeta: boolean; shift: boolean; alt: boolean }[] = [
+  { key: "f", ctrlOrMeta: true, shift: true, alt: false },  // Search
+  { key: "p", ctrlOrMeta: true, shift: false, alt: false },  // Quick Open
+];
+
+// Function keys that are allowed without modifiers
+const FUNCTION_KEY_RE = /^F([1-9]|1[0-2])$/;
+export function isFunctionKey(key: string): boolean {
+  return FUNCTION_KEY_RE.test(key);
+}
+
+export function isBuiltinShortcut(binding: { key: string; ctrlOrMeta: boolean; shift: boolean; alt: boolean }): boolean {
+  return BUILTIN_SHORTCUTS.some(
+    (b) =>
+      b.key.toLowerCase() === binding.key.toLowerCase() &&
+      b.ctrlOrMeta === binding.ctrlOrMeta &&
+      b.shift === binding.shift &&
+      b.alt === binding.alt
+  );
+}
+
+export function isValidShortcutKey(binding: { key: string; ctrlOrMeta: boolean; shift: boolean; alt: boolean }): boolean {
+  if (!binding.key) return true; // Not yet assigned
+  // Function keys are always allowed
+  if (isFunctionKey(binding.key)) return true;
+  // Shift alone is not enough — require Ctrl/Cmd or Alt
+  return binding.ctrlOrMeta || binding.alt;
+}
+
 // User settings (stored in Drive as settings.json)
 export interface UserSettings {
   apiPlan: ApiPlan;
@@ -502,6 +551,7 @@ export interface UserSettings {
   syncConflictFolder: string;
   encryptedApiKey: string;
   apiKeySalt: string;
+  shortcutKeys: ShortcutKeyBinding[];
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -527,4 +577,5 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   syncConflictFolder: "sync_conflicts",
   encryptedApiKey: "",
   apiKeySalt: "",
+  shortcutKeys: [],
 };
