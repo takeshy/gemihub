@@ -1444,6 +1444,10 @@ export function DriveFileTree({
           } else {
             await fetchAndCacheTree();
           }
+          // Update active file name if this was the active file
+          if (activeFileId === item.id) {
+            onSelectFile(item.id, newBaseName.trim(), item.mimeType);
+          }
         }
       } catch {
         // ignore
