@@ -32,7 +32,7 @@ GemiHub uses the **Streamable HTTP transport** variant of MCP.
 ```
 1. initialize      → Server returns capabilities + serverInfo
 2. notifications/initialized  → Client confirms init (notification, no response)
-3. tools/list      → Server returns available tools
+3. tools/list      → Server returns available tools (pagination via cursor supported)
 4. tools/call      → Execute a tool (repeatable)
 5. resources/read  → Fetch UI resource (optional)
 6. DELETE          → Close session
@@ -90,6 +90,7 @@ All OAuth discovery URLs are validated for SSRF protection before fetching.
 3. User authorizes in popup
 4. Callback exchanges authorization code for tokens via `POST /api/settings/mcp-oauth-token`
 5. Tokens stored in server config (`oauthTokens`)
+6. Mobile fallback: If popup is blocked, store pending state in `sessionStorage`, redirect to authorization URL in same tab, and resume on callback return via `/settings?mcp-oauth-return=1`
 
 ### Token Management
 
@@ -116,7 +117,7 @@ MCP tools are exposed to Gemini with prefixed names:
 mcp_{sanitizedServerId}_{sanitizedToolName}
 ```
 
-`sanitizedServerId` is derived from each server's unique ID (or normalized/sanitized fallback when migrating legacy configs). Sanitization: lowercase, replace non-alphanumeric with `_`, strip leading/trailing `_`.
+`sanitizedServerId` is derived from each server's unique ID (or normalized/sanitized fallback when migrating legacy configs). Sanitization: lowercase, replace non-alphanumeric with `_`, collapse consecutive `_` into one, strip leading/trailing `_`.
 
 Example: Server ID `brave_search_ab12cd`, tool `web_search` → `mcp_brave_search_ab12cd_web_search`
 
@@ -138,6 +139,7 @@ Gemini calls mcp_server_tool(args)
 
 - MCP tools are disabled when **Web Search** mode is active
 - MCP tools are disabled when **Gemma models** are selected (no function calling support)
+- MCP tools are disabled when **Flash-Lite models** are selected with a **custom RAG** setting
 - MCP tool dropdown is locked when drive tool mode is locked
 
 ---
@@ -207,14 +209,14 @@ The `mcp` workflow node calls an MCP server tool directly.
 
 ### Workflow Execution
 
-The workflow MCP handler creates a dedicated `McpClient` per execution (not cached):
+When a matching server config is found in settings, the handler uses a cached client via `getOrCreateClient()` (with OAuth support). Otherwise, a dedicated `McpClient` is created per execution:
 
 1. Initialize MCP session (handshake + `notifications/initialized`)
 2. Call `tools/call` via `McpClient` (60s timeout)
 3. Extract text content from result
 4. If `_meta.ui.resourceUri` present, call `resources/read` (30s timeout)
 5. Return `McpAppInfo` for display in execution log
-6. Close session
+6. Close session (only for non-shared clients; cached clients remain open)
 
 ### Command Node
 
@@ -235,7 +237,7 @@ All MCP server URLs are validated before use. Blocked targets:
 
 | Category | Blocked |
 |----------|---------|
-| Loopback | `127.*`, `::1`, `localhost` |
+| Loopback | `127.*`, `::1`, `::`, `::0`, `localhost` |
 | Default route | `0.*` |
 | Private networks (IPv4) | `10.*`, `172.16-31.*`, `192.168.*` |
 | Private networks (IPv6) | `fc00:*`, `fd*` |
@@ -287,7 +289,7 @@ Chat / Workflow                │
 | `app/routes/api.settings.mcp-oauth-token.tsx` | Exchange authorization code for OAuth tokens (PKCE) |
 | `app/routes/auth.mcp-oauth-callback.tsx` | OAuth callback page — receives authorization code from popup |
 | `app/components/chat/McpAppRenderer.tsx` | MCP App rendering — iframe sandbox, postMessage, maximize |
-| `app/engine/handlers/mcp.ts` | Workflow MCP node handler — dedicated McpClient per execution |
+| `app/engine/handlers/mcp.ts` | Workflow MCP node handler — uses cached or dedicated McpClient per execution |
 
 ### API Routes
 

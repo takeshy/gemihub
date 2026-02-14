@@ -35,6 +35,7 @@ interface McpInitializeResult {
 
 interface McpToolsListResult {
   tools: McpToolInfo[];
+  nextCursor?: string;
 }
 
 interface McpToolCallResult {
@@ -258,15 +259,29 @@ export class McpClient {
   }
 
   /**
-   * List available tools
+   * List available tools (follows pagination via nextCursor)
    */
   async listTools(abortSignal?: AbortSignal): Promise<McpToolInfo[]> {
     if (!this.initialized) {
       await this.initialize(abortSignal);
     }
 
-    const result = (await this.sendRequest("tools/list", undefined, undefined, abortSignal)) as McpToolsListResult;
-    return result.tools || [];
+    const allTools: McpToolInfo[] = [];
+    let cursor: string | undefined;
+    const maxPages = 100;
+    let page = 0;
+
+    do {
+      const params: Record<string, unknown> | undefined = cursor ? { cursor } : undefined;
+      const result = (await this.sendRequest("tools/list", params, undefined, abortSignal)) as McpToolsListResult;
+      if (result.tools) {
+        allTools.push(...result.tools);
+      }
+      cursor = result.nextCursor;
+      page++;
+    } while (cursor && page < maxPages);
+
+    return allTools;
   }
 
   /**

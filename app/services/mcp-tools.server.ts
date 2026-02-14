@@ -20,7 +20,7 @@ const mcpClients = new Map<string, McpClient>();
  * Matches obsidian-gemini-helper: lowercase, replace non-alphanumeric with _, strip leading/trailing _.
  */
 function sanitizeMcpName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "");
+  return name.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 function getClientKey(config: McpServerConfig): string {

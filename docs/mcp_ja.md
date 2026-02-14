@@ -32,7 +32,7 @@ GemiHub は MCP の **Streamable HTTP トランスポート** を使用します
 ```
 1. initialize      → サーバーが capabilities + serverInfo を返す
 2. notifications/initialized  → クライアントが初期化確認（通知、レスポンスなし）
-3. tools/list      → サーバーが利用可能なツールを返す
+3. tools/list      → サーバーが利用可能なツールを返す（cursor によるページネーション対応）
 4. tools/call      → ツールを実行（繰り返し可能）
 5. resources/read  → UI リソースを取得（オプション）
 6. DELETE          → セッションを終了
@@ -90,6 +90,7 @@ RFC 9728 に基づく OAuth 2.0 認証が必要なサーバーをサポートし
 3. ユーザーがポップアップで認可
 4. コールバックが `POST /api/settings/mcp-oauth-token` 経由で認可コードをトークンに交換
 5. トークンをサーバー設定に保存（`oauthTokens`）
+6. モバイルフォールバック: ポップアップがブロックされた場合、`sessionStorage` に保留状態を保存し、同じタブで認可 URL にリダイレクトし、コールバックから `/settings?mcp-oauth-return=1` 経由で処理を再開
 
 ### トークン管理
 
@@ -116,7 +117,7 @@ MCP ツールはプレフィックス付きの名前で Gemini に公開され�
 mcp_{sanitizedServerId}_{sanitizedToolName}
 ```
 
-`sanitizedServerId` は各サーバーの一意 ID（または移行時の正規化/サニタイズ済みフォールバック）から生成されます。サニタイズ: 小文字化、英数字以外を `_` に置換、先頭/末尾の `_` を除去。
+`sanitizedServerId` は各サーバーの一意 ID（または移行時の正規化/サニタイズ済みフォールバック）から生成されます。サニタイズ: 小文字化、英数字以外を `_` に置換、連続する `_` を1つに圧縮、先頭/末尾の `_` を除去。
 
 例: サーバー ID `brave_search_ab12cd`、ツール `web_search` → `mcp_brave_search_ab12cd_web_search`
 
@@ -138,6 +139,7 @@ Gemini が mcp_server_tool(args) を呼び出す
 
 - **Web Search** モードがアクティブな場合、MCP ツールは無効
 - **Gemma モデル** が選択されている場合、MCP ツールは無効（Function Calling 非対応）
+- **Flash-Lite モデル** で **カスタム RAG** 設定時、MCP ツールは無効
 - Drive ツールモードがロックされている場合、MCP ツールドロップダウンもロック
 
 ---
@@ -207,14 +209,14 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 
 ### ワークフロー実行
 
-ワークフローの MCP ハンドラーは実行ごとに専用の `McpClient` を作成します（キャッシュなし）：
+設定に一致するサーバー設定がある場合、ハンドラーは `getOrCreateClient()` 経由でキャッシュ済みクライアントを使用します（OAuth サポート付き）。一致しない場合は実行ごとに専用の `McpClient` を作成します：
 
 1. MCP セッションを初期化（ハンドシェイク + `notifications/initialized`）
 2. `McpClient` 経由で `tools/call` を呼び出し（60秒タイムアウト）
 3. 結果からテキストコンテンツを抽出
 4. `_meta.ui.resourceUri` がある場合、`resources/read` を呼び出し（30秒タイムアウト）
 5. 実行ログ表示用に `McpAppInfo` を返す
-6. セッションを終了
+6. セッションを終了（非共有クライアントのみ。キャッシュ済みクライアントは維持）
 
 ### Command ノード
 
@@ -235,7 +237,7 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 
 | カテゴリ | ブロック対象 |
 |---------|------------|
-| ループバック | `127.*`、`::1`、`localhost` |
+| ループバック | `127.*`、`::1`、`::`、`::0`、`localhost` |
 | デフォルトルート | `0.*` |
 | プライベートネットワーク (IPv4) | `10.*`、`172.16-31.*`、`192.168.*` |
 | プライベートネットワーク (IPv6) | `fc00:*`、`fd*` |
@@ -287,7 +289,7 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 | `app/routes/api.settings.mcp-oauth-token.tsx` | OAuth 認可コードをトークンに交換（PKCE） |
 | `app/routes/auth.mcp-oauth-callback.tsx` | OAuth コールバックページ — ポップアップから認可コードを受信 |
 | `app/components/chat/McpAppRenderer.tsx` | MCP App レンダリング — iframe サンドボックス、postMessage、最大化 |
-| `app/engine/handlers/mcp.ts` | ワークフロー MCP ノードハンドラー — 実行ごとに専用 McpClient を使用 |
+| `app/engine/handlers/mcp.ts` | ワークフロー MCP ノードハンドラー — キャッシュ済みまたは専用 McpClient を使用 |
 
 ### API ルート
 
