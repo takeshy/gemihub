@@ -34,9 +34,6 @@ function ShortcutsEn() {
         <p>
           You can assign keyboard shortcuts to execute specific workflows. Configure them in <strong>Settings &gt; Shortcuts</strong>.
         </p>
-        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/workflow_shortcut.png" alt="Workflow shortcut execution" className="w-full" loading="lazy" />
-        </figure>
 
         <h3>Adding a Shortcut</h3>
         <ul>
@@ -55,6 +52,9 @@ function ShortcutsEn() {
         </ul>
 
         <h3>Background Execution</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/workflow_shortcut_background.jpg" alt="Background workflow execution" className="w-full" loading="lazy" />
+        </figure>
         <p>
           When <strong>Background</strong> is enabled, the workflow runs without switching to the workflow panel. Progress and completion are shown in the status bar. If the workflow has a file picker dialog, the currently open file is automatically selected.
         </p>
@@ -91,9 +91,6 @@ function ShortcutsJa() {
         <p>
           特定のワークフローの実行にキーボードショートカットを割り当てることができます。<strong>設定 &gt; ショートカット</strong>で設定します。
         </p>
-        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/workflow_shortcut.png" alt="ワークフローショートカット実行" className="w-full" loading="lazy" />
-        </figure>
 
         <h3>ショートカットの追加</h3>
         <ul>
@@ -112,6 +109,9 @@ function ShortcutsJa() {
         </ul>
 
         <h3>バックグラウンド実行</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/workflow_shortcut_background.jpg" alt="バックグラウンドワークフロー実行" className="w-full" loading="lazy" />
+        </figure>
         <p>
           <strong>バックグラウンド</strong>が有効な場合、ワークフローパネルに切り替えずに実行されます。進捗と完了はステータスバーに表示されます。ワークフローにファイルピッカーダイアログがある場合、現在開いているファイルが自動的に選択されます。
         </p>
