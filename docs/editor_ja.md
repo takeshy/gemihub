@@ -159,13 +159,26 @@ Drive への反映は手動の Push 操作で行う。
 
 外部での一時的な編集を可能にする仕組み。
 
+### アーキテクチャ
+
+- ファイル内容は Google Drive の `__TEMP__` フォルダに保存される（ローカルファイルシステムは使用しない）
+- 編集 URL には暗号化トークン（AES-256-GCM、`SESSION_SECRET` 派生キー）が埋め込まれ、`{ accessToken, rootFolderId, fileId, fileName, createdAt }` を含む
+- URL 生成時に access token を再発行し、GET/PUT ともに **1 時間** の有効期限となる
+- マルチサーバー対応: サーバーローカルの状態を持たない
+
 ### Temp Upload
 
 1. エディタの Temp Upload ボタンをクリック
-2. `/api/drive/temp` に現在のファイル内容をアップロード
+2. `/api/drive/temp` に現在のファイル内容をアップロード（Drive `__TEMP__` フォルダに保存）
 3. 共有 URL を生成するかどうかの確認ダイアログが表示される
-4. 「はい」の場合、一時編集 URL が生成されクリップボードにコピーされる
+4. 「はい」の場合、サーバーで access token を再発行（フル 1 時間）し、認証情報を暗号化した URL を生成してクリップボードにコピー
 5. 「いいえ」の場合、「Uploaded」メッセージのみ表示される（URL は生成されない）
+
+### 編集 URL による外部アクセス
+
+- **GET** `/api/temp-edit/:token/:fileName` — Drive `__TEMP__` から読み取り、適切な Content-Type でコンテンツを返す
+- **PUT** `/api/temp-edit/:token/:fileName` — リクエストボディを Drive `__TEMP__` ファイルに書き戻す
+- 両メソッドとも暗号化トークンの検証と 1 時間の有効期限チェックを行う（期限切れの場合 410 Gone を返す）
 
 ### Temp Download
 

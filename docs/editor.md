@@ -165,13 +165,26 @@ Compare with any file to view differences.
 
 Enables temporary editing from external tools.
 
+### Architecture
+
+- File content is stored in the Google Drive `__TEMP__` folder (no local filesystem storage)
+- Edit URLs contain an encrypted token (AES-256-GCM, `SESSION_SECRET`-derived key) embedding `{ accessToken, rootFolderId, fileId, fileName, createdAt }`
+- A fresh access token is issued at URL generation time, giving the URL a **1-hour** validity window for both GET and PUT
+- Multi-server compatible: no server-local state is required
+
 ### Temp Upload
 
 1. Click the Temp Upload button in the editor
-2. Upload current file content to `/api/drive/temp`
+2. Upload current file content to `/api/drive/temp` (saves to Drive `__TEMP__` folder)
 3. A confirm dialog asks whether to generate a shareable URL
-4. If confirmed, a temporary edit URL is generated and copied to clipboard
+4. If confirmed, the server refreshes the access token (full 1 hour), encrypts credentials into the URL, and copies it to clipboard
 5. If declined, only an "Uploaded" message is shown (no URL generated)
+
+### External Access via Edit URL
+
+- **GET** `/api/temp-edit/:token/:fileName` — reads from Drive `__TEMP__` and returns the content with appropriate Content-Type
+- **PUT** `/api/temp-edit/:token/:fileName` — writes the request body back to the Drive `__TEMP__` file
+- Both methods validate the encrypted token and check the 1-hour expiry (returns 410 Gone if expired)
 
 ### Temp Download
 

@@ -1,14 +1,9 @@
-import type { Route } from "./+types/api.temp-edit.$uuid.$fileName";
-import {
-  readTempEditFile,
-  updateTempEditContent,
-} from "~/services/temp-edit-file.server";
+import type { Route } from "./+types/api.temp-edit.$token.$fileName";
+import { decryptTempEditToken } from "~/services/temp-edit-token.server";
+import { findTempFile, saveTempFile } from "~/services/temp-file.server";
 
-const GET_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
-const PUT_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day
+const EXPIRY_MS = 60 * 60 * 1000; // 1 hour (matches access token lifetime)
 const MAX_PUT_BODY = 10 * 1024 * 1024; // 10 MB
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function guessContentType(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase();
@@ -60,30 +55,43 @@ const ERROR_HEADERS = {
   "Content-Security-Policy": "default-src 'none'; sandbox",
 };
 
+function decryptOrNull(token: string) {
+  try {
+    return decryptTempEditToken(token);
+  } catch {
+    return null;
+  }
+}
+
 export async function loader({ params }: Route.LoaderArgs) {
-  const { uuid, fileName } = params;
-  if (!uuid || !fileName || !UUID_RE.test(uuid)) {
+  const { token, fileName } = params;
+  if (!token || !fileName) {
     return new Response("Bad request", { status: 400 });
   }
 
-  const entry = readTempEditFile(uuid);
-  if (!entry) {
+  const data = decryptOrNull(token);
+  if (!data) {
+    return new Response("Bad request", { status: 400, headers: ERROR_HEADERS });
+  }
+
+  if (data.fileName !== fileName) {
     return new Response("Not found", { status: 404, headers: ERROR_HEADERS });
   }
 
-  // Validate fileName matches stored entry
-  if (entry.fileName !== fileName) {
-    return new Response("Not found", { status: 404, headers: ERROR_HEADERS });
-  }
-
-  const age = Date.now() - new Date(entry.createdAt).getTime();
-  if (age > GET_EXPIRY_MS) {
-    return new Response("Gone — edit URL expired (30 min limit for GET)", {
+  const age = Date.now() - new Date(data.createdAt).getTime();
+  if (age > EXPIRY_MS) {
+    return new Response("Gone — edit URL expired (1 hour limit)", {
       status: 410,
       headers: ERROR_HEADERS,
     });
   }
 
+  const tempFile = await findTempFile(data.accessToken, data.rootFolderId, data.fileName);
+  if (!tempFile) {
+    return new Response("Not found", { status: 404, headers: ERROR_HEADERS });
+  }
+
+  const content = tempFile.payload.content;
   const contentType = guessContentType(fileName);
   const isBinary = !contentType.startsWith("text/") &&
     !contentType.startsWith("application/json") &&
@@ -91,10 +99,9 @@ export async function loader({ params }: Route.LoaderArgs) {
     !contentType.startsWith("application/xml") &&
     !contentType.startsWith("image/svg+xml");
 
-  if (isBinary && entry.content) {
-    // Binary content is stored as base64 — decode to raw bytes
+  if (isBinary && content) {
     try {
-      const bytes = Buffer.from(entry.content, "base64");
+      const bytes = Buffer.from(content, "base64");
       return new Response(bytes, {
         headers: { "Content-Type": contentType, ...getSafeHeaders(contentType) },
       });
@@ -103,7 +110,7 @@ export async function loader({ params }: Route.LoaderArgs) {
     }
   }
 
-  return new Response(entry.content, {
+  return new Response(content, {
     headers: { "Content-Type": contentType, ...getSafeHeaders(contentType) },
   });
 }
@@ -113,9 +120,23 @@ export async function action({ request, params }: Route.ActionArgs) {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const { uuid, fileName } = params;
-  if (!uuid || !fileName || !UUID_RE.test(uuid)) {
+  const { token, fileName } = params;
+  if (!token || !fileName) {
     return new Response("Bad request", { status: 400 });
+  }
+
+  const data = decryptOrNull(token);
+  if (!data) {
+    return new Response("Bad request", { status: 400 });
+  }
+
+  if (data.fileName !== fileName) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  const age = Date.now() - new Date(data.createdAt).getTime();
+  if (age > EXPIRY_MS) {
+    return new Response("Gone — edit URL expired (1 hour limit)", { status: 410 });
   }
 
   // Body size check
@@ -124,27 +145,17 @@ export async function action({ request, params }: Route.ActionArgs) {
     return new Response("Payload too large", { status: 413 });
   }
 
-  const entry = readTempEditFile(uuid);
-  if (!entry) {
-    return new Response("Not found", { status: 404 });
-  }
-
-  // Validate fileName matches stored entry
-  if (entry.fileName !== fileName) {
-    return new Response("Not found", { status: 404 });
-  }
-
-  const age = Date.now() - new Date(entry.createdAt).getTime();
-  if (age > PUT_EXPIRY_MS) {
-    return new Response("Gone — edit URL expired (1 day limit for PUT)", {
-      status: 410,
-    });
-  }
-
   const content = await request.text();
   if (content.length > MAX_PUT_BODY) {
     return new Response("Payload too large", { status: 413 });
   }
-  updateTempEditContent(uuid, content);
+
+  // Update the Drive __TEMP__ file directly
+  await saveTempFile(data.accessToken, data.rootFolderId, data.fileName, {
+    fileId: data.fileId,
+    content,
+    savedAt: new Date().toISOString(),
+  });
+
   return new Response("OK", { status: 200 });
 }

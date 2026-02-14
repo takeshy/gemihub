@@ -40,7 +40,7 @@ export default [
   route("api/drive/upload", "routes/api.drive.upload.tsx"),
   route("api/drive/temp", "routes/api.drive.temp.tsx"),
   // Public (no auth) — temp edit URLs for local editor integration
-  route("api/temp-edit/:uuid/:fileName", "routes/api.temp-edit.$uuid.$fileName.tsx"),
+  route("api/temp-edit/:token/:fileName", "routes/api.temp-edit.$token.$fileName.tsx"),
   // Public (no auth) — serves published Drive files with correct Content-Type
   route("public/file/:fileId/:fileName", "routes/public.file.$fileId.$fileName.tsx"),
   route("api/plugins", "routes/api.plugins.tsx"),

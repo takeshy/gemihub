@@ -25,8 +25,8 @@ export async function performTempUpload(opts: {
       body: JSON.stringify({ action: "generateEditUrl", fileName, fileId, content }),
     });
     if (!res.ok) throw new Error("Temp upload failed");
-    const { uuid } = await res.json();
-    const editUrl = `${window.location.origin}/api/temp-edit/${uuid}/${encodeURIComponent(fileName)}`;
+    const { token } = await res.json();
+    const editUrl = `${window.location.origin}/api/temp-edit/${token}/${encodeURIComponent(fileName)}`;
     try { await navigator.clipboard.writeText(editUrl); } catch { /* clipboard unavailable */ }
     return t("contextMenu.tempUrlCopied");
   } else {

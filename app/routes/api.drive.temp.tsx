@@ -1,6 +1,6 @@
 import type { Route } from "./+types/api.drive.temp";
 import { requireAuth } from "~/services/session.server";
-import { getValidTokens } from "~/services/google-auth.server";
+import { getValidTokens, refreshAccessToken } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import {
   listTempFiles,
@@ -8,10 +8,8 @@ import {
   saveTempFile,
   applyAllTempFiles,
   deleteTempFiles,
-  addTempEditEntry,
-  removeTempEditEntry,
 } from "~/services/temp-file.server";
-import { saveTempEditFile, cleanupExpired, removeLocalTempEditsByFileName } from "~/services/temp-edit-file.server";
+import { encryptTempEditToken } from "~/services/temp-edit-token.server";
 import {
   upsertFileInMeta,
 } from "~/services/sync-meta.server";
@@ -127,13 +125,7 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
 
-      // Remove existing temp-edit entries for the same fileName (overwrite)
-      const removedUuids = removeLocalTempEditsByFileName(fileName);
-      for (const oldUuid of removedUuids) {
-        await removeTempEditEntry(validTokens.accessToken, validTokens.rootFolderId, oldUuid);
-      }
-
-      // Also save to Drive temp (combines save + generateEditUrl into one call)
+      // Save to Drive __TEMP__ folder
       await saveTempFile(
         validTokens.accessToken,
         validTokens.rootFolderId,
@@ -141,18 +133,18 @@ export async function action({ request }: Route.ActionArgs) {
         { fileId, content: content ?? "", savedAt: new Date().toISOString() }
       );
 
-      const uuid = crypto.randomUUID();
+      // Refresh access token for a full 1-hour window
+      const refreshed = await refreshAccessToken(validTokens.refreshToken);
       const createdAt = new Date().toISOString();
-      saveTempEditFile(uuid, fileId, fileName, content ?? "");
-      await addTempEditEntry(validTokens.accessToken, validTokens.rootFolderId, {
-        uuid,
+      const token = encryptTempEditToken({
+        accessToken: refreshed.accessToken,
+        rootFolderId: validTokens.rootFolderId,
         fileId,
         fileName,
         createdAt,
       });
-      // Clean up expired local files (async, non-blocking)
-      cleanupExpired().catch(() => {});
-      return Response.json({ uuid }, { headers: responseHeaders });
+
+      return Response.json({ token }, { headers: responseHeaders });
     }
 
     default:

@@ -49,7 +49,7 @@ export async function listTempFiles(
 
   const results: TempFileInfo[] = [];
   for (const file of files) {
-    // Skip internal meta files (e.g. _temp-edit-meta.json)
+    // Skip internal files (names starting with _)
     if (file.name.startsWith("_")) continue;
     try {
       const raw = await readFile(accessToken, file.id);
@@ -221,78 +221,4 @@ export async function deleteTempFiles(
       // ignore individual delete failures
     }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Temp Edit Meta — stored as _temp-edit-meta.json inside __TEMP__ folder
-// ---------------------------------------------------------------------------
-
-const TEMP_EDIT_META_NAME = "_temp-edit-meta.json";
-
-export interface TempEditMetaEntry {
-  uuid: string;
-  fileId: string;
-  fileName: string;
-  createdAt: string;
-}
-
-interface TempEditMeta {
-  entries: TempEditMetaEntry[];
-}
-
-export async function readTempEditMeta(
-  accessToken: string,
-  rootFolderId: string
-): Promise<TempEditMeta> {
-  const tempFolderId = await ensureTempFolder(accessToken, rootFolderId);
-  const files = await listFiles(accessToken, tempFolderId);
-  const match = files.find((f) => f.name === TEMP_EDIT_META_NAME);
-  if (!match) return { entries: [] };
-  try {
-    const raw = await readFile(accessToken, match.id);
-    return JSON.parse(raw) as TempEditMeta;
-  } catch {
-    return { entries: [] };
-  }
-}
-
-async function writeTempEditMeta(
-  accessToken: string,
-  rootFolderId: string,
-  meta: TempEditMeta
-): Promise<void> {
-  const tempFolderId = await ensureTempFolder(accessToken, rootFolderId);
-  const content = JSON.stringify(meta);
-  const files = await listFiles(accessToken, tempFolderId);
-  const existing = files.find((f) => f.name === TEMP_EDIT_META_NAME);
-  if (existing) {
-    await updateFile(accessToken, existing.id, content, "application/json");
-  } else {
-    await createFile(accessToken, TEMP_EDIT_META_NAME, content, tempFolderId, "application/json");
-  }
-}
-
-export async function addTempEditEntry(
-  accessToken: string,
-  rootFolderId: string,
-  entry: TempEditMetaEntry
-): Promise<void> {
-  const meta = await readTempEditMeta(accessToken, rootFolderId);
-  // Prune expired entries (older than 1 day) to prevent unbounded growth
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  meta.entries = meta.entries.filter(
-    (e) => new Date(e.createdAt).getTime() > cutoff
-  );
-  meta.entries.push(entry);
-  await writeTempEditMeta(accessToken, rootFolderId, meta);
-}
-
-export async function removeTempEditEntry(
-  accessToken: string,
-  rootFolderId: string,
-  uuid: string
-): Promise<void> {
-  const meta = await readTempEditMeta(accessToken, rootFolderId);
-  meta.entries = meta.entries.filter((e) => e.uuid !== uuid);
-  await writeTempEditMeta(accessToken, rootFolderId, meta);
 }

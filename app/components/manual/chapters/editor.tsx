@@ -75,6 +75,26 @@ function EditorEn() {
           <li><strong>Encrypted (.encrypted)</strong> — Password prompt, then decrypted content editor.</li>
         </ul>
 
+        <h2>Temp Edit (Temporary File Sharing)</h2>
+        <p>
+          Share files temporarily with external tools or other devices. File content is stored in the Google Drive <code>__TEMP__</code> folder.
+        </p>
+        <h3>Temp Upload</h3>
+        <ol>
+          <li>Click the <strong>Temp UP</strong> button in the editor toolbar (or right-click a file and select Temp UP).</li>
+          <li>A confirmation dialog asks whether to generate a shareable edit URL.</li>
+          <li>If confirmed, the server issues a fresh access token (valid for 1 hour), encrypts it into the URL, and copies it to the clipboard.</li>
+          <li>If declined, the file is uploaded to <code>__TEMP__</code> without generating a URL.</li>
+        </ol>
+        <h3>Edit URL</h3>
+        <p>
+          The generated URL (<code>/api/temp-edit/:token/:fileName</code>) allows unauthenticated GET/PUT access for 1 hour. The encrypted token contains the access credentials, so no login is required. External tools can read and write the file via this URL.
+        </p>
+        <h3>Temp Download</h3>
+        <p>
+          Click <strong>Temp Download</strong> to check the <code>__TEMP__</code> folder for changes and merge them into the editor.
+        </p>
+
         <h2>Context Menu Actions</h2>
         <p>Right-click a file in the file tree for additional actions:</p>
         <ul>
@@ -159,6 +179,26 @@ function EditorJa() {
           <li><strong>音声 / 動画</strong> — メディアプレーヤー。</li>
           <li><strong>暗号化 (.encrypted)</strong> — パスワード入力後、復号コンテンツのエディタ。</li>
         </ul>
+
+        <h2>Temp Edit（一時ファイル共有）</h2>
+        <p>
+          外部ツールや他のデバイスとファイルを一時的に共有できます。ファイル内容はGoogle Driveの<code>__TEMP__</code>フォルダに保存されます。
+        </p>
+        <h3>Temp Upload</h3>
+        <ol>
+          <li>エディタツールバーの<strong>一時UP</strong>ボタンをクリック（またはファイルを右クリックして一時UPを選択）。</li>
+          <li>共有用の編集URLを生成するかどうかの確認ダイアログが表示されます。</li>
+          <li>「はい」の場合、サーバーで新しいアクセストークン（有効期限1時間）を発行し、暗号化してURLに埋め込み、クリップボードにコピーされます。</li>
+          <li>「いいえ」の場合、URLを生成せずに<code>__TEMP__</code>にアップロードのみ行います。</li>
+        </ol>
+        <h3>編集URL</h3>
+        <p>
+          生成されたURL（<code>/api/temp-edit/:token/:fileName</code>）は、1時間の間、認証なしでGET/PUTアクセスが可能です。暗号化トークンにアクセス認証情報が含まれるため、ログインは不要です。外部ツールからこのURLでファイルの読み書きができます。
+        </p>
+        <h3>Temp Download</h3>
+        <p>
+          <strong>Temp Download</strong>をクリックすると、<code>__TEMP__</code>フォルダの変更を確認し、エディタにマージします。
+        </p>
 
         <h2>コンテキストメニューアクション</h2>
         <p>ファイルツリーでファイルを右クリックすると追加アクションが表示されます：</p>
