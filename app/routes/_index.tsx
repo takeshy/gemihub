@@ -153,6 +153,14 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
 }
 clientLoader.hydrate = true;
 
+export function HydrateFallback() {
+  return (
+    <div className="flex h-dvh items-center justify-center bg-gray-50 dark:bg-gray-950">
+      <img src="/icons/icon-192x192.png" alt="" width={48} height={48} className="animate-pulse rounded" />
+    </div>
+  );
+}
+
 export function invalidateIndexCache() {
   cachedLoaderData = null;
 }
