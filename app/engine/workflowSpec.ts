@@ -74,7 +74,7 @@ condition: "{{text}} contains keyword"
 #### variable
 Initialize a variable.
 - **name** (required): Variable name
-- **value** (required): Initial value (string or number)
+- **value** (optional): Initial value (string or number, default: empty string)
 
 #### set
 Update a variable with expression support.
@@ -116,7 +116,7 @@ Execute LLM prompt via Gemini API with optional tools.
 #### drive-file
 Write/create file on Drive.
 - **path** (required): File name/path (supports {{variables}})
-- **content** (required): Content to write (supports {{variables}})
+- **content** (optional): Content to write (supports {{variables}}, default: empty string)
 - **mode** (optional): "overwrite" (default), "append", "create"
 - **confirm** (optional): "true" (default) / "false" — show diff review dialog when updating existing files
 - **history** (optional): "true"/"false" — record edit in edit history
@@ -239,7 +239,7 @@ Prompt user for text input.
 
 #### prompt-file
 Prompt user to select a file from Drive. Returns file **content** as a string.
-- **default** (optional): Default prompt text
+- **title** (optional): Dialog title (supports {{variables}})
 - **saveTo** (optional): Variable for file content (string)
 - **saveFileTo** (optional): Variable for file metadata JSON: \`{path, basename, name, extension}\`
 
@@ -281,7 +281,7 @@ ${mcpSection}
 Sync a Drive file to a Gemini RAG (File Search) store.
 - **path** (required): File path on Drive
 - **ragSetting** (required): RAG setting name${ragSyncSection}
-- **saveTo** (optional): Variable for result JSON: \`{path, ragSetting, fileId, mode, syncedAt}\`
+- **saveTo** (optional): Variable for result JSON: \`{path, ragSetting, fileId, storeName, mode, syncedAt}\`
 
 ### Data Processing
 

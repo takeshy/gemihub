@@ -40,12 +40,18 @@ import yaml from "js-yaml";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { useI18n } from "~/i18n/context";
 import { getLocallyModifiedFileIds } from "~/services/indexeddb-cache";
+import { attachDriveFileHandlers } from "~/utils/drive-file-sse";
 
 interface WorkflowFile {
   id: string;
   name: string;
   mimeType: string;
   modifiedTime?: string;
+}
+
+interface PendingReconnect {
+  executionId: string;
+  promptData?: Record<string, unknown>;
 }
 
 interface WorkflowPropsPanelProps {
@@ -57,6 +63,8 @@ interface WorkflowPropsPanelProps {
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
+  pendingReconnect?: PendingReconnect | null;
+  onClearPendingReconnect?: () => void;
 }
 
 function isWorkflowFile(name: string | null): boolean {
@@ -73,6 +81,8 @@ export function WorkflowPropsPanel({
   onModifyWithAI,
   settings,
   refreshKey,
+  pendingReconnect,
+  onClearPendingReconnect,
 }: WorkflowPropsPanelProps) {
   if (isWorkflowFile(activeFileName) && activeFileId) {
     return (
@@ -85,6 +95,8 @@ export function WorkflowPropsPanel({
         onModifyWithAI={onModifyWithAI}
         settings={settings}
         refreshKey={refreshKey}
+        pendingReconnect={pendingReconnect}
+        onClearPendingReconnect={onClearPendingReconnect}
       />
     );
   }
@@ -129,6 +141,8 @@ function WorkflowNodeListView({
   onModifyWithAI,
   settings,
   refreshKey,
+  pendingReconnect,
+  onClearPendingReconnect,
 }: {
   fileId: string;
   fileName: string;
@@ -138,6 +152,8 @@ function WorkflowNodeListView({
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
+  pendingReconnect?: PendingReconnect | null;
+  onClearPendingReconnect?: () => void;
 }) {
   const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId, refreshKey, "PropsPanel");
 
@@ -408,6 +424,7 @@ function WorkflowNodeListView({
         setExecutionStatus("waiting-prompt");
         setPromptData(data);
       });
+      attachDriveFileHandlers(es);
       es.onerror = () => {
         if (es.readyState === EventSource.CLOSED) {
           setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
@@ -456,11 +473,75 @@ function WorkflowNodeListView({
   // Listen for shortcut-triggered execution
   const pendingExecutionRef = useRef<string | null>(null);
 
+  // Reconnect to an existing execution (e.g. silent execution that needs a prompt)
+  const reconnectExecution = useCallback((execId: string, initialPromptData?: Record<string, unknown>) => {
+    setExecutionId(execId);
+    setLogs([]);
+    setExecutionStatus(initialPromptData ? "waiting-prompt" : "running");
+    setPromptData(initialPromptData ?? null);
+    setShowLogs(true);
+
+    const es = new EventSource(`/api/workflow/${fileId}/execute?executionId=${execId}`);
+    eventSourceRef[1](es);
+
+    es.addEventListener("log", (e) => {
+      const log = JSON.parse(e.data);
+      setLogs((prev) => [...prev, log]);
+      if (log.mcpApps && log.mcpApps.length > 0) {
+        setMcpAppModal(log.mcpApps);
+      }
+    });
+    es.addEventListener("complete", (e) => {
+      setExecutionStatus("completed");
+      es.close();
+      window.dispatchEvent(new Event("workflow-completed"));
+      try {
+        const data = JSON.parse((e as MessageEvent).data);
+        if (data.openFile) {
+          onSelectFile(data.openFile.fileId, data.openFile.fileName, data.openFile.mimeType);
+        }
+      } catch { /* ignore */ }
+    });
+    es.addEventListener("cancelled", () => {
+      setExecutionStatus("cancelled");
+      es.close();
+    });
+    es.addEventListener("error", (e) => {
+      if (e instanceof MessageEvent) {
+        const data = JSON.parse(e.data);
+        setLogs((prev) => [...prev, {
+          nodeId: "system", nodeType: "system",
+          message: data.error || "Execution error",
+          status: "error" as const, timestamp: new Date().toISOString(),
+        }]);
+      }
+      setExecutionStatus("error");
+      es.close();
+    });
+    es.addEventListener("status", (e) => {
+      const data = JSON.parse(e.data);
+      setExecutionStatus(data.status);
+    });
+    es.addEventListener("prompt-request", (e) => {
+      const data = JSON.parse(e.data);
+      setExecutionStatus("waiting-prompt");
+      setPromptData(data);
+    });
+    attachDriveFileHandlers(es);
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
+      }
+    };
+  }, [fileId, eventSourceRef, onSelectFile]);
+
   useEffect(() => {
     const handler = (e: Event) => {
-      const targetFileId = (e as CustomEvent).detail?.fileId as string | undefined;
+      const detail = (e as CustomEvent).detail as { fileId?: string } | undefined;
+      const targetFileId = detail?.fileId;
       // If this event targets a different file, ignore
       if (targetFileId && targetFileId !== fileId) return;
+
       if (executionStatus !== "running" && executionStatus !== "waiting-prompt" && workflow && !hasLocalChanges) {
         startExecution();
       } else if (!workflow) {
@@ -486,6 +567,16 @@ function WorkflowNodeListView({
       startExecution();
     }
   }, [workflow, fileId, hasLocalChanges, executionStatus, startExecution]);
+
+  // Reconnect to existing execution via props (from silent mode prompt handoff)
+  const consumedReconnectRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingReconnect) return;
+    if (consumedReconnectRef.current === pendingReconnect.executionId) return;
+    consumedReconnectRef.current = pendingReconnect.executionId;
+    onClearPendingReconnect?.();
+    reconnectExecution(pendingReconnect.executionId, pendingReconnect.promptData);
+  }, [pendingReconnect, reconnectExecution, onClearPendingReconnect]);
 
   const handlePromptResponse = useCallback(
     async (value: string | null) => {

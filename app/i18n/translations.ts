@@ -403,21 +403,19 @@ export interface TranslationStrings {
 
   // Shortcuts tab
   "settings.tab.shortcuts": string;
+  "settings.shortcuts.description": string;
   "settings.shortcuts.noShortcuts": string;
   "settings.shortcuts.addShortcut": string;
-  "settings.shortcuts.action": string;
-  "settings.shortcuts.key": string;
-  "settings.shortcuts.ctrlOrMeta": string;
-  "settings.shortcuts.shift": string;
-  "settings.shortcuts.alt": string;
   "settings.shortcuts.pressKey": string;
-  "settings.shortcuts.actionExecuteWorkflow": string;
   "settings.shortcuts.duplicate": string;
   "settings.shortcuts.requireModifier": string;
   "settings.shortcuts.builtinConflict": string;
-  "settings.shortcuts.targetWorkflow": string;
   "settings.shortcuts.selectWorkflow": string;
-  "settings.shortcuts.save": string;
+  "settings.shortcuts.silent": string;
+  "settings.shortcuts.silentDescription": string;
+  "settings.shortcuts.executing": string;
+  "settings.shortcuts.executionDone": string;
+  "settings.shortcuts.executionError": string;
 
   // Offline
   "offline.indicator": string;
@@ -826,21 +824,19 @@ const en: TranslationStrings = {
 
   // Shortcuts tab
   "settings.tab.shortcuts": "Shortcuts",
-  "settings.shortcuts.noShortcuts": "No shortcut keys configured.",
+  "settings.shortcuts.description": "Assign keyboard shortcuts to quickly execute your workflows.",
+  "settings.shortcuts.noShortcuts": "No shortcut keys configured. Add a shortcut to execute a workflow with a key combination.",
   "settings.shortcuts.addShortcut": "Add Shortcut",
-  "settings.shortcuts.action": "Action",
-  "settings.shortcuts.key": "Key",
-  "settings.shortcuts.ctrlOrMeta": "Ctrl / Cmd",
-  "settings.shortcuts.shift": "Shift",
-  "settings.shortcuts.alt": "Alt",
   "settings.shortcuts.pressKey": "Press a key...",
-  "settings.shortcuts.actionExecuteWorkflow": "Execute Workflow",
   "settings.shortcuts.duplicate": "This key combination is already assigned.",
   "settings.shortcuts.requireModifier": "Ctrl/Cmd or Alt modifier is required. Shift alone is not sufficient. Function keys (F1–F12) can be used alone.",
   "settings.shortcuts.builtinConflict": "This key combination is reserved by the application.",
-  "settings.shortcuts.targetWorkflow": "Target Workflow",
   "settings.shortcuts.selectWorkflow": "Select a workflow…",
-  "settings.shortcuts.save": "Save Shortcut Settings",
+  "settings.shortcuts.silent": "Background",
+  "settings.shortcuts.silentDescription": "Execute the workflow without opening the workflow screen. Progress is shown in the status bar.",
+  "settings.shortcuts.executing": "Executing: {name}",
+  "settings.shortcuts.executionDone": "Completed: {name}",
+  "settings.shortcuts.executionError": "Error: {name}",
 
   // Offline
   "offline.indicator": "Offline",
@@ -1249,21 +1245,19 @@ const ja: TranslationStrings = {
 
   // Shortcuts tab
   "settings.tab.shortcuts": "ショートカット",
-  "settings.shortcuts.noShortcuts": "ショートカットキーは設定されていません。",
+  "settings.shortcuts.description": "キーボードショートカットを割り当てて、作成済みのワークフローをすばやく実行できます。",
+  "settings.shortcuts.noShortcuts": "ショートカットキーは設定されていません。ショートカットを追加して、キー操作でワークフローを実行できます。",
   "settings.shortcuts.addShortcut": "ショートカットを追加",
-  "settings.shortcuts.action": "アクション",
-  "settings.shortcuts.key": "キー",
-  "settings.shortcuts.ctrlOrMeta": "Ctrl / Cmd",
-  "settings.shortcuts.shift": "Shift",
-  "settings.shortcuts.alt": "Alt",
   "settings.shortcuts.pressKey": "キーを押してください...",
-  "settings.shortcuts.actionExecuteWorkflow": "ワークフロー実行",
   "settings.shortcuts.duplicate": "このキーの組み合わせは既に割り当てられています。",
   "settings.shortcuts.requireModifier": "Ctrl/Cmd または Alt 修飾キーが必要です。Shift のみでは不十分です。ファンクションキー（F1〜F12）は単独で使用できます。",
   "settings.shortcuts.builtinConflict": "このキーの組み合わせはアプリケーションで予約されています。",
-  "settings.shortcuts.targetWorkflow": "対象ワークフロー",
   "settings.shortcuts.selectWorkflow": "ワークフローを選択…",
-  "settings.shortcuts.save": "ショートカット設定を保存",
+  "settings.shortcuts.silent": "バックグラウンド",
+  "settings.shortcuts.silentDescription": "ワークフロー画面を開かずに実行します。進行状況はステータスバーに表示されます。",
+  "settings.shortcuts.executing": "実行中: {name}",
+  "settings.shortcuts.executionDone": "完了: {name}",
+  "settings.shortcuts.executionError": "エラー: {name}",
 
   // Offline
   "offline.indicator": "オフライン",

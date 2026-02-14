@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   Folder,
@@ -191,6 +191,45 @@ function findFileByPath(nodes: CachedTreeNode[], fullPath: string, parentPath: s
   return null;
 }
 
+/** Collect folder IDs that contain at least one modified file */
+function collectModifiedFolderIds(
+  nodes: CachedTreeNode[],
+  modifiedFiles: Set<string>
+): Set<string> {
+  const result = new Set<string>();
+  function walk(nodes: CachedTreeNode[]): boolean {
+    let hasModified = false;
+    for (const node of nodes) {
+      if (node.isFolder && node.children) {
+        if (walk(node.children)) {
+          result.add(node.id);
+          hasModified = true;
+        }
+      } else if (modifiedFiles.has(node.id)) {
+        hasModified = true;
+      }
+    }
+    return hasModified;
+  }
+  walk(nodes);
+  return result;
+}
+
+/** Find all ancestor folder IDs for a given file ID in the tree */
+function findAncestorFolderIds(
+  nodes: CachedTreeNode[],
+  targetId: string
+): string[] | null {
+  for (const node of nodes) {
+    if (node.id === targetId) return [];
+    if (node.isFolder && node.children) {
+      const result = findAncestorFolderIds(node.children, targetId);
+      if (result !== null) return [node.id, ...result];
+    }
+  }
+  return null;
+}
+
 export function DriveFileTree({
   rootFolderId,
   onSelectFile,
@@ -241,6 +280,11 @@ export function DriveFileTree({
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
   const { progress, upload, clearProgress } = useFileUpload();
+
+  const modifiedFolderIds = useMemo(
+    () => collectModifiedFolderIds(treeItems, modifiedFiles),
+    [treeItems, modifiedFiles]
+  );
 
   const updateTreeFromMeta = useCallback(async (metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] }) => {
     const cachedMeta: CachedRemoteMeta = {
@@ -400,6 +444,25 @@ export function DriveFileTree({
       onFileListChange(flattenTree(treeItems, ""));
     }
   }, [treeItems, onFileListChange]);
+
+  // Auto-expand folders to reveal the active file from URL
+  const expandedForFileRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeFileId || treeItems.length === 0) return;
+    if (expandedForFileRef.current === activeFileId) return;
+    const ancestors = findAncestorFolderIds(treeItems, activeFileId);
+    if (ancestors !== null) {
+      expandedForFileRef.current = activeFileId;
+      if (ancestors.length > 0) {
+        setExpandedFolders((prev) => {
+          if (ancestors.every((id) => prev.has(id))) return prev;
+          const next = new Set(prev);
+          for (const id of ancestors) next.add(id);
+          return next;
+        });
+      }
+    }
+  }, [activeFileId, treeItems]);
 
   // Load tree from IndexedDB cache only (server fetch happens after pull/push)
   useEffect(() => {
@@ -2130,6 +2193,9 @@ export function DriveFileTree({
               >
                 <MoreHorizontal size={ICON.MD} />
               </span>
+            )}
+            {modifiedFolderIds.has(item.id) && (
+              <span className={`${isMobile ? "" : "ml-auto "}w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0`} title="Contains modified files" />
             )}
           </button>
           {expanded &&

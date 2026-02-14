@@ -6,11 +6,12 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
-import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff, AlertTriangle } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff, AlertTriangle, Loader2, Check, AlertCircle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
 import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData } from "~/services/indexeddb-cache";
+import { attachDriveFileHandlers } from "~/utils/drive-file-sse";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
@@ -710,12 +711,93 @@ function IDEContent({
     return [rs.storeId];
   }, [settings.ragEnabled, settings.ragSettings]);
 
+  // Silent workflow execution status (for shortcut-triggered background execution)
+  const [silentExecStatus, setSilentExecStatus] = useState<{ id: string; name: string; state: "running" | "done" | "error" } | null>(null);
+  const silentExecTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silentExecEsRef = useRef<EventSource | null>(null);
+  const [pendingReconnect, setPendingReconnect] = useState<{ executionId: string; promptData?: Record<string, unknown> } | null>(null);
+  const clearPendingReconnect = useCallback(() => setPendingReconnect(null), []);
+  const executeSilentWorkflow = useCallback((workflowId: string, workflowName: string) => {
+    // Close any previous silent execution EventSource
+    silentExecEsRef.current?.close();
+    setSilentExecStatus({ id: workflowId, name: workflowName, state: "running" });
+    if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
+    (async () => {
+      try {
+        const res = await fetch(`/api/workflow/${workflowId}/execute`, { method: "POST" });
+        const data = await res.json();
+        const execId = data.executionId as string;
+        const es = new EventSource(`/api/workflow/${workflowId}/execute?executionId=${execId}`);
+        silentExecEsRef.current = es;
+        es.addEventListener("complete", () => {
+          es.close();
+          silentExecEsRef.current = null;
+          setSilentExecStatus({ id: workflowId, name: workflowName, state: "done" });
+          silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 3000);
+        });
+        es.addEventListener("error", () => {
+          es.close();
+          silentExecEsRef.current = null;
+          setSilentExecStatus({ id: workflowId, name: workflowName, state: "error" });
+          silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 5000);
+        });
+        es.addEventListener("cancelled", () => {
+          es.close();
+          silentExecEsRef.current = null;
+          setSilentExecStatus(null);
+        });
+        // Prompt requested: auto-respond for drive-file with active file, otherwise hand off
+        es.addEventListener("prompt-request", (e) => {
+          const promptData = JSON.parse(e.data);
+          if (promptData.type === "drive-file" && activeFileIdRef.current) {
+            // Auto-respond with the currently open file
+            fetch("/api/prompt-response", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                executionId: execId,
+                value: JSON.stringify({
+                  id: activeFileIdRef.current,
+                  name: activeFileNameRef.current ?? "",
+                  mimeType: activeFileMimeTypeRef.current ?? "text/plain",
+                }),
+              }),
+            }).catch(() => { /* ignore */ });
+            return;
+          }
+          // Other prompt types: hand off to WorkflowPropsPanel via props
+          es.close();
+          silentExecEsRef.current = null;
+          setSilentExecStatus(null);
+          handleSelectFile(workflowId, workflowName, "text/yaml");
+          setPendingReconnect({ executionId: execId, promptData });
+        });
+        attachDriveFileHandlers(es);
+      } catch {
+        setSilentExecStatus({ id: workflowId, name: workflowName, state: "error" });
+        silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 5000);
+      }
+    })();
+  }, [handleSelectFile]);
+  // Cleanup silent execution EventSource on unmount
+  useEffect(() => {
+    return () => {
+      silentExecEsRef.current?.close();
+      if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
+    };
+  }, []);
+
   // Keyboard shortcut: Ctrl+Shift+F / Cmd+Shift+F to open search, Ctrl+P / Cmd+P to quick open
   // Also handles user-configured shortcut keys from settings
   const shortcutKeys = settings.shortcutKeys ?? [];
   const activeFileIdRef = useRef(activeFileId);
   activeFileIdRef.current = activeFileId;
+  const activeFileNameRef = useRef(activeFileName);
+  activeFileNameRef.current = activeFileName;
+  const activeFileMimeTypeRef = useRef(activeFileMimeType);
+  activeFileMimeTypeRef.current = activeFileMimeType;
   useEffect(() => {
+    if (isMobile) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
         e.preventDefault();
@@ -741,22 +823,29 @@ function IDEContent({
           if (binding.action === "executeWorkflow") {
             const targetId = binding.targetFileId;
             const targetName = binding.targetFileName;
-            // Force-open the target workflow if it's not the active file
-            if (targetId && targetName && activeFileIdRef.current !== targetId) {
-              handleSelectFile(targetId, targetName, "text/yaml");
+            if (binding.silent && targetId) {
+              // Silent execution: run in background without opening the workflow
+              executeSilentWorkflow(targetId, targetName || targetId);
+            } else {
+              // Normal execution: open the workflow file and dispatch event
+              if (targetId && targetName && activeFileIdRef.current !== targetId) {
+                handleSelectFile(targetId, targetName, "text/yaml");
+              }
+              setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent("shortcut-execute-workflow", {
+                    detail: { fileId: targetId },
+                  })
+                );
+              }, 0);
             }
-            window.dispatchEvent(
-              new CustomEvent("shortcut-execute-workflow", {
-                detail: { fileId: targetId },
-              })
-            );
           }
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [shortcutKeys, handleSelectFile]);
+  }, [shortcutKeys, handleSelectFile, isMobile]);
 
   // Mobile view state: which panel is shown full-screen
   const [mobileView, setMobileView] = useState<MobileView>("editor");
@@ -1030,6 +1119,8 @@ function IDEContent({
           onModifyWithAI={handleModifyWithAI}
           settings={settings}
           refreshKey={workflowVersion}
+          pendingReconnect={pendingReconnect}
+          onClearPendingReconnect={clearPendingReconnect}
         />
       )}
     </PanelErrorBoundary>
@@ -1098,6 +1189,43 @@ function IDEContent({
         <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs dark:border-amber-800 dark:bg-amber-900/20">
           <WifiOff size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <span className="text-amber-800 dark:text-amber-200">{t("offline.banner")}</span>
+        </div>
+      )}
+
+      {silentExecStatus && (
+        <div className={`flex items-center gap-2 border-b px-4 py-1.5 text-xs ${
+          silentExecStatus.state === "running"
+            ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20"
+            : silentExecStatus.state === "done"
+            ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
+            : "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
+        }`}>
+          {silentExecStatus.state === "running" && <Loader2 size={14} className="animate-spin text-blue-600 dark:text-blue-400" />}
+          {silentExecStatus.state === "done" && <Check size={14} className="text-green-600 dark:text-green-400" />}
+          {silentExecStatus.state === "error" && <AlertCircle size={14} className="text-red-600 dark:text-red-400" />}
+          {(() => {
+            const key = silentExecStatus.state === "running" ? "settings.shortcuts.executing"
+              : silentExecStatus.state === "done" ? "settings.shortcuts.executionDone"
+              : "settings.shortcuts.executionError";
+            const textClass = silentExecStatus.state === "running" ? "text-blue-800 dark:text-blue-200"
+              : silentExecStatus.state === "done" ? "text-green-800 dark:text-green-200"
+              : "text-red-800 dark:text-red-200";
+            const parts = t(key).split("{name}");
+            return (
+              <span className={textClass}>
+                {parts[0]}
+                <button
+                  className="underline hover:no-underline font-medium"
+                  onClick={() => {
+                    handleSelectFile(silentExecStatus.id, silentExecStatus.name, "text/yaml");
+                  }}
+                >
+                  {silentExecStatus.name}
+                </button>
+                {parts[1]}
+              </span>
+            );
+          })()}
         </div>
       )}
 

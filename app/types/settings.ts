@@ -481,10 +481,6 @@ export interface SlashCommand {
 // Shortcut key actions
 export type ShortcutAction = "executeWorkflow";
 
-export const SHORTCUT_ACTIONS: { value: ShortcutAction; labelKey: string }[] = [
-  { value: "executeWorkflow", labelKey: "settings.shortcuts.actionExecuteWorkflow" },
-];
-
 // Shortcut key binding
 export interface ShortcutKeyBinding {
   id: string;
@@ -495,6 +491,7 @@ export interface ShortcutKeyBinding {
   alt: boolean;
   targetFileId?: string;   // For executeWorkflow: which workflow to run
   targetFileName?: string; // For executeWorkflow: display name
+  silent?: boolean;        // Execute without opening the workflow screen
 }
 
 // Built-in shortcuts that cannot be overridden

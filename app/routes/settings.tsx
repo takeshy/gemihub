@@ -83,6 +83,7 @@ import { TrashDialog } from "~/components/settings/TrashDialog";
 import { ConflictsDialog } from "~/components/settings/ConflictsDialog";
 import { RagFilesDialog } from "~/components/settings/RagFilesDialog";
 import { invalidateIndexCache } from "~/routes/_index";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { PluginProvider } from "~/contexts/PluginContext";
 
 // ---------------------------------------------------------------------------
@@ -98,14 +99,14 @@ type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shor
 
 import type { TranslationStrings } from "~/i18n/translations";
 
-const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof SettingsIcon }[] = [
+const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof SettingsIcon; desktopOnly?: boolean }[] = [
   { id: "general", labelKey: "settings.tab.general", icon: SettingsIcon },
   { id: "sync", labelKey: "settings.tab.sync", icon: RefreshCw },
   { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
+  { id: "shortcuts", labelKey: "settings.tab.shortcuts", icon: Keyboard, desktopOnly: true },
   { id: "plugins", labelKey: "settings.tab.plugins", icon: Puzzle },
-  { id: "shortcuts", labelKey: "settings.tab.shortcuts", icon: Keyboard },
 ];
 
 // ---------------------------------------------------------------------------
@@ -464,6 +465,8 @@ function SettingsInner({
   setActiveTab: (tab: TabId) => void;
 }) {
   const { t } = useI18n();
+  const isMobile = useIsMobile();
+  const visibleTabs = isMobile ? TABS.filter((tab) => !tab.desktopOnly) : TABS;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -484,7 +487,7 @@ function SettingsInner({
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-5xl mx-auto px-4">
           <nav className="flex gap-1 overflow-x-auto scrollbar-hide" aria-label="Settings tabs">
-            {TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
