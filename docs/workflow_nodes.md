@@ -181,13 +181,13 @@ Make HTTP requests.
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `url` | Yes | Yes | Request URL |
-| `method` | No | No | `GET` (default), `POST`, `PUT`, `PATCH`, `DELETE` |
-| `contentType` | No | No | `json` (default), `form-data`, `text`, `binary` |
+| `method` | No | Yes | `GET` (default), `POST`, `PUT`, `PATCH`, `DELETE` |
+| `contentType` | No | Yes | `json` (default), `form-data`, `text`, `binary` |
 | `headers` | No | Yes | JSON object or `Key: Value` format (one per line) |
 | `body` | No | Yes | Request body (for POST/PUT/PATCH) |
 | `saveTo` | No | No | Variable for response body |
 | `saveStatus` | No | No | Variable for HTTP status code |
-| `throwOnError` | No | No | `"true"` to throw error on 4xx/5xx responses |
+| `throwOnError` | No | Yes | `"true"` to throw error on 4xx/5xx responses |
 
 **Binary responses** are automatically detected and stored as FileExplorerData JSON (Base64 encoded).
 
@@ -330,8 +330,8 @@ List files with filtering.
 |----------|:--------:|:--------:|-------------|
 | `folder` | No | Yes | Virtual folder prefix (e.g., `"Projects"`) |
 | `limit` | No | Yes | Maximum results (default: 50) |
-| `sortBy` | No | No | `modified` (default), `created`, `name` |
-| `sortOrder` | No | No | `desc` (default), `asc` |
+| `sortBy` | No | Yes | `modified` (default), `created`, `name` |
+| `sortOrder` | No | Yes | `desc` (default), `asc` |
 | `modifiedWithin` | No | Yes | Time filter (e.g., `"7d"`, `"24h"`, `"30m"`) |
 | `createdWithin` | No | Yes | Time filter (e.g., `"30d"`) |
 | `saveTo` | Yes | No | Variable for results |

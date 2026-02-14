@@ -108,6 +108,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "mode", label: "Mode", required: false, options: ["select", "create"], defaultValue: "select" },
         { key: "default", label: "Default", required: false, placeholder: "path/to/file.md" },
         { key: "extensions", label: "Extensions", required: false, placeholder: "md,txt,yaml" },
+        { key: "path", label: "Path", required: false, placeholder: "notes/file.md" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "selectedFile" },
         { key: "savePathTo", label: "Save Path To", required: false, placeholder: "filePath" },
       ];
