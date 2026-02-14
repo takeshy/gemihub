@@ -565,6 +565,7 @@ function TextBasedViewer({
   }
 
   const name = fileName || "";
+  const lower = name.toLowerCase();
 
   const handleHistoryClick = () => {
     setEditHistoryFile({ fileId, filePath: name, fullPath: name });
@@ -598,11 +599,11 @@ function TextBasedViewer({
         onClose={() => setDiffTarget(null)}
       />
     );
-  } else if (name.endsWith(".yaml") || name.endsWith(".yml")) {
+  } else if (lower.endsWith(".yaml") || lower.endsWith(".yml")) {
     editor = (
       <WorkflowEditor
         fileId={fileId}
-        fileName={name.replace(/\.ya?ml$/, "")}
+        fileName={name.replace(/\.ya?ml$/i, "")}
         initialContent={content}
         settings={settings}
         saveToCache={saveToCache}
@@ -610,7 +611,7 @@ function TextBasedViewer({
         onHistoryClick={handleHistoryClick}
       />
     );
-  } else if (name.endsWith(".md")) {
+  } else if (lower.endsWith(".md")) {
     editor = (
       <MarkdownFileEditor
         fileId={fileId}
@@ -623,7 +624,7 @@ function TextBasedViewer({
         onHistoryClick={handleHistoryClick}
       />
     );
-  } else if (name.endsWith(".html") || name.endsWith(".htm")) {
+  } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
     editor = (
       <HtmlFileEditor
         fileId={fileId}
@@ -806,10 +807,7 @@ function MarkdownFileEditor({
     },
     [editorCtx]
   );
-  // New file (empty) → wysiwyg, existing file → preview
-  const [mode, setMode] = useState<MdEditMode>(
-    initialContent ? "preview" : "wysiwyg"
-  );
+  const [mode, setMode] = useState<MdEditMode>("wysiwyg");
 
   // Lazy-load MarkdownEditor to avoid SSR issues with wysimark-lite
   const [MarkdownEditorComponent, setMarkdownEditorComponent] = useState<
@@ -913,7 +911,7 @@ function MarkdownFileEditor({
       {mode === "raw" && (
         <div className="flex-1 p-4">
           <textarea
-            value={content.replace(/\u00A0/g, "")}
+            value={content}
             onChange={(e) => updateContent(e.target.value)}
             onSelect={handleSelect}
             className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"

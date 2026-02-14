@@ -32,12 +32,14 @@ File editing system with a WYSIWYG markdown editor, visual workflow editor, HTML
 
 ### Binary Files
 
-| MIME Type | Display |
-|-----------|---------|
-| `image/*` | `<img>` image display |
-| `video/*` | `<video>` player |
-| `audio/*` | `<audio>` player |
-| `application/pdf` | iframe preview |
+Binary files are detected by file extension (case-insensitive), with MIME type as a fallback.
+
+| Type | Extensions | Display |
+|------|-----------|---------|
+| Image | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.bmp`, `.ico` | `<img>` image display |
+| Video | `.mp4`, `.webm`, `.ogg`, `.mov`, `.avi`, `.mkv` | `<video>` player |
+| Audio | `.mp3`, `.wav`, `.flac`, `.aac`, `.m4a`, `.opus` | `<audio>` player |
+| PDF | `.pdf` | iframe preview |
 
 Binary files show Temp Download / Temp Upload buttons for local editing and download.
 
@@ -45,9 +47,11 @@ Binary files show Temp Download / Temp Upload buttons for local editing and down
 
 Files with the `.encrypted` extension are handled by `EncryptedFileViewer`. After entering a password for decryption, the content can be edited as plain text. The password is cached for the session, enabling auto-decryption.
 
+A **Permanent Decrypt** button is available after decryption. This sends the plaintext to the server, removes the `.encrypted` extension from the file name, and stores the file unencrypted on Drive. A confirmation dialog is shown before proceeding.
+
 ### Plugin Extensions
 
-Plugins can register extensions and components in `mainViews` to add custom editors for new file types.
+Plugins can register extensions and components in `mainViews` to add custom editors for new file types. Plugin views are checked **before** the built-in editors, so a plugin can override the default editor for any extension (e.g., `.md`, `.yaml`).
 
 ---
 
@@ -159,8 +163,9 @@ Enables temporary editing from external tools.
 
 1. Click the Temp Upload button in the editor
 2. Upload current file content to `/api/drive/temp`
-3. A shareable temporary edit URL is copied to clipboard
-4. Edit from that URL in an external tool or browser
+3. A confirm dialog asks whether to generate a shareable URL
+4. If confirmed, a temporary edit URL is generated and copied to clipboard
+5. If declined, only an "Uploaded" message is shown (no URL generated)
 
 ### Temp Download
 
@@ -194,7 +199,7 @@ Context for managing shared editor state (`app/contexts/EditorContext.tsx`).
 | `activeFileName` | `string \| null` | Current file name |
 | `fileList` | `FileListItem[]` | All files from the file tree |
 | `getActiveSelection` | `() => SelectionInfo \| null` | Get the current text selection |
-| `hasActiveSelection` | `boolean` | Whether a file is open |
+| `hasActiveSelection` | `boolean` | Whether a file with content is open (not whether text is selected) |
 
 ### Selection Tracking
 

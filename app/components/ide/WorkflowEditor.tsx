@@ -49,6 +49,7 @@ export function WorkflowEditor({
   // Debounced auto-save to IndexedDB
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
+  const pendingContentRef = useRef<string | null>(null);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -63,13 +64,25 @@ export function WorkflowEditor({
   useEffect(() => {
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    pendingContentRef.current = yamlContent;
     debounceRef.current = setTimeout(() => {
       saveToCache(yamlContent);
+      pendingContentRef.current = null;
     }, 3000);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [yamlContent, saveToCache]);
+
+  // Flush pending content on unmount or fileId change (saveToCache identity changes)
+  useEffect(() => {
+    return () => {
+      if (pendingContentRef.current !== null) {
+        saveToCache(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
+    };
+  }, [saveToCache]);
 
   // Parse workflow YAML to mermaid on mount and when content changes
   useEffect(() => {
@@ -125,6 +138,14 @@ export function WorkflowEditor({
     }
   }, [yamlContent]);
 
+  const flushOnBlur = useCallback(() => {
+    if (pendingContentRef.current !== null) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      saveToCache(pendingContentRef.current);
+      pendingContentRef.current = null;
+    }
+  }, [saveToCache]);
+
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
 
   const handleTempUpload = useCallback(async () => {
@@ -176,7 +197,7 @@ export function WorkflowEditor({
   }, [tempDiffData, saveToCache, fileId]);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
