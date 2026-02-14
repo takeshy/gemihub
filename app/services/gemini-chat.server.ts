@@ -251,6 +251,8 @@ export async function* chatWithToolsStream(
   }
 
   let continueLoop = true;
+  let groundingEmitted = false;
+  const accumulatedSources: string[] = [];
   const messageParts: Part[] = [];
 
   if (lastMessage.attachments && lastMessage.attachments.length > 0) {
@@ -272,8 +274,6 @@ export async function* chatWithToolsStream(
 
   while (continueLoop) {
     const functionCallsToProcess: Array<{ name: string; args: Record<string, unknown> }> = [];
-    const groundingEmitted = false;
-    const accumulatedSources: string[] = [];
 
     for await (const chunk of response) {
       if (chunk.functionCalls && chunk.functionCalls.length > 0) {
@@ -338,6 +338,7 @@ export async function* chatWithToolsStream(
       } else {
         yield { type: "rag_used", ragSources: accumulatedSources };
       }
+      groundingEmitted = true;
     }
 
     if (functionCallsToProcess.length > 0 && executeToolCall) {

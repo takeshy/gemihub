@@ -54,7 +54,15 @@ export async function action({ request }: Route.ActionArgs) {
         if (encryption) {
           chatHistory.isEncrypted = true;
         }
-      } catch { /* ignore settings load failure */ }
+      } catch {
+        // If the chat was previously encrypted, we must not save it unencrypted
+        if (chatHistory.isEncrypted) {
+          return Response.json(
+            { error: "Failed to load encryption settings for encrypted chat" },
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
 
       const fileId = await saveChat(
         validTokens.accessToken,

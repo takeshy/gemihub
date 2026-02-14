@@ -157,6 +157,12 @@ export function ChatInput({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [pendingOverrides, setPendingOverrides] = useState<ChatOverrides | null>(null);
   const [dismissedFileId, setDismissedFileId] = useState<string | null>(null);
+
+  // Reset dismissed state when switching chats (lastFileIdInMessages changes)
+  useEffect(() => {
+    setDismissedFileId(null);
+  }, [lastFileIdInMessages]);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);

@@ -34,7 +34,8 @@ Chat uses SSE (Server-Sent Events). The server sends `data: {JSON}\n\n` chunks.
 | `web_search_used` | Web search sources used |
 | `image_generated` | Base64-encoded generated image |
 | `mcp_app` | MCP tool UI metadata |
-| `drive_changed` | Drive file was created/updated (triggers file tree refresh) |
+| `drive_file_created` | Drive file was created (triggers file tree refresh) |
+| `drive_file_updated` | Drive file was updated locally (triggers editor refresh) |
 | `error` | Error message |
 | `done` | Stream complete |
 
@@ -42,8 +43,9 @@ Chat uses SSE (Server-Sent Events). The server sends `data: {JSON}\n\n` chunks.
 
 1. Open `POST /api/chat` as SSE stream
 2. Parse `data:` lines, accumulate text/thinking/toolCalls
-3. On `drive_changed` → dispatch `sync-complete` event (refreshes file tree)
-4. On `done` → build final `Message` object and save to history
+3. On `drive_file_created` → update local sync meta, dispatch `sync-complete` (refreshes file tree)
+4. On `drive_file_updated` → save to local cache + edit history, dispatch `file-modified`/`file-restored` (refreshes editor)
+5. On `done` → build final `Message` object and save to history
 
 ---
 
@@ -61,7 +63,9 @@ When enabled, Gemini can call tools during chat. Tool execution happens server-s
 | `create_drive_file` | Create a new file (path separators for virtual folders) |
 | `update_drive_file` | Update existing file content |
 
-After `create_drive_file` or `update_drive_file`, the server updates `_sync-meta.json` and sends a `drive_changed` SSE chunk. The client dispatches `sync-complete` so the file tree refreshes without requiring a manual pull.
+After `create_drive_file`, the server creates the file on Drive, updates `_sync-meta.json`, and sends a `drive_file_created` SSE chunk. The client updates local sync meta and dispatches `sync-complete` so the file tree refreshes.
+
+After `update_drive_file`, the server sends a `drive_file_updated` SSE chunk with the new content. The client saves it to the local cache and edit history. The change is pushed to Drive on the next manual push.
 
 ### Drive Tool Modes
 
@@ -206,7 +210,7 @@ Browser (ChatPanel)           Server (api.chat)         Gemini API
 │ streaming state   │◄──►│ executeToolCall   │◄──►│ Stream       │
 │ tool call display │    │  ├─ Drive tools   │    │ Function calls│
 │ autocomplete      │    │  ├─ MCP tools     │    └──────────────┘
-│ chat history      │    │  └─ drive_changed │
+│ chat history      │    │  └─ drive_file_*  │
 └──────────────────┘    └──────────────────┘
                               │
                         ┌─────▼──────┐
@@ -220,7 +224,7 @@ Browser (ChatPanel)           Server (api.chat)         Gemini API
 
 | File | Role |
 |------|------|
-| `app/routes/api.chat.tsx` | Chat SSE API — streaming, tool dispatch, `drive_changed` emission |
+| `app/routes/api.chat.tsx` | Chat SSE API — streaming, tool dispatch, `drive_file_created`/`drive_file_updated` emission |
 | `app/routes/api.chat.history.tsx` | Chat history CRUD (list, save, delete) |
 | `app/services/gemini-chat.server.ts` | Gemini streaming with function calling, RAG, thinking, image generation |
 | `app/services/drive-tools.server.ts` | Drive tool definitions and execution |
