@@ -273,6 +273,7 @@ export interface TranslationStrings {
   "crypt.decryptFailed": string;
   "crypt.decryptDuplicate": string;
   "crypt.encryptEmptyFile": string;
+  "crypt.notConfigured": string;
 
   // Plugins tab
   "settings.tab.plugins": string;
@@ -676,6 +677,7 @@ const en: TranslationStrings = {
   "crypt.decryptFailed": "Decryption failed",
   "crypt.decryptDuplicate": "\"{name}\" already exists. Rename or delete it before decrypting.",
   "crypt.encryptEmptyFile": "Cannot encrypt an empty file.",
+  "crypt.notConfigured": "Encryption is not configured. Please set it up in Settings.",
 
   // Plugins tab
   "settings.tab.plugins": "Plugins",
@@ -1079,6 +1081,7 @@ const ja: TranslationStrings = {
   "crypt.decryptFailed": "暗号化解除に失敗しました",
   "crypt.decryptDuplicate": "「{name}」が既に存在します。暗号化解除する前にリネームまたは削除してください。",
   "crypt.encryptEmptyFile": "空のファイルは暗号化できません。",
+  "crypt.notConfigured": "暗号化が未設定です。設定画面から暗号化を設定してください。",
 
   // Plugins tab
   "settings.tab.plugins": "プラグイン",

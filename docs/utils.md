@@ -18,7 +18,6 @@ Right-click a file or folder in the file tree (or tap the `⋯` button on mobile
 
 | Menu Item | Description |
 |-----------|-------------|
-| Encrypt / Decrypt | Encrypt (appends `.encrypted`) or decrypt the file |
 | Edit History | View local edit history and restore any version |
 | Download | Download file locally (cache-first, falls back to API) |
 | Convert to PDF | Convert Markdown/HTML file to PDF, saved to `temporaries/` |
@@ -26,6 +25,7 @@ Right-click a file or folder in the file tree (or tap the `⋯` button on mobile
 | Publish | Make the file publicly accessible via a shareable link (URL auto-copied) |
 | Copy Link | Copy the public URL of a published file to clipboard |
 | Unpublish | Revoke public sharing for the file |
+| Encrypt / Decrypt | Encrypt (appends `.encrypted`) or decrypt the file |
 | Clear Cache | Delete the IndexedDB cache (warns if there are unsaved changes) |
 | Duplicate | Duplicate the file as `name (copy).ext` |
 | Rename | Rename the file |
@@ -35,7 +35,7 @@ Right-click a file or folder in the file tree (or tap the `⋯` button on mobile
 
 | Menu Item | Description |
 |-----------|-------------|
-| Clear Cache | Bulk-delete cache for all files in the folder (warns if modified files exist) |
+| Clear Cache | Bulk-delete cache for all files in the folder (warns if modified files exist). Shown only when cached files exist in the folder |
 | Rename | Rename the folder |
 | Trash | Move all files in the folder to `trash/` |
 

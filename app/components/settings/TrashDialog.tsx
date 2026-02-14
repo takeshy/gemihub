@@ -91,6 +91,7 @@ export function TrashDialog({ onClose }: TrashDialogProps) {
       });
       setSelected(new Set());
       await loadFiles();
+      window.dispatchEvent(new Event("sync-complete"));
     } catch {
       // ignore
     } finally {

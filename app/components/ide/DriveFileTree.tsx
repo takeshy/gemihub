@@ -26,6 +26,7 @@ import {
   Globe,
   GlobeLock,
   Copy,
+  Link2,
   Search,
   MoreHorizontal,
 } from "lucide-react";
@@ -1270,6 +1271,7 @@ export function DriveFileTree({
       if (!item.isFolder && item.id.startsWith("new:")) {
         if (!confirm(t("trash.softDeleteConfirm").replace("{name}", item.name))) return;
         await deleteCachedFile(item.id);
+        await deleteEditHistoryEntry(item.id);
         setTreeItems((prev) => removeNodeFromTree(prev, item.id));
         return;
       }
@@ -1292,10 +1294,11 @@ export function DriveFileTree({
             if (res.ok) {
               const data = await res.json();
               if (data.meta) lastMeta = data.meta;
+              // Clean local caches
+              await deleteCachedFile(fid);
+              await removeLocalSyncMetaEntry(fid);
+              await deleteEditHistoryEntry(fid);
             }
-            // Clean local caches
-            await deleteCachedFile(fid);
-            await removeLocalSyncMetaEntry(fid);
           }
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
@@ -1321,6 +1324,7 @@ export function DriveFileTree({
             // Clean local caches
             await deleteCachedFile(item.id);
             await removeLocalSyncMetaEntry(item.id);
+            await deleteEditHistoryEntry(item.id);
             const data = await res.json();
             if (data.meta) {
               await updateTreeFromMeta(data.meta);
@@ -1348,7 +1352,7 @@ export function DriveFileTree({
   const handleEncrypt = useCallback(
     async (item: CachedTreeNode) => {
       if (!encryptionEnabled) {
-        alert("暗号化が未設定です。設定画面から暗号化を設定してください。");
+        alert(t("crypt.notConfigured"));
         window.location.href = "/settings";
         return;
       }
@@ -1835,20 +1839,6 @@ export function DriveFileTree({
       const items: ContextMenuItem[] = [];
 
       if (!item.isFolder) {
-        if (!item.name.endsWith(".encrypted")) {
-          items.push({
-            label: t("crypt.encrypt"),
-            icon: <Lock size={ICON.MD} />,
-            onClick: () => handleEncrypt(item),
-          });
-        } else {
-          items.push({
-            label: t("crypt.decrypt"),
-            icon: <Unlock size={ICON.MD} />,
-            onClick: () => handleDecrypt(item),
-          });
-        }
-
         items.push({
           label: t("editHistory.menuLabel"),
           icon: <History size={ICON.MD} />,
@@ -1928,7 +1918,7 @@ export function DriveFileTree({
           if (fileMeta?.shared) {
             items.push({
               label: t("contextMenu.copyLink"),
-              icon: <Copy size={ICON.MD} />,
+              icon: <Link2 size={ICON.MD} />,
               onClick: () => handleCopyLink(item.id),
             });
             items.push({
@@ -1944,6 +1934,21 @@ export function DriveFileTree({
             });
           }
         }
+
+        // Encrypt / Decrypt
+        if (!item.name.endsWith(".encrypted")) {
+          items.push({
+            label: t("crypt.encrypt"),
+            icon: <Lock size={ICON.MD} />,
+            onClick: () => handleEncrypt(item),
+          });
+        } else {
+          items.push({
+            label: t("crypt.decrypt"),
+            icon: <Unlock size={ICON.MD} />,
+            onClick: () => handleDecrypt(item),
+          });
+        }
       }
 
       // Cache clear - available for both files and folders
@@ -1953,7 +1958,7 @@ export function DriveFileTree({
           icon: <Eraser size={ICON.MD} />,
           onClick: () => handleClearCache(item),
         });
-      } else if (item.isFolder) {
+      } else if (item.isFolder && collectFileIds(item).some(id => cachedFiles.has(id))) {
         items.push({
           label: t("contextMenu.clearCache"),
           icon: <Eraser size={ICON.MD} />,
@@ -1984,7 +1989,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, t, findFullFileName, treeItems]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, collectFileIds, t, findFullFileName, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -2094,7 +2099,7 @@ export function DriveFileTree({
         {remoteMeta[item.id]?.shared && (
           <span
             className={`${isMobile ? "" : "ml-auto "}flex-shrink-0 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer`}
-            title={`${window.location.origin}/public/file/${item.id}/${encodeURIComponent(item.name)}`}
+            title={`${window.location.origin}/public/file/${item.id}/${encodeURIComponent(remoteMeta[item.id]?.name?.split("/").pop() ?? item.name)}`}
             onClick={(e) => { e.stopPropagation(); handleCopyLink(item.id); }}
           >
             <Globe size={ICON.SM} />
