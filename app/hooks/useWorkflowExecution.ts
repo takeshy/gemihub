@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { McpAppInfo } from "~/types/chat";
 import { attachDriveFileHandlers } from "~/utils/drive-file-sse";
 
@@ -27,6 +27,13 @@ export function useWorkflowExecution(workflowId: string) {
     null
   );
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Clean up EventSource on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, []);
 
   const attachEventSource = useCallback((es: EventSource) => {
     eventSourceRef.current?.close();
