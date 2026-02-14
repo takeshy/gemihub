@@ -119,7 +119,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
         setTogglingId(null);
       }
     },
-    [showStatus]
+    [showStatus, t]
   );
 
   const handleUninstall = useCallback(
