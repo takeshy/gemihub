@@ -95,6 +95,29 @@ function EditorEn() {
           Click <strong>Temp Download</strong> to check the <code>__TEMP__</code> folder for changes and merge them into the editor.
         </p>
 
+        <h2>New File Creation</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/editor_new.png" alt="New file dialog" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          Click the <strong>New File</strong> button in the file tree toolbar to open the creation dialog. In addition to specifying a file name and extension, you can optionally include metadata in the initial content:
+        </p>
+        <ul>
+          <li><strong>Add date/time</strong> — Inserts the current date and time at the top of the file.</li>
+          <li><strong>Add location</strong> — Requests browser geolocation and inserts latitude/longitude coordinates.</li>
+        </ul>
+        <p>
+          Checkbox preferences are saved and restored on the next file creation. For <code>.md</code> files, labels are bold-formatted. Geolocation uses the Web Geolocation API with a 10-second timeout; if it fails, the location is simply omitted.
+        </p>
+
+        <h3>Using Location Data with AI Chat</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/editor_memo.png" alt="Memo with location and AI chat" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          When a memo contains latitude and longitude, you can ask the AI in the chat panel to identify the place name. The AI reads the file content via the <code>read_drive_file</code> function call and resolves the coordinates to a human-readable location.
+        </p>
+
         <h2>Context Menu Actions</h2>
         <p>Right-click a file in the file tree for additional actions:</p>
         <ul>
@@ -198,6 +221,29 @@ function EditorJa() {
         <h3>Temp Download</h3>
         <p>
           <strong>Temp Download</strong>をクリックすると、<code>__TEMP__</code>フォルダの変更を確認し、エディタにマージします。
+        </p>
+
+        <h2>新規ファイル作成</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/editor_new.png" alt="新規ファイルダイアログ" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          ファイルツリーのツールバーにある<strong>新規ファイル</strong>ボタンから、ファイル作成ダイアログを開くことができます。ファイル名と拡張子の指定に加えて、以下のオプションで初期内容にメタデータを含めることができます：
+        </p>
+        <ul>
+          <li><strong>日時を追加</strong> — 現在の日時をファイル先頭に挿入します。</li>
+          <li><strong>位置情報を追加</strong> — ブラウザの位置情報を取得し、緯度・経度を挿入します。</li>
+        </ul>
+        <p>
+          チェックボックスの状態は保存され、次回のファイル作成時に復元されます。<code>.md</code>ファイルの場合、ラベルは太字で表示されます。位置情報はWeb Geolocation APIを使用し、10秒のタイムアウトが設定されています。取得に失敗した場合は省略されます。
+        </p>
+
+        <h3>位置情報を使ったAIチャット</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/editor_memo.png" alt="メモの位置情報とAIチャット" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          メモに緯度・経度が含まれている場合、チャットパネルでAIに地名を質問できます。AIは<code>read_drive_file</code>ファンクションコールでファイル内容を読み取り、座標から地名を特定して回答します。
         </p>
 
         <h2>コンテキストメニューアクション</h2>
