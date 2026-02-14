@@ -262,7 +262,7 @@ export function SearchPanel({
             />
             <div className="mt-1 flex items-center justify-between">
               <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                Ctrl+Enter
+                {typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd" : "Ctrl"}+Enter
               </p>
               <button
                 onClick={handleSearch}

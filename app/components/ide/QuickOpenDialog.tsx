@@ -18,8 +18,6 @@ function guessMimeType(name: string): string {
   return "text/plain";
 }
 
-const MAX_VISIBLE = 10;
-
 export function QuickOpenDialog({ open, onClose, fileList, onSelectFile, zClass = "z-50" }: QuickOpenDialogProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
@@ -132,7 +130,7 @@ export function QuickOpenDialog({ open, onClose, fileList, onSelectFile, zClass 
               {t("quickOpen.noResults")}
             </div>
           ) : (
-            filtered.slice(0, MAX_VISIBLE).map((item, i) => (
+            filtered.map((item, i) => (
               <button
                 key={item.id}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
