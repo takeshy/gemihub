@@ -277,4 +277,10 @@ export async function handleDriveDeleteNode(
   await removeFileFromMeta(accessToken, folderId, existingFile.id, {
     signal: serviceContext.abortSignal,
   });
+
+  // Notify client so file tree updates immediately
+  serviceContext.onDriveFileDeleted?.({
+    fileId: existingFile.id,
+    fileName: existingFile.name,
+  });
 }

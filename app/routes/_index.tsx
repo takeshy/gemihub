@@ -756,6 +756,7 @@ function IDEContent({
           silentExecEsRef.current = null;
           setSilentExecStatus({ id: workflowId, name: workflowName, state: "done" });
           silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 3000);
+          window.dispatchEvent(new Event("workflow-completed"));
         });
         es.addEventListener("error", () => {
           es.close();

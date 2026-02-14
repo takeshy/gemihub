@@ -231,12 +231,16 @@ function broadcast(executionId: string, event: string, data: string): void {
   }
 }
 
-export function broadcastDriveFileUpdated(executionId: string, data: { fileId: string; fileName: string; content: string }): void {
+export function broadcastDriveFileUpdated(executionId: string, data: { fileId: string; fileName: string; content?: string }): void {
   broadcast(executionId, "drive-file-updated", JSON.stringify(data));
 }
 
 export function broadcastDriveFileCreated(executionId: string, data: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string }): void {
   broadcast(executionId, "drive-file-created", JSON.stringify(data));
+}
+
+export function broadcastDriveFileDeleted(executionId: string, data: { fileId: string; fileName: string }): void {
+  broadcast(executionId, "drive-file-deleted", JSON.stringify(data));
 }
 
 // Cleanup old executions (called on each new execution)

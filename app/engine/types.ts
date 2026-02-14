@@ -221,6 +221,7 @@ export interface ServiceContext {
   abortSignal?: AbortSignal;
   editHistorySettings?: import("~/types/settings").EditHistorySettings;
   settings?: import("~/types/settings").UserSettings;
-  onDriveFileUpdated?: (data: { fileId: string; fileName: string; content: string }) => void;
+  onDriveFileUpdated?: (data: { fileId: string; fileName: string; content?: string }) => void;
   onDriveFileCreated?: (data: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string }) => void;
+  onDriveFileDeleted?: (data: { fileId: string; fileName: string }) => void;
 }

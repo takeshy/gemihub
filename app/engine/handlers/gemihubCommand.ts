@@ -278,10 +278,11 @@ export async function handleGemihubCommandNode(
 
       const renamed = await driveService.renameFile(accessToken, file.id, text, { signal: serviceContext.abortSignal });
       await upsertFileInMeta(accessToken, folderId, renamed, { signal: serviceContext.abortSignal });
+      // Content omitted: rename doesn't change file content, only the name.
+      // drive-file-sse will dispatch sync-complete to rebuild the tree.
       serviceContext.onDriveFileUpdated?.({
         fileId: file.id,
         fileName: renamed.name,
-        content: "",
       });
       result = renamed.name;
       break;
