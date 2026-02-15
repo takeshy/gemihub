@@ -20,7 +20,7 @@ import { FaqChapter } from "~/components/manual/chapters/faq";
 
 export function headers() {
   return {
-    "Cache-Control": "public, s-maxage=86400, max-age=3600",
+    "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400, max-age=3600",
   };
 }
 
