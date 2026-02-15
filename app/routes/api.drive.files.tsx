@@ -41,6 +41,7 @@ import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 import { saveEdit } from "~/services/edit-history.server";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { createLogContext, emitLog } from "~/services/logger.server";
+import { handleRagAction } from "~/services/sync-rag.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
@@ -120,6 +121,77 @@ export async function action({ request }: Route.ActionArgs) {
     emitLog(logCtx, (init as { status?: number } | undefined)?.status ?? 200);
     return jsonWithCookie(data, init);
   };
+  const triggerRagRegister = (targetFileId: string, targetFileName: string, targetContent?: string) => {
+    void (async () => {
+      try {
+        await handleRagAction(
+          "ragSave",
+          {
+            action: "ragSave",
+            updates: [
+              {
+                fileName: targetFileName,
+                ragFileInfo: {
+                  checksum: "",
+                  uploadedAt: Date.now(),
+                  fileId: null,
+                  status: "pending" as const,
+                },
+              },
+            ],
+            storeName: "",
+          },
+          { validTokens, jsonWithCookie }
+        );
+
+        const registerRes = await handleRagAction(
+          "ragRegister",
+          {
+            action: "ragRegister",
+            fileId: targetFileId,
+            fileName: targetFileName,
+            ...(targetContent != null ? { content: targetContent } : {}),
+          },
+          { validTokens, jsonWithCookie }
+        );
+        const registerData = registerRes.ok
+          ? await registerRes.json().catch(() => null) as
+          | {
+            ok?: boolean;
+            skipped?: boolean;
+            reason?: string;
+            ragFileInfo?: { checksum: string; uploadedAt: number; fileId: string | null };
+            storeName?: string;
+          }
+          | null
+          : null;
+        if (registerData?.ok && !registerData.skipped && registerData.ragFileInfo) {
+          await handleRagAction(
+            "ragSave",
+            {
+              action: "ragSave",
+              updates: [
+                {
+                  fileName: targetFileName,
+                  ragFileInfo: { ...registerData.ragFileInfo, status: "registered" as const },
+                },
+              ],
+              storeName: registerData.storeName ?? "",
+            },
+            { validTokens, jsonWithCookie }
+          );
+        }
+
+        await handleRagAction(
+          "ragRetryPending",
+          { action: "ragRetryPending" },
+          { validTokens, jsonWithCookie }
+        );
+      } catch {
+        // best-effort
+      }
+    })();
+  };
 
   const body = await request.json();
   const { action: actionType, fileId, name, content, data, mimeType, overwriteFileId, dedup } = body;
@@ -144,6 +216,7 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      triggerRagRegister(file.id, file.name, typeof content === "string" ? content : undefined);
       return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "create-image": {
@@ -204,6 +277,7 @@ export async function action({ request }: Route.ActionArgs) {
             "application/pdf"
           );
         const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+        triggerRagRegister(file.id, file.name);
         return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
       } finally {
         try {
@@ -232,6 +306,7 @@ export async function action({ request }: Route.ActionArgs) {
         ? await updateFile(validTokens.accessToken, overwriteFileId, htmlContent, "text/html")
         : await createFile(validTokens.accessToken, htmlFileName, htmlContent, validTokens.rootFolderId, "text/html");
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      triggerRagRegister(file.id, file.name, htmlContent);
       return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "update": {
@@ -251,6 +326,7 @@ export async function action({ request }: Route.ActionArgs) {
 
       const file = await updateFile(validTokens.accessToken, fileId, content, effectiveMimeType);
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      triggerRagRegister(file.id, file.name, typeof content === "string" ? content : undefined);
 
       // Save remote edit history (best-effort)
       if (oldContent != null && content != null && oldContent !== content) {
@@ -279,6 +355,7 @@ export async function action({ request }: Route.ActionArgs) {
       const fileMeta = await getFileMetadata(validTokens.accessToken, fileId);
       const file = await updateFileBinary(validTokens.accessToken, fileId, buffer, fileMeta.mimeType || "application/octet-stream");
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      triggerRagRegister(file.id, file.name);
       return logAndReturn({
         file,
         md5Checksum: file.md5Checksum,

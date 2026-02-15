@@ -3,6 +3,7 @@ import { readFileBytes } from "~/services/google-drive.server";
 import { getOrCreateStore, registerSingleFile, calculateChecksum, deleteSingleFileFromRag } from "~/services/file-search.server";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
 import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
+import { isRagEligible } from "~/constants/rag";
 
 type RagActionType = "ragRegister" | "ragSave" | "ragDeleteDoc" | "ragRetryPending";
 
@@ -37,6 +38,30 @@ export const defaultRagDeps: RagDeps = {
   rebuildSyncMeta,
 };
 
+function matchesExcludePatterns(fileName: string, patterns: string[] | undefined): boolean {
+  if (!patterns || patterns.length === 0) return false;
+  for (const pattern of patterns) {
+    try {
+      if (new RegExp(pattern).test(fileName)) return true;
+    } catch {
+      // Ignore invalid patterns (validated in settings UI).
+    }
+  }
+  return false;
+}
+
+function toPendingRagInfo(
+  fallback: { checksum: string; uploadedAt: number; fileId: string | null; status: "registered" | "pending" },
+  fileId: string | null
+) {
+  return {
+    checksum: fallback.checksum || "",
+    uploadedAt: Date.now(),
+    fileId,
+    status: "pending" as const,
+  };
+}
+
 export async function handleRagAction(
   actionType: RagActionType,
   body: unknown,
@@ -56,6 +81,9 @@ export async function handleRagAction(
 
       if (!fileName) {
         return jsonWithCookie({ error: "Missing fileName" }, { status: 400 });
+      }
+      if (!isRagEligible(fileName)) {
+        return jsonWithCookie({ ok: true, skipped: true, reason: "ineligible-extension" });
       }
 
       const settings = await deps.getSettings(validTokens.accessToken, validTokens.rootFolderId);
@@ -77,7 +105,7 @@ export async function handleRagAction(
 
       // Skip if file matches exclude patterns
       const excludePatterns = ragSetting.excludePatterns || [];
-      if (excludePatterns.some((p) => { try { return new RegExp(p).test(fileName); } catch { return false; } })) {
+      if (matchesExcludePatterns(fileName, excludePatterns)) {
         return jsonWithCookie({ ok: true, skipped: true });
       }
 
@@ -160,6 +188,7 @@ export async function handleRagAction(
         settings.ragSettings[storeKey] = ragSetting;
       }
       ragSetting.files ??= {};
+      const excludePatterns = ragSetting.excludePatterns || [];
 
       // Enable RAG if we have newly registered (not just pending) files
       if (updates.some((u) => u.ragFileInfo.status === "registered")) {
@@ -170,13 +199,33 @@ export async function handleRagAction(
       }
 
       for (const { fileName, ragFileInfo } of updates) {
+        const existing = ragSetting.files[fileName];
+        // Keep tracking clean even if clients sent pending updates before exclude filtering.
+        if (!isRagEligible(fileName) || matchesExcludePatterns(fileName, excludePatterns)) {
+          const existingDocId = existing?.fileId ?? ragFileInfo.fileId;
+          if (!existingDocId) {
+            delete ragSetting.files[fileName];
+            continue;
+          }
+          if (!validTokens.geminiApiKey) {
+            ragSetting.files[fileName] = toPendingRagInfo(existing ?? ragFileInfo, existingDocId);
+            continue;
+          }
+          const deleted = await deps.deleteSingleFileFromRag(validTokens.geminiApiKey, existingDocId);
+          if (deleted) {
+            delete ragSetting.files[fileName];
+            continue;
+          }
+          // Keep a pending marker so retry can remove the orphaned doc later.
+          ragSetting.files[fileName] = toPendingRagInfo(existing ?? ragFileInfo, existingDocId);
+          continue;
+        }
         // Don't overwrite existing registered entries with empty-checksum pending
         // (initial pending-first save should not destroy checksum/fileId)
-        const existing = ragSetting.files[fileName];
         if (
           ragFileInfo.status === "pending" &&
           !ragFileInfo.checksum &&
-          existing?.status === "registered"
+          (!ragFileInfo.fileId && !!existing?.fileId)
         ) {
           continue;
         }
@@ -219,9 +268,11 @@ export async function handleRagAction(
       }
 
       // Find pending entries
-      const pendingEntries = Object.entries(retryRagSetting.files).filter(
-        ([, info]) => info.status === "pending"
-      );
+      const pendingEntries = Object.entries(retryRagSetting.files).filter(([fileName, info]) => {
+        if (!isRagEligible(fileName)) return true;
+        if (matchesExcludePatterns(fileName, retryRagSetting.excludePatterns || [])) return true;
+        return info.status === "pending";
+      });
       if (pendingEntries.length === 0) {
         return jsonWithCookie({ ok: true, retried: 0, stillPending: 0 });
       }
@@ -237,6 +288,22 @@ export async function handleRagAction(
       let stillPendingCount = 0;
 
       for (const [fileName, info] of pendingEntries) {
+        if (
+          !isRagEligible(fileName) ||
+          matchesExcludePatterns(fileName, retryRagSetting.excludePatterns || [])
+        ) {
+          // Excluded/ineligible file should never be retried.
+          if (info.fileId) {
+            const deleted = await deps.deleteSingleFileFromRag(retryApiKey, info.fileId);
+            if (!deleted) {
+              retryRagSetting.files[fileName] = toPendingRagInfo(info, info.fileId);
+              stillPendingCount++;
+              continue;
+            }
+          }
+          delete retryRagSetting.files[fileName];
+          continue;
+        }
         const driveFileId = nameToFileId[fileName];
         if (!driveFileId) {
           // File no longer exists on Drive, remove from tracking
