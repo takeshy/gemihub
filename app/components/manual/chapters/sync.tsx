@@ -30,6 +30,9 @@ function SyncEn() {
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
           <img src="/images/pull_diff.png" alt="Sync diff dialog" className="w-full" loading="lazy" />
         </figure>
+        <p>
+          If you want to keep your local version over the pulled content, you can open the file first and upload it via <strong>Temp UP</strong>, then perform the Pull, and afterwards overwrite it using <strong>Temp DL</strong>. This will mark the file as locally modified so it will be uploaded on the next Push.
+        </p>
 
         <h2>Sync Badges</h2>
         <p>
@@ -102,6 +105,9 @@ function SyncJa() {
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
           <img src="/images/pull_diff.png" alt="同期差分ダイアログ" className="w-full" loading="lazy" />
         </figure>
+        <p>
+          Pullの内容よりローカルを優先したい場合は、いったん「開く」でファイルを開いて<strong>一時UL</strong>でアップロードし、Pullした後に<strong>一時DL</strong>で上書きすることで、そのファイルを次回のPushで更新することができます。
+        </p>
 
         <h2>同期バッジ</h2>
         <p>
