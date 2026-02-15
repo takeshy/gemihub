@@ -337,9 +337,9 @@ export default function LandingPage() {
           </a>
           <a
             href={`/manual${jaPrefix}`}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-6 py-2.5 text-base font-semibold text-gray-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-gray-50 hover:shadow-md dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
           >
-            <BookOpen size={16} />
+            <BookOpen size={18} />
             {s.heroManual}
           </a>
         </div>
