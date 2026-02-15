@@ -37,6 +37,10 @@ export function useFileWithCache(
     } else {
       skipFetchRef.current = false;
       setContent(null);
+      // new: files load from cache instantly — clear stale loading to avoid flash spinner
+      if (fileId?.startsWith("new:")) {
+        setLoading(false);
+      }
     }
     setSaved(false);
     setError(null);
@@ -55,8 +59,8 @@ export function useFileWithCache(
         // new: prefix files are not yet on Drive — read from seeded cache only
         if (id.startsWith("new:")) {
           const cached = await getCachedFile(id);
-          if (cached && currentFileId.current === id) {
-            setContent(cached.content);
+          if (currentFileId.current === id) {
+            setContent(cached?.content ?? "");
             setLoading(false);
           }
           return;
