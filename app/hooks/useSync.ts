@@ -207,13 +207,6 @@ export function useSync() {
     return () => clearInterval(interval);
   }, [checkRemoteChanges]);
 
-  // When all conflicts are resolved, return to idle
-  useEffect(() => {
-    if (syncStatus === "conflict" && conflicts.length === 0) {
-      setSyncStatus("idle");
-    }
-  }, [syncStatus, conflicts.length]);
-
   const push = useCallback(async () => {
     if (syncLockRef.current) { console.warn("[useSync] push skipped: sync already in progress"); return; }
     syncLockRef.current = true;
@@ -534,6 +527,13 @@ export function useSync() {
       syncLockRef.current = false;
     }
   }, []);
+
+  // When all conflicts are resolved, auto-continue pull for remaining items
+  useEffect(() => {
+    if (syncStatus === "conflict" && conflicts.length === 0) {
+      pull();
+    }
+  }, [syncStatus, conflicts.length, pull]);
 
   const resolveConflict = useCallback(
     async (fileId: string, choice: "local" | "remote", isEditDelete?: boolean) => {
