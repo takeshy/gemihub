@@ -122,10 +122,12 @@ export async function action({ request }: Route.ActionArgs) {
 
     case "resolve": {
       // Resolve a conflict by choosing local or remote
-      const { fileId, choice, localContent } = body as {
+      const { fileId, choice, localContent, isEditDelete, fileName: clientFileName } = body as {
         fileId: string;
         choice: "local" | "remote";
         localContent?: string;
+        isEditDelete?: boolean;
+        fileName?: string;
       };
 
       if (choice === "local" && localContent == null) {
@@ -145,34 +147,95 @@ export async function action({ request }: Route.ActionArgs) {
         };
 
       if (choice === "local") {
-        // Local wins — remote content is the loser, back it up
-        try {
-          const remoteContent = await readFile(validTokens.accessToken, fileId);
-          const fileName = remoteMeta.files[fileId]?.name || fileId;
-          await saveConflictBackup(
-            validTokens.accessToken,
-            validTokens.rootFolderId,
-            conflictFolder,
-            fileName,
-            remoteContent
-          );
-        } catch {
-          // Backup failure shouldn't block conflict resolution
-        }
-        // Update the Drive file with local content
-        if (localContent != null) {
-          const existingMeta = remoteMeta.files[fileId];
-          const mimeType = existingMeta?.mimeType || "text/plain";
-          const updated = await updateFile(validTokens.accessToken, fileId, localContent, mimeType);
-          remoteMeta.files[fileId] = {
-            name: updated.name,
-            mimeType: updated.mimeType,
-            md5Checksum: updated.md5Checksum ?? "",
-            modifiedTime: updated.modifiedTime ?? "",
-          };
+        if (isEditDelete) {
+          // Edit-delete: file was deleted on remote — re-create it on Drive
+          if (localContent != null) {
+            const restoreName = clientFileName || fileId;
+            const newFile = await createFile(
+              validTokens.accessToken,
+              restoreName,
+              localContent,
+              validTokens.rootFolderId,
+              "text/plain"
+            );
+            remoteMeta.files[newFile.id] = {
+              name: newFile.name,
+              mimeType: newFile.mimeType,
+              md5Checksum: newFile.md5Checksum ?? "",
+              modifiedTime: newFile.modifiedTime ?? "",
+            };
+            remoteMeta.lastUpdatedAt = new Date().toISOString();
+            await writeRemoteSyncMeta(
+              validTokens.accessToken,
+              validTokens.rootFolderId,
+              remoteMeta
+            );
+            return logAndReturn({
+              remoteMeta,
+              file: {
+                fileId: newFile.id,
+                md5Checksum: newFile.md5Checksum ?? "",
+                modifiedTime: newFile.modifiedTime ?? "",
+                fileName: newFile.name,
+              },
+            });
+          }
+        } else {
+          // Normal conflict: local wins — remote content is the loser, back it up
+          try {
+            const remoteContent = await readFile(validTokens.accessToken, fileId);
+            const fileName = remoteMeta.files[fileId]?.name || fileId;
+            await saveConflictBackup(
+              validTokens.accessToken,
+              validTokens.rootFolderId,
+              conflictFolder,
+              fileName,
+              remoteContent
+            );
+          } catch {
+            // Backup failure shouldn't block conflict resolution
+          }
+          // Update the Drive file with local content
+          if (localContent != null) {
+            const existingMeta = remoteMeta.files[fileId];
+            const mimeType = existingMeta?.mimeType || "text/plain";
+            const updated = await updateFile(validTokens.accessToken, fileId, localContent, mimeType);
+            remoteMeta.files[fileId] = {
+              name: updated.name,
+              mimeType: updated.mimeType,
+              md5Checksum: updated.md5Checksum ?? "",
+              modifiedTime: updated.modifiedTime ?? "",
+            };
+          }
         }
       } else {
-        // Remote wins — local content is the loser, back it up
+        if (isEditDelete) {
+          // Edit-delete discard: back up local content, file already deleted on remote
+          if (localContent) {
+            const backupName = clientFileName || fileId;
+            try {
+              await saveConflictBackup(
+                validTokens.accessToken,
+                validTokens.rootFolderId,
+                conflictFolder,
+                backupName,
+                localContent
+              );
+            } catch {
+              // Backup failure shouldn't block conflict resolution
+            }
+          }
+          // File is already not in remoteMeta — just return current meta
+          remoteMeta.lastUpdatedAt = new Date().toISOString();
+          await writeRemoteSyncMeta(
+            validTokens.accessToken,
+            validTokens.rootFolderId,
+            remoteMeta
+          );
+          return logAndReturn({ remoteMeta });
+        }
+
+        // Normal conflict: remote wins — local content is the loser, back it up
         if (localContent) {
           const fileName = remoteMeta.files[fileId]?.name || fileId;
           try {

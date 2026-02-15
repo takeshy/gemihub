@@ -28,6 +28,7 @@ export interface SyncDiff {
     localModifiedTime: string;
     remoteModifiedTime: string;
   }>;
+  editDeleteConflicts: string[]; // locally edited but remotely deleted file IDs
   localOnly: string[]; // exists only locally
   remoteOnly: string[]; // exists only remotely
 }
@@ -58,6 +59,7 @@ export function computeSyncDiff(
   const toPush: string[] = [];
   const toPull: string[] = [];
   const conflicts: SyncDiff["conflicts"] = [];
+  const editDeleteConflicts: string[] = [];
   const localOnly: string[] = [];
   const remoteOnly: string[] = [];
 
@@ -82,7 +84,12 @@ export function computeSyncDiff(
       : false;
 
     if (hasLocal && !hasRemote) {
-      localOnly.push(fileId);
+      // Locally edited + previously synced + remotely deleted = edit-delete conflict
+      if (locallyModified && local) {
+        editDeleteConflicts.push(fileId);
+      } else {
+        localOnly.push(fileId);
+      }
     } else if (!hasLocal && hasRemote) {
       remoteOnly.push(fileId);
     } else if (localChanged && remoteChanged) {
@@ -101,5 +108,5 @@ export function computeSyncDiff(
     }
   }
 
-  return { toPush, toPull, conflicts, localOnly, remoteOnly };
+  return { toPush, toPull, conflicts, editDeleteConflicts, localOnly, remoteOnly };
 }

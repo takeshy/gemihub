@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Loader2, ExternalLink, ArrowUp, ArrowDown } from "lucide-react";
+import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Loader2, ExternalLink, ArrowUp, ArrowDown } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { DiffView } from "~/components/shared/DiffView";
 import { useI18n } from "~/i18n/context";
@@ -10,7 +10,7 @@ import { ICON } from "~/utils/icon-sizes";
 export interface FileListItem {
   id: string;
   name: string;
-  type: "new" | "modified" | "deleted";
+  type: "new" | "modified" | "deleted" | "editDeleted";
 }
 
 interface SyncDiffDialogProps {
@@ -65,7 +65,7 @@ export function SyncDiffDialog({
   const oldLabel = type === "push" ? "Drive" : "Local";
   const newLabel = type === "push" ? "Local" : "Drive";
 
-  const handleDiffToggle = useCallback(async (fileId: string, fileName: string, fileType: "new" | "modified" | "deleted") => {
+  const handleDiffToggle = useCallback(async (fileId: string, fileName: string, fileType: FileListItem["type"]) => {
     const current = diffStatesRef.current[fileId];
 
     if (current?.diff !== null && current?.diff !== undefined && !current.error) {
@@ -159,8 +159,8 @@ export function SyncDiffDialog({
           ) : (
             <div className="space-y-2">
               {files.map((f) => {
-                const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : Trash2;
-                const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : "text-red-500";
+                const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : f.type === "editDeleted" ? AlertTriangle : Trash2;
+                const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : f.type === "editDeleted" ? "text-amber-500" : "text-red-500";
                 const ds = diffStates[f.id];
                 const diffable = canShowDiff(f.name);
 
@@ -173,6 +173,11 @@ export function SyncDiffDialog({
                       <Icon size={14} className={`shrink-0 ${iconColor}`} />
                       <span className="truncate flex-1 text-sm text-gray-900 dark:text-gray-100" title={f.name}>
                         {f.name}
+                        {f.type === "editDeleted" && (
+                          <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                            {t("conflict.deletedOnRemote")}
+                          </span>
+                        )}
                       </span>
 
                       {/* Open button */}
@@ -189,8 +194,8 @@ export function SyncDiffDialog({
                         </button>
                       )}
 
-                      {/* Diff toggle */}
-                      {diffable ? (
+                      {/* Diff toggle (disabled for edit-delete: no remote content to compare) */}
+                      {diffable && f.type !== "editDeleted" ? (
                         <button
                           onClick={() => handleDiffToggle(f.id, f.name, f.type)}
                           disabled={ds?.loading}

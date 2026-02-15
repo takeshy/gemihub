@@ -9,7 +9,7 @@ import type { ConflictInfo } from "~/hooks/useSync";
 
 interface ConflictDialogProps {
   conflicts: ConflictInfo[];
-  onResolve: (fileId: string, choice: "local" | "remote") => Promise<void>;
+  onResolve: (fileId: string, choice: "local" | "remote", isEditDelete?: boolean) => Promise<void>;
   onClose: () => void;
 }
 
@@ -38,13 +38,13 @@ export function ConflictDialog({
   const handleResolveAll = async () => {
     const toResolve = conflicts
       .filter((c) => choicesRef.current[c.fileId])
-      .map((c) => ({ fileId: c.fileId, choice: choicesRef.current[c.fileId] }));
+      .map((c) => ({ fileId: c.fileId, choice: choicesRef.current[c.fileId], isEditDelete: c.isEditDelete }));
     setBatchResolving(true);
-    for (const { fileId, choice } of toResolve) {
+    for (const { fileId, choice, isEditDelete } of toResolve) {
       if (resolvedIds.current.has(fileId)) continue;
       setResolving(fileId);
       try {
-        await onResolve(fileId, choice);
+        await onResolve(fileId, choice, isEditDelete);
         resolvedIds.current.add(fileId);
       } finally {
         setResolving(null);
@@ -144,7 +144,9 @@ export function ConflictDialog({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
           <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-            {t("conflict.description")}
+            {conflicts.some(c => !c.isEditDelete) && t("conflict.description")}
+            {conflicts.some(c => !c.isEditDelete) && conflicts.some(c => c.isEditDelete) && " "}
+            {conflicts.some(c => c.isEditDelete) && t("conflict.editDeleteDescription")}
           </p>
           <p className="mb-4 text-xs text-gray-400 dark:text-gray-500 italic">
             {t("conflict.backupNote")}
@@ -178,9 +180,11 @@ export function ConflictDialog({
                     </span>
                     <span>
                       {t("conflict.remote")}:{" "}
-                      {conflict.remoteModifiedTime
-                        ? new Date(conflict.remoteModifiedTime).toLocaleString()
-                        : t("conflict.unknownTime")}
+                      {conflict.isEditDelete
+                        ? t("conflict.deletedOnRemote")
+                        : conflict.remoteModifiedTime
+                          ? new Date(conflict.remoteModifiedTime).toLocaleString()
+                          : t("conflict.unknownTime")}
                     </span>
                   </div>
 
@@ -206,9 +210,9 @@ export function ConflictDialog({
                         disabled={batchResolving}
                         className="accent-green-600"
                       />
-                      {t("conflict.keepRemote")}
+                      {conflict.isEditDelete ? t("conflict.acceptDeletion") : t("conflict.keepRemote")}
                     </label>
-                    {canDiff && (
+                    {canDiff && !conflict.isEditDelete && (
                       <button
                         onClick={() => handleDiffToggle(conflict.fileId, conflict.fileName)}
                         disabled={ds?.loading}

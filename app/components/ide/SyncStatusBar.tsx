@@ -103,6 +103,11 @@ export function SyncStatusBar({
           const cached = await getCachedFile(id);
           files.push({ id, name: cached?.fileName || id, type: "deleted" });
         }
+        // Edit-delete conflicts: locally edited but remotely deleted
+        for (const id of diff.editDeleteConflicts) {
+          const cached = await getCachedFile(id);
+          files.push({ id, name: cached?.fileName || id, type: "editDeleted" });
+        }
 
         files.sort((a, b) => a.name.localeCompare(b.name));
         setDialogFiles(files);

@@ -30,6 +30,7 @@ export interface ConflictInfo {
   remoteChecksum: string;
   localModifiedTime: string;
   remoteModifiedTime: string;
+  isEditDelete?: boolean;
 }
 
 export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "warning" | "error";
@@ -143,8 +144,9 @@ export function useSync() {
         // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
         // Exclude localOnly files only in editHistory (new local files — shown in push badge).
         // Exclude conflicts — they are shown in the conflict dialog, not pull.
+        // Include editDeleteConflicts so user sees pull badge and triggers conflict dialog.
         const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
-        setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length);
+        setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length + diff.editDeleteConflicts.length);
       }
     } catch {
       // ignore
@@ -235,6 +237,7 @@ export function useSync() {
       // 4. Reject push when remote has pending changes (pull first)
       if (
         diff.conflicts.length > 0
+        || diff.editDeleteConflicts.length > 0
         || diff.toPull.length > 0
         || diff.remoteOnly.length > 0
       ) {
@@ -392,9 +395,26 @@ export function useSync() {
       // 3. Compute diff client-side
       const diff = computeSyncDiff(localMeta, remoteMeta, modifiedIds);
 
-      // 4. Handle conflicts
-      if (diff.conflicts.length > 0) {
-        setConflicts(diff.conflicts);
+      // 4. Handle conflicts (including edit-delete conflicts)
+      const editDeleteConflictInfos: ConflictInfo[] = [];
+      if (diff.editDeleteConflicts.length > 0) {
+        const localFiles = localMeta?.files ?? {};
+        for (const fid of diff.editDeleteConflicts) {
+          const cached = await getCachedFile(fid);
+          editDeleteConflictInfos.push({
+            fileId: fid,
+            fileName: cached?.fileName || fid,
+            localChecksum: localFiles[fid]?.md5Checksum ?? "",
+            remoteChecksum: "",
+            localModifiedTime: localFiles[fid]?.modifiedTime ?? "",
+            remoteModifiedTime: "",
+            isEditDelete: true,
+          });
+        }
+      }
+      const allConflicts = [...diff.conflicts, ...editDeleteConflictInfos];
+      if (allConflicts.length > 0) {
+        setConflicts(allConflicts);
         setSyncStatus("conflict");
         return;
       }
@@ -516,7 +536,7 @@ export function useSync() {
   }, []);
 
   const resolveConflict = useCallback(
-    async (fileId: string, choice: "local" | "remote") => {
+    async (fileId: string, choice: "local" | "remote", isEditDelete?: boolean) => {
       if (syncLockRef.current) { console.warn("[useSync] resolveConflict skipped: sync already in progress"); return; }
       syncLockRef.current = true;
       setError(null);
@@ -527,9 +547,11 @@ export function useSync() {
         // - "local": server updates Drive with this content
         // - "remote": server backs up this content
         let localContent: string | undefined;
+        let fileName: string | undefined;
         const cached = await getCachedFile(fileId);
         if (cached) {
           localContent = cached.content;
+          fileName = cached.fileName;
         }
 
         const res = await fetch("/api/sync", {
@@ -540,6 +562,8 @@ export function useSync() {
             fileId,
             choice,
             localContent,
+            isEditDelete: isEditDelete || undefined,
+            fileName: isEditDelete ? fileName : undefined,
             localMeta: localMeta
               ? { lastUpdatedAt: localMeta.lastUpdatedAt, files: localMeta.files }
               : null,
@@ -562,14 +586,32 @@ export function useSync() {
           });
         }
 
+        // Edit-delete remote (accept deletion): clean up local cache
+        if (isEditDelete && choice === "remote") {
+          await deleteCachedFile(fileId);
+        }
+
         // If local wins, update cache md5/modifiedTime from server response
         if (choice === "local" && data.file && cached) {
-          await setCachedFile({
-            ...cached,
-            md5Checksum: data.file.md5Checksum,
-            modifiedTime: data.file.modifiedTime,
-            cachedAt: Date.now(),
-          });
+          if (isEditDelete && data.file.fileId !== fileId) {
+            // Edit-delete: server created a new file with a new ID
+            await deleteCachedFile(fileId);
+            await setCachedFile({
+              fileId: data.file.fileId,
+              content: cached.content,
+              md5Checksum: data.file.md5Checksum,
+              modifiedTime: data.file.modifiedTime,
+              cachedAt: Date.now(),
+              fileName: data.file.fileName,
+            });
+          } else {
+            await setCachedFile({
+              ...cached,
+              md5Checksum: data.file.md5Checksum,
+              modifiedTime: data.file.modifiedTime,
+              cachedAt: Date.now(),
+            });
+          }
         }
 
         // Clear edit history for the resolved file (conflict is resolved)
@@ -582,13 +624,17 @@ export function useSync() {
             lastUpdatedAt: string;
             files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
           });
+          const newFileId = (isEditDelete && data.file?.fileId !== fileId) ? data.file?.fileId : null;
           if (existing) {
+            // Remove old fileId for edit-delete (file was re-created with new ID)
+            if (isEditDelete) delete existing.files[fileId];
+            const mergeFileId = newFileId || fileId;
             const merged: LocalSyncMeta = {
               id: "current",
               lastUpdatedAt: incoming.lastUpdatedAt,
               files: {
                 ...existing.files,
-                ...(incoming.files[fileId] ? { [fileId]: incoming.files[fileId] } : {}),
+                ...(incoming.files[mergeFileId] ? { [mergeFileId]: incoming.files[mergeFileId] } : {}),
               },
             };
             await setLocalSyncMeta(merged);
@@ -610,6 +656,9 @@ export function useSync() {
         window.dispatchEvent(new Event("sync-complete"));
         if (choice === "remote") {
           window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: [fileId] } }));
+        }
+        if (isEditDelete && choice === "local" && data.file?.fileId) {
+          window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: [data.file.fileId] } }));
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Resolve failed");

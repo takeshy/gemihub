@@ -78,6 +78,36 @@ test("unchanged file is skipped", () => {
   assert.deepEqual(diff.toPush, []);
   assert.deepEqual(diff.toPull, []);
   assert.deepEqual(diff.conflicts, []);
+  assert.deepEqual(diff.editDeleteConflicts, []);
   assert.deepEqual(diff.localOnly, []);
   assert.deepEqual(diff.remoteOnly, []);
+});
+
+test("locally edited + remotely deleted produces editDeleteConflict", () => {
+  const localMeta = makeMeta("1", "aaa");
+  const remoteMeta: SyncMeta = { lastUpdatedAt: "2024-01-01T00:00:00.000Z", files: {} };
+  const diff = computeSyncDiff(localMeta, remoteMeta, new Set(["1"]));
+
+  assert.deepEqual(diff.editDeleteConflicts, ["1"]);
+  assert.deepEqual(diff.localOnly, []);
+  assert.equal(diff.conflicts.length, 0);
+});
+
+test("remotely deleted without local edits produces localOnly (not editDeleteConflict)", () => {
+  const localMeta = makeMeta("1", "aaa");
+  const remoteMeta: SyncMeta = { lastUpdatedAt: "2024-01-01T00:00:00.000Z", files: {} };
+  const diff = computeSyncDiff(localMeta, remoteMeta, new Set());
+
+  assert.deepEqual(diff.localOnly, ["1"]);
+  assert.deepEqual(diff.editDeleteConflicts, []);
+});
+
+test("new local file (editHistory only, no localMeta) stays as localOnly", () => {
+  const localMeta = null;
+  const remoteMeta: SyncMeta = { lastUpdatedAt: "2024-01-01T00:00:00.000Z", files: {} };
+  // File is in editHistory but not in any meta
+  const diff = computeSyncDiff(localMeta, remoteMeta, new Set(["new-file"]));
+
+  assert.deepEqual(diff.localOnly, ["new-file"]);
+  assert.deepEqual(diff.editDeleteConflicts, []);
 });

@@ -432,6 +432,9 @@ export interface TranslationStrings {
   "conflict.hideDiff": string;
   "conflict.diffError": string;
   "conflict.backupNote": string;
+  "conflict.editDeleteDescription": string;
+  "conflict.deletedOnRemote": string;
+  "conflict.acceptDeletion": string;
 
   // Sync diff dialog
   "sync.pushLabel": string;
@@ -895,6 +898,9 @@ const en: TranslationStrings = {
   "conflict.hideDiff": "Hide",
   "conflict.diffError": "Failed to load diff",
   "conflict.backupNote": "The overwritten version is backed up and can be restored from Settings > Sync > Conflict Backups.",
+  "conflict.editDeleteDescription": "These files were edited locally but deleted on remote. Choose to keep your local version (re-creates the file on Drive) or accept the deletion.",
+  "conflict.deletedOnRemote": "Deleted on remote",
+  "conflict.acceptDeletion": "Accept Deletion",
 
   // Sync diff dialog
   "sync.pushLabel": "Push to Drive",
@@ -1358,6 +1364,9 @@ const ja: TranslationStrings = {
   "conflict.hideDiff": "非表示",
   "conflict.diffError": "差分の読み込みに失敗しました",
   "conflict.backupNote": "上書きされたバージョンはバックアップされ、設定 > 同期 > コンフリクトバックアップから復元できます。",
+  "conflict.editDeleteDescription": "これらのファイルはローカルで編集されましたが、リモートで削除されています。ローカル版を保持する（Drive にファイルを再作成）か、削除を受け入れるか選択してください。",
+  "conflict.deletedOnRemote": "リモートで削除済み",
+  "conflict.acceptDeletion": "削除を受け入れる",
 
   // Sync diff dialog
   "sync.pushLabel": "ドライブ反映",
