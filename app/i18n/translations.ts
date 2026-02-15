@@ -48,6 +48,10 @@ export interface TranslationStrings {
   "chat.toolModeLockWebSearch": string;
   "chat.toolModeLockFlashLiteRag": string;
   "chat.toolModeLocked": string;
+  "chat.unpushWarning.title": string;
+  "chat.unpushWarning.description": string;
+  "chat.unpushWarning.sendAnyway": string;
+  "chat.unpushWarning.cancel": string;
 
   "chat.saveToDrive": string;
   "chat.savedToDrive": string;
@@ -395,6 +399,40 @@ export interface TranslationStrings {
   "workflow.historySelect.stepsSelected": string;
   "workflow.historySelect.skipped": string;
   "workflow.historySelect.error": string;
+  "workflow.ai.createTitle": string;
+  "workflow.ai.modifyTitle": string;
+  "workflow.ai.workflowName": string;
+  "workflow.ai.namePlaceholder": string;
+  "workflow.ai.refineLabel": string;
+  "workflow.ai.createLabel": string;
+  "workflow.ai.modifyLabel": string;
+  "workflow.ai.refinePlaceholder": string;
+  "workflow.ai.createPlaceholder": string;
+  "workflow.ai.modifyPlaceholder": string;
+  "workflow.ai.model": string;
+  "workflow.ai.generating": string;
+  "workflow.ai.thinking": string;
+  "workflow.ai.ctrlEnter": string;
+  "workflow.ai.cancel": string;
+  "workflow.ai.stop": string;
+  "workflow.ai.regenerate": string;
+  "workflow.ai.generate": string;
+  "workflow.ai.emptyResponse": string;
+  "workflow.ai.generationFailed": string;
+  "workflow.ai.noResponseStream": string;
+  "workflow.ai.generationError": string;
+  "workflow.preview.previewPrefix": string;
+  "workflow.preview.changesPrefix": string;
+  "workflow.preview.defaultName": string;
+  "workflow.preview.visual": string;
+  "workflow.preview.yaml": string;
+  "workflow.preview.diff": string;
+  "workflow.preview.cancel": string;
+  "workflow.preview.refine": string;
+  "workflow.preview.accept": string;
+  "workflow.preview.parseFailed": string;
+  "workflow.preview.noNodes": string;
+  "workflow.preview.noDiff": string;
 
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
@@ -513,6 +551,10 @@ const en: TranslationStrings = {
   "chat.toolModeLockWebSearch": "Drive tools are disabled during Web Search",
   "chat.toolModeLockFlashLiteRag": "Drive tools are disabled when Flash Lite uses RAG",
   "chat.toolModeLocked": "Auto (locked)",
+  "chat.unpushWarning.title": "Unpushed Changes",
+  "chat.unpushWarning.description": "The following files have local changes not yet pushed to Drive. The AI may see outdated content.",
+  "chat.unpushWarning.sendAnyway": "Send Anyway",
+  "chat.unpushWarning.cancel": "Cancel",
 
   "chat.saveToDrive": "Save to Drive",
   "chat.savedToDrive": "Saved to Drive",
@@ -861,6 +903,40 @@ const en: TranslationStrings = {
   "workflow.historySelect.stepsSelected": "{count} step(s) selected",
   "workflow.historySelect.skipped": "Skipped",
   "workflow.historySelect.error": "Error",
+  "workflow.ai.createTitle": "Create Workflow with AI",
+  "workflow.ai.modifyTitle": "Modify Workflow with AI",
+  "workflow.ai.workflowName": "Workflow Name",
+  "workflow.ai.namePlaceholder": "e.g., process-notes",
+  "workflow.ai.refineLabel": "Additional request (refine the result)",
+  "workflow.ai.createLabel": "Describe what this workflow should do",
+  "workflow.ai.modifyLabel": "Describe how to modify this workflow",
+  "workflow.ai.refinePlaceholder": "e.g., Change the loop to process only .md files...",
+  "workflow.ai.createPlaceholder": "e.g., Read all markdown files from Drive, summarize each one using AI, and save the summaries to a new file...",
+  "workflow.ai.modifyPlaceholder": "e.g., Add error handling to the HTTP request node...",
+  "workflow.ai.model": "Model",
+  "workflow.ai.generating": "Generating workflow...",
+  "workflow.ai.thinking": "Thinking...",
+  "workflow.ai.ctrlEnter": "Ctrl+Enter to generate",
+  "workflow.ai.cancel": "Cancel",
+  "workflow.ai.stop": "Stop",
+  "workflow.ai.regenerate": "Regenerate",
+  "workflow.ai.generate": "Generate",
+  "workflow.ai.emptyResponse": "AI returned empty response. Please try again.",
+  "workflow.ai.generationFailed": "Generation failed",
+  "workflow.ai.noResponseStream": "No response stream",
+  "workflow.ai.generationError": "Generation error",
+  "workflow.preview.previewPrefix": "Preview: ",
+  "workflow.preview.changesPrefix": "Changes: ",
+  "workflow.preview.defaultName": "Workflow",
+  "workflow.preview.visual": "Visual",
+  "workflow.preview.yaml": "YAML",
+  "workflow.preview.diff": "Diff",
+  "workflow.preview.cancel": "Cancel",
+  "workflow.preview.refine": "Refine",
+  "workflow.preview.accept": "Accept",
+  "workflow.preview.parseFailed": "Failed to parse generated YAML. Check the YAML tab for raw content.",
+  "workflow.preview.noNodes": "No nodes found",
+  "workflow.preview.noDiff": "No differences detected.",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
@@ -979,6 +1055,10 @@ const ja: TranslationStrings = {
   "chat.toolModeLockWebSearch": "Web Search中はDriveツールは無効です",
   "chat.toolModeLockFlashLiteRag": "Flash LiteでRAG使用時はDriveツールは無効です",
   "chat.toolModeLocked": "自動（ロック中）",
+  "chat.unpushWarning.title": "未プッシュの変更",
+  "chat.unpushWarning.description": "以下のファイルにはDriveにプッシュされていないローカル変更があります。AIは古い内容を参照する可能性があります。",
+  "chat.unpushWarning.sendAnyway": "そのまま送信",
+  "chat.unpushWarning.cancel": "キャンセル",
 
   "chat.saveToDrive": "Driveに保存",
   "chat.savedToDrive": "Drive保存済み",
@@ -1327,6 +1407,40 @@ const ja: TranslationStrings = {
   "workflow.historySelect.stepsSelected": "{count}件のステップを選択中",
   "workflow.historySelect.skipped": "スキップ",
   "workflow.historySelect.error": "エラー",
+  "workflow.ai.createTitle": "AIでワークフローを作成",
+  "workflow.ai.modifyTitle": "AIでワークフローを修正",
+  "workflow.ai.workflowName": "ワークフロー名",
+  "workflow.ai.namePlaceholder": "例: process-notes",
+  "workflow.ai.refineLabel": "追加リクエスト（結果を改善）",
+  "workflow.ai.createLabel": "ワークフローの内容を説明してください",
+  "workflow.ai.modifyLabel": "ワークフローの修正内容を説明してください",
+  "workflow.ai.refinePlaceholder": "例: ループを.mdファイルのみ処理するように変更...",
+  "workflow.ai.createPlaceholder": "例: Driveのすべてのmarkdownファイルを読み込み、それぞれをAIで要約し、要約を新しいファイルに保存...",
+  "workflow.ai.modifyPlaceholder": "例: HTTPリクエストノードにエラーハンドリングを追加...",
+  "workflow.ai.model": "モデル",
+  "workflow.ai.generating": "ワークフローを生成中...",
+  "workflow.ai.thinking": "思考中...",
+  "workflow.ai.ctrlEnter": "Ctrl+Enterで生成",
+  "workflow.ai.cancel": "キャンセル",
+  "workflow.ai.stop": "停止",
+  "workflow.ai.regenerate": "再生成",
+  "workflow.ai.generate": "生成",
+  "workflow.ai.emptyResponse": "AIが空の応答を返しました。もう一度お試しください。",
+  "workflow.ai.generationFailed": "生成に失敗しました",
+  "workflow.ai.noResponseStream": "レスポンスストリームがありません",
+  "workflow.ai.generationError": "生成エラー",
+  "workflow.preview.previewPrefix": "プレビュー: ",
+  "workflow.preview.changesPrefix": "変更: ",
+  "workflow.preview.defaultName": "ワークフロー",
+  "workflow.preview.visual": "ビジュアル",
+  "workflow.preview.yaml": "YAML",
+  "workflow.preview.diff": "差分",
+  "workflow.preview.cancel": "キャンセル",
+  "workflow.preview.refine": "修正",
+  "workflow.preview.accept": "適用",
+  "workflow.preview.parseFailed": "生成されたYAMLの解析に失敗しました。YAMLタブで生の内容を確認してください。",
+  "workflow.preview.noNodes": "ノードが見つかりません",
+  "workflow.preview.noDiff": "差分はありません。",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",

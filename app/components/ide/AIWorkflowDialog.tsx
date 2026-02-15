@@ -132,15 +132,15 @@ export function AIWorkflowDialog({
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Generation failed" }));
-        setError(err.error || "Generation failed");
+        const err = await res.json().catch(() => ({ error: t("workflow.ai.generationFailed") }));
+        setError(err.error || t("workflow.ai.generationFailed"));
         setPhase("input");
         return;
       }
 
       const reader = res.body?.getReader();
       if (!reader) {
-        setError("No response stream");
+        setError(t("workflow.ai.noResponseStream"));
         setPhase("input");
         return;
       }
@@ -176,7 +176,7 @@ export function AIWorkflowDialog({
                 fullText += parsed.content || "";
                 setGeneratedText(fullText);
               } else if (eventType === "error" || parsed.type === "error") {
-                setError(parsed.content || "Generation error");
+                setError(parsed.content || t("workflow.ai.generationError"));
                 setPhase("input");
                 return;
               }
@@ -195,7 +195,7 @@ export function AIWorkflowDialog({
       }
 
       if (!yaml.trim()) {
-        setError("AI returned empty response. Please try again.");
+        setError(t("workflow.ai.emptyResponse"));
         setPhase("input");
         return;
       }
@@ -210,10 +210,10 @@ export function AIWorkflowDialog({
       setPhase("preview");
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Generation failed");
+      setError(err instanceof Error ? err.message : t("workflow.ai.generationFailed"));
       setPhase("input");
     }
-  }, [description, name, mode, currentYaml, selectedModel, history, showThinking, selectedExecutionSteps]);
+  }, [description, name, mode, currentYaml, selectedModel, history, showThinking, selectedExecutionSteps, t]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -262,7 +262,7 @@ export function AIWorkflowDialog({
           <div className="flex items-center gap-2">
             <Sparkles size={ICON.LG} className="text-purple-500" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {mode === "create" ? "Create Workflow with AI" : "Modify Workflow with AI"}
+              {mode === "create" ? t("workflow.ai.createTitle") : t("workflow.ai.modifyTitle")}
             </h3>
           </div>
           <button
@@ -279,14 +279,14 @@ export function AIWorkflowDialog({
           {mode === "create" && (
             <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Workflow Name
+                {t("workflow.ai.workflowName")}
               </label>
               <input
                 ref={nameRef}
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., process-notes"
+                placeholder={t("workflow.ai.namePlaceholder")}
                 disabled={phase === "generating"}
                 className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 disabled:opacity-50"
               />
@@ -297,10 +297,10 @@ export function AIWorkflowDialog({
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
               {history.length > 0
-                ? "Additional request (refine the result)"
+                ? t("workflow.ai.refineLabel")
                 : mode === "create"
-                  ? "Describe what this workflow should do"
-                  : "Describe how to modify this workflow"}
+                  ? t("workflow.ai.createLabel")
+                  : t("workflow.ai.modifyLabel")}
             </label>
             <textarea
               ref={descriptionRef}
@@ -308,10 +308,10 @@ export function AIWorkflowDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder={
                 history.length > 0
-                  ? "e.g., Change the loop to process only .md files..."
+                  ? t("workflow.ai.refinePlaceholder")
                   : mode === "create"
-                    ? "e.g., Read all markdown files from Drive, summarize each one using AI, and save the summaries to a new file..."
-                    : "e.g., Add error handling to the HTTP request node..."
+                    ? t("workflow.ai.createPlaceholder")
+                    : t("workflow.ai.modifyPlaceholder")
               }
               rows={4}
               disabled={phase === "generating"}
@@ -358,7 +358,7 @@ export function AIWorkflowDialog({
           {/* Model selector */}
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Model
+              {t("workflow.ai.model")}
             </label>
             <select
               value={selectedModel}
@@ -386,7 +386,7 @@ export function AIWorkflowDialog({
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <Loader2 size={ICON.SM} className="animate-spin" />
-                <span>Generating workflow...</span>
+                <span>{t("workflow.ai.generating")}</span>
               </div>
 
               {/* Thinking section */}
@@ -398,7 +398,7 @@ export function AIWorkflowDialog({
                   >
                     {showThinking ? <ChevronDown size={ICON.SM} /> : <ChevronRight size={ICON.SM} />}
                     <Brain size={ICON.SM} />
-                    Thinking...
+                    {t("workflow.ai.thinking")}
                   </button>
                   {showThinking && (
                     <div
@@ -425,21 +425,21 @@ export function AIWorkflowDialog({
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <div className="text-[10px] text-gray-400">
-            {phase === "input" && "Ctrl+Enter to generate"}
+            {phase === "input" && t("workflow.ai.ctrlEnter")}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
               className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
             >
-              Cancel
+              {t("workflow.ai.cancel")}
             </button>
             {phase === "generating" ? (
               <button
                 onClick={handleCancel}
                 className="rounded bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800"
               >
-                Stop
+                {t("workflow.ai.stop")}
               </button>
             ) : (
               <button
@@ -450,7 +450,7 @@ export function AIWorkflowDialog({
                 className="flex items-center gap-1.5 rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
               >
                 <Sparkles size={ICON.SM} />
-                {history.length > 0 ? "Regenerate" : "Generate"}
+                {history.length > 0 ? t("workflow.ai.regenerate") : t("workflow.ai.generate")}
               </button>
             )}
           </div>

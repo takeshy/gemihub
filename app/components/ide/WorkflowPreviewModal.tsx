@@ -19,6 +19,7 @@ import {
   getNodeTypeColor,
 } from "~/utils/workflow-node-summary";
 import { buildOutgoingMap } from "~/utils/workflow-connections";
+import { useI18n } from "~/i18n/context";
 
 interface WorkflowPreviewModalProps {
   yaml: string;
@@ -41,6 +42,7 @@ export function WorkflowPreviewModal({
   onReject,
   onClose,
 }: WorkflowPreviewModalProps) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ViewTab>(
     mode === "modify" && originalYaml ? "diff" : "visual"
   );
@@ -65,9 +67,9 @@ export function WorkflowPreviewModal({
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {mode === "create" ? "Preview: " : "Changes: "}
+              {mode === "create" ? t("workflow.preview.previewPrefix") : t("workflow.preview.changesPrefix")}
               <span className="text-purple-600 dark:text-purple-400">
-                {workflowName || "Workflow"}
+                {workflowName || t("workflow.preview.defaultName")}
               </span>
             </h3>
           </div>
@@ -85,20 +87,20 @@ export function WorkflowPreviewModal({
             active={activeTab === "visual"}
             onClick={() => setActiveTab("visual")}
             icon={<Eye size={ICON.SM} />}
-            label="Visual"
+            label={t("workflow.preview.visual")}
           />
           <TabButton
             active={activeTab === "yaml"}
             onClick={() => setActiveTab("yaml")}
             icon={<Code size={ICON.SM} />}
-            label="YAML"
+            label={t("workflow.preview.yaml")}
           />
           {mode === "modify" && originalYaml && (
             <TabButton
               active={activeTab === "diff"}
               onClick={() => setActiveTab("diff")}
               icon={<FileDiff size={ICON.SM} />}
-              label="Diff"
+              label={t("workflow.preview.diff")}
             />
           )}
         </div>
@@ -118,21 +120,21 @@ export function WorkflowPreviewModal({
             onClick={onClose}
             className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
           >
-            Cancel
+            {t("workflow.preview.cancel")}
           </button>
           <button
             onClick={onReject}
             className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
           >
             <RotateCcw size={ICON.SM} />
-            Refine
+            {t("workflow.preview.refine")}
           </button>
           <button
             onClick={onAccept}
             className="flex items-center gap-1.5 rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
           >
             <Check size={ICON.SM} />
-            Accept
+            {t("workflow.preview.accept")}
           </button>
         </div>
       </div>
@@ -177,12 +179,13 @@ function VisualPreview({
   workflow: Workflow | null;
   yaml: string;
 }) {
+  const { t } = useI18n();
   const [showYaml, setShowYaml] = useState(false);
 
   if (!workflow) {
     return (
       <div className="text-center text-xs text-red-500">
-        Failed to parse generated YAML. Check the YAML tab for raw content.
+        {t("workflow.preview.parseFailed")}
       </div>
     );
   }
@@ -193,7 +196,7 @@ function VisualPreview({
   return (
     <div className="space-y-2">
       {nodeOrder.length === 0 ? (
-        <p className="text-xs text-gray-500">No nodes found</p>
+        <p className="text-xs text-gray-500">{t("workflow.preview.noNodes")}</p>
       ) : (
         nodeOrder.map((nodeId) => {
           const node = workflow.nodes.get(nodeId);
@@ -259,7 +262,7 @@ function VisualPreview({
       >
         {showYaml ? <ChevronDown size={ICON.SM} /> : <ChevronRight size={ICON.SM} />}
         <Code size={ICON.SM} />
-        YAML
+        {t("workflow.preview.yaml")}
       </button>
       {showYaml && (
         <pre className="max-h-48 overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300 font-mono whitespace-pre-wrap">
@@ -290,9 +293,10 @@ interface DiffLine {
 }
 
 function DiffPreview({ lines }: { lines: DiffLine[] }) {
+  const { t } = useI18n();
   if (lines.length === 0) {
     return (
-      <p className="text-xs text-gray-500">No differences detected.</p>
+      <p className="text-xs text-gray-500">{t("workflow.preview.noDiff")}</p>
     );
   }
 
