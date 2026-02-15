@@ -10,6 +10,7 @@ export interface AutocompleteItem {
   description: string;
   value: string; // inserted into text
   command?: SlashCommand;
+  hasLocalChanges?: boolean;
 }
 
 interface UseAutocompleteOptions {
@@ -73,6 +74,7 @@ export function useAutocomplete({
         label: file.name,
         description: file.path,
         value: `@${file.name}`,
+        hasLocalChanges: file.hasLocalChanges,
       });
     }
     return items;

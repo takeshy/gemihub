@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Wrench,
   Lock,
+  AlertTriangle,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
@@ -157,6 +158,7 @@ export function ChatInput({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [pendingOverrides, setPendingOverrides] = useState<ChatOverrides | null>(null);
   const [dismissedFileId, setDismissedFileId] = useState<string | null>(null);
+  const [unpushWarning, setUnpushWarning] = useState<{ fileNames: string[]; pendingSend: () => void } | null>(null);
 
   // Reset dismissed state when switching chats (lastFileIdInMessages changes)
   useEffect(() => {
@@ -289,7 +291,19 @@ export function ChatInput({
     }
   }, [toolDropdownOpen]);
 
-  const handleSend = useCallback(async () => {
+  // Check whether the active file qualifies for auto-context (will be appended to the message)
+  const shouldAutoContextActiveFile = useCallback(
+    (trimmed: string): boolean => {
+      const hasContentRef = trimmed.includes("{content}");
+      const hasSelectionRef = trimmed.includes("{selection}");
+      const hasFileRef = editorCtx.fileList.some(f => trimmed.includes(`@${f.name}`));
+      const fileChanged = editorCtx.activeFileId !== lastFileIdInMessages;
+      return !hasContentRef && !hasSelectionRef && !hasFileRef && fileChanged && !!editorCtx.activeFileId && dismissedFileId !== editorCtx.activeFileId;
+    },
+    [editorCtx.fileList, editorCtx.activeFileId, lastFileIdInMessages, dismissedFileId]
+  );
+
+  const doSend = useCallback(async () => {
     const trimmed = content.trim();
     if (!trimmed && attachments.length === 0) return;
     if (disabled || isStreaming) return;
@@ -317,11 +331,7 @@ export function ChatInput({
     resolved = await resolveFileReferences(resolved, editorCtx.fileList, effectiveMode === "none");
 
     // If no explicit file context was provided, append active file info so LLM can use drive-read
-    const hasContentRef = trimmed.includes("{content}");
-    const hasSelectionRef = trimmed.includes("{selection}");
-    const hasFileRef = editorCtx.fileList.some(f => trimmed.includes(`@${f.name}`));
-    const fileChanged = editorCtx.activeFileId !== lastFileIdInMessages;
-    if (!hasContentRef && !hasSelectionRef && !hasFileRef && fileChanged && editorCtx.activeFileId && editorCtx.activeFileName && dismissedFileId !== editorCtx.activeFileId) {
+    if (shouldAutoContextActiveFile(trimmed) && editorCtx.activeFileName) {
       resolved += `\n[Currently open file: ${editorCtx.activeFileName}, fileId: ${editorCtx.activeFileId}]`;
     }
 
@@ -338,7 +348,44 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, lastFileIdInMessages, dismissedFileId]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, shouldAutoContextActiveFile]);
+
+  const handleSend = useCallback(async () => {
+    const trimmed = content.trim();
+    if (!trimmed && attachments.length === 0) return;
+    if (disabled || isStreaming) return;
+
+    // Collect file IDs referenced in the message
+    const referencedFiles: FileListItem[] = [];
+    // @-mentioned files
+    for (const file of editorCtx.fileList) {
+      if (trimmed.includes(`@${file.name}`)) {
+        referencedFiles.push(file);
+      }
+    }
+    // Auto-context: currently open file (when it will be appended)
+    if (shouldAutoContextActiveFile(trimmed)) {
+      const activeFile = editorCtx.fileList.find(f => f.id === editorCtx.activeFileId);
+      if (activeFile && !referencedFiles.some(f => f.id === activeFile.id)) {
+        referencedFiles.push(activeFile);
+      }
+    }
+
+    // Check for unpushed changes
+    const unpushedFiles = referencedFiles.filter(f => f.hasLocalChanges);
+    if (unpushedFiles.length > 0) {
+      setUnpushWarning({
+        fileNames: unpushedFiles.map(f => f.name),
+        pendingSend: () => {
+          setUnpushWarning(null);
+          doSend();
+        },
+      });
+      return;
+    }
+
+    doSend();
+  }, [content, attachments, disabled, isStreaming, editorCtx, shouldAutoContextActiveFile, doSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -756,6 +803,47 @@ export function ChatInput({
             </select>
           )}
         </div>
+
+        {/* Unpush warning dialog */}
+        {unpushWarning && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="mx-4 w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-900">
+              <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+                <AlertTriangle size={ICON.LG} className="text-amber-500" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {t("chat.unpushWarning.title")}
+                </h3>
+              </div>
+              <div className="p-4">
+                <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                  {t("chat.unpushWarning.description")}
+                </p>
+                <ul className="mb-4 space-y-1">
+                  {unpushWarning.fileNames.map((name) => (
+                    <li key={name} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                      <FileText size={ICON.SM} className="flex-shrink-0 text-gray-400" />
+                      <span className="truncate">{name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+                <button
+                  onClick={() => setUnpushWarning(null)}
+                  className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                >
+                  {t("chat.unpushWarning.cancel")}
+                </button>
+                <button
+                  onClick={unpushWarning.pendingSend}
+                  className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  {t("chat.unpushWarning.sendAnyway")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

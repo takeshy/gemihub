@@ -60,6 +60,9 @@ export function AutocompletePopup({
             {item.type === "variable" && <Hash size={ICON.MD} />}
           </span>
           <span className="font-medium truncate">{item.label}</span>
+          {item.hasLocalChanges && (
+            <span className="h-2 w-2 flex-shrink-0 rounded-full bg-amber-500" title="Unpushed changes" />
+          )}
           <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-[50%]">
             {item.description}
           </span>

@@ -4,6 +4,7 @@ export interface FileListItem {
   id: string;
   name: string;
   path: string;
+  hasLocalChanges?: boolean;
 }
 
 export interface SelectionInfo {
