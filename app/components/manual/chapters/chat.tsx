@@ -11,7 +11,7 @@ function ChatEn() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">AI Chat</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/cap.png" alt="AI Chat interface" className="w-full" loading="lazy" />
+        <img src="/images/chat_rag.png" alt="AI Chat interface" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <p>
@@ -53,6 +53,9 @@ function ChatEn() {
         </p>
 
         <h3>Web Search Mode</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/rag_web_search_selector.png" alt="RAG and Web Search selector" className="w-full" loading="lazy" />
+        </figure>
         <p>
           When Web Search is enabled, the AI uses Google Search exclusively. <strong>All other tools (Drive, MCP, RAG) are disabled</strong> during Web Search mode, because Google Search is incompatible with other tool types in a single request.
         </p>
@@ -60,6 +63,14 @@ function ChatEn() {
         <h3>RAG and Drive Search</h3>
         <p>
           When RAG is enabled, the Drive Search tool (<code>search_drive_files</code> / <code>list_drive_files</code>) is disabled by default. This is because the AI tends to spend tokens calling Drive search instead of using RAG&apos;s semantic search, often resulting in missed or irrelevant results. RAG provides more accurate, meaning-based retrieval. You can override this in the tool mode settings if needed.
+        </p>
+
+        <h3>Drive Tools &amp; MCP</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/drive_tool_mcp_selector.png" alt="Drive tool and MCP selector" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          Configure Drive tool mode and select which MCP servers to enable for the conversation. These settings control which tools are available to the AI during function calling.
         </p>
 
         <h2>File Attachments</h2>
@@ -97,7 +108,7 @@ function ChatJa() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">AIチャット</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/cap.png" alt="AIチャットインターフェース" className="w-full" loading="lazy" />
+        <img src="/images/chat_rag.png" alt="AIチャットインターフェース" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <p>
@@ -139,6 +150,9 @@ function ChatJa() {
         </p>
 
         <h3>Web検索モード</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/rag_web_search_selector.png" alt="RAGとWeb検索セレクター" className="w-full" loading="lazy" />
+        </figure>
         <p>
           Web検索を有効にすると、AIはGoogle検索のみを使用します。<strong>他のすべてのツール（Drive、MCP、RAG）はWeb検索モード中は無効化</strong>されます。Google検索は1つのリクエスト内で他のツールタイプと併用できないためです。
         </p>
@@ -146,6 +160,14 @@ function ChatJa() {
         <h3>RAGとDrive検索</h3>
         <p>
           RAGを有効にすると、Drive検索ツール（<code>search_drive_files</code> / <code>list_drive_files</code>）はデフォルトで無効化されます。これは、AIがRAGの意味検索ではなくDrive検索にトークンを消費してしまい、結果として的外れな検索や空振りに終わるケースがあるためです。RAGはより正確な意味ベースの検索を提供します。必要に応じてツールモード設定で上書きできます。
+        </p>
+
+        <h3>Driveツール・MCP</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/drive_tool_mcp_selector.png" alt="DriveツールとMCPセレクター" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          Driveツールモードの設定や、会話で有効にするMCPサーバーの選択ができます。これらの設定により、ファンクションコール時にAIが利用できるツールを制御します。
         </p>
 
         <h2>ファイル添付</h2>
