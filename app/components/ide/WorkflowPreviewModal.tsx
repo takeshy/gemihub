@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   X,
   Check,
@@ -9,6 +9,7 @@ import {
   Code,
   Eye,
   FileDiff,
+  Loader2,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { parseWorkflowYaml } from "~/engine/parser";
@@ -26,7 +27,7 @@ interface WorkflowPreviewModalProps {
   originalYaml?: string;
   mode: "create" | "modify";
   workflowName?: string;
-  onAccept: () => void;
+  onAccept: () => void | Promise<void>;
   onReject: () => void;
   onClose: () => void;
 }
@@ -46,6 +47,16 @@ export function WorkflowPreviewModal({
   const [activeTab, setActiveTab] = useState<ViewTab>(
     mode === "modify" && originalYaml ? "diff" : "visual"
   );
+  const [saving, setSaving] = useState(false);
+
+  const handleAccept = useCallback(async () => {
+    setSaving(true);
+    try {
+      await onAccept();
+    } finally {
+      setSaving(false);
+    }
+  }, [onAccept]);
 
   const workflow = useMemo<Workflow | null>(() => {
     try {
@@ -118,23 +129,30 @@ export function WorkflowPreviewModal({
         <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <button
             onClick={onClose}
-            className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            disabled={saving}
+            className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 disabled:opacity-50"
           >
             {t("workflow.preview.cancel")}
           </button>
           <button
             onClick={onReject}
-            className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 disabled:opacity-50"
           >
             <RotateCcw size={ICON.SM} />
             {t("workflow.preview.refine")}
           </button>
           <button
-            onClick={onAccept}
-            className="flex items-center gap-1.5 rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+            onClick={handleAccept}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
           >
-            <Check size={ICON.SM} />
-            {t("workflow.preview.accept")}
+            {saving ? (
+              <Loader2 size={ICON.SM} className="animate-spin" />
+            ) : (
+              <Check size={ICON.SM} />
+            )}
+            {saving ? t("workflow.preview.saving") : t("workflow.preview.accept")}
           </button>
         </div>
       </div>

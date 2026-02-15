@@ -390,7 +390,6 @@ function IDELayout({
   const handleAIAccept = useCallback(
     async (yamlContent: string, workflowName: string, meta: AIWorkflowMeta) => {
       const dialogState = aiDialog;
-      setAiDialog(null);
 
       let workflowId = "";
       let finalName = workflowName;
@@ -474,6 +473,9 @@ function IDELayout({
           }
         }
 
+        // Close dialog after Drive operations complete
+        setAiDialog(null);
+
         // Save request record (fire-and-forget)
         if (workflowId) {
           const recordId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -498,6 +500,7 @@ function IDELayout({
         }
       } catch (err) {
         console.error("[AI Accept] Error:", err);
+        setAiDialog(null);
       }
     },
     [aiDialog, handleSelectFile, handleWorkflowChanged]

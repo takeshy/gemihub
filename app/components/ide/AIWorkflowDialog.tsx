@@ -32,7 +32,7 @@ interface AIWorkflowDialogProps {
   apiPlan: ApiPlan;
   encryptedPrivateKey?: string;
   salt?: string;
-  onAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
+  onAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -220,9 +220,9 @@ export function AIWorkflowDialog({
     setPhase("input");
   }, []);
 
-  const handleAcceptPreview = useCallback(() => {
+  const handleAcceptPreview = useCallback(async () => {
     const workflowName = mode === "create" ? name.trim() : (currentName || "workflow");
-    onAccept(generatedText, workflowName, {
+    await onAccept(generatedText, workflowName, {
       description: lastDescription,
       thinking,
       model: selectedModel,

@@ -430,6 +430,7 @@ export interface TranslationStrings {
   "workflow.preview.cancel": string;
   "workflow.preview.refine": string;
   "workflow.preview.accept": string;
+  "workflow.preview.saving": string;
   "workflow.preview.parseFailed": string;
   "workflow.preview.noNodes": string;
   "workflow.preview.noDiff": string;
@@ -934,6 +935,7 @@ const en: TranslationStrings = {
   "workflow.preview.cancel": "Cancel",
   "workflow.preview.refine": "Refine",
   "workflow.preview.accept": "Accept",
+  "workflow.preview.saving": "Saving...",
   "workflow.preview.parseFailed": "Failed to parse generated YAML. Check the YAML tab for raw content.",
   "workflow.preview.noNodes": "No nodes found",
   "workflow.preview.noDiff": "No differences detected.",
@@ -1438,6 +1440,7 @@ const ja: TranslationStrings = {
   "workflow.preview.cancel": "キャンセル",
   "workflow.preview.refine": "修正",
   "workflow.preview.accept": "適用",
+  "workflow.preview.saving": "保存中...",
   "workflow.preview.parseFailed": "生成されたYAMLの解析に失敗しました。YAMLタブで生の内容を確認してください。",
   "workflow.preview.noNodes": "ノードが見つかりません",
   "workflow.preview.noDiff": "差分はありません。",
