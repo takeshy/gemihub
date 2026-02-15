@@ -83,7 +83,7 @@ export function EditHistoryModal({
     setLoadingRemote(true);
     try {
       const res = await fetch(
-        `/api/settings/edit-history?filePath=${encodeURIComponent(filePath)}`
+        `/api/settings/edit-history?filePath=${encodeURIComponent(fullFilePath)}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -104,7 +104,7 @@ export function EditHistoryModal({
       setLoadingRemote(false);
       setShowRemote(true);
     }
-  }, [filePath]);
+  }, [fullFilePath]);
 
   const handleClearAll = useCallback(async () => {
     if (!confirm(t("editHistory.confirmClearAll"))) return;
@@ -112,13 +112,13 @@ export function EditHistoryModal({
       await fetch("/api/settings/edit-history", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filePath }),
+        body: JSON.stringify({ filePath: fullFilePath }),
       });
       setRemoteEntries([]);
     } catch {
       // ignore
     }
-  }, [filePath, t]);
+  }, [fullFilePath, t]);
 
   const allEntries = useMemo(
     () =>

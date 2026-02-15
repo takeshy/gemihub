@@ -576,8 +576,10 @@ function TextBasedViewer({
   const name = fileName || "";
   const lower = name.toLowerCase();
 
-  const handleHistoryClick = () => {
-    setEditHistoryFile({ fileId, filePath: name, fullPath: name });
+  const handleHistoryClick = async () => {
+    const cached = await getCachedFile(fileId);
+    const fullPath = cached?.fileName || name;
+    setEditHistoryFile({ fileId, filePath: name, fullPath });
   };
 
   // Determine which editor to render
