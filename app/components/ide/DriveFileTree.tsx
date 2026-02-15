@@ -43,8 +43,6 @@ import {
   getLocallyModifiedFileIds,
   deleteCachedFile,
   renameCachedFile,
-  getEditHistoryForFile,
-  setEditHistoryEntry,
   deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
@@ -148,16 +146,16 @@ function buildTreeFromMeta(meta: CachedRemoteMeta): CachedTreeNode[] {
   return root;
 }
 
-function flattenTree(nodes: CachedTreeNode[], parentPath: string): FileListItem[] {
+function flattenTree(nodes: CachedTreeNode[], parentPath: string, modifiedIds?: Set<string>): FileListItem[] {
   const result: FileListItem[] = [];
   for (const node of nodes) {
     const path = parentPath ? `${parentPath}/${node.name}` : node.name;
     if (node.isFolder) {
       if (node.children) {
-        result.push(...flattenTree(node.children, path));
+        result.push(...flattenTree(node.children, path, modifiedIds));
       }
     } else {
-      result.push({ id: node.id, name: node.name, path });
+      result.push({ id: node.id, name: node.name, path, hasLocalChanges: modifiedIds?.has(node.id) });
     }
   }
   return result;
@@ -439,12 +437,12 @@ export function DriveFileTree({
     }
   }, [treeItems, rootFolderId]);
 
-  // Push flattened file list to parent when tree changes
+  // Push flattened file list to parent when tree or modified files change
   useEffect(() => {
     if (onFileListChange && treeItems.length > 0) {
-      onFileListChange(flattenTree(treeItems, ""));
+      onFileListChange(flattenTree(treeItems, "", modifiedFiles));
     }
-  }, [treeItems, onFileListChange]);
+  }, [treeItems, onFileListChange, modifiedFiles]);
 
   // Auto-expand folders to reveal the active file from URL
   const expandedForFileRef = useRef<string | null>(null);
