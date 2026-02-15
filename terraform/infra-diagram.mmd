@@ -1,0 +1,40 @@
+graph TB
+    User["User (Browser)"] -->|HTTPS| DNS["Cloud DNS"]
+    DNS --> LB["Global Static IP<br/>+ SSL Certificate"]
+
+    subgraph GCP["Google Cloud Platform (asia-northeast1)"]
+        LB --> Backend["Backend Service<br/>(CDN enabled)"]
+        Backend --> NEG[Serverless NEG]
+        NEG --> Run
+
+        subgraph Run["Cloud Run (gemini-hub)"]
+            App["Min:0 / Max:3<br/>CPU:1 / RAM:2Gi"]
+        end
+
+        Run -->|Pull Image| AR["Artifact Registry<br/>(Docker)"]
+        Run -->|Read| Secrets["Secret Manager<br/>client_id / client_secret<br/>session_secret"]
+        Run -->|Logs| Sink["Logging Sink"] --> BQ["BigQuery<br/>(90-day retention)"]
+
+        CB["Cloud Build<br/>(optional)"] -.->|Build & Push| AR
+        CB -.->|Deploy| Run
+    end
+
+    GitHub[GitHub] -.->|Push to main| CB
+    Run -->|File Storage| GDrive[Google Drive]
+    Run -->|AI| Gemini[Gemini API]
+
+    classDef gcp fill:#4285F4,stroke:#1a73e8,color:#fff
+    classDef net fill:#FBBC04,stroke:#e8a200,color:#202124
+    classDef sec fill:#EA4335,stroke:#c5221f,color:#fff
+    classDef store fill:#34A853,stroke:#1e8e3e,color:#fff
+    classDef ext fill:#9AA0A6,stroke:#5f6368,color:#fff
+    classDef build fill:#AB47BC,stroke:#7B1FA2,color:#fff
+    classDef log fill:#FF6D01,stroke:#e65100,color:#fff
+
+    class App,Run gcp
+    class LB,DNS,Backend,NEG net
+    class Secrets sec
+    class AR,BQ,GDrive store
+    class User,GitHub,Gemini ext
+    class CB build
+    class Sink log
