@@ -24,7 +24,7 @@ Through the Model Context Protocol (MCP), GemiHub can talk to external services.
 
 ### No-Code Workflow Automation
 
-Build complex automation pipelines with a visual drag-and-drop editor. Chain together AI prompts, Drive file operations, HTTP requests, user input dialogs, and more. Workflows are stored as YAML, support loops and conditionals, and run in real-time with streaming output.
+Build complex automation pipelines with a visual editor. Chain together AI prompts, Drive file operations, HTTP requests, user input dialogs, and more. Workflows are stored as YAML, support loops and conditionals, and run in real-time with streaming output.
 
 ![Visual Workflow Editor](./public/images/visual_workflow.png)
 
@@ -68,7 +68,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 
 - **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments
 - **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides
-- **Visual Workflow Editor** — Drag-and-drop node-based builder (25 node types), YAML import/export, real-time SSE execution
+- **Visual Workflow Editor** — Visual node-based builder (24 node types), YAML import/export, real-time SSE execution
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
 - **MCP** — Connect external MCP servers as tools for AI chat, with OAuth support and rich UI rendering (MCP Apps)
