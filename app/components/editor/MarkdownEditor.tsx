@@ -1,5 +1,7 @@
 "use client";
 import { Editable, useEditor } from "wysimark-lite";
+import { useCallback, useMemo } from "react";
+import { fromWysiwygMarkdown, toWysiwygMarkdown } from "./markdown-spacing";
 
 interface MarkdownEditorProps {
   value: string;
@@ -17,13 +19,20 @@ export function MarkdownEditor({
   onImageChange,
 }: MarkdownEditorProps) {
   const editor = useEditor({});
+  const editorValue = useMemo(() => toWysiwygMarkdown(value), [value]);
+  const handleChange = useCallback(
+    (markdown: string) => {
+      onChange(fromWysiwygMarkdown(markdown));
+    },
+    [onChange]
+  );
 
   return (
     <div className="wysimark-fill flex-1 min-h-0 flex flex-col overflow-hidden bg-white text-gray-900">
       <Editable
         editor={editor}
-        value={value}
-        onChange={onChange}
+        value={editorValue}
+        onChange={handleChange}
         placeholder={placeholder}
         onFileSelect={onFileSelect}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
