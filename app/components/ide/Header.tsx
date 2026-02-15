@@ -39,6 +39,7 @@ interface HeaderProps {
   pluginMainViews?: PluginView[];
   isMobile?: boolean;
   isOffline?: boolean;
+  pullDialogTrigger?: number;
 }
 
 export function Header({
@@ -61,6 +62,7 @@ export function Header({
   pluginMainViews = [],
   isMobile = false,
   isOffline = false,
+  pullDialogTrigger = 0,
 }: HeaderProps) {
   const { t } = useI18n();
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
@@ -117,6 +119,7 @@ export function Header({
             onSelectFile={onSelectFile}
             conflicts={syncConflicts}
             compact={isMobile}
+            pullDialogTrigger={pullDialogTrigger}
           />
         )}
         {onQuickOpen && (

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
@@ -27,6 +27,7 @@ interface SyncStatusBarProps {
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   conflicts: ConflictInfo[];
   compact?: boolean;
+  pullDialogTrigger?: number;
 }
 
 export function SyncStatusBar({
@@ -41,6 +42,7 @@ export function SyncStatusBar({
   onSelectFile,
   conflicts,
   compact = false,
+  pullDialogTrigger = 0,
 }: SyncStatusBarProps) {
   const { t } = useI18n();
   const conflictCount = conflicts.length;
@@ -50,6 +52,7 @@ export function SyncStatusBar({
   const [dialogFiles, setDialogFiles] = useState<FileListItem[]>([]);
   const [dialogLoading, setDialogLoading] = useState(false);
   const pushCount = localModifiedCount;
+  const pullDialogTriggerRef = useRef(pullDialogTrigger);
 
   const openDiffDialog = useCallback(async (type: "push" | "pull") => {
     setDialogLoading(true);
@@ -118,6 +121,14 @@ export function SyncStatusBar({
       setDialogLoading(false);
     }
   }, []);
+
+  // External trigger to open pull diff dialog (e.g. from push-rejected dialog)
+  useEffect(() => {
+    if (pullDialogTrigger > 0 && pullDialogTrigger !== pullDialogTriggerRef.current) {
+      pullDialogTriggerRef.current = pullDialogTrigger;
+      openDiffDialog("pull");
+    }
+  }, [pullDialogTrigger, openDiffDialog]);
 
   const formatLastSync = (time: string | null) => {
     if (!time) return null;

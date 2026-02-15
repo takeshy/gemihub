@@ -327,6 +327,7 @@ function IDELayout({
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [showPushRejected, setShowPushRejected] = useState(false);
+  const [pullDialogTrigger, setPullDialogTrigger] = useState(0);
 
   // Auto-open conflict dialog when conflicts are detected
   useEffect(() => {
@@ -542,6 +543,8 @@ function IDELayout({
         showPushRejected={showPushRejected}
         setShowPushRejected={setShowPushRejected}
         clearSyncError={clearError}
+        pullDialogTrigger={pullDialogTrigger}
+        setPullDialogTrigger={setPullDialogTrigger}
       />
       </PluginProvider>
       </EditorContextProvider>
@@ -592,6 +595,8 @@ function IDEContent({
   showPushRejected,
   setShowPushRejected,
   clearSyncError,
+  pullDialogTrigger,
+  setPullDialogTrigger,
 }: {
   settings: UserSettings;
   hasGeminiApiKey: boolean;
@@ -628,6 +633,8 @@ function IDEContent({
   showPushRejected: boolean;
   setShowPushRejected: (v: boolean) => void;
   clearSyncError: () => void;
+  pullDialogTrigger: number;
+  setPullDialogTrigger: (v: number | ((prev: number) => number)) => void;
 }) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -1187,6 +1194,7 @@ function IDEContent({
         pluginMainViews={mainViews}
         isMobile={isMobile}
         isOffline={isOffline}
+        pullDialogTrigger={pullDialogTrigger}
       />
 
       {!hasGeminiApiKey && (
@@ -1423,7 +1431,7 @@ function IDEContent({
                 {t("common.cancel")}
               </button>
               <button
-                onClick={() => { setShowPushRejected(false); clearSyncError(); pull(); }}
+                onClick={() => { setShowPushRejected(false); clearSyncError(); setPullDialogTrigger(prev => prev + 1); }}
                 className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
                 Pull
