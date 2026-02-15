@@ -11,6 +11,15 @@ export default function GfmMarkdownPreview({ content }: { content: string }) {
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeHighlight]}
       components={{
+        p({ children, ...props }) {
+          // NBSP-only paragraphs are blank line markers from wysimark-lite.
+          // Render them as empty spacers instead of showing &nbsp; text.
+          const text = typeof children === "string" ? children : Array.isArray(children) ? children.join("") : "";
+          if (text === "\u00A0") {
+            return <p {...props}>&nbsp;</p>;
+          }
+          return <p {...props}>{children}</p>;
+        },
         code({ className, children, ...props }) {
           const match = /language-mermaid/.exec(className || "");
           if (match) {

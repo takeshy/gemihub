@@ -918,7 +918,7 @@ function MarkdownFileEditor({
       {/* Content area */}
       {mode === "preview" && (
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="prose dark:prose-invert max-w-none">
+          <div className="prose dark:prose-invert max-w-none [&_p]:my-1 [&_p]:leading-relaxed">
             <Suspense fallback={<Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />}>
               <LazyGfmPreview content={content} />
             </Suspense>
@@ -945,10 +945,10 @@ function MarkdownFileEditor({
       {mode === "raw" && (
         <div className="flex-1 p-4">
           <textarea
-            value={content}
+            value={content.replace(/^\u00A0$/gm, "")}
             onChange={(e) => updateContent(e.target.value)}
             onSelect={handleSelect}
-            className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            className="w-full h-full font-mono text-xs leading-none bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
           />
         </div>
@@ -1206,10 +1206,10 @@ parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.client
       {mode === "raw" && (
         <div className="flex-1 p-4">
           <textarea
-            value={content}
+            value={content.replace(/^\u00A0$/gm, "")}
             onChange={(e) => updateContent(e.target.value)}
             onSelect={handleSelect}
-            className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            className="w-full h-full font-mono text-xs leading-none bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
           />
         </div>
@@ -1393,7 +1393,7 @@ function TextFileEditor({
           value={content}
           onChange={(e) => updateContent(e.target.value)}
           onSelect={handleSelect}
-          className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+          className="w-full h-full font-mono text-xs leading-none bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
           spellCheck={false}
         />
       </div>
@@ -1556,7 +1556,7 @@ function DiffEditor({
           <textarea
             value={content}
             onChange={(e) => updateContent(e.target.value)}
-            className="w-full h-full font-mono text-base bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            className="w-full h-full font-mono text-xs leading-none bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
           />
         </div>
