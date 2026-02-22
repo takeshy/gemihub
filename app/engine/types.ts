@@ -100,6 +100,7 @@ export interface ExecutionStep {
   output?: unknown;
   status: "success" | "error" | "skipped";
   error?: string;
+  variablesSnapshot?: Record<string, string | number>;
 }
 
 export interface ExecutionRecord {

@@ -124,6 +124,40 @@ export function useWorkflowExecution(workflowId: string) {
     }
   }, [workflowId, attachEventSource]);
 
+  const startFrom = useCallback(async (startNodeId: string, initialVariables: Record<string, string | number>) => {
+    setLogs([]);
+    setStatus("running");
+    setPromptData(null);
+
+    try {
+      const res = await fetch(`/api/workflow/${workflowId}/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startNodeId, initialVariables }),
+      });
+      const data = await res.json();
+      const newExecutionId = data.executionId;
+      setExecutionId(newExecutionId);
+
+      const es = new EventSource(
+        `/api/workflow/${workflowId}/execute?executionId=${newExecutionId}`
+      );
+      attachEventSource(es);
+    } catch (err) {
+      setStatus("error");
+      setLogs((prev) => [
+        ...prev,
+        {
+          nodeId: "system",
+          nodeType: "system",
+          message: `Failed to start: ${err instanceof Error ? err.message : String(err)}`,
+          status: "error" as const,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    }
+  }, [workflowId, attachEventSource]);
+
   const reconnect = useCallback((execId: string, initialPromptData?: Record<string, unknown>) => {
     setExecutionId(execId);
     setLogs([]);
@@ -188,6 +222,7 @@ export function useWorkflowExecution(workflowId: string) {
 
   return {
     start,
+    startFrom,
     reconnect,
     stop,
     status,

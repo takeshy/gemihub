@@ -30,6 +30,8 @@ export interface ExecuteOptions {
   workflowId?: string;
   workflowName?: string;
   abortSignal?: AbortSignal;
+  startNodeId?: string;
+  initialVariables?: Record<string, string | number>;
 }
 
 export interface ExecuteResult {
@@ -50,6 +52,13 @@ export async function executeWorkflow(
     logs: [],
   };
 
+  // Merge initial variables (for retry from step)
+  if (options?.initialVariables) {
+    for (const [key, value] of Object.entries(options.initialVariables)) {
+      context.variables.set(key, value);
+    }
+  }
+
   const historyRecord: ExecutionRecord = {
     id: `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     workflowId: options?.workflowId || "",
@@ -59,7 +68,8 @@ export async function executeWorkflow(
     steps: [],
   };
 
-  if (!workflow.startNode) {
+  const startNode = options?.startNodeId || workflow.startNode;
+  if (!startNode) {
     throw new Error("No workflow nodes found");
   }
 
@@ -94,6 +104,8 @@ export async function executeWorkflow(
     };
   };
 
+  let currentVarsSnapshot: Record<string, string | number> | undefined;
+
   const addHistoryStep = (
     nodeId: string,
     nodeType: WorkflowNode["type"],
@@ -105,11 +117,12 @@ export async function executeWorkflow(
     historyRecord.steps.push({
       nodeId, nodeType, timestamp: new Date().toISOString(),
       input, output, status, error,
+      variablesSnapshot: currentVarsSnapshot,
     });
   };
 
   const stack: { nodeId: string; iterationCount: number }[] = [
-    { nodeId: workflow.startNode, iterationCount: 0 },
+    { nodeId: startNode, iterationCount: 0 },
   ];
   const whileLoopStates = new Map<string, { iterationCount: number }>();
   let totalIterations = 0;
@@ -130,6 +143,9 @@ export async function executeWorkflow(
     const current = stack.pop()!;
     const node = workflow.nodes.get(current.nodeId);
     if (!node) continue;
+
+    // Capture variables snapshot before each step for resume support
+    currentVarsSnapshot = Object.fromEntries(context.variables);
 
     log(node.id, node.type, `Executing node: ${node.type}`);
 

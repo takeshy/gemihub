@@ -13,6 +13,7 @@ import {
   Sparkles,
   Wrench,
   MessageSquare,
+  Play,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type {
@@ -25,6 +26,7 @@ import type {
 import { decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
 import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
+import { useI18n } from "~/i18n/context";
 
 type TabId = "execution" | "request";
 
@@ -34,6 +36,7 @@ interface ExecutionHistoryModalProps {
   onClose: () => void;
   encryptedPrivateKey?: string;
   salt?: string;
+  onRetryFromStep?: (startNodeId: string, initialVariables: Record<string, string | number>) => void;
 }
 
 export function ExecutionHistoryModal({
@@ -42,6 +45,7 @@ export function ExecutionHistoryModal({
   onClose,
   encryptedPrivateKey,
   salt,
+  onRetryFromStep,
 }: ExecutionHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<TabId>("execution");
 
@@ -89,7 +93,7 @@ export function ExecutionHistoryModal({
         </div>
 
         {activeTab === "execution" ? (
-          <ExecutionHistoryTab workflowId={workflowId} onClose={onClose} encryptedPrivateKey={encryptedPrivateKey} salt={salt} />
+          <ExecutionHistoryTab workflowId={workflowId} onClose={onClose} encryptedPrivateKey={encryptedPrivateKey} salt={salt} onRetryFromStep={onRetryFromStep} />
         ) : (
           <RequestHistoryTab workflowId={workflowId} onClose={onClose} encryptedPrivateKey={encryptedPrivateKey} salt={salt} />
         )}
@@ -112,11 +116,13 @@ function ExecutionHistoryTab({
   onClose,
   encryptedPrivateKey,
   salt,
+  onRetryFromStep,
 }: {
   workflowId: string;
   onClose: () => void;
   encryptedPrivateKey?: string;
   salt?: string;
+  onRetryFromStep?: (startNodeId: string, initialVariables: Record<string, string | number>) => void;
 }) {
   const [records, setRecords] = useState<ExecutionRecordItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +134,11 @@ function ExecutionHistoryTab({
   const [expandedStepIndex, setExpandedStepIndex] = useState<number | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
+  const { t } = useI18n();
+
+  // Whether retry buttons should be shown for the currently expanded record
+  // Only the latest (first) record has snapshots available
+  const isLatestRecord = expandedId === records[0]?.id;
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -347,6 +358,7 @@ function ExecutionHistoryTab({
                             (step: ExecutionStep, i: number) => {
                               const isStepExpanded = expandedStepIndex === i;
                               const hasDetail = step.input || step.output || step.error;
+                              const canRetry = isLatestRecord && onRetryFromStep && step.variablesSnapshot;
                               return (
                                 <div key={i}>
                                   <div
@@ -377,6 +389,20 @@ function ExecutionHistoryTab({
                                           ? step.output.slice(0, 80)
                                           : JSON.stringify(step.output).slice(0, 80)}
                                       </span>
+                                    )}
+                                    {canRetry && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onRetryFromStep(step.nodeId, step.variablesSnapshot!);
+                                          onClose();
+                                        }}
+                                        className="ml-auto flex-shrink-0 flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                                        title={step.status === "error" ? t("workflow.retryFromError") : t("workflow.retryFromHere")}
+                                      >
+                                        <Play size={10} />
+                                        {step.status === "error" ? t("workflow.retryFromError") : t("workflow.retryFromHere")}
+                                      </button>
                                     )}
                                   </div>
                                   {isStepExpanded && (
