@@ -406,6 +406,8 @@ export interface TranslationStrings {
   // Workflow
   "workflow.nodeComment": string;
   "workflow.pushRequired": string;
+  "workflow.retryFromHere": string;
+  "workflow.retryFromError": string;
   "workflow.referenceHistory": string;
   "workflow.historySelect.title": string;
   "workflow.historySelect.recentExecutions": string;
@@ -508,6 +510,7 @@ export interface TranslationStrings {
   "sync.pullDirection": string;
   "sync.openFile": string;
   "sync.noDiff": string;
+  "sync.encryptedNoDiff": string;
 
   // Shortcuts tab
   "settings.tab.shortcuts": string;
@@ -941,6 +944,8 @@ const en: TranslationStrings = {
   // Workflow
   "workflow.nodeComment": "Comment",
   "workflow.pushRequired": "Push to sync changes with server before executing",
+  "workflow.retryFromHere": "Retry from here",
+  "workflow.retryFromError": "Retry from error",
   "workflow.referenceHistory": "Reference Execution History",
   "workflow.historySelect.title": "Select Execution Steps",
   "workflow.historySelect.recentExecutions": "Recent Executions",
@@ -1043,6 +1048,7 @@ const en: TranslationStrings = {
   "sync.pullDirection": "Drive \u2192 Local",
   "sync.openFile": "Open",
   "sync.noDiff": "Binary file",
+  "sync.encryptedNoDiff": "Encrypted file (diff not available)",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "Shortcuts",
@@ -1476,6 +1482,8 @@ const ja: TranslationStrings = {
   // Workflow
   "workflow.nodeComment": "コメント",
   "workflow.pushRequired": "Pushしてサーバー側に反映しないと実行できません",
+  "workflow.retryFromHere": "ここからリトライ",
+  "workflow.retryFromError": "エラーからリトライ",
   "workflow.referenceHistory": "実行履歴を参照",
   "workflow.historySelect.title": "実行ステップを選択",
   "workflow.historySelect.recentExecutions": "実行履歴",
@@ -1578,6 +1586,7 @@ const ja: TranslationStrings = {
   "sync.pullDirection": "ドライブ \u2192 ローカル",
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
+  "sync.encryptedNoDiff": "暗号化ファイル（差分表示不可）",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "ショートカット",

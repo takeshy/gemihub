@@ -92,12 +92,10 @@ export function EncryptedFileViewer({
   }, [fileId, encryptedContent]);
 
   // Stale cache detection → force refresh from Drive
-  // Case 1: .encrypted extension but plain content (encrypt ran, cache stale)
-  // Case 2: no .encrypted extension but encrypted content (decrypt ran, cache stale)
+  // .encrypted extension but plain content means encrypt ran but cache is stale
+  // (no .encrypted extension with encrypted content is normal — content-based detection)
   useEffect(() => {
-    const stale =
-      (fileName.endsWith(".encrypted") && !contentIsEncrypted) ||
-      (!fileName.endsWith(".encrypted") && contentIsEncrypted);
+    const stale = fileName.endsWith(".encrypted") && !contentIsEncrypted;
     if (stale && !refreshedRef.current) {
       refreshedRef.current = true;
       forceRefresh();

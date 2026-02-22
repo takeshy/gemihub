@@ -799,7 +799,7 @@ function MarkdownFileEditor({
         tempContent: payload.content,
         tempSavedAt: payload.savedAt,
         currentModifiedTime: "",
-        isBinary: fileName.endsWith(".encrypted"),
+        isBinary: fileName.endsWith(".encrypted") || isEncryptedFile(content),
       });
     } catch { /* ignore */ }
   }, [fileName, fileId, content, t]);
@@ -1345,7 +1345,7 @@ function TextFileEditor({
         tempContent: payload.content,
         tempSavedAt: payload.savedAt,
         currentModifiedTime: "",
-        isBinary: fileName.endsWith(".encrypted"),
+        isBinary: fileName.endsWith(".encrypted") || isEncryptedFile(content),
       });
     } catch { /* ignore */ }
   }, [fileName, fileId, content, t]);

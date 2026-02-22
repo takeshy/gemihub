@@ -5,6 +5,7 @@ import { DiffView } from "~/components/shared/DiffView";
 import { useI18n } from "~/i18n/context";
 import { getCachedFile } from "~/services/indexeddb-cache";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { isEncryptedFile } from "~/services/crypto-core";
 import { ICON } from "~/utils/icon-sizes";
 
 export interface FileListItem {
@@ -105,6 +106,15 @@ export function SyncDiffDialog({
           const data = await res.json();
           remoteContent = data.files?.[0]?.content ?? "";
         }
+      }
+
+      // Content-based encrypted file detection
+      if (isEncryptedFile(localContent) || isEncryptedFile(remoteContent)) {
+        setDiffStates((prev) => ({
+          ...prev,
+          [fileId]: { loading: false, diff: "encrypted", error: false, expanded: true },
+        }));
+        return;
       }
 
       let oldContent: string;
@@ -237,11 +247,15 @@ export function SyncDiffDialog({
                             {t("conflict.diffError")}
                           </div>
                         )}
-                        {ds.diff && (
+                        {ds.diff && ds.diff === "encrypted" ? (
+                          <div className="px-3 py-2 text-xs text-gray-400 italic">
+                            {t("sync.encryptedNoDiff")}
+                          </div>
+                        ) : ds.diff ? (
                           <div className="rounded border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
                             <DiffView diff={ds.diff} />
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </div>

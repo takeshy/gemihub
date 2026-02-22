@@ -40,6 +40,7 @@ import {
   setCachedFile,
   getCachedFile,
   getAllCachedFileIds,
+  getEncryptedCachedFileIds,
   getLocallyModifiedFileIds,
   deleteCachedFile,
   renameCachedFile,
@@ -253,6 +254,7 @@ export function DriveFileTree({
   const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [cachedFiles, setCachedFiles] = useState<Set<string>>(new Set());
+  const [encryptedFiles, setEncryptedFiles] = useState<Set<string>>(new Set());
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set());
   const [createFileDialog, setCreateFileDialog] = useState<{
     open: boolean; name: string; ext: string; customExt: string; addDateTime: boolean; addLocation: boolean;
@@ -332,13 +334,17 @@ export function DriveFileTree({
     }
   }, [rootFolderId]);
 
-  // Load cached/modified file IDs when tree items change
+  // Load cached/modified/encrypted file IDs when tree items change
   useEffect(() => {
     if (treeItems.length === 0) return;
     (async () => {
       try {
         const ids = await getAllCachedFileIds();
         setCachedFiles(ids);
+      } catch { /* ignore */ }
+      try {
+        const ids = await getEncryptedCachedFileIds();
+        setEncryptedFiles(ids);
       } catch { /* ignore */ }
       try {
         const ids = await getLocallyModifiedFileIds();
@@ -366,10 +372,23 @@ export function DriveFileTree({
         });
       }
     };
-    const handleCached = (e: Event) => {
+    const handleCached = async (e: Event) => {
       const fileId = (e as CustomEvent).detail?.fileId;
       if (fileId) {
         setCachedFiles((prev) => new Set(prev).add(fileId));
+        // Check if newly cached file is encrypted by content
+        try {
+          const cached = await getCachedFile(fileId);
+          if (cached?.content && isEncryptedFile(cached.content)) {
+            setEncryptedFiles((prev) => new Set(prev).add(fileId));
+          } else {
+            setEncryptedFiles((prev) => {
+              const next = new Set(prev);
+              next.delete(fileId);
+              return next;
+            });
+          }
+        } catch { /* ignore */ }
       }
     };
     // After push/pull/sync-check, re-read modified files and refresh tree
@@ -2137,7 +2156,7 @@ export function DriveFileTree({
         }
 
         // Publish / unpublish — not for encrypted files
-        if (!item.name.endsWith(".encrypted")) {
+        if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
           const fileMeta = remoteMeta[item.id];
           if (fileMeta?.shared) {
             items.push({
@@ -2160,7 +2179,7 @@ export function DriveFileTree({
         }
 
         // Encrypt / Decrypt
-        if (!item.name.endsWith(".encrypted")) {
+        if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
           items.push({
             label: t("crypt.encrypt"),
             icon: <Lock size={ICON.MD} />,
@@ -2213,7 +2232,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, collectFileIds, t, findFullFileName, treeItems]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, collectFileIds, t, findFullFileName, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
