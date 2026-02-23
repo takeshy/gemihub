@@ -46,5 +46,4 @@ export default [
   route("api/plugins", "routes/api.plugins.tsx"),
   route("api/plugins/:id", "routes/api.plugins.$id.tsx"),
   route("api/obsidian/token", "routes/api.obsidian.token.tsx"),
-  route("api/obsidian/temp-edit-token", "routes/api.obsidian.temp-edit-token.tsx"),
 ] satisfies RouteConfig;
