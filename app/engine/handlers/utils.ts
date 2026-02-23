@@ -85,10 +85,18 @@ export function replaceVariables(
       let parsedValue: unknown;
       if (typeof varValue === "string") {
         try {
-          let jsonString = varValue;
-          const codeBlockMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)```/);
-          if (codeBlockMatch) jsonString = codeBlockMatch[1].trim();
-          parsedValue = JSON.parse(jsonString);
+          // Try direct JSON parse first; fall back to code-block extraction
+          // (LLM output often wraps JSON in ```, but valid JSON values may
+          //  contain triple-backticks in string fields which would confuse
+          //  the code-block regex if applied unconditionally.)
+          try {
+            parsedValue = JSON.parse(varValue);
+          } catch {
+            let jsonString = varValue;
+            const codeBlockMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (codeBlockMatch) jsonString = codeBlockMatch[1].trim();
+            parsedValue = JSON.parse(jsonString);
+          }
         } catch {
           return match;
         }
