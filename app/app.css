@@ -66,6 +66,11 @@ body {
   overflow-y: auto !important;
 }
 
+/* Disable iframe pointer-events during tree drag to prevent event stealing */
+body.tree-dragging iframe {
+  pointer-events: none !important;
+}
+
 /* Hide scrollbar for horizontal tab scrolling on mobile */
 .scrollbar-hide {
   -ms-overflow-style: none;
