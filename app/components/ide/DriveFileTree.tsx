@@ -1114,6 +1114,7 @@ export function DriveFileTree({
         setBusy(fileIds);
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          let failCount = 0;
           for (const file of files) {
             // Replace the old folder prefix with new folder path
             const relativePath = file.fullPath; // relative to folderNode
@@ -1127,8 +1128,11 @@ export function DriveFileTree({
               const data = await res.json();
               await renameCachedFile(file.id, newFullName);
               if (data.meta) lastMeta = data.meta;
+            } else {
+              failCount++;
             }
           }
+          if (failCount > 0) alert(t("contextMenu.moveFailed"));
           if (newParentId !== rootFolderId) {
             setExpandedFolders((prev) => {
               const next = new Set(prev);
@@ -1143,7 +1147,7 @@ export function DriveFileTree({
             await fetchAndCacheTree();
           }
         } catch {
-          // ignore
+          alert(t("contextMenu.moveFailed"));
         } finally {
           clearBusy(fileIds);
         }
@@ -1187,14 +1191,16 @@ export function DriveFileTree({
           } else {
             await fetchAndCacheTree();
           }
+        } else {
+          alert(t("contextMenu.moveFailed"));
         }
       } catch {
-        // ignore
+        alert(t("contextMenu.moveFailed"));
       } finally {
         clearBusy([itemId]);
       }
     },
-    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath, findNodeById, collectFilesWithPaths, setBusy, clearBusy]
+    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath, findNodeById, collectFilesWithPaths, setBusy, clearBusy, t]
   );
 
   const handleDrop = useCallback(
@@ -1508,6 +1514,7 @@ export function DriveFileTree({
         setBusy(fileIds);
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          let failCount = 0;
           for (const fid of fileIds) {
             const fullName = findFullFileName(fid, treeItems, "");
             if (!fullName) continue;
@@ -1526,15 +1533,18 @@ export function DriveFileTree({
               const data = await res.json();
               await renameCachedFile(fid, newFullName);
               if (data.meta) lastMeta = data.meta;
+            } else {
+              failCount++;
             }
           }
+          if (failCount > 0) alert(t("contextMenu.renameFailed"));
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
           } else {
             await fetchAndCacheTree();
           }
         } catch {
-          // ignore
+          alert(t("contextMenu.renameFailed"));
         } finally {
           clearBusy(fileIds);
         }
@@ -1578,9 +1588,11 @@ export function DriveFileTree({
           if (activeFileId === item.id) {
             onSelectFile(item.id, newBaseName.trim(), item.mimeType);
           }
+        } else {
+          alert(t("contextMenu.renameFailed"));
         }
       } catch {
-        // ignore
+        alert(t("contextMenu.renameFailed"));
       } finally {
         clearBusy([item.id]);
       }
@@ -1614,6 +1626,7 @@ export function DriveFileTree({
         setBusy(fileIds);
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          let failCount = 0;
           for (const fid of fileIds) {
             const res = await fetch("/api/drive/files", {
               method: "POST",
@@ -1627,8 +1640,11 @@ export function DriveFileTree({
               await deleteCachedFile(fid);
               await removeLocalSyncMetaEntry(fid);
               await deleteEditHistoryEntry(fid);
+            } else {
+              failCount++;
             }
           }
+          if (failCount > 0) alert(t("trash.deleteFailed"));
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
           } else {
@@ -1642,7 +1658,7 @@ export function DriveFileTree({
             return;
           }
         } catch {
-          // ignore
+          alert(t("trash.deleteFailed"));
         } finally {
           clearBusy(fileIds);
         }
@@ -1675,9 +1691,11 @@ export function DriveFileTree({
               window.dispatchEvent(new PopStateEvent("popstate"));
               return;
             }
+          } else {
+            alert(t("trash.deleteFailed"));
           }
         } catch {
-          // ignore
+          alert(t("trash.deleteFailed"));
         } finally {
           clearBusy([item.id]);
         }
@@ -1979,14 +1997,16 @@ export function DriveFileTree({
             return insertInto(prev);
           });
           onSelectFile(file.id, baseName, file.mimeType);
+        } else {
+          alert(t("contextMenu.duplicateFailed"));
         }
       } catch {
-        // ignore
+        alert(t("contextMenu.duplicateFailed"));
       } finally {
         clearBusy([item.id]);
       }
     },
-    [treeItems, findFullFileName, onSelectFile, setBusy, clearBusy]
+    [treeItems, findFullFileName, onSelectFile, setBusy, clearBusy, t]
   );
 
   const handlePublish = useCallback(

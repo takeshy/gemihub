@@ -225,6 +225,9 @@ export interface TranslationStrings {
   "contextMenu.linkCopied": string;
   "contextMenu.publishFailed": string;
   "contextMenu.unpublishFailed": string;
+  "contextMenu.renameFailed": string;
+  "contextMenu.duplicateFailed": string;
+  "contextMenu.moveFailed": string;
   "contextMenu.fileAlreadyExists": string;
   "contextMenu.duplicate": string;
   "contextMenu.convertToPdf": string;
@@ -763,6 +766,9 @@ const en: TranslationStrings = {
   "contextMenu.linkCopied": "Link copied to clipboard.",
   "contextMenu.publishFailed": "Failed to publish file.",
   "contextMenu.unpublishFailed": "Failed to unpublish file.",
+  "contextMenu.renameFailed": "Failed to rename.",
+  "contextMenu.duplicateFailed": "Failed to duplicate.",
+  "contextMenu.moveFailed": "Failed to move.",
   "contextMenu.fileAlreadyExists": "\"{name}\" already exists. Overwrite?",
   "contextMenu.duplicate": "Duplicate",
   "contextMenu.convertToPdf": "Convert to PDF",
@@ -1301,6 +1307,9 @@ const ja: TranslationStrings = {
   "contextMenu.linkCopied": "リンクをクリップボードにコピーしました。",
   "contextMenu.publishFailed": "ファイルの公開に失敗しました。",
   "contextMenu.unpublishFailed": "公開の解除に失敗しました。",
+  "contextMenu.renameFailed": "名前の変更に失敗しました。",
+  "contextMenu.duplicateFailed": "複製に失敗しました。",
+  "contextMenu.moveFailed": "移動に失敗しました。",
   "contextMenu.fileAlreadyExists": "「{name}」は既に存在します。上書きしますか？",
   "contextMenu.duplicate": "複製",
   "contextMenu.convertToPdf": "PDFに変換",
