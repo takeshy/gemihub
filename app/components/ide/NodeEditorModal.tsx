@@ -161,7 +161,21 @@ export function NodeEditorModal({
                 {def.label}
                 {def.required && <span className="text-red-500 ml-0.5">*</span>}
               </label>
-              {def.options ? (
+              {def.toggle ? (
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={(properties[def.key] ?? def.defaultValue) !== "false"}
+                    onChange={(e) =>
+                      setProperties((p) => ({ ...p, [def.key]: e.target.checked ? "true" : "false" }))
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
+                  />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {(properties[def.key] ?? def.defaultValue) !== "false" ? "Enabled" : "Disabled"}
+                  </span>
+                </label>
+              ) : def.options ? (
                 <select
                   value={properties[def.key] || def.defaultValue || ""}
                   onChange={(e) =>

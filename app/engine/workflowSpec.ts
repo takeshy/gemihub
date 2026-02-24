@@ -106,6 +106,7 @@ Execute LLM prompt via Gemini API with optional tools.
 - **ragSetting** (optional): "__websearch__", "__none__", or RAG setting name${commandRagSection}
 - **driveToolMode** (optional): "all", "noSearch", "none" (default: "none")
 - **mcpServers** (optional): Comma-separated MCP server IDs${mcpServerList}
+- **enableThinking** (optional): "true" (default) or "false". Enable deep thinking mode
 - **systemPrompt** (optional): System prompt override
 - **attachments** (optional): Comma-separated variable names containing FileExplorerData (images, PDFs, etc.)
 - **saveTo** (optional): Variable for text response

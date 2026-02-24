@@ -11,6 +11,7 @@ export interface NodePropertyDef {
   multiline?: boolean;
   options?: string[];
   defaultValue?: string;
+  toggle?: boolean;
 }
 
 export interface NodePropertyContext {
@@ -45,6 +46,7 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "ragSetting", label: "RAG / Search", required: false, options: ["__none__", "__websearch__", ...(context?.ragSettingNames || [])], defaultValue: "__none__" },
         { key: "driveToolMode", label: "Drive Tools", required: false, options: ["none", "all", "noSearch"], defaultValue: "none" },
         { key: "mcpServers", label: "MCP Servers", required: false, placeholder: context?.mcpServerIds?.length ? context.mcpServerIds.join(", ") : "mcp_server_id_1,mcp_server_id_2" },
+        { key: "enableThinking", label: "Enable Thinking", required: false, toggle: true, defaultValue: "true" },
         { key: "attachments", label: "Attachments", required: false, placeholder: "imageVar,fileVar" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "result" },
         { key: "saveImageTo", label: "Save Image To", required: false, placeholder: "generatedImage" },
