@@ -166,11 +166,9 @@ export function getDriveToolModeConstraint(
   if (ragSetting === "__websearch__") {
     return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockWebSearch" };
   }
-  if (m.includes("flash-lite") && ragSetting && ragSetting !== "__websearch__") {
-    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockFlashLiteRag" };
-  }
+  // fileSearch + functionDeclarations not supported by Gemini API
   if (ragSetting && ragSetting !== "__websearch__") {
-    return { forcedMode: null, defaultMode: "noSearch", locked: false };
+    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockRag" };
   }
   return { forcedMode: null, defaultMode: "all", locked: false };
 }
@@ -208,6 +206,8 @@ export type ModelType =
   | "gemini-2.5-pro"
   | "gemini-3-flash-preview"
   | "gemini-3-pro-preview"
+  | "gemini-3.1-pro-preview"
+  | "gemini-3.1-pro-preview-customtools"
   | "gemini-2.5-flash-lite"
   | "gemini-2.5-flash-image"
   | "gemini-3-pro-image-preview"
@@ -225,14 +225,24 @@ export interface ModelInfo {
 
 export const PAID_MODELS: ModelInfo[] = [
   {
+    name: "gemini-3.1-pro-preview",
+    displayName: "Gemini 3.1 Pro Preview",
+    description: "Latest flagship model with 1M context, best performance (recommended)",
+  },
+  {
+    name: "gemini-3.1-pro-preview-customtools",
+    displayName: "Gemini 3.1 Pro Preview (Custom Tools)",
+    description: "Optimized for agentic workflows with custom tools and bash",
+  },
+  {
     name: "gemini-3-flash-preview",
     displayName: "Gemini 3 Flash Preview",
-    description: "Latest fast model with 1M context, best cost-performance (recommended)",
+    description: "Fast model with 1M context, best cost-performance",
   },
   {
     name: "gemini-3-pro-preview",
     displayName: "Gemini 3 Pro Preview",
-    description: "Latest flagship model with 1M context, best performance",
+    description: "Flagship model with 1M context",
   },
   {
     name: "gemini-2.5-flash",
@@ -332,7 +342,7 @@ export function isImageGenerationModel(modelName: ModelType): boolean {
 
 // Default models by plan
 export const DEFAULT_MODEL_FREE: ModelType = "gemini-2.5-flash";
-export const DEFAULT_MODEL_PAID: ModelType = "gemini-3-pro-preview";
+export const DEFAULT_MODEL_PAID: ModelType = "gemini-3.1-pro-preview";
 
 export function getDefaultModelForPlan(plan: ApiPlan): ModelType {
   return plan === "paid" ? DEFAULT_MODEL_PAID : DEFAULT_MODEL_FREE;
@@ -564,7 +574,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   systemPrompt: "",
   maxFunctionCalls: 20,
   functionCallWarningThreshold: 5,
-  rootFolderName: "GeminiHub",
+  rootFolderName: "gemihub",
   language: null,
   fontSize: 16,
   theme: "system",

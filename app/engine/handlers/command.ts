@@ -289,6 +289,7 @@ export async function handleCommandNode(
     ragStoreIds,
     {
       webSearchEnabled,
+      enableThinking: node.properties["enableThinking"] !== "false",
       functionCallLimits: settings ? {
         maxFunctionCalls: settings.maxFunctionCalls,
         functionCallWarningThreshold: settings.functionCallWarningThreshold,

@@ -187,9 +187,12 @@ Make HTTP requests.
 | `contentType` | No | Yes | `json` (default), `form-data`, `text`, `binary` |
 | `headers` | No | Yes | JSON object or `Key: Value` format (one per line) |
 | `body` | No | Yes | Request body (for POST/PUT/PATCH) |
+| `responseType` | No | Yes | `auto` (default), `text`, `binary` — override Content-Type auto-detection |
 | `saveTo` | No | No | Variable for response body |
 | `saveStatus` | No | No | Variable for HTTP status code |
 | `throwOnError` | No | Yes | `"true"` to throw error on 4xx/5xx responses |
+
+**Response type detection:** By default (`auto`), binary vs text is auto-detected from the Content-Type header. Use `responseType: text` to force text processing (e.g., when a server returns `application/octet-stream` for JSON), or `responseType: binary` to force binary handling.
 
 **Binary responses** are automatically detected and stored as FileExplorerData JSON (Base64 encoded).
 

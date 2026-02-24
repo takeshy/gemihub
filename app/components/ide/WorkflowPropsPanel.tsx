@@ -133,6 +133,37 @@ function formatValue(value: unknown): string {
   }
 }
 
+function NodeComment({ comment }: { comment: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = comment.split("\n");
+  const isMultiLine = lines.length > 1;
+
+  if (!isMultiLine) {
+    return (
+      <p className="mt-0.5 truncate text-[11px] italic text-yellow-600 dark:text-yellow-400">
+        {comment}
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-0.5">
+      <button
+        onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+        className="flex items-center gap-0.5 text-[11px] italic text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
+      >
+        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        <span className={expanded ? "" : "truncate max-w-[180px] inline-block align-bottom"}>{lines[0]}</span>
+      </button>
+      {expanded && (
+        <pre className="mt-0.5 whitespace-pre-wrap text-[11px] italic text-yellow-600 dark:text-yellow-400 pl-3.5">
+          {lines.slice(1).join("\n")}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function WorkflowNodeListView({
   fileId,
   fileName,
@@ -432,16 +463,79 @@ function WorkflowNodeListView({
     [workflow, isNewNode, saveWorkflow]
   );
 
+  // Shared SSE listener setup for execution
+  const attachExecutionListeners = useCallback((es: EventSource) => {
+    eventSourceRef[1](es);
+
+    es.addEventListener("log", (e) => {
+      const log = JSON.parse(e.data);
+      setLogs((prev) => [...prev, log]);
+      if (log.mcpApps && log.mcpApps.length > 0) {
+        setMcpAppModal(log.mcpApps);
+      }
+    });
+    es.addEventListener("complete", (e) => {
+      setExecutionStatus("completed");
+      es.close();
+      window.dispatchEvent(new Event("workflow-completed"));
+      try {
+        const data = JSON.parse((e as MessageEvent).data);
+        if (data.openFile) {
+          onSelectFile(data.openFile.fileId, data.openFile.fileName, data.openFile.mimeType);
+        }
+      } catch { /* ignore parse errors */ }
+    });
+    es.addEventListener("cancelled", () => {
+      setExecutionStatus("cancelled");
+      es.close();
+    });
+    es.addEventListener("error", (e) => {
+      if (e instanceof MessageEvent) {
+        const data = JSON.parse(e.data);
+        setLogs((prev) => [
+          ...prev,
+          {
+            nodeId: "system",
+            nodeType: "system",
+            message: data.error || "Execution error",
+            status: "error" as const,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
+      setExecutionStatus("error");
+      es.close();
+    });
+    es.addEventListener("status", (e) => {
+      const data = JSON.parse(e.data);
+      setExecutionStatus(data.status);
+    });
+    es.addEventListener("prompt-request", (e) => {
+      const data = JSON.parse(e.data);
+      setExecutionStatus("waiting-prompt");
+      setPromptData(data);
+    });
+    attachDriveFileHandlers(es);
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
+      }
+    };
+  }, [eventSourceRef, onSelectFile]);
+
   // Execution
-  const startExecution = useCallback(async () => {
+  const startExecution = useCallback(async (body?: { startNodeId: string; initialVariables: Record<string, string | number> }) => {
     setLogs([]);
     setExecutionStatus("running");
     setShowLogs(true);
 
     try {
-      const res = await fetch(`/api/workflow/${fileId}/execute`, {
-        method: "POST",
-      });
+      const fetchInit: RequestInit = { method: "POST" };
+      if (body) {
+        fetchInit.headers = { "Content-Type": "application/json" };
+        fetchInit.body = JSON.stringify(body);
+      }
+      const res = await fetch(`/api/workflow/${fileId}/execute`, fetchInit);
       const data = await res.json();
       const newExecId = data.executionId;
       setExecutionId(newExecId);
@@ -449,66 +543,11 @@ function WorkflowNodeListView({
       const es = new EventSource(
         `/api/workflow/${fileId}/execute?executionId=${newExecId}`
       );
-      eventSourceRef[1](es);
-
-      es.addEventListener("log", (e) => {
-        const log = JSON.parse(e.data);
-        setLogs((prev) => [...prev, log]);
-        if (log.mcpApps && log.mcpApps.length > 0) {
-          setMcpAppModal(log.mcpApps);
-        }
-      });
-      es.addEventListener("complete", (e) => {
-        setExecutionStatus("completed");
-        es.close();
-        window.dispatchEvent(new Event("workflow-completed"));
-        try {
-          const data = JSON.parse((e as MessageEvent).data);
-          if (data.openFile) {
-            onSelectFile(data.openFile.fileId, data.openFile.fileName, data.openFile.mimeType);
-          }
-        } catch { /* ignore parse errors */ }
-      });
-      es.addEventListener("cancelled", () => {
-        setExecutionStatus("cancelled");
-        es.close();
-      });
-      es.addEventListener("error", (e) => {
-        if (e instanceof MessageEvent) {
-          const data = JSON.parse(e.data);
-          setLogs((prev) => [
-            ...prev,
-            {
-              nodeId: "system",
-              nodeType: "system",
-              message: data.error || "Execution error",
-              status: "error" as const,
-              timestamp: new Date().toISOString(),
-            },
-          ]);
-        }
-        setExecutionStatus("error");
-        es.close();
-      });
-      es.addEventListener("status", (e) => {
-        const data = JSON.parse(e.data);
-        setExecutionStatus(data.status);
-      });
-      es.addEventListener("prompt-request", (e) => {
-        const data = JSON.parse(e.data);
-        setExecutionStatus("waiting-prompt");
-        setPromptData(data);
-      });
-      attachDriveFileHandlers(es);
-      es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED) {
-          setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
-        }
-      };
+      attachExecutionListeners(es);
     } catch {
       setExecutionStatus("error");
     }
-  }, [fileId, eventSourceRef, onSelectFile]);
+  }, [fileId, attachExecutionListeners]);
 
   const stopExecution = useCallback(async () => {
     if (!executionId) return;
@@ -557,58 +596,8 @@ function WorkflowNodeListView({
     setShowLogs(true);
 
     const es = new EventSource(`/api/workflow/${fileId}/execute?executionId=${execId}`);
-    eventSourceRef[1](es);
-
-    es.addEventListener("log", (e) => {
-      const log = JSON.parse(e.data);
-      setLogs((prev) => [...prev, log]);
-      if (log.mcpApps && log.mcpApps.length > 0) {
-        setMcpAppModal(log.mcpApps);
-      }
-    });
-    es.addEventListener("complete", (e) => {
-      setExecutionStatus("completed");
-      es.close();
-      window.dispatchEvent(new Event("workflow-completed"));
-      try {
-        const data = JSON.parse((e as MessageEvent).data);
-        if (data.openFile) {
-          onSelectFile(data.openFile.fileId, data.openFile.fileName, data.openFile.mimeType);
-        }
-      } catch { /* ignore */ }
-    });
-    es.addEventListener("cancelled", () => {
-      setExecutionStatus("cancelled");
-      es.close();
-    });
-    es.addEventListener("error", (e) => {
-      if (e instanceof MessageEvent) {
-        const data = JSON.parse(e.data);
-        setLogs((prev) => [...prev, {
-          nodeId: "system", nodeType: "system",
-          message: data.error || "Execution error",
-          status: "error" as const, timestamp: new Date().toISOString(),
-        }]);
-      }
-      setExecutionStatus("error");
-      es.close();
-    });
-    es.addEventListener("status", (e) => {
-      const data = JSON.parse(e.data);
-      setExecutionStatus(data.status);
-    });
-    es.addEventListener("prompt-request", (e) => {
-      const data = JSON.parse(e.data);
-      setExecutionStatus("waiting-prompt");
-      setPromptData(data);
-    });
-    attachDriveFileHandlers(es);
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
-      }
-    };
-  }, [fileId, eventSourceRef, onSelectFile]);
+    attachExecutionListeners(es);
+  }, [fileId, attachExecutionListeners]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -863,6 +852,10 @@ function WorkflowNodeListView({
                       {summary}
                     </p>
                   )}
+                  {/* Comment */}
+                  {node.properties.comment && (
+                    <NodeComment comment={node.properties.comment} />
+                  )}
                 </div>
                 {/* Outgoing edges */}
                 {outgoing.length > 0 && (
@@ -994,7 +987,7 @@ function WorkflowNodeListView({
           </button>
         ) : (
           <button
-            onClick={startExecution}
+            onClick={() => startExecution()}
             disabled={hasLocalChanges || !workflow}
             className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
               hasLocalChanges || !workflow
@@ -1099,6 +1092,7 @@ function WorkflowNodeListView({
           onClose={() => setShowHistory(false)}
           encryptedPrivateKey={settings?.encryption?.encryptedPrivateKey}
           salt={settings?.encryption?.salt}
+          onRetryFromStep={(startNodeId, initialVariables) => startExecution({ startNodeId, initialVariables })}
         />
       )}
     </div>

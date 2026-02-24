@@ -78,7 +78,7 @@ After `update_drive_file`, the server sends a `drive_file_updated` SSE chunk wit
 Mode is auto-constrained by model and RAG settings:
 - **Gemma models**: forced to `none` (no function calling support)
 - **Web Search mode**: forced to `none` (incompatible with other tools)
-- **Flash Lite + RAG**: function calling tools disabled (only RAG/File Search)
+- **RAG enabled**: function calling tools disabled (fileSearch + functionDeclarations not supported by Gemini API)
 
 ### MCP Tools
 

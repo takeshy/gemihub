@@ -28,12 +28,17 @@ export function useFileWithCache(
   // Skip fetchFile when migrating from new: → real ID (content already in React state)
   const skipFetchRef = useRef(false);
   if (fileId !== prevFileId) {
-    const wasMigration = prevFileId?.startsWith("new:") && !fileId?.startsWith("new:");
+    // Only treat as migration when file-id-migrated event explicitly signaled it
+    // (same file, ID changed from new: to real Drive ID).
+    // Previously this was inferred from the ID pattern, which also matched
+    // navigating from a new: file to a *different* existing file — causing
+    // content not to be cleared and the wrong file's content to be displayed.
+    const wasMigration = migratingRef.current;
     setPrevFileId(fileId);
     currentFileId.current = fileId;
-    // Don't clear content when migrating from new: to real ID (same content, avoids flash)
     if (wasMigration) {
       skipFetchRef.current = true;
+      migratingRef.current = false;
     } else {
       skipFetchRef.current = false;
       setContent(null);
@@ -44,7 +49,6 @@ export function useFileWithCache(
     }
     setSaved(false);
     setError(null);
-    migratingRef.current = false;
   }
   if (refreshKey !== prevRefreshKey) {
     setPrevRefreshKey(refreshKey);

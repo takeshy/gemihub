@@ -151,6 +151,16 @@ export function createPluginAPI(
         if (!res.ok) throw new Error(`Drive update error: ${res.status}`);
         window.dispatchEvent(new Event("sync-complete"));
       },
+
+      async rebuildTree() {
+        const res = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "rebuildTree" }),
+        });
+        if (!res.ok) throw new Error(`Rebuild tree error: ${res.status}`);
+        window.dispatchEvent(new Event("sync-complete"));
+      },
     },
 
     storage: {

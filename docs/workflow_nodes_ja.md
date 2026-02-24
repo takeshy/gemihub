@@ -185,9 +185,12 @@ HTTP リクエストを実行します。
 | `contentType` | No | No | `json`（デフォルト）, `form-data`, `text`, `binary` |
 | `headers` | No | Yes | JSON オブジェクトまたは `Key: Value` 形式（1行1ペア） |
 | `body` | No | Yes | リクエストボディ（POST/PUT/PATCH 用） |
+| `responseType` | No | Yes | `auto`（デフォルト）, `text`, `binary` — Content-Type 自動判定をオーバーライド |
 | `saveTo` | No | No | レスポンスボディを保存する変数 |
 | `saveStatus` | No | No | HTTP ステータスコードを保存する変数 |
 | `throwOnError` | No | No | `"true"` で 4xx/5xx 時にエラーをスロー |
+
+**レスポンスタイプ判定:** デフォルト（`auto`）では Content-Type ヘッダーからバイナリ/テキストを自動判定します。`responseType: text` でテキスト処理を強制（例: サーバーが JSON を `application/octet-stream` で返す場合）、`responseType: binary` でバイナリ処理を強制できます。
 
 **バイナリレスポンス**は自動検出され、FileExplorerData JSON（Base64 エンコード）として保存されます。
 

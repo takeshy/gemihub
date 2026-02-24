@@ -30,7 +30,7 @@
     "react-router": "7.12.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "wysimark-lite": "^0.25.32",
+    "wysimark-lite": "^0.25.33",
     "zod": "^4.3.6"
   },
   "devDependencies": {

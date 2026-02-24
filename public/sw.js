@@ -72,6 +72,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Skip Vite dev server dependencies — never cache these
+  if (url.pathname.startsWith("/node_modules/")) {
+    return;
+  }
+
   // Skip React Router single-fetch data requests — handled by clientLoader
   if (url.pathname.endsWith(".data")) {
     return;

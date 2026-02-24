@@ -17,3 +17,7 @@ terraform/.terraform/
 terraform/*.tfstate*
 terraform/terraform.tfvars
 terraform/tfplan
+terraform/environments/*/.terraform/
+terraform/environments/*/*.tfstate*
+terraform/environments/*/terraform.tfvars
+terraform/environments/*/tfplan

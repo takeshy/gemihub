@@ -20,63 +20,95 @@ function getNodeLabel(node: WorkflowNode): string {
   const id = node.id;
   const p = node.properties;
 
+  let label: string;
   switch (node.type) {
     case "variable":
     case "set":
-      return `**${id}**\n${p.name || ""} = ${p.value || ""}`;
+      label = `**${id}**\n${p.name || ""} = ${p.value || ""}`;
+      break;
     case "if":
     case "while":
-      return p.condition || "condition";
+      label = p.condition || "condition";
+      break;
     case "command": {
       const prompt = p.prompt || "(no prompt)";
       const model = p.model ? `\nModel: ${p.model}` : "";
       const saveTo = p.saveTo ? `\n→ ${p.saveTo}` : "";
-      return `**${id}**\n${prompt}${model}${saveTo}`;
+      label = `**${id}**\n${prompt}${model}${saveTo}`;
+      break;
     }
     case "drive-file":
-      return `**${id}**\nWrite: ${p.path || ""}\nMode: ${p.mode || "overwrite"}`;
+      label = `**${id}**\nWrite: ${p.path || ""}\nMode: ${p.mode || "overwrite"}`;
+      break;
     case "drive-read":
-      return `**${id}**\nRead: ${p.path || ""}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nRead: ${p.path || ""}\n→ ${p.saveTo || ""}`;
+      break;
     case "drive-search":
-      return `**${id}**\nSearch: ${p.query || ""}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nSearch: ${p.query || ""}\n→ ${p.saveTo || ""}`;
+      break;
     case "drive-list":
-      return `**${id}**\nList: ${p.folder || "/"}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nList: ${p.folder || "/"}\n→ ${p.saveTo || ""}`;
+      break;
     case "drive-folder-list":
-      return `**${id}**\nFolders: ${p.folder || "/"}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nFolders: ${p.folder || "/"}\n→ ${p.saveTo || ""}`;
+      break;
     case "drive-file-picker":
-      return `**${id}**\nFile picker\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nFile picker\n→ ${p.saveTo || ""}`;
+      break;
     case "drive-save":
-      return `**${id}**\nSave: ${p.source || ""}\n→ ${p.path || ""}`;
+      label = `**${id}**\nSave: ${p.source || ""}\n→ ${p.path || ""}`;
+      break;
     case "drive-delete":
-      return `**${id}**\nDelete: ${p.path || ""}`;
+      label = `**${id}**\nDelete: ${p.path || ""}`;
+      break;
     case "dialog": {
       const title = p.title || "";
       const msg = p.message || "";
-      return `**${id}**\n${title}\n${msg}`.trim();
+      label = `**${id}**\n${title}\n${msg}`.trim();
+      break;
     }
     case "prompt-value":
-      return `**${id}**\nInput: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nInput: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+      break;
     case "prompt-file":
-      return `**${id}**\nFile: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nFile: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+      break;
     case "prompt-selection":
-      return `**${id}**\nSelection: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nSelection: ${p.title || ""}\n→ ${p.saveTo || ""}`;
+      break;
     case "workflow":
-      return `**${id}**\nSub-workflow: ${p.path || ""}`;
+      label = `**${id}**\nSub-workflow: ${p.path || ""}`;
+      break;
     case "http":
-      return `**${id}**\n${p.method || "GET"} ${p.url || ""}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\n${p.method || "GET"} ${p.url || ""}\n→ ${p.saveTo || ""}`;
+      break;
     case "json":
-      return `**${id}**\nJSON: ${p.source || ""}\n→ ${p.saveTo || ""}`;
+      label = `**${id}**\nJSON: ${p.source || ""}\n→ ${p.saveTo || ""}`;
+      break;
     case "mcp":
-      return `**${id}**\nMCP: ${p.tool || ""}\nURL: ${p.url || ""}`;
+      label = `**${id}**\nMCP: ${p.tool || ""}\nURL: ${p.url || ""}`;
+      break;
     case "rag-sync":
-      return `**${id}**\nRAG: ${p.path || ""}\n→ ${p.ragSetting || ""}`;
+      label = `**${id}**\nRAG: ${p.path || ""}\n→ ${p.ragSetting || ""}`;
+      break;
     case "sleep":
-      return `**${id}**\nSleep ${p.duration || ""}ms`;
+      label = `**${id}**\nSleep ${p.duration || ""}ms`;
+      break;
     case "gemihub-command":
-      return `**${id}**\nCmd: ${p.command || ""}\n${p.path || ""}`;
+      label = `**${id}**\nCmd: ${p.command || ""}\n${p.path || ""}`;
+      break;
     default:
-      return `**${id}**\n${node.type}`;
+      label = `**${id}**\n${node.type}`;
   }
+
+  // Append comment if present
+  if (p.comment) {
+    const firstLine = p.comment.split("\n")[0];
+    const truncated = firstLine.length > 30 ? firstLine.slice(0, 30) + "…" : firstLine;
+    label += `\n💬 ${truncated}`;
+  }
+
+  return label;
 }
 
 /**

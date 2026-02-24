@@ -32,7 +32,7 @@ The latest GitHub Release must contain at least `manifest.json` and `main.js`. `
 ### Where Plugin Data is Stored
 
 ```
-GeminiHub/
+gemihub/
   plugins/
     {plugin-id}/
       manifest.json   ← Plugin metadata
@@ -168,10 +168,10 @@ const content = await api.drive.readFile(fileId);
 // Search files by name
 const files = await api.drive.searchFiles("query");
 
-// List files in a folder (omit folderId to list files in the GeminiHub root folder)
+// List files in a folder (omit folderId to list files in the gemihub root folder)
 const files = await api.drive.listFiles(folderId);
 
-// Create a file (created in the GeminiHub root folder)
+// Create a file (created in the gemihub root folder)
 const { id, name } = await api.drive.createFile("notes.md", "# Notes");
 
 // Update a file

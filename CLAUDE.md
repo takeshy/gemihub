@@ -77,7 +77,7 @@ The index route (`_index.tsx`) renders the IDE with: Header (sync controls), Lef
 
 ### Plugin System
 
-Plugins extend the app via GitHub Release installation. Plugin files (`manifest.json`, `main.js`, optional `styles.css`) are stored in `GeminiHub/plugins/{id}/` on Drive and cached in IndexedDB. Plugins receive a `PluginAPI` with access to language, UI registration (views, slash commands, settings tabs), Gemini AI, Drive operations, and scoped storage. See `docs/plugins.md` for the full developer guide.
+Plugins extend the app via GitHub Release installation. Plugin files (`manifest.json`, `main.js`, optional `styles.css`) are stored in `gemihub/plugins/{id}/` on Drive and cached in IndexedDB. Plugins receive a `PluginAPI` with access to language, UI registration (views, slash commands, settings tabs), Gemini AI, Drive operations, and scoped storage. See `docs/plugins.md` for the full developer guide.
 
 Key files: `app/types/plugin.ts` (types), `app/services/plugin-api.ts` (API factory), `app/services/plugin-loader.ts` (loading), `app/contexts/PluginContext.tsx` (lifecycle), `app/services/plugin-manager.server.ts` (Drive storage).
 

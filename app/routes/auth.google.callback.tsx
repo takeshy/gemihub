@@ -25,7 +25,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw new Response("Invalid OAuth state parameter", { status: 400 });
   }
 
-  const tokens = await exchangeCode(code);
+  const tokens = await exchangeCode(code, request);
 
   // Ensure root folder exists on Drive
   const rootFolderId = await ensureRootFolder(tokens.accessToken);

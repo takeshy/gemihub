@@ -35,6 +35,7 @@ export interface ChatWithToolsOptions {
   functionCallLimits?: FunctionCallLimitOptions;
   disableTools?: boolean;
   webSearchEnabled?: boolean;
+  enableThinking?: boolean;
 }
 
 const DEFAULT_MAX_FUNCTION_CALLS = 20;
@@ -191,10 +192,11 @@ function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
   return [{ functionDeclarations }];
 }
 
-function getThinkingConfig(model: ModelType) {
+function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   const supportsThinking = !modelLower.includes("gemma");
   if (!supportsThinking) return undefined;
+  if (!enableThinking) return undefined;
   if (modelLower.includes("flash-lite")) {
     return { includeThoughts: true, thinkingBudget: -1 };
   }
@@ -213,22 +215,36 @@ export async function* chatStream(
   const ai = new GoogleGenAI({ apiKey });
   const contents = messagesToContents(messages);
 
-  const response = await ai.models.generateContentStream({
-    model,
-    contents,
-    config: {
-      systemInstruction: systemPrompt,
-    },
-  });
+  try {
+    const response = await ai.models.generateContentStream({
+      model,
+      contents,
+      config: {
+        systemInstruction: systemPrompt,
+      },
+    });
 
-  for await (const chunk of response) {
-    const text = chunk.text;
-    if (text) {
-      yield { type: "text", content: text };
+    let hasReceivedChunk = false;
+    for await (const chunk of response) {
+      hasReceivedChunk = true;
+      const text = chunk.text;
+      if (text) {
+        yield { type: "text", content: text };
+      }
     }
-  }
 
-  yield { type: "done" };
+    if (!hasReceivedChunk) {
+      yield { type: "error", error: "No response received from API (possible server error)" };
+      return;
+    }
+
+    yield { type: "done" };
+  } catch (error) {
+    yield {
+      type: "error",
+      error: error instanceof Error ? error.message : "API call failed",
+    };
+  }
 }
 
 /**
@@ -259,7 +275,6 @@ export async function* chatWithToolsStream(
   let geminiTools: Tool[] | undefined;
 
   const isGemma = model.toLowerCase().includes("gemma");
-  const isFlashLite = model.toLowerCase().includes("flash-lite");
   const ragEnabled = !isGemma && ragStoreIds && ragStoreIds.length > 0;
   const webSearchEnabled = options?.webSearchEnabled ?? false;
 
@@ -267,7 +282,8 @@ export async function* chatWithToolsStream(
     // Web Search mode: use googleSearch only (incompatible with other tools)
     geminiTools = [{ googleSearch: {} } as Tool];
   } else if (!options?.disableTools) {
-    if (tools.length > 0 && !(isFlashLite && ragEnabled)) {
+    // Skip function calling when RAG is enabled (fileSearch + functionDeclarations not supported)
+    if (tools.length > 0 && !ragEnabled) {
       geminiTools = toolsToGeminiFormat(tools);
     }
     if (ragEnabled) {
@@ -285,8 +301,7 @@ export async function* chatWithToolsStream(
 
   const historyMessages = messages.slice(0, -1);
   const history = messagesToContents(historyMessages);
-  const supportsThinking = !model.toLowerCase().includes("gemma");
-  const thinkingConfig = getThinkingConfig(model);
+  const thinkingConfig = getThinkingConfig(model, options?.enableThinking);
 
   const chat: Chat = ai.chats.create({
     model,
@@ -294,7 +309,7 @@ export async function* chatWithToolsStream(
     config: {
       systemInstruction: systemPrompt,
       ...(geminiTools ? { tools: geminiTools } : {}),
-      ...(supportsThinking ? { thinkingConfig } : {}),
+      ...(thinkingConfig ? { thinkingConfig } : {}),
     },
   });
 
@@ -325,187 +340,100 @@ export async function* chatWithToolsStream(
     messageParts.push({ text: lastMessage.content });
   }
 
-  let response = await chat.sendMessageStream({ message: messageParts });
+  try {
+    let response = await chat.sendMessageStream({ message: messageParts });
 
-  while (continueLoop) {
-    const functionCallsToProcess: Array<{ name: string; args: Record<string, unknown>; thoughtSignature?: string }> = [];
+    while (continueLoop) {
+      const functionCallsToProcess: Array<{ name: string; args: Record<string, unknown>; thoughtSignature?: string }> = [];
+      let hasReceivedChunk = false;
 
-    for await (const chunk of response) {
-      const chunkWithCandidates = chunk as {
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{ text?: string; thought?: boolean; functionCall?: { name?: string; args?: unknown }; thoughtSignature?: string }>;
-          };
-          groundingMetadata?: {
-            groundingChunks?: Array<{
-              retrievedContext?: { uri?: string; title?: string };
-            }>;
-          };
-        }>;
-      };
-      const candidates = chunkWithCandidates.candidates;
+      for await (const chunk of response) {
+        hasReceivedChunk = true;
+        const chunkWithCandidates = chunk as {
+          candidates?: Array<{
+            content?: {
+              parts?: Array<{ text?: string; thought?: boolean; functionCall?: { name?: string; args?: unknown }; thoughtSignature?: string }>;
+            };
+            groundingMetadata?: {
+              groundingChunks?: Array<{
+                retrievedContext?: { uri?: string; title?: string };
+              }>;
+            };
+          }>;
+        };
+        const candidates = chunkWithCandidates.candidates;
 
-      // Extract function calls from candidates to preserve thoughtSignature
-      if (candidates && candidates.length > 0) {
-        const parts = candidates[0]?.content?.parts;
-        if (parts) {
-          for (const part of parts) {
-            if (part.functionCall) {
-              functionCallsToProcess.push({
-                name: part.functionCall.name ?? "",
-                args: (part.functionCall.args as Record<string, unknown>) ?? {},
-                thoughtSignature: part.thoughtSignature,
-              });
-            }
-          }
-        }
-      }
-
-      if (candidates && candidates.length > 0) {
-        const parts = candidates[0]?.content?.parts;
-        if (parts) {
-          for (const part of parts) {
-            if (part.thought && part.text) {
-              yield { type: "thinking", content: part.text };
-            }
-          }
-        }
-      }
-
-      if (!groundingEmitted && candidates && candidates.length > 0) {
-        const groundingMetadata = candidates[0]?.groundingMetadata;
-        if (groundingMetadata) {
-          if (groundingMetadata.groundingChunks) {
-            for (const gc of groundingMetadata.groundingChunks) {
-              const ctx = gc.retrievedContext as { uri?: string; title?: string } | undefined;
-              const web = (gc as { web?: { uri?: string; title?: string } }).web;
-              const source = ctx?.title || ctx?.uri || web?.title || web?.uri;
-              if (source && !accumulatedSources.includes(source)) {
-                accumulatedSources.push(source);
+        // Extract function calls from candidates to preserve thoughtSignature
+        if (candidates && candidates.length > 0) {
+          const parts = candidates[0]?.content?.parts;
+          if (parts) {
+            for (const part of parts) {
+              if (part.functionCall) {
+                functionCallsToProcess.push({
+                  name: part.functionCall.name ?? "",
+                  args: (part.functionCall.args as Record<string, unknown>) ?? {},
+                  thoughtSignature: part.thoughtSignature,
+                });
               }
             }
           }
         }
-      }
 
-      const text = chunk.text;
-      if (text) {
-        yield { type: "text", content: text };
-      }
-    }
-
-    if (accumulatedSources.length > 0 && !groundingEmitted) {
-      if (webSearchEnabled) {
-        yield { type: "web_search_used", ragSources: accumulatedSources };
-      } else {
-        yield { type: "rag_used", ragSources: accumulatedSources };
-      }
-      groundingEmitted = true;
-    }
-
-    if (functionCallsToProcess.length > 0 && executeToolCall) {
-      const remainingBefore = maxFunctionCalls - functionCallCount;
-
-      if (remainingBefore <= 0) {
-        yield {
-          type: "text",
-          content: "\n\n[Function call limit reached. Summarizing with available information...]",
-        };
-        response = await chat.sendMessageStream({
-          message: [
-            {
-              text: "You have reached the function call limit. Please provide a final answer based on the information gathered so far.",
-            },
-          ],
-        });
-        for await (const chunk of response) {
-          const text = chunk.text;
-          if (text) {
-            yield { type: "text", content: text };
+        if (candidates && candidates.length > 0) {
+          const parts = candidates[0]?.content?.parts;
+          if (parts) {
+            for (const part of parts) {
+              if (part.thought && part.text) {
+                yield { type: "thinking", content: part.text };
+              }
+            }
           }
         }
-        continueLoop = false;
-        continue;
-      }
 
-      const callsToExecute = functionCallsToProcess.slice(0, remainingBefore);
-      const skippedCount = functionCallsToProcess.length - callsToExecute.length;
-      const remainingAfter = remainingBefore - callsToExecute.length;
-
-      if (!warningEmitted && remainingAfter <= warningThreshold) {
-        warningEmitted = true;
-        yield {
-          type: "text",
-          content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]`,
-        };
-      }
-
-      const functionResponseParts: Part[] = [];
-
-      for (const fc of callsToExecute) {
-        const toolCall: ToolCall = {
-          id: (fc as { id?: string }).id ?? `${fc.name}_${Date.now()}`,
-          name: fc.name,
-          args: fc.args,
-          thoughtSignature: fc.thoughtSignature,
-        };
-
-        yield { type: "tool_call", toolCall };
-
-        const result = await executeToolCall(fc.name, fc.args);
-
-        if (isDriveToolMediaResult(result)) {
-          yield {
-            type: "tool_result",
-            toolResult: {
-              toolCallId: toolCall.id,
-              result: { mediaFile: result.__mediaData.fileName, mimeType: result.__mediaData.mimeType },
-            },
-          };
-        } else {
-          yield {
-            type: "tool_result",
-            toolResult: { toolCallId: toolCall.id, result },
-          };
+        if (!groundingEmitted && candidates && candidates.length > 0) {
+          const groundingMetadata = candidates[0]?.groundingMetadata;
+          if (groundingMetadata) {
+            if (groundingMetadata.groundingChunks) {
+              for (const gc of groundingMetadata.groundingChunks) {
+                const ctx = gc.retrievedContext as { uri?: string; title?: string } | undefined;
+                const web = (gc as { web?: { uri?: string; title?: string } }).web;
+                const source = ctx?.title || ctx?.uri || web?.title || web?.uri;
+                if (source && !accumulatedSources.includes(source)) {
+                  accumulatedSources.push(source);
+                }
+              }
+            }
+          }
         }
 
-        if (isDriveToolMediaResult(result)) {
-          functionResponseParts.push(
-            createPartFromFunctionResponse(
-              toolCall.id,
-              fc.name,
-              { fileName: result.__mediaData.fileName },
-              [createFunctionResponsePartFromBase64(result.__mediaData.base64, result.__mediaData.mimeType)]
-            )
-          );
-        } else {
-          functionResponseParts.push({
-            functionResponse: {
-              name: fc.name,
-              id: toolCall.id,
-              response: { result } as Record<string, unknown>,
-            },
-          });
+        const text = chunk.text;
+        if (text) {
+          yield { type: "text", content: text };
         }
       }
 
-      functionCallCount += callsToExecute.length;
+      if (!hasReceivedChunk) {
+        yield { type: "error", error: "No response received from API (possible server error)" };
+        break;
+      }
 
-      if (skippedCount > 0 || functionCallCount >= maxFunctionCalls) {
-        const skippedMsg = skippedCount > 0 ? ` (${skippedCount} additional calls were skipped)` : "";
-        yield {
-          type: "text",
-          content: `\n\n[Function call limit reached${skippedMsg}. Summarizing with available information...]`,
-        };
-
-        if (functionResponseParts.length > 0) {
-          functionResponseParts.push({
-            text: "[System: Function call limit reached. Please provide a final answer based on the information gathered so far.]",
-          } as Part);
-          response = await chat.sendMessageStream({
-            message: functionResponseParts,
-          });
+      if (accumulatedSources.length > 0 && !groundingEmitted) {
+        if (webSearchEnabled) {
+          yield { type: "web_search_used", ragSources: accumulatedSources };
         } else {
+          yield { type: "rag_used", ragSources: accumulatedSources };
+        }
+        groundingEmitted = true;
+      }
+
+      if (functionCallsToProcess.length > 0 && executeToolCall) {
+        const remainingBefore = maxFunctionCalls - functionCallCount;
+
+        if (remainingBefore <= 0) {
+          yield {
+            type: "text",
+            content: "\n\n[Function call limit reached. Summarizing with available information...]",
+          };
           response = await chat.sendMessageStream({
             message: [
               {
@@ -513,33 +441,134 @@ export async function* chatWithToolsStream(
               },
             ],
           });
+          for await (const chunk of response) {
+            const text = chunk.text;
+            if (text) {
+              yield { type: "text", content: text };
+            }
+          }
+          continueLoop = false;
+          continue;
         }
 
-        for await (const chunk of response) {
-          const text = chunk.text;
-          if (text) {
-            yield { type: "text", content: text };
+        const callsToExecute = functionCallsToProcess.slice(0, remainingBefore);
+        const skippedCount = functionCallsToProcess.length - callsToExecute.length;
+        const remainingAfter = remainingBefore - callsToExecute.length;
+
+        if (!warningEmitted && remainingAfter <= warningThreshold) {
+          warningEmitted = true;
+          yield {
+            type: "text",
+            content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]`,
+          };
+        }
+
+        const functionResponseParts: Part[] = [];
+
+        for (const fc of callsToExecute) {
+          const toolCall: ToolCall = {
+            id: (fc as { id?: string }).id ?? `${fc.name}_${Date.now()}`,
+            name: fc.name,
+            args: fc.args,
+            thoughtSignature: fc.thoughtSignature,
+          };
+
+          yield { type: "tool_call", toolCall };
+
+          const result = await executeToolCall(fc.name, fc.args);
+
+          if (isDriveToolMediaResult(result)) {
+            yield {
+              type: "tool_result",
+              toolResult: {
+                toolCallId: toolCall.id,
+                result: { mediaFile: result.__mediaData.fileName, mimeType: result.__mediaData.mimeType },
+              },
+            };
+          } else {
+            yield {
+              type: "tool_result",
+              toolResult: { toolCallId: toolCall.id, result },
+            };
+          }
+
+          if (isDriveToolMediaResult(result)) {
+            functionResponseParts.push(
+              createPartFromFunctionResponse(
+                toolCall.id,
+                fc.name,
+                { fileName: result.__mediaData.fileName },
+                [createFunctionResponsePartFromBase64(result.__mediaData.base64, result.__mediaData.mimeType)]
+              )
+            );
+          } else {
+            functionResponseParts.push({
+              functionResponse: {
+                name: fc.name,
+                id: toolCall.id,
+                response: { result } as Record<string, unknown>,
+              },
+            });
           }
         }
+
+        functionCallCount += callsToExecute.length;
+
+        if (skippedCount > 0 || functionCallCount >= maxFunctionCalls) {
+          const skippedMsg = skippedCount > 0 ? ` (${skippedCount} additional calls were skipped)` : "";
+          yield {
+            type: "text",
+            content: `\n\n[Function call limit reached${skippedMsg}. Summarizing with available information...]`,
+          };
+
+          if (functionResponseParts.length > 0) {
+            functionResponseParts.push({
+              text: "[System: Function call limit reached. Please provide a final answer based on the information gathered so far.]",
+            } as Part);
+            response = await chat.sendMessageStream({
+              message: functionResponseParts,
+            });
+          } else {
+            response = await chat.sendMessageStream({
+              message: [
+                {
+                  text: "You have reached the function call limit. Please provide a final answer based on the information gathered so far.",
+                },
+              ],
+            });
+          }
+
+          for await (const chunk of response) {
+            const text = chunk.text;
+            if (text) {
+              yield { type: "text", content: text };
+            }
+          }
+          continueLoop = false;
+          continue;
+        }
+
+        if (warningEmitted && remainingAfter <= warningThreshold) {
+          functionResponseParts.push({
+            text: `[System: You have ${remainingAfter} function calls remaining. Please complete your task efficiently or provide a summary.]`,
+          } as Part);
+        }
+
+        response = await chat.sendMessageStream({
+          message: functionResponseParts,
+        });
+      } else {
         continueLoop = false;
-        continue;
       }
-
-      if (warningEmitted && remainingAfter <= warningThreshold) {
-        functionResponseParts.push({
-          text: `[System: You have ${remainingAfter} function calls remaining. Please complete your task efficiently or provide a summary.]`,
-        } as Part);
-      }
-
-      response = await chat.sendMessageStream({
-        message: functionResponseParts,
-      });
-    } else {
-      continueLoop = false;
     }
-  }
 
-  yield { type: "done" };
+    yield { type: "done" };
+  } catch (error) {
+    yield {
+      type: "error",
+      error: error instanceof Error ? error.message : "API call failed",
+    };
+  }
 }
 
 /**

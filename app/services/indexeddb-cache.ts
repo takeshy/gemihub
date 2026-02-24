@@ -1,6 +1,8 @@
 // IndexedDB cache service for browser-side file caching and sync metadata
 // Uses a singleton DB connection for performance.
 
+import { isEncryptedFile } from "./crypto-core";
+
 const DB_NAME = "gemihub-cache";
 const DB_VERSION = 6;
 
@@ -19,7 +21,7 @@ export interface CachedFile {
 export interface LocalSyncMeta {
   id: "current"; // primary key (fixed key, always 1 record)
   lastUpdatedAt: string;
-  files: Record<string, { md5Checksum: string; modifiedTime: string }>;
+  files: Record<string, { md5Checksum: string; modifiedTime: string; name?: string }>;
 }
 
 export interface EditHistoryDiff {
@@ -248,6 +250,22 @@ export async function getAllCachedFiles(): Promise<CachedFile[]> {
     return await txGetAll<CachedFile>(db, "files");
   } catch {
     return [];
+  }
+}
+
+export async function getEncryptedCachedFileIds(): Promise<Set<string>> {
+  if (typeof indexedDB === "undefined") return new Set();
+  try {
+    const files = await getAllCachedFiles();
+    const encrypted = new Set<string>();
+    for (const f of files) {
+      if (f.content && isEncryptedFile(f.content)) {
+        encrypted.add(f.fileId);
+      }
+    }
+    return encrypted;
+  } catch {
+    return new Set();
   }
 }
 

@@ -40,6 +40,7 @@ import {
   setCachedFile,
   getCachedFile,
   getAllCachedFileIds,
+  getEncryptedCachedFileIds,
   getLocallyModifiedFileIds,
   deleteCachedFile,
   renameCachedFile,
@@ -253,6 +254,7 @@ export function DriveFileTree({
   const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [cachedFiles, setCachedFiles] = useState<Set<string>>(new Set());
+  const [encryptedFiles, setEncryptedFiles] = useState<Set<string>>(new Set());
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set());
   const [createFileDialog, setCreateFileDialog] = useState<{
     open: boolean; name: string; ext: string; customExt: string; addDateTime: boolean; addLocation: boolean;
@@ -278,6 +280,7 @@ export function DriveFileTree({
   const isMobile = useIsMobile();
   const dragCounterRef = useRef(0);
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { progress, upload, clearProgress } = useFileUpload();
 
   const modifiedFolderIds = useMemo(
@@ -332,13 +335,17 @@ export function DriveFileTree({
     }
   }, [rootFolderId]);
 
-  // Load cached/modified file IDs when tree items change
+  // Load cached/modified/encrypted file IDs when tree items change
   useEffect(() => {
     if (treeItems.length === 0) return;
     (async () => {
       try {
         const ids = await getAllCachedFileIds();
         setCachedFiles(ids);
+      } catch { /* ignore */ }
+      try {
+        const ids = await getEncryptedCachedFileIds();
+        setEncryptedFiles(ids);
       } catch { /* ignore */ }
       try {
         const ids = await getLocallyModifiedFileIds();
@@ -366,10 +373,23 @@ export function DriveFileTree({
         });
       }
     };
-    const handleCached = (e: Event) => {
+    const handleCached = async (e: Event) => {
       const fileId = (e as CustomEvent).detail?.fileId;
       if (fileId) {
         setCachedFiles((prev) => new Set(prev).add(fileId));
+        // Check if newly cached file is encrypted by content
+        try {
+          const cached = await getCachedFile(fileId);
+          if (cached?.content && isEncryptedFile(cached.content)) {
+            setEncryptedFiles((prev) => new Set(prev).add(fileId));
+          } else {
+            setEncryptedFiles((prev) => {
+              const next = new Set(prev);
+              next.delete(fileId);
+              return next;
+            });
+          }
+        } catch { /* ignore */ }
       }
     };
     // After push/pull/sync-check, re-read modified files and refresh tree
@@ -1038,13 +1058,103 @@ export function DriveFileTree({
     []
   );
 
+  // Collect all files under a node with their full paths
+  const collectFilesWithPaths = useCallback(
+    (node: CachedTreeNode, parentPath: string): { id: string; fullPath: string }[] => {
+      const fullPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+      if (!node.isFolder) return [{ id: node.id, fullPath }];
+      const files: { id: string; fullPath: string }[] = [];
+      for (const child of node.children ?? []) {
+        files.push(...collectFilesWithPaths(child, fullPath));
+      }
+      return files;
+    },
+    []
+  );
+
+  // Find a tree node by its ID
+  const findNodeById = useCallback(
+    (nodeId: string, nodes: CachedTreeNode[]): CachedTreeNode | null => {
+      for (const node of nodes) {
+        if (node.id === nodeId) return node;
+        if (node.children) {
+          const found = findNodeById(nodeId, node.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    },
+    []
+  );
+
   const handleMoveItem = useCallback(
     async (itemId: string, _oldParentId: string, newParentId: string) => {
-      // Virtual folders can't be moved
-      if (itemId.startsWith("vfolder:")) return;
       // Don't drop on self
       if (itemId === newParentId) return;
 
+      // Folder move: rename all files under the folder
+      if (itemId.startsWith("vfolder:")) {
+        const oldFolderPath = getFolderPath(itemId);
+        const folderBaseName = oldFolderPath.split("/").pop()!;
+        const newParentPath = newParentId === rootFolderId ? "" : getFolderPath(newParentId);
+        const newFolderPath = newParentPath ? `${newParentPath}/${folderBaseName}` : folderBaseName;
+
+        // Don't move to same location
+        if (newFolderPath === oldFolderPath) return;
+        // Prevent dropping into own subtree
+        if (newParentId.startsWith("vfolder:") && (getFolderPath(newParentId) + "/").startsWith(oldFolderPath + "/")) return;
+
+        const folderNode = findNodeById(itemId, treeItems);
+        if (!folderNode) return;
+        const files = collectFilesWithPaths(folderNode, "");
+
+        if (files.length === 0) return;
+
+        const fileIds = files.map((f) => f.id);
+        setBusy(fileIds);
+        try {
+          let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          let failCount = 0;
+          for (const file of files) {
+            // Replace the old folder prefix with new folder path
+            const relativePath = file.fullPath; // relative to folderNode
+            const newFullName = newFolderPath ? `${newFolderPath}/${relativePath}` : relativePath;
+            const res = await fetch("/api/drive/files", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "rename", fileId: file.id, name: newFullName }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              await renameCachedFile(file.id, newFullName);
+              if (data.meta) lastMeta = data.meta;
+            } else {
+              failCount++;
+            }
+          }
+          if (failCount > 0) alert(t("contextMenu.moveFailed"));
+          if (newParentId !== rootFolderId) {
+            setExpandedFolders((prev) => {
+              const next = new Set(prev);
+              next.add(newParentId);
+              next.add(`vfolder:${newFolderPath}`);
+              return next;
+            });
+          }
+          if (lastMeta) {
+            await updateTreeFromMeta(lastMeta);
+          } else {
+            await fetchAndCacheTree();
+          }
+        } catch {
+          alert(t("contextMenu.moveFailed"));
+        } finally {
+          clearBusy(fileIds);
+        }
+        return;
+      }
+
+      // File move
       // Find current full file name in tree
       const currentName = findFullFileName(itemId, treeItems, "");
       if (!currentName) return;
@@ -1081,14 +1191,16 @@ export function DriveFileTree({
           } else {
             await fetchAndCacheTree();
           }
+        } else {
+          alert(t("contextMenu.moveFailed"));
         }
       } catch {
-        // ignore
+        alert(t("contextMenu.moveFailed"));
       } finally {
         clearBusy([itemId]);
       }
     },
-    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath, setBusy, clearBusy]
+    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath, findNodeById, collectFilesWithPaths, setBusy, clearBusy, t]
   );
 
   const handleDrop = useCallback(
@@ -1098,6 +1210,7 @@ export function DriveFileTree({
       setDragOverTree(false);
       setDragOverFolderId(null);
       setDraggingItem(null);
+      document.body.classList.remove("tree-dragging");
       dragCounterRef.current = 0;
       folderDragCounterRef.current.clear();
 
@@ -1263,8 +1376,24 @@ export function DriveFileTree({
 
   const handleTreeDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = draggingItem ? "move" : "copy";
-  }, [draggingItem]);
+    const isInternal = e.dataTransfer.types.includes("application/x-tree-node-id");
+    e.dataTransfer.dropEffect = isInternal ? "move" : "copy";
+
+    // Auto-scroll when dragging near edges of the scroll container
+    const container = scrollContainerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const threshold = 40;
+      const y = e.clientY;
+      if (y - rect.top < threshold) {
+        const proximity = Math.max(1, threshold - (y - rect.top));
+        container.scrollTop -= Math.ceil(proximity / 5);
+      } else if (rect.bottom - y < threshold) {
+        const proximity = Math.max(1, threshold - (rect.bottom - y));
+        container.scrollTop += Math.ceil(proximity / 5);
+      }
+    }
+  }, []);
 
   const handleTreeDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -1385,6 +1514,7 @@ export function DriveFileTree({
         setBusy(fileIds);
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          let failCount = 0;
           for (const fid of fileIds) {
             const fullName = findFullFileName(fid, treeItems, "");
             if (!fullName) continue;
@@ -1403,15 +1533,18 @@ export function DriveFileTree({
               const data = await res.json();
               await renameCachedFile(fid, newFullName);
               if (data.meta) lastMeta = data.meta;
+            } else {
+              failCount++;
             }
           }
+          if (failCount > 0) alert(t("contextMenu.renameFailed"));
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
           } else {
             await fetchAndCacheTree();
           }
         } catch {
-          // ignore
+          alert(t("contextMenu.renameFailed"));
         } finally {
           clearBusy(fileIds);
         }
@@ -1455,9 +1588,11 @@ export function DriveFileTree({
           if (activeFileId === item.id) {
             onSelectFile(item.id, newBaseName.trim(), item.mimeType);
           }
+        } else {
+          alert(t("contextMenu.renameFailed"));
         }
       } catch {
-        // ignore
+        alert(t("contextMenu.renameFailed"));
       } finally {
         clearBusy([item.id]);
       }
@@ -1491,6 +1626,7 @@ export function DriveFileTree({
         setBusy(fileIds);
         try {
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          let failCount = 0;
           for (const fid of fileIds) {
             const res = await fetch("/api/drive/files", {
               method: "POST",
@@ -1504,8 +1640,11 @@ export function DriveFileTree({
               await deleteCachedFile(fid);
               await removeLocalSyncMetaEntry(fid);
               await deleteEditHistoryEntry(fid);
+            } else {
+              failCount++;
             }
           }
+          if (failCount > 0) alert(t("trash.deleteFailed"));
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
           } else {
@@ -1519,7 +1658,7 @@ export function DriveFileTree({
             return;
           }
         } catch {
-          // ignore
+          alert(t("trash.deleteFailed"));
         } finally {
           clearBusy(fileIds);
         }
@@ -1552,9 +1691,11 @@ export function DriveFileTree({
               window.dispatchEvent(new PopStateEvent("popstate"));
               return;
             }
+          } else {
+            alert(t("trash.deleteFailed"));
           }
         } catch {
-          // ignore
+          alert(t("trash.deleteFailed"));
         } finally {
           clearBusy([item.id]);
         }
@@ -1856,14 +1997,16 @@ export function DriveFileTree({
             return insertInto(prev);
           });
           onSelectFile(file.id, baseName, file.mimeType);
+        } else {
+          alert(t("contextMenu.duplicateFailed"));
         }
       } catch {
-        // ignore
+        alert(t("contextMenu.duplicateFailed"));
       } finally {
         clearBusy([item.id]);
       }
     },
-    [treeItems, findFullFileName, onSelectFile, setBusy, clearBusy]
+    [treeItems, findFullFileName, onSelectFile, setBusy, clearBusy, t]
   );
 
   const handlePublish = useCallback(
@@ -2137,7 +2280,7 @@ export function DriveFileTree({
         }
 
         // Publish / unpublish — not for encrypted files
-        if (!item.name.endsWith(".encrypted")) {
+        if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
           const fileMeta = remoteMeta[item.id];
           if (fileMeta?.shared) {
             items.push({
@@ -2160,7 +2303,7 @@ export function DriveFileTree({
         }
 
         // Encrypt / Decrypt
-        if (!item.name.endsWith(".encrypted")) {
+        if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
           items.push({
             label: t("crypt.encrypt"),
             icon: <Lock size={ICON.MD} />,
@@ -2213,7 +2356,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, collectFileIds, t, findFullFileName, treeItems]
+    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, collectFileIds, t, findFullFileName, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -2222,28 +2365,23 @@ export function DriveFileTree({
     if (item.isFolder) {
       const expanded = expandedFolders.has(item.id);
       const isDragOver = dragOverFolderId === item.id;
-      const isVirtualFolder = item.id.startsWith("vfolder:");
       const isSelected = selectedFolderId === item.id;
 
       return (
         <div key={item.id}>
           <button
-            draggable={!isVirtualFolder}
+            draggable
             onClick={() => toggleFolder(item.id)}
             onContextMenu={(e) => handleContextMenu(e, item)}
             onDragStart={(e) => {
-              if (isVirtualFolder) { e.preventDefault(); return; }
               e.dataTransfer.setData("application/x-tree-node-id", item.id);
               e.dataTransfer.setData("application/x-tree-node-parent", parentId);
               e.dataTransfer.effectAllowed = "move";
               setDraggingItem({ id: item.id, parentId });
+              document.body.classList.add("tree-dragging");
             }}
-            onDragEnd={() => setDraggingItem(null)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              e.dataTransfer.dropEffect = draggingItem ? "move" : "copy";
-            }}
+            onDragEnd={() => { setDraggingItem(null); document.body.classList.remove("tree-dragging"); }}
+            onDragOver={(e) => { e.preventDefault(); }}
             onDragEnter={(e) => handleFolderDragEnter(e, item.id)}
             onDragLeave={(e) => handleFolderDragLeave(e, item.id)}
             onDrop={(e) => handleDrop(e, item.id)}
@@ -2302,8 +2440,13 @@ export function DriveFileTree({
           e.dataTransfer.setData("application/x-tree-node-parent", parentId);
           e.dataTransfer.effectAllowed = "move";
           setDraggingItem({ id: item.id, parentId });
+          document.body.classList.add("tree-dragging");
         }}
-        onDragEnd={() => setDraggingItem(null)}
+        onDragEnd={() => { setDraggingItem(null); document.body.classList.remove("tree-dragging"); }}
+        onDragOver={(e) => { e.preventDefault(); }}
+        onDragEnter={(e) => handleFolderDragEnter(e, parentId)}
+        onDragLeave={(e) => handleFolderDragLeave(e, parentId)}
+        onDrop={(e) => handleDrop(e, parentId)}
         className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm ${
           isActive
             ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
@@ -2390,7 +2533,7 @@ export function DriveFileTree({
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto py-1">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-1">
         {loading && treeItems.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 size={ICON.LG} className="animate-spin text-gray-400" />

@@ -179,9 +179,13 @@ export async function handleHttpNode(
     throw new Error(`HTTP ${response.status} ${method} ${url}: ${responseText}`);
   }
 
+  // Determine response type: auto (default), text, or binary
+  const responseType = replaceVariables(node.properties["responseType"] || "auto", context);
   const contentTypeHeader = response.headers.get("content-type") || "application/octet-stream";
   const mimeType = contentTypeHeader.split(";")[0].trim();
-  const isBinary = isBinaryMimeType(mimeType);
+  const isBinary = responseType === "binary" ? true
+    : responseType === "text" ? false
+    : isBinaryMimeType(mimeType);
   const saveTo = node.properties["saveTo"];
 
   if (isBinary && saveTo) {

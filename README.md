@@ -67,18 +67,19 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 ## Features
 
 - **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments
-- **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides
+- **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides. `/run @workflow.yaml` executes workflows directly from chat with inline streaming logs
 - **Visual Workflow Editor** — Visual node-based builder (24 node types), YAML import/export, real-time SSE execution
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
+- **Keyboard Shortcuts** — Configurable shortcuts with modifier key support (Ctrl/Cmd, Shift, Alt) via Settings
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
 - **MCP** — Connect external MCP servers as tools for AI chat, with OAuth support and rich UI rendering (MCP Apps)
-- **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, and settings panels
+- **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, settings panels, custom file icons, and file extension handling
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
-- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore
+- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore. Backup token for external migration tools
 - **Encryption** — Optional hybrid RSA + AES encryption for individual files, chat history, and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
-- **Multi-Model Support** — Gemini 3, 2.5, Flash, Pro, Lite, Gemma; paid and free plan model lists
+- **Multi-Model Support** — Gemini 3.1 Pro, Gemini 3, 2.5, Flash, Pro, Lite, Gemma; paid and free plan model lists
 - **Image Generation** — Generate images via Gemini image models
 - **i18n** — English and Japanese UI
 

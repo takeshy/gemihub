@@ -58,7 +58,7 @@ Available models depend on API plan:
 | Plan | Models |
 |------|--------|
 | Free | gemini-2.5-flash-lite, gemini-2.5-flash |
-| Paid | gemini-3-flash-preview, gemini-3-pro-preview |
+| Paid | gemini-3.1-pro-preview, gemini-3-flash-preview |
 
 If the selected model does not support File Search, the system automatically falls back to the other model for the same plan.
 

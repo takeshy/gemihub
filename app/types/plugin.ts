@@ -83,6 +83,7 @@ export interface PluginAPI {
       content: string
     ): Promise<{ id: string; name: string }>;
     updateFile(fileId: string, content: string): Promise<void>;
+    rebuildTree(): Promise<void>;
   };
 
   // Plugin-scoped storage (data.json on Drive)

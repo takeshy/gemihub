@@ -24,6 +24,7 @@ export default [
   route("api/workflow/request-history", "routes/api.workflow.request-history.tsx"),
   route("api/prompt-response", "routes/api.prompt-response.tsx"),
   route("api/chat", "routes/api.chat.tsx"),
+  route("api/chat/compact", "routes/api.chat.compact.tsx"),
   route("api/chat/history", "routes/api.chat.history.tsx"),
   route("api/settings/mcp-test", "routes/api.settings.mcp-test.tsx"),
   route("api/settings/mcp-oauth-token", "routes/api.settings.mcp-oauth-token.tsx"),
@@ -45,4 +46,5 @@ export default [
   route("public/file/:fileId/:fileName", "routes/public.file.$fileId.$fileName.tsx"),
   route("api/plugins", "routes/api.plugins.tsx"),
   route("api/plugins/:id", "routes/api.plugins.$id.tsx"),
+  route("api/obsidian/token", "routes/api.obsidian.token.tsx"),
 ] satisfies RouteConfig;

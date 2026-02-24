@@ -3,6 +3,7 @@ import { data, redirect, useLoaderData, useSearchParams } from "react-router";
 import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
+import { ensureRootFolder } from "~/services/google-drive.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
@@ -11,7 +12,7 @@ import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiO
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
-import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta } from "~/services/indexeddb-cache";
+import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta, getAllCachedFiles, clearAllCache } from "~/services/indexeddb-cache";
 import { attachDriveFileHandlers } from "~/utils/drive-file-sse";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 
@@ -46,7 +47,27 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   try {
     const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
-    const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+
+    // Detect root folder mismatch (folder trashed/renamed → new folder created on another device)
+    let rootFolderMismatch: { canonicalRootFolderId: string } | null = null;
+
+    if (validTokens.rootFolderId) {
+      const canonicalId = await ensureRootFolder(validTokens.accessToken);
+      if (canonicalId !== validTokens.rootFolderId) {
+        rootFolderMismatch = { canonicalRootFolderId: canonicalId };
+      }
+    }
+
+    let driveSettings;
+    if (rootFolderMismatch) {
+      try {
+        driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      } catch {
+        driveSettings = await getSettings(validTokens.accessToken, rootFolderMismatch.canonicalRootFolderId);
+      }
+    } else {
+      driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+    }
 
     // Merge local plugins (dev only) — local plugins take priority over Drive plugins
     const localPlugins = getLocalPlugins();
@@ -66,6 +87,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         hasEncryptedApiKey: !!settings.encryptedApiKey,
         rootFolderId: validTokens.rootFolderId,
         isOffline: false,
+        rootFolderMismatch,
       },
       { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
     );
@@ -75,11 +97,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     // so the client can fall back to IndexedDB-cached settings.
     const acceptLanguage = request.headers.get("Accept-Language");
     return data({
-      settings: { ...DEFAULT_USER_SETTINGS, language: resolveLanguage(null, acceptLanguage) },
+      settings: { ...DEFAULT_USER_SETTINGS, language: resolveLanguage(null, acceptLanguage) } as UserSettings,
       hasGeminiApiKey: !!tokens.geminiApiKey,
       hasEncryptedApiKey: false,
       rootFolderId: tokens.rootFolderId,
       isOffline: true,
+      rootFolderMismatch: null,
     });
   }
 }
@@ -108,7 +131,7 @@ function applyLocalStorageLanguage(d: LoaderData): LoaderData {
 }
 
 export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
-  if (cachedLoaderData) return cachedLoaderData;
+  if (cachedLoaderData) return applyLocalStorageLanguage(cachedLoaderData);
 
   try {
     const loaderData = await serverLoader();
@@ -124,6 +147,7 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
           hasEncryptedApiKey: cached.hasEncryptedApiKey,
           rootFolderId: cached.rootFolderId,
           isOffline: true,
+          rootFolderMismatch: null,
         });
         return cachedLoaderData;
       }
@@ -153,6 +177,7 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
         hasEncryptedApiKey: cached.hasEncryptedApiKey,
         rootFolderId: cached.rootFolderId,
         isOffline: true,
+        rootFolderMismatch: null,
       });
       return cachedLoaderData;
     }
@@ -165,6 +190,7 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
         hasEncryptedApiKey: false,
         rootFolderId: "",
         isOffline: true,
+        rootFolderMismatch: null,
       });
       return cachedLoaderData;
     }
@@ -199,6 +225,7 @@ export default function Index() {
       hasEncryptedApiKey={data.hasEncryptedApiKey}
       rootFolderId={data.rootFolderId}
       initialOffline={data.isOffline}
+      rootFolderMismatch={data.rootFolderMismatch}
     />
   );
 }
@@ -220,12 +247,14 @@ function IDELayout({
   hasEncryptedApiKey,
   rootFolderId,
   initialOffline,
+  rootFolderMismatch,
 }: {
   settings: UserSettings;
   hasGeminiApiKey: boolean;
   hasEncryptedApiKey: boolean;
   rootFolderId: string;
   initialOffline: boolean;
+  rootFolderMismatch: { canonicalRootFolderId: string } | null;
 }) {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(initialHasGeminiApiKey);
   useApplySettings(settings.language ?? "en", settings.fontSize, settings.theme);
@@ -532,6 +561,7 @@ function IDELayout({
         hasEncryptedApiKey={hasEncryptedApiKey}
         rootFolderId={rootFolderId}
         initialOffline={initialOffline}
+        rootFolderMismatch={rootFolderMismatch}
         rightPanel={rightPanel}
         setRightPanel={setRightPanel}
         activeFileId={activeFileId}
@@ -584,6 +614,7 @@ function IDEContent({
   hasEncryptedApiKey,
   rootFolderId,
   initialOffline,
+  rootFolderMismatch,
   rightPanel,
   setRightPanel,
   activeFileId,
@@ -622,6 +653,7 @@ function IDEContent({
   hasEncryptedApiKey: boolean;
   rootFolderId: string;
   initialOffline: boolean;
+  rootFolderMismatch: { canonicalRootFolderId: string } | null;
   rightPanel: RightPanelId;
   setRightPanel: (panel: RightPanelId) => void;
   activeFileId: string | null;
@@ -699,6 +731,40 @@ function IDEContent({
 
   // Migrate offline-created new: files to Drive when back online
   usePendingFileMigration(isOffline);
+
+  // Root folder mismatch dialog state (once confirmed, page reloads — no toggle needed)
+  const showMismatchDialog = !!rootFolderMismatch;
+  const [mismatchMigrating, setMismatchMigrating] = useState(false);
+
+  const handleMismatchConfirm = useCallback(async () => {
+    if (!rootFolderMismatch) return;
+    setMismatchMigrating(true);
+    try {
+      const cachedFiles = await getAllCachedFiles();
+      // Only migrate text files (skip binary/base64 files)
+      const textFiles = cachedFiles
+        .filter((f) => !f.encoding && !f.fileId.startsWith("new:"))
+        .map((f) => ({ fileName: f.fileName || f.fileId, content: f.content }));
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "migrateRootFolder",
+          newRootFolderId: rootFolderMismatch.canonicalRootFolderId,
+          files: textFiles,
+        }),
+      });
+      if (!res.ok) {
+        setMismatchMigrating(false);
+        return;
+      }
+      await clearAllCache();
+      invalidateIndexCache();
+      window.location.reload();
+    } catch {
+      setMismatchMigrating(false);
+    }
+  }, [rootFolderMismatch]);
 
   // Search panel state
   const [showSearch, setShowSearch] = useState(false);
@@ -1529,6 +1595,31 @@ function IDEContent({
         }}
         zClass="z-[1001]"
       />
+
+      {/* Root folder mismatch dialog */}
+      {showMismatchDialog && rootFolderMismatch && (
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+            <div className="mb-3 flex items-center gap-2 text-amber-600 dark:text-amber-400">
+              <AlertTriangle size={20} />
+              <h3 className="text-base font-semibold">{t("rootMismatch.title")}</h3>
+            </div>
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+              {t("rootMismatch.description")}
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={handleMismatchConfirm}
+                disabled={mismatchMigrating}
+                className="flex items-center gap-2 rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {mismatchMigrating && <Loader2 size={14} className="animate-spin" />}
+                {mismatchMigrating ? t("rootMismatch.migrating") : t("rootMismatch.confirm")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Password prompt for API key unlock */}
       {showPasswordPrompt && (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { data, useLoaderData, useFetcher, useNavigate } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
@@ -46,6 +47,7 @@ import {
   encryptPrivateKey,
   decryptPrivateKey,
   generateKeyPair,
+  encryptData,
 } from "~/services/crypto-core";
 import {
   ArrowLeft,
@@ -166,7 +168,6 @@ export async function action({ request }: Route.ActionArgs) {
 
   const formData = await request.formData();
   const _action = formData.get("_action") as string;
-
   try {
     switch (_action) {
       case "saveGeneral": {
@@ -230,6 +231,11 @@ export async function action({ request }: Route.ActionArgs) {
 
         const isInitialSetup = !currentSettings.encryptedApiKey && geminiApiKey && password;
         const isPasswordChange = !!currentSettings.encryptedApiKey && currentPassword && newPassword;
+        const isApiKeyChangeOnly = !!currentSettings.encryptedApiKey && geminiApiKey && !newPassword;
+
+        if (isApiKeyChangeOnly && !currentPassword) {
+          return jsonWithCookie({ success: false, message: "currentPasswordRequired" });
+        }
 
         if (isInitialSetup) {
           // Initial setup: encrypt API key + generate RSA key pair
@@ -285,6 +291,20 @@ export async function action({ request }: Route.ActionArgs) {
                 salt: rsaSalt,
               };
             }
+          } catch {
+            return jsonWithCookie({ success: false, message: "Current password is incorrect." });
+          }
+        } else if (isApiKeyChangeOnly) {
+          // API key change only: re-encrypt new API key with current password
+          try {
+            // Verify current password by decrypting existing key
+            await decryptPrivateKey(
+              currentSettings.encryptedApiKey, currentSettings.apiKeySalt, currentPassword
+            );
+
+            const { encryptedPrivateKey: encApiKey, salt: apiSalt } = await encryptPrivateKey(geminiApiKey, currentPassword);
+            updatedSettings.encryptedApiKey = encApiKey;
+            updatedSettings.apiKeySalt = apiSalt;
           } catch {
             return jsonWithCookie({ success: false, message: "Current password is incorrect." });
           }
@@ -430,6 +450,50 @@ export async function action({ request }: Route.ActionArgs) {
         return jsonWithCookie({ success: true, message: "Shortcut settings saved." });
       }
 
+      case "generateMigrationToken": {
+        // Generate migration token (XOR-encoded accessToken + rootFolderId)
+        const payload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
+        const buf = Buffer.from(payload);
+        for (let i = 0; i < buf.length; i++) buf[i] ^= 0x5a;
+        const migrationToken = buf.toString("hex");
+
+        // If encryption is set up, also export _encrypted-auth.json to Drive
+        const enc = currentSettings.encryption;
+        if (enc?.enabled && enc.publicKey && enc.encryptedPrivateKey && enc.salt) {
+          const url = new URL(request.url);
+          const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+          const apiOrigin = `${proto}://${url.host}`;
+          const authPayload = JSON.stringify({
+            refreshToken: validTokens.refreshToken,
+            apiOrigin,
+          });
+          const encrypted = await encryptData(authPayload, enc.publicKey);
+
+          const authFileContent = JSON.stringify({
+            data: encrypted,
+            encryptedPrivateKey: enc.encryptedPrivateKey,
+            salt: enc.salt,
+          }, null, 2);
+          const { findFileByExactName, createFile, updateFile } = await import("~/services/google-drive.server");
+          const existingFile = await findFileByExactName(
+            validTokens.accessToken, "_encrypted-auth.json", validTokens.rootFolderId
+          );
+          if (existingFile) {
+            await updateFile(validTokens.accessToken, existingFile.id, authFileContent, "application/json");
+          } else {
+            await createFile(
+              validTokens.accessToken, "_encrypted-auth.json", authFileContent,
+              validTokens.rootFolderId, "application/json"
+            );
+          }
+        }
+
+        return jsonWithCookie({
+          success: true,
+          migrationToken,
+        });
+      }
+
       default:
         return jsonWithCookie({ success: false, message: "Unknown action." });
     }
@@ -447,15 +511,15 @@ export default function Settings() {
   const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
-  const effectiveLang = (() => {
+  const [currentLang, setCurrentLang] = useState<Language>(() => {
     const serverLang = settings.language ?? "en";
     try {
       const ls = localStorage.getItem("gemihub-language");
       if (ls === "ja" || ls === "en") return ls as Language;
     } catch { /* localStorage unavailable */ }
     return serverLang;
-  })();
-  useApplySettings(effectiveLang, settings.fontSize, settings.theme);
+  });
+  useApplySettings(currentLang, settings.fontSize, settings.theme);
 
   // Detect OAuth redirect return from mobile flow
   useEffect(() => {
@@ -470,14 +534,15 @@ export default function Settings() {
   }, []);
 
   return (
-    <I18nProvider language={effectiveLang}>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={effectiveLang}>
+    <I18nProvider language={currentLang}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={currentLang}>
         <SettingsInner
           settings={settings}
           hasApiKey={hasApiKey}
           maskedKey={maskedKey}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          onLanguageChange={setCurrentLang}
         />
       </PluginProvider>
     </I18nProvider>
@@ -490,12 +555,14 @@ function SettingsInner({
   maskedKey,
   activeTab,
   setActiveTab,
+  onLanguageChange,
 }: {
   settings: UserSettings;
   hasApiKey: boolean;
   maskedKey: string | null;
   activeTab: TabId;
   setActiveTab: (tab: TabId) => void;
+  onLanguageChange: (lang: Language) => void;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -546,7 +613,7 @@ function SettingsInner({
       {/* Tab content */}
       <main className="max-w-5xl mx-auto px-4 py-4 sm:py-8">
         {activeTab === "general" && (
-          <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} />
+          <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} onLanguageChange={onLanguageChange} />
         )}
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
@@ -621,15 +688,18 @@ function SaveButton({ loading }: { loading?: boolean }) {
   );
 }
 
-function ErrorDialog({
+function NotifyDialog({
   message,
+  variant = "info",
   onClose,
 }: {
   message: string;
+  variant?: "info" | "error";
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  return (
+  const isError = variant === "error";
+  const dialog = (
     <div
       className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50"
       onClick={onClose}
@@ -639,9 +709,9 @@ function ErrorDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
-            <AlertCircle size={16} />
-            {t("settings.general.errorTitle")}
+          <h3 className={`text-sm font-semibold flex items-center gap-2 ${isError ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}`}>
+            {isError ? <AlertCircle size={16} /> : <Check size={16} />}
+            {isError ? t("settings.general.errorTitle") : t("common.ok")}
           </h3>
           <button
             onClick={onClose}
@@ -664,6 +734,10 @@ function ErrorDialog({
       </div>
     </div>
   );
+  if (typeof document !== "undefined") {
+    return createPortal(dialog, document.body);
+  }
+  return dialog;
 }
 
 const inputClass =
@@ -679,21 +753,22 @@ function GeneralTab({
   settings,
   hasApiKey,
   maskedKey,
+  onLanguageChange,
 }: {
   settings: UserSettings;
   hasApiKey: boolean;
   maskedKey: string | null;
+  onLanguageChange: (lang: Language) => void;
 }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   const [apiPlan, setApiPlan] = useState<ApiPlan>(settings.apiPlan);
   const [selectedModel, setSelectedModel] = useState<ModelType | "">(
     settings.selectedModel || ""
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
-  const [language, setLanguage] = useState<Language>(settings.language ?? "en");
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
@@ -771,7 +846,7 @@ function GeneralTab({
 
       {/* Error dialog (modal) */}
       {errorMessage && (
-        <ErrorDialog message={errorMessage} onClose={() => setErrorMessage(null)} />
+        <NotifyDialog message={errorMessage} variant="error" onClose={() => setErrorMessage(null)} />
       )}
 
       <fetcher.Form method="post">
@@ -859,12 +934,27 @@ function GeneralTab({
             </div>
           </>
         ) : (
-          /* Already setup: show configured status and password change option */
+          /* Already setup: show configured status, current password, and password change option */
           <div className="mb-6">
             <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
               <p className="text-sm text-green-700 dark:text-green-300 flex items-center gap-2">
                 <Check size={16} />
                 {t("settings.general.configured")}
+              </p>
+            </div>
+            <div className="mb-4">
+              <Label htmlFor="currentPassword">{t("settings.general.currentPassword")}</Label>
+              <input
+                type="password"
+                id="currentPassword"
+                name="currentPassword"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder={t("settings.general.currentPassword")}
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t("settings.general.currentPasswordRequired")}
               </p>
             </div>
             {!showPasswordChange ? (
@@ -877,18 +967,6 @@ function GeneralTab({
               </button>
             ) : (
               <div className="space-y-3 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-                <div>
-                  <Label htmlFor="currentPassword">{t("settings.general.currentPassword")}</Label>
-                  <input
-                    type="password"
-                    id="currentPassword"
-                    name="currentPassword"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder={t("settings.general.currentPassword")}
-                    className={inputClass}
-                  />
-                </div>
                 <div>
                   <Label htmlFor="newPassword">{t("settings.general.newPassword")}</Label>
                   <input
@@ -1062,7 +1140,7 @@ function GeneralTab({
             id="language"
             name="language"
             value={language}
-            onChange={(e) => setLanguage(e.target.value as Language)}
+            onChange={(e) => onLanguageChange(e.target.value as Language)}
             className={inputClass + " max-w-[300px]"}
           >
             {SUPPORTED_LANGUAGES.map((lang) => (
@@ -1121,6 +1199,7 @@ function GeneralTab({
 
 function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const { t } = useI18n();
+  const migrationFetcher = useFetcher<{ success?: boolean; migrationToken?: string; message?: string }>();
 
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(true);
@@ -1132,6 +1211,9 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [pruneMsg, setPruneMsg] = useState<string | null>(null);
   const [historyStats, setHistoryStats] = useState<Record<string, unknown> | null>(null);
+  const [backupToken, setBackupToken] = useState<string | null>(null);
+  const [notifyDialog, setNotifyDialog] = useState<{ message: string; variant: "info" | "error" } | null>(null);
+  const [backupCopied, setBackupCopied] = useState(false);
 
   // Load lastUpdatedAt from IndexedDB
   useEffect(() => {
@@ -1155,29 +1237,26 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
     try {
       const {
         setLocalSyncMeta,
-        getLocallyModifiedFileIds,
+        getAllCachedFiles,
         getCachedFile,
         setCachedFile,
+        deleteCachedFile,
         getCachedRemoteMeta,
         clearAllEditHistory,
-        deleteEditHistoryEntry,
       } = await import("~/services/indexeddb-cache");
       const { ragRegisterInBackground } = await import("~/services/rag-sync");
-      const allModifiedIds = await getLocallyModifiedFileIds();
+      const allCached = await getAllCachedFiles();
       const cachedRemote = await getCachedRemoteMeta();
-      const eligibleModifiedIds = new Set<string>();
 
-      const pushedFiles: Array<{ fileId: string; content: string; fileName: string }> = [];
-      for (const fid of allModifiedIds) {
-        const cached = await getCachedFile(fid);
-        if (!cached) continue;
-        const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? fid;
+      const pushedFiles: Array<{ fileId: string; content: string; fileName: string; encoding?: "base64" }> = [];
+      for (const cached of allCached) {
+        const fileName = cached.fileName ?? cachedRemote?.files?.[cached.fileId]?.name ?? cached.fileId;
         if (isSyncExcludedPath(fileName)) continue;
-        eligibleModifiedIds.add(fid);
         pushedFiles.push({
-          fileId: fid,
+          fileId: cached.fileId,
           content: cached.content,
           fileName,
+          ...(cached.encoding === "base64" ? { encoding: "base64" as const } : {}),
         });
       }
 
@@ -1187,7 +1266,8 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "pushFiles",
-            files: pushedFiles.map(({ fileId, content }) => ({ fileId, content })),
+            files: pushedFiles,
+            forceRecreate: true,
           }),
         });
         if (!res.ok) throw new Error("Full push failed");
@@ -1197,16 +1277,31 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           : 0;
 
         const pushedResultIds = new Set<string>();
-        for (const r of data.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
+        for (const r of data.results as Array<{ fileId: string; newFileId?: string; md5Checksum: string; modifiedTime: string }>) {
           pushedResultIds.add(r.fileId);
-          const cached = await getCachedFile(r.fileId);
-          if (cached) {
-            await setCachedFile({
-              ...cached,
-              md5Checksum: r.md5Checksum,
-              modifiedTime: r.modifiedTime,
-              cachedAt: Date.now(),
-            });
+          if (r.newFileId) {
+            // File was recreated with a new ID — remove old cache entry, create new one
+            const oldCached = await getCachedFile(r.fileId);
+            await deleteCachedFile(r.fileId);
+            if (oldCached) {
+              await setCachedFile({
+                ...oldCached,
+                fileId: r.newFileId,
+                md5Checksum: r.md5Checksum,
+                modifiedTime: r.modifiedTime,
+                cachedAt: Date.now(),
+              });
+            }
+          } else {
+            const cached = await getCachedFile(r.fileId);
+            if (cached) {
+              await setCachedFile({
+                ...cached,
+                md5Checksum: r.md5Checksum,
+                modifiedTime: r.modifiedTime,
+                cachedAt: Date.now(),
+              });
+            }
           }
         }
 
@@ -1229,26 +1324,25 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         } else {
           setLastUpdatedAt(new Date().toISOString());
         }
-        if (pushedResultIds.size === eligibleModifiedIds.size) {
-          await clearAllEditHistory();
-        } else {
-          for (const fileId of pushedResultIds) {
-            await deleteEditHistoryEntry(fileId);
-          }
-        }
+        // Full push covers all cached files — clear all edit history
+        await clearAllEditHistory();
         const successfulFiles = pushedFiles.filter((f) => pushedResultIds.has(f.fileId));
         ragRegisterInBackground(successfulFiles);
         const fullPushCompletion = getSyncCompletionStatus(skippedCount, "Full push");
-        setActionMsg(fullPushCompletion.error ?? "Full push completed.");
-      } else if (allModifiedIds.size === 0) {
+        if (fullPushCompletion.error) {
+          setNotifyDialog({ message: t("settings.sync.fullPushSkipped").replace("{count}", String(skippedCount)), variant: "error" });
+        } else {
+          setNotifyDialog({ message: t("settings.sync.fullPushCompleted"), variant: "info" });
+        }
+      } else if (allCached.length === 0) {
         await clearAllEditHistory();
-        setActionMsg("No modified files to push.");
+        setNotifyDialog({ message: t("settings.sync.noCachedFiles"), variant: "info" });
       } else {
-        setActionMsg("No sync-eligible modified files to push.");
+        setNotifyDialog({ message: t("settings.sync.noSyncEligibleFiles"), variant: "info" });
       }
       window.dispatchEvent(new Event("sync-complete"));
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Full push failed.");
+      setNotifyDialog({ message: err instanceof Error ? err.message : t("settings.sync.fullPushFailed"), variant: "error" });
     } finally {
       setActionLoading(null);
     }
@@ -1270,7 +1364,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "fullPull", skipHashes }),
       });
-      if (!res.ok) throw new Error("Full pull failed");
+      if (!res.ok) throw new Error(t("settings.sync.fullPullFailed"));
       const data = await res.json();
 
       const updatedMeta = {
@@ -1314,9 +1408,9 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       if (pulledIds.length > 0) {
         window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: pulledIds } }));
       }
-      setActionMsg(`Full pull completed. Downloaded ${data.files.length} file(s).`);
+      setNotifyDialog({ message: t("settings.sync.fullPullCompleted").replace("{count}", String(data.files.length)), variant: "info" });
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Full pull failed.");
+      setNotifyDialog({ message: err instanceof Error ? err.message : t("settings.sync.fullPullFailed"), variant: "error" });
     } finally {
       setActionLoading(null);
     }
@@ -1331,15 +1425,15 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "detectUntracked" }),
       });
-      if (!res.ok) throw new Error("Detection failed");
+      if (!res.ok) throw new Error(t("settings.sync.detectionFailed"));
       const data = await res.json();
       setUntrackedFiles(data.untrackedFiles);
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Detection failed.");
+      setActionMsg(err instanceof Error ? err.message : t("settings.sync.detectionFailed"));
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [t]);
 
   const handleRebuildTree = useCallback(async () => {
     setActionLoading("rebuildTree");
@@ -1350,16 +1444,16 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       const res = await fetch("/settings", { method: "POST", body: fd });
       const resData = await res.json();
       if (res.ok && resData.success) {
-        setActionMsg(resData.message);
+        setActionMsg(t("settings.sync.rebuildCompleted"));
       } else {
-        setActionMsg(resData.message || "Rebuild failed.");
+        setActionMsg(resData.message || t("settings.sync.rebuildFailed"));
       }
     } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : "Rebuild failed.");
+      setActionMsg(err instanceof Error ? err.message : t("settings.sync.rebuildFailed"));
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [t]);
 
   const handlePrune = useCallback(async () => {
     if (!window.confirm(t("settings.editHistory.pruneConfirm"))) return;
@@ -1369,7 +1463,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       const res = await fetch("/api/settings/edit-history-prune", { method: "POST" });
       const resData = await res.json();
       if (!res.ok) {
-        setPruneMsg(resData.error || "Prune failed.");
+        setPruneMsg(resData.error || t("settings.sync.pruneFailed"));
         return;
       }
       const { deletedCount, remainingEntries, totalFiles } = resData as {
@@ -1386,7 +1480,7 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           .replace("{files}", String(totalFiles)));
       }
     } catch (err) {
-      setPruneMsg(err instanceof Error ? err.message : "Prune error.");
+      setPruneMsg(err instanceof Error ? err.message : t("settings.sync.pruneError"));
     } finally {
       setActionLoading(null);
     }
@@ -1399,17 +1493,56 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
       const data = await res.json();
       setHistoryStats(data);
     } catch {
-      setHistoryStats({ error: "Failed to load stats." });
+      setHistoryStats({ error: t("settings.sync.failedToLoadStats") });
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [t]);
+
+  const handleGenerateMigrationToken = useCallback(() => {
+    migrationFetcher.submit(
+      { _action: "generateMigrationToken" },
+      { method: "POST", action: "/settings" }
+    );
+  }, [migrationFetcher]);
+
+  useEffect(() => {
+    if (migrationFetcher.state === "idle" && migrationFetcher.data) {
+      const d = migrationFetcher.data;
+      if (d.migrationToken) {
+        setBackupToken(d.migrationToken);
+        setBackupCopied(false);
+      } else if (d.message) {
+        setActionMsg(d.message);
+      }
+    }
+  }, [migrationFetcher.state, migrationFetcher.data]);
+
+  const handleCopyBackupToken = useCallback(async () => {
+    if (!backupToken) return;
+    try {
+      await navigator.clipboard.writeText(backupToken);
+      setBackupCopied(true);
+      setTimeout(() => setBackupCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }, [backupToken]);
 
   const actionBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm disabled:opacity-50";
   const dangerBtnClass = "inline-flex items-center gap-2 px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 text-sm disabled:opacity-50";
 
   return (
     <div className="space-y-6">
+      {/* Notify dialog (portal) */}
+      {notifyDialog && (
+        <NotifyDialog
+          message={notifyDialog.message}
+          variant={notifyDialog.variant}
+          onClose={() => setNotifyDialog(null)}
+        />
+      )}
+
       {/* Status message */}
       {actionMsg && (
         <div className="p-3 rounded-md border text-sm bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300">
@@ -1435,6 +1568,49 @@ function SyncTab({ settings: _settings }: { settings: UserSettings }) {
             <span className="italic text-gray-400">{t("settings.sync.notSynced")}</span>
           )}
         </div>
+      </SectionCard>
+
+      {/* Migration Tool */}
+      <SectionCard>
+        <div className="flex items-center gap-2 mb-3">
+          <KeyRound size={16} className="text-gray-600 dark:text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+            {t("settings.sync.migrationTool")}
+          </h3>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          {t("settings.sync.migrationToolDescription")}
+        </p>
+        {!backupToken ? (
+          <button
+            type="button"
+            onClick={handleGenerateMigrationToken}
+            disabled={migrationFetcher.state !== "idle"}
+            className={actionBtnClass}
+          >
+            {migrationFetcher.state !== "idle" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+            {t("settings.sync.migrationTokenGenerate")}
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <code className="block p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded break-all select-all">
+              {backupToken}
+            </code>
+            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>{t("settings.sync.migrationTokenWarning")}</span>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleCopyBackupToken} className={actionBtnClass}>
+                {backupCopied ? <Check size={14} /> : <Copy size={14} />}
+                {backupCopied ? t("settings.sync.backupTokenCopied") : t("settings.sync.backupTokenCopy")}
+              </button>
+              <button type="button" onClick={() => { setBackupToken(null); setBackupCopied(false); }} className={actionBtnClass}>
+                {t("settings.sync.backupTokenHide")}
+              </button>
+            </div>
+          </div>
+        )}
       </SectionCard>
 
       {/* Data Management */}

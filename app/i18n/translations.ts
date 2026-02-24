@@ -5,6 +5,7 @@ export interface TranslationStrings {
   "common.save": string;
   "common.cancel": string;
   "common.close": string;
+  "common.ok": string;
   "common.settings": string;
   "common.logout": string;
 
@@ -46,7 +47,7 @@ export interface TranslationStrings {
   "chat.mcpToolsLabel": string;
   "chat.toolModeLockGemma": string;
   "chat.toolModeLockWebSearch": string;
-  "chat.toolModeLockFlashLiteRag": string;
+  "chat.toolModeLockRag": string;
   "chat.toolModeLocked": string;
   "chat.unpushWarning.title": string;
   "chat.unpushWarning.description": string;
@@ -55,6 +56,21 @@ export interface TranslationStrings {
 
   "chat.saveToDrive": string;
   "chat.savedToDrive": string;
+
+  // Compact
+  "chat.compact": string;
+  "chat.compacting": string;
+  "chat.compacted": string;
+  "chat.compactFailed": string;
+  "chat.compactedContext": string;
+
+  // Welcome hints
+  "chat.welcomeTitle": string;
+  "chat.welcomeHint": string;
+  "chat.welcomeThinking": string;
+  "chat.welcomeImage": string;
+  "chat.welcomeCompact": string;
+  "chat.welcomeNewChat": string;
 
   // Settings page
   "settings.title": string;
@@ -162,6 +178,7 @@ export interface TranslationStrings {
   "settings.general.invalidApiKey": string;
   "settings.general.apiKeyRequired": string;
   "settings.general.passwordRequiredError": string;
+  "settings.general.currentPasswordRequired": string;
   "settings.general.required": string;
   "settings.general.errorTitle": string;
   "settings.general.generalSaved": string;
@@ -223,6 +240,9 @@ export interface TranslationStrings {
   "contextMenu.linkCopied": string;
   "contextMenu.publishFailed": string;
   "contextMenu.unpublishFailed": string;
+  "contextMenu.renameFailed": string;
+  "contextMenu.duplicateFailed": string;
+  "contextMenu.moveFailed": string;
   "contextMenu.fileAlreadyExists": string;
   "contextMenu.duplicate": string;
   "contextMenu.convertToPdf": string;
@@ -271,6 +291,19 @@ export interface TranslationStrings {
   "settings.sync.rebuild": string;
   "settings.sync.dangerZone": string;
   "settings.sync.dangerZoneDescription": string;
+  "settings.sync.fullPushCompleted": string;
+  "settings.sync.fullPushSkipped": string;
+  "settings.sync.noCachedFiles": string;
+  "settings.sync.noSyncEligibleFiles": string;
+  "settings.sync.fullPushFailed": string;
+  "settings.sync.fullPullCompleted": string;
+  "settings.sync.fullPullFailed": string;
+  "settings.sync.detectionFailed": string;
+  "settings.sync.rebuildFailed": string;
+  "settings.sync.rebuildCompleted": string;
+  "settings.sync.pruneFailed": string;
+  "settings.sync.pruneError": string;
+  "settings.sync.failedToLoadStats": string;
 
   // Temp diff modal
   "tempDiff.title": string;
@@ -389,7 +422,10 @@ export interface TranslationStrings {
   "quickOpen.selectFile": string;
 
   // Workflow
+  "workflow.nodeComment": string;
   "workflow.pushRequired": string;
+  "workflow.retryFromHere": string;
+  "workflow.retryFromError": string;
   "workflow.referenceHistory": string;
   "workflow.historySelect.title": string;
   "workflow.historySelect.recentExecutions": string;
@@ -442,6 +478,13 @@ export interface TranslationStrings {
   "settings.sync.conflictsTitle": string;
   "settings.sync.conflictsDescription": string;
   "settings.sync.manage": string;
+  "settings.sync.migrationTool": string;
+  "settings.sync.migrationToolDescription": string;
+  "settings.sync.migrationTokenGenerate": string;
+  "settings.sync.migrationTokenWarning": string;
+  "settings.sync.backupTokenCopy": string;
+  "settings.sync.backupTokenCopied": string;
+  "settings.sync.backupTokenHide": string;
   "trash.tabTrash": string;
   "trash.tabConflicts": string;
   "trash.noFiles": string;
@@ -485,6 +528,7 @@ export interface TranslationStrings {
   "sync.pullDirection": string;
   "sync.openFile": string;
   "sync.noDiff": string;
+  "sync.encryptedNoDiff": string;
 
   // Shortcuts tab
   "settings.tab.shortcuts": string;
@@ -505,6 +549,12 @@ export interface TranslationStrings {
   // Offline
   "offline.indicator": string;
   "offline.banner": string;
+
+  // Root folder mismatch
+  "rootMismatch.title": string;
+  "rootMismatch.description": string;
+  "rootMismatch.migrating": string;
+  "rootMismatch.confirm": string;
 }
 
 const en: TranslationStrings = {
@@ -512,6 +562,7 @@ const en: TranslationStrings = {
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.ok": "OK",
   "common.settings": "Settings",
   "common.logout": "Logout",
 
@@ -551,7 +602,7 @@ const en: TranslationStrings = {
   "chat.mcpToolsLabel": "MCP Tools",
   "chat.toolModeLockGemma": "Gemma models don't support function calling",
   "chat.toolModeLockWebSearch": "Drive tools are disabled during Web Search",
-  "chat.toolModeLockFlashLiteRag": "Drive tools are disabled when Flash Lite uses RAG",
+  "chat.toolModeLockRag": "Drive tools are disabled when RAG is enabled",
   "chat.toolModeLocked": "Auto (locked)",
   "chat.unpushWarning.title": "Unpushed Changes",
   "chat.unpushWarning.description": "The following files have local changes not yet pushed to Drive. The AI may see outdated content.",
@@ -560,6 +611,21 @@ const en: TranslationStrings = {
 
   "chat.saveToDrive": "Save to Drive",
   "chat.savedToDrive": "Saved to Drive",
+
+  // Compact
+  "chat.compact": "/compact",
+  "chat.compacting": "Compacting...",
+  "chat.compacted": "Conversation compressed: {{before}} messages → {{after}}",
+  "chat.compactFailed": "Failed to compress conversation",
+  "chat.compactedContext": "Compacted conversation context",
+
+  // Welcome hints
+  "chat.welcomeTitle": "Start a conversation with AI",
+  "chat.welcomeHint": "Ask questions about your files, create new ones, or search your Drive.",
+  "chat.welcomeThinking": "Use words like \"think\" or \"analyze\" to enable deep thinking mode",
+  "chat.welcomeImage": "Use \"generate image\" or \"create image\" to auto-switch to image model",
+  "chat.welcomeCompact": "Type /compact to compress a long conversation into a new chat",
+  "chat.welcomeNewChat": "Gemini has no memory, so the entire chat history is sent each time. Always click + to start a new chat when changing topics",
 
   // Settings
   "settings.title": "Settings",
@@ -668,6 +734,7 @@ const en: TranslationStrings = {
   "settings.general.invalidApiKey": "Invalid API key. Please check your Gemini API key and try again.",
   "settings.general.apiKeyRequired": "API key is required for initial setup.",
   "settings.general.passwordRequiredError": "Password is required for initial setup.",
+  "settings.general.currentPasswordRequired": "Current password is required to change the API key.",
   "settings.general.required": "Required",
   "settings.general.errorTitle": "Save Error",
   "settings.general.generalSaved": "General settings saved.",
@@ -729,6 +796,9 @@ const en: TranslationStrings = {
   "contextMenu.linkCopied": "Link copied to clipboard.",
   "contextMenu.publishFailed": "Failed to publish file.",
   "contextMenu.unpublishFailed": "Failed to unpublish file.",
+  "contextMenu.renameFailed": "Failed to rename.",
+  "contextMenu.duplicateFailed": "Failed to duplicate.",
+  "contextMenu.moveFailed": "Failed to move.",
   "contextMenu.fileAlreadyExists": "\"{name}\" already exists. Overwrite?",
   "contextMenu.duplicate": "Duplicate",
   "contextMenu.convertToPdf": "Convert to PDF",
@@ -777,6 +847,19 @@ const en: TranslationStrings = {
   "settings.sync.rebuild": "Rebuild",
   "settings.sync.dangerZone": "Danger Zone",
   "settings.sync.dangerZoneDescription": "These operations may cause data loss and cannot be undone.",
+  "settings.sync.fullPushCompleted": "Full push completed.",
+  "settings.sync.fullPushSkipped": "Full push completed with warning: skipped {count} file(s).",
+  "settings.sync.noCachedFiles": "No cached files to push.",
+  "settings.sync.noSyncEligibleFiles": "No sync-eligible cached files to push.",
+  "settings.sync.fullPushFailed": "Full push failed.",
+  "settings.sync.fullPullCompleted": "Full pull completed. Downloaded {count} file(s).",
+  "settings.sync.fullPullFailed": "Full pull failed.",
+  "settings.sync.detectionFailed": "Detection failed.",
+  "settings.sync.rebuildFailed": "Rebuild failed.",
+  "settings.sync.rebuildCompleted": "Sync meta rebuilt.",
+  "settings.sync.pruneFailed": "Prune failed.",
+  "settings.sync.pruneError": "Prune error.",
+  "settings.sync.failedToLoadStats": "Failed to load stats.",
 
   // Temp diff modal
   "tempDiff.title": "Temp File Comparison",
@@ -895,7 +978,10 @@ const en: TranslationStrings = {
   "quickOpen.selectFile": "Select a file...",
 
   // Workflow
+  "workflow.nodeComment": "Comment",
   "workflow.pushRequired": "Push to sync changes with server before executing",
+  "workflow.retryFromHere": "Retry from here",
+  "workflow.retryFromError": "Retry from error",
   "workflow.referenceHistory": "Reference Execution History",
   "workflow.historySelect.title": "Select Execution Steps",
   "workflow.historySelect.recentExecutions": "Recent Executions",
@@ -948,6 +1034,13 @@ const en: TranslationStrings = {
   "settings.sync.conflictsTitle": "Conflict Backups",
   "settings.sync.conflictsDescription": "Manage conflict backup files from sync resolution.",
   "settings.sync.manage": "Manage",
+  "settings.sync.migrationTool": "Migration Tool",
+  "settings.sync.migrationToolDescription": "Generate a token for Obsidian Gemini Helper or external backup tools. If encryption is enabled, authentication credentials are also exported to Google Drive.",
+  "settings.sync.migrationTokenGenerate": "Generate Token",
+  "settings.sync.migrationTokenWarning": "This token grants access to your GemHub files in Google Drive. It expires in about 1 hour.",
+  "settings.sync.backupTokenCopy": "Copy",
+  "settings.sync.backupTokenCopied": "Copied!",
+  "settings.sync.backupTokenHide": "Hide Token",
   "trash.tabTrash": "Trash",
   "trash.tabConflicts": "Conflicts",
   "trash.noFiles": "No files in trash.",
@@ -991,6 +1084,7 @@ const en: TranslationStrings = {
   "sync.pullDirection": "Drive \u2192 Local",
   "sync.openFile": "Open",
   "sync.noDiff": "Binary file",
+  "sync.encryptedNoDiff": "Encrypted file (diff not available)",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "Shortcuts",
@@ -1011,6 +1105,12 @@ const en: TranslationStrings = {
   // Offline
   "offline.indicator": "Offline",
   "offline.banner": "You are in offline mode. Some features are unavailable.",
+
+  // Root folder mismatch
+  "rootMismatch.title": "New gemihub folder detected",
+  "rootMismatch.description": "Your local cached files will be moved to conflicts. You can restore them from Settings > Conflicts.",
+  "rootMismatch.migrating": "Migrating...",
+  "rootMismatch.confirm": "OK",
 };
 
 const ja: TranslationStrings = {
@@ -1018,6 +1118,7 @@ const ja: TranslationStrings = {
   "common.save": "保存",
   "common.cancel": "キャンセル",
   "common.close": "閉じる",
+  "common.ok": "OK",
   "common.settings": "設定",
   "common.logout": "ログアウト",
 
@@ -1057,7 +1158,7 @@ const ja: TranslationStrings = {
   "chat.mcpToolsLabel": "MCPツール",
   "chat.toolModeLockGemma": "Gemmaモデルはファンクションコールに対応していません",
   "chat.toolModeLockWebSearch": "Web Search中はDriveツールは無効です",
-  "chat.toolModeLockFlashLiteRag": "Flash LiteでRAG使用時はDriveツールは無効です",
+  "chat.toolModeLockRag": "RAG使用時はDriveツールは無効です",
   "chat.toolModeLocked": "自動（ロック中）",
   "chat.unpushWarning.title": "未プッシュの変更",
   "chat.unpushWarning.description": "以下のファイルにはDriveにプッシュされていないローカル変更があります。AIは古い内容を参照する可能性があります。",
@@ -1066,6 +1167,21 @@ const ja: TranslationStrings = {
 
   "chat.saveToDrive": "Driveに保存",
   "chat.savedToDrive": "Drive保存済み",
+
+  // Compact
+  "chat.compact": "/compact",
+  "chat.compacting": "圧縮中...",
+  "chat.compacted": "会話を圧縮しました: {{before}}メッセージ → {{after}}",
+  "chat.compactFailed": "会話の圧縮に失敗しました",
+  "chat.compactedContext": "圧縮された会話コンテキスト",
+
+  // Welcome hints
+  "chat.welcomeTitle": "AIとの会話を始めましょう",
+  "chat.welcomeHint": "ファイルについて質問したり、新規作成したり、Drive内を検索できます。",
+  "chat.welcomeThinking": "「考えて」「分析して」などのキーワードで深い思考モードが有効になります",
+  "chat.welcomeImage": "「画像を生成」「generate image」で自動的に画像モデルに切り替わります",
+  "chat.welcomeCompact": "/compact で長い会話を要約して新しいチャットに引き継げます",
+  "chat.welcomeNewChat": "Geminiは記憶ができないため、毎回このチャットの全会話を送信します。話題を変える時は必ず + ボタンで新しいチャットを始めてください",
 
   // Settings
   "settings.title": "設定",
@@ -1174,6 +1290,7 @@ const ja: TranslationStrings = {
   "settings.general.invalidApiKey": "無効なAPIキーです。Gemini APIキーを確認して再度お試しください。",
   "settings.general.apiKeyRequired": "初回設定にはAPIキーが必要です。",
   "settings.general.passwordRequiredError": "初回設定にはパスワードが必要です。",
+  "settings.general.currentPasswordRequired": "APIキーを変更するには現在のパスワードが必要です。",
   "settings.general.required": "必須",
   "settings.general.errorTitle": "保存エラー",
   "settings.general.generalSaved": "一般設定を保存しました。",
@@ -1235,6 +1352,9 @@ const ja: TranslationStrings = {
   "contextMenu.linkCopied": "リンクをクリップボードにコピーしました。",
   "contextMenu.publishFailed": "ファイルの公開に失敗しました。",
   "contextMenu.unpublishFailed": "公開の解除に失敗しました。",
+  "contextMenu.renameFailed": "名前の変更に失敗しました。",
+  "contextMenu.duplicateFailed": "複製に失敗しました。",
+  "contextMenu.moveFailed": "移動に失敗しました。",
   "contextMenu.fileAlreadyExists": "「{name}」は既に存在します。上書きしますか？",
   "contextMenu.duplicate": "複製",
   "contextMenu.convertToPdf": "PDFに変換",
@@ -1283,6 +1403,19 @@ const ja: TranslationStrings = {
   "settings.sync.rebuild": "再構築",
   "settings.sync.dangerZone": "危険な操作",
   "settings.sync.dangerZoneDescription": "これらの操作はデータ損失を引き起こす可能性があり、元に戻せません。",
+  "settings.sync.fullPushCompleted": "完全Pushが完了しました。",
+  "settings.sync.fullPushSkipped": "完全Pushが完了しましたが、{count}件のファイルをスキップしました。",
+  "settings.sync.noCachedFiles": "Pushするキャッシュファイルがありません。",
+  "settings.sync.noSyncEligibleFiles": "同期対象のキャッシュファイルがありません。",
+  "settings.sync.fullPushFailed": "完全Pushに失敗しました。",
+  "settings.sync.fullPullCompleted": "完全Pullが完了しました。{count}件のファイルをダウンロードしました。",
+  "settings.sync.fullPullFailed": "完全Pullに失敗しました。",
+  "settings.sync.detectionFailed": "検出に失敗しました。",
+  "settings.sync.rebuildFailed": "再構築に失敗しました。",
+  "settings.sync.rebuildCompleted": "同期メタデータを再構築しました。",
+  "settings.sync.pruneFailed": "整理に失敗しました。",
+  "settings.sync.pruneError": "整理中にエラーが発生しました。",
+  "settings.sync.failedToLoadStats": "統計の読み込みに失敗しました。",
 
   // Temp diff modal
   "tempDiff.title": "一時ファイルの比較",
@@ -1401,7 +1534,10 @@ const ja: TranslationStrings = {
   "quickOpen.selectFile": "ファイルを選択...",
 
   // Workflow
+  "workflow.nodeComment": "コメント",
   "workflow.pushRequired": "Pushしてサーバー側に反映しないと実行できません",
+  "workflow.retryFromHere": "ここからリトライ",
+  "workflow.retryFromError": "エラーからリトライ",
   "workflow.referenceHistory": "実行履歴を参照",
   "workflow.historySelect.title": "実行ステップを選択",
   "workflow.historySelect.recentExecutions": "実行履歴",
@@ -1454,6 +1590,13 @@ const ja: TranslationStrings = {
   "settings.sync.conflictsTitle": "コンフリクトバックアップ",
   "settings.sync.conflictsDescription": "同期コンフリクト解決時のバックアップファイルを管理します。",
   "settings.sync.manage": "管理",
+  "settings.sync.migrationTool": "移行ツール",
+  "settings.sync.migrationToolDescription": "Obsidian Gemini Helper や外部バックアップツール用のトークンを生成します。暗号化が有効な場合、認証情報も Google Drive にエクスポートされます。",
+  "settings.sync.migrationTokenGenerate": "トークンを生成",
+  "settings.sync.migrationTokenWarning": "このトークンは Google Drive の GemHub ファイルへのアクセス権を付与します。約1時間で失効します。",
+  "settings.sync.backupTokenCopy": "コピー",
+  "settings.sync.backupTokenCopied": "コピーしました！",
+  "settings.sync.backupTokenHide": "トークンを非表示",
   "trash.tabTrash": "ゴミ箱",
   "trash.tabConflicts": "コンフリクト",
   "trash.noFiles": "ゴミ箱にファイルはありません。",
@@ -1497,6 +1640,7 @@ const ja: TranslationStrings = {
   "sync.pullDirection": "ドライブ \u2192 ローカル",
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
+  "sync.encryptedNoDiff": "暗号化ファイル（差分表示不可）",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "ショートカット",
@@ -1517,6 +1661,12 @@ const ja: TranslationStrings = {
   // Offline
   "offline.indicator": "オフライン",
   "offline.banner": "オフラインモードです。一部の機能は利用できません。",
+
+  // Root folder mismatch
+  "rootMismatch.title": "新しいgemihubフォルダを検出しました",
+  "rootMismatch.description": "ローカルキャッシュのファイルをコンフリクトに移動します。設定のコンフリクト管理から復元できます。",
+  "rootMismatch.migrating": "移行中...",
+  "rootMismatch.confirm": "OK",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };

@@ -13,6 +13,7 @@ import {
   Wrench,
   Lock,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
@@ -45,6 +46,9 @@ interface ChatInputProps {
   driveToolModeLocked?: boolean;
   driveToolModeReasonKey?: keyof TranslationStrings;
   lastFileIdInMessages?: string | null;
+  onCompact?: () => void;
+  isCompacting?: boolean;
+  messageCount?: number;
 }
 
 function fileToAttachment(file: File): Promise<Attachment> {
@@ -149,6 +153,9 @@ export function ChatInput({
   driveToolModeLocked = false,
   driveToolModeReasonKey,
   lastFileIdInMessages = null,
+  onCompact,
+  isCompacting = false,
+  messageCount = 0,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -308,6 +315,15 @@ export function ChatInput({
     if (!trimmed && attachments.length === 0) return;
     if (disabled || isStreaming) return;
 
+    // Intercept /compact command
+    if (trimmed === "/compact" && onCompact) {
+      if (messageCount >= 2) {
+        setContent("");
+        onCompact();
+      }
+      return;
+    }
+
     // Resolve template variables
     let resolved = resolveTemplateVariables(
       trimmed,
@@ -348,7 +364,7 @@ export function ChatInput({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, shouldAutoContextActiveFile]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, shouldAutoContextActiveFile, onCompact, messageCount]);
 
   const handleSend = useCallback(async () => {
     const trimmed = content.trim();
@@ -677,24 +693,34 @@ export function ChatInput({
           )}
 
           {/* Textarea */}
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => {
-              const val = e.target.value;
-              setContent(val);
-              // Clear overrides if user modifies text after command selection
-              if (pendingOverrides && !val.startsWith("/")) {
-                // Keep overrides - user may be editing the template
-              }
-              autocomplete.handleInputChange(val, e.target.selectionStart);
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="Type / for commands, @ for mentions..."
-            disabled={disabled}
-            rows={3}
-            className="max-h-[200px] min-h-[80px] flex-1 resize-none bg-transparent py-1 text-sm text-gray-900 placeholder-gray-400 outline-none disabled:opacity-50 dark:text-gray-100 dark:placeholder-gray-500"
-          />
+          <div className="relative flex-1">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => {
+                const val = e.target.value;
+                setContent(val);
+                // Clear overrides if user modifies text after command selection
+                if (pendingOverrides && !val.startsWith("/")) {
+                  // Keep overrides - user may be editing the template
+                }
+                autocomplete.handleInputChange(val, e.target.selectionStart);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="Type / for commands, @ for mentions..."
+              disabled={disabled || isCompacting}
+              rows={3}
+              className="max-h-[200px] min-h-[80px] w-full resize-none bg-transparent py-1 text-sm text-gray-900 placeholder-gray-400 outline-none disabled:opacity-50 dark:text-gray-100 dark:placeholder-gray-500"
+            />
+            {isCompacting && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-gray-800/60">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 size={ICON.LG} className="animate-spin" />
+                  {t("chat.compacting")}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Right buttons (vertical stack): collapse + send/stop */}
           <div className="flex flex-shrink-0 flex-col items-center gap-1 self-end">

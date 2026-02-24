@@ -115,6 +115,11 @@ export async function saveExecutionRecord(
     console.error("[workflow-history] Failed to update _meta.json:", err);
   }
 
+  // Strip variablesSnapshot from older records to save storage (best-effort)
+  stripOldSnapshots(accessToken, folderId, fileId, fileName, record.workflowId).catch((err) => {
+    console.error("[workflow-history] Failed to strip old snapshots:", err);
+  });
+
   return fileId;
 }
 
@@ -157,6 +162,53 @@ export async function loadExecutionRecord(
     return { encrypted: true, encryptedContent: content };
   }
   return JSON.parse(content) as ExecutionRecord;
+}
+
+/**
+ * Strip variablesSnapshot from older execution records for the same workflow.
+ * Skips encrypted files and records for different workflows.
+ */
+async function stripOldSnapshots(
+  accessToken: string,
+  folderId: string,
+  excludeFileId: string,
+  excludeFileName: string,
+  workflowId: string
+): Promise<void> {
+  const files = await listFiles(accessToken, folderId);
+  const candidates = files.filter(
+    (f) =>
+      f.id !== excludeFileId &&
+      f.name !== excludeFileName &&
+      f.name.startsWith("exec_") &&
+      f.name.endsWith(".json") &&
+      f.name !== "_meta.json"
+  );
+
+  for (const file of candidates) {
+    try {
+      const content = await readFile(accessToken, file.id);
+      if (isEncryptedFile(content)) continue;
+
+      const record = JSON.parse(content) as ExecutionRecord;
+      if (record.workflowId !== workflowId) continue;
+
+      const hasSnapshots = record.steps?.some((s) => s.variablesSnapshot);
+      if (!hasSnapshots) continue;
+
+      for (const step of record.steps) {
+        delete step.variablesSnapshot;
+      }
+      await updateFile(
+        accessToken,
+        file.id,
+        JSON.stringify(record, null, 2),
+        "application/json"
+      );
+    } catch {
+      // Skip files that can't be processed
+    }
+  }
 }
 
 export async function deleteExecutionRecord(

@@ -34,7 +34,7 @@ export interface SyncDiff {
 }
 
 /** Minimal shape accepted as localMeta (LocalSyncMeta is a superset) */
-type SyncMetaLike = { files: Record<string, { md5Checksum: string; modifiedTime: string }> } | null;
+type SyncMetaLike = { files: Record<string, { md5Checksum: string; modifiedTime: string; name?: string }> } | null;
 
 /**
  * Compute sync diff by comparing two metadata snapshots:
@@ -81,6 +81,7 @@ export function computeSyncDiff(
     const localChanged = locallyModified;
     const remoteChanged = local && remote
       ? local.md5Checksum !== remote.md5Checksum
+        || (local.name != null && local.name !== remote.name)
       : false;
 
     if (hasLocal && !hasRemote) {

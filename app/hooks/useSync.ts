@@ -37,13 +37,14 @@ export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "warning"
 
 function toLocalSyncMeta(remoteMeta: {
   lastUpdatedAt: string;
-  files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+  files: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string }>;
 }): LocalSyncMeta {
   const files: LocalSyncMeta["files"] = {};
   for (const [id, f] of Object.entries(remoteMeta.files)) {
     files[id] = {
       md5Checksum: f.md5Checksum ?? "",
       modifiedTime: f.modifiedTime ?? "",
+      name: f.name,
     };
   }
   return {
@@ -179,18 +180,16 @@ export function useSync() {
       const data = await res.json();
       const remoteMeta = data.remoteMeta as SyncMeta | null;
 
-      // Cache remoteMeta in IndexedDB for pull to use
+      // Cache remoteMeta in IndexedDB for pull dialog to use
       if (remoteMeta) {
         const existingCached = await getCachedRemoteMeta();
-        if (existingCached?.rootFolderId) {
-          await setCachedRemoteMeta({
-            id: "current",
-            rootFolderId: existingCached.rootFolderId,
-            lastUpdatedAt: remoteMeta.lastUpdatedAt,
-            files: remoteMeta.files,
-            cachedAt: Date.now(),
-          });
-        }
+        await setCachedRemoteMeta({
+          id: "current",
+          rootFolderId: existingCached?.rootFolderId ?? "",
+          lastUpdatedAt: remoteMeta.lastUpdatedAt,
+          files: remoteMeta.files,
+          cachedAt: Date.now(),
+        });
       }
 
       // Recompute both push and pull counts from the fresh remoteMeta
@@ -228,24 +227,25 @@ export function useSync() {
       const diff = computeSyncDiff(localMeta, remoteMeta, modifiedIds);
 
       // 4. Reject push when remote has pending changes (pull first)
+      const localMetaFiles = localMeta?.files ?? {};
+      const remoteDeletedCount = diff.localOnly.filter(id => id in localMetaFiles).length;
       if (
         diff.conflicts.length > 0
         || diff.editDeleteConflicts.length > 0
         || diff.toPull.length > 0
         || diff.remoteOnly.length > 0
+        || remoteDeletedCount > 0
       ) {
         // Update cached remoteMeta so subsequent pull uses the fresh data
         if (remoteMeta) {
           const existingCached = await getCachedRemoteMeta();
-          if (existingCached?.rootFolderId) {
-            await setCachedRemoteMeta({
-              id: "current",
-              rootFolderId: existingCached.rootFolderId,
-              lastUpdatedAt: remoteMeta.lastUpdatedAt,
-              files: remoteMeta.files,
-              cachedAt: Date.now(),
-            });
-          }
+          await setCachedRemoteMeta({
+            id: "current",
+            rootFolderId: existingCached?.rootFolderId ?? "",
+            lastUpdatedAt: remoteMeta.lastUpdatedAt,
+            files: remoteMeta.files,
+            cachedAt: Date.now(),
+          });
           // Recompute both push and pull counts from the fresh remoteMeta
           await refreshSyncCounts(remoteMeta);
         }
@@ -326,7 +326,7 @@ export function useSync() {
           await setLocalSyncMeta(
             toLocalSyncMeta(pushData.remoteMeta as {
               lastUpdatedAt: string;
-              files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+              files: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string }>;
             })
           );
           await updateCachedRemoteMetaFromSyncMeta(pushData.remoteMeta as SyncMeta);
@@ -474,6 +474,7 @@ export function useSync() {
             updatedMeta.files[id] = {
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
+              name: rm?.name,
             };
           }
         }
@@ -504,6 +505,7 @@ export function useSync() {
           updatedMeta.files[file.fileId] = {
             md5Checksum: rm?.md5Checksum ?? "",
             modifiedTime: rm?.modifiedTime ?? "",
+            name: rm?.name,
           };
         }
       }
@@ -624,7 +626,7 @@ export function useSync() {
           const existing = await getLocalSyncMeta();
           const incoming = toLocalSyncMeta(data.remoteMeta as {
             lastUpdatedAt: string;
-            files: Record<string, { md5Checksum?: string; modifiedTime?: string }>;
+            files: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string }>;
           });
           const newFileId = (isEditDelete && data.file?.fileId !== fileId) ? data.file?.fileId : null;
           if (existing) {
@@ -710,10 +712,11 @@ export function useSync() {
       };
 
       // Include skipped files in meta too (including binary files not downloaded on mobile)
-      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { md5Checksum: string; modifiedTime: string }>)) {
+      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { name?: string; md5Checksum: string; modifiedTime: string }>)) {
         updatedMeta.files[fileId] = {
           md5Checksum: fileMeta.md5Checksum,
           modifiedTime: fileMeta.modifiedTime,
+          name: fileMeta.name,
         };
       }
 

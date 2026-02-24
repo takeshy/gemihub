@@ -25,7 +25,7 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
           startOnLoad: false,
           theme: isDark ? "dark" : "default",
           flowchart: {
-            useMaxWidth: true,
+            useMaxWidth: false,
             htmlLabels: true,
             curve: "basis",
           },
@@ -64,7 +64,7 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
   return (
     <div
       ref={containerRef}
-      className="flex items-center justify-center overflow-auto rounded bg-white p-4 dark:bg-gray-900 [&>svg]:max-w-full"
+      className="overflow-auto rounded bg-white p-4 dark:bg-gray-900"
     />
   );
 }

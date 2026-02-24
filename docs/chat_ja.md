@@ -74,7 +74,7 @@ Gemini ストリーミング、Function Calling、RAG、画像生成、MCP 連�
 モデルと RAG 設定によりモードが自動制約される：
 - **Gemma モデル**: `none` に強制（Function Calling 非対応）
 - **Web Search モード**: `none` に強制（他のツールと非互換）
-- **Flash Lite + RAG**: Function Calling ツール無効（RAG/File Search のみ）
+- **RAG 有効時**: Function Calling ツール無効（fileSearch + functionDeclarations は Gemini API 非対応）
 
 ### MCP ツール
 

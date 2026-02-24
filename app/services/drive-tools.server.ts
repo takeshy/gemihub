@@ -6,6 +6,7 @@ import {
   getFileMetadata,
   searchFiles,
   createFile,
+  renameFile,
 } from "./google-drive.server";
 import { getFileListFromMeta, upsertFileInMeta } from "./sync-meta.server";
 import type { ToolDefinition } from "~/types/settings";
@@ -147,6 +148,52 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
         },
       },
       required: ["fileId", "content"],
+    },
+  },
+  {
+    name: "rename_drive_file",
+    description: "Rename a file in Google Drive",
+    parameters: {
+      type: "object",
+      properties: {
+        fileId: {
+          type: "string",
+          description: "The Google Drive file ID",
+        },
+        newName: {
+          type: "string",
+          description: "The new file name (including path, e.g. 'notes/renamed.md')",
+        },
+      },
+      required: ["fileId", "newName"],
+    },
+  },
+  {
+    name: "bulk_rename_drive_files",
+    description: "Rename multiple files in Google Drive in a single operation",
+    parameters: {
+      type: "object",
+      properties: {
+        files: {
+          type: "array",
+          description: "Array of files to rename",
+          items: {
+            type: "object",
+            properties: {
+              fileId: {
+                type: "string",
+                description: "The Google Drive file ID",
+              },
+              newName: {
+                type: "string",
+                description: "The new file name (including path)",
+              },
+            },
+            required: ["fileId", "newName"],
+          },
+        },
+      },
+      required: ["files"],
     },
   },
 ];
@@ -293,6 +340,47 @@ export async function executeDriveTool(
         webViewLink: fileMeta.webViewLink,
         content,
       };
+    }
+
+    case "rename_drive_file": {
+      const fileId = args.fileId;
+      const newName = args.newName;
+      if (typeof fileId !== "string" || !fileId) {
+        return { error: "rename_drive_file: 'fileId' must be a non-empty string" };
+      }
+      if (typeof newName !== "string" || !newName) {
+        return { error: "rename_drive_file: 'newName' must be a non-empty string" };
+      }
+      const file = await renameFile(accessToken, fileId, newName, { signal: abortSignal });
+      await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
+      return {
+        id: file.id,
+        name: file.name,
+        webViewLink: file.webViewLink,
+      };
+    }
+
+    case "bulk_rename_drive_files": {
+      const files = args.files;
+      if (!Array.isArray(files) || files.length === 0) {
+        return { error: "bulk_rename_drive_files: 'files' must be a non-empty array" };
+      }
+      const results: Array<{ id: string; name: string; webViewLink?: string } | { error: string }> = [];
+      for (const entry of files) {
+        const { fileId, newName } = entry as { fileId?: string; newName?: string };
+        if (typeof fileId !== "string" || !fileId || typeof newName !== "string" || !newName) {
+          results.push({ error: `Invalid entry: fileId and newName are required` });
+          continue;
+        }
+        try {
+          const file = await renameFile(accessToken, fileId, newName, { signal: abortSignal });
+          await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
+          results.push({ id: file.id, name: file.name, webViewLink: file.webViewLink });
+        } catch (err) {
+          results.push({ error: `Failed to rename ${fileId}: ${err instanceof Error ? err.message : "unknown error"}` });
+        }
+      }
+      return { results };
     }
 
     default:

@@ -11,6 +11,7 @@ export interface NodePropertyDef {
   multiline?: boolean;
   options?: string[];
   defaultValue?: string;
+  toggle?: boolean;
 }
 
 export interface NodePropertyContext {
@@ -18,7 +19,7 @@ export interface NodePropertyContext {
   mcpServerIds?: string[];
 }
 
-export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodePropertyContext): NodePropertyDef[] {
+function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePropertyContext): NodePropertyDef[] {
   switch (type) {
     case "variable":
       return [
@@ -45,6 +46,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "ragSetting", label: "RAG / Search", required: false, options: ["__none__", "__websearch__", ...(context?.ragSettingNames || [])], defaultValue: "__none__" },
         { key: "driveToolMode", label: "Drive Tools", required: false, options: ["none", "all", "noSearch"], defaultValue: "none" },
         { key: "mcpServers", label: "MCP Servers", required: false, placeholder: context?.mcpServerIds?.length ? context.mcpServerIds.join(", ") : "mcp_server_id_1,mcp_server_id_2" },
+        { key: "enableThinking", label: "Enable Thinking", required: false, toggle: true, defaultValue: "true" },
         { key: "attachments", label: "Attachments", required: false, placeholder: "imageVar,fileVar" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "result" },
         { key: "saveImageTo", label: "Save Image To", required: false, placeholder: "generatedImage" },
@@ -57,6 +59,7 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
         { key: "contentType", label: "Content Type", required: false, options: ["json", "text", "form-data", "binary"], defaultValue: "json" },
         { key: "headers", label: "Headers", required: false, multiline: true, placeholder: '{"Authorization": "Bearer ..."}' },
         { key: "body", label: "Body", required: false, multiline: true },
+        { key: "responseType", label: "Response Type", required: false, options: ["auto", "text", "binary"], defaultValue: "auto" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "response" },
         { key: "saveStatus", label: "Save Status To", required: false, placeholder: "statusCode" },
         { key: "throwOnError", label: "Throw On Error", required: false, options: ["false", "true"], defaultValue: "false" },
@@ -191,4 +194,12 @@ export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodeProper
     default:
       return [];
   }
+}
+
+export function getNodePropertyDefs(type: WorkflowNodeType, context?: NodePropertyContext): NodePropertyDef[] {
+  const defs = getTypeSpecificPropertyDefs(type, context);
+  return [
+    ...defs,
+    { key: "comment", label: "Comment", required: false, multiline: true },
+  ];
 }

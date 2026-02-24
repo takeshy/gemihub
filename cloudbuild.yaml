@@ -36,6 +36,6 @@ options:
 
 substitutions:
   _REGION: asia-northeast1
-  _PROJECT_ID: geminihub-486523
+  _PROJECT_ID: takeshy-work-b94f7
   _SERVICE: gemini-hub
   _REPO: gemini-hub

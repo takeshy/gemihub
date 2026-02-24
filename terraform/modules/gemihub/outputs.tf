@@ -10,5 +10,5 @@ output "cloud_run_url" {
 
 output "nameservers" {
   description = "Set these nameservers at your domain registrar (Onamae.com)"
-  value       = google_dns_managed_zone.default.name_servers
+  value       = var.manage_dns ? google_dns_managed_zone.default[0].name_servers : []
 }

@@ -4,6 +4,7 @@ import { createTwoFilesPatch } from "diff";
 import { DiffView } from "~/components/shared/DiffView";
 import { useI18n } from "~/i18n/context";
 import { getCachedFile } from "~/services/indexeddb-cache";
+import { isEncryptedFile } from "~/services/crypto-core";
 import { ICON } from "~/utils/icon-sizes";
 import type { ConflictInfo } from "~/hooks/useSync";
 
@@ -92,6 +93,15 @@ export function ConflictDialog({
       if (!res.ok) throw new Error("fetch failed");
       const data = await res.json();
       const remoteContent = data.files?.[0]?.content ?? "";
+
+      // Content-based encrypted file detection
+      if (isEncryptedFile(localContent) || isEncryptedFile(remoteContent)) {
+        setDiffStates((prev) => ({
+          ...prev,
+          [fileId]: { loading: false, diff: "encrypted", error: false, expanded: true },
+        }));
+        return;
+      }
 
       const patch = createTwoFilesPatch(
         fileName,
@@ -243,11 +253,15 @@ export function ConflictDialog({
                           {t("conflict.diffError")}
                         </div>
                       )}
-                      {ds.diff && (
+                      {ds.diff && ds.diff === "encrypted" ? (
+                        <div className="px-3 py-2 text-xs text-gray-400 italic">
+                          {t("sync.encryptedNoDiff")}
+                        </div>
+                      ) : ds.diff ? (
                         <div className="rounded border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
                           <DiffView diff={ds.diff} />
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>

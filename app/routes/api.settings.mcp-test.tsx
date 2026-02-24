@@ -108,7 +108,9 @@ export async function action({ request }: Route.ActionArgs) {
           // Attempt dynamic client registration if available and no clientId yet
           if (discovery.registrationUrl && !discovery.config.clientId) {
             try {
-              const effectiveOrigin = origin || new URL(request.url).origin;
+              const fallbackUrl = new URL(request.url);
+              const fallbackProto = request.headers.get("x-forwarded-proto") || fallbackUrl.protocol.replace(":", "");
+              const effectiveOrigin = origin || `${fallbackProto}://${fallbackUrl.host}`;
               const redirectUri = `${effectiveOrigin}/auth/mcp-oauth-callback`;
               const registration = await registerOAuthClient(
                 discovery.registrationUrl,

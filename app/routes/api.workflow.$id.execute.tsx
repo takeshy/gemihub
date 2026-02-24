@@ -120,6 +120,19 @@ export async function action({ request, params }: Route.ActionArgs) {
   logCtx.details = { workflowId: fileId, executionId, streaming: true };
   emitLog(logCtx, 200);
 
+  // Parse optional resume parameters from POST body
+  let startNodeId: string | undefined;
+  let initialVariables: Record<string, string | number> | undefined;
+  try {
+    const body = await request.json();
+    if (body && typeof body === "object") {
+      if (typeof body.startNodeId === "string") startNodeId = body.startNodeId;
+      if (body.initialVariables && typeof body.initialVariables === "object") {
+        initialVariables = body.initialVariables as Record<string, string | number>;
+      }
+    }
+  } catch { /* no body or invalid JSON — normal execution */ }
+
   // Create execution state
   const executionState = createExecution(executionId, fileId, validTokens.rootFolderId);
 
@@ -282,7 +295,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         { variables: new Map() },
         serviceContext,
         onLog,
-        { workflowId: fileId, workflowName, abortSignal: executionState.abortController.signal },
+        { workflowId: fileId, workflowName, abortSignal: executionState.abortController.signal, startNodeId, initialVariables },
         promptCallbacks
       );
 

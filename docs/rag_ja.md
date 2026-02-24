@@ -161,7 +161,7 @@ Push/Pull の sync API 内に RAG 関連の4アクションがある:
 | `"drive"` | Google Drive API でフルテキスト検索 |
 
 **RAG モードの詳細**:
-- API プランに応じたモデル選択: paid → `gemini-3-flash-preview` / `gemini-3-pro-preview`, free → `gemini-2.5-flash-lite` / `gemini-2.5-flash`
+- API プランに応じたモデル選択: paid → `gemini-3.1-pro-preview` / `gemini-3-flash-preview`, free → `gemini-2.5-flash-lite` / `gemini-2.5-flash`
 - 指定モデルで `fileSearch` ツールが非対応の場合、同プラン内の別モデルにフォールバック
 - システム指示: `"Search files and answer the query concisely in the query's language."`
 - `groundingMetadata.groundingChunks.retrievedContext` からファイル名・URI を抽出
@@ -261,8 +261,7 @@ geminiTools.push({
 |------|:-----------:|:---:|:------:|------|
 | Gemma モデル | 不可 | 不可 | Yes | ツール非対応。MCP も無効化 |
 | Web Search モード | 不可 | 不可 | Yes | `googleSearch` のみ使用。MCP も無効化 |
-| Flash Lite + RAG設定選択中 | 不可 | 可 | Yes | Drive ツールと RAG の併用不可 |
-| Flash/Pro + RAG設定選択中 | 検索以外 | 可 | No | `defaultMode: "noSearch"` (ユーザー変更可) |
+| RAG設定選択中 | 不可 | 可 | Yes | fileSearch + functionDeclarations は API 非対応。MCP も無効化 |
 | RAG設定未選択 (`null`) | 全機能 | - | No | 制約なし |
 
 ### グラウンディングメタデータ
