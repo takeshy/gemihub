@@ -2365,7 +2365,6 @@ export function DriveFileTree({
     if (item.isFolder) {
       const expanded = expandedFolders.has(item.id);
       const isDragOver = dragOverFolderId === item.id;
-      const isVirtualFolder = item.id.startsWith("vfolder:");
       const isSelected = selectedFolderId === item.id;
 
       return (
