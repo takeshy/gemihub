@@ -35,6 +35,7 @@ export interface ChatWithToolsOptions {
   functionCallLimits?: FunctionCallLimitOptions;
   disableTools?: boolean;
   webSearchEnabled?: boolean;
+  enableThinking?: boolean;
 }
 
 const DEFAULT_MAX_FUNCTION_CALLS = 20;
@@ -191,10 +192,11 @@ function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
   return [{ functionDeclarations }];
 }
 
-function getThinkingConfig(model: ModelType) {
+function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   const supportsThinking = !modelLower.includes("gemma");
   if (!supportsThinking) return undefined;
+  if (!enableThinking) return undefined;
   if (modelLower.includes("flash-lite")) {
     return { includeThoughts: true, thinkingBudget: -1 };
   }
@@ -299,8 +301,7 @@ export async function* chatWithToolsStream(
 
   const historyMessages = messages.slice(0, -1);
   const history = messagesToContents(historyMessages);
-  const supportsThinking = !model.toLowerCase().includes("gemma");
-  const thinkingConfig = getThinkingConfig(model);
+  const thinkingConfig = getThinkingConfig(model, options?.enableThinking);
 
   const chat: Chat = ai.chats.create({
     model,
@@ -308,7 +309,7 @@ export async function* chatWithToolsStream(
     config: {
       systemInstruction: systemPrompt,
       ...(geminiTools ? { tools: geminiTools } : {}),
-      ...(supportsThinking ? { thinkingConfig } : {}),
+      ...(thinkingConfig ? { thinkingConfig } : {}),
     },
   });
 

@@ -22,6 +22,8 @@ import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
 import { ChatInput } from "~/components/chat/ChatInput";
 import { useI18n } from "~/i18n/context";
+import { shouldUseImageModel, shouldEnableThinking } from "~/utils/keyword-detection";
+import { isImageGenerationModel } from "~/types/settings";
 import { isEncryptedFile, decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
 import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
@@ -84,6 +86,7 @@ export function ChatPanel({
   const abortControllerRef = useRef<AbortController | null>(null);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
+  const [isCompacting, setIsCompacting] = useState(false);
 
   const availableModels = getAvailableModels(settings.apiPlan);
   const defaultModel =
@@ -401,7 +404,18 @@ export function ChatPanel({
       }
 
       // Apply overrides from slash commands
-      const effectiveModel = overrides?.model || selectedModel;
+      let effectiveModel = overrides?.model || selectedModel;
+      // Auto-switch to image model when image keywords detected
+      if (!isImageGenerationModel(effectiveModel) && shouldUseImageModel(content)) {
+        const available = getAvailableModels(settings.apiPlan);
+        const preferredImage = available.find((m) => m.name === "gemini-3-pro-image-preview");
+        const fallbackImage = available.find((m) => m.isImageModel);
+        if (preferredImage) {
+          effectiveModel = preferredImage.name;
+        } else if (fallbackImage) {
+          effectiveModel = fallbackImage.name;
+        }
+      }
       const effectiveRagSetting = overrides?.searchSetting !== undefined ? overrides.searchSetting : selectedRagSetting;
       const requestedDriveToolMode = overrides?.driveToolMode || driveToolMode;
       const effectiveConstraint = getDriveToolModeConstraint(
@@ -467,6 +481,7 @@ export function ChatPanel({
         enableMcp: mcpEnabled,
         mcpServers: mcpServersFiltered,
         webSearchEnabled: isWebSearch,
+        enableThinking: shouldEnableThinking(content),
         apiPlan: settings.apiPlan,
         settings: {
           maxFunctionCalls: settings.maxFunctionCalls,
@@ -814,6 +829,134 @@ export function ChatPanel({
     }
   }, [saveMarkdownState, messages, histories, activeChatId]);
 
+  // ---- Compact conversation ----
+  const handleCompact = useCallback(async () => {
+    if (messages.length < 2 || isStreaming || isCompacting) return;
+    setIsCompacting(true);
+
+    try {
+      // Save current chat first (preserves full history)
+      await saveChat(messages);
+
+      // Build conversation text for summarization
+      const conversationText = messages
+        .map((msg) => {
+          const role = msg.role === "user" ? "User" : "Assistant";
+          return `${role}: ${msg.content}`;
+        })
+        .join("\n\n");
+
+      const summaryMessages: Message[] = [
+        {
+          role: "user",
+          content: `Summarize the following conversation concisely. Preserve key information, decisions, file paths, and context that would be needed to continue the conversation. Output the summary in the same language as the conversation.\n\n---\n${conversationText}\n---`,
+          timestamp: Date.now(),
+        },
+      ];
+
+      // Call compact endpoint
+      const response = await fetch("/api/chat/compact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: summaryMessages,
+          model: selectedModel,
+          systemPrompt: "You are a conversation summarizer. Output only the summary without any preamble.",
+        }),
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      // Read SSE stream to collect summary
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let summary = "";
+      let buf = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (!data) continue;
+          try {
+            const chunk = JSON.parse(data);
+            if (chunk.type === "text" && chunk.content) {
+              summary += chunk.content;
+            }
+          } catch { /* skip */ }
+        }
+      }
+
+      if (!summary.trim()) {
+        throw new Error(t("chat.compactFailed"));
+      }
+
+      // Start a new chat with compact context
+      const now = Date.now();
+      const beforeCount = messages.length;
+      const userMessage: Message = { role: "user", content: "/compact", timestamp: now };
+      const compactedMessage: Message = {
+        role: "assistant",
+        content: `[${t("chat.compactedContext")}]\n\n${summary}`,
+        timestamp: now + 1,
+      };
+      const newMessages = [userMessage, compactedMessage];
+
+      // Reset to new chat BEFORE saving so saveChat doesn't overwrite the original
+      const newChatId = `chat-${Date.now()}`;
+      setActiveChatId(newChatId);
+      setActiveChatFileId(null);
+      setActiveChatCreatedAt(now);
+      setMessages(newMessages);
+
+      // Save directly with explicit new chat ID (avoids stale closure of activeChatId)
+      const compactTitle = t("chat.compacted").replace("{{before}}", String(beforeCount)).replace("{{after}}", "2");
+      const chatHistory: ChatHistory = {
+        id: newChatId,
+        title: compactTitle,
+        messages: newMessages,
+        createdAt: now,
+        updatedAt: now,
+      };
+      try {
+        const res = await fetch("/api/chat/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(chatHistory),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const fileId = typeof data.fileId === "string" ? data.fileId : "";
+          if (fileId) setActiveChatFileId(fileId);
+          setHistories((prev) => [
+            { id: newChatId, fileId, title: compactTitle, createdAt: now, updatedAt: now },
+            ...prev,
+          ]);
+        }
+      } catch (e) { console.error("Failed to save compacted chat:", e); }
+    } catch (error) {
+      console.error("Compact failed:", error);
+      // Show error to user via a temporary error message in chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `**${t("chat.compactFailed")}:** ${error instanceof Error ? error.message : "Unknown error"}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsCompacting(false);
+    }
+  }, [messages, isStreaming, isCompacting, saveChat, selectedModel, t]);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Chat history selector */}
@@ -927,6 +1070,9 @@ export function ChatPanel({
         lastFileIdInMessages={lastFileIdInMessages}
         driveToolModeLocked={toolConstraint.locked}
         driveToolModeReasonKey={toolConstraint.reasonKey as keyof TranslationStrings | undefined}
+        onCompact={handleCompact}
+        isCompacting={isCompacting}
+        messageCount={messages.length}
       />
 
       {showCryptoPrompt && settings.encryption.encryptedPrivateKey && (

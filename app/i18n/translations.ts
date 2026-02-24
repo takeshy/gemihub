@@ -57,6 +57,21 @@ export interface TranslationStrings {
   "chat.saveToDrive": string;
   "chat.savedToDrive": string;
 
+  // Compact
+  "chat.compact": string;
+  "chat.compacting": string;
+  "chat.compacted": string;
+  "chat.compactFailed": string;
+  "chat.compactedContext": string;
+
+  // Welcome hints
+  "chat.welcomeTitle": string;
+  "chat.welcomeHint": string;
+  "chat.welcomeThinking": string;
+  "chat.welcomeImage": string;
+  "chat.welcomeCompact": string;
+  "chat.welcomeNewChat": string;
+
   // Settings page
   "settings.title": string;
   "settings.tab.general": string;
@@ -596,6 +611,21 @@ const en: TranslationStrings = {
 
   "chat.saveToDrive": "Save to Drive",
   "chat.savedToDrive": "Saved to Drive",
+
+  // Compact
+  "chat.compact": "/compact",
+  "chat.compacting": "Compacting...",
+  "chat.compacted": "Conversation compressed: {{before}} messages → {{after}}",
+  "chat.compactFailed": "Failed to compress conversation",
+  "chat.compactedContext": "Compacted conversation context",
+
+  // Welcome hints
+  "chat.welcomeTitle": "Start a conversation with AI",
+  "chat.welcomeHint": "Ask questions about your files, create new ones, or search your Drive.",
+  "chat.welcomeThinking": "Use words like \"think\" or \"analyze\" to enable deep thinking mode",
+  "chat.welcomeImage": "Use \"generate image\" or \"create image\" to auto-switch to image model",
+  "chat.welcomeCompact": "Type /compact to compress a long conversation into a new chat",
+  "chat.welcomeNewChat": "Gemini has no memory, so the entire chat history is sent each time. Always click + to start a new chat when changing topics",
 
   // Settings
   "settings.title": "Settings",
@@ -1137,6 +1167,21 @@ const ja: TranslationStrings = {
 
   "chat.saveToDrive": "Driveに保存",
   "chat.savedToDrive": "Drive保存済み",
+
+  // Compact
+  "chat.compact": "/compact",
+  "chat.compacting": "圧縮中...",
+  "chat.compacted": "会話を圧縮しました: {{before}}メッセージ → {{after}}",
+  "chat.compactFailed": "会話の圧縮に失敗しました",
+  "chat.compactedContext": "圧縮された会話コンテキスト",
+
+  // Welcome hints
+  "chat.welcomeTitle": "AIとの会話を始めましょう",
+  "chat.welcomeHint": "ファイルについて質問したり、新規作成したり、Drive内を検索できます。",
+  "chat.welcomeThinking": "「考えて」「分析して」などのキーワードで深い思考モードが有効になります",
+  "chat.welcomeImage": "「画像を生成」「generate image」で自動的に画像モデルに切り替わります",
+  "chat.welcomeCompact": "/compact で長い会話を要約して新しいチャットに引き継げます",
+  "chat.welcomeNewChat": "Geminiは記憶ができないため、毎回このチャットの全会話を送信します。話題を変える時は必ず + ボタンで新しいチャットを始めてください",
 
   // Settings
   "settings.title": "設定",
