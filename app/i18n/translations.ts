@@ -559,6 +559,7 @@ export interface TranslationStrings {
   // Frontmatter editor
   "frontmatter.properties": string;
   "frontmatter.addProperty": string;
+  "frontmatter.addProperties": string;
   "frontmatter.propertyType": string;
   "frontmatter.remove": string;
   "frontmatter.text": string;
@@ -1130,6 +1131,7 @@ const en: TranslationStrings = {
   // Frontmatter editor
   "frontmatter.properties": "Properties",
   "frontmatter.addProperty": "Add property",
+  "frontmatter.addProperties": "Add properties",
   "frontmatter.propertyType": "Property type",
   "frontmatter.remove": "Remove",
   "frontmatter.text": "Text",
@@ -1701,6 +1703,7 @@ const ja: TranslationStrings = {
   // Frontmatter editor
   "frontmatter.properties": "プロパティ",
   "frontmatter.addProperty": "プロパティを追加",
+  "frontmatter.addProperties": "プロパティを追加",
   "frontmatter.propertyType": "プロパティタイプ",
   "frontmatter.remove": "削除",
   "frontmatter.text": "テキスト",

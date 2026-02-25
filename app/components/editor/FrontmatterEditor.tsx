@@ -71,6 +71,7 @@ export function serializeFrontmatter(
   properties: FrontmatterProperty[],
   body: string
 ): string {
+  if (properties.length === 0) return body;
   const obj: Record<string, unknown> = {};
   for (const prop of properties) {
     obj[prop.key] = convertValue(prop.value, prop.type);

@@ -1993,6 +1993,8 @@ export function DriveFileTree({
             next.delete(item.id);
             return next;
           });
+          // Refresh sync badge counts after edit history removal
+          window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
           if (item.id === activeFileId) {
             window.history.pushState({}, "", "/");
             window.dispatchEvent(new PopStateEvent("popstate"));
@@ -2029,6 +2031,8 @@ export function DriveFileTree({
             for (const id of modifiedInFolder) next.delete(id);
             return next;
           });
+          // Refresh sync badge counts after edit history removal
+          window.dispatchEvent(new CustomEvent("file-modified", { detail: {} }));
           if (activeFileId && toDelete.includes(activeFileId)) {
             window.history.pushState({}, "", "/");
             window.dispatchEvent(new PopStateEvent("popstate"));

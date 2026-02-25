@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
-import { FileText, Loader2, Eye, PenLine, Code, X } from "lucide-react";
+import { FileText, Loader2, Eye, PenLine, Code, X, Plus } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { ICON } from "~/utils/icon-sizes";
 import type { UserSettings } from "~/types/settings";
@@ -911,6 +911,11 @@ function MarkdownFileEditor({
     },
     [updateContent]
   );
+  // Add empty frontmatter block to a file that doesn't have one
+  const addFrontmatter = useCallback(() => {
+    updateContent(`---\n---\n${content}`);
+  }, [content, updateContent]);
+
   // For wysiwyg, handle body-only changes from the editor
   // Uses a ref for the frontmatter block to avoid stale closure when
   // FrontmatterEditor and wysiwyg fire changes near-simultaneously
@@ -1002,8 +1007,18 @@ function MarkdownFileEditor({
 
       {mode === "wysiwyg" && (
         <>
-          {fmParsed.hasFrontmatter && (
+          {fmParsed.hasFrontmatter ? (
             <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} />
+          ) : (
+            <div className="border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+              <button
+                onClick={addFrontmatter}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                <Plus size={ICON.SM} />
+                {t("frontmatter.addProperties")}
+              </button>
+            </div>
           )}
           <WysiwygSelectionTracker setActiveSelection={editorCtx.setActiveSelection}>
             {MarkdownEditorComponent ? (
