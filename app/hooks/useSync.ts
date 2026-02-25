@@ -160,7 +160,16 @@ export function useSync() {
         // Exclude conflicts — they are shown in the conflict dialog, not pull.
         // Include editDeleteConflicts so user sees pull badge and triggers conflict dialog.
         const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
-        setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + pullLocalOnly.length + diff.editDeleteConflicts.length);
+        const isExcluded = (id: string) => {
+          const name = remoteFiles[id]?.name || localFiles[id]?.name;
+          return name ? isSyncExcludedPath(name) : false;
+        };
+        const pullCount =
+          diff.toPull.filter(id => !isExcluded(id)).length +
+          diff.remoteOnly.filter(id => !isExcluded(id)).length +
+          pullLocalOnly.filter(id => !isExcluded(id)).length +
+          diff.editDeleteConflicts.filter(id => !isExcluded(id)).length;
+        setRemoteModifiedCount(pullCount);
       }
     } catch {
       // ignore
