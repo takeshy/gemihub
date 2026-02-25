@@ -10,6 +10,7 @@ import {
   GripVertical,
   Plus,
   X,
+  ChevronRight,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { ContextMenu, type ContextMenuItem } from "~/components/ide/ContextMenu";
@@ -174,6 +175,7 @@ export function FrontmatterEditor({ parsed, onFrontmatterChange, readOnly }: Fro
   const [properties, setProperties] = useState<FrontmatterProperty[]>(() =>
     propertiesFromFrontmatter(parsed.frontmatter)
   );
+  const [collapsed, setCollapsed] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -343,73 +345,85 @@ export function FrontmatterEditor({ parsed, onFrontmatterChange, readOnly }: Fro
 
   return (
     <div className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
-      <div className="mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+      <button
+        type="button"
+        onClick={() => setCollapsed((v) => !v)}
+        className="flex items-center gap-1 mb-1 text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+      >
+        <ChevronRight
+          size={ICON.SM}
+          className={`transition-transform ${collapsed ? "" : "rotate-90"}`}
+        />
         {t("frontmatter.properties")}
-      </div>
-      <div className="space-y-1">
-        {properties.map((prop, index) => (
-          <div
-            key={prop.id}
-            className={`group flex items-center gap-2 rounded px-1 py-0.5 ${
-              dragOverIndex === index && dragIndex !== index
-                ? "border-t-2 border-blue-400"
-                : ""
-            } ${dragIndex === index ? "opacity-40" : ""}`}
-            draggable={!readOnly}
-            onDragStart={(e) => handleDragStart(e, index)}
-            onDragOver={(e) => handleDragOver(e, index)}
-            onDrop={(e) => handleDrop(e, index)}
-            onDragEnd={handleDragEnd}
-            onContextMenu={(e) => !readOnly && handleContextMenu(e, index)}
-          >
-            {/* Drag handle + type icon */}
-            <span
-              className="flex shrink-0 cursor-grab items-center text-gray-400 dark:text-gray-500"
-              title={t(TYPE_LABEL_KEYS[prop.type])}
-            >
-              {readOnly ? (
-                TYPE_ICONS[prop.type]
-              ) : (
-                <GripVertical size={ICON.SM} className="mr-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
-              {!readOnly && TYPE_ICONS[prop.type]}
-            </span>
+      </button>
+      {!collapsed && (
+        <>
+          <div className="space-y-1">
+            {properties.map((prop, index) => (
+              <div
+                key={prop.id}
+                className={`group flex items-center gap-2 rounded px-1 py-0.5 ${
+                  dragOverIndex === index && dragIndex !== index
+                    ? "border-t-2 border-blue-400"
+                    : ""
+                } ${dragIndex === index ? "opacity-40" : ""}`}
+                draggable={!readOnly}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onContextMenu={(e) => !readOnly && handleContextMenu(e, index)}
+              >
+                {/* Drag handle + type icon */}
+                <span
+                  className="flex shrink-0 cursor-grab items-center text-gray-400 dark:text-gray-500"
+                  title={t(TYPE_LABEL_KEYS[prop.type])}
+                >
+                  {readOnly ? (
+                    TYPE_ICONS[prop.type]
+                  ) : (
+                    <GripVertical size={ICON.SM} className="mr-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                  {!readOnly && TYPE_ICONS[prop.type]}
+                </span>
 
-            {/* Key */}
-            {readOnly ? (
-              <span className="min-w-[80px] shrink-0 text-xs font-medium text-gray-600 dark:text-gray-300">
-                {prop.key}
-              </span>
-            ) : (
-              <input
-                type="text"
-                value={prop.key}
-                onChange={(e) => updateKey(index, e.target.value)}
-                className="min-w-[80px] max-w-[140px] shrink-0 border-b border-transparent bg-transparent text-xs font-medium text-gray-600 outline-none focus:border-blue-400 dark:text-gray-300"
-                placeholder="key"
-              />
-            )}
+                {/* Key */}
+                {readOnly ? (
+                  <span className="min-w-[80px] shrink-0 text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {prop.key}
+                  </span>
+                ) : (
+                  <input
+                    type="text"
+                    value={prop.key}
+                    onChange={(e) => updateKey(index, e.target.value)}
+                    className="min-w-[80px] max-w-[140px] shrink-0 border-b border-transparent bg-transparent text-xs font-medium text-gray-600 outline-none focus:border-blue-400 dark:text-gray-300"
+                    placeholder="key"
+                  />
+                )}
 
-            {/* Value editor */}
-            <div className="flex-1 min-w-0">
-              <PropertyValueEditor
-                prop={prop}
-                readOnly={readOnly}
-                onChange={(val) => updateValue(index, val)}
-              />
-            </div>
+                {/* Value editor */}
+                <div className="flex-1 min-w-0">
+                  <PropertyValueEditor
+                    prop={prop}
+                    readOnly={readOnly}
+                    onChange={(val) => updateValue(index, val)}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {!readOnly && (
-        <button
-          onClick={addProperty}
-          className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          <Plus size={ICON.SM} />
-          {t("frontmatter.addProperty")}
-        </button>
+          {!readOnly && (
+            <button
+              onClick={addProperty}
+              className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              <Plus size={ICON.SM} />
+              {t("frontmatter.addProperty")}
+            </button>
+          )}
+        </>
       )}
 
       {contextMenu && (

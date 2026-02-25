@@ -826,6 +826,27 @@ function MarkdownFileEditor({
   );
   const [mode, setMode] = useState<MdEditMode>("wysiwyg");
 
+  // Track whether the user has genuinely interacted with the wysiwyg editor.
+  // wysimark-lite (Slate-based) normalizes markdown on load (reformatting tables,
+  // code fences, image captions, etc.) and fires onChange with the normalized
+  // content. We skip that normalization onChange to avoid creating spurious diffs.
+  const wysiwygEditedRef = useRef(false);
+  const prevModeForWysiwygRef = useRef(mode);
+  // Reset when switching to wysiwyg mode (synchronous, before Slate mounts)
+  if (mode !== prevModeForWysiwygRef.current) {
+    prevModeForWysiwygRef.current = mode;
+    if (mode === "wysiwyg") {
+      wysiwygEditedRef.current = false;
+    }
+  }
+  // Reset on external content changes (file switch, pull, etc.)
+  if (contentFromProps.current) {
+    wysiwygEditedRef.current = false;
+  }
+  const markWysiwygEdited = useCallback(() => {
+    wysiwygEditedRef.current = true;
+  }, []);
+
   // Lazy-load MarkdownEditor to avoid SSR issues with wysimark-lite
   const [MarkdownEditorComponent, setMarkdownEditorComponent] = useState<
     React.ComponentType<{
@@ -908,6 +929,21 @@ function MarkdownFileEditor({
     },
     [updateContent]
   );
+  // Guarded wysiwyg onChange: skip wysimark-lite's normalization-only changes
+  const guardedHandleBodyChange = useCallback(
+    (newBody: string) => {
+      if (!wysiwygEditedRef.current) return;
+      handleBodyChange(newBody);
+    },
+    [handleBodyChange]
+  );
+  const guardedUpdateContent = useCallback(
+    (newContent: string) => {
+      if (!wysiwygEditedRef.current) return;
+      updateContent(newContent);
+    },
+    [updateContent]
+  );
 
   const modes: { key: MdEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
@@ -971,13 +1007,21 @@ function MarkdownFileEditor({
           )}
           <WysiwygSelectionTracker setActiveSelection={editorCtx.setActiveSelection}>
             {MarkdownEditorComponent ? (
-              <MarkdownEditorComponent
-                value={fmParsed.hasFrontmatter ? fmParsed.body : content}
-                onChange={fmParsed.hasFrontmatter ? handleBodyChange : updateContent}
-                placeholder="Write your content here..."
-                onFileSelect={onFileSelect}
-                onImageChange={onImageChange}
-              />
+              <div
+                className="flex-1 min-h-0 flex flex-col overflow-hidden"
+                onKeyDownCapture={markWysiwygEdited}
+                onPointerDownCapture={markWysiwygEdited}
+                onPasteCapture={markWysiwygEdited}
+                onDropCapture={markWysiwygEdited}
+              >
+                <MarkdownEditorComponent
+                  value={fmParsed.hasFrontmatter ? fmParsed.body : content}
+                  onChange={fmParsed.hasFrontmatter ? guardedHandleBodyChange : guardedUpdateContent}
+                  placeholder="Write your content here..."
+                  onFileSelect={onFileSelect}
+                  onImageChange={onImageChange}
+                />
+              </div>
             ) : (
               <Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />
             )}
