@@ -24,6 +24,7 @@ import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { usePlugins } from "~/contexts/PluginContext";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
+import { FrontmatterEditor, parseFrontmatter, serializeFrontmatter } from "~/components/editor/FrontmatterEditor";
 
 function WysiwygSelectionTracker({
   setActiveSelection,
@@ -878,6 +879,36 @@ function MarkdownFileEditor({
     }
   }, [saveToCache]);
 
+  // Frontmatter parsing for preview/wysiwyg modes
+  const fmParsed = useMemo(() => parseFrontmatter(content), [content]);
+  // Ref keeps the latest body so callbacks never use stale closures
+  const fmBodyRef = useRef(fmParsed.body);
+  fmBodyRef.current = fmParsed.body;
+  const handleFrontmatterChange = useCallback(
+    (properties: Parameters<typeof serializeFrontmatter>[0]) => {
+      updateContent(serializeFrontmatter(properties, fmBodyRef.current));
+    },
+    [updateContent]
+  );
+  // For wysiwyg, handle body-only changes from the editor
+  // Uses a ref for the frontmatter block to avoid stale closure when
+  // FrontmatterEditor and wysiwyg fire changes near-simultaneously
+  const fmBlockRef = useRef("");
+  fmBlockRef.current = fmParsed.hasFrontmatter
+    ? content.slice(0, content.length - fmParsed.body.length)
+    : "";
+  const handleBodyChange = useCallback(
+    (newBody: string) => {
+      const block = fmBlockRef.current;
+      if (block) {
+        updateContent(block + newBody);
+      } else {
+        updateContent(newBody);
+      }
+    },
+    [updateContent]
+  );
+
   const modes: { key: MdEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
     { key: "wysiwyg", icon: <PenLine size={ICON.MD} />, label: t("mainViewer.wysiwyg") },
@@ -919,29 +950,39 @@ function MarkdownFileEditor({
 
       {/* Content area */}
       {mode === "preview" && (
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="prose dark:prose-invert max-w-none [&_p]:my-1 [&_p]:leading-relaxed">
-            <Suspense fallback={<Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />}>
-              <LazyGfmPreview content={content} />
-            </Suspense>
+        <div className="flex-1 overflow-y-auto">
+          {fmParsed.hasFrontmatter && (
+            <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} readOnly />
+          )}
+          <div className="p-6">
+            <div className="prose dark:prose-invert max-w-none [&_p]:my-1 [&_p]:leading-relaxed">
+              <Suspense fallback={<Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />}>
+                <LazyGfmPreview content={fmParsed.hasFrontmatter ? fmParsed.body : content} />
+              </Suspense>
+            </div>
           </div>
         </div>
       )}
 
       {mode === "wysiwyg" && (
-        <WysiwygSelectionTracker setActiveSelection={editorCtx.setActiveSelection}>
-          {MarkdownEditorComponent ? (
-            <MarkdownEditorComponent
-              value={content}
-              onChange={updateContent}
-              placeholder="Write your content here..."
-              onFileSelect={onFileSelect}
-              onImageChange={onImageChange}
-            />
-          ) : (
-            <Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />
+        <>
+          {fmParsed.hasFrontmatter && (
+            <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} />
           )}
-        </WysiwygSelectionTracker>
+          <WysiwygSelectionTracker setActiveSelection={editorCtx.setActiveSelection}>
+            {MarkdownEditorComponent ? (
+              <MarkdownEditorComponent
+                value={fmParsed.hasFrontmatter ? fmParsed.body : content}
+                onChange={fmParsed.hasFrontmatter ? handleBodyChange : updateContent}
+                placeholder="Write your content here..."
+                onFileSelect={onFileSelect}
+                onImageChange={onImageChange}
+              />
+            ) : (
+              <Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />
+            )}
+          </WysiwygSelectionTracker>
+        </>
       )}
 
       {mode === "raw" && (

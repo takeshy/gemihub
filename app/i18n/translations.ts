@@ -555,6 +555,21 @@ export interface TranslationStrings {
   "rootMismatch.description": string;
   "rootMismatch.migrating": string;
   "rootMismatch.confirm": string;
+
+  // Frontmatter editor
+  "frontmatter.properties": string;
+  "frontmatter.addProperty": string;
+  "frontmatter.propertyType": string;
+  "frontmatter.remove": string;
+  "frontmatter.text": string;
+  "frontmatter.number": string;
+  "frontmatter.checkbox": string;
+  "frontmatter.date": string;
+  "frontmatter.dateTime": string;
+  "frontmatter.list": string;
+  "frontmatter.cut": string;
+  "frontmatter.copy": string;
+  "frontmatter.paste": string;
 }
 
 const en: TranslationStrings = {
@@ -1111,6 +1126,21 @@ const en: TranslationStrings = {
   "rootMismatch.description": "Your local cached files will be moved to conflicts. You can restore them from Settings > Conflicts.",
   "rootMismatch.migrating": "Migrating...",
   "rootMismatch.confirm": "OK",
+
+  // Frontmatter editor
+  "frontmatter.properties": "Properties",
+  "frontmatter.addProperty": "Add property",
+  "frontmatter.propertyType": "Property type",
+  "frontmatter.remove": "Remove",
+  "frontmatter.text": "Text",
+  "frontmatter.number": "Number",
+  "frontmatter.checkbox": "Checkbox",
+  "frontmatter.date": "Date",
+  "frontmatter.dateTime": "Date & time",
+  "frontmatter.list": "List",
+  "frontmatter.cut": "Cut",
+  "frontmatter.copy": "Copy",
+  "frontmatter.paste": "Paste",
 };
 
 const ja: TranslationStrings = {
@@ -1667,6 +1697,21 @@ const ja: TranslationStrings = {
   "rootMismatch.description": "ローカルキャッシュのファイルをコンフリクトに移動します。設定のコンフリクト管理から復元できます。",
   "rootMismatch.migrating": "移行中...",
   "rootMismatch.confirm": "OK",
+
+  // Frontmatter editor
+  "frontmatter.properties": "プロパティ",
+  "frontmatter.addProperty": "プロパティを追加",
+  "frontmatter.propertyType": "プロパティタイプ",
+  "frontmatter.remove": "削除",
+  "frontmatter.text": "テキスト",
+  "frontmatter.number": "数値",
+  "frontmatter.checkbox": "チェックボックス",
+  "frontmatter.date": "日付",
+  "frontmatter.dateTime": "日時",
+  "frontmatter.list": "リスト",
+  "frontmatter.cut": "切り取り",
+  "frontmatter.copy": "コピー",
+  "frontmatter.paste": "貼り付け",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };
