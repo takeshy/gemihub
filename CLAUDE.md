@@ -21,7 +21,7 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 - `docs/editor.md` — エディタシステム（WYSIWYG、ワークフロー編集、ファイルタイプ別表示等）（`editor_ja.md` は日本語版）
 - `docs/history.md` — 編集履歴の仕組み
 - `docs/utils.md` — 右クリックメニュー、ゴミ箱、スラッシュコマンド等のユーティリティ
-- `docs/workflow_execution.md` — ワークフロー実行エンジン（パーサー、エグゼキューター、SSE、プロンプト、AI生成）
+- `docs/workflow_execution.md` — ワークフロー実行エンジン（パーサー、ローカル実行、プロンプト、AI生成）
 - `docs/search.md` — 検索機能（ローカル/Drive/RAG検索、Quick Open）
 
 ## Commands
@@ -51,15 +51,15 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 
 1. **Routes** (`app/routes/`) — React Router pages and API endpoints. Page routes use loaders for server data; API routes handle POST/GET via `action`/`loader` exports.
 2. **Services** (`app/services/`) — Server-side business logic. Files ending in `.server.ts` are server-only (never bundled to client). Key services: `gemini-chat.server.ts` (streaming AI), `google-drive.server.ts` (Drive API), `google-auth.server.ts` (OAuth), `mcp-client.server.ts` (MCP JSON-RPC).
-3. **Components** (`app/components/`) — React UI organized by feature: `chat/` (chat panel), `flow/` (Mermaid-based workflow diagram), `execution/` (workflow execution), `editor/` (markdown editor), `ide/` (main layout and panels).
-4. **Engine** (`app/engine/`) — Workflow execution engine. `parser.ts` converts YAML to AST, `executor.ts` runs it via a handler-per-node-type pattern in `handlers/`. Supports 24 node types (variable, set, if, while, command, http, json, drive-file, drive-read, drive-search, drive-list, drive-folder-list, drive-file-picker, drive-save, drive-delete, dialog, prompt-value, prompt-file, prompt-selection, workflow, mcp, rag-sync, sleep, gemihub-command).
-5. **Hooks** (`app/hooks/`) — `useSync.ts` (push/pull with conflict resolution), `useFileWithCache.ts` (IndexedDB cache-first reads), `useWorkflowExecution.ts` (execution state via SSE), `useAutocomplete.ts` (slash command and @file autocomplete).
+3. **Components** (`app/components/`) — React UI organized by feature: `chat/` (chat panel), `flow/` (Mermaid-based workflow diagram), `editor/` (markdown editor), `ide/` (main layout and panels).
+4. **Engine** (`app/engine/`) — Workflow execution engine. `parser.ts` converts YAML to AST. `local-executor.ts` runs 21/24 node types in the browser; `executor.ts` handles the remaining 3 server-side nodes (mcp, rag-sync, gemihub-command) via `handlers/`. Local handlers live in `local-handlers/`. Supports 24 node types (variable, set, if, while, command, http, json, drive-file, drive-read, drive-search, drive-list, drive-folder-list, drive-file-picker, drive-save, drive-delete, dialog, prompt-value, prompt-file, prompt-selection, workflow, mcp, rag-sync, sleep, gemihub-command).
+5. **Hooks** (`app/hooks/`) — `useSync.ts` (push/pull with conflict resolution), `useFileWithCache.ts` (IndexedDB cache-first reads), `useLocalWorkflowExecution.ts` (client-side workflow execution), `useAutocomplete.ts` (slash command and @file autocomplete).
 6. **Contexts** (`app/contexts/`) — `EditorContext.tsx` (shared file content, selection, file list for template resolution), `PluginContext.tsx` (plugin lifecycle and API management).
 7. **Utils** (`app/utils/`) — Workflow-to-Mermaid diagram conversion (`workflow-to-mermaid.ts`), node property definitions, and connection helpers.
 
 ### Key Patterns
 
-- **Streaming:** Chat (`/api/chat`) and workflow execution (`/api/workflow/:id/execute`) use SSE (Server-Sent Events). Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used.
+- **Streaming:** Chat (`/api/chat`) uses SSE (Server-Sent Events). Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used. Workflow execution runs locally in the browser (21/24 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
 - **Function Calling:** Gemini calls Drive tools (read/search/list/create/update), Google Search, RAG/File Search, and dynamically-discovered MCP tools (prefixed `mcp_{server}_{tool}`).
 - **Cache-First Sync:** Files cached in IndexedDB. MD5 hash comparison detects changes. Manual push/pull with conflict resolution dialog.
 - **Local-First File Updates:** ファイルを更新する機能（チャットの `update_drive_file`、ワークフローの `drive-save` ノード等）は、Google Driveに直接書き込まず、IndexedDB のキャッシュと editHistory のみを更新する。Drive への反映は Push フローで行う。詳細は `docs/sync.md`「Chat-Initiated File Operations」を参照。
@@ -102,7 +102,7 @@ Slash commands (`/command`) support template variables: `{content}` (active file
 ### Adding a Workflow Node Type
 
 1. Add the type to `WorkflowNodeType` union and properties to `WorkflowNode` in `app/engine/types.ts`
-2. Add a `case` in `app/engine/executor.ts` (handler logic lives in `app/engine/handlers/`)
+2. Add a local handler in `app/engine/local-handlers/` and a `case` in `app/engine/local-executor.ts` (or for server-only nodes, add to `app/engine/handlers/` and `app/engine/executor.ts`)
 3. Add node label in `app/utils/workflow-to-mermaid.ts`
 4. Add property definitions in `app/utils/workflow-node-properties.ts`
 

@@ -1,12 +1,12 @@
 # Workflow Execution
 
-Workflow execution engine with YAML parsing, handler-based node dispatch, SSE streaming, interactive prompts, and AI-powered workflow generation.
+Workflow execution engine with YAML parsing, handler-based node dispatch, client-side local execution, interactive prompts, and AI-powered workflow generation.
 
 ## Features
 
 - **YAML Parser**: Converts YAML workflow definitions into an executable AST
 - **Handler-Based Execution**: 24 node types dispatched to isolated handler functions
-- **SSE Streaming**: Real-time execution log streaming via Server-Sent Events
+- **Local Execution**: 21/24 node types run in the browser; only 3 (mcp, rag-sync, gemihub-command) call the server
 - **Interactive Prompts**: Pause execution to prompt users for input, then resume
 - **Sub-Workflow Execution**: Recursive workflow calls with cycle detection
 - **Variable Templating**: `{{var}}` syntax with nested access, array indexing, and JSON escaping
@@ -52,7 +52,7 @@ Conditional nodes (`if` / `while`) require `trueNext`, with optional `falseNext`
 
 ## Executor
 
-`executeWorkflow()` runs a parsed workflow using a stack-based depth-first approach.
+`executeWorkflow()` is the server-side executor, used only by `/api/workflow/execute-node` for the 3 server-requiring node types (mcp, rag-sync, gemihub-command). It runs a parsed workflow using a stack-based depth-first approach. For the primary client-side executor, see [Local Execution](#local-execution-client-side).
 
 ### Execution Flow
 
@@ -175,18 +175,26 @@ By default, workflow execution runs in the browser. The execution loop runs clie
 Browser (client):
 ├── Parse workflow YAML locally (parser.ts)
 ├── Run executor loop locally (local-executor.ts)
-│   ├── Client-safe nodes → execute directly in browser
+│   ├── Local nodes (21 types) → execute directly in browser
 │   │   ├── variable, set, if, while, sleep, json
-│   │   └── dialog, prompt-value, prompt-selection (UI shown directly)
-│   └── Server-required nodes → POST /api/workflow/execute-node
-│       ├── command (streaming via SSE response)
-│       ├── drive-*, http, mcp, rag-sync, gemihub-command, workflow
-│       └── prompt-file, drive-file-picker (UI shown locally, file read on server)
+│   │   ├── dialog, prompt-value, prompt-selection (UI shown directly)
+│   │   ├── command (Gemini API called directly from browser via gemini-chat-core.ts)
+│   │   │   ├── Drive tools → drive-tools-local.ts (IndexedDB)
+│   │   │   └── MCP tools → /api/workflow/mcp-proxy (server proxy)
+│   │   ├── http (fetch from browser)
+│   │   ├── drive-file, drive-read, drive-search, drive-list, drive-folder-list,
+│   │   │   drive-save, drive-delete (IndexedDB via drive-local.ts)
+│   │   ├── drive-file-picker, prompt-file (UI shown locally, file read from IndexedDB)
+│   │   └── workflow (sub-workflow loaded from IndexedDB, executed recursively)
+│   └── Server-required nodes (3 types) → POST /api/workflow/execute-node
+│       ├── mcp (MCP server calls)
+│       ├── rag-sync (Gemini RAG API)
+│       └── gemihub-command (encryption, publish, PDF/HTML export)
 ```
 
-### Client-Safe Nodes
+### Local Nodes
 
-These nodes run entirely in the browser with no server call:
+These 21 node types run entirely in the browser with no server call:
 
 | Node Type | Description |
 |-----------|-------------|
@@ -199,22 +207,28 @@ These nodes run entirely in the browser with no server call:
 | `dialog` | Show dialog UI directly |
 | `prompt-value` | Show text input UI directly |
 | `prompt-selection` | Show multiline input UI directly |
+| `command` | Gemini API called directly from browser; Drive tools use IndexedDB, MCP tools use `/api/workflow/mcp-proxy` |
+| `http` | HTTP request via browser fetch |
+| `drive-file` | Create/update file in IndexedDB |
+| `drive-read` | Read file from IndexedDB |
+| `drive-search` | Search files in IndexedDB cache |
+| `drive-list` | List files from IndexedDB cache |
+| `drive-folder-list` | List folders from IndexedDB cache |
+| `drive-file-picker` | Interactive file picker using cached file tree |
+| `drive-save` | Save binary/text to IndexedDB |
+| `drive-delete` | Soft-delete file in IndexedDB |
+| `prompt-file` | Drive file picker + read from IndexedDB |
+| `workflow` | Sub-workflow loaded from IndexedDB, executed recursively |
 
 ### Server-Required Nodes
 
-These nodes call `POST /api/workflow/execute-node` per invocation:
+These 3 node types call `POST /api/workflow/execute-node` per invocation:
 
 | Node Type | Reason |
 |-----------|--------|
-| `command` | Gemini API, function calling |
-| `http` | Server-side fetch (avoids CORS) |
-| `drive-*` | Google Drive API access |
-| `prompt-file` | Drive file picker + file reading |
-| `drive-file-picker` | Drive file picker + file reading |
-| `workflow` | Sub-workflow loading from Drive |
-| `mcp` | MCP server calls |
-| `rag-sync` | Gemini RAG API |
-| `gemihub-command` | Drive operations, encryption, PDF export |
+| `mcp` | MCP server calls require server-side HTTP |
+| `rag-sync` | Gemini RAG API requires server-side access |
+| `gemihub-command` | Drive operations (encrypt, publish, PDF/HTML export) require server-side access |
 
 ### Node Execution API
 
@@ -286,62 +300,13 @@ For server nodes that need prompts (drive-file with confirm, encrypted files):
 
 ---
 
-## SSE Streaming (Legacy Server Execution)
-
-### Endpoints
+## Server API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/workflow/execute-node` | Execute a single server-requiring node (mcp, rag-sync, gemihub-command) |
-| POST | `/api/workflow/mcp-proxy` | Proxy for MCP tool definitions and execution |
+| POST | `/api/workflow/mcp-proxy` | Proxy for MCP tool definitions and execution (used by local command node) |
 | GET/POST | `/api/workflow/history` | List/load/save/delete execution history records |
-| `error` | Fatal error message |
-| `prompt-request` | Prompt waiting for user input (type, title, options, etc.) |
-| `drive-file-updated` | Workflow modified a Drive file |
-| `drive-file-created` | Workflow created a Drive file |
-
-### Client-Side Hook (Legacy)
-
-`useWorkflowExecution` manages SSE-based execution state:
-
-```typescript
-{
-  executionId: string | null
-  logs: LogEntry[]
-  status: "idle" | "running" | "completed" | "cancelled" | "error" | "waiting-prompt"
-  promptData: Record<string, unknown> | null
-}
-```
-
-Methods: `start()`, `stop()`, `handlePromptResponse(value)`
-
----
-
-## Execution Store
-
-In-memory state management for active executions (no database persistence).
-
-### Execution State
-
-```typescript
-ExecutionState {
-  id: string
-  status: "running" | "completed" | "error" | "cancelled" | "waiting-prompt"
-  logs: ExecutionLog[]
-  record?: ExecutionRecord
-  abortController: AbortController
-  promptResolve?: (value: string | null) => void
-  promptType?: string
-  promptData?: Record<string, unknown>
-  subscribers: Set<(event, data) => void>
-}
-```
-
-### Broadcast Mechanism
-
-- `broadcast(id, event, data)` calls all SSE subscribers
-- Existing logs are replayed when a new subscriber connects
-- Executions are cleaned up after 30 minutes of inactivity (measured from the last log entry timestamp, or `createdAt` if no logs exist). Executions in `running` or `waiting-prompt` status are skipped during cleanup
 
 ---
 
@@ -399,7 +364,7 @@ The `workflow` node type executes another workflow file.
 
 ## Handlers
 
-All 24 node types are dispatched to isolated handler functions in `app/engine/handlers/`.
+All 24 node types are dispatched to isolated handler functions. Local handlers (21 types) live in `app/engine/local-handlers/`. Server-side handlers (3 types: mcp, rag-sync, gemihub-command) live in `app/engine/handlers/`.
 
 ### Control Flow
 
