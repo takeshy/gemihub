@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useIsDark } from "~/hooks/useIsDark";
+import { enqueueMermaidRender } from "~/utils/mermaid-render";
 
 export function MermaidCodeBlock({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -13,27 +14,16 @@ export function MermaidCodeBlock({ code }: { code: string }) {
 
     (async () => {
       if (!containerRef.current || !code) return;
-
-      const id = `mermaid-md-${Date.now()}`;
       try {
-        const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: isDark ? "dark" : "default",
-          flowchart: { useMaxWidth: true, htmlLabels: true, curve: "basis" },
-          securityLevel: "strict",
-          suppressErrorRendering: true,
-        });
-
-        const { svg } = await mermaid.render(id, code);
-
-        if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg;
+        const result = await enqueueMermaidRender(
+          { chart: code, isDark, useMaxWidth: true },
+          () => cancelled,
+        );
+        if (result && !cancelled && containerRef.current) {
+          containerRef.current.innerHTML = result.svg;
           setError(null);
         }
       } catch (e) {
-        // Clean up orphaned Mermaid error element created by failed render
-        document.getElementById(id)?.remove();
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to render diagram");
         }

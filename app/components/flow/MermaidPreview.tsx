@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useIsDark } from "~/hooks/useIsDark";
+import { enqueueMermaidRender } from "~/utils/mermaid-render";
 
 interface MermaidPreviewProps {
   chart: string;
@@ -17,31 +18,16 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
 
     (async () => {
       if (!containerRef.current || !chart) return;
-
-      const id = `mermaid-${Date.now()}`;
       try {
-        const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: isDark ? "dark" : "default",
-          flowchart: {
-            useMaxWidth: false,
-            htmlLabels: true,
-            curve: "basis",
-          },
-          securityLevel: "strict",
-          suppressErrorRendering: true,
-        });
-
-        const { svg } = await mermaid.render(id, chart);
-
-        if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg;
+        const result = await enqueueMermaidRender(
+          { chart, isDark },
+          () => cancelled,
+        );
+        if (result && !cancelled && containerRef.current) {
+          containerRef.current.innerHTML = result.svg;
           setError(null);
         }
       } catch (e) {
-        // Clean up orphaned Mermaid error element created by failed render
-        document.getElementById(id)?.remove();
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to render diagram");
         }
