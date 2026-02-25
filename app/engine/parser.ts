@@ -196,6 +196,40 @@ export function getNextNodes(
   return nextNodes;
 }
 
+/**
+ * Parse workflow YAML content, optionally selecting a named sub-workflow
+ * from a multi-workflow file (workflows[] array).
+ */
+export function parseWorkflowContentByName(
+  content: string,
+  workflowName?: string
+): Workflow {
+  if (!workflowName) {
+    return parseWorkflowYaml(content);
+  }
+
+  const parsed = yaml.load(content);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid sub-workflow YAML");
+  }
+
+  const root = parsed as Record<string, unknown>;
+  const workflows = root.workflows;
+  if (Array.isArray(workflows)) {
+    const selected = workflows.find((item) => (
+      item &&
+      typeof item === "object" &&
+      (item as Record<string, unknown>).name === workflowName
+    ));
+    if (!selected || typeof selected !== "object") {
+      throw new Error(`Sub-workflow not found by name: ${workflowName}`);
+    }
+    return parseWorkflowData(selected as Record<string, unknown>);
+  }
+
+  return parseWorkflowYaml(content);
+}
+
 // Serialize workflow back to YAML
 export function serializeWorkflow(workflow: Workflow, name?: string): string {
   const nodes: Record<string, unknown>[] = [];

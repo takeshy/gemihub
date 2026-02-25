@@ -18,11 +18,11 @@ export default [
   // API routes
   route("api/drive/files", "routes/api.drive.files.tsx"),
   route("api/drive/tree", "routes/api.drive.tree.tsx"),
-  route("api/workflow/:id/execute", "routes/api.workflow.$id.execute.tsx"),
+  route("api/workflow/execute-node", "routes/api.workflow.execute-node.tsx"),
+  route("api/workflow/mcp-proxy", "routes/api.workflow.mcp-proxy.tsx"),
   route("api/workflow/ai-generate", "routes/api.workflow.ai-generate.tsx"),
   route("api/workflow/history", "routes/api.workflow.history.tsx"),
   route("api/workflow/request-history", "routes/api.workflow.request-history.tsx"),
-  route("api/prompt-response", "routes/api.prompt-response.tsx"),
   route("api/chat", "routes/api.chat.tsx"),
   route("api/chat/compact", "routes/api.chat.compact.tsx"),
   route("api/chat/history", "routes/api.chat.history.tsx"),

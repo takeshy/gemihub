@@ -13,8 +13,11 @@ import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
 import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta, getAllCachedFiles, clearAllCache } from "~/services/indexeddb-cache";
-import { attachDriveFileHandlers } from "~/utils/drive-file-sse";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
+import { parseWorkflowYaml } from "~/engine/parser";
+import { executeWorkflowLocally } from "~/engine/local-executor";
+import { processDriveEvent } from "~/utils/drive-file-local";
+import { getCachedApiKey } from "~/services/api-key-cache";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
 import { LeftSidebar } from "~/components/ide/LeftSidebar";
@@ -122,6 +125,11 @@ function getLocalStorageLanguage(): import("~/types/settings").Language | null {
 type LoaderData = Awaited<ReturnType<Route.ClientLoaderArgs["serverLoader"]>>;
 let cachedLoaderData: LoaderData | null = null;
 
+/** In-memory access to loader data (avoids IndexedDB round-trip). */
+export function getCachedLoaderDataInMemory(): LoaderData | null {
+  return cachedLoaderData;
+}
+
 function applyLocalStorageLanguage(d: LoaderData): LoaderData {
   const lsLang = getLocalStorageLanguage();
   if (lsLang && d.settings.language !== lsLang) {
@@ -145,6 +153,7 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
           settings: cached.settings as typeof loaderData.settings,
           hasGeminiApiKey: cached.hasGeminiApiKey,
           hasEncryptedApiKey: cached.hasEncryptedApiKey,
+
           rootFolderId: cached.rootFolderId,
           isOffline: true,
           rootFolderMismatch: null,
@@ -156,7 +165,7 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
       return cachedLoaderData;
     }
 
-    // Online — cache for future offline use
+    // Online — cache for future offline use (geminiApiKey kept in-memory only)
     cachedLoaderData = applyLocalStorageLanguage(loaderData);
     setCachedLoaderData({
       id: "current",
@@ -855,83 +864,71 @@ function IDEContent({
   // Silent workflow execution status (for shortcut-triggered background execution)
   const [silentExecStatus, setSilentExecStatus] = useState<{ id: string; name: string; state: "running" | "done" | "error" } | null>(null);
   const silentExecTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const silentExecEsRef = useRef<EventSource | null>(null);
-  const [pendingReconnect, setPendingReconnect] = useState<{ executionId: string; promptData?: Record<string, unknown> } | null>(null);
-  const clearPendingReconnect = useCallback(() => setPendingReconnect(null), []);
+  const silentExecAbortRef = useRef<AbortController | null>(null);
   const executeSilentWorkflow = useCallback((workflowId: string, workflowName: string) => {
-    // Close any previous silent execution EventSource
-    silentExecEsRef.current?.close();
+    // Abort any previous silent execution
+    silentExecAbortRef.current?.abort();
     setSilentExecStatus({ id: workflowId, name: workflowName, state: "running" });
     if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
+    const abortController = new AbortController();
+    silentExecAbortRef.current = abortController;
     (async () => {
       try {
-        const res = await fetch(`/api/workflow/${workflowId}/execute`, { method: "POST" });
-        if (!res.ok) throw new Error("Failed to start workflow execution");
-        const data = await res.json();
-        const execId = data.executionId;
-        if (typeof execId !== "string" || !execId) throw new Error("Invalid executionId");
-        const es = new EventSource(`/api/workflow/${workflowId}/execute?executionId=${execId}`);
-        silentExecEsRef.current = es;
-        es.addEventListener("complete", () => {
-          es.close();
-          silentExecEsRef.current = null;
+        const cached = await getCachedFile(workflowId);
+        if (!cached) throw new Error("Workflow file not found in cache");
+        const workflow = parseWorkflowYaml(cached.content);
+        const silentSettings = getCachedLoaderDataInMemory()?.settings as import("~/types/settings").UserSettings | undefined;
+        const result = await executeWorkflowLocally(
+          workflow,
+          {
+            onLog: () => { /* silent: no UI logs */ },
+            onDriveEvent: (event) => { processDriveEvent(event).catch(() => {}); },
+            promptCallbacks: {
+              promptForValue: async () => null,
+              promptForDialog: async () => null,
+              promptForDriveFile: async () => {
+                // Auto-respond with the currently open file
+                if (activeFileIdRef.current) {
+                  return {
+                    id: activeFileIdRef.current,
+                    name: activeFileNameRef.current ?? "",
+                    mimeType: activeFileMimeTypeRef.current ?? "text/plain",
+                  };
+                }
+                return null;
+              },
+              promptForDiff: async () => true, // Auto-approve in silent mode
+              promptForPassword: async () => null,
+            },
+          },
+          {
+            workflowId,
+            workflowName,
+            abortSignal: abortController.signal,
+            geminiApiKey: getCachedApiKey() || undefined,
+            settings: silentSettings,
+          },
+        );
+        if (abortController.signal.aborted) return;
+        if (result.historyRecord.status === "completed") {
           setSilentExecStatus({ id: workflowId, name: workflowName, state: "done" });
           silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 3000);
           window.dispatchEvent(new Event("workflow-completed"));
-        });
-        es.addEventListener("error", () => {
-          es.close();
-          silentExecEsRef.current = null;
+        } else {
           setSilentExecStatus({ id: workflowId, name: workflowName, state: "error" });
           silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 5000);
-        });
-        es.addEventListener("cancelled", () => {
-          es.close();
-          silentExecEsRef.current = null;
-          setSilentExecStatus(null);
-        });
-        // Prompt requested: auto-respond for drive-file with active file, otherwise hand off
-        es.addEventListener("prompt-request", (e) => {
-          let promptData: Record<string, unknown>;
-          try {
-            promptData = JSON.parse(e.data);
-          } catch {
-            return;
-          }
-          if (promptData.type === "drive-file" && activeFileIdRef.current) {
-            // Auto-respond with the currently open file
-            fetch("/api/prompt-response", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                executionId: execId,
-                value: JSON.stringify({
-                  id: activeFileIdRef.current,
-                  name: activeFileNameRef.current ?? "",
-                  mimeType: activeFileMimeTypeRef.current ?? "text/plain",
-                }),
-              }),
-            }).catch(() => { /* ignore */ });
-            return;
-          }
-          // Other prompt types: hand off to WorkflowPropsPanel via props
-          es.close();
-          silentExecEsRef.current = null;
-          setSilentExecStatus(null);
-          handleSelectFile(workflowId, workflowName, "text/yaml");
-          setPendingReconnect({ executionId: execId, promptData });
-        });
-        attachDriveFileHandlers(es);
+        }
       } catch {
+        if (abortController.signal.aborted) return;
         setSilentExecStatus({ id: workflowId, name: workflowName, state: "error" });
         silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), 5000);
       }
     })();
-  }, [handleSelectFile, setPendingReconnect]);
-  // Cleanup silent execution EventSource on unmount
+  }, []);
+  // Cleanup silent execution on unmount
   useEffect(() => {
     return () => {
-      silentExecEsRef.current?.close();
+      silentExecAbortRef.current?.abort();
       if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
     };
   }, []);
@@ -1268,8 +1265,6 @@ function IDEContent({
           onModifyWithAI={handleModifyWithAI}
           settings={settings}
           refreshKey={workflowVersion}
-          pendingReconnect={pendingReconnect}
-          onClearPendingReconnect={clearPendingReconnect}
         />
       )}
     </PanelErrorBoundary>

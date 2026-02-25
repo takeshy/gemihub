@@ -44,6 +44,8 @@ import {
   getLocallyModifiedFileIds,
   deleteCachedFile,
   renameCachedFile,
+  getEditHistoryForFile,
+  setEditHistoryEntry,
   deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
@@ -53,7 +55,7 @@ import {
 } from "~/services/indexeddb-cache";
 import { decryptFileContent, isEncryptedFile } from "~/services/crypto-core";
 import { saveLocalEdit, hasNetContentChange } from "~/services/edit-history-local";
-import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { isBinaryMimeType, isSyncExcludedPath } from "~/services/sync-client-utils";
 import { cryptoCache } from "~/services/crypto-cache";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { useFileUpload } from "~/hooks/useFileUpload";
@@ -61,6 +63,33 @@ import { EditHistoryModal } from "./EditHistoryModal";
 import { TempDiffModal } from "./TempDiffModal";
 import { useI18n } from "~/i18n/context";
 import type { FileListItem } from "~/contexts/EditorContext";
+
+/**
+ * Migrate a "new:" file to a new ID reflecting a new path.
+ * Updates CachedFile, editHistory, and CachedRemoteMeta atomically.
+ */
+async function migrateNewFileId(oldId: string, newId: string, newFileName: string): Promise<void> {
+  // Migrate CachedFile
+  const cached = await getCachedFile(oldId);
+  if (cached) {
+    await deleteCachedFile(oldId);
+    await setCachedFile({ ...cached, fileId: newId, fileName: newFileName });
+  }
+  // Migrate editHistory
+  const history = await getEditHistoryForFile(oldId);
+  if (history) {
+    await deleteEditHistoryEntry(oldId);
+    await setEditHistoryEntry({ ...history, fileId: newId, filePath: newFileName });
+  }
+  // Migrate CachedRemoteMeta entry
+  const meta = await getCachedRemoteMeta();
+  if (meta?.files[oldId]) {
+    const entry = meta.files[oldId];
+    delete meta.files[oldId];
+    meta.files[newId] = { ...entry, name: newFileName };
+    await setCachedRemoteMeta(meta);
+  }
+}
 
 interface DriveFileTreeProps {
   rootFolderId: string;
@@ -121,6 +150,8 @@ function buildTreeFromMeta(meta: CachedRemoteMeta): CachedTreeNode[] {
   }
 
   for (const [fileId, f] of Object.entries(meta.files)) {
+    // Skip system files (settings.json, _sync-meta.json, _encrypted-auth.json, etc.)
+    if (isSyncExcludedPath(f.name)) continue;
     const parts = f.name.split("/");
     const fileName = parts.pop()!;
     const parentChildren = ensureFolder(parts);
@@ -289,16 +320,26 @@ export function DriveFileTree({
   );
 
   const updateTreeFromMeta = useCallback(async (metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] }) => {
+    // Merge local-only "new:" entries from existing CachedRemoteMeta
+    const existingMeta = await getCachedRemoteMeta();
+    const mergedFiles = { ...metaData.files };
+    if (existingMeta) {
+      for (const [id, entry] of Object.entries(existingMeta.files)) {
+        if (id.startsWith("new:") && !(id in mergedFiles)) {
+          mergedFiles[id] = entry;
+        }
+      }
+    }
     const cachedMeta: CachedRemoteMeta = {
       id: "current",
       rootFolderId,
       lastUpdatedAt: metaData.lastUpdatedAt,
-      files: metaData.files,
+      files: mergedFiles,
       cachedAt: Date.now(),
     };
     const items = buildTreeFromMeta(cachedMeta);
     setTreeItems(items);
-    setRemoteMeta(metaData.files);
+    setRemoteMeta(mergedFiles);
     await Promise.all([
       setCachedRemoteMeta(cachedMeta),
       setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
@@ -311,23 +352,41 @@ export function DriveFileTree({
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
-      const items = data.items as CachedTreeNode[];
-      setTreeItems(items);
-      // Cache both tree and meta
-      const promises: Promise<void>[] = [
-        setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
-      ];
+
       if (data.meta) {
-        setRemoteMeta(data.meta.files);
-        promises.push(setCachedRemoteMeta({
+        // Merge local-only "new:" entries from existing CachedRemoteMeta
+        const existingMeta = await getCachedRemoteMeta();
+        const mergedFiles = { ...data.meta.files };
+        if (existingMeta) {
+          for (const [id, entry] of Object.entries(existingMeta.files)) {
+            if (id.startsWith("new:") && !(id in mergedFiles)) {
+              mergedFiles[id] = entry;
+            }
+          }
+        }
+
+        const cachedMeta: CachedRemoteMeta = {
           id: "current",
           rootFolderId,
           lastUpdatedAt: data.meta.lastUpdatedAt,
-          files: data.meta.files,
+          files: mergedFiles,
           cachedAt: Date.now(),
-        }));
+        };
+
+        // Use buildTreeFromMeta which filters system files (isSyncExcludedPath)
+        const items = buildTreeFromMeta(cachedMeta);
+        setTreeItems(items);
+        setRemoteMeta(mergedFiles);
+        await Promise.all([
+          setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
+          setCachedRemoteMeta(cachedMeta),
+        ]);
+      } else {
+        // Fallback: no meta available, use raw items from server
+        const items = data.items as CachedTreeNode[];
+        setTreeItems(items);
+        await setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() });
       }
-      await Promise.all(promises);
     } catch {
       // ignore
     } finally {
@@ -1119,6 +1178,16 @@ export function DriveFileTree({
             // Replace the old folder prefix with new folder path
             const relativePath = file.fullPath; // relative to folderNode
             const newFullName = newFolderPath ? `${newFolderPath}/${relativePath}` : relativePath;
+            if (file.id.startsWith("new:")) {
+              // Local-only file: migrate to new ID reflecting the new path
+              const newTempId = `new:${newFullName}`;
+              await migrateNewFileId(file.id, newTempId, newFullName);
+              if (activeFileId === file.id) {
+                const node = findNodeById(file.id, treeItems);
+                onSelectFile(newTempId, relativePath.split("/").pop() || relativePath, node?.mimeType || "text/plain");
+              }
+              continue;
+            }
             const res = await fetch("/api/drive/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1171,28 +1240,51 @@ export function DriveFileTree({
 
       setBusy([itemId]);
       try {
-        const res = await fetch("/api/drive/files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "rename",
-            fileId: itemId,
-            name: newFullName,
-          }),
-        });
-        if (res.ok) {
+        if (itemId.startsWith("new:")) {
+          // Local-only file: migrate to new ID reflecting the new path
+          const newTempId = `new:${newFullName}`;
+          await migrateNewFileId(itemId, newTempId, newFullName);
           if (newParentId !== rootFolderId) {
             setExpandedFolders((prev) => new Set(prev).add(newParentId));
           }
-          const data = await res.json();
-          await renameCachedFile(itemId, newFullName);
-          if (data.meta) {
-            await updateTreeFromMeta(data.meta);
-          } else {
-            await fetchAndCacheTree();
+          const node = findNodeById(itemId, treeItems);
+          if (activeFileId === itemId) {
+            onSelectFile(newTempId, baseName, node?.mimeType || "text/plain");
           }
+          // Update tree in-place (no server fetch needed for local-only files)
+          setTreeItems((prev) => {
+            const replace = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
+              nodes.map((n) => {
+                if (n.id === itemId) return { ...n, id: newTempId, name: baseName };
+                if (n.children) return { ...n, children: replace(n.children) };
+                return n;
+              });
+            return replace(prev);
+          });
         } else {
-          alert(t("contextMenu.moveFailed"));
+          const res = await fetch("/api/drive/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "rename",
+              fileId: itemId,
+              name: newFullName,
+            }),
+          });
+          if (res.ok) {
+            if (newParentId !== rootFolderId) {
+              setExpandedFolders((prev) => new Set(prev).add(newParentId));
+            }
+            const data = await res.json();
+            await renameCachedFile(itemId, newFullName);
+            if (data.meta) {
+              await updateTreeFromMeta(data.meta);
+            } else {
+              await fetchAndCacheTree();
+            }
+          } else {
+            alert(t("contextMenu.moveFailed"));
+          }
         }
       } catch {
         alert(t("contextMenu.moveFailed"));
@@ -1200,7 +1292,7 @@ export function DriveFileTree({
         clearBusy([itemId]);
       }
     },
-    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath, findNodeById, collectFilesWithPaths, setBusy, clearBusy, t]
+    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, findFullFileName, getFolderPath, findNodeById, collectFilesWithPaths, setBusy, clearBusy, t, activeFileId, onSelectFile]
   );
 
   const handleDrop = useCallback(
@@ -1471,17 +1563,8 @@ export function DriveFileTree({
         const prefix = hasPath ? oldFullName.substring(0, oldFullName.lastIndexOf("/")) : "";
         const newFullName = prefix ? `${prefix}/${newBaseName.trim()}` : newBaseName.trim();
         const newTempId = `new:${newFullName}`;
-        // Migrate cache entry
-        const cached = await getCachedFile(item.id);
-        await deleteCachedFile(item.id);
-        await setCachedFile({
-          fileId: newTempId,
-          content: cached?.content ?? "",
-          md5Checksum: "",
-          modifiedTime: "",
-          cachedAt: Date.now(),
-          fileName: newFullName,
-        });
+        // Migrate all stores (CachedFile, editHistory, CachedRemoteMeta)
+        await migrateNewFileId(item.id, newTempId, newFullName);
         // Update tree node
         setTreeItems((prev) => {
           const replace = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
@@ -1520,6 +1603,17 @@ export function DriveFileTree({
             if (!fullName) continue;
             // Replace old prefix with new prefix
             const newFullName = newPrefix + fullName.slice(oldPrefix.length);
+            if (fid.startsWith("new:")) {
+              // Local-only file: migrate to new ID reflecting the new path
+              const newTempId = `new:${newFullName}`;
+              await migrateNewFileId(fid, newTempId, newFullName);
+              if (activeFileId === fid) {
+                const baseName = newFullName.split("/").pop() || newFullName;
+                const node = findNodeById(fid, treeItems);
+                onSelectFile(newTempId, baseName, node?.mimeType || "text/plain");
+              }
+              continue;
+            }
             const res = await fetch("/api/drive/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1597,7 +1691,7 @@ export function DriveFileTree({
         clearBusy([item.id]);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, t, collectFileIds, findFullFileName, treeItems, setBusy, clearBusy, activeFileId, onSelectFile]
+    [fetchAndCacheTree, updateTreeFromMeta, t, collectFileIds, findFullFileName, findNodeById, treeItems, setBusy, clearBusy, activeFileId, onSelectFile]
   );
 
   const handleDelete = useCallback(
@@ -1607,6 +1701,11 @@ export function DriveFileTree({
         if (!confirm(t("trash.softDeleteConfirm").replace("{name}", item.name))) return;
         await deleteCachedFile(item.id);
         await deleteEditHistoryEntry(item.id);
+        const meta = await getCachedRemoteMeta();
+        if (meta?.files[item.id]) {
+          delete meta.files[item.id];
+          await setCachedRemoteMeta(meta);
+        }
         setTreeItems((prev) => removeNodeFromTree(prev, item.id));
         window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
         if (item.id === activeFileId) {
@@ -1628,6 +1727,17 @@ export function DriveFileTree({
           let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
           let failCount = 0;
           for (const fid of fileIds) {
+            if (fid.startsWith("new:")) {
+              // Local-only file: delete from IndexedDB only (not on Drive)
+              await deleteCachedFile(fid);
+              await deleteEditHistoryEntry(fid);
+              const meta = await getCachedRemoteMeta();
+              if (meta?.files[fid]) {
+                delete meta.files[fid];
+                await setCachedRemoteMeta(meta);
+              }
+              continue;
+            }
             const res = await fetch("/api/drive/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -2205,6 +2315,8 @@ export function DriveFileTree({
     (item: CachedTreeNode): ContextMenuItem[] => {
       const items: ContextMenuItem[] = [];
 
+      const isNewFile = !item.isFolder && item.id.startsWith("new:");
+
       if (!item.isFolder) {
         items.push({
           label: t("editHistory.menuLabel"),
@@ -2254,6 +2366,7 @@ export function DriveFileTree({
               }
             }
             // Fallback to API download (binary without cache, or no cache at all)
+            if (isNewFile) return; // new: files have no server-side data
             const a = document.createElement("a");
             a.href = `/api/drive/files?action=raw&fileId=${item.id}`;
             a.download = fileName;
@@ -2263,58 +2376,61 @@ export function DriveFileTree({
           },
         });
 
-        if (canConvertToPdf(item.name, item.mimeType)) {
-          items.push({
-            label: t("contextMenu.convertToPdf"),
-            icon: <FileOutput size={ICON.MD} />,
-            onClick: () => handleConvertMarkdownToPdf(item),
-          });
-        }
-
-        if (canConvertToHtml(item.name, item.mimeType)) {
-          items.push({
-            label: t("contextMenu.convertToHtml"),
-            icon: <FileCode size={ICON.MD} />,
-            onClick: () => handleConvertMarkdownToHtml(item),
-          });
-        }
-
-        // Publish / unpublish — not for encrypted files
-        if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
-          const fileMeta = remoteMeta[item.id];
-          if (fileMeta?.shared) {
+        // Operations that require a real Drive file ID — hide for new: files
+        if (!isNewFile) {
+          if (canConvertToPdf(item.name, item.mimeType)) {
             items.push({
-              label: t("contextMenu.copyLink"),
-              icon: <Link2 size={ICON.MD} />,
-              onClick: () => handleCopyLink(item.id),
+              label: t("contextMenu.convertToPdf"),
+              icon: <FileOutput size={ICON.MD} />,
+              onClick: () => handleConvertMarkdownToPdf(item),
             });
+          }
+
+          if (canConvertToHtml(item.name, item.mimeType)) {
             items.push({
-              label: t("contextMenu.unpublish"),
-              icon: <GlobeLock size={ICON.MD} />,
-              onClick: () => handleUnpublish(item),
+              label: t("contextMenu.convertToHtml"),
+              icon: <FileCode size={ICON.MD} />,
+              onClick: () => handleConvertMarkdownToHtml(item),
+            });
+          }
+
+          // Publish / unpublish — not for encrypted files
+          if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
+            const fileMeta = remoteMeta[item.id];
+            if (fileMeta?.shared) {
+              items.push({
+                label: t("contextMenu.copyLink"),
+                icon: <Link2 size={ICON.MD} />,
+                onClick: () => handleCopyLink(item.id),
+              });
+              items.push({
+                label: t("contextMenu.unpublish"),
+                icon: <GlobeLock size={ICON.MD} />,
+                onClick: () => handleUnpublish(item),
+              });
+            } else {
+              items.push({
+                label: t("contextMenu.publish"),
+                icon: <Globe size={ICON.MD} />,
+                onClick: () => handlePublish(item),
+              });
+            }
+          }
+
+          // Encrypt / Decrypt
+          if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
+            items.push({
+              label: t("crypt.encrypt"),
+              icon: <Lock size={ICON.MD} />,
+              onClick: () => handleEncrypt(item),
             });
           } else {
             items.push({
-              label: t("contextMenu.publish"),
-              icon: <Globe size={ICON.MD} />,
-              onClick: () => handlePublish(item),
+              label: t("crypt.decrypt"),
+              icon: <Unlock size={ICON.MD} />,
+              onClick: () => handleDecrypt(item),
             });
           }
-        }
-
-        // Encrypt / Decrypt
-        if (!item.name.endsWith(".encrypted") && !encryptedFiles.has(item.id)) {
-          items.push({
-            label: t("crypt.encrypt"),
-            icon: <Lock size={ICON.MD} />,
-            onClick: () => handleEncrypt(item),
-          });
-        } else {
-          items.push({
-            label: t("crypt.decrypt"),
-            icon: <Unlock size={ICON.MD} />,
-            onClick: () => handleDecrypt(item),
-          });
         }
       }
 

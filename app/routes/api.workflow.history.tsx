@@ -5,6 +5,7 @@ import {
   listExecutionRecords,
   loadExecutionRecord,
   deleteExecutionRecord,
+  saveExecutionRecord,
 } from "~/services/workflow-history.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
 
@@ -49,6 +50,24 @@ export async function action({ request }: Route.ActionArgs) {
   const body = await request.json();
   const { action: act, fileId } = body;
   logCtx.action = act;
+
+  if (act === "save" && body.record) {
+    const { getSettings } = await import("~/services/user-settings.server");
+    const { getEncryptionParams } = await import("~/types/settings");
+    let encryption;
+    try {
+      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+      encryption = getEncryptionParams(settings, "workflow");
+    } catch { /* proceed without encryption */ }
+    await saveExecutionRecord(
+      validTokens.accessToken,
+      validTokens.rootFolderId,
+      body.record,
+      encryption,
+    );
+    emitLog(logCtx, 200);
+    return Response.json({ success: true }, { headers: responseHeaders });
+  }
 
   if (act === "delete" && fileId) {
     await deleteExecutionRecord(validTokens.accessToken, validTokens.rootFolderId, fileId);

@@ -164,25 +164,15 @@ ExecutionRecord {
 
 ## SSE ストリーミング
 
-実行は Server-Sent Events でリアルタイム更新を行う。
+実行はブラウザ内でローカルに行われる（21/24 ノードタイプ）。サーバーが必要なノード（mcp, rag-sync, gemihub-command）のみ API 呼出。
 
 ### エンドポイント
 
 | メソッド | エンドポイント | 説明 |
 |---------|--------------|------|
-| POST | `/api/workflow/{id}/execute` | 実行開始、`{ executionId }` を返す |
-| GET | `/api/workflow/{id}/execute?executionId={id}` | SSE ストリーム |
-| POST | `/api/workflow/{id}/stop` | 実行停止 |
-| POST | `/api/prompt-response` | インタラクティブプロンプトへの応答 |
-
-### SSE イベントタイプ
-
-| イベント | 説明 |
-|---------|------|
-| `log` | ノード実行ログ（nodeId, nodeType, message, status, input/output） |
-| `status` | ステータス変更（running / completed / error / cancelled / waiting-prompt） |
-| `complete` | 実行完了（レコードとオプションの openFile 付き） |
-| `cancelled` | ユーザーが実行を停止 |
+| POST | `/api/workflow/execute-node` | サーバー必須ノードの単体実行 |
+| POST | `/api/workflow/mcp-proxy` | MCP ツール定義取得・実行プロキシ |
+| GET/POST | `/api/workflow/history` | 実行履歴の一覧/読込/保存/削除 |
 | `error` | 致命的エラーメッセージ |
 | `prompt-request` | ユーザー入力待ちのプロンプト（type, title, options 等） |
 | `drive-file-updated` | ワークフローが Drive ファイルを更新 |
@@ -190,46 +180,17 @@ ExecutionRecord {
 
 ### クライアントサイドフック
 
-`useWorkflowExecution` が実行状態を管理:
+`useLocalWorkflowExecution` が実行状態を管理:
 
 ```typescript
 {
-  executionId: string | null
   logs: LogEntry[]
   status: "idle" | "running" | "completed" | "cancelled" | "error" | "waiting-prompt"
   promptData: Record<string, unknown> | null
 }
 ```
 
-メソッド: `start()`, `stop()`, `handlePromptResponse(value)`
-
----
-
-## 実行ストア
-
-アクティブな実行のインメモリ状態管理（データベース永続化なし）。
-
-### 実行状態
-
-```typescript
-ExecutionState {
-  id: string
-  status: "running" | "completed" | "error" | "cancelled" | "waiting-prompt"
-  logs: ExecutionLog[]
-  record?: ExecutionRecord
-  abortController: AbortController
-  promptResolve?: (value: string | null) => void
-  promptType?: string
-  promptData?: Record<string, unknown>
-  subscribers: Set<(event, data) => void>
-}
-```
-
-### ブロードキャスト機構
-
-- `broadcast(id, event, data)` が全 SSE サブスクライバーを呼び出し
-- 新規サブスクライバー接続時に既存ログをリプレイ
-- 30 分後にクリーンアップ
+メソッド: `executeWorkflow(yaml, options?)`, `stop()`, `handlePromptResponse(value)`
 
 ---
 
@@ -240,12 +201,9 @@ ExecutionState {
 ### プロンプトフロー
 
 1. ハンドラが `promptCallbacks.promptForValue(title, default, multiline)` を呼び出し
-2. 実行ストアがステータスを `"waiting-prompt"` に設定
-3. SSE が `prompt-request` イベントをクライアントにブロードキャスト
-4. クライアントがプロンプトモーダルを表示
-5. ユーザーが POST `/api/prompt-response` で入力を送信
-6. `resolvePrompt()` がハンドラの Promise をアンブロック
-7. ハンドラが返された値で実行を再開
+2. フックがステータスを `"waiting-prompt"` に設定しプロンプトモーダルを表示
+3. ユーザーが入力を送信
+4. `handlePromptResponse()` が Promise を解決しハンドラが再開
 
 ### プロンプトタイプ
 
@@ -376,13 +334,13 @@ POST `/api/workflow/ai-generate`（SSE ストリーム）
 
 ## 実行 UI
 
-### ExecutionPanel
+### WorkflowPropsPanel
 
-IDE 右サイドバーのメイン実行ビュー:
+IDE 右サイドバーのワークフロービュー:
 
-- 実行/停止ボタン
+- ドラッグ&ドロップ対応のノードリスト
+- ローカル実行の実行/停止ボタン
 - ステータスアイコン付きのリアルタイム実行ログ表示
-- 最新ログへの自動スクロール
 - ツール結果表示用の MCP アプリモーダル
 - 入力待ち時のプロンプトモーダル
 
@@ -443,17 +401,21 @@ IDE 右サイドバーのメイン実行ビュー:
 | File | Description |
 |------|-------------|
 | `app/engine/parser.ts` | YAML パーサー、AST ビルダー、エッジ解決 |
-| `app/engine/executor.ts` | スタックベースのエグゼキューター（ハンドラディスパッチ） |
+| `app/engine/executor.ts` | スタックベースのサーバーエグゼキューター |
+| `app/engine/local-executor.ts` | クライアントサイドエグゼキューター（21/24 ローカル、3 サーバー） |
+| `app/engine/local-handlers/` | ローカルノードハンドラ（command, http, drive, prompt, workflow） |
 | `app/engine/types.ts` | コア型（WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks） |
-| `app/engine/handlers/` | 24 種類のノードタイプハンドラ |
-| `app/services/execution-store.server.ts` | インメモリ実行状態、SSE ブロードキャスト、プロンプト管理 |
-| `app/routes/api.workflow.$id.execute.tsx` | 実行開始/ストリーミング用 SSE エンドポイント |
-| `app/routes/api.workflow.$id.stop.tsx` | 実行停止エンドポイント |
-| `app/routes/api.prompt-response.tsx` | プロンプト応答エンドポイント |
+| `app/engine/handlers/` | 24 種類のノードタイプハンドラ（サーバーサイド） |
+| `app/hooks/useLocalWorkflowExecution.ts` | クライアントサイドローカル実行フック |
+| `app/routes/api.workflow.execute-node.tsx` | サーバー必須ノードの単体実行 API |
+| `app/routes/api.workflow.mcp-proxy.tsx` | MCP ツール定義取得・実行プロキシ |
 | `app/routes/api.workflow.ai-generate.tsx` | AI ワークフロー生成エンドポイント |
-| `app/hooks/useWorkflowExecution.ts` | クライアントサイド実行状態フック |
-| `app/components/execution/ExecutionPanel.tsx` | 実行ログ UI |
+| `app/services/drive-local.ts` | IndexedDB ベースの Drive 操作 |
+| `app/services/drive-tools-local.ts` | ローカル Gemini function calling Drive ツール |
+| `app/services/gemini-chat-core.ts` | ブラウザ互換 Gemini API クライアント |
+| `app/utils/drive-file-local.ts` | ローカル実行用 Drive イベント UI ディスパッチ |
 | `app/components/execution/PromptModal.tsx` | インタラクティブプロンプトモーダル |
+| `app/components/ide/WorkflowPropsPanel.tsx` | ワークフローノードリスト、実行制御、ログ |
 | `app/components/ide/AIWorkflowDialog.tsx` | AI 生成ダイアログ UI |
 | `app/components/settings/ShortcutsTab.tsx` | ショートカットキー設定 UI |
 | `app/types/settings.ts` | `ShortcutKeyBinding` 型、バリデーションヘルパー（`isBuiltinShortcut`, `isValidShortcutKey`） |

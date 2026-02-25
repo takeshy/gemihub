@@ -19,7 +19,6 @@ import {
   Info,
   Sparkles,
   AppWindow,
-  AlertTriangle,
   GripVertical,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
@@ -39,20 +38,13 @@ import { ExecutionHistoryModal } from "./ExecutionHistoryModal";
 import { PromptModal } from "~/components/execution/PromptModal";
 import yaml from "js-yaml";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
-import { useI18n } from "~/i18n/context";
-import { getLocallyModifiedFileIds } from "~/services/indexeddb-cache";
-import { attachDriveFileHandlers } from "~/utils/drive-file-sse";
+import { useLocalWorkflowExecution } from "~/hooks/useLocalWorkflowExecution";
 
 interface WorkflowFile {
   id: string;
   name: string;
   mimeType: string;
   modifiedTime?: string;
-}
-
-interface PendingReconnect {
-  executionId: string;
-  promptData?: Record<string, unknown>;
 }
 
 interface WorkflowPropsPanelProps {
@@ -64,8 +56,6 @@ interface WorkflowPropsPanelProps {
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
-  pendingReconnect?: PendingReconnect | null;
-  onClearPendingReconnect?: () => void;
 }
 
 function isWorkflowFile(name: string | null): boolean {
@@ -82,8 +72,6 @@ export function WorkflowPropsPanel({
   onModifyWithAI,
   settings,
   refreshKey,
-  pendingReconnect,
-  onClearPendingReconnect,
 }: WorkflowPropsPanelProps) {
   if (isWorkflowFile(activeFileName) && activeFileId) {
     return (
@@ -96,8 +84,6 @@ export function WorkflowPropsPanel({
         onModifyWithAI={onModifyWithAI}
         settings={settings}
         refreshKey={refreshKey}
-        pendingReconnect={pendingReconnect}
-        onClearPendingReconnect={onClearPendingReconnect}
       />
     );
   }
@@ -173,8 +159,6 @@ function WorkflowNodeListView({
   onModifyWithAI,
   settings,
   refreshKey,
-  pendingReconnect,
-  onClearPendingReconnect,
 }: {
   fileId: string;
   fileName: string;
@@ -184,8 +168,6 @@ function WorkflowNodeListView({
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
-  pendingReconnect?: PendingReconnect | null;
-  onClearPendingReconnect?: () => void;
 }) {
   const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId, refreshKey, "PropsPanel");
 
@@ -230,8 +212,8 @@ function WorkflowNodeListView({
   // History
   const [showHistory, setShowHistory] = useState(false);
 
-  // Execution
-  const [executionId, setExecutionId] = useState<string | null>(null);
+  // Execution – local workflow execution
+  const localExecution = useLocalWorkflowExecution(fileId);
   const [executionStatus, setExecutionStatus] = useState<
     "idle" | "running" | "completed" | "cancelled" | "error" | "waiting-prompt"
   >("idle");
@@ -240,40 +222,19 @@ function WorkflowNodeListView({
   const [expandedLogIndex, setExpandedLogIndex] = useState<number | null>(null);
   const [mcpAppModal, setMcpAppModal] = useState<McpAppInfo[] | null>(null);
   const [promptData, setPromptData] = useState<Record<string, unknown> | null>(null);
-  const eventSourceRef = useState<EventSource | null>(null);
 
-  const { t } = useI18n();
-  const [hasLocalChanges, setHasLocalChanges] = useState(false);
+  // Sync local execution state to component state
+  useEffect(() => {
+    setExecutionStatus(localExecution.status);
+    setLogs(localExecution.logs);
+    setPromptData(localExecution.promptData);
+  }, [localExecution.status, localExecution.logs, localExecution.promptData]);
+
+
 
   // Drag and drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<{ index: number; position: "above" | "below" } | null>(null);
-
-  useEffect(() => {
-    const checkModified = () => {
-      getLocallyModifiedFileIds().then((ids) => {
-        setHasLocalChanges(ids.has(fileId));
-      }).catch(() => {});
-    };
-    checkModified();
-
-    const handleModified = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.fileId === fileId) {
-        setHasLocalChanges(true);
-      }
-    };
-    const handleSync = () => {
-      checkModified();
-    };
-
-    window.addEventListener("file-modified", handleModified);
-    window.addEventListener("sync-complete", handleSync);
-    return () => {
-      window.removeEventListener("file-modified", handleModified);
-      window.removeEventListener("sync-complete", handleSync);
-    };
-  }, [fileId]);
 
   const saveWorkflow = useCallback(
     async (updated: Workflow) => {
@@ -463,141 +424,45 @@ function WorkflowNodeListView({
     [workflow, isNewNode, saveWorkflow]
   );
 
-  // Shared SSE listener setup for execution
-  const attachExecutionListeners = useCallback((es: EventSource) => {
-    eventSourceRef[1](es);
-
-    es.addEventListener("log", (e) => {
-      const log = JSON.parse(e.data);
-      setLogs((prev) => [...prev, log]);
-      if (log.mcpApps && log.mcpApps.length > 0) {
-        setMcpAppModal(log.mcpApps);
-      }
-    });
-    es.addEventListener("complete", (e) => {
-      setExecutionStatus("completed");
-      es.close();
-      window.dispatchEvent(new Event("workflow-completed"));
-      try {
-        const data = JSON.parse((e as MessageEvent).data);
-        if (data.openFile) {
-          onSelectFile(data.openFile.fileId, data.openFile.fileName, data.openFile.mimeType);
-        }
-      } catch { /* ignore parse errors */ }
-    });
-    es.addEventListener("cancelled", () => {
-      setExecutionStatus("cancelled");
-      es.close();
-    });
-    es.addEventListener("error", (e) => {
-      if (e instanceof MessageEvent) {
-        const data = JSON.parse(e.data);
-        setLogs((prev) => [
-          ...prev,
-          {
-            nodeId: "system",
-            nodeType: "system",
-            message: data.error || "Execution error",
-            status: "error" as const,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      }
-      setExecutionStatus("error");
-      es.close();
-    });
-    es.addEventListener("status", (e) => {
-      const data = JSON.parse(e.data);
-      setExecutionStatus(data.status);
-    });
-    es.addEventListener("prompt-request", (e) => {
-      const data = JSON.parse(e.data);
-      setExecutionStatus("waiting-prompt");
-      setPromptData(data);
-    });
-    attachDriveFileHandlers(es);
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        setExecutionStatus((prev) => (prev === "running" ? "error" : prev));
-      }
-    };
-  }, [eventSourceRef, onSelectFile]);
-
-  // Execution
+  // Execution – local workflow execution
   const startExecution = useCallback(async (body?: { startNodeId: string; initialVariables: Record<string, string | number> }) => {
-    setLogs([]);
-    setExecutionStatus("running");
     setShowLogs(true);
 
-    try {
-      const fetchInit: RequestInit = { method: "POST" };
-      if (body) {
-        fetchInit.headers = { "Content-Type": "application/json" };
-        fetchInit.body = JSON.stringify(body);
-      }
-      const res = await fetch(`/api/workflow/${fileId}/execute`, fetchInit);
-      const data = await res.json();
-      const newExecId = data.executionId;
-      setExecutionId(newExecId);
-
-      const es = new EventSource(
-        `/api/workflow/${fileId}/execute?executionId=${newExecId}`
-      );
-      attachExecutionListeners(es);
-    } catch {
+    if (!rawYaml) {
       setExecutionStatus("error");
+      return;
     }
-  }, [fileId, attachExecutionListeners]);
 
-  const stopExecution = useCallback(async () => {
-    if (!executionId) return;
-    try {
-      const res = await fetch(`/api/workflow/${fileId}/stop`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ executionId }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setLogs((prev) => [
-          ...prev,
-          {
-            nodeId: "system",
-            nodeType: "system",
-            message: data.error || "Failed to stop execution",
-            status: "error" as const,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      }
-    } catch (error) {
-      setLogs((prev) => [
-        ...prev,
-        {
-          nodeId: "system",
-          nodeType: "system",
-          message: `Failed to stop execution: ${error instanceof Error ? error.message : String(error)}`,
-          status: "error" as const,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+    const result = await localExecution.executeWorkflow(rawYaml, {
+      startNodeId: body?.startNodeId,
+      initialVariables: body?.initialVariables,
+      workflowName: workflowName || undefined,
+    });
+
+    if (result?.historyRecord?.status === "completed") {
+      window.dispatchEvent(new Event("workflow-completed"));
     }
-  }, [executionId, fileId]);
+
+    // Handle __openFile variable
+    if (result?.context) {
+      const openFileRaw = result.context.variables.get("__openFile");
+      if (typeof openFileRaw === "string") {
+        try {
+          const openFile = JSON.parse(openFileRaw);
+          if (openFile.fileId && openFile.fileName) {
+            onSelectFile(openFile.fileId, openFile.fileName, openFile.mimeType || "text/markdown");
+          }
+        } catch { /* ignore */ }
+      }
+    }
+  }, [rawYaml, localExecution, onSelectFile, workflowName]);
+
+  const stopExecution = useCallback(() => {
+    localExecution.stop();
+  }, [localExecution]);
 
   // Listen for shortcut-triggered execution
   const pendingExecutionRef = useRef<string | null>(null);
-
-  // Reconnect to an existing execution (e.g. silent execution that needs a prompt)
-  const reconnectExecution = useCallback((execId: string, initialPromptData?: Record<string, unknown>) => {
-    setExecutionId(execId);
-    setLogs([]);
-    setExecutionStatus(initialPromptData ? "waiting-prompt" : "running");
-    setPromptData(initialPromptData ?? null);
-    setShowLogs(true);
-
-    const es = new EventSource(`/api/workflow/${fileId}/execute?executionId=${execId}`);
-    attachExecutionListeners(es);
-  }, [fileId, attachExecutionListeners]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -606,7 +471,7 @@ function WorkflowNodeListView({
       // If this event targets a different file, ignore
       if (targetFileId && targetFileId !== fileId) return;
 
-      if (executionStatus !== "running" && executionStatus !== "waiting-prompt" && workflow && !hasLocalChanges) {
+      if (executionStatus !== "running" && executionStatus !== "waiting-prompt" && workflow) {
         startExecution();
       } else if (!workflow) {
         // Workflow not loaded yet (just navigated) — defer execution
@@ -615,7 +480,7 @@ function WorkflowNodeListView({
     };
     window.addEventListener("shortcut-execute-workflow", handler);
     return () => window.removeEventListener("shortcut-execute-workflow", handler);
-  }, [executionStatus, workflow, hasLocalChanges, startExecution, fileId]);
+  }, [executionStatus, workflow, startExecution, fileId]);
 
   // Deferred execution: run when workflow finishes loading after a shortcut navigation
   useEffect(() => {
@@ -624,36 +489,18 @@ function WorkflowNodeListView({
     // Clear immediately so it won't re-fire on subsequent state changes
     pendingExecutionRef.current = null;
     if (
-      !hasLocalChanges &&
       executionStatus !== "running" &&
       executionStatus !== "waiting-prompt"
     ) {
       startExecution();
     }
-  }, [workflow, fileId, hasLocalChanges, executionStatus, startExecution]);
-
-  // Reconnect to existing execution via props (from silent mode prompt handoff)
-  const consumedReconnectRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!pendingReconnect) return;
-    if (consumedReconnectRef.current === pendingReconnect.executionId) return;
-    consumedReconnectRef.current = pendingReconnect.executionId;
-    onClearPendingReconnect?.();
-    reconnectExecution(pendingReconnect.executionId, pendingReconnect.promptData);
-  }, [pendingReconnect, reconnectExecution, onClearPendingReconnect]);
+  }, [workflow, fileId, executionStatus, startExecution]);
 
   const handlePromptResponse = useCallback(
-    async (value: string | null) => {
-      if (!executionId) return;
-      setPromptData(null);
-      setExecutionStatus("running");
-      await fetch("/api/prompt-response", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ executionId, value }),
-      });
+    (value: string | null) => {
+      localExecution.handlePromptResponse(value);
     },
-    [executionId]
+    [localExecution]
   );
 
   // Current executing nodeId from logs
@@ -964,16 +811,6 @@ function WorkflowNodeListView({
         </div>
       )}
 
-      {/* Push required warning */}
-      {hasLocalChanges && (
-        <div className="flex items-center gap-1 border-t border-gray-200 px-3 py-1.5 dark:border-gray-800">
-          <AlertTriangle size={ICON.SM} className="flex-shrink-0 text-yellow-500" />
-          <span className="text-[10px] text-yellow-600 dark:text-yellow-400">
-            {t("workflow.pushRequired")}
-          </span>
-        </div>
-      )}
-
       {/* Footer: Execute + History */}
       <div className="flex items-center gap-2 border-t border-gray-200 px-3 py-2 dark:border-gray-800">
         {executionStatus === "running" ||
@@ -988,9 +825,9 @@ function WorkflowNodeListView({
         ) : (
           <button
             onClick={() => startExecution()}
-            disabled={hasLocalChanges || !workflow}
+            disabled={!workflow}
             className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
-              hasLocalChanges || !workflow
+              !workflow
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
