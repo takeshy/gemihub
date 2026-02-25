@@ -75,11 +75,18 @@ function collectTrackedIds(
 async function updateCachedRemoteMetaFromSyncMeta(remoteMeta: SyncMeta): Promise<void> {
   const existing = await getCachedRemoteMeta();
   if (existing?.rootFolderId) {
+    // Preserve local-only "new:" entries that haven't been migrated to Drive yet
+    const mergedFiles = { ...remoteMeta.files };
+    for (const [id, entry] of Object.entries(existing.files)) {
+      if (id.startsWith("new:") && !(id in mergedFiles)) {
+        mergedFiles[id] = entry;
+      }
+    }
     await setCachedRemoteMeta({
       id: "current",
       rootFolderId: existing.rootFolderId,
       lastUpdatedAt: remoteMeta.lastUpdatedAt,
-      files: remoteMeta.files,
+      files: mergedFiles,
       cachedAt: Date.now(),
     });
   }
@@ -109,7 +116,13 @@ export function useSync() {
       const remoteMeta = freshRemoteMeta !== undefined
         ? freshRemoteMeta
         : cachedRemote
-          ? { lastUpdatedAt: cachedRemote.lastUpdatedAt, files: cachedRemote.files }
+          ? {
+              lastUpdatedAt: cachedRemote.lastUpdatedAt,
+              // Exclude local-only "new:" entries so they aren't treated as remote files
+              files: Object.fromEntries(
+                Object.entries(cachedRemote.files).filter(([id]) => !id.startsWith("new:"))
+              ),
+            }
           : null;
       const localMeta = await getLocalSyncMeta();
       const diff = computeSyncDiff(
@@ -183,11 +196,20 @@ export function useSync() {
       // Cache remoteMeta in IndexedDB for pull dialog to use
       if (remoteMeta) {
         const existingCached = await getCachedRemoteMeta();
+        // Preserve local-only "new:" entries that haven't been migrated to Drive yet
+        const mergedFiles = { ...remoteMeta.files };
+        if (existingCached) {
+          for (const [id, entry] of Object.entries(existingCached.files)) {
+            if (id.startsWith("new:") && !(id in mergedFiles)) {
+              mergedFiles[id] = entry;
+            }
+          }
+        }
         await setCachedRemoteMeta({
           id: "current",
           rootFolderId: existingCached?.rootFolderId ?? "",
           lastUpdatedAt: remoteMeta.lastUpdatedAt,
-          files: remoteMeta.files,
+          files: mergedFiles,
           cachedAt: Date.now(),
         });
       }
@@ -239,11 +261,20 @@ export function useSync() {
         // Update cached remoteMeta so subsequent pull uses the fresh data
         if (remoteMeta) {
           const existingCached = await getCachedRemoteMeta();
+          // Preserve local-only "new:" entries
+          const mergedFiles = { ...remoteMeta.files };
+          if (existingCached) {
+            for (const [id, entry] of Object.entries(existingCached.files)) {
+              if (id.startsWith("new:") && !(id in mergedFiles)) {
+                mergedFiles[id] = entry;
+              }
+            }
+          }
           await setCachedRemoteMeta({
             id: "current",
             rootFolderId: existingCached?.rootFolderId ?? "",
             lastUpdatedAt: remoteMeta.lastUpdatedAt,
-            files: remoteMeta.files,
+            files: mergedFiles,
             cachedAt: Date.now(),
           });
           // Recompute both push and pull counts from the fresh remoteMeta
@@ -269,7 +300,8 @@ export function useSync() {
       const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
       const binarySkippedIds: string[] = [];
       const revertedIds: string[] = [];
-      for (const fid of filteredIds) {
+      // Skip "new:" files — they haven't been migrated to Drive yet and have no real file ID
+      for (const fid of [...filteredIds].filter(id => !id.startsWith("new:"))) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
         const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? remoteMeta?.files?.[fid]?.name ?? fid;
@@ -371,11 +403,16 @@ export function useSync() {
     setSyncStatus("pulling");
     setError(null);
     try {
-      // 1. Get remoteMeta (cached or fresh)
+      // 1. Get remoteMeta (cached or fresh), excluding local-only "new:" entries
       let remoteMeta: SyncMeta | null = null;
       const cachedRemote = await getCachedRemoteMeta();
       if (cachedRemote) {
-        remoteMeta = { lastUpdatedAt: cachedRemote.lastUpdatedAt, files: cachedRemote.files };
+        remoteMeta = {
+          lastUpdatedAt: cachedRemote.lastUpdatedAt,
+          files: Object.fromEntries(
+            Object.entries(cachedRemote.files).filter(([id]) => !id.startsWith("new:"))
+          ),
+        };
       } else {
         const res = await fetch("/api/sync");
         if (!res.ok) throw new Error("Failed to fetch remote meta");
@@ -415,14 +452,16 @@ export function useSync() {
       }
 
       // 5. Clean up localOnly files (deleted on remote)
+      // Skip "new:" files — they are local-only creations, not remote deletions
+      const localOnlyReal = diff.localOnly.filter(id => !id.startsWith("new:"));
       let baseMeta: LocalSyncMeta | null = localMeta;
-      if (diff.localOnly.length > 0) {
+      if (localOnlyReal.length > 0) {
         const updatedMetaForDelete: LocalSyncMeta = localMeta ?? {
           id: "current",
           lastUpdatedAt: new Date().toISOString(),
           files: {},
         };
-        for (const fid of diff.localOnly) {
+        for (const fid of localOnlyReal) {
           await deleteCachedFile(fid);
           await deleteEditHistoryEntry(fid);
           delete updatedMetaForDelete.files[fid];
@@ -435,7 +474,7 @@ export function useSync() {
       // 6. Download files via pullDirect (content only, no server-side meta read/write)
       const filesToPull = [...diff.toPull, ...diff.remoteOnly];
       if (filesToPull.length === 0) {
-        if (diff.localOnly.length > 0) {
+        if (localOnlyReal.length > 0) {
           window.dispatchEvent(new Event("sync-complete"));
           setLastSyncTime(new Date().toISOString());
           const remainingModified = await getLocallyModifiedFileIds();
@@ -750,7 +789,20 @@ export function useSync() {
       await clearAllEditHistory();
 
       await setLocalSyncMeta(updatedMeta);
-      if (data.remoteMeta) await updateCachedRemoteMetaFromSyncMeta(data.remoteMeta as SyncMeta);
+      // Full pull is authoritative — overwrite CachedRemoteMeta WITHOUT merging "new:" entries.
+      // Any pending local-only files are discarded along with their edit history (cleared above).
+      if (data.remoteMeta) {
+        const existing = await getCachedRemoteMeta();
+        if (existing?.rootFolderId) {
+          await setCachedRemoteMeta({
+            id: "current",
+            rootFolderId: existing.rootFolderId,
+            lastUpdatedAt: (data.remoteMeta as SyncMeta).lastUpdatedAt,
+            files: (data.remoteMeta as SyncMeta).files,
+            cachedAt: Date.now(),
+          });
+        }
+      }
       setLastSyncTime(new Date().toISOString());
       window.dispatchEvent(new Event("sync-complete"));
       const pulledIds = (data.files as { fileId: string }[]).map((f) => f.fileId);

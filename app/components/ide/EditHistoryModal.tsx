@@ -61,7 +61,7 @@ export function EditHistoryModal({
         if (entry) {
           setLocalEntries(
             entry.diffs
-              .filter((d) => d.diff !== "")
+              .filter((d) => d.diff !== "" && d.diff !== "[binary]")
               .map((d, i) => ({
                 id: `local-${i}`,
                 timestamp: d.timestamp,

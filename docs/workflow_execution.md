@@ -165,35 +165,144 @@ Used in `if` and `while` nodes:
 
 ---
 
-## SSE Streaming
+## Local Execution (Client-Side)
 
-Execution uses Server-Sent Events for real-time updates.
+By default, workflow execution runs in the browser. The execution loop runs client-side, and only server-requiring nodes call the server API.
+
+### Architecture
+
+```
+Browser (client):
+├── Parse workflow YAML locally (parser.ts)
+├── Run executor loop locally (local-executor.ts)
+│   ├── Client-safe nodes → execute directly in browser
+│   │   ├── variable, set, if, while, sleep, json
+│   │   └── dialog, prompt-value, prompt-selection (UI shown directly)
+│   └── Server-required nodes → POST /api/workflow/execute-node
+│       ├── command (streaming via SSE response)
+│       ├── drive-*, http, mcp, rag-sync, gemihub-command, workflow
+│       └── prompt-file, drive-file-picker (UI shown locally, file read on server)
+```
+
+### Client-Safe Nodes
+
+These nodes run entirely in the browser with no server call:
+
+| Node Type | Description |
+|-----------|-------------|
+| `variable` | Set/initialize a variable |
+| `set` | Arithmetic expression |
+| `if` | Conditional branching |
+| `while` | Loop with condition |
+| `sleep` | Delay execution |
+| `json` | Parse JSON string |
+| `dialog` | Show dialog UI directly |
+| `prompt-value` | Show text input UI directly |
+| `prompt-selection` | Show multiline input UI directly |
+
+### Server-Required Nodes
+
+These nodes call `POST /api/workflow/execute-node` per invocation:
+
+| Node Type | Reason |
+|-----------|--------|
+| `command` | Gemini API, function calling |
+| `http` | Server-side fetch (avoids CORS) |
+| `drive-*` | Google Drive API access |
+| `prompt-file` | Drive file picker + file reading |
+| `drive-file-picker` | Drive file picker + file reading |
+| `workflow` | Sub-workflow loading from Drive |
+| `mcp` | MCP server calls |
+| `rag-sync` | Gemini RAG API |
+| `gemihub-command` | Drive operations, encryption, PDF export |
+
+### Node Execution API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/workflow/execute-node` | Execute a single server-requiring node |
+
+**Request body:**
+```json
+{
+  "nodeType": "drive-read",
+  "nodeId": "read-file",
+  "properties": { "path": "example.md", "saveTo": "content" },
+  "variables": { "content": "" },
+  "workflowId": "abc123",
+  "promptResponse": null
+}
+```
+
+**Response (non-streaming):**
+```json
+{
+  "variables": { "content": "file content here" },
+  "logs": [],
+  "driveEvents": []
+}
+```
+
+**Response (prompt needed):**
+```json
+{
+  "needsPrompt": true,
+  "promptType": "diff",
+  "promptData": { "title": "Confirm Write", "fileName": "example.md", "diff": "..." }
+}
+```
+
+When the server returns `needsPrompt: true`, the client shows the prompt UI, collects the user response, and retries the API call with `promptResponse` set.
+
+For the `command` node, the response is an SSE stream with `log`, `complete`, and `error` events.
+
+### Client-Side Hook
+
+`useLocalWorkflowExecution(workflowId)` manages local execution state:
+
+```typescript
+{
+  status: "idle" | "running" | "completed" | "cancelled" | "error" | "waiting-prompt"
+  logs: LogEntry[]
+  promptData: Record<string, unknown> | null
+  executeWorkflow(yamlContent, options?): Promise<LocalExecuteResult | null>
+  stop(): void
+  handlePromptResponse(value: string | null): void
+}
+```
+
+### Prompt Handling
+
+Prompts are handled directly in the browser without SSE round-trip:
+1. Local executor encounters a prompt node (dialog, prompt-value, prompt-selection)
+2. Hook sets `promptData` and pauses execution via a Promise
+3. PromptModal shows, user responds
+4. Hook resolves the Promise, execution continues
+
+For server nodes that need prompts (drive-file with confirm, encrypted files):
+1. Server returns `{needsPrompt: true, promptType, promptData}`
+2. Client shows prompt UI
+3. Client retries the API call with `promptResponse`
+
+---
+
+## SSE Streaming (Legacy Server Execution)
 
 ### Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/workflow/{id}/execute` | Start execution, returns `{ executionId }` |
-| GET | `/api/workflow/{id}/execute?executionId={id}` | SSE stream |
-| POST | `/api/workflow/{id}/stop` | Stop execution |
-| POST | `/api/prompt-response` | Respond to an interactive prompt |
-
-### SSE Event Types
-
-| Event | Description |
-|-------|-------------|
-| `log` | Node execution log (nodeId, nodeType, message, status, input/output) |
-| `status` | Status change (`running` / `completed` / `error` / `cancelled` / `waiting-prompt`) |
-| `complete` | Execution finished with record and optional openFile |
-| `cancelled` | User stopped execution |
+| POST | `/api/workflow/execute-node` | Execute a single server-requiring node (mcp, rag-sync, gemihub-command) |
+| POST | `/api/workflow/mcp-proxy` | Proxy for MCP tool definitions and execution |
+| GET/POST | `/api/workflow/history` | List/load/save/delete execution history records |
 | `error` | Fatal error message |
 | `prompt-request` | Prompt waiting for user input (type, title, options, etc.) |
 | `drive-file-updated` | Workflow modified a Drive file |
 | `drive-file-created` | Workflow created a Drive file |
 
-### Client-Side Hook
+### Client-Side Hook (Legacy)
 
-`useWorkflowExecution` manages execution state:
+`useWorkflowExecution` manages SSE-based execution state:
 
 ```typescript
 {
@@ -240,15 +349,21 @@ ExecutionState {
 
 Workflows can pause to prompt users for input.
 
-### Prompt Flow
+### Prompt Flow (Local Execution)
 
-1. Handler calls `promptCallbacks.promptForValue(title, default, multiline)`
-2. Execution store sets status to `"waiting-prompt"`
-3. SSE broadcasts `prompt-request` event to client
-4. Client shows prompt modal
-5. User submits input via POST `/api/prompt-response`
-6. `resolvePrompt()` unblocks the handler Promise
-7. Handler resumes with the returned value
+1. Local executor encounters prompt node (dialog, prompt-value, prompt-selection)
+2. Hook sets `promptData` and status to `"waiting-prompt"`
+3. Client shows PromptModal directly (no SSE)
+4. User submits input
+5. Hook resolves the Promise, execution continues
+
+### Prompt Flow (Server Node with Prompt)
+
+1. Client calls `POST /api/workflow/execute-node`
+2. Server returns `{needsPrompt: true, promptType, promptData}`
+3. Client shows PromptModal
+4. User submits input
+5. Client retries API call with `promptResponse` field
 
 ### Prompt Types
 
@@ -415,13 +530,13 @@ Regeneration maintains conversation history of user/model turns.
 
 ## Execution UI
 
-### ExecutionPanel
+### WorkflowPropsPanel
 
-Main execution view in the IDE right sidebar:
+Main workflow view in the IDE right sidebar:
 
-- Run/Stop buttons
+- Node list with drag-and-drop reordering
+- Run/Stop buttons with local execution
 - Real-time execution log display with status icons
-- Auto-scroll to latest log entry
 - MCP app modal for tool results
 - Prompt modal when execution is waiting for input
 
@@ -482,17 +597,21 @@ Shortcut bindings are stored in `settings.json` on Drive as the `shortcutKeys` f
 | File | Description |
 |------|-------------|
 | `app/engine/parser.ts` | YAML parser, AST builder, edge resolution |
-| `app/engine/executor.ts` | Stack-based executor with handler dispatch |
+| `app/engine/executor.ts` | Stack-based server executor with handler dispatch |
+| `app/engine/local-executor.ts` | Client-side executor (21/24 nodes local, 3 server) |
+| `app/engine/local-handlers/` | Local node handlers (command, http, drive, prompt, workflow) |
 | `app/engine/types.ts` | Core types (WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks) |
-| `app/engine/handlers/` | 24 node type handlers |
-| `app/services/execution-store.server.ts` | In-memory execution state, SSE broadcast, prompt management |
-| `app/routes/api.workflow.$id.execute.tsx` | SSE endpoint for starting/streaming execution |
-| `app/routes/api.workflow.$id.stop.tsx` | Stop execution endpoint |
-| `app/routes/api.prompt-response.tsx` | Prompt response endpoint |
+| `app/engine/handlers/` | 24 node type handlers (server-side) |
+| `app/hooks/useLocalWorkflowExecution.ts` | Client-side local execution hook |
+| `app/routes/api.workflow.execute-node.tsx` | Single-node execution API for server-requiring nodes |
+| `app/routes/api.workflow.mcp-proxy.tsx` | MCP tool definition and execution proxy |
 | `app/routes/api.workflow.ai-generate.tsx` | AI workflow generation endpoint |
-| `app/hooks/useWorkflowExecution.ts` | Client-side execution state hook |
-| `app/components/execution/ExecutionPanel.tsx` | Execution log UI |
+| `app/services/drive-local.ts` | IndexedDB-based Drive operations for local execution |
+| `app/services/drive-tools-local.ts` | Local Gemini function calling Drive tools |
+| `app/services/gemini-chat-core.ts` | Browser-compatible Gemini API client (extracted from server) |
+| `app/utils/drive-file-local.ts` | Drive event UI dispatch for local execution |
 | `app/components/execution/PromptModal.tsx` | Interactive prompt modals |
+| `app/components/ide/WorkflowPropsPanel.tsx` | Workflow node list, execution controls, logs |
 | `app/components/ide/AIWorkflowDialog.tsx` | AI generation dialog UI |
 | `app/components/settings/ShortcutsTab.tsx` | Shortcut key settings UI |
 | `app/types/settings.ts` | `ShortcutKeyBinding` type, validation helpers (`isBuiltinShortcut`, `isValidShortcutKey`) |
