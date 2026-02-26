@@ -14,7 +14,7 @@ import {
   type Schema,
   type Chat,
 } from "@google/genai";
-import type { Message, StreamChunk, ToolCall, GeneratedImage } from "~/types/chat";
+import type { Message, StreamChunk, StreamChunkUsage, ToolCall, GeneratedImage } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
 
 export interface DriveToolMediaResult {
@@ -194,11 +194,89 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
   return [{ functionDeclarations }];
 }
 
+// Model pricing per token (USD)
+// Source: https://ai.google.dev/pricing
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  "gemini-2.5-flash":       { input: 0.30 / 1e6, output: 2.50 / 1e6 },
+  "gemini-2.5-flash-lite":  { input: 0.10 / 1e6, output: 0.40 / 1e6 },
+  "gemini-2.5-pro":         { input: 1.25 / 1e6, output: 10.00 / 1e6 },
+  "gemini-3-flash-preview": { input: 0.50 / 1e6, output: 3.00 / 1e6 },
+  "gemini-3-pro-preview":   { input: 2.00 / 1e6, output: 12.00 / 1e6 },
+  "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
+  "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
+  "gemini-2.5-flash-image":    { input: 0.30 / 1e6, output: 30.00 / 1e6 },
+  "gemini-3-pro-image-preview": { input: 2.00 / 1e6, output: 120.00 / 1e6 },
+};
+
+// Grounding with Google Search cost per prompt (USD)
+const SEARCH_GROUNDING_COST: Record<string, number> = {
+  "gemini-3-flash-preview": 14 / 1000,
+  "gemini-3-pro-preview":   14 / 1000,
+  "gemini-3.1-pro-preview": 14 / 1000,
+  "gemini-3.1-pro-preview-customtools": 14 / 1000,
+  "gemini-3-pro-image-preview": 14 / 1000,
+  "gemini-2.5-flash":       35 / 1000,
+  "gemini-2.5-flash-lite":  35 / 1000,
+  "gemini-2.5-pro":         35 / 1000,
+  "gemini-2.5-flash-image": 35 / 1000,
+};
+
+interface ExtractedUsage {
+  input?: number;
+  output?: number;
+  thinking?: number;
+  total?: number;
+  inputCost?: number;
+  outputCost?: number;
+  totalCost?: number;
+}
+
+function extractUsage(
+  usageMetadata: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number; thoughtsTokenCount?: number } | undefined,
+  options?: { model?: string; webSearchUsed?: boolean }
+): ExtractedUsage | undefined {
+  if (!usageMetadata) return undefined;
+  const model = options?.model;
+  const inputTokens = usageMetadata.promptTokenCount ?? 0;
+  const outputTokens = usageMetadata.candidatesTokenCount ?? 0;
+  const thinkingTokens = usageMetadata.thoughtsTokenCount ?? 0;
+  const pricing = model ? MODEL_PRICING[model] : undefined;
+  const inputCost = pricing ? inputTokens * pricing.input : undefined;
+  // candidatesTokenCount already includes thinking tokens in Gemini's accounting
+  const outputCost = pricing ? outputTokens * pricing.output : undefined;
+  let totalCost = inputCost !== undefined && outputCost !== undefined ? inputCost + outputCost : undefined;
+
+  if (options?.webSearchUsed && model && SEARCH_GROUNDING_COST[model] !== undefined) {
+    totalCost = (totalCost ?? 0) + SEARCH_GROUNDING_COST[model];
+  }
+
+  return {
+    input: usageMetadata.promptTokenCount,
+    output: usageMetadata.candidatesTokenCount,
+    thinking: thinkingTokens > 0 ? thinkingTokens : undefined,
+    total: usageMetadata.totalTokenCount,
+    inputCost,
+    outputCost,
+    totalCost,
+  };
+}
+
+function toStreamChunkUsage(usage: ExtractedUsage | undefined): StreamChunkUsage | undefined {
+  if (!usage) return undefined;
+  return {
+    inputTokens: usage.input,
+    outputTokens: usage.output,
+    thinkingTokens: usage.thinking,
+    totalTokens: usage.total,
+    totalCost: usage.totalCost,
+  };
+}
+
 export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   const supportsThinking = !modelLower.includes("gemma");
   if (!supportsThinking) return undefined;
-  if (!enableThinking) return undefined;
+  if (!enableThinking) return { thinkingBudget: 0 };
   if (modelLower.includes("flash-lite")) {
     return { includeThoughts: true, thinkingBudget: -1 };
   }
@@ -227,8 +305,10 @@ export async function* chatStream(
     });
 
     let hasReceivedChunk = false;
+    let lastUsage: ExtractedUsage | undefined;
     for await (const chunk of response) {
       hasReceivedChunk = true;
+      if (chunk.usageMetadata) lastUsage = extractUsage(chunk.usageMetadata, { model });
       const text = chunk.text;
       if (text) {
         yield { type: "text", content: text };
@@ -240,7 +320,7 @@ export async function* chatStream(
       return;
     }
 
-    yield { type: "done" };
+    yield { type: "done", usage: toStreamChunkUsage(lastUsage) };
   } catch (error) {
     yield {
       type: "error",
@@ -322,8 +402,10 @@ export async function* chatWithToolsStream(
 
   let continueLoop = true;
   let groundingEmitted = false;
+  let searchCostAdded = false;
   const accumulatedSources: string[] = [];
   const messageParts: Part[] = [];
+  const totalUsage: ExtractedUsage = { input: 0, output: 0, total: 0 };
 
   if (lastMessage.attachments && lastMessage.attachments.length > 0) {
     for (const attachment of lastMessage.attachments) {
@@ -346,9 +428,11 @@ export async function* chatWithToolsStream(
     while (continueLoop) {
       const functionCallsToProcess: Array<{ name: string; args: Record<string, unknown>; thoughtSignature?: string }> = [];
       let hasReceivedChunk = false;
+      let roundUsage: ExtractedUsage | undefined;
 
       for await (const chunk of response) {
         hasReceivedChunk = true;
+        if (chunk.usageMetadata) roundUsage = extractUsage(chunk.usageMetadata, { model });
         const chunkWithCandidates = chunk as {
           candidates?: Array<{
             content?: {
@@ -423,6 +507,22 @@ export async function* chatWithToolsStream(
           yield { type: "rag_used", ragSources: accumulatedSources };
         }
         groundingEmitted = true;
+      }
+
+      // Accumulate usage across rounds
+      if (roundUsage) {
+        totalUsage.input = (totalUsage.input ?? 0) + (roundUsage.input ?? 0);
+        totalUsage.output = (totalUsage.output ?? 0) + (roundUsage.output ?? 0);
+        if (roundUsage.thinking !== undefined) totalUsage.thinking = (totalUsage.thinking ?? 0) + roundUsage.thinking;
+        totalUsage.total = (totalUsage.total ?? 0) + (roundUsage.total ?? 0);
+        if (roundUsage.inputCost !== undefined) totalUsage.inputCost = (totalUsage.inputCost ?? 0) + roundUsage.inputCost;
+        if (roundUsage.outputCost !== undefined) totalUsage.outputCost = (totalUsage.outputCost ?? 0) + roundUsage.outputCost;
+        if (roundUsage.totalCost !== undefined) totalUsage.totalCost = (totalUsage.totalCost ?? 0) + roundUsage.totalCost;
+      }
+      // Add search grounding cost if web search was used (once)
+      if (groundingEmitted && !searchCostAdded && webSearchEnabled && SEARCH_GROUNDING_COST[model] !== undefined) {
+        totalUsage.totalCost = (totalUsage.totalCost ?? 0) + SEARCH_GROUNDING_COST[model];
+        searchCostAdded = true;
       }
 
       if (functionCallsToProcess.length > 0 && executeToolCall) {
@@ -561,7 +661,7 @@ export async function* chatWithToolsStream(
       }
     }
 
-    yield { type: "done" };
+    yield { type: "done", usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined) };
   } catch (error) {
     yield {
       type: "error",
@@ -639,7 +739,8 @@ export async function* generateImageStream(
       }
     }
 
-    yield { type: "done" };
+    const imageUsage = extractUsage(response.usageMetadata, { model: imageModel });
+    yield { type: "done", usage: toStreamChunkUsage(imageUsage) };
   } catch (error) {
     yield {
       type: "error",

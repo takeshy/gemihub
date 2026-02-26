@@ -72,6 +72,10 @@ export interface TranslationStrings {
   "chat.welcomeCompact": string;
   "chat.welcomeNewChat": string;
 
+  // Message usage
+  "message.tokens": string;
+  "message.thinkingTokens": string;
+
   // Settings page
   "settings.title": string;
   "settings.tab.general": string;
@@ -642,6 +646,10 @@ const en: TranslationStrings = {
   "chat.welcomeImage": "Use \"generate image\" or \"create image\" to auto-switch to image model",
   "chat.welcomeCompact": "Type /compact to compress a long conversation into a new chat",
   "chat.welcomeNewChat": "Gemini has no memory, so the entire chat history is sent each time. Always click + to start a new chat when changing topics",
+
+  // Message usage
+  "message.tokens": "Tokens",
+  "message.thinkingTokens": "Thinking",
 
   // Settings
   "settings.title": "Settings",
@@ -1214,6 +1222,10 @@ const ja: TranslationStrings = {
   "chat.welcomeImage": "「画像を生成」「generate image」で自動的に画像モデルに切り替わります",
   "chat.welcomeCompact": "/compact で長い会話を要約して新しいチャットに引き継げます",
   "chat.welcomeNewChat": "Geminiは記憶ができないため、毎回このチャットの全会話を送信します。話題を変える時は必ず + ボタンで新しいチャットを始めてください",
+
+  // Message usage
+  "message.tokens": "トークン",
+  "message.thinkingTokens": "思考",
 
   // Settings
   "settings.title": "設定",

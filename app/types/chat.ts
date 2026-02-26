@@ -39,6 +39,15 @@ export interface ToolResult {
   result: unknown;
 }
 
+// Usage info for streaming chunks and messages
+export interface StreamChunkUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  thinkingTokens?: number;
+  totalTokens?: number;
+  totalCost?: number; // USD
+}
+
 // Chat message
 export interface Message {
   role: "user" | "assistant";
@@ -54,6 +63,8 @@ export interface Message {
   thinking?: string;
   generatedImages?: GeneratedImage[];
   mcpApps?: McpAppInfo[];
+  usage?: StreamChunkUsage;
+  elapsedMs?: number;
 }
 
 // Streaming chunk types
@@ -80,6 +91,7 @@ export interface StreamChunk {
   mcpApp?: McpAppInfo;
   updatedFile?: { fileId: string; fileName: string; content: string };
   createdFile?: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string };
+  usage?: StreamChunkUsage;
 }
 
 // Chat history stored in Drive

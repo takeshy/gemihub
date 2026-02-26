@@ -48,6 +48,7 @@ export async function* generateWorkflowStream(
     const ai = new GoogleGenAI({ apiKey });
 
     // Build thinking config (Gemma models don't support thinking)
+    // Always enable thinking for workflow generation (quality improvement)
     const thinkingConfig = isGemmaModel(model)
       ? undefined
       : model.includes("lite")

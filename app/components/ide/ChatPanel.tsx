@@ -490,6 +490,7 @@ export function ChatPanel({
         },
       };
 
+      const sendStartTime = Date.now();
       let buffer = "";
       let accumulatedContent = "";
       let accumulatedThinking = "";
@@ -671,6 +672,8 @@ export function ChatPanel({
                         : undefined,
                     mcpApps:
                       mcpApps.length > 0 ? mcpApps : undefined,
+                    usage: chunk.usage || undefined,
+                    elapsedMs: Date.now() - sendStartTime,
                   };
 
                   const finalMessages = [
@@ -717,6 +720,7 @@ export function ChatPanel({
               generatedImages:
                 generatedImages.length > 0 ? generatedImages : undefined,
               mcpApps: mcpApps.length > 0 ? mcpApps : undefined,
+              elapsedMs: Date.now() - sendStartTime,
             };
             const finalMessages = [...updatedMessages, partialMessage];
             setMessages(finalMessages);

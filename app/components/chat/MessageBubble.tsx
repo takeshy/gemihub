@@ -4,7 +4,7 @@ import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
-import type { Message, Attachment, GeneratedImage, ToolCall } from "~/types/chat";
+import type { Message, Attachment, GeneratedImage, ToolCall, StreamChunkUsage } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
 import { McpAppRenderer } from "./McpAppRenderer";
 import { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } from "~/services/indexeddb-cache";
@@ -19,6 +19,15 @@ function formatTimestamp(timestamp: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatElapsed(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatNumber(n: number): string {
+  return n.toLocaleString();
 }
 
 function ThinkingSection({ thinking }: { thinking: string }) {
@@ -158,6 +167,26 @@ function WebSearchIndicator({ sources }: { sources?: string[] }) {
           {source.split("/").pop() || source}
         </span>
       ))}
+    </div>
+  );
+}
+
+function UsageInfo({ usage, elapsedMs }: { usage?: StreamChunkUsage; elapsedMs?: number }) {
+  const { t } = useI18n();
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-x-2 text-[10px] text-gray-400 dark:text-gray-500">
+      {elapsedMs !== undefined && (
+        <span>{formatElapsed(elapsedMs)}</span>
+      )}
+      {usage && usage.inputTokens !== undefined && usage.outputTokens !== undefined && (
+        <span>
+          {formatNumber(usage.inputTokens)} → {formatNumber(usage.outputTokens)} {t("message.tokens")}
+          {usage.thinkingTokens ? ` (${t("message.thinkingTokens")} ${formatNumber(usage.thinkingTokens)})` : ""}
+        </span>
+      )}
+      {usage?.totalCost !== undefined && (
+        <span>${usage.totalCost.toFixed(4)}</span>
+      )}
     </div>
   );
 }
@@ -381,6 +410,11 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:150ms]" />
               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500 [animation-delay:300ms]" />
             </div>
+          )}
+
+          {/* Usage info (tokens, cost, response time) */}
+          {!isUser && !isStreaming && (message.usage || message.elapsedMs) && (
+            <UsageInfo usage={message.usage} elapsedMs={message.elapsedMs} />
           )}
 
           {/* Timestamp */}
