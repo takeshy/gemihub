@@ -3,7 +3,6 @@ import { Plus, Trash2, ChevronDown, HardDrive, Loader2, Check } from "lucide-rea
 import { ICON } from "~/utils/icon-sizes";
 import type {
   Message,
-  StreamChunk,
   Attachment,
   ChatHistory,
   ChatHistoryItem,
@@ -28,12 +27,13 @@ import { isEncryptedFile, decryptWithPrivateKey, decryptFileContent } from "~/se
 import { cryptoCache } from "~/services/crypto-cache";
 import { CryptoPasswordPrompt } from "~/components/shared/CryptoPasswordPrompt";
 import {
-  getCachedFile,
   setCachedFile,
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
-import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
+import { getCachedApiKey } from "~/services/api-key-cache";
+import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
+import { processDriveEvent } from "~/utils/drive-file-local";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -84,6 +84,7 @@ export function ChatPanel({
   const [chatListOpen, setChatListOpen] = useState(false);
   const [saveMarkdownState, setSaveMarkdownState] = useState<"idle" | "saving" | "saved">("idle");
   const abortControllerRef = useRef<AbortController | null>(null);
+  const pendingSendRef = useRef<{ content: string; attachments?: Attachment[]; overrides?: ChatOverrides } | null>(null);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
@@ -396,8 +397,10 @@ export function ChatPanel({
         return;
       }
 
-      if (!hasApiKey) {
+      const localApiKey = getCachedApiKey();
+      if (!localApiKey) {
         if (hasEncryptedApiKey && onNeedUnlock) {
+          pendingSendRef.current = { content, attachments, overrides };
           onNeedUnlock();
         }
         return;
@@ -465,33 +468,7 @@ export function ChatPanel({
         ? normalizeSelectedMcpServerIds(mcpOverride, settings.mcpServers)
         : isWebSearch ? [] : enabledMcpServerIds;
 
-      const mcpEnabled = effectiveMcpIds.length > 0;
-
-      const mcpServersFiltered = mcpEnabled
-        ? settings.mcpServers.filter((s) => !!s.id && effectiveMcpIds.includes(s.id))
-        : undefined;
-
-      const body = {
-        messages: updatedMessages,
-        model: effectiveModel,
-        systemPrompt: settings.systemPrompt || undefined,
-        ragStoreIds: !isWebSearch && ragStoreIds.length > 0 ? ragStoreIds : undefined,
-        driveToolMode: effectiveDriveToolMode,
-        enableDriveTools: effectiveDriveToolMode !== "none",
-        enableMcp: mcpEnabled,
-        mcpServers: mcpServersFiltered,
-        webSearchEnabled: isWebSearch,
-        enableThinking: shouldEnableThinking(content),
-        apiPlan: settings.apiPlan,
-        settings: {
-          maxFunctionCalls: settings.maxFunctionCalls,
-          functionCallWarningThreshold: settings.functionCallWarningThreshold,
-          ragTopK: settings.ragTopK,
-        },
-      };
-
       const sendStartTime = Date.now();
-      let buffer = "";
       let accumulatedContent = "";
       let accumulatedThinking = "";
       let accumulatedToolCalls: Message["toolCalls"] = [];
@@ -503,197 +480,128 @@ export function ChatPanel({
       let mcpApps: McpAppInfo[] = [];
 
       try {
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: abortController.signal,
-        });
+        const generator = executeLocalChat(
+          {
+            apiKey: localApiKey,
+            model: effectiveModel,
+            messages: updatedMessages,
+            systemPrompt: settings.systemPrompt || undefined,
+            driveToolMode: effectiveDriveToolMode,
+            mcpServerIds: effectiveMcpIds,
+            ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
+            webSearchEnabled: isWebSearch,
+            enableThinking: shouldEnableThinking(content),
+            maxFunctionCalls: settings.maxFunctionCalls,
+            functionCallWarningThreshold: settings.functionCallWarningThreshold,
+            ragTopK: settings.ragTopK,
+            abortSignal: abortController.signal,
+          },
+          {
+            onDriveEvent: (event) => {
+              processDriveEvent(event).catch(() => {});
+            },
+            onMcpApp: (app) => {
+              mcpApps = [...mcpApps, app];
+            },
+          },
+        );
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || `HTTP ${response.status}`);
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response body");
-
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6).trim();
-            if (!data) continue;
-
-            try {
-              const chunk: StreamChunk = JSON.parse(data);
-
-              switch (chunk.type) {
-                case "text":
-                  accumulatedContent += chunk.content || "";
-                  setStreamingContent(accumulatedContent);
-                  break;
-                case "thinking":
-                  accumulatedThinking += chunk.content || "";
-                  setStreamingThinking(accumulatedThinking);
-                  break;
-                case "tool_call":
-                  if (chunk.toolCall) {
-                    accumulatedToolCalls = [
-                      ...(accumulatedToolCalls || []),
-                      chunk.toolCall,
-                    ];
-                    setStreamingToolCalls([...accumulatedToolCalls]);
-                  }
-                  break;
-                case "tool_result":
-                  if (chunk.toolResult) {
-                    accumulatedToolResults = [
-                      ...(accumulatedToolResults || []),
-                      chunk.toolResult,
-                    ];
-                  }
-                  break;
-                case "rag_used":
-                  ragUsed = true;
-                  ragSources = chunk.ragSources || [];
-                  setStreamingRagUsed(true);
-                  setStreamingRagSources([...ragSources]);
-                  break;
-                case "web_search_used":
-                  webSearchUsed = true;
-                  ragSources = chunk.ragSources || [];
-                  setStreamingWebSearchUsed(true);
-                  setStreamingRagSources([...ragSources]);
-                  break;
-                case "image_generated":
-                  if (chunk.generatedImage) {
-                    generatedImages = [...generatedImages, chunk.generatedImage];
-                  }
-                  break;
-                case "mcp_app":
-                  if (chunk.mcpApp) {
-                    mcpApps = [...mcpApps, chunk.mcpApp];
-                  }
-                  break;
-                case "drive_file_updated":
-                  if (chunk.updatedFile) {
-                    const { fileId: ufId, fileName: ufName, content: ufContent } = chunk.updatedFile;
-                    (async () => {
-                      try {
-                        await addCommitBoundary(ufId);
-                        await saveLocalEdit(ufId, ufName, ufContent);
-                        const cached = await getCachedFile(ufId);
-                        await setCachedFile({
-                          fileId: ufId,
-                          content: ufContent,
-                          md5Checksum: cached?.md5Checksum ?? "",
-                          modifiedTime: cached?.modifiedTime ?? "",
-                          cachedAt: Date.now(),
-                          fileName: ufName,
-                        });
-                        await addCommitBoundary(ufId);
-                        window.dispatchEvent(
-                          new CustomEvent("file-modified", { detail: { fileId: ufId } })
-                        );
-                        window.dispatchEvent(
-                          new CustomEvent("file-restored", {
-                            detail: { fileId: ufId, content: ufContent },
-                          })
-                        );
-                      } catch { /* ignore */ }
-                    })();
-                  }
-                  break;
-                case "drive_file_created":
-                  if (chunk.createdFile) {
-                    const { fileId: cfId, fileName: cfName, content: cfContent, md5Checksum: cfMd5, modifiedTime: cfMt } = chunk.createdFile;
-                    (async () => {
-                      try {
-                        await setCachedFile({
-                          fileId: cfId,
-                          content: cfContent,
-                          md5Checksum: cfMd5,
-                          modifiedTime: cfMt,
-                          cachedAt: Date.now(),
-                          fileName: cfName,
-                        });
-                        const syncMeta = (await getLocalSyncMeta()) ?? {
-                          id: "current" as const,
-                          lastUpdatedAt: new Date().toISOString(),
-                          files: {},
-                        };
-                        syncMeta.files[cfId] = {
-                          md5Checksum: cfMd5,
-                          modifiedTime: cfMt,
-                        };
-                        await setLocalSyncMeta(syncMeta);
-                        window.dispatchEvent(new Event("sync-complete"));
-                      } catch { /* ignore */ }
-                    })();
-                  }
-                  break;
-                case "error":
-                  accumulatedContent +=
-                    `\n\n**Error:** ${chunk.error || "Unknown error"}`;
-                  setStreamingContent(accumulatedContent);
-                  break;
-                case "done": {
-                  const assistantMessage: Message = {
-                    role: "assistant",
-                    content: accumulatedContent,
-                    timestamp: Date.now(),
-                    model: effectiveModel,
-                    thinking: accumulatedThinking || undefined,
-                    toolCalls:
-                      accumulatedToolCalls && accumulatedToolCalls.length > 0
-                        ? accumulatedToolCalls
-                        : undefined,
-                    toolResults:
-                      accumulatedToolResults &&
-                      accumulatedToolResults.length > 0
-                        ? accumulatedToolResults
-                        : undefined,
-                    ragUsed: ragUsed || undefined,
-                    webSearchUsed: webSearchUsed || undefined,
-                    ragSources:
-                      ragSources.length > 0 ? ragSources : undefined,
-                    generatedImages:
-                      generatedImages.length > 0
-                        ? generatedImages
-                        : undefined,
-                    mcpApps:
-                      mcpApps.length > 0 ? mcpApps : undefined,
-                    usage: chunk.usage || undefined,
-                    elapsedMs: Date.now() - sendStartTime,
-                  };
-
-                  const finalMessages = [
-                    ...updatedMessages,
-                    assistantMessage,
-                  ];
-                  setMessages(finalMessages);
-                  setStreamingContent("");
-                  setStreamingThinking("");
-                  setStreamingToolCalls([]);
-                  setStreamingRagSources([]);
-                  setStreamingRagUsed(false);
-                  setStreamingWebSearchUsed(false);
-                  setIsStreaming(false);
-                  await saveChat(finalMessages);
-                  break;
-                }
+        for await (const chunk of generator) {
+          if (abortController.signal.aborted) {
+            throw new DOMException("The operation was aborted.", "AbortError");
+          }
+          switch (chunk.type) {
+            case "text":
+              accumulatedContent += chunk.content || "";
+              setStreamingContent(accumulatedContent);
+              break;
+            case "thinking":
+              accumulatedThinking += chunk.content || "";
+              setStreamingThinking(accumulatedThinking);
+              break;
+            case "tool_call":
+              if (chunk.toolCall) {
+                accumulatedToolCalls = [
+                  ...(accumulatedToolCalls || []),
+                  chunk.toolCall,
+                ];
+                setStreamingToolCalls([...accumulatedToolCalls]);
               }
-            } catch {
-              // Skip malformed SSE data
+              break;
+            case "tool_result":
+              if (chunk.toolResult) {
+                accumulatedToolResults = [
+                  ...(accumulatedToolResults || []),
+                  chunk.toolResult,
+                ];
+              }
+              break;
+            case "rag_used":
+              ragUsed = true;
+              ragSources = chunk.ragSources || [];
+              setStreamingRagUsed(true);
+              setStreamingRagSources([...ragSources]);
+              break;
+            case "web_search_used":
+              webSearchUsed = true;
+              ragSources = chunk.ragSources || [];
+              setStreamingWebSearchUsed(true);
+              setStreamingRagSources([...ragSources]);
+              break;
+            case "image_generated":
+              if (chunk.generatedImage) {
+                generatedImages = [...generatedImages, chunk.generatedImage];
+              }
+              break;
+            case "error":
+              accumulatedContent +=
+                `\n\n**Error:** ${chunk.error || "Unknown error"}`;
+              setStreamingContent(accumulatedContent);
+              break;
+            case "done": {
+              const assistantMessage: Message = {
+                role: "assistant",
+                content: accumulatedContent,
+                timestamp: Date.now(),
+                model: effectiveModel,
+                thinking: accumulatedThinking || undefined,
+                toolCalls:
+                  accumulatedToolCalls && accumulatedToolCalls.length > 0
+                    ? accumulatedToolCalls
+                    : undefined,
+                toolResults:
+                  accumulatedToolResults &&
+                  accumulatedToolResults.length > 0
+                    ? accumulatedToolResults
+                    : undefined,
+                ragUsed: ragUsed || undefined,
+                webSearchUsed: webSearchUsed || undefined,
+                ragSources:
+                  ragSources.length > 0 ? ragSources : undefined,
+                generatedImages:
+                  generatedImages.length > 0
+                    ? generatedImages
+                    : undefined,
+                mcpApps:
+                  mcpApps.length > 0 ? mcpApps : undefined,
+                usage: chunk.usage || undefined,
+                elapsedMs: Date.now() - sendStartTime,
+              };
+
+              const finalMessages = [
+                ...updatedMessages,
+                assistantMessage,
+              ];
+              setMessages(finalMessages);
+              setStreamingContent("");
+              setStreamingThinking("");
+              setStreamingToolCalls([]);
+              setStreamingRagSources([]);
+              setStreamingRagUsed(false);
+              setStreamingWebSearchUsed(false);
+              setIsStreaming(false);
+              await saveChat(finalMessages);
+              break;
             }
           }
         }
@@ -748,7 +656,6 @@ export function ChatPanel({
       }
     },
     [
-      hasApiKey,
       hasEncryptedApiKey,
       onNeedUnlock,
       messages,
@@ -760,6 +667,19 @@ export function ChatPanel({
       saveChat,
     ]
   );
+
+  // Retry pending send after API key becomes available (password prompt unlock)
+  useEffect(() => {
+    const handler = () => {
+      const pending = pendingSendRef.current;
+      if (pending) {
+        pendingSendRef.current = null;
+        handleSend(pending.content, pending.attachments, pending.overrides);
+      }
+    };
+    window.addEventListener("api-key-cached", handler);
+    return () => window.removeEventListener("api-key-cached", handler);
+  }, [handleSend]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -858,43 +778,20 @@ export function ChatPanel({
         },
       ];
 
-      // Call compact endpoint
-      const response = await fetch("/api/chat/compact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: summaryMessages,
-          model: selectedModel,
-          systemPrompt: "You are a conversation summarizer. Output only the summary without any preamble.",
-        }),
-      });
+      // Call Gemini directly for compact
+      const compactApiKey = getCachedApiKey();
+      if (!compactApiKey) throw new Error("API key not available");
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      // Read SSE stream to collect summary
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
       let summary = "";
-      let buf = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (!data) continue;
-          try {
-            const chunk = JSON.parse(data);
-            if (chunk.type === "text" && chunk.content) {
-              summary += chunk.content;
-            }
-          } catch { /* skip */ }
+      const compactGenerator = chatStream(
+        compactApiKey,
+        selectedModel,
+        summaryMessages as Message[],
+        "You are a conversation summarizer. Output only the summary without any preamble.",
+      );
+      for await (const chunk of compactGenerator) {
+        if (chunk.type === "text" && chunk.content) {
+          summary += chunk.content;
         }
       }
 
@@ -1047,7 +944,7 @@ export function ChatPanel({
       {/* Input */}
       <ChatInput
         onSend={handleSend}
-        disabled={!hasApiKey}
+        disabled={!hasApiKey && !getCachedApiKey()}
         models={availableModels}
         selectedModel={selectedModel}
         onModelChange={handleModelChange}

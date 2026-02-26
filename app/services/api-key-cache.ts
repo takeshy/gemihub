@@ -12,6 +12,9 @@ export function getCachedApiKey(): string | null {
 
 export function setCachedApiKey(key: string): void {
   cachedApiKey = key;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("api-key-cached"));
+  }
 }
 
 export function clearCachedApiKey(): void {

@@ -12,7 +12,6 @@ import {
   ChevronUp,
   Wrench,
   Lock,
-  AlertTriangle,
   Loader2,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
@@ -165,7 +164,6 @@ export function ChatInput({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [pendingOverrides, setPendingOverrides] = useState<ChatOverrides | null>(null);
   const [dismissedFileId, setDismissedFileId] = useState<string | null>(null);
-  const [unpushWarning, setUnpushWarning] = useState<{ fileNames: string[]; pendingSend: () => void } | null>(null);
 
   // Reset dismissed state when switching chats (lastFileIdInMessages changes)
   useEffect(() => {
@@ -367,41 +365,8 @@ export function ChatInput({
   }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, shouldAutoContextActiveFile, onCompact, messageCount]);
 
   const handleSend = useCallback(async () => {
-    const trimmed = content.trim();
-    if (!trimmed && attachments.length === 0) return;
-    if (disabled || isStreaming) return;
-
-    // Collect file IDs referenced in the message
-    const referencedFiles: FileListItem[] = [];
-    // @-mentioned files
-    for (const file of editorCtx.fileList) {
-      if (trimmed.includes(`@${file.name}`)) {
-        referencedFiles.push(file);
-      }
-    }
-    // Auto-context: currently open file (when it will be appended)
-    if (shouldAutoContextActiveFile(trimmed)) {
-      const activeFile = editorCtx.fileList.find(f => f.id === editorCtx.activeFileId);
-      if (activeFile && !referencedFiles.some(f => f.id === activeFile.id)) {
-        referencedFiles.push(activeFile);
-      }
-    }
-
-    // Check for unpushed changes
-    const unpushedFiles = referencedFiles.filter(f => f.hasLocalChanges);
-    if (unpushedFiles.length > 0) {
-      setUnpushWarning({
-        fileNames: unpushedFiles.map(f => f.name),
-        pendingSend: () => {
-          setUnpushWarning(null);
-          doSend();
-        },
-      });
-      return;
-    }
-
     doSend();
-  }, [content, attachments, disabled, isStreaming, editorCtx, shouldAutoContextActiveFile, doSend]);
+  }, [doSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -830,46 +795,6 @@ export function ChatInput({
           )}
         </div>
 
-        {/* Unpush warning dialog */}
-        {unpushWarning && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="mx-4 w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-900">
-              <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                <AlertTriangle size={ICON.LG} className="text-amber-500" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {t("chat.unpushWarning.title")}
-                </h3>
-              </div>
-              <div className="p-4">
-                <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-                  {t("chat.unpushWarning.description")}
-                </p>
-                <ul className="mb-4 space-y-1">
-                  {unpushWarning.fileNames.map((name) => (
-                    <li key={name} className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                      <FileText size={ICON.SM} className="flex-shrink-0 text-gray-400" />
-                      <span className="truncate">{name}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
-                <button
-                  onClick={() => setUnpushWarning(null)}
-                  className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                >
-                  {t("chat.unpushWarning.cancel")}
-                </button>
-                <button
-                  onClick={unpushWarning.pendingSend}
-                  className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                >
-                  {t("chat.unpushWarning.sendAnyway")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

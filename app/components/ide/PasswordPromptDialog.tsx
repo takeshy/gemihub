@@ -1,7 +1,10 @@
 import { useState, useCallback } from "react";
 import { Lock, Loader2, AlertCircle } from "lucide-react";
 import { useI18n } from "~/i18n/context";
-import { invalidateIndexCache } from "~/routes/_index";
+import { invalidateIndexCache, getCachedLoaderDataInMemory } from "~/routes/_index";
+import { setCachedApiKey } from "~/services/api-key-cache";
+import { decryptPrivateKey } from "~/services/crypto-core";
+import { getCachedLoaderData } from "~/services/indexeddb-cache";
 
 interface PasswordPromptDialogProps {
   onSuccess: () => void;
@@ -29,6 +32,19 @@ export function PasswordPromptDialog({ onSuccess, onClose }: PasswordPromptDialo
         return;
       }
       invalidateIndexCache();
+      // Decrypt and cache the API key client-side for local chat execution
+      try {
+        let settings: { encryptedApiKey?: string; apiKeySalt?: string } | undefined =
+          getCachedLoaderDataInMemory()?.settings;
+        if (!settings) {
+          const cached = await getCachedLoaderData();
+          settings = cached?.settings as { encryptedApiKey?: string; apiKeySalt?: string } | undefined;
+        }
+        if (settings?.encryptedApiKey && settings?.apiKeySalt) {
+          const apiKey = await decryptPrivateKey(settings.encryptedApiKey, settings.apiKeySalt, password);
+          setCachedApiKey(apiKey);
+        }
+      } catch { /* fallback: server will handle */ }
       onSuccess();
     } catch {
       setError(t("unlock.error"));
