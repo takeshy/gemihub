@@ -276,7 +276,9 @@ export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   const supportsThinking = !modelLower.includes("gemma");
   if (!supportsThinking) return undefined;
-  if (!enableThinking) return { thinkingBudget: 0 };
+  // gemini-3-pro models require thinking — cannot set thinkingBudget: 0
+  const thinkingRequired = modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
+  if (!enableThinking && !thinkingRequired) return { thinkingBudget: 0 };
   if (modelLower.includes("flash-lite")) {
     return { includeThoughts: true, thinkingBudget: -1 };
   }
