@@ -411,7 +411,8 @@ export function ChatPanel({
       // Auto-switch to image model when image keywords detected
       if (!isImageGenerationModel(effectiveModel) && shouldUseImageModel(content)) {
         const available = getAvailableModels(settings.apiPlan);
-        const preferredImage = available.find((m) => m.name === "gemini-3-pro-image-preview");
+        const preferredImage = available.find((m) => m.name === "gemini-3.1-flash-image-preview")
+          || available.find((m) => m.name === "gemini-3-pro-image-preview");
         const fallbackImage = available.find((m) => m.isImageModel);
         if (preferredImage) {
           effectiveModel = preferredImage.name;

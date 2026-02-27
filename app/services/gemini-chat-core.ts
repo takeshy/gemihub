@@ -201,20 +201,20 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "gemini-2.5-flash-lite":  { input: 0.10 / 1e6, output: 0.40 / 1e6 },
   "gemini-2.5-pro":         { input: 1.25 / 1e6, output: 10.00 / 1e6 },
   "gemini-3-flash-preview": { input: 0.50 / 1e6, output: 3.00 / 1e6 },
-  "gemini-3-pro-preview":   { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-2.5-flash-image":    { input: 0.30 / 1e6, output: 30.00 / 1e6 },
   "gemini-3-pro-image-preview": { input: 2.00 / 1e6, output: 120.00 / 1e6 },
+  "gemini-3.1-flash-image-preview": { input: 0.25 / 1e6, output: 60.00 / 1e6 },
 };
 
 // Grounding with Google Search cost per prompt (USD)
 const SEARCH_GROUNDING_COST: Record<string, number> = {
   "gemini-3-flash-preview": 14 / 1000,
-  "gemini-3-pro-preview":   14 / 1000,
   "gemini-3.1-pro-preview": 14 / 1000,
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
   "gemini-3-pro-image-preview": 14 / 1000,
+  "gemini-3.1-flash-image-preview": 14 / 1000,
   "gemini-2.5-flash":       35 / 1000,
   "gemini-2.5-flash-lite":  35 / 1000,
   "gemini-2.5-pro":         35 / 1000,

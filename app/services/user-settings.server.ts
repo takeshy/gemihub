@@ -56,9 +56,15 @@ export async function getSettings(
       );
       return {
         ...cmd,
+        model: (cmd.model as string) === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview" : cmd.model,
         enabledMcpServers: normalizedIds.length > 0 ? normalizedIds : null,
       };
     });
+
+    // Migrate deprecated model names
+    if ((parsed.selectedModel as string) === "gemini-3-pro-preview") {
+      parsed.selectedModel = "gemini-3.1-pro-preview";
+    }
 
     // Merge with defaults to handle missing fields from older versions
     const settings: UserSettings = {
