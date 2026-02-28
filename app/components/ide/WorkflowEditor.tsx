@@ -148,17 +148,14 @@ export function WorkflowEditor({
     }
   }, [saveToCache]);
 
-  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploadFeedback(null);
     const fullFileName = fileName + ".yaml";
     try {
       const feedback = await performTempUpload({ fileName: fullFileName, fileId, content: yamlContent, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
       await saveToCache(yamlContent);
-      setUploadFeedback(feedback);
-      setTimeout(() => setUploadFeedback(null), 2000);
+      alert(feedback);
     } catch { /* ignore */ }
     finally { setUploading(false); }
   }, [yamlContent, fileName, fileId, saveToCache, t, tempEditConfirm.confirm]);
@@ -238,7 +235,6 @@ export function WorkflowEditor({
             onTempUpload={handleTempUpload}
             onTempDownload={handleTempDownload}
             uploading={uploading}
-            uploadFeedback={uploadFeedback}
           />
         </div>
       </div>

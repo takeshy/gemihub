@@ -9,7 +9,6 @@ interface EditorToolbarActionsProps {
   onTempUpload: () => void;
   onTempDownload: () => void;
   uploading: boolean;
-  uploadFeedback?: string | null;
 }
 
 export function EditorToolbarActions({
@@ -18,7 +17,6 @@ export function EditorToolbarActions({
   onTempUpload,
   onTempDownload,
   uploading,
-  uploadFeedback,
 }: EditorToolbarActionsProps) {
   const { t } = useI18n();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -47,11 +45,6 @@ export function EditorToolbarActions({
         </button>
       )}
       {/* Desktop only: temp upload and temp download side by side */}
-      {uploadFeedback && (
-        <span className="hidden sm:inline text-xs text-green-600 dark:text-green-400">
-          {uploadFeedback}
-        </span>
-      )}
       <button
         onClick={onTempUpload}
         disabled={uploading}
@@ -70,11 +63,6 @@ export function EditorToolbarActions({
         {t("contextMenu.tempDownload")}
       </button>
       {/* Mobile: temp upload button always visible */}
-      {uploadFeedback && (
-        <span className="sm:hidden text-xs text-green-600 dark:text-green-400">
-          {uploadFeedback}
-        </span>
-      )}
       <button
         onClick={onTempUpload}
         disabled={uploading}

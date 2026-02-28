@@ -199,7 +199,6 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
   const blobUrlRef = useRef<string | null>(null);
   const { t } = useI18n();
   const [uploading, setUploading] = useState(false);
-  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const tempEditConfirm = useTempEditConfirm();
   const [tempPreview, setTempPreview] = useState<{ content: string; savedAt: string } | null>(null);
   const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
@@ -290,13 +289,11 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
   }, []);
 
   const handleTempUpload = useCallback(async () => {
-    setUploadFeedback(null);
     try {
       const cached = await getCachedFile(fileId);
       const content = cached?.content ?? "";
       const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
-      setUploadFeedback(feedback);
-      setTimeout(() => setUploadFeedback(null), 2000);
+      alert(feedback);
     } catch { /* ignore */ }
     finally { setUploading(false); }
   }, [fileName, fileId, t, tempEditConfirm.confirm]);
@@ -374,11 +371,6 @@ function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: st
           {fileName}
         </span>
         <div className="flex items-center gap-1 ml-2">
-          {uploadFeedback && (
-            <span className="text-xs text-green-600 dark:text-green-400">
-              {uploadFeedback}
-            </span>
-          )}
           <button
             onClick={handleTempUpload}
             disabled={uploading || !src}
@@ -766,15 +758,12 @@ function MarkdownFileEditor({
     };
   }, [saveToCache]);
 
-  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploadFeedback(null);
     try {
       const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
-      setUploadFeedback(feedback);
-      setTimeout(() => setUploadFeedback(null), 2000);
+      alert(feedback);
     } catch { /* ignore */ }
     finally { setUploading(false); }
   }, [content, fileName, fileId, t, tempEditConfirm.confirm]);
@@ -985,7 +974,6 @@ function MarkdownFileEditor({
           onTempUpload={handleTempUpload}
           onTempDownload={handleTempDownload}
           uploading={uploading}
-          uploadFeedback={uploadFeedback}
         />
       </div>
 
@@ -1152,15 +1140,12 @@ function HtmlFileEditor({
     };
   }, [saveToCache]);
 
-  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploadFeedback(null);
     try {
       const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
-      setUploadFeedback(feedback);
-      setTimeout(() => setUploadFeedback(null), 2000);
+      alert(feedback);
     } catch { /* ignore */ }
     finally { setUploading(false); }
   }, [content, fileName, fileId, t, tempEditConfirm.confirm]);
@@ -1291,7 +1276,6 @@ parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.client
           onTempUpload={handleTempUpload}
           onTempDownload={handleTempDownload}
           uploading={uploading}
-          uploadFeedback={uploadFeedback}
         />
       </div>
 
@@ -1411,15 +1395,12 @@ function TextFileEditor({
     };
   }, [saveToCache]);
 
-  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const tempEditConfirm = useTempEditConfirm();
 
   const handleTempUpload = useCallback(async () => {
-    setUploadFeedback(null);
     try {
       const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
-      setUploadFeedback(feedback);
-      setTimeout(() => setUploadFeedback(null), 2000);
+      alert(feedback);
     } catch { /* ignore */ }
     finally { setUploading(false); }
   }, [content, fileName, fileId, t, tempEditConfirm.confirm]);
@@ -1487,7 +1468,6 @@ function TextFileEditor({
           onTempUpload={handleTempUpload}
           onTempDownload={handleTempDownload}
           uploading={uploading}
-          uploadFeedback={uploadFeedback}
         />
       </div>
       <div className="flex-1 p-4">
