@@ -94,22 +94,30 @@ export function SyncStatusBar({
         const localFiles = localMeta?.files ?? {};
 
         for (const id of diff.remoteOnly) {
-          files.push({ id, name: remoteFiles[id]?.name || id, type: "new" });
+          const name = remoteFiles[id]?.name || id;
+          if (isSyncExcludedPath(name)) continue;
+          files.push({ id, name, type: "new" });
         }
         for (const id of diff.toPull) {
-          files.push({ id, name: remoteFiles[id]?.name || id, type: "modified" });
+          const name = remoteFiles[id]?.name || id;
+          if (isSyncExcludedPath(name)) continue;
+          files.push({ id, name, type: "modified" });
         }
         // Only show files that exist in localMeta (remotely-deleted files).
         // Files only in editHistory are new local files — shown in push, not pull.
         for (const id of diff.localOnly) {
           if (!(id in localFiles)) continue;
           const cached = await getCachedFile(id);
-          files.push({ id, name: cached?.fileName || id, type: "deleted" });
+          const name = cached?.fileName || id;
+          if (isSyncExcludedPath(name)) continue;
+          files.push({ id, name, type: "deleted" });
         }
         // Edit-delete conflicts: locally edited but remotely deleted
         for (const id of diff.editDeleteConflicts) {
           const cached = await getCachedFile(id);
-          files.push({ id, name: cached?.fileName || id, type: "editDeleted" });
+          const name = cached?.fileName || id;
+          if (isSyncExcludedPath(name)) continue;
+          files.push({ id, name, type: "editDeleted" });
         }
 
         files.sort((a, b) => a.name.localeCompare(b.name));

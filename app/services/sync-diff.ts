@@ -54,7 +54,7 @@ export function computeSyncDiff(
   const remoteFiles = remoteMeta?.files ?? {};
 
   // System files to exclude from sync diff
-  const SYSTEM_FILE_NAMES = new Set([SYNC_META_FILE_NAME, "settings.json"]);
+  const SYSTEM_FILE_NAMES = new Set([SYNC_META_FILE_NAME, "settings.json", "_encrypted-auth.json"]);
 
   const toPush: string[] = [];
   const toPull: string[] = [];
