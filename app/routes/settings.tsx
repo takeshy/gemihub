@@ -7,6 +7,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { resolveLanguage } from "~/i18n/resolve-language";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
+import { ENCRYPTED_AUTH_FILE_NAME } from "~/services/sync-diff";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import { GoogleGenAI } from "@google/genai";
 import {
@@ -476,13 +477,13 @@ export async function action({ request }: Route.ActionArgs) {
           }, null, 2);
           const { findFileByExactName, createFile, updateFile } = await import("~/services/google-drive.server");
           const existingFile = await findFileByExactName(
-            validTokens.accessToken, "_encrypted-auth.json", validTokens.rootFolderId
+            validTokens.accessToken, ENCRYPTED_AUTH_FILE_NAME, validTokens.rootFolderId
           );
           if (existingFile) {
             await updateFile(validTokens.accessToken, existingFile.id, authFileContent, "application/json");
           } else {
             await createFile(
-              validTokens.accessToken, "_encrypted-auth.json", authFileContent,
+              validTokens.accessToken, ENCRYPTED_AUTH_FILE_NAME, authFileContent,
               validTokens.rootFolderId, "application/json"
             );
           }

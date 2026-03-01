@@ -1,6 +1,8 @@
 // Pure sync diff types and computation — shared between server and client.
 
 export const SYNC_META_FILE_NAME = "_sync-meta.json";
+export const SETTINGS_FILE_NAME = "settings.json";
+export const ENCRYPTED_AUTH_FILE_NAME = "_encrypted-auth.json";
 
 export interface FileSyncMeta {
   name: string;
@@ -54,7 +56,7 @@ export function computeSyncDiff(
   const remoteFiles = remoteMeta?.files ?? {};
 
   // System files to exclude from sync diff
-  const SYSTEM_FILE_NAMES = new Set([SYNC_META_FILE_NAME, "settings.json", "_encrypted-auth.json"]);
+  const SYSTEM_FILE_NAMES = new Set([SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME]);
 
   const toPush: string[] = [];
   const toPull: string[] = [];

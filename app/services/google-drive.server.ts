@@ -1,4 +1,5 @@
 import type { SessionTokens } from "./session.server";
+import { SYNC_META_FILE_NAME, SETTINGS_FILE_NAME } from "./sync-diff";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -10,7 +11,7 @@ function escapeDriveQuery(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
-const SYSTEM_FILES = new Set(["settings.json", "_sync-meta.json"]);
+const SYSTEM_FILES = new Set([SETTINGS_FILE_NAME, SYNC_META_FILE_NAME]);
 
 export interface DriveFile {
   id: string;

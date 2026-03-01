@@ -7,8 +7,7 @@ import {
   normalizeSelectedMcpServerIds,
   type UserSettings,
 } from "~/types/settings";
-
-const SETTINGS_FILE_NAME = "settings.json";
+import { SETTINGS_FILE_NAME } from "./sync-diff";
 
 // In-memory cache keyed by rootFolderId (stable across token refreshes)
 const settingsCache = new Map<string, { settings: UserSettings; fileId: string | null; cachedAt: number }>();
