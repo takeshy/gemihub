@@ -72,7 +72,7 @@ Detection logic per file:
 
 Where:
 - `localChanged = locallyModifiedFileIds.has(fileId)` — the `editHistory` store tracks which files have been edited locally since the last sync
-- `remoteChanged = localMeta.md5Checksum !== remoteMeta.md5Checksum` — remote meta diverges from local meta when another device has pushed changes
+- `remoteChanged = localMeta.md5Checksum !== remoteMeta.md5Checksum || localMeta.name !== remoteMeta.name` — remote meta diverges from local meta when another device has pushed changes (detects both content and name changes)
 
 No live Drive API listing is needed: the `drive.file` scope ensures only GemiHub can modify these files, so `_sync-meta.json` is always authoritative.
 
@@ -412,6 +412,7 @@ Located in Settings → Sync tab, organized into sections:
 Excluded by name filter in `computeSyncDiff`:
 - `_sync-meta.json` — Sync metadata
 - `settings.json` — User settings
+- `_encrypted-auth.json` — Encrypted authentication data
 
 Excluded by folder structure — these are actual Google Drive subfolders created via `ensureSubFolder()`. Files inside subfolders are not returned by `listUserFiles(rootFolderId)`. As a safety net, `isSyncExcludedPath()` also filters these prefixes on the client side:
 - `history/` — Chat, execution, and request history (including `_meta.json` and `.history.json` files)
@@ -445,7 +446,7 @@ Browser (IndexedDB)          Server                Google Drive
 |------|------|
 | `app/hooks/useSync.ts` | Client-side sync hook (push, pull, resolveConflict, fullPull, localModifiedCount) |
 | `app/hooks/useFileWithCache.ts` | IndexedDB cache-first file reads, auto-save with edit history |
-| `app/routes/api.sync.tsx` | Server-side sync API (16 POST actions + GET loader) |
+| `app/routes/api.sync.tsx` | Server-side sync API (18 POST actions + GET loader) |
 | `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
 | `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
 | `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory, remoteMeta) |
@@ -454,7 +455,7 @@ Browser (IndexedDB)          Server                Google Drive
 | `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |
 | `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog (restore/rename/delete) |
 | `app/services/history-meta.server.ts` | History listing metadata (`_meta.json`) read/write/rebuild for chat, execution, and request history folders |
-| `app/services/sync-diff.ts` | `computeSyncDiff` implementation (re-exported from `sync-meta.server.ts`) |
+| `app/services/sync-diff.ts` | `computeSyncDiff` implementation (re-exported by `sync-meta.server.ts`) |
 | `app/services/sync-client-utils.ts` | `isSyncExcludedPath`, `isBinaryMimeType`, binary temp file upload |
 | `app/services/google-drive.server.ts` | Google Drive API wrapper |
 | `app/utils/parallel.ts` | Parallel processing utility (concurrency limit) |
@@ -479,6 +480,8 @@ Browser (IndexedDB)          Server                Google Drive
 | `restoreTrash` | POST | Move files from `trash/` back to root, re-add to sync meta |
 | `listConflicts` | POST | List files in the `sync_conflicts/` folder |
 | `restoreConflict` | POST | Create new file from conflict backup, delete backup |
+| `rebuildTree` | POST | Rebuild the file tree from Drive (full re-scan) |
+| `migrateRootFolder` | POST | Migrate root folder name on Drive |
 | `ragRegister` | POST | Register a single file in the RAG store during push |
 | `ragSave` | POST | Batch save RAG tracking info after push completes |
 | `ragDeleteDoc` | POST | Delete a document from the RAG store |

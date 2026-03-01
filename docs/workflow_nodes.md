@@ -156,6 +156,7 @@ Execute an LLM prompt via Gemini API.
 | `saveTo` | No | No | Variable to store text response |
 | `saveImageTo` | No | No | Variable to store generated image (FileExplorerData JSON) |
 | `systemPrompt` | No | Yes | System prompt for the LLM |
+| `enableThinking` | No | No | `"true"` (default) to enable thinking/reasoning, `"false"` to disable |
 
 `command` node uses the same tool constraints as chat:
 - Gemma models force function tools (Drive/MCP) off

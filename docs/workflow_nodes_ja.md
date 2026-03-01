@@ -154,6 +154,7 @@ Gemini API を使用して LLM プロンプトを実行します。
 | `saveTo` | No | No | テキスト応答を保存する変数 |
 | `saveImageTo` | No | No | 生成画像を保存する変数（FileExplorerData JSON） |
 | `systemPrompt` | No | Yes | LLM のシステムプロンプト |
+| `enableThinking` | No | No | `"true"`（デフォルト）で思考/推論を有効化、`"false"` で無効化 |
 
 `command` ノードはチャットと同じツール制約を使用します:
 - Gemma モデルはファンクションツール（Drive/MCP）を強制的に無効化

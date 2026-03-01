@@ -6,7 +6,7 @@ AI chat with Gemini streaming, function calling, RAG, image generation, and MCP 
 
 - **Streaming Responses**: Real-time text generation via Server-Sent Events (SSE)
 - **Function Calling**: Gemini calls Drive tools, MCP tools, RAG/File Search, and Google Search
-- **Drive Tool Integration**: Read, search, list, create, and update Drive files from chat
+- **Drive Tool Integration**: Read, search, list, create, update, and rename Drive files from chat
 - **MCP Tools**: Dynamically-discovered tools from MCP servers (prefixed `mcp_{serverId}_{tool}`)
 - **RAG / Web Search**: Retrieval-Augmented Generation via Gemini File Search, or Google Search mode
 - **Extended Thinking**: Collapsible thinking/reasoning display for supported models
@@ -14,13 +14,13 @@ AI chat with Gemini streaming, function calling, RAG, image generation, and MCP 
 - **Chat History**: Auto-saved to Google Drive with optional encryption
 - **Slash Commands**: `/command` with template variables and per-command overrides
 - **File References**: `@filename` to reference Drive files in messages
-- **Attachments**: Image and PDF file attachments via drag-and-drop or file picker
+- **Attachments**: Image, PDF, and text file attachments via drag-and-drop or file picker
 
 ---
 
 ## Streaming Protocol
 
-Chat uses SSE (Server-Sent Events). The server sends `data: {JSON}\n\n` chunks.
+Chat uses SSE-compatible chunk types. By default, chat executes locally in the browser via `executeLocalChat` (calling the Gemini API directly with a cached API key). The server-side `/api/chat` SSE endpoint exists as a fallback. Both paths produce the same chunk types.
 
 ### Chunk Types
 
@@ -41,8 +41,8 @@ Chat uses SSE (Server-Sent Events). The server sends `data: {JSON}\n\n` chunks.
 
 ### Client Handling
 
-1. Open `POST /api/chat` as SSE stream
-2. Parse `data:` lines, accumulate text/thinking/toolCalls
+1. Call `executeLocalChat` which streams from Gemini API directly in the browser (or fall back to `POST /api/chat` SSE stream)
+2. Parse chunks, accumulate text/thinking/toolCalls
 3. On `drive_file_created` → update local sync meta, dispatch `sync-complete` (refreshes file tree)
 4. On `drive_file_updated` → save to local cache + edit history, dispatch `file-modified`/`file-restored` (refreshes editor)
 5. On `done` → build final `Message` object and save to history
@@ -51,7 +51,7 @@ Chat uses SSE (Server-Sent Events). The server sends `data: {JSON}\n\n` chunks.
 
 ## Function Calling
 
-When enabled, Gemini can call tools during chat. Tool execution happens server-side within the SSE stream.
+When enabled, Gemini can call tools during chat. Tool execution happens within the local chat executor (or server-side for the SSE fallback).
 
 ### Drive Tools
 
@@ -62,17 +62,19 @@ When enabled, Gemini can call tools during chat. Tool execution happens server-s
 | `list_drive_files` | List files and virtual folders |
 | `create_drive_file` | Create a new file (path separators for virtual folders) |
 | `update_drive_file` | Update existing file content |
+| `rename_drive_file` | Rename a file by ID |
+| `bulk_rename_drive_files` | Rename multiple files at once |
 
-After `create_drive_file`, the server creates the file on Drive, updates `_sync-meta.json`, and sends a `drive_file_created` SSE chunk. The client updates local sync meta and dispatches `sync-complete` so the file tree refreshes.
+After `create_drive_file`, the file is created on Drive (an ID is needed), and a `drive_file_created` chunk is emitted. The client seeds the local cache and sync meta so the file tree refreshes.
 
-After `update_drive_file`, the server sends a `drive_file_updated` SSE chunk with the new content. The client saves it to the local cache and edit history. The change is pushed to Drive on the next manual push.
+After `update_drive_file`, the file is **not** written to Drive. A `drive_file_updated` chunk returns the new content to the client, which saves it to the local cache and edit history. The change is pushed to Drive on the next manual push.
 
 ### Drive Tool Modes
 
 | Mode | Tools Available |
 |------|----------------|
-| `all` | All 5 drive tools |
-| `noSearch` | Read, create, update only (no search/list) |
+| `all` | All 7 drive tools |
+| `noSearch` | Read, create, update, rename, bulk rename only (no search/list) |
 | `none` | No drive tools |
 
 Mode is auto-constrained by model and RAG settings:
@@ -102,7 +104,8 @@ Models are determined by the user's API plan (Free or Paid). Each model has diff
 - **Standard models**: Streaming text + function calling + thinking
 - **Image models**: Image generation (no function calling)
 - **Gemma models**: Text only (no function calling, no thinking)
-- **Flash Lite**: Thinking enabled with `thinkingBudget: -1` (no explicit limit)
+- **Flash Lite**: When thinking is enabled, uses `thinkingBudget: -1` (no explicit limit)
+- **gemini-3-pro / gemini-3.1-pro models**: Thinking is required and cannot be disabled (thinkingBudget cannot be set to 0)
 
 Model selection is per-chat via the dropdown. Slash commands can override the model.
 
@@ -157,6 +160,7 @@ Drag-and-drop or click the paperclip button to attach files.
 |------|---------|
 | Image | `image/*` — sent as inline Base64 data |
 | PDF | `application/pdf` — sent as inline Base64 data |
+| Text | Other file types — sent as inline text data (fallback) |
 
 Attachments are included in the Gemini API request as `inlineData` parts.
 
@@ -204,33 +208,44 @@ When `encryptChatHistory` is enabled in settings, new chats are encrypted before
 ### Data Flow
 
 ```
-Browser (ChatPanel)           Server (api.chat)         Gemini API
-┌──────────────────┐    ┌──────────────────┐    ┌──────────────┐
-│ messages state    │    │ SSE stream       │    │ generateContent│
-│ streaming state   │◄──►│ executeToolCall   │◄──►│ Stream       │
-│ tool call display │    │  ├─ Drive tools   │    │ Function calls│
-│ autocomplete      │    │  ├─ MCP tools     │    └──────────────┘
-│ chat history      │    │  └─ drive_file_*  │
-└──────────────────┘    └──────────────────┘
-                              │
-                        ┌─────▼──────┐
-                        │ Google Drive│
-                        │ _sync-meta │
-                        │ history/   │
-                        └────────────┘
+Browser (ChatPanel)                                  Gemini API
+┌──────────────────┐                           ┌──────────────┐
+│ messages state    │  executeLocalChat         │ generateContent│
+│ streaming state   │◄────────────────────────►│ Stream       │
+│ tool call display │  (direct API call         │ Function calls│
+│ autocomplete      │   with cached API key)    └──────────────┘
+│ chat history      │
+│                   │──► Drive tools (IndexedDB local-first)
+│                   │──► MCP tools (/api/workflow/mcp-proxy)
+└──────────────────┘
+         │
+   ┌─────▼──────┐
+   │ IndexedDB  │
+   │ cache      │
+   │ editHistory│
+   └─────┬──────┘
+         │ Push
+   ┌─────▼──────┐
+   │ Google Drive│
+   │ _sync-meta │
+   │ history/   │
+   └────────────┘
 ```
 
 ### Key Files
 
 | File | Role |
 |------|------|
-| `app/routes/api.chat.tsx` | Chat SSE API — streaming, tool dispatch, `drive_file_created`/`drive_file_updated` emission |
+| `app/routes/api.chat.tsx` | Chat SSE API (server-side fallback) — streaming, tool dispatch |
 | `app/routes/api.chat.history.tsx` | Chat history CRUD (list, save, delete) |
-| `app/services/gemini-chat.server.ts` | Gemini streaming with function calling, RAG, thinking, image generation |
+| `app/hooks/useLocalChat.ts` | Browser-side chat execution — calls Gemini API directly with cached API key |
+| `app/services/gemini-chat-core.ts` | Browser-compatible Gemini API client (streaming, function calling, RAG, thinking, image generation) |
+| `app/services/gemini-chat.server.ts` | Server-only re-export of gemini-chat-core.ts |
 | `app/services/drive-tools.server.ts` | Drive tool definitions and execution |
+| `app/services/drive-tool-definitions.ts` | Drive tool schema definitions (7 tools) |
 | `app/services/chat-history.server.ts` | Chat history persistence (Drive + `_meta.json`) |
 | `app/services/mcp-tools.server.ts` | MCP tool discovery and execution |
-| `app/components/ide/ChatPanel.tsx` | Chat panel — state management, SSE parsing, history UI |
+| `app/components/ide/ChatPanel.tsx` | Chat panel — state management, local chat execution, history UI |
 | `app/components/chat/ChatInput.tsx` | Input area — model/RAG/tool selectors, autocomplete, attachments |
 | `app/components/chat/MessageList.tsx` | Message list with streaming partial message |
 | `app/components/chat/MessageBubble.tsx` | Message display — thinking, tool badges, images, markdown |

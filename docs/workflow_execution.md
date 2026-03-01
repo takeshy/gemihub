@@ -98,6 +98,7 @@ ServiceContext {
   settings?: UserSettings
   onDriveFileUpdated?: (data) => void   // Broadcast to SSE
   onDriveFileCreated?: (data) => void   // Broadcast to SSE
+  onDriveFileDeleted?: (data) => void   // Broadcast to SSE
 }
 ```
 
@@ -161,7 +162,7 @@ Used in `if` and `while` nodes:
 | `>` | Greater than |
 | `<=` | Less than or equal |
 | `>=` | Greater than or equal |
-| `contains` | String contains |
+| `contains` | String contains or JSON array includes |
 
 ---
 
@@ -364,7 +365,7 @@ The `workflow` node type executes another workflow file.
 
 ## Handlers
 
-All 24 node types are dispatched to isolated handler functions. Local handlers (21 types) live in `app/engine/local-handlers/`. Server-side handlers (3 types: mcp, rag-sync, gemihub-command) live in `app/engine/handlers/`.
+All 24 node types are dispatched to isolated handler functions. Local handlers (21 types) live in `app/engine/local-handlers/`. Server-side handlers (3 types: mcp, rag-sync, gemihub-command) live in `app/engine/handlers/`. Some shared handlers (control flow, json) in `app/engine/handlers/` are also imported by the local executor.
 
 ### Control Flow
 
@@ -432,6 +433,7 @@ All 24 node types are dispatched to isolated handler functions. Local handlers (
 | `attachments` | Comma-separated variable names containing FileExplorerData. Files are sent as Gemini attachments (image/pdf/text). If the FileExplorerData has an `id` but no `data`, the file is read from Drive automatically |
 | `systemPrompt` | System prompt passed to the Gemini model. Supports `{{variable}}` templates |
 | `saveImageTo` | Variable name to save generated image data as FileExplorerData (for image generation models) |
+| `enableThinking` | `"true"` (default) to enable thinking/reasoning, `"false"` to disable |
 
 #### `drive-file-picker` modes
 
@@ -566,7 +568,7 @@ Shortcut bindings are stored in `settings.json` on Drive as the `shortcutKeys` f
 | `app/engine/local-executor.ts` | Client-side executor (21/24 nodes local, 3 server) |
 | `app/engine/local-handlers/` | Local node handlers (command, http, drive, prompt, workflow) |
 | `app/engine/types.ts` | Core types (WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks) |
-| `app/engine/handlers/` | 24 node type handlers (server-side) |
+| `app/engine/handlers/` | 24 node type handlers (shared by both server and local executors) |
 | `app/hooks/useLocalWorkflowExecution.ts` | Client-side local execution hook |
 | `app/routes/api.workflow.execute-node.tsx` | Single-node execution API for server-requiring nodes |
 | `app/routes/api.workflow.mcp-proxy.tsx` | MCP tool definition and execution proxy |

@@ -91,11 +91,14 @@ ExecutionContext {
 ServiceContext {
   driveAccessToken: string
   driveRootFolderId: string
+  driveHistoryFolderId: string            // 編集履歴ファイル用フォルダ ID
   geminiApiKey?: string
   abortSignal?: AbortSignal
+  editHistorySettings?: EditHistorySettings  // リモート編集履歴設定
   settings?: UserSettings
   onDriveFileUpdated?: (data) => void   // SSE へブロードキャスト
   onDriveFileCreated?: (data) => void   // SSE へブロードキャスト
+  onDriveFileDeleted?: (data) => void   // SSE へブロードキャスト
 }
 ```
 
@@ -158,7 +161,7 @@ ExecutionRecord {
 | `>` | より大きい |
 | `<=` | 以下 |
 | `>=` | 以上 |
-| `contains` | 文字列を含む |
+| `contains` | 文字列を含む、または JSON 配列に要素を含む |
 
 ---
 
@@ -239,7 +242,7 @@ ExecutionRecord {
 
 ## ハンドラ
 
-24 種類のノードタイプがすべて `app/engine/handlers/` 内の個別ハンドラ関数にディスパッチされる。
+24 種類のノードタイプのうち、21 はクライアントサイド（`app/engine/local-handlers/`）で、3 はサーバーサイド（`app/engine/handlers/`）で実行される。
 
 ### 制御フロー
 

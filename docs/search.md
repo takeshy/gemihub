@@ -89,7 +89,7 @@ Modal dialog for rapid file selection.
 - **Keyboard navigation**: Arrow keys to move selection, Enter to open, Escape to close
 - **Real-time filtering**: Results update as you type
 - **Auto-scroll**: Selected item scrolls into view
-- **Max visible**: 10 items shown at a time (scrollable)
+- **Scrollable list**: Results displayed in a scrollable container (`max-h-80`)
 
 ### Image Picker Mode
 

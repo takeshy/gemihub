@@ -1,5 +1,7 @@
 # Team & Multi-Tenant Architecture
 
+> **Note:** This document is a design proposal. The features described below are **not yet implemented** in the codebase.
+
 ## Overview
 
 GemiHub supports two usage tiers with different deployment models:

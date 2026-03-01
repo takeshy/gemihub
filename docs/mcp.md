@@ -283,6 +283,7 @@ Chat / Workflow                │
 | `app/services/mcp-tools.server.ts` | Tool discovery, naming, execution, client caching, UI resource fetching |
 | `app/services/mcp-oauth.server.ts` | RFC 9728 OAuth discovery, client registration, token exchange/refresh |
 | `app/services/url-validator.server.ts` | SSRF protection — URL validation for MCP endpoints |
+| `app/services/mcp-proxy-server-resolver.ts` | Resolves which MCP server config to use for proxy requests |
 | `app/routes/api.mcp.tool-call.tsx` | Server-side proxy for iframe tool calls |
 | `app/routes/api.mcp.resource-read.tsx` | Server-side proxy for iframe resource reads |
 | `app/routes/api.settings.mcp-test.tsx` | Test connection, discover tools, OAuth discovery on 401 |

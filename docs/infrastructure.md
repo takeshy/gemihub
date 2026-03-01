@@ -52,7 +52,7 @@ Google Cloud deployment managed by Terraform.
 
 | Service | Purpose |
 |---------|---------|
-| **Cloud Run** | Node.js SSR application hosting (scale to zero) |
+| **Cloud Run** | Node.js SSR application hosting |
 | **Artifact Registry** | Docker image repository |
 | **Secret Manager** | OAuth credentials, session secret |
 | **Compute Engine** | Global external Application Load Balancer (`EXTERNAL_MANAGED`), static IP, managed SSL |
@@ -66,19 +66,25 @@ Google Cloud deployment managed by Terraform.
 
 ```
 terraform/
-  main.tf              # Provider configuration (google ~> 6.0)
-  variables.tf         # Input variables
+  environments/
+    prod/main.tf       # Production environment entry point
+    stg/main.tf        # Staging environment entry point
+  modules/
+    gemihub/
+      main.tf          # Provider configuration (google ~> 6.0)
+      variables.tf     # Input variables
+      outputs.tf       # Output values (LB IP, Cloud Run URL, nameservers)
+      apis.tf          # GCP API enablement (10 APIs)
+      artifact-registry.tf # Docker image repository
+      secrets.tf       # Secret Manager secrets
+      iam.tf           # Service accounts and IAM bindings
+      cloud-run.tf     # Cloud Run service
+      networking.tf    # Load Balancer (IP, NEG, backend, URL map, SSL, proxies, forwarding rules)
+      dns.tf           # Cloud DNS managed zone, A record, optional TXT verification record
+      bigquery-logging.tf  # Cloud Logging → BigQuery pipeline
+      bigquery-views.tf    # BigQuery view definitions
+      cloud-build.tf   # Cloud Build trigger (reference only, created via Cloud Console)
   terraform.tfvars     # Variable values (git-ignored, contains secrets)
-  outputs.tf           # Output values (LB IP, Cloud Run URL, nameservers)
-  apis.tf              # GCP API enablement (10 APIs)
-  artifact-registry.tf # Docker image repository
-  secrets.tf           # Secret Manager secrets
-  iam.tf               # Service accounts and IAM bindings
-  cloud-run.tf         # Cloud Run service
-  networking.tf        # Load Balancer (IP, NEG, backend, URL map, SSL, proxies, forwarding rules)
-  dns.tf               # Cloud DNS managed zone, A record, optional TXT verification record
-  bigquery-logging.tf  # Cloud Logging → BigQuery pipeline
-  cloud-build.tf       # Cloud Build trigger (reference only, created via Cloud Console)
 ```
 
 ## Environment Variables (Cloud Run)
@@ -89,6 +95,7 @@ terraform/
 | `GOOGLE_CLIENT_SECRET` | Secret Manager |
 | `SESSION_SECRET` | Secret Manager |
 | `GOOGLE_REDIRECT_URI` | Set directly (`https://<domain>/auth/google/callback`) |
+| `ROOT_FOLDER_NAME` | Conditionally set when `root_folder_name` differs from default `"gemihub"` |
 | `NODE_ENV` | Set in Dockerfile: `production` |
 | `PORT` | Set in Dockerfile: `8080` |
 
@@ -97,8 +104,8 @@ terraform/
 | Setting | Value |
 |---------|-------|
 | CPU | 1 vCPU (idle when no requests via `cpu_idle = true`) |
-| Memory | 512 Mi |
-| Min instances | 0 (scale to zero) |
+| Memory | 2 Gi |
+| Min instances | 1 |
 | Max instances | 3 |
 | Port | 8080 |
 | Ingress | Internal + Cloud Load Balancing (`INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER`) |
@@ -225,7 +232,7 @@ gcloud run services update gemini-hub --region=asia-northeast1
 
 | Service | Monthly Cost |
 |---------|-------------|
-| Cloud Run (scale to zero) | ~$0 idle |
+| Cloud Run (min 1 instance) | ~$5-10 |
 | Global HTTPS Load Balancer | ~$18-20 |
 | Cloud DNS | ~$0.20 |
 | Artifact Registry | ~$0.10/GB |

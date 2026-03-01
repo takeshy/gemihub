@@ -283,6 +283,7 @@ iframe からのツール呼び出しは CORS を回避するため `POST /api/m
 | `app/services/mcp-tools.server.ts` | ツール検出、命名、実行、クライアントキャッシュ、UI リソース取得 |
 | `app/services/mcp-oauth.server.ts` | RFC 9728 OAuth ディスカバリ、クライアント登録、トークン交換/リフレッシュ |
 | `app/services/url-validator.server.ts` | SSRF 保護 — MCP エンドポイントの URL バリデーション |
+| `app/services/mcp-proxy-server-resolver.ts` | プロキシリクエストに使用する MCP サーバー設定の解決 |
 | `app/routes/api.mcp.tool-call.tsx` | iframe ツール呼び出し用サーバーサイドプロキシ |
 | `app/routes/api.mcp.resource-read.tsx` | iframe リソース読み取り用サーバーサイドプロキシ |
 | `app/routes/api.settings.mcp-test.tsx` | 接続テスト、ツール検出、401 時の OAuth ディスカバリ |

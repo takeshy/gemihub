@@ -52,30 +52,39 @@ Terraform で管理する Google Cloud デプロイ構成。
 
 | サービス | 用途 |
 |---------|------|
-| **Cloud Run** | Node.js SSR アプリケーションホスティング（ゼロスケール対応） |
+| **Cloud Run** | Node.js SSR アプリケーションホスティング |
 | **Artifact Registry** | Docker イメージリポジトリ |
 | **Secret Manager** | OAuth 認証情報、セッションシークレット |
 | **Compute Engine** | グローバル外部 Application Load Balancer（`EXTERNAL_MANAGED`）、静的 IP、マネージド SSL |
 | **Cloud DNS** | DNS ゾーン管理（A レコード + TXT 検証） |
 | **Cloud Build** | CI/CD パイプライン（push 時にビルド＆デプロイ） |
 | **IAM** | サービスアカウントと権限管理 |
+| **BigQuery** | API リクエストログストレージ（90 日保持） |
+| **Cloud Logging** | Cloud Run から BigQuery へのログシンク |
 
 ## Terraform 構成
 
 ```
 terraform/
-  main.tf              # プロバイダ設定（google ~> 6.0）
-  variables.tf         # 入力変数
+  environments/
+    prod/main.tf       # 本番環境エントリポイント
+    stg/main.tf        # ステージング環境エントリポイント
+  modules/
+    gemihub/
+      main.tf          # プロバイダ設定（google ~> 6.0）
+      variables.tf     # 入力変数
+      outputs.tf       # 出力値（LB IP、Cloud Run URL、ネームサーバー）
+      apis.tf          # GCP API 有効化（10 API）
+      artifact-registry.tf # Docker イメージリポジトリ
+      secrets.tf       # Secret Manager シークレット
+      iam.tf           # サービスアカウントと IAM バインディング
+      cloud-run.tf     # Cloud Run サービス
+      networking.tf    # ロードバランサー（IP、NEG、バックエンド、URL マップ、SSL、プロキシ、転送ルール）
+      dns.tf           # Cloud DNS マネージドゾーン、A レコード、オプションの TXT 検証レコード
+      bigquery-logging.tf  # Cloud Logging → BigQuery パイプライン
+      bigquery-views.tf    # BigQuery ビュー定義
+      cloud-build.tf   # Cloud Build トリガー（参照用、Cloud Console で作成）
   terraform.tfvars     # 変数値（git-ignored、シークレット含む）
-  outputs.tf           # 出力値（LB IP、Cloud Run URL、ネームサーバー）
-  apis.tf              # GCP API 有効化（8 API）
-  artifact-registry.tf # Docker イメージリポジトリ
-  secrets.tf           # Secret Manager シークレット
-  iam.tf               # サービスアカウントと IAM バインディング
-  cloud-run.tf         # Cloud Run サービス
-  networking.tf        # ロードバランサー（IP、NEG、バックエンド、URL マップ、SSL、プロキシ、転送ルール）
-  dns.tf               # Cloud DNS マネージドゾーン、A レコード、TXT 検証レコード
-  cloud-build.tf       # Cloud Build トリガー（参照用、gcloud で作成）
 ```
 
 ## 環境変数（Cloud Run）
@@ -86,6 +95,7 @@ terraform/
 | `GOOGLE_CLIENT_SECRET` | Secret Manager |
 | `SESSION_SECRET` | Secret Manager |
 | `GOOGLE_REDIRECT_URI` | 直接設定（`https://<domain>/auth/google/callback`） |
+| `ROOT_FOLDER_NAME` | `root_folder_name` がデフォルトの `"gemihub"` と異なる場合に条件付きで設定 |
 | `NODE_ENV` | Dockerfile で設定: `production` |
 | `PORT` | Dockerfile で設定: `8080` |
 
@@ -94,11 +104,11 @@ terraform/
 | 設定 | 値 |
 |------|------|
 | CPU | 1 vCPU（リクエストがない間は `cpu_idle = true` でアイドル） |
-| メモリ | 512 Mi |
-| 最小インスタンス数 | 0（ゼロスケール） |
+| メモリ | 2 Gi |
+| 最小インスタンス数 | 1 |
 | 最大インスタンス数 | 3 |
 | ポート | 8080 |
-| Ingress | 全トラフィック |
+| Ingress | 内部 + Cloud Load Balancing（`INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER`） |
 | 認証 | パブリック（allUsers） |
 | 削除保護 | 無効 |
 | スタートアッププローブ | HTTP GET `/`、初期遅延 5秒、間隔 10秒、失敗閾値 3 |
@@ -122,6 +132,8 @@ Terraform により以下の GCP API が有効化されます：
 - `iam.googleapis.com`
 - `cloudresourcemanager.googleapis.com`
 - `dns.googleapis.com`
+- `bigquery.googleapis.com`
+- `logging.googleapis.com`
 
 ## ネットワーク
 
@@ -130,13 +142,15 @@ Terraform により以下の GCP API が有効化されます：
 - **HTTP (port 80)**: `MOVED_PERMANENTLY_DEFAULT` による HTTPS への 301 リダイレクト
 - **HTTPS (port 443)**: Google マネージド SSL 証明書（`gemihub-cert`）、ロードバランサーで TLS 終端
 - **サーバーレス NEG**: ロードバランサーから Cloud Run へトラフィックをルーティング
+- **CDN**: Cloud CDN 有効（`USE_ORIGIN_HEADERS` キャッシュモード、オリジンの Cache-Control ヘッダーを尊重）
+- **Cloud Run ingress**: `run.app` への直接パブリックアクセスはブロック、トラフィックはロードバランサー経由のみ
 
 ## DNS
 
 Google Cloud DNS で管理。ゾーンには以下を含む：
 
 - **A レコード**: ドメインをグローバル静的 IP に向ける
-- **TXT レコード**: Google サイト検証
+- **TXT レコード**: Google サイト検証（デフォルトでは無効、`google_site_verification_token` に検証トークンを設定して有効化）
 
 ドメインレジストラでネームサーバーの設定が必要。
 
@@ -151,6 +165,8 @@ Google Cloud DNS で管理。ゾーンには以下を含む：
 トリガーは `main` ブランチへの push で自動実行（PR マージも含む）。GitHub 接続は 2nd-gen Cloud Build リポジトリリンクを使用。
 
 > **注意:** Cloud Build トリガーは Cloud Console から手動で作成（GitHub OAuth 接続が必要）。`cloud-build.tf` はリソース定義を参照用として含む。
+
+> **注意:** Cloud Run のコンテナイメージは Cloud Build がデプロイごとに更新するため、Terraform の `lifecycle.ignore_changes` で管理対象外としている。イメージの変更は `cloudbuild.yaml` 経由のみで行うこと。
 
 ## Docker
 
@@ -216,7 +232,7 @@ gcloud run services update gemini-hub --region=asia-northeast1
 
 | サービス | 月額コスト |
 |---------|-----------|
-| Cloud Run（ゼロスケール） | アイドル時 ~$0 |
+| Cloud Run（最小 1 インスタンス） | ~$5-10 |
 | グローバル HTTPS ロードバランサー | ~$18-20 |
 | Cloud DNS | ~$0.20 |
 | Artifact Registry | ~$0.10/GB |

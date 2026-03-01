@@ -99,7 +99,7 @@ The modal shows:
 - **Local entries** (IndexedDB) by default — editing session diffs with Restore button
 - **Remote entries** (Drive) on demand — click "Show remote history" to load past diffs from Drive
 
-Each entry displays: timestamp, origin badge (local/remote), addition/deletion stats, and an expandable diff view.
+Each entry displays: timestamp, origin badge (local/remote), addition/deletion stats, and an expandable diff view. Non-newest entries also have a **Copy (Save As)** button that reconstructs the content at that point and saves it as a new Drive file.
 
 ---
 
@@ -109,14 +109,15 @@ Restore reverts a file to the state **at** the selected history entry — i.e., 
 
 ### How It Works
 
-`restoreToHistoryEntry` (steps 1-4) computes the restored content and updates edit history. The caller (`EditHistoryModal.handleRestore`) performs steps 5-6.
+The caller (`EditHistoryModal.handleRestore`) performs steps 1-2. `restoreToHistoryEntry` (steps 3-4) computes the restored content and updates edit history. The caller performs steps 5-6.
 
-1. Read current content from IndexedDB cache
-2. For each non-empty diff **newer than** the target entry (the target itself is NOT reversed):
+1. Read current content from IndexedDB cache *(caller)*
+2. Compute which diffs are newer than the target entry and pass them to `restoreToHistoryEntry` *(caller)*
+3. For each non-empty diff provided (the target itself is NOT reversed):
    - **Local diffs**: always reverse-apply (swap `+`/`-` lines, invert hunk headers, apply patch)
    - **Remote diffs**: try reverse-apply first; if it fails (content is at the OLD side, not yet pulled), skip
-3. Record the restore as a new history entry: `diff(current → restored)`
-4. Add commit boundaries around the restore entry
+   - Record the restore as a new history entry: `diff(current → restored)` and add commit boundaries
+4. Return the restored content
 5. Update IndexedDB cache with restored content *(caller)*
 6. Dispatch `file-restored` event to update the editor *(caller)*
 

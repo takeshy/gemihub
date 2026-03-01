@@ -201,10 +201,9 @@ Enables temporary editing from external tools.
 ### Temp Upload
 
 1. Click the Temp Upload button in the editor
-2. Upload current file content to `/api/drive/temp` (saves to Drive `__TEMP__` folder)
-3. A confirm dialog asks whether to generate a shareable URL
-4. If confirmed, the server refreshes the access token (full 1 hour), encrypts credentials into the URL, and copies it to clipboard
-5. If declined, only an "Uploaded" message is shown (no URL generated)
+2. A confirm dialog asks whether to generate a shareable URL
+3. If confirmed, the `generateEditUrl` action uploads and generates the URL in one request; the server refreshes the access token (full 1 hour), encrypts credentials into the URL, and copies it to clipboard
+4. If declined, the `save` action uploads the file content to `/api/drive/temp` (saves to Drive `__TEMP__` folder); only an "Uploaded" message is shown (no URL generated)
 
 ### External Access via Edit URL
 

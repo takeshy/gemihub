@@ -59,7 +59,7 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 
 ### Key Patterns
 
-- **Streaming:** Chat (`/api/chat`) uses SSE (Server-Sent Events). Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used. Workflow execution runs locally in the browser (21/24 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
+- **Streaming:** Chat executes locally in the browser via `executeLocalChat` (calling Gemini API directly with a cached API key). The server-side `/api/chat` SSE endpoint exists as a fallback. Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used. Workflow execution also runs locally in the browser (21/24 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
 - **Function Calling:** Gemini calls Drive tools (read/search/list/create/update), Google Search, RAG/File Search, and dynamically-discovered MCP tools (prefixed `mcp_{server}_{tool}`).
 - **Cache-First Sync:** Files cached in IndexedDB. MD5 hash comparison detects changes. Manual push/pull with conflict resolution dialog.
 - **Local-First File Updates:** ファイルを更新する機能（チャットの `update_drive_file`、ワークフローの `drive-save` ノード等）は、Google Driveに直接書き込まず、IndexedDB のキャッシュと editHistory のみを更新する。Drive への反映は Push フローで行う。詳細は `docs/sync.md`「Chat-Initiated File Operations」を参照。

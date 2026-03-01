@@ -172,6 +172,9 @@ const { id, name } = await api.drive.createFile("notes.md", "# メモ");
 
 // ファイルを更新
 await api.drive.updateFile(fileId, "新しい内容");
+
+// ファイルツリーを Drive から再構築
+await api.drive.rebuildTree();
 ```
 
 #### プラグインストレージ

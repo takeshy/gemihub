@@ -176,6 +176,9 @@ const { id, name } = await api.drive.createFile("notes.md", "# Notes");
 
 // Update a file
 await api.drive.updateFile(fileId, "new content");
+
+// Rebuild the file tree from Drive
+await api.drive.rebuildTree();
 ```
 
 #### Plugin Storage
