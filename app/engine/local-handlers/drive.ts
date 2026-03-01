@@ -18,7 +18,7 @@ import {
   saveBinaryFileLocal,
   findFileByNameLocal,
 } from "~/services/drive-local";
-import { isBinaryMimeType } from "./mime-utils";
+import { isBinaryMimeType } from "~/services/sync-client-utils";
 
 function parseDuration(duration: string): number | null {
   const match = duration.match(/^(\d+)\s*(d|h|m)$/);

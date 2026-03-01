@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { data, redirect, useLoaderData, useSearchParams } from "react-router";
+import { data, redirect, useLoaderData } from "react-router";
 import type { Route } from "./+types/_index";
 import { getTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
@@ -32,9 +32,11 @@ import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkfl
 import { SearchPanel } from "~/components/ide/SearchPanel";
 import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
-import { useSync } from "~/hooks/useSync";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { usePendingFileMigration } from "~/hooks/usePendingFileMigration";
+import { useActiveFile } from "~/hooks/useActiveFile";
+import { useSyncUI } from "~/hooks/useSyncUI";
+import { useAIWorkflowDialog, type AIDialogState } from "~/hooks/useAIWorkflowDialog";
 import { ICON } from "~/utils/icon-sizes";
 import { PluginIcon } from "~/components/shared/PluginIcon";
 
@@ -243,13 +245,6 @@ export default function Index() {
 // IDE Layout (authenticated)
 // ---------------------------------------------------------------------------
 
-interface AIDialogState {
-  mode: "create" | "modify";
-  currentYaml?: string;
-  currentName?: string;
-  currentFileId?: string;
-}
-
 function IDELayout({
   settings,
   hasGeminiApiKey: initialHasGeminiApiKey,
@@ -267,96 +262,13 @@ function IDELayout({
 }) {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(initialHasGeminiApiKey);
   useApplySettings(settings.language ?? "en", settings.fontSize, settings.theme);
-  const [searchParams] = useSearchParams();
-
-  // Active file state — use local state to avoid React Router navigation on file switch
-  const [activeFileId, setActiveFileId] = useState<string | null>(
-    () => searchParams.get("file")
-  );
-  const [activeFileName, setActiveFileName] = useState<string | null>(null);
-  const [activeFileMimeType, setActiveFileMimeType] = useState<string | null>(
-    null
-  );
-
-  // Sync active file with browser back/forward navigation
-  useEffect(() => {
-    const handler = () => {
-      const fileId = new URL(window.location.href).searchParams.get("file");
-      setActiveFileId(fileId);
-      setActiveFileName(null);
-      setActiveFileMimeType(null);
-    };
-    window.addEventListener("popstate", handler);
-    return () => window.removeEventListener("popstate", handler);
-  }, []);
 
   // Right panel state — supports "chat", "workflow", or "plugin:{viewId}" for plugin sidebar views
   const [rightPanel, setRightPanel] = useState<RightPanelId>("chat");
 
-  // Resolve file name when opened via URL (fileId present, fileName unknown)
-  useEffect(() => {
-    if (activeFileId?.startsWith("new:")) return; // Not yet on Drive
-    if (activeFileId && !activeFileName) {
-      const applyName = (name: string, mimeType?: string | null) => {
-        setActiveFileName(name);
-        setActiveFileMimeType(mimeType || null);
-        if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
-          if (name.endsWith(".yaml") || name.endsWith(".yml")) {
-            setRightPanel("workflow");
-          } else {
-            setRightPanel("chat");
-          }
-        }
-      };
-
-      // Cache-first: use IndexedDB if available, otherwise fetch from API
-      getCachedFile(activeFileId).then((cached) => {
-        if (cached?.fileName) {
-          applyName(cached.fileName);
-        } else {
-          fetch(`/api/drive/files?action=metadata&fileId=${activeFileId}`)
-            .then((res) => res.ok ? res.json() : null)
-            .then((data) => {
-              if (data?.name) applyName(data.name, data.mimeType);
-            })
-            .catch(() => {});
-        }
-      }).catch(() => {});
-    }
-  }, [activeFileId, activeFileName, rightPanel]);
-
-  // When a new: file is migrated to a real Drive ID, update active file state + URL
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { oldId, newId, fileName, mimeType } = (e as CustomEvent).detail;
-      setActiveFileId((prev) => (prev === oldId ? newId : prev));
-      // Use base name (last segment) — fileName from Drive API may be a full path
-      const baseName = fileName ? (fileName as string).split("/").pop()! : null;
-      setActiveFileName((prev) => (prev === null && baseName ? baseName : prev));
-      setActiveFileMimeType((prev) => (prev === null && mimeType ? mimeType : prev));
-      // Update URL to use real Drive ID
-      const url = new URL(window.location.href);
-      if (url.searchParams.get("file") === oldId) {
-        url.searchParams.set("file", newId);
-        window.history.replaceState({}, "", url.toString());
-      }
-    };
-    window.addEventListener("file-id-migrated", handler);
-    return () => window.removeEventListener("file-id-migrated", handler);
-  }, []);
-
-  // When a file is permanently decrypted, update active file name (.encrypted removed)
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { fileId: decryptedId, newName } = (e as CustomEvent).detail;
-      if (decryptedId === activeFileId && newName) {
-        const baseName = (newName as string).split("/").pop()!;
-        setActiveFileName(baseName);
-      }
-    };
-    window.addEventListener("file-decrypted", handler);
-    return () => window.removeEventListener("file-decrypted", handler);
-  }, [activeFileId]);
+  // Active file state (synced with URL, migration events, decryption events)
+  const { activeFileId, activeFileName, activeFileMimeType, handleSelectFile } =
+    useActiveFile({ rightPanel, setRightPanel });
 
   // Workflow version for refreshing MainViewer after sidebar edits
   const [workflowVersion, setWorkflowVersion] = useState(0);
@@ -364,201 +276,36 @@ function IDELayout({
     setWorkflowVersion((v) => v + 1);
   }, []);
 
-  // Sync state
+  // Sync state + dialog management
   const {
     syncStatus,
     lastSyncTime,
     conflicts,
-    error: syncError,
+    syncError,
     localModifiedCount,
     remoteModifiedCount,
     push,
     pull,
     resolveConflict,
     clearError,
-  } = useSync();
+    showConflictDialog,
+    setShowConflictDialog,
+    showPasswordPrompt,
+    setShowPasswordPrompt,
+    showPushRejected,
+    setShowPushRejected,
+    pullDialogTrigger,
+    setPullDialogTrigger,
+  } = useSyncUI();
 
-  const [showConflictDialog, setShowConflictDialog] = useState(false);
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [showPushRejected, setShowPushRejected] = useState(false);
-  const [pullDialogTrigger, setPullDialogTrigger] = useState(0);
-
-  // Auto-open conflict dialog when conflicts are detected
-  useEffect(() => {
-    if (syncStatus === "conflict" && conflicts.length > 0) {
-      setShowConflictDialog(true);
-    }
-  }, [syncStatus, conflicts.length]);
-
-  // Auto-open push rejected dialog
-  useEffect(() => {
-    if (syncError === "settings.sync.pushRejected") {
-      setShowPushRejected(true);
-    }
-  }, [syncError]);
-
-  // AI Workflow dialog state
-  const [aiDialog, setAiDialog] = useState<AIDialogState | null>(null);
-
-  // ---- File selection ----
-  const handleSelectFile = useCallback(
-    (fileId: string, fileName: string, mimeType: string) => {
-      setActiveFileId(fileId);
-      setActiveFileName(fileName);
-      setActiveFileMimeType(mimeType);
-      // Auto-switch right panel based on file type, but keep plugin views open
-      if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
-        if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
-          setRightPanel("workflow");
-        } else {
-          setRightPanel("chat");
-        }
-      }
-      // Update URL without triggering React Router navigation/loader
-      const url = new URL(window.location.href);
-      url.searchParams.set("file", fileId);
-      window.history.pushState({}, "", url.toString());
-    },
-    [rightPanel]
-  );
-
-  // ---- New workflow creation (opens AI dialog) ----
-  const handleNewWorkflow = useCallback(() => {
-    setAiDialog({ mode: "create" });
-  }, []);
-
-  // ---- Modify workflow with AI ----
-  const handleModifyWithAI = useCallback(
-    (currentYaml: string, workflowName: string) => {
-      setAiDialog({
-        mode: "modify",
-        currentYaml,
-        currentName: workflowName,
-        currentFileId: activeFileId || undefined,
-      });
-    },
-    [activeFileId]
-  );
-
-  // ---- AI workflow accept handler ----
-  const handleAIAccept = useCallback(
-    async (yamlContent: string, workflowName: string, meta: AIWorkflowMeta) => {
-      const dialogState = aiDialog;
-
-      let workflowId = "";
-      let finalName = workflowName;
-
-      try {
-        if (dialogState?.mode === "modify" && dialogState.currentFileId) {
-          // Update existing workflow
-          workflowId = dialogState.currentFileId;
-          console.log("[AI Accept] Updating existing file:", dialogState.currentFileId);
-          const res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "update",
-              fileId: dialogState.currentFileId,
-              content: yamlContent,
-            }),
-          });
-          if (res.ok) {
-            const resData = await res.json();
-            console.log("[AI Accept] Drive update OK, md5:", resData.md5Checksum);
-            // Update IndexedDB cache so the viewer picks up the new content
-            try {
-              await setCachedFile({
-                fileId: dialogState.currentFileId,
-                content: yamlContent,
-                md5Checksum: resData.md5Checksum ?? "",
-                modifiedTime: resData.file?.modifiedTime ?? "",
-                cachedAt: Date.now(),
-                fileName: resData.file?.name,
-              });
-            } catch {
-              // IndexedDB write failed — Drive update already succeeded
-            }
-            // Notify all useFileWithCache hooks so they pick up the new content
-            window.dispatchEvent(
-              new CustomEvent("file-restored", {
-                detail: { fileId: dialogState.currentFileId, content: yamlContent },
-              })
-            );
-            handleWorkflowChanged();
-          } else {
-            console.error("[AI Accept] Drive update failed:", res.status, await res.text().catch(() => ""));
-          }
-        } else {
-          console.log("[AI Accept] Creating new file. dialogState:", dialogState?.mode, "fileId:", dialogState?.currentFileId);
-          // Create new workflow file under workflows/ folder
-          const baseName = workflowName.endsWith(".yaml")
-            ? workflowName
-            : `${workflowName}.yaml`;
-          const fileName = `workflows/${baseName}`;
-          const res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "create",
-              name: fileName,
-              content: yamlContent,
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            workflowId = data.file.id;
-            finalName = data.file.name;
-            // Cache content in IndexedDB so MainViewer can load it instantly
-            try {
-              await setCachedFile({
-                fileId: data.file.id,
-                content: yamlContent,
-                md5Checksum: data.file.md5Checksum ?? "",
-                modifiedTime: data.file.modifiedTime ?? "",
-                cachedAt: Date.now(),
-                fileName: data.file.name,
-              });
-            } catch {
-              // IndexedDB write failed — Drive create already succeeded
-            }
-            // Refresh file tree so the new file appears
-            window.dispatchEvent(new Event("sync-complete"));
-            handleSelectFile(data.file.id, data.file.name, "text/yaml");
-          }
-        }
-
-        // Close dialog after Drive operations complete
-        setAiDialog(null);
-
-        // Save request record (fire-and-forget)
-        if (workflowId) {
-          const recordId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          fetch("/api/workflow/request-history", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "save",
-              record: {
-                id: recordId,
-                workflowId,
-                workflowName: finalName,
-                createdAt: new Date().toISOString(),
-                description: meta.description,
-                thinking: meta.thinking,
-                model: meta.model,
-                mode: meta.mode,
-                history: meta.history.length > 0 ? meta.history : undefined,
-              },
-            }),
-          }).catch(() => {});
-        }
-      } catch (err) {
-        console.error("[AI Accept] Error:", err);
-        setAiDialog(null);
-      }
-    },
-    [aiDialog, handleSelectFile, handleWorkflowChanged]
-  );
+  // AI Workflow dialog state + callbacks
+  const {
+    aiDialog,
+    setAiDialog,
+    handleNewWorkflow,
+    handleModifyWithAI,
+    handleAIAccept,
+  } = useAIWorkflowDialog({ activeFileId, handleSelectFile, handleWorkflowChanged });
 
   return (
     <I18nProvider language={settings.language ?? "en"}>

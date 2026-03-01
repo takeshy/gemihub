@@ -27,6 +27,7 @@ import {
   SYNC_META_FILE_NAME,
   type SyncMeta,
 } from "~/services/sync-meta.server";
+import { SETTINGS_FILE_NAME } from "~/services/sync-diff";
 import { parallelProcess } from "~/utils/parallel";
 import { saveEdit } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
@@ -327,7 +328,7 @@ export async function action({ request }: Route.ActionArgs) {
       const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
 
       const fileEntries = Object.entries(remoteMeta.files).filter(
-        ([_id, f]) => f.name !== "_sync-meta.json" && f.name !== "settings.json"
+        ([_id, f]) => f.name !== SYNC_META_FILE_NAME && f.name !== SETTINGS_FILE_NAME
       );
 
       // Skip files where local hash matches remote, or binary content on mobile
@@ -396,7 +397,7 @@ export async function action({ request }: Route.ActionArgs) {
       const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
       const allFiles = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
       const trackedIds = new Set(Object.keys(remoteMeta?.files ?? {}));
-      const systemNames = new Set(["_sync-meta.json", "settings.json"]);
+      const systemNames = new Set([SYNC_META_FILE_NAME, SETTINGS_FILE_NAME]);
 
       const untrackedFiles = allFiles
         .filter((f) => !trackedIds.has(f.id) && !systemNames.has(f.name))

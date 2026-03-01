@@ -1,0 +1,265 @@
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Eye, Code } from "lucide-react";
+import { ICON } from "~/utils/icon-sizes";
+import { useI18n } from "~/i18n/context";
+import { useEditorContext } from "~/contexts/EditorContext";
+import { addCommitBoundary } from "~/services/edit-history-local";
+import { EditorToolbarActions } from "../EditorToolbarActions";
+import { performTempUpload } from "~/services/temp-upload";
+import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
+import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
+import { TempDiffModal } from "../TempDiffModal";
+import { useIsMobile } from "~/hooks/useIsMobile";
+
+type HtmlEditMode = "preview" | "raw";
+
+export function HtmlFileEditor({
+  fileId,
+  fileName,
+  initialContent,
+  saveToCache,
+  onDiffClick,
+  onHistoryClick,
+}: {
+  fileId: string;
+  fileName: string;
+  initialContent: string;
+  saveToCache: (content: string) => Promise<void>;
+  onDiffClick?: () => void;
+  onHistoryClick?: () => void;
+}) {
+  const { t } = useI18n();
+  const [content, setContent] = useState(initialContent);
+  const editorCtx = useEditorContext();
+  const [uploading, setUploading] = useState(false);
+  const [tempDiffData, setTempDiffData] = useState<{
+    fileName: string;
+    fileId: string;
+    currentContent: string;
+    tempContent: string;
+    tempSavedAt: string;
+    currentModifiedTime: string;
+    isBinary: boolean;
+  } | null>(null);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const contentFromProps = useRef(true);
+  const pendingContentRef = useRef<string | null>(null);
+  const prevFileIdRef = useRef(fileId);
+
+  const updateContent = useCallback((newContent: string) => {
+    contentFromProps.current = false;
+    setContent(newContent);
+  }, []);
+
+  useEffect(() => {
+    const prev = prevFileIdRef.current;
+    prevFileIdRef.current = fileId;
+    if (prev.startsWith("new:") && !fileId.startsWith("new:")) return;
+    contentFromProps.current = true;
+    setContent(initialContent);
+    setMode("preview");
+  }, [initialContent, fileId]);
+
+  useEffect(() => {
+    if (contentFromProps.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    pendingContentRef.current = content;
+    debounceRef.current = setTimeout(() => {
+      saveToCache(content);
+      pendingContentRef.current = null;
+    }, 1000);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [content, saveToCache, fileId]);
+
+  // Flush pending content on unmount or fileId change (saveToCache identity changes)
+  useEffect(() => {
+    return () => {
+      if (pendingContentRef.current !== null) {
+        saveToCache(pendingContentRef.current);
+        pendingContentRef.current = null;
+      }
+    };
+  }, [saveToCache]);
+
+  const tempEditConfirm = useTempEditConfirm();
+
+  const handleTempUpload = useCallback(async () => {
+    try {
+      const feedback = await performTempUpload({ fileName, fileId, content, t, confirm: tempEditConfirm.confirm, onStart: () => setUploading(true) });
+      alert(feedback);
+    } catch { /* ignore */ }
+    finally { setUploading(false); }
+  }, [content, fileName, fileId, t, tempEditConfirm.confirm]);
+
+  const handleTempDownload = useCallback(async () => {
+    try {
+      const res = await fetch("/api/drive/temp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "download", fileName }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.found) {
+        alert(t("contextMenu.noTempFile"));
+        return;
+      }
+      const { payload } = data.tempFile;
+      setTempDiffData({
+        fileName,
+        fileId,
+        currentContent: content,
+        tempContent: payload.content,
+        tempSavedAt: payload.savedAt,
+        currentModifiedTime: "",
+        isBinary: false,
+      });
+    } catch { /* ignore */ }
+  }, [fileName, fileId, content, t]);
+
+  const handleTempDiffAccept = useCallback(async () => {
+    if (!tempDiffData) return;
+    await addCommitBoundary(fileId);
+    contentFromProps.current = false;
+    setContent(tempDiffData.tempContent);
+    await saveToCache(tempDiffData.tempContent);
+    setTempDiffData(null);
+  }, [tempDiffData, saveToCache, fileId]);
+
+  const handleSelect = useCallback(
+    (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      const ta = e.currentTarget;
+      const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+      editorCtx.setActiveSelection(
+        sel ? { text: sel, start: ta.selectionStart, end: ta.selectionEnd } : null
+      );
+    },
+    [editorCtx]
+  );
+
+  const [mode, setMode] = useState<HtmlEditMode>(
+    initialContent ? "preview" : "raw"
+  );
+
+  const flushOnBlur = useCallback(() => {
+    if (pendingContentRef.current !== null) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      saveToCache(pendingContentRef.current);
+      pendingContentRef.current = null;
+    }
+  }, [saveToCache]);
+
+  const isMobile = useIsMobile();
+
+  // Inject touch tracking script into srcDoc so swipe gestures are forwarded
+  // to the parent via postMessage. The script is tiny and harmless on desktop
+  // (touch events simply don't fire). sandbox="allow-scripts" (without
+  // allow-same-origin) keeps the iframe in an opaque origin -- safe.
+  const srcDocWithTouch = useMemo(() => {
+    const script = `<script>
+var _sx,_sy,_st;
+document.addEventListener('touchstart',function(e){var t=e.touches[0];_sx=t.clientX;_sy=t.clientY;_st=Date.now();});
+document.addEventListener('touchend',function(e){var t=e.changedTouches[0];
+parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.clientX,ey:t.clientY,et:Date.now()},'*');});
+</script>`;
+    return content + script;
+  }, [content]);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type !== "gemihub-iframe-touch") return;
+      const { sx, sy, st, ex, ey, et } = e.data;
+      const dx = ex - sx;
+      const dy = ey - sy;
+      const elapsed = et - st;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && elapsed < 300) {
+        window.dispatchEvent(
+          new CustomEvent("iframe-swipe", { detail: { direction: dx > 0 ? "right" : "left" } })
+        );
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [isMobile]);
+
+  const modes: { key: HtmlEditMode; icon: React.ReactNode; label: string }[] = [
+    { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
+    { key: "raw", icon: <Code size={ICON.MD} />, label: t("mainViewer.raw") },
+  ];
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        {/* Mode selector */}
+        <div className="flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
+          {modes.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setMode(m.key)}
+              className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
+                mode === m.key
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              }`}
+              title={m.label}
+            >
+              {m.icon}
+              <span className="hidden sm:inline">{m.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <EditorToolbarActions
+          onDiffClick={onDiffClick}
+          onHistoryClick={onHistoryClick}
+          onTempUpload={handleTempUpload}
+          onTempDownload={handleTempDownload}
+          uploading={uploading}
+        />
+      </div>
+
+      {/* Content area */}
+      {mode === "preview" && (
+        <iframe
+          srcDoc={srcDocWithTouch}
+          className="flex-1 w-full border-0 bg-white"
+          title={fileName}
+          sandbox="allow-scripts"
+        />
+      )}
+
+      {mode === "raw" && (
+        <div className="flex-1 p-4">
+          <textarea
+            value={content.replace(/^\u00A0$/gm, "")}
+            onChange={(e) => updateContent(e.target.value)}
+            onSelect={handleSelect}
+            className="w-full h-full font-mono text-xs leading-none bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            spellCheck={false}
+          />
+        </div>
+      )}
+
+      {tempEditConfirm.visible && (
+        <TempEditUrlDialog t={t} onYes={tempEditConfirm.onYes} onNo={tempEditConfirm.onNo} />
+      )}
+      {tempDiffData && (
+        <TempDiffModal
+          fileName={tempDiffData.fileName}
+          currentContent={tempDiffData.currentContent}
+          tempContent={tempDiffData.tempContent}
+          tempSavedAt={tempDiffData.tempSavedAt}
+          currentModifiedTime={tempDiffData.currentModifiedTime}
+          isBinary={tempDiffData.isBinary}
+          onAccept={handleTempDiffAccept}
+          onReject={() => setTempDiffData(null)}
+        />
+      )}
+    </div>
+  );
+}

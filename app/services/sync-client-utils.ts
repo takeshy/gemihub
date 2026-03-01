@@ -1,6 +1,7 @@
 import { setCachedFile, type LocalSyncMeta, type CachedRemoteMeta } from "~/services/indexeddb-cache";
+import { SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME } from "~/services/sync-diff";
 
-export const SYNC_EXCLUDED_FILE_NAMES = new Set(["_sync-meta.json", "settings.json", "_encrypted-auth.json"]);
+export const SYNC_EXCLUDED_FILE_NAMES = new Set([SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME]);
 export const SYNC_EXCLUDED_PREFIXES = [
   "history/",
   "trash/",

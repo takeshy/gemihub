@@ -10,7 +10,7 @@ import {
   readFileBinaryLocal,
 } from "~/services/drive-local";
 import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
-import { isBinaryMimeType } from "./mime-utils";
+import { isBinaryMimeType } from "~/services/sync-client-utils";
 
 // ---------------------------------------------------------------------------
 // prompt-file
