@@ -792,5 +792,6 @@ export function useSync() {
     resolveConflict,
     fullPull,
     clearError,
+    checkRemoteChanges,
   };
 }

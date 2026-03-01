@@ -288,6 +288,7 @@ function IDELayout({
     pull,
     resolveConflict,
     clearError,
+    checkRemoteChanges,
     showConflictDialog,
     setShowConflictDialog,
     showPasswordPrompt,
@@ -332,6 +333,7 @@ function IDELayout({
         remoteModifiedCount={remoteModifiedCount}
         push={push}
         pull={pull}
+        checkRemoteChanges={checkRemoteChanges}
         resolveConflict={resolveConflict}
         showConflictDialog={showConflictDialog}
         setShowConflictDialog={setShowConflictDialog}
@@ -385,6 +387,7 @@ function IDEContent({
   remoteModifiedCount,
   push,
   pull,
+  checkRemoteChanges,
   resolveConflict,
   showConflictDialog,
   setShowConflictDialog,
@@ -424,6 +427,7 @@ function IDEContent({
   remoteModifiedCount: number;
   push: () => void;
   pull: () => void;
+  checkRemoteChanges: () => Promise<void>;
   resolveConflict: (fileId: string, resolution: "local" | "remote") => Promise<void>;
   showConflictDialog: boolean;
   setShowConflictDialog: (v: boolean) => void;
@@ -1369,9 +1373,9 @@ function IDEContent({
           onSuccess={() => {
             setShowPasswordPrompt(false);
             setHasGeminiApiKey(true);
-            // Trigger a pull so Drive files are cached in IndexedDB
-            // and the file tree shows green cache indicators
-            pull();
+            // Refresh sync counts so the pull badge shows remote changes
+            // (actual pull is left to the user via the pull dialog)
+            checkRemoteChanges();
           }}
           onClose={() => setShowPasswordPrompt(false)}
         />

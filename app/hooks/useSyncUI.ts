@@ -21,6 +21,7 @@ export function useSyncUI() {
     resolveConflict,
     fullPull,
     clearError,
+    checkRemoteChanges,
   } = useSync();
 
   const [showConflictDialog, setShowConflictDialog] = useState(false);
@@ -55,6 +56,7 @@ export function useSyncUI() {
     resolveConflict,
     fullPull,
     clearError,
+    checkRemoteChanges,
 
     // Dialog state
     showConflictDialog,
