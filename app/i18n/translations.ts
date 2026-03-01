@@ -533,6 +533,7 @@ export interface TranslationStrings {
   "sync.openFile": string;
   "sync.noDiff": string;
   "sync.encryptedNoDiff": string;
+  "sync.conflictBadge": string;
 
   // Shortcuts tab
   "settings.tab.shortcuts": string;
@@ -1109,6 +1110,7 @@ const en: TranslationStrings = {
   "sync.openFile": "Open",
   "sync.noDiff": "Binary file",
   "sync.encryptedNoDiff": "Encrypted file (diff not available)",
+  "sync.conflictBadge": "Conflict",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "Shortcuts",
@@ -1685,6 +1687,7 @@ const ja: TranslationStrings = {
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
   "sync.encryptedNoDiff": "暗号化ファイル（差分表示不可）",
+  "sync.conflictBadge": "コンフリクト",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "ショートカット",

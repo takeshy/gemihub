@@ -119,6 +119,11 @@ export function SyncStatusBar({
           if (isSyncExcludedPath(name)) continue;
           files.push({ id, name, type: "editDeleted" });
         }
+        // Normal conflicts: both locally and remotely modified
+        for (const conflict of diff.conflicts) {
+          if (isSyncExcludedPath(conflict.fileName)) continue;
+          files.push({ id: conflict.fileId, name: conflict.fileName, type: "conflict" });
+        }
 
         files.sort((a, b) => a.name.localeCompare(b.name));
         setDialogFiles(files);

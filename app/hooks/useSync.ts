@@ -104,8 +104,7 @@ export function useSync() {
       } else {
         // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
         // Exclude localOnly files only in editHistory (new local files — shown in push badge).
-        // Exclude conflicts — they are shown in the conflict dialog, not pull.
-        // Include editDeleteConflicts so user sees pull badge and triggers conflict dialog.
+        // Include conflicts and editDeleteConflicts — shown in pull dialog with conflict badge.
         const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
         const isExcluded = (id: string) => {
           const name = remoteFiles[id]?.name || localFiles[id]?.name;
@@ -115,7 +114,8 @@ export function useSync() {
           diff.toPull.filter(id => !isExcluded(id)).length +
           diff.remoteOnly.filter(id => !isExcluded(id)).length +
           pullLocalOnly.filter(id => !isExcluded(id)).length +
-          diff.editDeleteConflicts.filter(id => !isExcluded(id)).length;
+          diff.editDeleteConflicts.filter(id => !isExcluded(id)).length +
+          diff.conflicts.filter(c => !isExcluded(c.fileId)).length;
         setRemoteModifiedCount(pullCount);
       }
     } catch {
@@ -401,11 +401,6 @@ export function useSync() {
         }
       }
       const allConflicts = [...diff.conflicts, ...editDeleteConflictInfos];
-      if (allConflicts.length > 0) {
-        setConflicts(allConflicts);
-        setSyncStatus("conflict");
-        return;
-      }
 
       // 5. Clean up localOnly files (deleted on remote)
       // Skip "new:" files — they are local-only creations, not remote deletions
@@ -427,98 +422,101 @@ export function useSync() {
         baseMeta = updatedMetaForDelete;
       }
 
-      // 6. Download files via pullDirect (content only, no server-side meta read/write)
+      // 6. Download non-conflict files via pullDirect
       const filesToPull = [...diff.toPull, ...diff.remoteOnly];
-      if (filesToPull.length === 0) {
-        if (localOnlyReal.length > 0) {
-          window.dispatchEvent(new Event("sync-complete"));
-          setLastSyncTime(new Date().toISOString());
-          const remainingModified = await getLocallyModifiedFileIds();
-          setLocalModifiedCount(remainingModified.size);
-        }
-        setRemoteModifiedCount(0);
-        setSyncStatus("idle");
-        return;
-      }
-
       const remoteFiles = remoteMeta?.files ?? {};
-      const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-      // On mobile, skip downloading binary file content (save storage)
-      const filesToDownload = isMobile
-        ? filesToPull.filter((id) => !isBinaryMimeType(remoteFiles[id]?.mimeType))
-        : filesToPull;
+      if (filesToPull.length > 0) {
+        const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-      // Build mimeTypes map so server can use readFileBase64 for binary files
-      const mimeTypes: Record<string, string> = {};
-      for (const id of filesToDownload) {
-        if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
-      }
+        // On mobile, skip downloading binary file content (save storage)
+        const filesToDownload = isMobile
+          ? filesToPull.filter((id) => !isBinaryMimeType(remoteFiles[id]?.mimeType))
+          : filesToPull;
 
-      const updatedMeta: LocalSyncMeta = baseMeta ?? {
-        id: "current",
-        lastUpdatedAt: new Date().toISOString(),
-        files: {},
-      };
+        // Build mimeTypes map so server can use readFileBase64 for binary files
+        const mimeTypes: Record<string, string> = {};
+        for (const id of filesToDownload) {
+          if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
+        }
 
-      // On mobile, track binary files in localSyncMeta without caching content
-      if (isMobile) {
-        for (const id of filesToPull) {
-          if (isBinaryMimeType(remoteFiles[id]?.mimeType)) {
-            const rm = remoteFiles[id];
-            updatedMeta.files[id] = {
+        const updatedMeta: LocalSyncMeta = baseMeta ?? {
+          id: "current",
+          lastUpdatedAt: new Date().toISOString(),
+          files: {},
+        };
+
+        // On mobile, track binary files in localSyncMeta without caching content
+        if (isMobile) {
+          for (const id of filesToPull) {
+            if (isBinaryMimeType(remoteFiles[id]?.mimeType)) {
+              const rm = remoteFiles[id];
+              updatedMeta.files[id] = {
+                md5Checksum: rm?.md5Checksum ?? "",
+                modifiedTime: rm?.modifiedTime ?? "",
+                name: rm?.name,
+              };
+            }
+          }
+        }
+
+        if (filesToDownload.length > 0) {
+          const pullRes = await fetch("/api/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "pullDirect", fileIds: filesToDownload, mimeTypes }),
+          });
+          if (!pullRes.ok) throw new Error("Failed to pull changes");
+          const pullData = await pullRes.json();
+
+          // 7. Update IndexedDB with content + metadata from remoteMeta
+          for (const file of pullData.files as Array<{ fileId: string; content: string; encoding?: "base64" }>) {
+            const rm = remoteFiles[file.fileId];
+            if (!file.encoding) await addCommitBoundary(file.fileId);
+            await setCachedFile({
+              fileId: file.fileId,
+              content: file.content,
+              md5Checksum: rm?.md5Checksum ?? "",
+              modifiedTime: rm?.modifiedTime ?? "",
+              cachedAt: Date.now(),
+              fileName: rm?.name,
+              ...(file.encoding ? { encoding: file.encoding } : {}),
+            });
+            updatedMeta.files[file.fileId] = {
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
               name: rm?.name,
             };
           }
         }
+
+        // 8. Save localMeta
+        updatedMeta.lastUpdatedAt = new Date().toISOString();
+        await setLocalSyncMeta(updatedMeta);
+        baseMeta = updatedMeta;
       }
 
-      if (filesToDownload.length > 0) {
-        const pullRes = await fetch("/api/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "pullDirect", fileIds: filesToDownload, mimeTypes }),
-        });
-        if (!pullRes.ok) throw new Error("Failed to pull changes");
-        const pullData = await pullRes.json();
-
-        // 7. Update IndexedDB with content + metadata from remoteMeta
-        for (const file of pullData.files as Array<{ fileId: string; content: string; encoding?: "base64" }>) {
-          const rm = remoteFiles[file.fileId];
-          if (!file.encoding) await addCommitBoundary(file.fileId);
-          await setCachedFile({
-            fileId: file.fileId,
-            content: file.content,
-            md5Checksum: rm?.md5Checksum ?? "",
-            modifiedTime: rm?.modifiedTime ?? "",
-            cachedAt: Date.now(),
-            fileName: rm?.name,
-            ...(file.encoding ? { encoding: file.encoding } : {}),
-          });
-          updatedMeta.files[file.fileId] = {
-            md5Checksum: rm?.md5Checksum ?? "",
-            modifiedTime: rm?.modifiedTime ?? "",
-            name: rm?.name,
-          };
-        }
-      }
-
-      // 8. Save localMeta
-      updatedMeta.lastUpdatedAt = new Date().toISOString();
-      await setLocalSyncMeta(updatedMeta);
       if (remoteMeta) await updateCachedRemoteMetaFromSyncMeta(remoteMeta);
 
-      setLastSyncTime(new Date().toISOString());
-      window.dispatchEvent(new Event("sync-complete"));
-      if (filesToPull.length > 0) {
-        window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: filesToPull } }));
+      // 9. Dispatch events and update counts
+      if (filesToPull.length > 0 || localOnlyReal.length > 0) {
+        setLastSyncTime(new Date().toISOString());
+        window.dispatchEvent(new Event("sync-complete"));
+        if (filesToPull.length > 0) {
+          window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: filesToPull } }));
+        }
       }
       const remainingModified = await getLocallyModifiedFileIds();
       setLocalModifiedCount(remainingModified.size);
-      setRemoteModifiedCount(0);
-      setSyncStatus("idle");
+
+      // 10. Handle conflicts after downloading non-conflict files
+      if (allConflicts.length > 0) {
+        setConflicts(allConflicts);
+        setSyncStatus("conflict");
+      } else {
+        setRemoteModifiedCount(0);
+        setSyncStatus("idle");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pull failed");
       setSyncStatus("error");
@@ -527,12 +525,12 @@ export function useSync() {
     }
   }, []);
 
-  // When all conflicts are resolved, auto-continue pull for remaining items
+  // When all conflicts are resolved, transition to idle (non-conflict files already downloaded)
   useEffect(() => {
     if (syncStatus === "conflict" && conflicts.length === 0) {
-      pull();
+      setSyncStatus("idle");
     }
-  }, [syncStatus, conflicts.length, pull]);
+  }, [syncStatus, conflicts.length]);
 
   const resolveConflict = useCallback(
     async (fileId: string, choice: "local" | "remote", isEditDelete?: boolean) => {

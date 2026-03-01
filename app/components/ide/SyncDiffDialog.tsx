@@ -11,7 +11,7 @@ import { ICON } from "~/utils/icon-sizes";
 export interface FileListItem {
   id: string;
   name: string;
-  type: "new" | "modified" | "deleted" | "editDeleted";
+  type: "new" | "modified" | "deleted" | "editDeleted" | "conflict";
 }
 
 interface SyncDiffDialogProps {
@@ -178,15 +178,15 @@ export function SyncDiffDialog({
           ) : (
             <div className="space-y-2">
               {files.map((f) => {
-                const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : f.type === "editDeleted" ? AlertTriangle : Trash2;
-                const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : f.type === "editDeleted" ? "text-amber-500" : "text-red-500";
+                const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : f.type === "editDeleted" || f.type === "conflict" ? AlertTriangle : Trash2;
+                const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : f.type === "editDeleted" || f.type === "conflict" ? "text-amber-500" : "text-red-500";
                 const ds = diffStates[f.id];
                 const diffable = canShowDiff(f.name);
 
                 return (
                   <div
                     key={f.id}
-                    className="rounded-lg border border-gray-200 dark:border-gray-700 p-3"
+                    className={`rounded-lg border border-gray-200 dark:border-gray-700 p-3${f.type === "conflict" ? " opacity-60" : ""}`}
                   >
                     <div className="flex items-center gap-2">
                       <Icon size={14} className={`shrink-0 ${iconColor}`} />
@@ -195,6 +195,11 @@ export function SyncDiffDialog({
                         {f.type === "editDeleted" && (
                           <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
                             {t("conflict.deletedOnRemote")}
+                          </span>
+                        )}
+                        {f.type === "conflict" && (
+                          <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                            {t("sync.conflictBadge")}
                           </span>
                         )}
                       </span>
@@ -268,7 +273,16 @@ export function SyncDiffDialog({
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <span className="text-xs text-gray-400">
-            {type === "push" ? t("sync.pushDirection") : t("sync.pullDirection")}
+            {(() => {
+              if (type === "pull") {
+                const conflictCount = files.filter(f => f.type === "conflict").length;
+                if (conflictCount > 0) {
+                  const downloadCount = files.length - conflictCount;
+                  return `${t("sync.pullDirection")} (${downloadCount}) + ${t("sync.conflictBadge")} (${conflictCount})`;
+                }
+              }
+              return type === "push" ? t("sync.pushDirection") : t("sync.pullDirection");
+            })()}
           </span>
           <div className="flex items-center gap-2">
             <button
