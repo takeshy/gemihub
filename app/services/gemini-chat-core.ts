@@ -454,8 +454,12 @@ export async function* chatWithToolsStream(
           if (parts) {
             for (const part of parts) {
               if (part.functionCall) {
+                // Skip internal Gemini tools (e.g. google_file_search for RAG) - their results
+                // come through groundingMetadata, not function call responses
+                const name = part.functionCall.name ?? "";
+                if (name.startsWith("google_")) continue;
                 functionCallsToProcess.push({
-                  name: part.functionCall.name ?? "",
+                  name,
                   args: (part.functionCall.args as Record<string, unknown>) ?? {},
                   thoughtSignature: part.thoughtSignature,
                 });
