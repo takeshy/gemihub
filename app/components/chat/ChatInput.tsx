@@ -13,6 +13,8 @@ import {
   Wrench,
   Lock,
   Loader2,
+  Music,
+  Film,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
@@ -50,8 +52,14 @@ interface ChatInputProps {
   messageCount?: number;
 }
 
+const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
+
 function fileToAttachment(file: File): Promise<Attachment> {
   return new Promise((resolve, reject) => {
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      reject(new Error(`File "${file.name}" exceeds the 20MB size limit`));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = (reader.result as string).split(",")[1];
@@ -60,6 +68,10 @@ function fileToAttachment(file: File): Promise<Attachment> {
         type = "image";
       } else if (file.type === "application/pdf") {
         type = "pdf";
+      } else if (file.type.startsWith("audio/")) {
+        type = "audio";
+      } else if (file.type.startsWith("video/")) {
+        type = "video";
       }
       resolve({
         name: file.name,
@@ -73,7 +85,7 @@ function fileToAttachment(file: File): Promise<Attachment> {
   });
 }
 
-const ACCEPTED_FILE_TYPES = "image/*,application/pdf";
+const ACCEPTED_FILE_TYPES = "image/*,application/pdf,audio/*,video/*";
 
 function resolveTemplateVariables(
   text: string,
@@ -399,13 +411,16 @@ export function ChatInput({
       for (const file of Array.from(files)) {
         if (
           file.type.startsWith("image/") ||
-          file.type === "application/pdf"
+          file.type === "application/pdf" ||
+          file.type.startsWith("audio/") ||
+          file.type.startsWith("video/")
         ) {
           try {
             const att = await fileToAttachment(file);
             newAttachments.push(att);
           } catch (e) {
-            console.error("Failed to process attachment:", file.name, e);
+            const msg = e instanceof Error ? e.message : `Failed to process: ${file.name}`;
+            alert(msg);
           }
         }
       }
@@ -487,6 +502,10 @@ export function ChatInput({
               >
                 {att.type === "image" ? (
                   <ImageIcon size={ICON.SM} />
+                ) : att.type === "audio" ? (
+                  <Music size={ICON.SM} />
+                ) : att.type === "video" ? (
+                  <Film size={ICON.SM} />
                 ) : (
                   <FileText size={ICON.SM} />
                 )}

@@ -196,6 +196,10 @@ export async function handleCommandNodeLocal(
                 png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
                 gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
                 pdf: "application/pdf",
+                mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac",
+                aac: "audio/aac", m4a: "audio/mp4", opus: "audio/opus", ogg: "audio/ogg",
+                mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+                avi: "video/x-msvideo", mkv: "video/x-matroska",
               };
               fileData.mimeType = mimeMap[ext] || fileMeta?.mimeType || "application/octet-stream";
             }
@@ -206,7 +210,10 @@ export async function handleCommandNodeLocal(
         }
         if (fileData.data && fileData.mimeType) {
           const attachType = fileData.mimeType.startsWith("image/") ? "image"
-            : fileData.mimeType === "application/pdf" ? "pdf" : "text";
+            : fileData.mimeType === "application/pdf" ? "pdf"
+            : fileData.mimeType.startsWith("audio/") ? "audio"
+            : fileData.mimeType.startsWith("video/") ? "video"
+            : "text";
           attachments.push({
             name: fileData.basename || fileData.name || "file",
             type: attachType,

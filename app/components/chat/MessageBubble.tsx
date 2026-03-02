@@ -2,7 +2,7 @@
 
 import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug, Music } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall, StreamChunkUsage } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
@@ -303,6 +303,35 @@ function AttachmentDisplay({ attachment }: { attachment: Attachment }) {
         <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
           {attachment.name}
         </div>
+      </div>
+    );
+  }
+
+  if (attachment.type === "audio") {
+    const dataUrl = `data:${attachment.mimeType};base64,${attachment.data}`;
+    return (
+      <div className="mb-2">
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800">
+          <Music size={ICON.MD} className="shrink-0 text-gray-500 dark:text-gray-400" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs text-gray-600 dark:text-gray-400">{attachment.name}</div>
+            <audio controls preload="metadata" className="mt-1 h-8 w-full">
+              <source src={dataUrl} type={attachment.mimeType} />
+            </audio>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (attachment.type === "video") {
+    const dataUrl = `data:${attachment.mimeType};base64,${attachment.data}`;
+    return (
+      <div className="mb-2">
+        <video controls preload="metadata" className="max-h-48 max-w-full rounded-lg border border-gray-200 dark:border-gray-700">
+          <source src={dataUrl} type={attachment.mimeType} />
+        </video>
+        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{attachment.name}</div>
       </div>
     );
   }
