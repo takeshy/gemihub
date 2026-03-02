@@ -80,7 +80,11 @@ export function Header({
     return () => document.removeEventListener("mousedown", handler);
   }, [pluginMenuOpen]);
 
-  const allPluginViews = [...pluginSidebarViews, ...pluginMainViews];
+  // Hide main views whose plugin already has a sidebar view (they auto-activate)
+  const standaloneMainViews = pluginMainViews.filter(
+    (mv) => !pluginSidebarViews.some((sv) => sv.pluginId === mv.pluginId),
+  );
+  const allPluginViews = [...pluginSidebarViews, ...standaloneMainViews];
   const hasActivePlugin = rightPanel.startsWith("plugin:") || rightPanel.startsWith("main-plugin:");
 
   const tabButtonClass = (isActive: boolean) =>
@@ -182,7 +186,7 @@ export function Header({
                         {view.name}
                       </button>
                     ))}
-                    {pluginMainViews.map((view) => (
+                    {standaloneMainViews.map((view) => (
                       <button
                         key={view.id}
                         onClick={() => { setRightPanel(`main-plugin:${view.id}`); setPluginMenuOpen(false); }}

@@ -907,7 +907,11 @@ function IDEContent({
   // Mobile plugin menu state
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
   const pluginMenuRef = useRef<HTMLDivElement>(null);
-  const allPluginViews = [...sidebarViews, ...mainViews];
+  // Hide main views whose plugin already has a sidebar view (they auto-activate)
+  const standaloneMainViews = mainViews.filter(
+    (mv) => !sidebarViews.some((sv) => sv.pluginId === mv.pluginId),
+  );
+  const allPluginViews = [...sidebarViews, ...standaloneMainViews];
 
   // Close plugin menu on click outside
   useEffect(() => {
@@ -936,9 +940,16 @@ function IDEContent({
     : null;
 
   // Determine if current main view is a plugin view
-  const activePluginMainView = rightPanel.startsWith("main-plugin:")
-    ? mainViews.find((v) => `main-plugin:${v.id}` === rightPanel)
-    : null;
+  // Explicit selection via main-plugin: prefix, or auto-activate when sidebar plugin has a companion main view
+  const activePluginMainView = (() => {
+    if (rightPanel.startsWith("main-plugin:")) {
+      return mainViews.find((v) => `main-plugin:${v.id}` === rightPanel) ?? null;
+    }
+    if (activePluginSidebarView) {
+      return mainViews.find((v) => v.pluginId === activePluginSidebarView.pluginId) ?? null;
+    }
+    return null;
+  })();
 
   // Merge plugin slash commands with settings slash commands for ChatPanel
   const allSlashCommands = settings.slashCommands || [];
@@ -1222,7 +1233,7 @@ function IDEContent({
                         {view.name}
                       </button>
                     ))}
-                    {mainViews.map((view) => (
+                    {standaloneMainViews.map((view) => (
                       <button
                         key={view.id}
                         onClick={() => {
