@@ -6,6 +6,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
   server: {
+    host: true,
     port: Number(process.env.PORT) || 8132,
   },
 });
