@@ -946,7 +946,14 @@ function IDEContent({
       return mainViews.find((v) => `main-plugin:${v.id}` === rightPanel) ?? null;
     }
     if (activePluginSidebarView) {
-      return mainViews.find((v) => v.pluginId === activePluginSidebarView.pluginId) ?? null;
+      const companion = mainViews.find((v) => v.pluginId === activePluginSidebarView.pluginId);
+      if (!companion) return null;
+      // If the companion defines supported extensions, only activate when file matches (or no file)
+      if (companion.extensions?.length && activeFileName) {
+        const ext = "." + (activeFileName.split(".").pop()?.toLowerCase() ?? "");
+        if (!companion.extensions.includes(ext)) return null;
+      }
+      return companion;
     }
     return null;
   })();
