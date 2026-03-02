@@ -994,7 +994,7 @@ function IDEContent({
       {activePluginSidebarView ? (
         <div className="h-full overflow-auto p-2">
           {getPluginAPI(activePluginSidebarView.pluginId) ? (
-            <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} language={settings.language ?? "en"} />
+            <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} language={settings.language ?? "en"} fileId={activeFileId ?? undefined} fileName={activeFileName ?? undefined} />
           ) : null}
         </div>
       ) : rightPanel === "chat" ? (
