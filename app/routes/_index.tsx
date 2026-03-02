@@ -800,6 +800,8 @@ function IDEContent({
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (isAnimatingRef.current) return;
+    const sel = window.getSelection();
+    if (sel && sel.toString().length > 0) { touchStartRef.current = null; return; }
     const touch = e.touches[0];
     const edgeThreshold = 20;
     const screenWidth = window.innerWidth;
@@ -813,6 +815,12 @@ function IDEContent({
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchStartRef.current) return;
+    const sel = window.getSelection();
+    if (sel && sel.toString().length > 0) {
+      touchStartRef.current = null;
+      swipeDirRef.current = null;
+      return;
+    }
     const touch = e.touches[0];
     const deltaX = touch.clientX - touchStartRef.current.x;
     const deltaY = touch.clientY - touchStartRef.current.y;
