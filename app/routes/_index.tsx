@@ -757,7 +757,7 @@ function IDEContent({
 
   // Swipe animation state
   const containerRef = useRef<HTMLDivElement>(null);
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number; fromEdge: boolean } | null>(null);
   const swipeDirRef = useRef<"horizontal" | "vertical" | null>(null);
   const isAnimatingRef = useRef(false);
 
@@ -803,10 +803,17 @@ function IDEContent({
     const sel = window.getSelection();
     if (sel && sel.toString().length > 0) { touchStartRef.current = null; return; }
     const touch = e.touches[0];
-    const edgeThreshold = 20;
     const screenWidth = window.innerWidth;
+    const edgeZone = screenWidth * 0.2; // 20% from each edge
+    const fromEdge = touch.clientX < edgeZone || touch.clientX > screenWidth - edgeZone;
+    // Only allow swipe from screen edges to avoid interfering with content interaction
+    if (!fromEdge) {
+      touchStartRef.current = null;
+      return;
+    }
+    const edgeThreshold = 20;
     if (touch.clientX > edgeThreshold && touch.clientX < screenWidth - edgeThreshold) {
-      touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now(), fromEdge };
       swipeDirRef.current = null;
     } else {
       touchStartRef.current = null;
@@ -849,6 +856,7 @@ function IDEContent({
     const deltaY = touch.clientY - touchStartRef.current.y;
     const elapsed = Date.now() - touchStartRef.current.time;
     const wasTracking = swipeDirRef.current === "horizontal";
+    const startedFromEdge = touchStartRef.current.fromEdge;
     touchStartRef.current = null;
     swipeDirRef.current = null;
 
@@ -859,9 +867,9 @@ function IDEContent({
       const threshold = window.innerWidth * 0.25;
       const velocity = Math.abs(deltaX) / elapsed;
       shouldSwipe = Math.abs(deltaX) > threshold || (velocity > 0.3 && Math.abs(deltaX) > 30);
-    } else {
+    } else if (startedFromEdge) {
       // touchMove was captured by inner element (e.g. editor):
-      // fallback to simple start/end delta detection
+      // fallback to simple start/end delta detection (only from edge swipes)
       shouldSwipe = Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) && elapsed < 300;
     }
 
