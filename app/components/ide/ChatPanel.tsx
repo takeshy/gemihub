@@ -116,6 +116,18 @@ export function ChatPanel({
     return [];
   });
 
+  // Thinking toggles for Flash / Flash Lite models
+  const [thinkFlash, setThinkFlash] = useState(false);
+  const [thinkFlashLite, setThinkFlashLite] = useState(true);
+
+  // Resolve thinking toggle for a given model name
+  const getThinkingToggle = useCallback((model: string): boolean | undefined => {
+    const m = model.toLowerCase();
+    if (m.includes("flash-lite")) return thinkFlashLite ? true : undefined;
+    if (m.includes("flash") && !m.includes("pro")) return thinkFlash ? true : undefined;
+    return undefined;
+  }, [thinkFlash, thinkFlashLite]);
+
   // Persist MCP selection to localStorage
   useEffect(() => {
     try {
@@ -491,7 +503,7 @@ export function ChatPanel({
             mcpServerIds: effectiveMcpIds,
             ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
             webSearchEnabled: isWebSearch,
-            enableThinking: shouldEnableThinking(content),
+            enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
             maxFunctionCalls: settings.maxFunctionCalls,
             functionCallWarningThreshold: settings.functionCallWarningThreshold,
             ragTopK: settings.ragTopK,
@@ -666,6 +678,7 @@ export function ChatPanel({
       enabledMcpServerIds,
       settings,
       saveChat,
+      getThinkingToggle,
     ]
   );
 
@@ -940,6 +953,7 @@ export function ChatPanel({
         streamingRagUsed={streamingRagUsed}
         streamingWebSearchUsed={streamingWebSearchUsed}
         isStreaming={isStreaming}
+        alwaysThink={getThinkingToggle(selectedModel) === true}
       />
 
       {/* Input */}
@@ -972,6 +986,10 @@ export function ChatPanel({
         lastFileIdInMessages={lastFileIdInMessages}
         driveToolModeLocked={toolConstraint.locked}
         driveToolModeReasonKey={toolConstraint.reasonKey as keyof TranslationStrings | undefined}
+        thinkFlash={thinkFlash}
+        thinkFlashLite={thinkFlashLite}
+        onThinkFlashChange={setThinkFlash}
+        onThinkFlashLiteChange={setThinkFlashLite}
         onCompact={handleCompact}
         isCompacting={isCompacting}
         messageCount={messages.length}

@@ -45,6 +45,9 @@ export interface TranslationStrings {
   "chat.noHistory": string;
   "chat.confirmDelete": string;
   "chat.mcpToolsLabel": string;
+  "chat.alwaysThinkLabel": string;
+  "chat.thinkFlash": string;
+  "chat.thinkFlashLite": string;
   "chat.toolModeLockGemma": string;
   "chat.toolModeLockWebSearch": string;
   "chat.toolModeLockRag": string;
@@ -626,6 +629,9 @@ const en: TranslationStrings = {
   "chat.noHistory": "No chat history",
   "chat.confirmDelete": "Delete this chat?",
   "chat.mcpToolsLabel": "MCP Tools",
+  "chat.alwaysThinkLabel": "Always Think",
+  "chat.thinkFlash": "Flash",
+  "chat.thinkFlashLite": "Flash Lite",
   "chat.toolModeLockGemma": "Gemma models don't support function calling",
   "chat.toolModeLockWebSearch": "Drive tools are disabled during Web Search",
   "chat.toolModeLockRag": "Drive tools are disabled when RAG is enabled",
@@ -1208,6 +1214,9 @@ const ja: TranslationStrings = {
   "chat.noHistory": "チャット履歴はありません",
   "chat.confirmDelete": "このチャットを削除しますか？",
   "chat.mcpToolsLabel": "MCPツール",
+  "chat.alwaysThinkLabel": "常に思考",
+  "chat.thinkFlash": "Flash",
+  "chat.thinkFlashLite": "Flash Lite",
   "chat.toolModeLockGemma": "Gemmaモデルはファンクションコールに対応していません",
   "chat.toolModeLockWebSearch": "Web Search中はDriveツールは無効です",
   "chat.toolModeLockRag": "RAG使用時はDriveツールは無効です",

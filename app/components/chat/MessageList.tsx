@@ -16,6 +16,7 @@ interface MessageListProps {
   streamingRagUsed?: boolean;
   streamingWebSearchUsed?: boolean;
   isStreaming?: boolean;
+  alwaysThink?: boolean;
 }
 
 export function MessageList({
@@ -27,6 +28,7 @@ export function MessageList({
   streamingRagUsed,
   streamingWebSearchUsed,
   isStreaming,
+  alwaysThink,
 }: MessageListProps) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -69,12 +71,14 @@ export function MessageList({
               {t("chat.welcomeHint")}
             </p>
             <div className="grid grid-cols-2 gap-3 text-left">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
-                <Brain size={ICON.LG} className="mb-1.5 text-purple-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  {t("chat.welcomeThinking")}
-                </p>
-              </div>
+              {!alwaysThink && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+                  <Brain size={ICON.LG} className="mb-1.5 text-purple-500" />
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t("chat.welcomeThinking")}
+                  </p>
+                </div>
+              )}
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
                 <ImageIcon size={ICON.LG} className="mb-1.5 text-blue-500" />
                 <p className="text-xs text-gray-600 dark:text-gray-400">
