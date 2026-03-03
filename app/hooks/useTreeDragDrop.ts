@@ -237,6 +237,97 @@ export function useTreeDragDrop({
     [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, setBusy, clearBusy, t, activeFileId, onSelectFile, setTreeItems, setExpandedFolders]
   );
 
+  const handleMoveMultipleItems = useCallback(
+    async (itemIds: string[], newParentId: string) => {
+      // Filter out folders — only move files
+      const fileIds = itemIds.filter((id) => !id.startsWith("vfolder:"));
+      if (fileIds.length === 0) return;
+
+      // Don't drop on self
+      if (fileIds.length === 1 && fileIds[0] === newParentId) return;
+
+      const newFolderPath = newParentId === rootFolderId ? "" : getFolderPath(newParentId);
+
+      // Classify files into local and remote
+      const localFiles: Array<{ id: string; baseName: string; currentName: string }> = [];
+      const remoteFiles: Array<{ fileId: string; name: string; baseName: string }> = [];
+      for (const id of fileIds) {
+        const currentName = findFullFileName(id, treeItems, "");
+        if (!currentName) continue;
+        const baseName = currentName.split("/").pop()!;
+        const newFullName = newFolderPath ? `${newFolderPath}/${baseName}` : baseName;
+        if (newFullName === currentName) continue; // same location
+        if (id.startsWith("new:")) {
+          localFiles.push({ id, baseName, currentName });
+        } else {
+          remoteFiles.push({ fileId: id, name: newFullName, baseName });
+        }
+      }
+
+      const totalCount = localFiles.length + remoteFiles.length;
+      if (totalCount === 0) return;
+
+      if (totalCount >= 2 && !confirm(t("contextMenu.bulkMoveConfirm").replace("{count}", String(totalCount)))) {
+        return;
+      }
+
+      const allIds = [...localFiles.map((f) => f.id), ...remoteFiles.map((f) => f.fileId)];
+      setBusy(allIds);
+      try {
+        // Handle local-only files
+        for (const file of localFiles) {
+          const newFullName = newFolderPath ? `${newFolderPath}/${file.baseName}` : file.baseName;
+          const newTempId = `new:${newFullName}`;
+          await migrateNewFileId(file.id, newTempId, newFullName);
+          if (activeFileId === file.id) {
+            const node = findNodeById(file.id, treeItems);
+            onSelectFile(newTempId, file.baseName, node?.mimeType || "text/plain");
+          }
+        }
+
+        // Handle remote files with single bulkRename call
+        let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+        if (remoteFiles.length > 0) {
+          const res = await fetch("/api/drive/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "bulkRename",
+              files: remoteFiles.map((f) => ({ fileId: f.fileId, name: f.name })),
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const failedSet = new Set(data.failedFileIds as string[]);
+            if (failedSet.size > 0) alert(t("contextMenu.moveFailed"));
+            await Promise.all(
+              remoteFiles
+                .filter((rf) => !failedSet.has(rf.fileId))
+                .map((rf) => renameCachedFile(rf.fileId, rf.name))
+            );
+            if (data.meta) lastMeta = data.meta;
+          } else {
+            alert(t("contextMenu.moveFailed"));
+          }
+        }
+
+        if (newParentId !== rootFolderId) {
+          setExpandedFolders((prev) => new Set(prev).add(newParentId));
+        }
+        if (lastMeta) {
+          await updateTreeFromMeta(lastMeta);
+        } else {
+          await fetchAndCacheTree();
+        }
+      } catch {
+        alert(t("contextMenu.moveFailed"));
+      } finally {
+        clearBusy(allIds);
+      }
+    },
+    [treeItems, rootFolderId, fetchAndCacheTree, updateTreeFromMeta, setBusy, clearBusy, t, activeFileId, onSelectFile, setExpandedFolders]
+  );
+
   const handleDrop = useCallback(
     async (e: React.DragEvent, folderId: string) => {
       e.preventDefault();
@@ -248,7 +339,18 @@ export function useTreeDragDrop({
       dragCounterRef.current = 0;
       folderDragCounterRef.current.clear();
 
-      // Internal tree node move
+      // Internal tree node move — multi-select first
+      const multiNodeIds = e.dataTransfer.getData("application/x-tree-node-ids");
+      if (multiNodeIds) {
+        try {
+          const ids = JSON.parse(multiNodeIds) as string[];
+          if (ids.length > 0) {
+            await handleMoveMultipleItems(ids, folderId);
+            return;
+          }
+        } catch { /* fall through to single */ }
+      }
+
       const nodeId = e.dataTransfer.getData("application/x-tree-node-id");
       if (nodeId) {
         const nodeParent = e.dataTransfer.getData("application/x-tree-node-parent");
@@ -405,12 +507,12 @@ export function useTreeDragDrop({
         setExpandedFolders((prev) => new Set(prev).add(folderId));
       }
     },
-    [upload, rootFolderId, fetchAndCacheTree, handleMoveItem, treeItems, t, activeFileId, setExpandedFolders]
+    [upload, rootFolderId, fetchAndCacheTree, handleMoveItem, handleMoveMultipleItems, treeItems, t, activeFileId, setExpandedFolders]
   );
 
   const handleTreeDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const isInternal = e.dataTransfer.types.includes("application/x-tree-node-id");
+    const isInternal = e.dataTransfer.types.includes("application/x-tree-node-id") || e.dataTransfer.types.includes("application/x-tree-node-ids");
     e.dataTransfer.dropEffect = isInternal ? "move" : "copy";
 
     // Auto-scroll when dragging near edges of the scroll container

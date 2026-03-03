@@ -108,6 +108,8 @@ export function DriveFileTree({
   } | null>(null);
   const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastClickedFileId, setLastClickedFileId] = useState<string | null>(null);
   const [cachedFiles, setCachedFiles] = useState<Set<string>>(new Set());
   const [encryptedFiles, setEncryptedFiles] = useState<Set<string>>(new Set());
   const [modifiedFiles, setModifiedFiles] = useState<Set<string>>(new Set());
@@ -132,6 +134,23 @@ export function DriveFileTree({
   const isMobile = useIsMobile();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { progress, upload, clearProgress } = useFileUpload();
+
+  const visibleFileIds = useMemo(() => {
+    const ids: string[] = [];
+    const walk = (nodes: CachedTreeNode[]) => {
+      for (const node of nodes) {
+        if (node.isFolder) {
+          if (expandedFolders.has(node.id) && node.children) {
+            walk(node.children);
+          }
+        } else {
+          ids.push(node.id);
+        }
+      }
+    };
+    walk(treeItems);
+    return ids;
+  }, [treeItems, expandedFolders]);
 
   const modifiedFolderIds = useMemo(
     () => collectModifiedFolderIds(treeItems, modifiedFiles),
@@ -681,7 +700,11 @@ export function DriveFileTree({
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
-    const isDragging = draggingItem?.id === item.id;
+    const isDragging = draggingItem
+      ? selectedIds.has(draggingItem.id)
+        ? selectedIds.has(item.id)
+        : draggingItem.id === item.id
+      : false;
 
     if (item.isFolder) {
       const expanded = expandedFolders.has(item.id);
@@ -692,16 +715,17 @@ export function DriveFileTree({
         <div key={item.id}>
           <button
             draggable
-            onClick={() => toggleFolder(item.id)}
+            onClick={() => { setSelectedIds(new Set()); toggleFolder(item.id); }}
             onContextMenu={(e) => handleContextMenu(e, item)}
             onDragStart={(e) => {
+              setSelectedIds(new Set());
               e.dataTransfer.setData("application/x-tree-node-id", item.id);
               e.dataTransfer.setData("application/x-tree-node-parent", parentId);
               e.dataTransfer.effectAllowed = "move";
               setDraggingItem({ id: item.id, parentId });
               document.body.classList.add("tree-dragging");
             }}
-            onDragEnd={() => { setDraggingItem(null); document.body.classList.remove("tree-dragging"); }}
+            onDragEnd={() => { setDraggingItem(null); setSelectedIds(new Set()); document.body.classList.remove("tree-dragging"); }}
             onDragOver={(e) => { e.preventDefault(); }}
             onDragEnter={(e) => handleFolderDragEnter(e, item.id)}
             onDragLeave={(e) => handleFolderDragLeave(e, item.id)}
@@ -749,29 +773,75 @@ export function DriveFileTree({
     }
 
     const isActive = item.id === activeFileId;
+    const isMultiSelected = selectedIds.has(item.id);
 
     return (
       <button
         key={item.id}
         draggable
-        onClick={() => { setSelectedFolderId(null); onSelectFile(item.id, item.name, item.mimeType); }}
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            // Toggle selection
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+              return next;
+            });
+            setLastClickedFileId(item.id);
+            return;
+          }
+          if (e.shiftKey && lastClickedFileId) {
+            // Range selection
+            const startIdx = visibleFileIds.indexOf(lastClickedFileId);
+            const endIdx = visibleFileIds.indexOf(item.id);
+            if (startIdx !== -1 && endIdx !== -1) {
+              const lo = Math.min(startIdx, endIdx);
+              const hi = Math.max(startIdx, endIdx);
+              setSelectedIds(new Set(visibleFileIds.slice(lo, hi + 1)));
+            }
+            return;
+          }
+          // Normal click — clear selection, open file
+          setSelectedIds(new Set());
+          setSelectedFolderId(null);
+          setLastClickedFileId(item.id);
+          onSelectFile(item.id, item.name, item.mimeType);
+        }}
         onContextMenu={(e) => handleContextMenu(e, item)}
         onDragStart={(e) => {
-          e.dataTransfer.setData("application/x-tree-node-id", item.id);
-          e.dataTransfer.setData("application/x-tree-node-parent", parentId);
-          e.dataTransfer.effectAllowed = "move";
-          setDraggingItem({ id: item.id, parentId });
+          if (selectedIds.has(item.id) && selectedIds.size > 1) {
+            // Multi-drag: set selected IDs
+            e.dataTransfer.setData("application/x-tree-node-ids", JSON.stringify([...selectedIds]));
+            e.dataTransfer.effectAllowed = "move";
+            setDraggingItem({ id: item.id, parentId });
+            // Custom drag ghost with count badge
+            const ghost = document.createElement("div");
+            ghost.style.cssText = "position:absolute;top:-9999px;left:-9999px;padding:4px 10px;background:#4f46e5;color:white;border-radius:8px;font-size:13px;white-space:nowrap;";
+            ghost.textContent = t("fileTree.selectedCount").replace("{count}", String(selectedIds.size));
+            document.body.appendChild(ghost);
+            e.dataTransfer.setDragImage(ghost, 0, 0);
+            requestAnimationFrame(() => document.body.removeChild(ghost));
+          } else {
+            // Single drag: clear selection
+            setSelectedIds(new Set());
+            e.dataTransfer.setData("application/x-tree-node-id", item.id);
+            e.dataTransfer.setData("application/x-tree-node-parent", parentId);
+            e.dataTransfer.effectAllowed = "move";
+            setDraggingItem({ id: item.id, parentId });
+          }
           document.body.classList.add("tree-dragging");
         }}
-        onDragEnd={() => { setDraggingItem(null); document.body.classList.remove("tree-dragging"); }}
+        onDragEnd={() => { setDraggingItem(null); setSelectedIds(new Set()); document.body.classList.remove("tree-dragging"); }}
         onDragOver={(e) => { e.preventDefault(); }}
         onDragEnter={(e) => handleFolderDragEnter(e, parentId)}
         onDragLeave={(e) => handleFolderDragLeave(e, parentId)}
         onDrop={(e) => handleDrop(e, parentId)}
         className={`flex w-full items-center gap-1 rounded px-1 py-0.5 text-left text-sm ${
-          isActive
-            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-            : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+          isMultiSelected
+            ? "bg-indigo-50 text-gray-700 dark:bg-indigo-900/30 dark:text-gray-300"
+            : isActive
+              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+              : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
         } ${isDragging ? "opacity-50" : ""}`}
         style={{ paddingLeft: `${depth * 12 + 20}px` }}
       >
@@ -812,6 +882,17 @@ export function DriveFileTree({
           ? "bg-blue-50 border-2 border-dashed border-blue-300 dark:bg-blue-950/30 dark:border-blue-600"
           : ""
       }`}
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          setSelectedIds(new Set());
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+          e.preventDefault();
+          setSelectedIds(new Set(visibleFileIds));
+        }
+      }}
       onDragOver={handleTreeDragOver}
       onDragEnter={handleTreeDragEnter}
       onDragLeave={handleTreeDragLeave}
@@ -819,7 +900,9 @@ export function DriveFileTree({
     >
       <div className="flex items-center justify-between px-2 py-1 border-b border-gray-200 dark:border-gray-800">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          Files
+          {selectedIds.size > 0
+            ? t("fileTree.selectedCount").replace("{count}", String(selectedIds.size))
+            : "Files"}
         </span>
         <div className="flex items-center gap-0.5">
           {onSearchOpen && (

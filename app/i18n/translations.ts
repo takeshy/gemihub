@@ -401,6 +401,7 @@ export interface TranslationStrings {
   "fileTree.cancel": string;
   "fileTree.addDateTime": string;
   "fileTree.addLocation": string;
+  "fileTree.selectedCount": string;
   "fileContent.dateTime": string;
   "fileContent.location": string;
   "fileContent.latitude": string;
@@ -980,6 +981,7 @@ const en: TranslationStrings = {
   "fileTree.cancel": "Cancel",
   "fileTree.addDateTime": "Add date/time",
   "fileTree.addLocation": "Add location",
+  "fileTree.selectedCount": "{count} selected",
   "fileContent.dateTime": "Date:",
   "fileContent.location": "Location:",
   "fileContent.latitude": "Lat.",
@@ -1559,6 +1561,7 @@ const ja: TranslationStrings = {
   "fileTree.cancel": "キャンセル",
   "fileTree.addDateTime": "日時を追加",
   "fileTree.addLocation": "位置情報を追加",
+  "fileTree.selectedCount": "{count}件選択中",
   "fileContent.dateTime": "日時:",
   "fileContent.location": "場所:",
   "fileContent.latitude": "緯度",
