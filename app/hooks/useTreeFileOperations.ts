@@ -324,6 +324,65 @@ export function useTreeFileOperations({
     [treeItems, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, setTreeItems]
   );
 
+  const handleDeleteMultiple = useCallback(
+    async (fileIds: string[]): Promise<boolean> => {
+      // Exclude virtual folders (they have no real entity)
+      const targetIds = fileIds.filter((id) => !id.startsWith("vfolder:"));
+      if (targetIds.length === 0) return false;
+      if (!confirm(t("trash.bulkDeleteConfirm").replace("{count}", String(targetIds.length)))) return false;
+
+      setBusy(targetIds);
+      try {
+        let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+        let failCount = 0;
+        for (const fid of targetIds) {
+          if (fid.startsWith("new:")) {
+            await deleteCachedFile(fid);
+            await deleteEditHistoryEntry(fid);
+            const meta = await getCachedRemoteMeta();
+            if (meta?.files[fid]) {
+              delete meta.files[fid];
+              await setCachedRemoteMeta(meta);
+            }
+            continue;
+          }
+          const res = await fetch("/api/drive/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "delete", fileId: fid }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.meta) lastMeta = data.meta;
+            await deleteCachedFile(fid);
+            await removeLocalSyncMetaEntry(fid);
+            await deleteEditHistoryEntry(fid);
+          } else {
+            failCount++;
+          }
+        }
+        if (failCount > 0) alert(t("trash.deleteFailed"));
+        if (lastMeta) {
+          await updateTreeFromMeta(lastMeta);
+        } else {
+          await fetchAndCacheTree();
+        }
+        window.dispatchEvent(new CustomEvent("file-modified", { detail: {} }));
+        if (activeFileId && targetIds.includes(activeFileId)) {
+          window.history.pushState({}, "", "/");
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }
+        return true;
+      } catch {
+        alert(t("trash.deleteFailed"));
+        return false;
+      } finally {
+        clearBusy(targetIds);
+      }
+    },
+    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId]
+  );
+
   const handleEncrypt = useCallback(
     async (item: CachedTreeNode) => {
       if (!encryptionEnabled) {
@@ -797,6 +856,7 @@ export function useTreeFileOperations({
   return {
     handleRenameSubmit,
     handleDelete,
+    handleDeleteMultiple,
     handleEncrypt,
     handleDecryptWithPassword,
     handleTempDiffAccept,

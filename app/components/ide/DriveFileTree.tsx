@@ -511,6 +511,7 @@ export function DriveFileTree({
   const {
     handleRenameSubmit,
     handleDelete,
+    handleDeleteMultiple,
     handleEncrypt,
     handleDecryptWithPassword,
     handleTempDiffAccept,
@@ -897,6 +898,12 @@ export function DriveFileTree({
         if ((e.ctrlKey || e.metaKey) && e.key === "a") {
           e.preventDefault();
           setSelectedIds(new Set(visibleFileIds));
+          return;
+        }
+        if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.size > 0) {
+          e.preventDefault();
+          const ids = [...selectedIds];
+          handleDeleteMultiple(ids).then((ok) => { if (ok) setSelectedIds(new Set()); });
         }
       }}
       onDragOver={handleTreeDragOver}
@@ -911,6 +918,15 @@ export function DriveFileTree({
             : "Files"}
         </span>
         <div className="flex items-center gap-0.5">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={async () => { if (await handleDeleteMultiple([...selectedIds])) setSelectedIds(new Set()); }}
+              className="rounded p-0.5 text-red-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+              title={t("trash.tabTrash")}
+            >
+              <Trash2 size={ICON.MD} />
+            </button>
+          )}
           {onSearchOpen && (
             <button
               onClick={onSearchOpen}

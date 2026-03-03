@@ -504,6 +504,7 @@ export interface TranslationStrings {
   "trash.selectAll": string;
   "trash.softDeleteConfirm": string;
   "trash.softDeleteFolderConfirm": string;
+  "trash.bulkDeleteConfirm": string;
   "trash.deleteFailed": string;
   "trash.restoreFailed": string;
   "trash.conflictInfo": string;
@@ -1085,6 +1086,7 @@ const en: TranslationStrings = {
   "trash.selectAll": "Select All",
   "trash.softDeleteConfirm": "Move \"{name}\" to trash?",
   "trash.softDeleteFolderConfirm": "Move all {count} file(s) in folder \"{name}\" to trash?",
+  "trash.bulkDeleteConfirm": "Move {count} file(s) to trash?",
   "trash.deleteFailed": "Failed to delete files.",
   "trash.restoreFailed": "Failed to restore files.",
   "trash.conflictInfo": "Conflict backups created during sync resolution.",
@@ -1666,6 +1668,7 @@ const ja: TranslationStrings = {
   "trash.selectAll": "すべて選択",
   "trash.softDeleteConfirm": "「{name}」をゴミ箱に移動しますか？",
   "trash.softDeleteFolderConfirm": "フォルダ「{name}」内の{count}件のファイルをゴミ箱に移動しますか？",
+  "trash.bulkDeleteConfirm": "{count}件のファイルをゴミ箱に移動しますか？",
   "trash.deleteFailed": "ファイルの削除に失敗しました。",
   "trash.restoreFailed": "ファイルの復元に失敗しました。",
   "trash.conflictInfo": "同期コンフリクト解決時に作成されたバックアップです。",
