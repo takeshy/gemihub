@@ -35,6 +35,8 @@ import {
   setFileSharedInMeta,
   readRemoteSyncMeta,
 } from "~/services/sync-meta.server";
+import { SYNC_META_FILE_NAME, type SyncMeta } from "~/services/sync-diff";
+import { parallelProcess } from "~/utils/parallel";
 import { saveSettings } from "~/services/user-settings.server";
 import { deleteSingleFileFromRag } from "~/services/file-search.server";
 import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
@@ -385,6 +387,100 @@ export async function action({ request }: Route.ActionArgs) {
       const renamed = await renameFile(validTokens.accessToken, fileId, name);
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, renamed);
       return logAndReturn({ file: renamed, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+    }
+    case "bulkRename": {
+      const files = body.files as Array<{ fileId: string; name: string }> | undefined;
+      if (!files || files.length === 0) return logAndReturn({ error: "Missing files" }, { status: 400 });
+
+      // Read meta once — cache metaFileId to skip redundant findFileByExactName on write
+      const metaFile = await findFileByExactName(validTokens.accessToken, SYNC_META_FILE_NAME, validTokens.rootFolderId);
+      let bulkMeta: SyncMeta = { lastUpdatedAt: new Date().toISOString(), files: {} };
+      const metaFileId: string | null = metaFile?.id ?? null;
+      if (metaFile) {
+        try {
+          const raw = await readFile(validTokens.accessToken, metaFile.id);
+          bulkMeta = JSON.parse(raw) as SyncMeta;
+        } catch { /* use empty meta */ }
+      }
+
+      // Collect old RAG names for re-keying
+      const ragRenames: Array<{ fileId: string; oldName: string; newName: string }> = [];
+      for (const f of files) {
+        const oldName = bulkMeta.files[f.fileId]?.name;
+        if (oldName && oldName !== f.name) {
+          ragRenames.push({ fileId: f.fileId, oldName, newName: f.name });
+        }
+      }
+
+      // Parallel rename via Drive API
+      const failedFileIds: string[] = [];
+      const results = await parallelProcess(
+        files,
+        async (f) => {
+          try {
+            const renamed = await renameFile(validTokens.accessToken, f.fileId, f.name);
+            return { fileId: f.fileId, ok: true, file: renamed };
+          } catch {
+            failedFileIds.push(f.fileId);
+            return { fileId: f.fileId, ok: false, file: null };
+          }
+        },
+        5,
+      );
+
+      // Update meta entries for successes
+      for (const r of results) {
+        if (r.ok && r.file) {
+          bulkMeta.files[r.fileId] = {
+            name: r.file.name,
+            mimeType: r.file.mimeType,
+            md5Checksum: r.file.md5Checksum ?? "",
+            modifiedTime: r.file.modifiedTime ?? "",
+            createdTime: r.file.createdTime,
+            ...(bulkMeta.files[r.fileId]?.shared != null
+              ? { shared: bulkMeta.files[r.fileId].shared, webViewLink: bulkMeta.files[r.fileId].webViewLink }
+              : {}),
+          };
+        }
+      }
+      bulkMeta.lastUpdatedAt = new Date().toISOString();
+
+      // Write meta (reuse cached fileId) and RAG re-key in parallel
+      const metaContent = JSON.stringify(bulkMeta, null, 2);
+      const writeMetaPromise = metaFileId
+        ? updateFile(validTokens.accessToken, metaFileId, metaContent, "application/json")
+        : createFile(validTokens.accessToken, SYNC_META_FILE_NAME, metaContent, validTokens.rootFolderId, "application/json");
+
+      const ragRekeyPromise = (async () => {
+        try {
+          const successRenames = ragRenames.filter((r) => !failedFileIds.includes(r.fileId));
+          if (successRenames.length === 0) return;
+          const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+          const ragSetting = settings.ragSettings[DEFAULT_RAG_STORE_KEY];
+          if (!ragSetting?.files) return;
+          let changed = false;
+          for (const { oldName, newName } of successRenames) {
+            if (ragSetting.files[oldName]) {
+              ragSetting.files[newName] = ragSetting.files[oldName];
+              delete ragSetting.files[oldName];
+              changed = true;
+            }
+          }
+          if (changed) {
+            await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
+          }
+        } catch {
+          // Best-effort: don't block rename
+        }
+      })();
+
+      await Promise.all([writeMetaPromise, ragRekeyPromise]);
+
+      return logAndReturn({
+        results: results.map((r) => ({ fileId: r.fileId, ok: r.ok })),
+        failedFileIds,
+        meta: { lastUpdatedAt: bulkMeta.lastUpdatedAt, files: bulkMeta.files },
+      });
     }
     case "delete": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });

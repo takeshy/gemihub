@@ -101,38 +101,62 @@ export function useTreeFileOperations({
         const newPrefix = parts.join("/");
 
         const fileIds = collectFileIds(item);
+
+        // Classify files before confirm so we know the count
+        const remoteFiles: Array<{ fileId: string; name: string }> = [];
+        const localFileIds: string[] = [];
+        for (const fid of fileIds) {
+          if (fid.startsWith("new:")) {
+            localFileIds.push(fid);
+          } else {
+            const fullName = findFullFileName(fid, treeItems, "");
+            if (!fullName) continue;
+            remoteFiles.push({ fileId: fid, name: newPrefix + fullName.slice(oldPrefix.length) });
+          }
+        }
+
+        if (remoteFiles.length >= 2 && !confirm(t("contextMenu.bulkRenameConfirm").replace("{count}", String(remoteFiles.length)))) {
+          return;
+        }
+
         setBusy(fileIds);
         try {
-          let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
-          let failCount = 0;
-          for (const fid of fileIds) {
+          // Handle local-only files
+          for (const fid of localFileIds) {
             const fullName = findFullFileName(fid, treeItems, "");
             if (!fullName) continue;
             const newFullName = newPrefix + fullName.slice(oldPrefix.length);
-            if (fid.startsWith("new:")) {
-              const newTempId = `new:${newFullName}`;
-              await migrateNewFileId(fid, newTempId, newFullName);
-              if (activeFileId === fid) {
-                const baseName = newFullName.split("/").pop() || newFullName;
-                const node = findNodeById(fid, treeItems);
-                onSelectFile(newTempId, baseName, node?.mimeType || "text/plain");
-              }
-              continue;
+            const newTempId = `new:${newFullName}`;
+            await migrateNewFileId(fid, newTempId, newFullName);
+            if (activeFileId === fid) {
+              const baseName = newFullName.split("/").pop() || newFullName;
+              const node = findNodeById(fid, treeItems);
+              onSelectFile(newTempId, baseName, node?.mimeType || "text/plain");
             }
+          }
+
+          let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          if (remoteFiles.length > 0) {
             const res = await fetch("/api/drive/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "rename", fileId: fid, name: newFullName }),
+              body: JSON.stringify({ action: "bulkRename", files: remoteFiles }),
             });
             if (res.ok) {
               const data = await res.json();
-              await renameCachedFile(fid, newFullName);
+              const failedSet = new Set(data.failedFileIds as string[]);
+              if (failedSet.size > 0) alert(t("contextMenu.renameFailed"));
+              await Promise.all(
+                remoteFiles
+                  .filter((rf) => !failedSet.has(rf.fileId))
+                  .map((rf) => renameCachedFile(rf.fileId, rf.name))
+              );
               if (data.meta) lastMeta = data.meta;
             } else {
-              failCount++;
+              alert(t("contextMenu.renameFailed"));
             }
           }
-          if (failCount > 0) alert(t("contextMenu.renameFailed"));
+
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
           } else {
@@ -163,18 +187,23 @@ export function useTreeFileOperations({
         const res = await fetch("/api/drive/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "rename", fileId: item.id, name: newFullName }),
+          body: JSON.stringify({ action: "bulkRename", files: [{ fileId: item.id, name: newFullName }] }),
         });
         if (res.ok) {
           const data = await res.json();
-          await renameCachedFile(item.id, newFullName);
+          const failedSet = new Set(data.failedFileIds as string[]);
+          if (failedSet.has(item.id)) {
+            alert(t("contextMenu.renameFailed"));
+          } else {
+            await renameCachedFile(item.id, newFullName);
+            if (activeFileId === item.id) {
+              onSelectFile(item.id, newBaseName.trim(), item.mimeType);
+            }
+          }
           if (data.meta) {
             await updateTreeFromMeta(data.meta);
           } else {
             await fetchAndCacheTree();
-          }
-          if (activeFileId === item.id) {
-            onSelectFile(item.id, newBaseName.trim(), item.mimeType);
           }
         } else {
           alert(t("contextMenu.renameFailed"));

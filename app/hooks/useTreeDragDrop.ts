@@ -78,43 +78,68 @@ export function useTreeDragDrop({
 
         const folderNode = findNodeById(itemId, treeItems);
         if (!folderNode) return;
-        const files = collectFilesWithPaths(folderNode, "");
+        // Collect from children so fullPath is relative to (not including) the folder itself
+        const files = (folderNode.children ?? []).flatMap((child) => collectFilesWithPaths(child, ""));
 
         if (files.length === 0) return;
+
+        // Classify files before confirm so we know the count
+        const remoteFiles: Array<{ fileId: string; name: string; relativePath: string }> = [];
+        const localFiles: Array<typeof files[number]> = [];
+        for (const file of files) {
+          const relativePath = file.fullPath;
+          const newFullName = newFolderPath ? `${newFolderPath}/${relativePath}` : relativePath;
+          if (file.id.startsWith("new:")) {
+            localFiles.push(file);
+          } else {
+            remoteFiles.push({ fileId: file.id, name: newFullName, relativePath });
+          }
+        }
+
+        if (remoteFiles.length >= 2 && !confirm(t("contextMenu.bulkMoveConfirm").replace("{count}", String(remoteFiles.length)))) {
+          return;
+        }
 
         const fileIds = files.map((f) => f.id);
         setBusy(fileIds);
         try {
-          let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
-          let failCount = 0;
-          for (const file of files) {
-            // Replace the old folder prefix with new folder path
-            const relativePath = file.fullPath; // relative to folderNode
+          // Handle local-only files
+          for (const file of localFiles) {
+            const relativePath = file.fullPath;
             const newFullName = newFolderPath ? `${newFolderPath}/${relativePath}` : relativePath;
-            if (file.id.startsWith("new:")) {
-              // Local-only file: migrate to new ID reflecting the new path
-              const newTempId = `new:${newFullName}`;
-              await migrateNewFileId(file.id, newTempId, newFullName);
-              if (activeFileId === file.id) {
-                const node = findNodeById(file.id, treeItems);
-                onSelectFile(newTempId, relativePath.split("/").pop() || relativePath, node?.mimeType || "text/plain");
-              }
-              continue;
+            const newTempId = `new:${newFullName}`;
+            await migrateNewFileId(file.id, newTempId, newFullName);
+            if (activeFileId === file.id) {
+              const node = findNodeById(file.id, treeItems);
+              onSelectFile(newTempId, relativePath.split("/").pop() || relativePath, node?.mimeType || "text/plain");
             }
+          }
+
+          let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+          if (remoteFiles.length > 0) {
             const res = await fetch("/api/drive/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "rename", fileId: file.id, name: newFullName }),
+              body: JSON.stringify({
+                action: "bulkRename",
+                files: remoteFiles.map((f) => ({ fileId: f.fileId, name: f.name })),
+              }),
             });
             if (res.ok) {
               const data = await res.json();
-              await renameCachedFile(file.id, newFullName);
+              const failedSet = new Set(data.failedFileIds as string[]);
+              if (failedSet.size > 0) alert(t("contextMenu.moveFailed"));
+              await Promise.all(
+                remoteFiles
+                  .filter((rf) => !failedSet.has(rf.fileId))
+                  .map((rf) => renameCachedFile(rf.fileId, rf.name))
+              );
               if (data.meta) lastMeta = data.meta;
             } else {
-              failCount++;
+              alert(t("contextMenu.moveFailed"));
             }
           }
-          if (failCount > 0) alert(t("contextMenu.moveFailed"));
+
           if (newParentId !== rootFolderId) {
             setExpandedFolders((prev) => {
               const next = new Set(prev);
@@ -179,9 +204,8 @@ export function useTreeDragDrop({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: "rename",
-              fileId: itemId,
-              name: newFullName,
+              action: "bulkRename",
+              files: [{ fileId: itemId, name: newFullName }],
             }),
           });
           if (res.ok) {
@@ -189,7 +213,12 @@ export function useTreeDragDrop({
               setExpandedFolders((prev) => new Set(prev).add(newParentId));
             }
             const data = await res.json();
-            await renameCachedFile(itemId, newFullName);
+            const failedSet = new Set(data.failedFileIds as string[]);
+            if (failedSet.has(itemId)) {
+              alert(t("contextMenu.moveFailed"));
+            } else {
+              await renameCachedFile(itemId, newFullName);
+            }
             if (data.meta) {
               await updateTreeFromMeta(data.meta);
             } else {
