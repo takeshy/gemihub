@@ -65,39 +65,38 @@ export function useTreeFileOperations({
   tempDiffData,
   setTempDiffData,
 }: UseTreeFileOperationsParams) {
-  const handleRename = useCallback(
-    async (item: CachedTreeNode) => {
+  const handleRenameSubmit = useCallback(
+    async (item: CachedTreeNode, newName: string) => {
+      const trimmed = newName.trim();
+      if (!trimmed || trimmed === item.name) return;
+
       if (!item.isFolder && item.id.startsWith("new:")) {
-        const newBaseName = prompt(t("contextMenu.rename"), item.name);
-        if (!newBaseName?.trim() || newBaseName.trim() === item.name) return;
         const oldFullName = item.id.slice("new:".length);
         const hasPath = oldFullName.includes("/");
         const prefix = hasPath ? oldFullName.substring(0, oldFullName.lastIndexOf("/")) : "";
-        const newFullName = prefix ? `${prefix}/${newBaseName.trim()}` : newBaseName.trim();
+        const newFullName = prefix ? `${prefix}/${trimmed}` : trimmed;
         const newTempId = `new:${newFullName}`;
         await migrateNewFileId(item.id, newTempId, newFullName);
         setTreeItems((prev) => {
           const replace = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
             nodes.map((n) => {
-              if (n.id === item.id) return { ...n, id: newTempId, name: newBaseName.trim() };
+              if (n.id === item.id) return { ...n, id: newTempId, name: trimmed };
               if (n.children) return { ...n, children: replace(n.children) };
               return n;
             });
           return replace(prev);
         });
         if (activeFileId === item.id) {
-          onSelectFile(newTempId, newBaseName.trim(), item.mimeType);
+          onSelectFile(newTempId, trimmed, item.mimeType);
         }
         return;
       }
 
       if (item.isFolder && item.id.startsWith("vfolder:")) {
         const oldPrefix = item.id.slice("vfolder:".length);
-        const newFolderName = prompt(t("contextMenu.rename"), item.name);
-        if (!newFolderName?.trim() || newFolderName.trim() === item.name) return;
 
         const parts = oldPrefix.split("/");
-        parts[parts.length - 1] = newFolderName.trim();
+        parts[parts.length - 1] = trimmed;
         const newPrefix = parts.join("/");
 
         const fileIds = collectFileIds(item);
@@ -171,15 +170,13 @@ export function useTreeFileOperations({
       }
 
       const currentFullName = findFullFileName(item.id, treeItems, "");
-      const newBaseName = prompt(t("contextMenu.rename"), item.name);
-      if (!newBaseName?.trim() || newBaseName.trim() === item.name) return;
 
       let newFullName: string;
       if (currentFullName && currentFullName.includes("/")) {
         const prefix = currentFullName.substring(0, currentFullName.lastIndexOf("/"));
-        newFullName = `${prefix}/${newBaseName.trim()}`;
+        newFullName = `${prefix}/${trimmed}`;
       } else {
-        newFullName = newBaseName.trim();
+        newFullName = trimmed;
       }
 
       setBusy([item.id]);
@@ -197,7 +194,7 @@ export function useTreeFileOperations({
           } else {
             await renameCachedFile(item.id, newFullName);
             if (activeFileId === item.id) {
-              onSelectFile(item.id, newBaseName.trim(), item.mimeType);
+              onSelectFile(item.id, trimmed, item.mimeType);
             }
           }
           if (data.meta) {
@@ -807,7 +804,7 @@ export function useTreeFileOperations({
   );
 
   return {
-    handleRename,
+    handleRenameSubmit,
     handleDelete,
     handleEncrypt,
     handleDecrypt,

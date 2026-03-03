@@ -107,6 +107,7 @@ export function DriveFileTree({
     item: CachedTreeNode;
   } | null>(null);
   const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
+  const [renameDialog, setRenameDialog] = useState<{ item: CachedTreeNode; name: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastClickedFileId, setLastClickedFileId] = useState<string | null>(null);
@@ -503,7 +504,7 @@ export function DriveFileTree({
 
   // --- File operation handlers hook ---
   const {
-    handleRename,
+    handleRenameSubmit,
     handleDelete,
     handleEncrypt,
     handleDecrypt,
@@ -684,7 +685,7 @@ export function DriveFileTree({
       items.push({
         label: t("contextMenu.rename"),
         icon: <Pencil size={ICON.MD} />,
-        onClick: () => handleRename(item),
+        onClick: () => setRenameDialog({ item, name: item.name }),
       });
 
       items.push({
@@ -696,7 +697,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleRename, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, t, treeItems]
+    [handleDelete, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, t, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -1040,6 +1041,46 @@ export function DriveFileTree({
             onSelectFile(file.id, baseName, file.mimeType);
           }}
         />
+      )}
+
+      {renameDialog && createPortal(
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setRenameDialog(null)}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              {t("contextMenu.rename")}
+            </h3>
+            <input
+              type="text"
+              value={renameDialog.name}
+              onChange={(e) => setRenameDialog((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleRenameSubmit(renameDialog.item, renameDialog.name);
+                  setRenameDialog(null);
+                }
+                if (e.key === "Escape") setRenameDialog(null);
+              }}
+              className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setRenameDialog(null)}
+                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                {t("fileTree.cancel")}
+              </button>
+              <button
+                onClick={() => { handleRenameSubmit(renameDialog.item, renameDialog.name); setRenameDialog(null); }}
+                disabled={!renameDialog.name.trim() || renameDialog.name.trim() === renameDialog.item.name}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {t("common.ok")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {createFileDialog.open && createPortal(
