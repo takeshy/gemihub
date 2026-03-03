@@ -55,7 +55,9 @@ export async function getSettings(
       );
       return {
         ...cmd,
-        model: (cmd.model as string) === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview" : cmd.model,
+        model: (cmd.model as string) === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview"
+          : (cmd.model as string) === "gemini-2.5-flash-image" ? "gemini-3.1-flash-image-preview"
+          : cmd.model,
         enabledMcpServers: normalizedIds.length > 0 ? normalizedIds : null,
       };
     });
@@ -63,6 +65,9 @@ export async function getSettings(
     // Migrate deprecated model names
     if ((parsed.selectedModel as string) === "gemini-3-pro-preview") {
       parsed.selectedModel = "gemini-3.1-pro-preview";
+    }
+    if ((parsed.selectedModel as string) === "gemini-2.5-flash-image") {
+      parsed.selectedModel = "gemini-3.1-flash-image-preview";
     }
 
     // Merge with defaults to handle missing fields from older versions

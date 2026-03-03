@@ -46,6 +46,10 @@ interface ChatInputProps {
   slashCommands?: (SlashCommand & { execute?: (args: string) => Promise<string> })[];
   driveToolModeLocked?: boolean;
   driveToolModeReasonKey?: keyof TranslationStrings;
+  thinkFlash?: boolean;
+  thinkFlashLite?: boolean;
+  onThinkFlashChange?: (value: boolean) => void;
+  onThinkFlashLiteChange?: (value: boolean) => void;
   lastFileIdInMessages?: string | null;
   onCompact?: () => void;
   isCompacting?: boolean;
@@ -163,6 +167,10 @@ export function ChatInput({
   slashCommands = [],
   driveToolModeLocked = false,
   driveToolModeReasonKey,
+  thinkFlash = false,
+  thinkFlashLite = true,
+  onThinkFlashChange,
+  onThinkFlashLiteChange,
   lastFileIdInMessages = null,
   onCompact,
   isCompacting = false,
@@ -658,6 +666,22 @@ export function ChatInput({
                             </button>
                           );
                         })}
+                      </>
+                    )}
+                    {onThinkFlashChange && onThinkFlashLiteChange && (
+                      <>
+                        <div className="mx-3 my-1 border-t border-gray-200 dark:border-gray-700" />
+                        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                          {t("chat.alwaysThinkLabel")}
+                        </div>
+                        <label className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
+                          <input type="checkbox" checked={thinkFlash} onChange={(e) => onThinkFlashChange(e.target.checked)} className="h-3 w-3" />
+                          <span>{t("chat.thinkFlash")}</span>
+                        </label>
+                        <label className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
+                          <input type="checkbox" checked={thinkFlashLite} onChange={(e) => onThinkFlashLiteChange(e.target.checked)} className="h-3 w-3" />
+                          <span>{t("chat.thinkFlashLite")}</span>
+                        </label>
                       </>
                     )}
                   </div>

@@ -168,7 +168,7 @@ Attachments are included in the Gemini API request as `inlineData` parts.
 
 ## Image Generation
 
-When an image-capable model is selected (e.g., `gemini-2.5-flash-image`), the chat switches to image generation mode:
+When an image-capable model is selected (e.g., `gemini-3.1-flash-image-preview`), the chat switches to image generation mode:
 - Uses `generateContent` (not streaming chat)
 - Response can contain both text and images
 - Images displayed inline with download and save-to-Drive buttons

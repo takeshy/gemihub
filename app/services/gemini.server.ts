@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import type { ModelType } from "~/types/settings";
 
 export async function generateWorkflow(
@@ -51,9 +51,11 @@ export async function* generateWorkflowStream(
     // Always enable thinking for workflow generation (quality improvement)
     const thinkingConfig = isGemmaModel(model)
       ? undefined
-      : model.includes("lite")
-        ? { includeThoughts: true, thinkingBudget: -1 }
-        : { includeThoughts: true };
+      : model.includes("gemini-3.1-flash-lite")
+        ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
+        : model === "gemini-2.5-flash-lite"
+          ? { includeThoughts: true, thinkingBudget: -1 }
+          : { includeThoughts: true };
 
     // Build contents with history for regeneration
     const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
