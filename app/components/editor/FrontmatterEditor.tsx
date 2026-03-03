@@ -176,7 +176,9 @@ export function FrontmatterEditor({ parsed, onFrontmatterChange, readOnly }: Fro
   const [properties, setProperties] = useState<FrontmatterProperty[]>(() =>
     propertiesFromFrontmatter(parsed.frontmatter)
   );
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("frontmatter-collapsed") === "true"; } catch { return true; }
+  });
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -348,7 +350,7 @@ export function FrontmatterEditor({ parsed, onFrontmatterChange, readOnly }: Fro
     <div className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
       <button
         type="button"
-        onClick={() => setCollapsed((v) => !v)}
+        onClick={() => setCollapsed((v) => { const next = !v; try { localStorage.setItem("frontmatter-collapsed", String(next)); } catch { /* ignore */ } return next; })}
         className="flex items-center gap-1 mb-1 text-xs font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
       >
         <ChevronRight
