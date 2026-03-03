@@ -56,6 +56,7 @@ export function EncryptedFileViewer({
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [decryptingPermanent, setDecryptingPermanent] = useState(false);
+  const [showDecryptConfirm, setShowDecryptConfirm] = useState(false);
   const [tempDiffData, setTempDiffData] = useState<{
     fileName: string;
     fileId: string;
@@ -83,6 +84,7 @@ export function EncryptedFileViewer({
       setEditedContent(encrypted ? "" : unescapeMarkdown(encryptedContent));
       setError(null);
       setPassword("");
+      setShowDecryptConfirm(false);
       if (prevFileIdRef.current !== fileId) {
         refreshedRef.current = false;
       }
@@ -368,7 +370,6 @@ export function EncryptedFileViewer({
 
   // Permanently decrypt: send plaintext to server, remove .encrypted extension
   const handlePermanentDecrypt = useCallback(async () => {
-    if (!confirm(t("crypt.decryptConfirm"))) return;
     setDecryptingPermanent(true);
     try {
       const res = await fetch("/api/drive/files", {
@@ -472,7 +473,7 @@ export function EncryptedFileViewer({
         <div className="flex items-center justify-end px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           <div className="flex items-center gap-1 sm:gap-2">
             <button
-              onClick={handlePermanentDecrypt}
+              onClick={() => setShowDecryptConfirm(true)}
               disabled={decryptingPermanent}
               className="flex items-center gap-1 px-2 py-1 text-xs text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-600 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30 disabled:opacity-50"
               title={t("crypt.decrypt")}
@@ -482,6 +483,30 @@ export function EncryptedFileViewer({
             </button>
           </div>
         </div>
+
+        {showDecryptConfirm && (
+          <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setShowDecryptConfirm(false)}>
+            <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                {t("crypt.decryptConfirm")}
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowDecryptConfirm(false)}
+                  className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  {t("fileTree.cancel")}
+                </button>
+                <button
+                  onClick={() => { setShowDecryptConfirm(false); handlePermanentDecrypt(); }}
+                  className="px-3 py-1.5 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
+                >
+                  {t("common.ok")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Media content */}
         {blobUrl ? (
@@ -533,7 +558,7 @@ export function EncryptedFileViewer({
             uploading={uploading}
           />
           <button
-            onClick={handlePermanentDecrypt}
+            onClick={() => setShowDecryptConfirm(true)}
             disabled={uploading || decryptingPermanent}
             className="flex items-center gap-1 px-2 py-1 text-xs text-orange-600 dark:text-orange-400 border border-orange-300 dark:border-orange-600 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30 disabled:opacity-50"
             title={t("crypt.decrypt")}
@@ -543,6 +568,30 @@ export function EncryptedFileViewer({
           </button>
         </div>
       </div>
+
+      {showDecryptConfirm && (
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setShowDecryptConfirm(false)}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+              {t("crypt.decryptConfirm")}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDecryptConfirm(false)}
+                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                {t("fileTree.cancel")}
+              </button>
+              <button
+                onClick={() => { setShowDecryptConfirm(false); handlePermanentDecrypt(); }}
+                className="px-3 py-1.5 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
+              >
+                {t("common.ok")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Text editor */}
       <div className="flex-1 p-4">

@@ -399,6 +399,7 @@ export interface TranslationStrings {
   "fileTree.customExt": string;
   "fileTree.create": string;
   "fileTree.cancel": string;
+  "fileTree.folderName": string;
   "fileTree.addDateTime": string;
   "fileTree.addLocation": string;
   "fileTree.selectedCount": string;
@@ -979,6 +980,7 @@ const en: TranslationStrings = {
   "fileTree.customExt": "Custom",
   "fileTree.create": "Create",
   "fileTree.cancel": "Cancel",
+  "fileTree.folderName": "Folder name",
   "fileTree.addDateTime": "Add date/time",
   "fileTree.addLocation": "Add location",
   "fileTree.selectedCount": "{count} selected",
@@ -1559,6 +1561,7 @@ const ja: TranslationStrings = {
   "fileTree.customExt": "カスタム",
   "fileTree.create": "作成",
   "fileTree.cancel": "キャンセル",
+  "fileTree.folderName": "フォルダ名",
   "fileTree.addDateTime": "日時を追加",
   "fileTree.addLocation": "位置情報を追加",
   "fileTree.selectedCount": "{count}件選択中",

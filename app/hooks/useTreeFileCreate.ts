@@ -48,21 +48,28 @@ export function useTreeFileCreate({
     open: boolean; name: string; ext: string; customExt: string; addDateTime: boolean; addLocation: boolean;
   }>({ open: false, name: "", ext: ".md", customExt: "", addDateTime: false, addLocation: false });
 
+  const [folderDialog, setFolderDialog] = useState<{ open: boolean; name: string }>({ open: false, name: "" });
+
   const handleCreateFolder = useCallback(() => {
-    const name = prompt("Folder name:");
-    if (!name?.trim()) return;
+    setFolderDialog({ open: true, name: "" });
+  }, []);
+
+  const handleCreateFolderSubmit = useCallback(() => {
+    const name = folderDialog.name.trim();
+    if (!name) return;
+    setFolderDialog({ open: false, name: "" });
 
     // Determine parent path from selected folder
     const parentPath = selectedFolderId?.startsWith("vfolder:")
       ? selectedFolderId.slice("vfolder:".length)
       : "";
-    const folderPath = parentPath ? `${parentPath}/${name.trim()}` : name.trim();
+    const folderPath = parentPath ? `${parentPath}/${name}` : name;
     const folderId = `vfolder:${folderPath}`;
 
     // Add virtual folder node to tree locally
     const newFolder: CachedTreeNode = {
       id: folderId,
-      name: name.trim(),
+      name,
       mimeType: "application/vnd.google-apps.folder",
       isFolder: true,
       children: [],
@@ -104,7 +111,7 @@ export function useTreeFileCreate({
       return next;
     });
     setSelectedFolderId(folderId);
-  }, [selectedFolderId, setTreeItems, setExpandedFolders, setSelectedFolderId]);
+  }, [folderDialog.name, selectedFolderId, setTreeItems, setExpandedFolders, setSelectedFolderId]);
 
   const handleCreateFile = useCallback(() => {
     const saved = localStorage.getItem("createFileOptions");
@@ -542,7 +549,10 @@ export function useTreeFileCreate({
   return {
     createFileDialog,
     setCreateFileDialog,
+    folderDialog,
+    setFolderDialog,
     handleCreateFolder,
+    handleCreateFolderSubmit,
     handleCreateFile,
     handleUploadClick,
     handleCreateFileSubmit,

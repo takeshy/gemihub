@@ -369,10 +369,8 @@ export function useTreeFileOperations({
     [fetchAndCacheTree, updateTreeFromMeta, encryptionEnabled, setBusy, clearBusy, t]
   );
 
-  const handleDecrypt = useCallback(
-    async (item: CachedTreeNode) => {
-      if (!confirm(t("crypt.decryptConfirm"))) return;
-
+  const handleDecryptWithPassword = useCallback(
+    async (item: CachedTreeNode, password: string) => {
       setBusy([item.id]);
       try {
         let encContent = "";
@@ -384,13 +382,6 @@ export function useTreeFileOperations({
           if (!raw.ok) { alert(t("crypt.decryptFailed")); return; }
           const rawData = await raw.json();
           encContent = rawData.content;
-        }
-
-        let password = cryptoCache.getPassword();
-        if (!password) {
-          const inputPw = prompt(t("crypt.enterPassword"));
-          if (!inputPw) return;
-          password = inputPw;
         }
 
         let plaintext: string;
@@ -807,7 +798,7 @@ export function useTreeFileOperations({
     handleRenameSubmit,
     handleDelete,
     handleEncrypt,
-    handleDecrypt,
+    handleDecryptWithPassword,
     handleTempDiffAccept,
     handleClearCache,
     handleDuplicate,

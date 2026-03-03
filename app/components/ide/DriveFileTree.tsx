@@ -45,6 +45,7 @@ import {
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
 import { isEncryptedFile } from "~/services/crypto-core";
+import { cryptoCache } from "~/services/crypto-cache";
 import { hasNetContentChange } from "~/services/edit-history-local";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -108,6 +109,7 @@ export function DriveFileTree({
   } | null>(null);
   const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ item: CachedTreeNode; name: string } | null>(null);
+  const [decryptDialog, setDecryptDialog] = useState<{ step: "confirm" | "password"; item: CachedTreeNode; password: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lastClickedFileId, setLastClickedFileId] = useState<string | null>(null);
@@ -430,7 +432,10 @@ export function DriveFileTree({
   const {
     createFileDialog,
     setCreateFileDialog,
+    folderDialog,
+    setFolderDialog,
     handleCreateFolder,
+    handleCreateFolderSubmit,
     handleCreateFile,
     handleUploadClick,
     handleCreateFileSubmit,
@@ -507,7 +512,7 @@ export function DriveFileTree({
     handleRenameSubmit,
     handleDelete,
     handleEncrypt,
-    handleDecrypt,
+    handleDecryptWithPassword,
     handleTempDiffAccept,
     handleClearCache,
     handleDuplicate,
@@ -653,7 +658,7 @@ export function DriveFileTree({
             items.push({
               label: t("crypt.decrypt"),
               icon: <Unlock size={ICON.MD} />,
-              onClick: () => handleDecrypt(item),
+              onClick: () => setDecryptDialog({ step: "confirm", item, password: "" }),
             });
           }
         }
@@ -697,7 +702,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleDuplicate, handleEncrypt, handleDecrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, t, treeItems]
+    [handleDelete, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, t, treeItems]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -1078,6 +1083,123 @@ export function DriveFileTree({
                 {t("common.ok")}
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {folderDialog.open && createPortal(
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setFolderDialog({ open: false, name: "" })}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              {t("fileTree.folderName")}
+            </h3>
+            <input
+              type="text"
+              value={folderDialog.name}
+              onChange={(e) => setFolderDialog((prev) => ({ ...prev, name: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreateFolderSubmit();
+                if (e.key === "Escape") setFolderDialog({ open: false, name: "" });
+              }}
+              className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setFolderDialog({ open: false, name: "" })}
+                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                {t("fileTree.cancel")}
+              </button>
+              <button
+                onClick={handleCreateFolderSubmit}
+                disabled={!folderDialog.name.trim()}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {t("common.ok")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {decryptDialog && createPortal(
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setDecryptDialog(null)}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+            {decryptDialog.step === "confirm" ? (
+              <>
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                  {t("crypt.decryptConfirm")}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setDecryptDialog(null)}
+                    className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    {t("fileTree.cancel")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const cached = cryptoCache.getPassword();
+                      if (cached) {
+                        const item = decryptDialog.item;
+                        setDecryptDialog(null);
+                        handleDecryptWithPassword(item, cached);
+                      } else {
+                        setDecryptDialog((prev) => prev ? { ...prev, step: "password" } : prev);
+                      }
+                    }}
+                    className="px-3 py-1.5 text-xs bg-orange-600 text-white rounded hover:bg-orange-700"
+                  >
+                    {t("common.ok")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  {t("crypt.enterPassword")}
+                </h3>
+                <input
+                  type="password"
+                  value={decryptDialog.password}
+                  onChange={(e) => setDecryptDialog((prev) => prev ? { ...prev, password: e.target.value } : prev)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && decryptDialog.password) {
+                      const { item, password } = decryptDialog;
+                      setDecryptDialog(null);
+                      handleDecryptWithPassword(item, password);
+                    }
+                    if (e.key === "Escape") setDecryptDialog(null);
+                  }}
+                  placeholder={t("crypt.passwordPlaceholder")}
+                  className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    onClick={() => setDecryptDialog(null)}
+                    className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    {t("fileTree.cancel")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!decryptDialog.password) return;
+                      const { item, password } = decryptDialog;
+                      setDecryptDialog(null);
+                      handleDecryptWithPassword(item, password);
+                    }}
+                    disabled={!decryptDialog.password}
+                    className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {t("common.ok")}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body
