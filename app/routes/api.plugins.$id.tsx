@@ -17,9 +17,110 @@ import {
   getLocalPluginData,
   saveLocalPluginData,
 } from "~/services/local-plugins.server";
+import fs from "node:fs";
+import path from "node:path";
+import { Readable } from "node:stream";
+import type { PluginAsset } from "~/types/plugin";
 
 // ---------------------------------------------------------------------------
-// GET /api/plugins/:id?file=main.js — serve plugin files
+// Asset caching helpers
+// ---------------------------------------------------------------------------
+
+/** In-progress download guard so concurrent requests don't duplicate work */
+const assetDownloads = new Map<string, Promise<void>>();
+
+function assetCachePath(pluginId: string, name: string): string {
+  return path.join(process.cwd(), "data", "plugins", pluginId, name);
+}
+
+function validateAssetUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid asset URL: ${url}`);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error(`Asset URL must use HTTPS: ${url}`);
+  }
+  // Block private/internal IPs (metadata APIs, localhost, link-local, etc.)
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host === "metadata.google.internal" ||
+    host.endsWith(".internal") ||
+    host.startsWith("127.") ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    host === "169.254.169.254" ||
+    host.startsWith("169.254.") ||
+    host === "[::1]" ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  ) {
+    throw new Error(`Asset URL points to a private/internal address: ${url}`);
+  }
+}
+
+async function ensureAssetCached(
+  pluginId: string,
+  asset: PluginAsset
+): Promise<void> {
+  const cachePath = assetCachePath(pluginId, asset.name);
+  if (fs.existsSync(cachePath)) return;
+
+  validateAssetUrl(asset.url);
+
+  const key = `${pluginId}/${asset.name}`;
+  if (assetDownloads.has(key)) return assetDownloads.get(key)!;
+
+  const promise = (async () => {
+    const dir = path.dirname(cachePath);
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = cachePath + ".tmp";
+
+    const res = await fetch(asset.url);
+    if (!res.ok)
+      throw new Error(`Failed to fetch asset ${asset.url}: HTTP ${res.status}`);
+
+    const buf = await res.arrayBuffer();
+    fs.writeFileSync(tmp, Buffer.from(buf));
+    fs.renameSync(tmp, cachePath); // atomic
+  })();
+
+  assetDownloads.set(key, promise);
+  try {
+    await promise;
+  } finally {
+    assetDownloads.delete(key);
+  }
+}
+
+/** Remove all cached assets for a plugin */
+function clearAssetCache(pluginId: string): void {
+  const dir = path.join(process.cwd(), "data", "plugins", pluginId);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function mimeFromName(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    js: "application/javascript",
+    wasm: "application/wasm",
+    json: "application/json",
+    css: "text/css",
+  };
+  return map[ext] ?? "application/octet-stream";
+}
+
+function isValidPluginId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(id);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/plugins/:id?file=main.js  — serve plugin source files
+// GET /api/plugins/:id?asset=name    — serve cached external assets
 // ---------------------------------------------------------------------------
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -30,7 +131,71 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   );
 
   const pluginId = params.id;
+  if (!isValidPluginId(pluginId)) {
+    return new Response("Invalid plugin ID", { status: 400 });
+  }
   const url = new URL(request.url);
+  const assetName = url.searchParams.get("asset");
+
+  // ── Asset serving path ──────────────────────────────────────────────────
+  if (assetName !== null) {
+    // Reject path-traversal attempts
+    if (assetName.includes("/") || assetName.includes("\\") || assetName.startsWith(".")) {
+      return new Response("Invalid asset name", { status: 400 });
+    }
+
+    // Read the manifest to validate the requested asset is declared
+    let manifestText: string | null = null;
+    const localManifest = getLocalPluginFile(pluginId, "manifest.json");
+    if (localManifest !== null) {
+      manifestText = localManifest;
+    } else {
+      manifestText = await getPluginFile(
+        validTokens.accessToken,
+        validTokens.rootFolderId,
+        pluginId,
+        "manifest.json"
+      );
+    }
+
+    if (manifestText === null) {
+      return new Response("Plugin not found", { status: 404 });
+    }
+
+    let declared: PluginAsset | undefined;
+    try {
+      const raw = JSON.parse(manifestText) as { assets?: PluginAsset[] };
+      declared = raw.assets?.find((a) => a.name === assetName);
+    } catch {
+      return new Response("Invalid manifest", { status: 500 });
+    }
+    if (!declared) {
+      return new Response("Asset not declared in manifest", { status: 403 });
+    }
+
+    try {
+      await ensureAssetCached(pluginId, declared);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return new Response(`Asset download failed: ${msg}`, { status: 502 });
+    }
+
+    const cachePath = assetCachePath(pluginId, assetName);
+    const stat = fs.statSync(cachePath);
+    const nodeStream = fs.createReadStream(cachePath);
+    const webStream = Readable.toWeb(nodeStream) as ReadableStream;
+
+    const headers: Record<string, string> = {
+      "Content-Type": mimeFromName(assetName),
+      "Content-Length": String(stat.size),
+      "Cache-Control": "private, max-age=86400",
+    };
+    if (setCookieHeader) headers["Set-Cookie"] = setCookieHeader;
+
+    return new Response(webStream, { headers });
+  }
+
+  // ── Plugin source file path ──────────────────────────────────────────────
   const fileName = url.searchParams.get("file") || "main.js";
 
   // Only allow specific files
@@ -111,6 +276,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   };
 
   const pluginId = params.id;
+  if (!isValidPluginId(pluginId)) {
+    return jsonWithCookie({ error: "Invalid plugin ID" }, { status: 400 });
+  }
 
   if (request.method === "DELETE") {
     // Uninstall plugin
@@ -130,6 +298,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         validTokens.rootFolderId,
         pluginId
       );
+      clearAssetCache(pluginId);
 
       // Remove from settings
       const settings = await getSettings(
@@ -244,6 +413,9 @@ export async function action({ request, params }: Route.ActionArgs) {
             { status: 404 }
           );
         }
+
+        // Clear cached assets so updated plugin re-downloads fresh ones
+        clearAssetCache(pluginId);
 
         const { manifest, version } = await installPlugin(
           validTokens.accessToken,

@@ -3,6 +3,14 @@
 import type React from "react";
 import type { PluginConfig } from "~/types/settings";
 
+/** External asset declared in manifest.json */
+export interface PluginAsset {
+  /** Filename used to reference this asset via api.assets.fetch(name) */
+  name: string;
+  /** Upstream URL the server downloads from */
+  url: string;
+}
+
 /** manifest.json schema */
 export interface PluginManifest {
   id: string;
@@ -11,6 +19,8 @@ export interface PluginManifest {
   minAppVersion: string;
   description: string;
   author: string;
+  /** Optional list of external assets the plugin needs (served via api.assets.fetch) */
+  assets?: PluginAsset[];
 }
 
 /** View registered by a plugin */
@@ -91,6 +101,16 @@ export interface PluginAPI {
     get(key: string): Promise<unknown>;
     set(key: string, value: unknown): Promise<void>;
     getAll(): Promise<Record<string, unknown>>;
+  };
+
+  // External asset fetching (declared in manifest.json assets[])
+  assets: {
+    /**
+     * Fetch a declared asset by name.
+     * The server downloads from the upstream URL on first call and caches it.
+     * Returns the raw bytes as an ArrayBuffer.
+     */
+    fetch(name: string): Promise<ArrayBuffer>;
   };
 
   // Host React instances (shared)

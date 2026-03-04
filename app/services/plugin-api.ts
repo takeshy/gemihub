@@ -163,6 +163,16 @@ export function createPluginAPI(
       },
     },
 
+    assets: {
+      async fetch(name: string) {
+        const res = await fetch(
+          `/api/plugins/${encodeURIComponent(pluginId)}?asset=${encodeURIComponent(name)}`
+        );
+        if (!res.ok) throw new Error(`Asset fetch error: ${res.status}`);
+        return res.arrayBuffer();
+      },
+    },
+
     storage: {
       async get(key: string) {
         const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}`, {

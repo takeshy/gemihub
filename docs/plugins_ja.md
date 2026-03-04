@@ -64,11 +64,16 @@ gemihub/
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
   "description": "プラグインの説明",
-  "author": "作者名"
+  "author": "作者名",
+  "assets": [
+    { "name": "model.wasm", "url": "https://cdn.example.com/model.wasm" }
+  ]
 }
 ```
 
 `id` は一意である必要があり、Drive フォルダ名と IndexedDB キャッシュキーとして使用されます。
+
+任意の `assets` 配列で、プラグインが実行時に必要とする外部ファイル（WASM バイナリ、大規模モデル等）を宣言できます。各エントリには `name`（コードから参照するファイル名）と `url`（サーバーがダウンロードする HTTPS URL）を指定します。詳細は[外部アセット](#外部アセット)を参照してください。
 
 ### main.js
 
@@ -192,6 +197,22 @@ await api.storage.set("myKey", { count: 42 });
 const all = await api.storage.getAll();
 ```
 
+#### 外部アセット
+
+プラグインは `manifest.json` で外部アセット（WASM バイナリ、ML モデル等）を宣言できます。サーバーがキャッシュプロキシとして動作し、初回リクエスト時に宣言された URL からファイルをダウンロードし、以降はローカルキャッシュ（`data/plugins/{id}/`）から配信します。
+
+```typescript
+// 宣言されたアセットを名前で取得（ArrayBuffer を返す）
+const buf = await api.assets.fetch("model.wasm");
+const module = await WebAssembly.instantiate(buf);
+```
+
+**ルール:**
+- アセットは `manifest.json` の `assets` 配列で宣言する必要があります。未宣言の名前へのリクエストは拒否されます（403）。
+- URL は HTTPS 必須です。プライベート/内部アドレス（localhost、169.254.x、10.x 等）はブロックされます。
+- アセットキャッシュはプラグインの更新・アンインストール時に自動的にクリアされます。
+- アセット名はフラットなファイル名のみ（`/`、`\`、先頭の `.` は不可）。
+
 #### React
 
 バージョン不一致を避けるため、ホストの React インスタンスを利用できます:
@@ -246,5 +267,6 @@ function MyPanel({ api }) {
 | GET | `/api/plugins` | インストール済みプラグイン一覧 |
 | POST | `/api/plugins` | プラグインインストール `{ repo }` |
 | GET | `/api/plugins/:id?file=main.js` | プラグインファイル配信 |
+| GET | `/api/plugins/:id?asset={name}` | manifest で宣言された外部アセットのキャッシュ配信 |
 | POST | `/api/plugins/:id` | アクション: `toggle`, `getData`, `setData`, `update`, `checkUpdate` |
 | DELETE | `/api/plugins/:id` | プラグインアンインストール |

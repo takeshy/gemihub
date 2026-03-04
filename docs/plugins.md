@@ -64,11 +64,16 @@ A plugin release must contain these assets:
   "version": "1.0.0",
   "minAppVersion": "1.0.0",  // reserved for future use
   "description": "What my plugin does",
-  "author": "Your Name"
+  "author": "Your Name",
+  "assets": [
+    { "name": "model.wasm", "url": "https://cdn.example.com/model.wasm" }
+  ]
 }
 ```
 
 The `id` must be unique and is used as the Drive folder name and IndexedDB cache key.
+
+The optional `assets` array declares external files (e.g. WASM binaries, large models) that the plugin needs at runtime. Each entry has a `name` (filename to reference from code) and a `url` (HTTPS URL the server downloads from). See [External Assets](#external-assets) for details.
 
 ### main.js
 
@@ -196,6 +201,22 @@ await api.storage.set("myKey", { count: 42 });
 const all = await api.storage.getAll();
 ```
 
+#### External Assets
+
+Plugins can declare external assets (WASM binaries, ML models, etc.) in `manifest.json`. The server acts as a caching proxy — it downloads the file from the declared URL on the first request and serves it from the local cache (`data/plugins/{id}/`) on subsequent requests.
+
+```typescript
+// Fetch a declared asset by name (returns ArrayBuffer)
+const buf = await api.assets.fetch("model.wasm");
+const module = await WebAssembly.instantiate(buf);
+```
+
+**Rules:**
+- Assets must be declared in the `assets` array of `manifest.json`. Requests for undeclared names are rejected (403).
+- URLs must use HTTPS. Private/internal addresses (localhost, 169.254.x, 10.x, etc.) are blocked.
+- The asset cache is automatically cleared on plugin update or uninstall.
+- Asset names must be flat filenames (no `/`, `\`, or leading `.`).
+
 #### React
 
 The host's React instances are available to avoid version mismatches:
@@ -266,5 +287,6 @@ To publish an update, create a new release with an updated version tag. Users cl
 | GET | `/api/plugins` | List installed plugins |
 | POST | `/api/plugins` | Install plugin `{ repo }` |
 | GET | `/api/plugins/:id?file={name}` | Serve plugin file (main.js, styles.css, manifest.json) |
+| GET | `/api/plugins/:id?asset={name}` | Serve a cached external asset declared in manifest |
 | POST | `/api/plugins/:id` | Actions: `toggle`, `getData`, `setData`, `update`, `checkUpdate` |
 | DELETE | `/api/plugins/:id` | Uninstall plugin |
