@@ -222,14 +222,11 @@ export function useTreeFileCreate({
         const result = await upload(newFiles, rootFolderId, namePrefix);
         if (result.ok) {
           await fetchAndCacheTree();
-          const binaryNewFiles = newFiles.filter((f) => {
-            const uploaded = result.fileMap.get(f.name);
-            return uploaded && isBinaryMimeType(uploaded.mimeType);
-          });
-          if (binaryNewFiles.length > 0) {
-            const localMeta = await getLocalSyncMeta();
-            for (const file of binaryNewFiles) {
-              const uploaded = result.fileMap.get(file.name)!;
+          const localMeta = await getLocalSyncMeta();
+          for (const file of newFiles) {
+            const uploaded = result.fileMap.get(file.name);
+            if (!uploaded) continue;
+            if (isBinaryMimeType(uploaded.mimeType)) {
               const base64 = await new Promise<string>((resolve) => {
                 const reader = new FileReader();
                 reader.onload = () => {
@@ -247,18 +244,28 @@ export function useTreeFileCreate({
                 fileName: uploaded.name ?? file.name,
                 encoding: "base64",
               });
-              window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: uploaded.id } }));
-              if (localMeta) {
-                localMeta.files[uploaded.id] = {
-                  md5Checksum: uploaded.md5Checksum ?? "",
-                  modifiedTime: uploaded.modifiedTime ?? "",
-                };
-              }
+            } else {
+              const content = await file.text();
+              await setCachedFile({
+                fileId: uploaded.id,
+                content,
+                md5Checksum: uploaded.md5Checksum ?? "",
+                modifiedTime: uploaded.modifiedTime ?? "",
+                cachedAt: Date.now(),
+                fileName: uploaded.name ?? file.name,
+              });
             }
+            window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: uploaded.id } }));
             if (localMeta) {
-              localMeta.lastUpdatedAt = new Date().toISOString();
-              await setLocalSyncMeta(localMeta);
+              localMeta.files[uploaded.id] = {
+                md5Checksum: uploaded.md5Checksum ?? "",
+                modifiedTime: uploaded.modifiedTime ?? "",
+              };
             }
+          }
+          if (localMeta) {
+            localMeta.lastUpdatedAt = new Date().toISOString();
+            await setLocalSyncMeta(localMeta);
           }
         }
       }
