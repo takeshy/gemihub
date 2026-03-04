@@ -134,7 +134,7 @@ export function createPluginAPI(
         const res = await fetch("/api/drive/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "create", name, content, mimeType }),
+          body: JSON.stringify({ action: "create", name, content, mimeType, dedup: true }),
         });
         if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
         const data = await res.json();
