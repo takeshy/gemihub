@@ -138,25 +138,42 @@ export function createPluginAPI(
         });
         if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
         const data = await res.json();
+        const file = data.file;
+        // Cache locally so it doesn't appear in Pull diff
+        const { setCachedFile } = await import("~/services/indexeddb-cache");
+        await setCachedFile({
+          fileId: file.id,
+          content,
+          md5Checksum: file.md5Checksum ?? "",
+          modifiedTime: file.modifiedTime ?? "",
+          cachedAt: Date.now(),
+          fileName: file.name,
+        });
         if (data.meta) {
           window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
         }
         window.dispatchEvent(new Event("sync-complete"));
-        return { id: data.file.id, name: data.file.name };
+        return { id: file.id, name: file.name };
       },
 
       async updateFile(fileId: string, content: string) {
-        const res = await fetch("/api/drive/files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update", fileId, content }),
+        // Update local cache only; user pushes to Drive manually
+        const { getCachedFile, setCachedFile } = await import("~/services/indexeddb-cache");
+        const { saveLocalEdit } = await import("~/services/edit-history-local");
+        const cached = await getCachedFile(fileId);
+        if (!cached) throw new Error(`File not in local cache: ${fileId}`);
+        await saveLocalEdit(fileId, cached.fileName ?? fileId, content);
+        await setCachedFile({
+          fileId,
+          content,
+          md5Checksum: cached.md5Checksum ?? "",
+          modifiedTime: cached.modifiedTime ?? "",
+          cachedAt: Date.now(),
+          fileName: cached.fileName,
         });
-        if (!res.ok) throw new Error(`Drive update error: ${res.status}`);
-        const data = await res.json();
-        if (data.meta) {
-          window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
-        }
-        window.dispatchEvent(new Event("sync-complete"));
+        window.dispatchEvent(
+          new CustomEvent("file-modified", { detail: { fileId } })
+        );
       },
 
       async rebuildTree() {
