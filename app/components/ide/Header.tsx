@@ -30,7 +30,7 @@ interface HeaderProps {
   localModifiedCount: number;
   remoteModifiedCount: number;
   onPush: () => void;
-  onPull: () => void;
+  onPull: (ignoredIds?: Set<string>) => void;
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   onQuickOpen?: () => void;

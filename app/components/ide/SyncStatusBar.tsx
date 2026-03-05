@@ -22,7 +22,7 @@ interface SyncStatusBarProps {
   localModifiedCount: number;
   remoteModifiedCount: number;
   onPush: () => void;
-  onPull: () => void;
+  onPull: (ignoredIds?: Set<string>) => void;
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   conflicts: ConflictInfo[];
@@ -234,7 +234,7 @@ export function SyncStatusBar({
           type={dialogType}
           onClose={() => setDialogType(null)}
           onSelectFile={onSelectFile}
-          onSync={dialogType === "push" ? onPush : onPull}
+          onSync={dialogType === "push" ? onPush : (ignoredIds) => onPull(ignoredIds)}
           syncDisabled={isBusy}
         />
       )}

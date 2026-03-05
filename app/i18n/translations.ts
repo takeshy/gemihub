@@ -542,6 +542,8 @@ export interface TranslationStrings {
   "sync.noDiff": string;
   "sync.encryptedNoDiff": string;
   "sync.conflictBadge": string;
+  "sync.ignore": string;
+  "sync.unignore": string;
 
   // Shortcuts tab
   "settings.tab.shortcuts": string;
@@ -1127,6 +1129,8 @@ const en: TranslationStrings = {
   "sync.noDiff": "Binary file",
   "sync.encryptedNoDiff": "Encrypted file (diff not available)",
   "sync.conflictBadge": "Conflict",
+  "sync.ignore": "Ignore",
+  "sync.unignore": "Unignore",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "Shortcuts",
@@ -1712,6 +1716,8 @@ const ja: TranslationStrings = {
   "sync.noDiff": "バイナリファイル",
   "sync.encryptedNoDiff": "暗号化ファイル（差分表示不可）",
   "sync.conflictBadge": "コンフリクト",
+  "sync.ignore": "無視",
+  "sync.unignore": "無視解除",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "ショートカット",

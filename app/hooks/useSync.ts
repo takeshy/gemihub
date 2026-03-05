@@ -12,6 +12,7 @@ import {
   getCachedRemoteMeta,
   setCachedRemoteMeta,
   deleteEditHistoryEntry,
+  setEditHistoryEntry,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
@@ -360,7 +361,7 @@ export function useSync() {
     }
   }, [refreshSyncCounts]);
 
-  const pull = useCallback(async () => {
+  const pull = useCallback(async (ignoredIds?: Set<string>) => {
     if (syncLockRef.current) { console.warn("[useSync] pull skipped: sync already in progress"); return; }
     syncLockRef.current = true;
     setSyncStatus("pulling");
@@ -430,10 +431,16 @@ export function useSync() {
       }
 
       // 6. Download non-conflict files via pullDirect
-      const filesToPull = [...diff.toPull, ...diff.remoteOnly];
+      const allFilesToPull = [...diff.toPull, ...diff.remoteOnly];
       const remoteFiles = remoteMeta?.files ?? {};
 
-      if (filesToPull.length > 0) {
+      // Separate ignored modified files — metadata only, no download
+      const ignoredModifiedIds = new Set(
+        ignoredIds ? diff.toPull.filter(id => ignoredIds.has(id)) : []
+      );
+      const filesToPull = allFilesToPull.filter(id => !ignoredModifiedIds.has(id));
+
+      if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
         const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
         // On mobile, skip downloading binary file content (save storage)
@@ -497,6 +504,27 @@ export function useSync() {
           }
         }
 
+        // 7b. Handle ignored modified files — metadata only, no download, mark for push
+        for (const fid of ignoredModifiedIds) {
+          const rm = remoteFiles[fid];
+          updatedMeta.files[fid] = {
+            md5Checksum: rm?.md5Checksum ?? "",
+            modifiedTime: rm?.modifiedTime ?? "",
+            name: rm?.name,
+          };
+          // Synthetic marker diff — reverse-apply inserts a phantom line,
+          // making reconstructed content differ from cache → hasNetContentChange returns true
+          await setEditHistoryEntry({
+            fileId: fid,
+            filePath: rm?.name ?? fid,
+            diffs: [{
+              timestamp: new Date().toISOString(),
+              diff: "@@ -1,1 +1,0 @@\n-__PULL_IGNORED__",
+              stats: { additions: 0, deletions: 1 },
+            }],
+          });
+        }
+
         // 8. Save localMeta
         updatedMeta.lastUpdatedAt = new Date().toISOString();
         await setLocalSyncMeta(updatedMeta);
@@ -506,7 +534,7 @@ export function useSync() {
       if (remoteMeta) await updateCachedRemoteMetaFromSyncMeta(remoteMeta);
 
       // 9. Dispatch events and update counts
-      if (filesToPull.length > 0 || localOnlyReal.length > 0) {
+      if (allFilesToPull.length > 0 || localOnlyReal.length > 0) {
         setLastSyncTime(new Date().toISOString());
         window.dispatchEvent(new Event("sync-complete"));
         if (filesToPull.length > 0) {

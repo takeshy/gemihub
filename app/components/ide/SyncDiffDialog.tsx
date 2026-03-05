@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Loader2, ExternalLink, ArrowUp, ArrowDown } from "lucide-react";
+import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Loader2, ExternalLink, ArrowUp, ArrowDown, EyeOff, Eye } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { DiffView } from "~/components/shared/DiffView";
 import { useI18n } from "~/i18n/context";
@@ -19,7 +19,7 @@ interface SyncDiffDialogProps {
   type: "push" | "pull";
   onClose: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
-  onSync?: () => void;
+  onSync?: (ignoredIds?: Set<string>) => void;
   syncDisabled?: boolean;
 }
 
@@ -60,6 +60,19 @@ export function SyncDiffDialog({
   const [diffStates, setDiffStates] = useState<Record<string, DiffState>>({});
   const diffStatesRef = useRef(diffStates);
   useEffect(() => { diffStatesRef.current = diffStates; }, [diffStates]);
+  const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
+
+  const canIgnore = (fileType: FileListItem["type"]) =>
+    type === "pull" && fileType === "modified";
+
+  const toggleIgnore = useCallback((fileId: string) => {
+    setIgnoredIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  }, []);
 
   // createTwoFilesPatch(old, new) — labels must match which content is old vs new
   // Push: old=Drive, new=local; Pull: old=local, new=Drive
@@ -161,7 +174,7 @@ export function SyncDiffDialog({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {title} ({files.length})
+            {title} ({ignoredIds.size > 0 ? `${files.length - ignoredIds.size} / ${files.length}` : files.length})
           </h3>
           <button
             onClick={onClose}
@@ -182,11 +195,12 @@ export function SyncDiffDialog({
                 const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : f.type === "editDeleted" || f.type === "conflict" ? "text-amber-500" : "text-red-500";
                 const ds = diffStates[f.id];
                 const diffable = canShowDiff(f.name);
+                const ignored = ignoredIds.has(f.id);
 
                 return (
                   <div
                     key={f.id}
-                    className={`rounded-lg border border-gray-200 dark:border-gray-700 p-3${f.type === "conflict" ? " opacity-60" : ""}`}
+                    className={`rounded-lg border border-gray-200 dark:border-gray-700 p-3${f.type === "conflict" ? " opacity-60" : ""}${ignored ? " opacity-50" : ""}`}
                   >
                     <div className="flex items-center gap-2">
                       <Icon size={14} className={`shrink-0 ${iconColor}`} />
@@ -215,6 +229,18 @@ export function SyncDiffDialog({
                         >
                           <ExternalLink size={12} />
                           {t("sync.openFile")}
+                        </button>
+                      )}
+
+                      {/* Ignore toggle (pull only, not for conflict/editDeleted) */}
+                      {canIgnore(f.type) && (
+                        <button
+                          onClick={() => toggleIgnore(f.id)}
+                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                          title={ignored ? t("sync.unignore") : t("sync.ignore")}
+                        >
+                          {ignored ? <Eye size={ICON.SM} /> : <EyeOff size={ICON.SM} />}
+                          {ignored ? t("sync.unignore") : t("sync.ignore")}
                         </button>
                       )}
 
@@ -293,7 +319,7 @@ export function SyncDiffDialog({
             </button>
             {onSync && (
               <button
-                onClick={() => { onClose(); onSync(); }}
+                onClick={() => { onClose(); onSync(ignoredIds.size > 0 ? ignoredIds : undefined); }}
                 disabled={syncDisabled}
                 className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
