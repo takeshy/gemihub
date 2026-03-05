@@ -207,6 +207,10 @@ export async function action({ request }: Route.ActionArgs) {
       let file: DriveFile | null = null;
       if (dedup) {
         file = await findFileByExactName(validTokens.accessToken, name, validTokens.rootFolderId);
+        if (file && content) {
+          // Update existing file with new content so remote stays in sync
+          file = await updateFile(validTokens.accessToken, file.id, content, mimeType || "text/plain");
+        }
       }
       if (!file) {
         file = await createFile(
