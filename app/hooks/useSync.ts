@@ -126,12 +126,19 @@ export function useSync() {
   // Listen for file-modified events to update counts in real-time
   useEffect(() => {
     const handler = () => { refreshSyncCounts(); };
+    const correctionHandler = (e: Event) => {
+      const { type, count } = (e as CustomEvent).detail;
+      if (type === "pull") setRemoteModifiedCount(count);
+      else if (type === "push") setLocalModifiedCount(count);
+    };
     window.addEventListener("file-modified", handler);
     window.addEventListener("sync-complete", handler);
+    window.addEventListener("sync-counts-corrected", correctionHandler);
     refreshSyncCounts();
     return () => {
       window.removeEventListener("file-modified", handler);
       window.removeEventListener("sync-complete", handler);
+      window.removeEventListener("sync-counts-corrected", correctionHandler);
     };
   }, [refreshSyncCounts]);
 

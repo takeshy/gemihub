@@ -88,6 +88,9 @@ export function SyncStatusBar({
         }
         files.sort((a, b) => a.name.localeCompare(b.name));
         setDialogFiles(files);
+        window.dispatchEvent(new CustomEvent("sync-counts-corrected", {
+          detail: { type, count: files.length }
+        }));
       } else {
         const files: FileListItem[] = [];
         const remoteFiles = remoteMeta?.files ?? {};
@@ -127,6 +130,9 @@ export function SyncStatusBar({
 
         files.sort((a, b) => a.name.localeCompare(b.name));
         setDialogFiles(files);
+        window.dispatchEvent(new CustomEvent("sync-counts-corrected", {
+          detail: { type, count: files.length }
+        }));
       }
     } catch {
       setDialogFiles([]);
