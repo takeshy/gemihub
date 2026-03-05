@@ -90,9 +90,9 @@ export interface PluginAPI {
     ): Promise<Array<{ id: string; name: string; mimeType: string }>>;
     createFile(
       name: string,
-      content: string
+      content: string | ArrayBuffer
     ): Promise<{ id: string; name: string }>;
-    updateFile(fileId: string, content: string): Promise<void>;
+    updateFile(fileId: string, content: string | ArrayBuffer): Promise<void>;
     rebuildTree(): Promise<void>;
   };
 

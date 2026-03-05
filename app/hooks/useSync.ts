@@ -261,8 +261,7 @@ export function useSync() {
         ? new Set([...modifiedIds].filter((id) => trackedIds.has(id) || !localFiles[id]))
         : modifiedIds;
 
-      const filesToPush: Array<{ fileId: string; content: string; fileName: string }> = [];
-      const binarySkippedIds: string[] = [];
+      const filesToPush: Array<{ fileId: string; content: string; fileName: string; encoding?: "base64" }> = [];
       const revertedIds: string[] = [];
       // Skip "new:" files — they haven't been migrated to Drive yet and have no real file ID
       for (const fid of [...filteredIds].filter(id => !id.startsWith("new:"))) {
@@ -270,9 +269,9 @@ export function useSync() {
         if (!cached) continue;
         const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? remoteMeta?.files?.[fid]?.name ?? fid;
         if (isSyncExcludedPath(fileName)) continue;
-        // Skip base64-encoded files (binary files already updated on Drive via upload)
+        // Binary files: push with encoding flag (skip hasNetContentChange — text diff not applicable)
         if (cached.encoding === "base64") {
-          binarySkippedIds.push(fid);
+          filesToPush.push({ fileId: fid, content: cached.content, fileName, encoding: "base64" });
           continue;
         }
         // Skip files whose content was reverted to synced state (no net change)
@@ -292,7 +291,7 @@ export function useSync() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "pushFiles",
-            files: filesToPush.map(({ fileId, content }) => ({ fileId, content })),
+            files: filesToPush.map(({ fileId, content, fileName, encoding }) => ({ fileId, content, ...(encoding ? { encoding, fileName } : {}) })),
             remoteMeta,
             syncMetaFileId,
           }),
@@ -331,10 +330,6 @@ export function useSync() {
 
       // Clear edit history only for files that were actually pushed successfully
       for (const fileId of pushedResultIds) {
-        await deleteEditHistoryEntry(fileId);
-      }
-      // Clear edit history for binary files skipped during push (already up-to-date on Drive)
-      for (const fileId of binarySkippedIds) {
         await deleteEditHistoryEntry(fileId);
       }
       // Clear edit history for reverted files (content matches synced state, no actual diff)

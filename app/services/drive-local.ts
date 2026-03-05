@@ -510,7 +510,7 @@ export async function saveBinaryFileLocal(
 // Helper: mark binary file as modified without computing diffs
 // ---------------------------------------------------------------------------
 
-async function markBinaryFileModified(fileId: string, filePath: string): Promise<void> {
+export async function markBinaryFileModified(fileId: string, filePath: string): Promise<void> {
   const existing = await getEditHistoryForFile(fileId);
   if (existing) return; // already marked
   await setEditHistoryEntry({
