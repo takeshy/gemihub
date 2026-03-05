@@ -138,6 +138,9 @@ export function createPluginAPI(
         });
         if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
         const data = await res.json();
+        if (data.meta) {
+          window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
+        }
         window.dispatchEvent(new Event("sync-complete"));
         return { id: data.file.id, name: data.file.name };
       },
@@ -149,6 +152,10 @@ export function createPluginAPI(
           body: JSON.stringify({ action: "update", fileId, content }),
         });
         if (!res.ok) throw new Error(`Drive update error: ${res.status}`);
+        const data = await res.json();
+        if (data.meta) {
+          window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
+        }
         window.dispatchEvent(new Event("sync-complete"));
       },
 
