@@ -96,8 +96,8 @@ Uploads locally-changed files to remote.
    ├─ Get modified file IDs from IndexedDB editHistory
    ├─ Filter to only files tracked in any known meta (remoteMeta or localMeta)
    ├─ Filter out system files and excluded paths (history/, plugins/, etc.)
-   ├─ Filter out binary files (base64-encoded, already uploaded directly to Drive)
-   ├─ Filter out reverted files (hasNetContentChange = false)
+   ├─ Include binary files (base64-encoded) with encoding flag (skip hasNetContentChange)
+   ├─ Filter out reverted text files (hasNetContentChange = false)
    ├─ Read all modified file contents from IndexedDB cache
    ├─ POST /api/sync { action: "pushFiles", files, remoteMeta, syncMetaFileId }
    │   └─ Server:

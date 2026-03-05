@@ -172,11 +172,19 @@ const files = await api.drive.searchFiles("クエリ");
 // フォルダ内のファイル一覧
 const files = await api.drive.listFiles(folderId);
 
-// ファイルを作成
+// テキストファイルを作成
 const { id, name } = await api.drive.createFile("notes.md", "# メモ");
 
-// ファイルを更新
+// バイナリファイルを作成（ArrayBuffer を渡す）
+const response = await fetch(imageUrl);
+const buffer = await response.arrayBuffer();
+const { id, name } = await api.drive.createFile("photo.png", buffer);
+
+// テキストファイルを更新
 await api.drive.updateFile(fileId, "新しい内容");
+
+// バイナリファイルを更新（ローカル更新のみ。Drive への反映は Push で行う）
+await api.drive.updateFile(fileId, arrayBuffer);
 
 // ファイルツリーを Drive から再構築
 await api.drive.rebuildTree();

@@ -176,11 +176,19 @@ const files = await api.drive.searchFiles("query");
 // List files in a folder (omit folderId to list files in the gemihub root folder)
 const files = await api.drive.listFiles(folderId);
 
-// Create a file (created in the gemihub root folder)
+// Create a text file (created in the gemihub root folder)
 const { id, name } = await api.drive.createFile("notes.md", "# Notes");
 
-// Update a file
+// Create a binary file (pass ArrayBuffer)
+const response = await fetch(imageUrl);
+const buffer = await response.arrayBuffer();
+const { id, name } = await api.drive.createFile("photo.png", buffer);
+
+// Update a file (text)
 await api.drive.updateFile(fileId, "new content");
+
+// Update a file (binary — updated locally, push to sync to Drive)
+await api.drive.updateFile(fileId, arrayBuffer);
 
 // Rebuild the file tree from Drive
 await api.drive.rebuildTree();
