@@ -156,7 +156,7 @@ export function createPluginAPI(
           if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
           const data = await res.json();
           const file = data.file;
-          const { setCachedFile } = await import("~/services/indexeddb-cache");
+          const { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } = await import("~/services/indexeddb-cache");
           await setCachedFile({
             fileId: file.id,
             content: base64,
@@ -166,6 +166,16 @@ export function createPluginAPI(
             fileName: file.name,
             encoding: "base64",
           });
+          // Update localSyncMeta so the file doesn't appear as a pull candidate
+          const localMeta = await getLocalSyncMeta();
+          if (localMeta) {
+            localMeta.files[file.id] = {
+              md5Checksum: file.md5Checksum ?? "",
+              modifiedTime: file.modifiedTime ?? "",
+            };
+            localMeta.lastUpdatedAt = data.meta?.lastUpdatedAt || new Date().toISOString();
+            await setLocalSyncMeta(localMeta);
+          }
           if (data.meta) {
             window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
           }
@@ -194,7 +204,7 @@ export function createPluginAPI(
         const data = await res.json();
         const file = data.file;
         // Cache locally so it doesn't appear in Pull diff
-        const { setCachedFile } = await import("~/services/indexeddb-cache");
+        const { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } = await import("~/services/indexeddb-cache");
         await setCachedFile({
           fileId: file.id,
           content,
@@ -203,6 +213,16 @@ export function createPluginAPI(
           cachedAt: Date.now(),
           fileName: file.name,
         });
+        // Update localSyncMeta so the file doesn't appear as a pull candidate
+        const localMeta = await getLocalSyncMeta();
+        if (localMeta) {
+          localMeta.files[file.id] = {
+            md5Checksum: file.md5Checksum ?? "",
+            modifiedTime: file.modifiedTime ?? "",
+          };
+          localMeta.lastUpdatedAt = data.meta?.lastUpdatedAt || new Date().toISOString();
+          await setLocalSyncMeta(localMeta);
+        }
         if (data.meta) {
           window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
         }
