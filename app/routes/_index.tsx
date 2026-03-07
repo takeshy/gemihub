@@ -14,6 +14,7 @@ import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
 import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta, getAllCachedFiles, clearAllCache } from "~/services/indexeddb-cache";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
+import { SkillProvider, useSkills } from "~/contexts/SkillContext";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally } from "~/engine/local-executor";
 import { processDriveEvent } from "~/utils/drive-file-local";
@@ -312,6 +313,7 @@ function IDELayout({
     <I18nProvider language={settings.language ?? "en"}>
       <EditorContextProvider>
       <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language ?? "en"}>
+      <SkillProvider skillsFolderName={settings.skillsFolderName ?? "skills"}>
       <IDEContent
         settings={settings}
         hasGeminiApiKey={hasGeminiApiKey}
@@ -353,6 +355,7 @@ function IDELayout({
         pullDialogTrigger={pullDialogTrigger}
         setPullDialogTrigger={setPullDialogTrigger}
       />
+      </SkillProvider>
       </PluginProvider>
       </EditorContextProvider>
     </I18nProvider>
@@ -975,7 +978,14 @@ function IDEContent({
   })();
 
   // Merge plugin slash commands with settings slash commands for ChatPanel
-  const allSlashCommands = settings.slashCommands || [];
+  const { skills } = useSkills();
+  const skillSlashCommands = skills.map((s) => ({
+    id: `__skill__${s.id}`,
+    name: s.id,
+    description: `[Skill] ${s.description || s.name}`,
+    promptTemplate: "",
+  }));
+  const allSlashCommands = [...(settings.slashCommands || []), ...skillSlashCommands];
 
   // Shared components
   const fileTreeContent = (

@@ -559,6 +559,7 @@ export interface UserSettings {
   encryptedApiKey: string;
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
+  skillsFolderName: string;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -585,4 +586,5 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   encryptedApiKey: "",
   apiKeySalt: "",
   shortcutKeys: [],
+  skillsFolderName: "skills",
 };

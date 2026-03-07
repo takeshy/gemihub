@@ -23,7 +23,12 @@ import {
   type DriveToolMode,
 } from "~/types/settings";
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
+import type { SkillWorkflowRef } from "~/types/skill";
 import type { DriveEvent } from "~/engine/local-executor";
+import { findFileByNameLocal, readFileLocal } from "~/services/drive-local";
+import { parseWorkflowContentByName } from "~/engine/parser";
+import { executeWorkflowLocally, type LocalExecuteCallbacks } from "~/engine/local-executor";
+import { buildWorkflowToolId } from "~/services/skill-loader";
 
 export interface LocalChatOptions {
   apiKey: string;
@@ -39,6 +44,13 @@ export interface LocalChatOptions {
   functionCallWarningThreshold?: number;
   ragTopK?: number;
   abortSignal?: AbortSignal;
+  skillWorkflows?: Array<{
+    skillId: string;
+    skillName: string;
+    workflow: SkillWorkflowRef;
+    folderId: string;
+  }>;
+  skillsFolderName?: string;
 }
 
 export interface LocalChatCallbacks {
@@ -64,6 +76,8 @@ export async function* executeLocalChat(
     functionCallWarningThreshold,
     ragTopK,
     abortSignal,
+    skillWorkflows,
+    skillsFolderName = "skills",
   } = options;
 
   // Image generation model
@@ -112,6 +126,35 @@ export async function* executeLocalChat(
       if (abortSignal?.aborted) throw err;
       console.error("Failed to get MCP tool definitions:", err);
     }
+  }
+
+  // Skill workflow tool
+  if (skillWorkflows && skillWorkflows.length > 0) {
+    const workflowIds = skillWorkflows.map((sw) =>
+      buildWorkflowToolId(sw.skillId, sw.workflow),
+    );
+    tools.push({
+      name: "run_skill_workflow",
+      description:
+        "Execute a workflow provided by an active agent skill. Available workflows: " +
+        workflowIds.join(", "),
+      parameters: {
+        type: "object",
+        properties: {
+          workflowId: {
+            type: "string",
+            description:
+              "Workflow ID in the format skillId/workflowName. Available: " +
+              workflowIds.join(", "),
+          },
+          variables: {
+            type: "string",
+            description: "Optional JSON object of input variables",
+          },
+        },
+        required: ["workflowId"],
+      },
+    });
   }
 
   // Build tool dispatcher
@@ -168,6 +211,83 @@ export async function* executeLocalChat(
         if (abortSignal?.aborted) throw err;
         return {
           error: err instanceof Error ? err.message : "MCP tool call failed",
+        };
+      }
+    }
+
+    // Skill workflow tool
+    if (name === "run_skill_workflow" && skillWorkflows && skillWorkflows.length > 0) {
+      try {
+        const workflowId = args.workflowId as string;
+        const variablesJson = (args.variables as string) || "{}";
+
+        // Find matching skill workflow
+        const match = skillWorkflows.find(
+          (sw) => buildWorkflowToolId(sw.skillId, sw.workflow) === workflowId,
+        );
+        if (!match) {
+          return { error: `Skill workflow not found: ${workflowId}` };
+        }
+
+        // Resolve the workflow file from cache
+        const wfPath = `${skillsFolderName}/${match.skillId}/${match.workflow.path}`;
+        const candidates = [wfPath];
+        if (!wfPath.endsWith(".yaml") && !wfPath.endsWith(".yml")) {
+          candidates.push(`${wfPath}.yaml`, `${wfPath}.yml`);
+        }
+
+        let fileId: string | null = null;
+        for (const candidate of candidates) {
+          const found = await findFileByNameLocal(candidate);
+          if (found) {
+            fileId = found.id;
+            break;
+          }
+        }
+        if (!fileId) {
+          return { error: `Workflow file not found: ${wfPath}` };
+        }
+
+        const content = await readFileLocal(fileId);
+        const workflow = parseWorkflowContentByName(content);
+
+        // Parse input variables
+        let initialVariables: Record<string, string | number> = {};
+        try {
+          const parsed = JSON.parse(variablesJson);
+          if (typeof parsed === "object" && parsed !== null) {
+            initialVariables = parsed;
+          }
+        } catch { /* ignore parse errors */ }
+
+        // Execute workflow headlessly with no-op callbacks
+        const headlessCallbacks: LocalExecuteCallbacks = {
+          onLog: () => {},
+          onDriveEvent: (event) => callbacks?.onDriveEvent?.(event),
+          promptCallbacks: {
+            promptForValue: async () => null,
+            promptForDialog: async () => null,
+            promptForDriveFile: async () => null,
+          },
+        };
+        const result = await executeWorkflowLocally(workflow, headlessCallbacks, {
+          initialVariables,
+          workflowId: fileId,
+        });
+
+        // Collect result variables
+        const resultVars: Record<string, string | number> = {};
+        for (const [k, v] of result.context.variables) {
+          resultVars[k] = v;
+        }
+
+        return {
+          status: result.historyRecord?.status || "completed",
+          variables: resultVars,
+        };
+      } catch (err) {
+        return {
+          error: err instanceof Error ? err.message : "Skill workflow execution failed",
         };
       }
     }

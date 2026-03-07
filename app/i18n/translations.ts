@@ -586,6 +586,11 @@ export interface TranslationStrings {
   "frontmatter.cut": string;
   "frontmatter.copy": string;
   "frontmatter.paste": string;
+
+  // Skills
+  "settings.general.skillsFolder": string;
+  "settings.general.skillsFolderDescription": string;
+  "skills.selector.title": string;
 }
 
 const en: TranslationStrings = {
@@ -1173,6 +1178,11 @@ const en: TranslationStrings = {
   "frontmatter.cut": "Cut",
   "frontmatter.copy": "Copy",
   "frontmatter.paste": "Paste",
+
+  // Skills
+  "settings.general.skillsFolder": "Skills Folder",
+  "settings.general.skillsFolderDescription": "Folder name under your root folder containing skill definitions (subfolders with SKILL.md).",
+  "skills.selector.title": "Agent Skills",
 };
 
 const ja: TranslationStrings = {
@@ -1760,6 +1770,11 @@ const ja: TranslationStrings = {
   "frontmatter.cut": "切り取り",
   "frontmatter.copy": "コピー",
   "frontmatter.paste": "貼り付け",
+
+  // Skills
+  "settings.general.skillsFolder": "スキルフォルダ",
+  "settings.general.skillsFolderDescription": "SKILL.mdを含むスキル定義フォルダのルートフォルダ内での名前。",
+  "skills.selector.title": "エージェントスキル",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };

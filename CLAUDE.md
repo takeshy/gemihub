@@ -17,6 +17,7 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 - `docs/mcp.md` — MCPサーバー連携
 - `docs/encryption.md` — ハイブリッド暗号化（RSA+AES）
 - `docs/plugins.md` — プラグイン開発ガイド
+- `docs/skill.md` — Agent Skills（カスタム指示・参照資料・ワークフローをバンドルしたAIエージェント）
 - `docs/infrastructure.md` — インフラ構成（Cloud Run等）
 - `docs/editor.md` — エディタシステム（WYSIWYG、ワークフロー編集、ファイルタイプ別表示等）（`editor_ja.md` は日本語版）
 - `docs/history.md` — 編集履歴の仕組み

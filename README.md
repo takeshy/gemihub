@@ -73,6 +73,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Keyboard Shortcuts** — Configurable shortcuts with modifier key support (Ctrl/Cmd, Shift, Alt) via Settings
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
 - **MCP** — Connect external MCP servers as tools for AI chat, with OAuth support and rich UI rendering (MCP Apps)
+- **Agent Skills** — User-defined AI agent configurations with custom instructions, reference materials, and executable workflows stored on Drive
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, settings panels, custom file icons, and file extension handling
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
@@ -101,6 +102,7 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 | Edit History | [history.md](./docs/history.md) | [history_ja.md](./docs/history_ja.md) |
 | Utils (Context Menu, Trash, Commands) | [utils.md](./docs/utils.md) | [utils_ja.md](./docs/utils_ja.md) |
 | Workflow Execution Engine | [workflow_execution.md](./docs/workflow_execution.md) | [workflow_execution_ja.md](./docs/workflow_execution_ja.md) |
+| Agent Skills | [skill.md](./docs/skill.md) | — |
 | Search | [search.md](./docs/search.md) | [search_ja.md](./docs/search_ja.md) |
 
 ## Getting Started

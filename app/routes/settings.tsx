@@ -144,6 +144,7 @@ export async function action({ request }: Route.ActionArgs) {
         const language = (formData.get("language") as Language) || currentSettings.language;
         const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
         const theme = (formData.get("theme") as Theme) || currentSettings.theme || "system";
+        const skillsFolderName = (formData.get("skillsFolderName") as string)?.trim() || currentSettings.skillsFolderName || "skills";
 
         // Encryption-related fields
         const password = (formData.get("password") as string)?.trim() || "";
@@ -184,6 +185,7 @@ export async function action({ request }: Route.ActionArgs) {
           language,
           fontSize,
           theme,
+          skillsFolderName,
         };
 
         // Update file encryption toggles

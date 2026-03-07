@@ -34,6 +34,7 @@ import {
 import { getCachedApiKey } from "~/services/api-key-cache";
 import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
 import { processDriveEvent } from "~/utils/drive-file-local";
+import { useSkills } from "~/contexts/SkillContext";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -61,6 +62,7 @@ export function ChatPanel({
   pluginSlashCommands = [],
 }: ChatPanelProps) {
   const { t } = useI18n();
+  const { skills, activeSkillIds, toggleSkill, activateSkill, getActiveSkillsSystemPrompt, getActiveSkillWorkflows } = useSkills();
   const [histories, setHistories] = useState<ChatHistoryItem[]>([]);
 
   // Fetch chat histories on mount
@@ -493,12 +495,20 @@ export function ChatPanel({
       let mcpApps: McpAppInfo[] = [];
 
       try {
+        const skillPrompt = await getActiveSkillsSystemPrompt();
+        const fullSystemPrompt = [settings.systemPrompt, skillPrompt]
+          .filter(Boolean)
+          .join("\n\n") || undefined;
+        const skillWorkflows = getActiveSkillWorkflows();
+
         const generator = executeLocalChat(
           {
             apiKey: localApiKey,
             model: effectiveModel,
             messages: updatedMessages,
-            systemPrompt: settings.systemPrompt || undefined,
+            systemPrompt: fullSystemPrompt,
+            skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
+            skillsFolderName: skillWorkflows.length > 0 ? settings.skillsFolderName : undefined,
             driveToolMode: effectiveDriveToolMode,
             mcpServerIds: effectiveMcpIds,
             ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
@@ -679,6 +689,8 @@ export function ChatPanel({
       settings,
       saveChat,
       getThinkingToggle,
+      getActiveSkillsSystemPrompt,
+      getActiveSkillWorkflows,
     ]
   );
 
@@ -993,6 +1005,10 @@ export function ChatPanel({
         onCompact={handleCompact}
         isCompacting={isCompacting}
         messageCount={messages.length}
+        skills={skills}
+        activeSkillIds={activeSkillIds}
+        onToggleSkill={toggleSkill}
+        onActivateSkill={activateSkill}
       />
 
       {showCryptoPrompt && settings.encryption.encryptedPrivateKey && (

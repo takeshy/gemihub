@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
+import type { SkillMetadata } from "~/types/skill";
 import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, McpServerConfig } from "~/types/settings";
 import { getDriveToolModeConstraint } from "~/types/settings";
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
@@ -26,6 +27,7 @@ import type { TranslationStrings } from "~/i18n/translations";
 import { useEditorContext, type FileListItem, type SelectionInfo } from "~/contexts/EditorContext";
 import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
 import { AutocompletePopup } from "./AutocompletePopup";
+import { SkillSelector, SkillChips } from "./SkillSelector";
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => void;
@@ -54,6 +56,10 @@ interface ChatInputProps {
   onCompact?: () => void;
   isCompacting?: boolean;
   messageCount?: number;
+  skills?: SkillMetadata[];
+  activeSkillIds?: string[];
+  onToggleSkill?: (skillId: string) => void;
+  onActivateSkill?: (skillId: string) => void;
 }
 
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
@@ -175,6 +181,10 @@ export function ChatInput({
   onCompact,
   isCompacting = false,
   messageCount = 0,
+  skills = [],
+  activeSkillIds = [],
+  onToggleSkill,
+  onActivateSkill,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -222,6 +232,13 @@ export function ChatInput({
       if (!result) return;
 
       if (item.type === "command") {
+        // Check if this is a skill activation command
+        if (result.command && result.command.id?.startsWith("__skill__") && onActivateSkill) {
+          const skillId = result.command.id.replace("__skill__", "");
+          onActivateSkill(skillId);
+          setContent("");
+          return;
+        }
         // Replace entire content with prompt template
         setContent(result.text);
         // Store overrides from command
@@ -272,7 +289,7 @@ export function ChatInput({
         }, 0);
       }
     },
-    [autocomplete, content]
+    [autocomplete, content, onActivateSkill]
   );
 
   // Auto-resize textarea
@@ -483,6 +500,17 @@ export function ChatInput({
   return (
     <div className="border-t border-gray-200 bg-white px-4 pt-3 pb-4 dark:border-gray-800 dark:bg-gray-900">
       <div className="mx-auto max-w-3xl">
+        {/* Active skill chips */}
+        {onToggleSkill && skills.length > 0 && activeSkillIds.length > 0 && (
+          <div className="mb-2">
+            <SkillChips
+              skills={skills}
+              activeSkillIds={activeSkillIds}
+              onToggleSkill={onToggleSkill}
+            />
+          </div>
+        )}
+
         {/* Current file chip */}
         {showFileChip && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -560,6 +588,15 @@ export function ChatInput({
               className="hidden"
               onChange={(e) => handleFileSelect(e.target.files)}
             />
+
+            {/* Skill selector */}
+            {onToggleSkill && skills.length > 0 && (
+              <SkillSelector
+                skills={skills}
+                activeSkillIds={activeSkillIds}
+                onToggleSkill={onToggleSkill}
+              />
+            )}
 
             {/* Tool mode button */}
             {onDriveToolModeChange && (
