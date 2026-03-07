@@ -2,6 +2,7 @@ export interface SkillWorkflowRef {
   path: string;
   name?: string;
   description: string;
+  fileId?: string;
 }
 
 export interface SkillMetadata {

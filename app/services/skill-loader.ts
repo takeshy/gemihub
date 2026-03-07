@@ -115,7 +115,27 @@ export async function discoverSkills(
             path: relPath,
             name: baseName,
             description: `Run ${baseName}`,
+            fileId: wfFile.id,
           });
+        }
+      }
+    }
+
+    // Resolve fileIds for frontmatter-declared workflows
+    if (workflowsFolder?.isFolder && workflowsFolder.children) {
+      for (const wf of workflows) {
+        if (wf.fileId) continue;
+        // path is relative, e.g. "workflows/build.yaml"
+        const parts = wf.path.split("/");
+        let node: CachedTreeNode | undefined;
+        let searchChildren = subFolder.children;
+        for (const part of parts) {
+          node = findChildByName(searchChildren, part);
+          if (!node) break;
+          searchChildren = node.children || [];
+        }
+        if (node && !node.isFolder) {
+          wf.fileId = node.id;
         }
       }
     }
@@ -194,7 +214,8 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[]): string {
   const sections: string[] = [
     "# Active Agent Skills",
     "",
-    "The following agent skills are active. Follow their instructions carefully.",
+    "The following agent skills are active. Proactively use the skill's instructions and workflows to fulfill the user's request.",
+    "When you encounter {{variableName}} placeholders in skill instructions or workflow definitions, interpret the variable name and replace it with an appropriate value (e.g., {{today}} → today's date, {{monday}} → this week's Monday date).",
   ];
 
   for (const skill of skills) {

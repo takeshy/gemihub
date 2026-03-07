@@ -25,7 +25,7 @@ import {
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
 import type { SkillWorkflowRef } from "~/types/skill";
 import type { DriveEvent } from "~/engine/local-executor";
-import { findFileByNameLocal, readFileLocal } from "~/services/drive-local";
+import { readFileLocal } from "~/services/drive-local";
 import { parseWorkflowContentByName } from "~/engine/parser";
 import { executeWorkflowLocally, type LocalExecuteCallbacks } from "~/engine/local-executor";
 import { buildWorkflowToolId } from "~/services/skill-loader";
@@ -50,7 +50,6 @@ export interface LocalChatOptions {
     workflow: SkillWorkflowRef;
     folderId: string;
   }>;
-  skillsFolderName?: string;
 }
 
 export interface LocalChatCallbacks {
@@ -77,7 +76,6 @@ export async function* executeLocalChat(
     ragTopK,
     abortSignal,
     skillWorkflows,
-    skillsFolderName = "skills",
   } = options;
 
   // Image generation model
@@ -229,23 +227,10 @@ export async function* executeLocalChat(
           return { error: `Skill workflow not found: ${workflowId}` };
         }
 
-        // Resolve the workflow file from cache
-        const wfPath = `${skillsFolderName}/${match.skillId}/${match.workflow.path}`;
-        const candidates = [wfPath];
-        if (!wfPath.endsWith(".yaml") && !wfPath.endsWith(".yml")) {
-          candidates.push(`${wfPath}.yaml`, `${wfPath}.yml`);
-        }
-
-        let fileId: string | null = null;
-        for (const candidate of candidates) {
-          const found = await findFileByNameLocal(candidate);
-          if (found) {
-            fileId = found.id;
-            break;
-          }
-        }
+        // Resolve the workflow file from pre-resolved fileId
+        const fileId = match.workflow.fileId;
         if (!fileId) {
-          return { error: `Workflow file not found: ${wfPath}` };
+          return { error: `Workflow file not found: ${match.workflow.path}` };
         }
 
         const content = await readFileLocal(fileId);

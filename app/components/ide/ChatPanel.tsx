@@ -508,7 +508,6 @@ export function ChatPanel({
             messages: updatedMessages,
             systemPrompt: fullSystemPrompt,
             skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
-            skillsFolderName: skillWorkflows.length > 0 ? settings.skillsFolderName : undefined,
             driveToolMode: effectiveDriveToolMode,
             mcpServerIds: effectiveMcpIds,
             ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
@@ -993,6 +992,12 @@ export function ChatPanel({
             description: cmd.description,
             promptTemplate: `/${cmd.name} `,
             execute: cmd.execute,
+          })),
+          ...skills.map((skill) => ({
+            id: `__skill__${skill.id}`,
+            name: skill.id,
+            description: `${skill.name}${skill.description ? ` - ${skill.description}` : ""}`,
+            promptTemplate: `/${skill.id} `,
           })),
         ]}
         lastFileIdInMessages={lastFileIdInMessages}
