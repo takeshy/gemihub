@@ -16,6 +16,7 @@ import {
   DRIVE_SEARCH_TOOL_NAMES,
 } from "~/services/drive-tool-definitions";
 import { executeLocalDriveTool } from "~/services/drive-tools-local";
+import { executeSandboxedJS, EXECUTE_JAVASCRIPT_TOOL } from "~/services/sandbox-executor";
 import { readFileBinaryLocal } from "~/services/drive-local";
 import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import {
@@ -95,6 +96,11 @@ export async function handleCommandNodeLocal(
   const functionToolsForcedOff =
     toolConstraint.locked && toolConstraint.forcedMode === "none";
 
+  // JavaScript sandbox tool
+  if (!functionToolsForcedOff) {
+    tools.push(EXECUTE_JAVASCRIPT_TOOL);
+  }
+
   // Drive tools
   if (driveToolMode !== "none") {
     if (driveToolMode === "noSearch") {
@@ -167,6 +173,19 @@ export async function handleCommandNodeLocal(
       } catch (err) {
         if (abortSignal?.aborted) throw new Error("Execution cancelled");
         return { error: err instanceof Error ? err.message : "MCP tool call failed" };
+      }
+    }
+
+    // JavaScript sandbox tool
+    if (name === "execute_javascript") {
+      try {
+        const code = args.code as string;
+        const input = args.input as string | undefined;
+        const result = await executeSandboxedJS(code, input);
+        return { result };
+      } catch (err) {
+        if (abortSignal?.aborted) throw new Error("Execution cancelled");
+        return { error: err instanceof Error ? err.message : "JavaScript execution failed" };
       }
     }
 

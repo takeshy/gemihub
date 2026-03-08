@@ -180,6 +180,12 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "ragSetting", label: "RAG Setting", required: true, placeholder: "myRagStore", options: context?.ragSettingNames?.length ? context.ragSettingNames : undefined },
         { key: "saveTo", label: "Save To", required: false, placeholder: "syncResult" },
       ];
+    case "script":
+      return [
+        { key: "code", label: "Code", required: true, multiline: true, placeholder: "var items = '{{data}}'.split(',');\nreturn items.map(s => s.trim()).join('\\n');" },
+        { key: "saveTo", label: "Save To", required: false, placeholder: "result" },
+        { key: "timeout", label: "Timeout (ms)", required: false, placeholder: "10000" },
+      ];
     case "sleep":
       return [
         { key: "duration", label: "Duration (ms)", required: true, placeholder: "1000" },

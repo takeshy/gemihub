@@ -16,6 +16,7 @@ import {
   DRIVE_SEARCH_TOOL_NAMES,
 } from "~/services/drive-tool-definitions";
 import { executeLocalDriveTool } from "~/services/drive-tools-local";
+import { executeSandboxedJS, EXECUTE_JAVASCRIPT_TOOL } from "~/services/sandbox-executor";
 import {
   isImageGenerationModel,
   type ToolDefinition,
@@ -155,6 +156,11 @@ export async function* executeLocalChat(
     });
   }
 
+  // JavaScript sandbox tool (not available for Gemma models which lack function calling)
+  if (!model.toLowerCase().includes("gemma")) {
+    tools.push(EXECUTE_JAVASCRIPT_TOOL);
+  }
+
   // Build tool dispatcher
   const driveToolNames = new Set(DRIVE_TOOL_DEFINITIONS.map((t) => t.name));
   const mcpToolNames = new Set(mcpToolDefs.map((t) => t.name));
@@ -209,6 +215,21 @@ export async function* executeLocalChat(
         if (abortSignal?.aborted) throw err;
         return {
           error: err instanceof Error ? err.message : "MCP tool call failed",
+        };
+      }
+    }
+
+    // JavaScript sandbox tool
+    if (name === "execute_javascript") {
+      try {
+        const code = args.code as string;
+        const input = args.input as string | undefined;
+        const result = await executeSandboxedJS(code, input);
+        return { result };
+      } catch (err) {
+        if (abortSignal?.aborted) throw err;
+        return {
+          error: err instanceof Error ? err.message : "JavaScript execution failed",
         };
       }
     }

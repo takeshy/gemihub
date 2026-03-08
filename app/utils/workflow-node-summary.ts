@@ -47,6 +47,8 @@ export function getNodeSummary(node: WorkflowNode): string {
       return p.tool ? `${truncate(p.url || "", 20)}:${p.tool}` : "";
     case "rag-sync":
       return p.path ? `${truncate(p.path, 30)} → ${p.ragSetting || ""}` : "";
+    case "script":
+      return p.saveTo ? `JS → ${p.saveTo}` : truncate(p.code || "", 40);
     case "sleep":
       return p.duration ? `${p.duration}ms` : "";
     case "gemihub-command":
@@ -85,6 +87,7 @@ export function getNodeTypeLabel(type: WorkflowNodeType): string {
     workflow: "Workflow",
     mcp: "MCP",
     "rag-sync": "RAG Sync",
+    script: "Script",
     sleep: "Sleep",
     "gemihub-command": "GemiHub Command",
   };
@@ -120,6 +123,9 @@ export function getNodeTypeColor(type: WorkflowNodeType): string {
     case "prompt-file":
     case "prompt-selection":
       return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300";
+    // Script: orange
+    case "script":
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300";
     // External: cyan
     case "http":
     case "json":

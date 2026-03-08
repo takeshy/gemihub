@@ -9,7 +9,7 @@
 | 変数 | `variable`, `set` | 変数の宣言と更新 |
 | 制御 | `if`, `while`, `sleep` | 条件分岐、ループ、一時停止 |
 | LLM | `command` | Gemini API でプロンプトを実行 |
-| データ | `http`, `json` | HTTP リクエストと JSON パース |
+| データ | `http`, `json`, `script` | HTTP リクエスト、JSON パース、JavaScript 実行 |
 | Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save`, `drive-delete` | Google Drive ファイル操作 |
 | プロンプト | `prompt-value`, `prompt-file`, `prompt-selection`, `dialog`, `drive-file-picker` | ユーザー入力ダイアログ |
 | 合成 | `workflow` | 別のワークフローをサブワークフローとして実行 |
@@ -235,6 +235,59 @@ JSON 文字列をパースしてプロパティアクセスを可能にします
 **マークダウンコードブロック内の JSON:** `` ```json ... ``` `` から自動抽出されます。
 
 **テンプレートサポート:** `source` プロパティは `{{variable}}` テンプレートを先に解決し、次に変数ルックアップを試行（`source: myVar` の後方互換性）、最後に解決された文字列を直接 JSON としてパースします。
+
+---
+
+### script
+
+サンドボックス化された iframe 内で JavaScript コードを実行します。DOM・ネットワーク・ストレージへのアクセスはなく、純粋な計算のみ可能です。`set` ノードの算術演算では対応できない文字列加工・データ変換・計算・エンコード/デコード等に使用します。
+
+```yaml
+- id: transform
+  type: script
+  code: |
+    var items = '{{rawList}}'.split(',').map(function(s){ return s.trim(); });
+    items.sort();
+    return items.join('\n');
+  saveTo: sortedList
+  timeout: "5000"
+```
+
+| プロパティ | 必須 | テンプレート | 説明 |
+|-----------|:----:|:----------:|------|
+| `code` | Yes | Yes | 実行する JavaScript コード。`return` で値を返す |
+| `saveTo` | No | No | 結果を保存する変数 |
+| `timeout` | No | No | タイムアウト（ミリ秒、デフォルト: 10000） |
+
+**戻り値:**
+- `undefined` / `null` → 空文字列
+- 文字列以外 → JSON シリアライズ（配列、オブジェクト、数値など）
+- 文字列 → そのまま保存
+
+**非同期対応:** Promise は自動的に await されます。
+
+**セキュリティ:** `sandbox="allow-scripts"` の iframe（opaque origin）で実行。親 DOM・Cookie・localStorage・ネットワークへのアクセス不可。
+
+**例 — Base64 エンコード:**
+```yaml
+- id: encode
+  type: script
+  code: "return btoa('{{plainText}}')"
+  saveTo: encoded
+```
+
+**例 — ユニーク単語の抽出:**
+```yaml
+- id: unique-words
+  type: script
+  code: |
+    var words = '{{text:json}}'.split(/\s+/);
+    var unique = [...new Set(words)];
+    return unique.sort().join(', ');
+  saveTo: uniqueWords
+```
+
+> **備考:** `command` ノードの function calling にも `execute_javascript` ツールがあり、AI がチャットやワークフロー実行中に JavaScript コードを動的に記述・実行できます。
 
 ---
 

@@ -211,10 +211,7 @@ export type ModelType =
   | "gemini-2.5-flash-lite"
   | "gemini-3-pro-image-preview"
   | "gemini-3.1-flash-image-preview"
-  | "gemma-3-27b-it"
-  | "gemma-3-12b-it"
-  | "gemma-3-4b-it"
-  | "gemma-3-1b-it";
+  | "gemma-3-27b-it";
 
 export interface ModelInfo {
   name: ModelType;
@@ -292,21 +289,6 @@ export const FREE_MODELS: ModelInfo[] = [
   {
     name: "gemma-3-27b-it",
     displayName: "Gemma 3 27B (No tools)",
-    description: "Free tier Gemma model (no function calling)",
-  },
-  {
-    name: "gemma-3-12b-it",
-    displayName: "Gemma 3 12B (No tools)",
-    description: "Free tier Gemma model (no function calling)",
-  },
-  {
-    name: "gemma-3-4b-it",
-    displayName: "Gemma 3 4B (No tools)",
-    description: "Free tier Gemma model (no function calling)",
-  },
-  {
-    name: "gemma-3-1b-it",
-    displayName: "Gemma 3 1B (No tools)",
     description: "Free tier Gemma model (no function calling)",
   },
 ];

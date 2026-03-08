@@ -39,6 +39,7 @@ import {
 import { handlePromptFileNodeLocal, handleDriveFilePickerNodeLocal } from "./local-handlers/prompt";
 import { handleWorkflowNodeLocal } from "./local-handlers/workflow";
 import { handleCommandNodeLocal } from "./local-handlers/command";
+import { handleScriptNodeLocal } from "./local-handlers/script";
 import { getCachedApiKey } from "~/services/api-key-cache";
 
 const MAX_WHILE_ITERATIONS = 1000;
@@ -723,6 +724,22 @@ export async function executeWorkflowLocally(
           await handleDriveFilePickerNodeLocal(node, context, callbacks.promptCallbacks);
           log(node.id, node.type, `File selected`, "success");
           addHistoryStep(node.id, node.type);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        // ── Client-side: Script (JS sandbox) ──────────────────────────────
+        case "script": {
+          if (options.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const scriptCode = (node.properties["code"] || "").substring(0, 50);
+          log(node.id, node.type, `Executing script: ${scriptCode}...`, "info");
+          await handleScriptNodeLocal(node, context, options.abortSignal);
+          const scriptSaveTo = node.properties["saveTo"];
+          const scriptOutput = scriptSaveTo ? context.variables.get(scriptSaveTo) : undefined;
+          log(node.id, node.type, `Script completed`, "success",
+            { code: node.properties["code"] }, scriptOutput);
+          addHistoryStep(node.id, node.type, { code: node.properties["code"] }, scriptOutput);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;

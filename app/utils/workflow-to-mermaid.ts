@@ -91,6 +91,12 @@ function getNodeLabel(node: WorkflowNode): string {
     case "rag-sync":
       label = `**${id}**\nRAG: ${p.path || ""}\n→ ${p.ragSetting || ""}`;
       break;
+    case "script": {
+      const scriptCode = (p.code || "").split("\n")[0];
+      const truncatedCode = scriptCode.length > 30 ? scriptCode.slice(0, 30) + "…" : scriptCode;
+      label = `**${id}**\nJS: ${truncatedCode}\n→ ${p.saveTo || ""}`;
+      break;
+    }
     case "sleep":
       label = `**${id}**\nSleep ${p.duration || ""}ms`;
       break;

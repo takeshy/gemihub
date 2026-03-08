@@ -9,7 +9,7 @@ This document provides detailed specifications for all workflow node types.
 | Variables | `variable`, `set` | Declare and update variables |
 | Control | `if`, `while`, `sleep` | Conditional branching, loops, pausing |
 | LLM | `command` | Execute prompts via Gemini API |
-| Data | `http`, `json` | HTTP requests and JSON parsing |
+| Data | `http`, `json`, `script` | HTTP requests, JSON parsing, JavaScript execution |
 | Drive | `drive-file`, `drive-read`, `drive-search`, `drive-list`, `drive-folder-list`, `drive-save`, `drive-delete` | Google Drive file operations |
 | Prompts | `prompt-value`, `prompt-file`, `prompt-selection`, `dialog`, `drive-file-picker` | User input dialogs |
 | Composition | `workflow` | Execute another workflow as a sub-workflow |
@@ -237,6 +237,59 @@ After parsing, access properties using dot notation: `{{data.items[0].name}}`
 **JSON in markdown code blocks:** Automatically extracted from `` ```json ... ``` `` fences.
 
 **Template support:** The `source` property resolves `{{variable}}` templates first, then tries variable lookup (backward compat for `source: myVar`), then uses the resolved string directly as JSON.
+
+---
+
+### script
+
+Execute JavaScript code in a sandboxed iframe. The sandbox has no access to DOM, network, or storage — only pure computation. Useful for string manipulation, data transformation, calculations, encoding/decoding, and other operations that `set` node arithmetic cannot handle.
+
+```yaml
+- id: transform
+  type: script
+  code: |
+    var items = '{{rawList}}'.split(',').map(function(s){ return s.trim(); });
+    items.sort();
+    return items.join('\n');
+  saveTo: sortedList
+  timeout: "5000"
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `code` | Yes | Yes | JavaScript code to execute. Use `return` to return a value. |
+| `saveTo` | No | No | Variable to store the result |
+| `timeout` | No | No | Timeout in milliseconds (default: 10000) |
+
+**Return values:**
+- `undefined` / `null` → empty string
+- Non-string values → JSON-serialized (e.g., arrays, objects, numbers)
+- Strings → stored as-is
+
+**Async support:** Promises are automatically awaited.
+
+**Security:** Runs in an iframe with `sandbox="allow-scripts"` (opaque origin). No access to parent DOM, cookies, localStorage, or network.
+
+**Example — Base64 encode:**
+```yaml
+- id: encode
+  type: script
+  code: "return btoa('{{plainText}}')"
+  saveTo: encoded
+```
+
+**Example — extract unique words:**
+```yaml
+- id: unique-words
+  type: script
+  code: |
+    var words = '{{text:json}}'.split(/\s+/);
+    var unique = [...new Set(words)];
+    return unique.sort().join(', ');
+  saveTo: uniqueWords
+```
+
+> **Note:** The `command` node also has access to an `execute_javascript` tool via function calling, allowing the AI to write and run JavaScript code dynamically during a chat or workflow command execution.
 
 ---
 

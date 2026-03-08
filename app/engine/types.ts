@@ -23,6 +23,7 @@ export type WorkflowNodeType =
   | "mcp"
   | "rag-sync"
   | "sleep"
+  | "script"
   | "gemihub-command";
 
 export interface WorkflowNode {
