@@ -15,6 +15,7 @@ import {
 } from "~/services/skill-loader";
 
 interface SkillContextValue {
+  skillsFolderName: string;
   skills: SkillMetadata[];
   activeSkillIds: string[];
   toggleSkill: (skillId: string) => void;
@@ -31,6 +32,7 @@ interface SkillContextValue {
 }
 
 const SkillContext = createContext<SkillContextValue>({
+  skillsFolderName: "skills",
   skills: [],
   activeSkillIds: [],
   toggleSkill: () => {},
@@ -149,6 +151,7 @@ export function SkillProvider({
   return (
     <SkillContext.Provider
       value={{
+        skillsFolderName,
         skills,
         activeSkillIds,
         toggleSkill,

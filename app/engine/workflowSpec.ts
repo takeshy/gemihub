@@ -12,6 +12,7 @@ interface WorkflowSpecContext {
   apiPlan?: ApiPlan;
   mcpServers?: McpServerConfig[];
   ragSettingNames?: string[];
+  outputAsMarkdown?: boolean;
 }
 
 export function getWorkflowSpecification(context?: WorkflowSpecContext): string {
@@ -22,12 +23,18 @@ export function getWorkflowSpecification(context?: WorkflowSpecContext): string 
   const commandRagSection = buildCommandRagSection(context?.ragSettingNames);
   const ragSyncSection = buildRagSyncSection(context?.ragSettingNames);
 
+  const formatSection = context?.outputAsMarkdown
+    ? `## Format
+Workflows are defined in YAML format inside a \`\`\`yaml code block within a Markdown document.
+Include a brief description and processing overview BEFORE the \`\`\`yaml code block as Markdown text.`
+    : `## Format
+Workflows are defined in YAML format. Output ONLY the YAML content starting with "name:".
+Do NOT include \`\`\`yaml or \`\`\` markers.`;
+
   return `
 # GemiHub Workflow Specification
 
-## Format
-Workflows are defined in YAML format. Output ONLY the YAML content starting with "name:".
-Do NOT include \`\`\`yaml or \`\`\` markers.
+${formatSection}
 
 ## Basic Structure
 \`\`\`yaml
@@ -530,4 +537,56 @@ function buildRagSyncSection(ragSettingNames?: string[]): string {
   if (!ragSettingNames || ragSettingNames.length === 0) return "";
   const names = ragSettingNames.map((n) => `\`${n}\``).join(", ");
   return `\n  Available: ${names}`;
+}
+
+/**
+ * Build the user prompt for workflow generation based on mode and parameters.
+ * Shared by ai-generate (Gemini streaming) and ai-prompt (external LLM copy).
+ */
+export function buildWorkflowUserPrompt({
+  mode,
+  name,
+  description,
+  currentYaml,
+  executionSteps,
+  outputAsMarkdown,
+}: {
+  mode: "create" | "modify";
+  name?: string;
+  description: string;
+  currentYaml?: string;
+  executionSteps?: import("./types").ExecutionStep[];
+  outputAsMarkdown?: boolean;
+}): string {
+  if (mode === "modify" && currentYaml) {
+    let executionContext = "";
+    if (executionSteps && executionSteps.length > 0) {
+      executionContext = "\n\nEXECUTION HISTORY (selected steps):\n";
+      executionSteps.forEach((step, i) => {
+        executionContext += `\nStep ${i + 1} [${step.nodeType}] ${step.nodeId}\n`;
+        if (step.input) {
+          const inputStr = typeof step.input === "string"
+            ? step.input
+            : JSON.stringify(step.input, null, 2);
+          executionContext += `  Input: ${inputStr}\n`;
+        }
+        if (step.error) {
+          executionContext += `  Error: ${step.error}\n`;
+        } else if (step.output !== undefined) {
+          const outputStr = typeof step.output === "string"
+            ? step.output
+            : JSON.stringify(step.output, null, 2);
+          executionContext += `  Output: ${outputStr}\n`;
+        }
+        executionContext += `  Status: ${step.status}\n`;
+      });
+    }
+    const outputInstruction = outputAsMarkdown
+      ? "Output the COMPLETE modified workflow YAML inside a ```yaml code block."
+      : "Output the COMPLETE modified workflow YAML. Do not omit any nodes.";
+    return `Here is the current workflow YAML:\n\n\`\`\`yaml\n${currentYaml}\n\`\`\`${executionContext}\n\nPlease modify this workflow according to the following request:\n${description}\n\n${outputInstruction}`;
+  }
+  return name
+    ? `Create a workflow named "${name}".\n\n${description}`
+    : description;
 }

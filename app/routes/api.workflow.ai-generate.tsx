@@ -1,7 +1,7 @@
 import type { Route } from "./+types/api.workflow.ai-generate";
 import { requireAuth } from "~/services/session.server";
 import { generateWorkflowStream } from "~/services/gemini.server";
-import { getWorkflowSpecification } from "~/engine/workflowSpec";
+import { getWorkflowSpecification, buildWorkflowUserPrompt } from "~/engine/workflowSpec";
 import { getSettings } from "~/services/user-settings.server";
 import type { ModelType, ApiPlan } from "~/types/settings";
 import { getDefaultModelForPlan } from "~/types/settings";
@@ -62,37 +62,13 @@ export async function action({ request }: Route.ActionArgs) {
       : undefined,
   });
 
-  // Build user prompt based on mode
-  let userPrompt: string;
-  if (mode === "modify" && currentYaml) {
-    let executionContext = "";
-    if (executionSteps && executionSteps.length > 0) {
-      executionContext = "\n\nEXECUTION HISTORY (selected steps):\n";
-      executionSteps.forEach((step, i) => {
-        executionContext += `\nStep ${i + 1} [${step.nodeType}] ${step.nodeId}\n`;
-        if (step.input) {
-          const inputStr = typeof step.input === "string"
-            ? step.input
-            : JSON.stringify(step.input, null, 2);
-          executionContext += `  Input: ${inputStr}\n`;
-        }
-        if (step.error) {
-          executionContext += `  Error: ${step.error}\n`;
-        } else if (step.output !== undefined) {
-          const outputStr = typeof step.output === "string"
-            ? step.output
-            : JSON.stringify(step.output, null, 2);
-          executionContext += `  Output: ${outputStr}\n`;
-        }
-        executionContext += `  Status: ${step.status}\n`;
-      });
-    }
-    userPrompt = `Here is the current workflow YAML:\n\n\`\`\`yaml\n${currentYaml}\n\`\`\`${executionContext}\n\nPlease modify this workflow according to the following request:\n${description}\n\nOutput the COMPLETE modified workflow YAML. Do not omit any nodes.`;
-  } else {
-    userPrompt = name
-      ? `Create a workflow named "${name}".\n\n${description}`
-      : description;
-  }
+  const userPrompt = buildWorkflowUserPrompt({
+    mode,
+    name,
+    description,
+    currentYaml,
+    executionSteps,
+  });
 
   const selectedModel = model || (settings?.selectedModel as ModelType) || getDefaultModelForPlan(apiPlan);
 

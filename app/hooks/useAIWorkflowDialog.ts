@@ -93,11 +93,12 @@ export function useAIWorkflowDialog({
           }
         } else {
           console.log("[AI Accept] Creating new file. dialogState:", dialogState?.mode, "fileId:", dialogState?.currentFileId);
-          // Create new workflow file under workflows/ folder
+          // Create new workflow file under workflows/ folder (or skill folder)
           const baseName = workflowName.endsWith(".yaml")
             ? workflowName
             : `${workflowName}.yaml`;
-          const fileName = `workflows/${baseName}`;
+          const folderPath = meta.skillFolderPath || "workflows";
+          const fileName = `${folderPath}/${baseName}`;
           const res = await fetch("/api/drive/files", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

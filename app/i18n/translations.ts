@@ -469,6 +469,15 @@ export interface TranslationStrings {
   "workflow.ai.generationFailed": string;
   "workflow.ai.noResponseStream": string;
   "workflow.ai.generationError": string;
+  "workflow.ai.copyPrompt": string;
+  "workflow.ai.promptCopied": string;
+  "workflow.ai.pasteLabel": string;
+  "workflow.ai.pastePlaceholder": string;
+  "workflow.ai.applyPasted": string;
+  "workflow.ai.enterPastedYaml": string;
+  "workflow.ai.parseFailed": string;
+  "workflow.ai.targetFolder": string;
+  "workflow.ai.targetDefault": string;
   "workflow.preview.previewPrefix": string;
   "workflow.preview.changesPrefix": string;
   "workflow.preview.defaultName": string;
@@ -1061,6 +1070,15 @@ const en: TranslationStrings = {
   "workflow.ai.generationFailed": "Generation failed",
   "workflow.ai.noResponseStream": "No response stream",
   "workflow.ai.generationError": "Generation error",
+  "workflow.ai.copyPrompt": "Copy Prompt",
+  "workflow.ai.promptCopied": "Prompt copied to clipboard",
+  "workflow.ai.pasteLabel": "Paste the response from external LLM",
+  "workflow.ai.pastePlaceholder": "Paste the YAML or markdown (with ```yaml blocks) from Claude, GPT, etc...",
+  "workflow.ai.applyPasted": "Apply",
+  "workflow.ai.enterPastedYaml": "Please paste YAML content",
+  "workflow.ai.parseFailed": "Could not find valid workflow YAML in pasted content",
+  "workflow.ai.targetFolder": "Save to",
+  "workflow.ai.targetDefault": "workflows/ (default)",
   "workflow.preview.previewPrefix": "Preview: ",
   "workflow.preview.changesPrefix": "Changes: ",
   "workflow.preview.defaultName": "Workflow",
@@ -1653,6 +1671,15 @@ const ja: TranslationStrings = {
   "workflow.ai.generationFailed": "生成に失敗しました",
   "workflow.ai.noResponseStream": "レスポンスストリームがありません",
   "workflow.ai.generationError": "生成エラー",
+  "workflow.ai.copyPrompt": "プロンプトをコピー",
+  "workflow.ai.promptCopied": "プロンプトをクリップボードにコピーしました",
+  "workflow.ai.pasteLabel": "外部LLMからのレスポンスを貼り付け",
+  "workflow.ai.pastePlaceholder": "Claude、GPT等が出力したYAMLまたはMarkdown（```yamlブロック含む）を貼り付け...",
+  "workflow.ai.applyPasted": "適用",
+  "workflow.ai.enterPastedYaml": "YAMLの内容を貼り付けてください",
+  "workflow.ai.parseFailed": "貼り付けた内容からワークフローYAMLを見つけられませんでした",
+  "workflow.ai.targetFolder": "保存先",
+  "workflow.ai.targetDefault": "workflows/（デフォルト）",
   "workflow.preview.previewPrefix": "プレビュー: ",
   "workflow.preview.changesPrefix": "変更: ",
   "workflow.preview.defaultName": "ワークフロー",

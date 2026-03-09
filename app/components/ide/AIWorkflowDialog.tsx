@@ -7,6 +7,9 @@ import {
   ChevronRight,
   Brain,
   History,
+  Copy,
+  Check,
+  ClipboardPaste,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { ModelType, ApiPlan } from "~/types/settings";
@@ -14,7 +17,14 @@ import { getAvailableModels, getDefaultModelForPlan } from "~/types/settings";
 import { WorkflowPreviewModal } from "./WorkflowPreviewModal";
 import { ExecutionHistorySelectModal } from "./ExecutionHistorySelectModal";
 import { useI18n } from "~/i18n/context";
+import { useSkills } from "~/contexts/SkillContext";
 import type { ExecutionStep } from "~/engine/types";
+
+/** Extract YAML content from a fenced code block, or return text as-is. */
+function extractYamlFromCodeBlock(text: string): string {
+  const m = text.match(/```(?:yaml)?\s*([\s\S]*?)```/);
+  return m ? m[1].trim() : text;
+}
 
 export interface AIWorkflowMeta {
   description: string;
@@ -22,6 +32,8 @@ export interface AIWorkflowMeta {
   model: string;
   mode: "create" | "modify";
   history: { role: "user" | "model"; text: string }[];
+  /** When set, create the workflow under this folder path instead of "workflows/" */
+  skillFolderPath?: string;
 }
 
 interface AIWorkflowDialogProps {
@@ -55,9 +67,11 @@ export function AIWorkflowDialog({
   onClose,
 }: AIWorkflowDialogProps) {
   const { t } = useI18n();
+  const { skills, skillsFolderName } = useSkills();
 
   // Input state
   const [name, setName] = useState(currentName || "");
+  const [selectedSkillId, setSelectedSkillId] = useState("");
   const [description, setDescription] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelType>(getDefaultModelForPlan(apiPlan));
 
@@ -75,6 +89,11 @@ export function AIWorkflowDialog({
   // Regeneration history
   const [history, setHistory] = useState<GenerationHistory[]>([]);
   const [lastDescription, setLastDescription] = useState("");
+
+  // External LLM paste flow
+  const [showPasteSection, setShowPasteSection] = useState(false);
+  const [pastedText, setPastedText] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
 
   // Refs
   const thinkingRef = useRef<HTMLDivElement>(null);
@@ -188,11 +207,7 @@ export function AIWorkflowDialog({
       }
 
       // Extract YAML from code block if present
-      let yaml = fullText;
-      const codeBlockMatch = yaml.match(/```(?:yaml)?\s*([\s\S]*?)```/);
-      if (codeBlockMatch) {
-        yaml = codeBlockMatch[1].trim();
-      }
+      const yaml = extractYamlFromCodeBlock(fullText);
 
       if (!yaml.trim()) {
         setError(t("workflow.ai.emptyResponse"));
@@ -222,14 +237,21 @@ export function AIWorkflowDialog({
 
   const handleAcceptPreview = useCallback(async () => {
     const workflowName = mode === "create" ? name.trim() : (currentName || "workflow");
+    const validSkillId = selectedSkillId && skills.some((s) => s.id === selectedSkillId)
+      ? selectedSkillId
+      : undefined;
+    const skillFolderPath = mode === "create" && validSkillId
+      ? `${skillsFolderName}/${validSkillId}/workflows`
+      : undefined;
     await onAccept(generatedText, workflowName, {
       description: lastDescription,
       thinking,
       model: selectedModel,
       mode,
       history,
+      skillFolderPath,
     });
-  }, [generatedText, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history]);
+  }, [generatedText, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history, selectedSkillId, skillsFolderName, skills]);
 
   const handleRejectPreview = useCallback(() => {
     // Go back to input for refinement, keep history
@@ -237,6 +259,69 @@ export function AIWorkflowDialog({
     setPhase("input");
     setTimeout(() => descriptionRef.current?.focus(), 100);
   }, []);
+
+  const handleCopyPrompt = useCallback(async () => {
+    const desc = description.trim();
+    if (!desc) return;
+    if (mode === "create" && !name.trim()) return;
+
+    setError(null);
+
+    try {
+      const res = await fetch("/api/workflow/ai-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          name: mode === "create" ? name.trim() : undefined,
+          description: desc,
+          currentYaml: mode === "modify" ? currentYaml : undefined,
+          executionSteps: selectedExecutionSteps.length > 0 ? selectedExecutionSteps : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: t("workflow.ai.generationFailed") }));
+        setError(err.error || t("workflow.ai.generationFailed"));
+        return;
+      }
+
+      const data = await res.json();
+      await navigator.clipboard.writeText(data.prompt);
+      setLastDescription(desc);
+      setShowPasteSection(true);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("workflow.ai.generationFailed"));
+    }
+  }, [description, name, mode, currentYaml, selectedExecutionSteps, t]);
+
+  const handleApplyPasted = useCallback(async () => {
+    const text = pastedText.trim();
+    if (!text) {
+      setError(t("workflow.ai.enterPastedYaml"));
+      return;
+    }
+
+    // Try to extract YAML from code block
+    const yaml = extractYamlFromCodeBlock(text);
+
+    // Validate that it looks like workflow YAML
+    if (!yaml.includes("name:") || !yaml.includes("nodes:")) {
+      setError(t("workflow.ai.parseFailed"));
+      return;
+    }
+
+    setError(null);
+    setGeneratedText(yaml);
+    setHistory((prev) => [
+      ...prev,
+      { role: "user", text: lastDescription },
+      { role: "model", text: yaml },
+    ]);
+    setPhase("preview");
+  }, [pastedText, lastDescription, t]);
 
   // Preview phase
   if (phase === "preview") {
@@ -290,6 +375,28 @@ export function AIWorkflowDialog({
                 disabled={phase === "generating"}
                 className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 disabled:opacity-50"
               />
+            </div>
+          )}
+
+          {/* Skill target (create mode only, when skills exist) */}
+          {mode === "create" && skills.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t("workflow.ai.targetFolder")}
+              </label>
+              <select
+                value={selectedSkillId}
+                onChange={(e) => setSelectedSkillId(e.target.value)}
+                disabled={phase === "generating"}
+                className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 disabled:opacity-50"
+              >
+                <option value="">{t("workflow.ai.targetDefault")}</option>
+                {skills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({skillsFolderName}/{s.id}/workflows/)
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -381,6 +488,32 @@ export function AIWorkflowDialog({
             </div>
           )}
 
+          {/* Paste response section (for external LLM flow) */}
+          {showPasteSection && phase === "input" && (
+            <div className="border-t border-gray-200 pt-3 dark:border-gray-700 space-y-2">
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                {t("workflow.ai.pasteLabel")}
+              </label>
+              <textarea
+                value={pastedText}
+                onChange={(e) => setPastedText(e.target.value)}
+                placeholder={t("workflow.ai.pastePlaceholder")}
+                rows={6}
+                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 resize-none font-mono text-xs"
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={handleApplyPasted}
+                  disabled={!pastedText.trim()}
+                  className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <ClipboardPaste size={ICON.SM} />
+                  {t("workflow.ai.applyPasted")}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Generation progress */}
           {phase === "generating" && (
             <div className="space-y-2">
@@ -442,16 +575,32 @@ export function AIWorkflowDialog({
                 {t("workflow.ai.stop")}
               </button>
             ) : (
-              <button
-                onClick={handleGenerate}
-                disabled={
-                  !description.trim() || (mode === "create" && !name.trim())
-                }
-                className="flex items-center gap-1.5 rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
-              >
-                <Sparkles size={ICON.SM} />
-                {history.length > 0 ? t("workflow.ai.regenerate") : t("workflow.ai.generate")}
-              </button>
+              <>
+                <button
+                  onClick={handleCopyPrompt}
+                  disabled={
+                    !description.trim() || (mode === "create" && !name.trim())
+                  }
+                  className={`flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+                    promptCopied
+                      ? "border-green-300 text-green-700 dark:border-green-600 dark:text-green-300"
+                      : "border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  {promptCopied ? <Check size={ICON.SM} /> : <Copy size={ICON.SM} />}
+                  {promptCopied ? t("workflow.ai.promptCopied") : t("workflow.ai.copyPrompt")}
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  disabled={
+                    !description.trim() || (mode === "create" && !name.trim())
+                  }
+                  className="flex items-center gap-1.5 rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  <Sparkles size={ICON.SM} />
+                  {history.length > 0 ? t("workflow.ai.regenerate") : t("workflow.ai.generate")}
+                </button>
+              </>
             )}
           </div>
         </div>

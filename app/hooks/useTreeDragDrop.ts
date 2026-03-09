@@ -38,6 +38,40 @@ interface UseTreeDragDropParams {
   scrollContainerRef: RefObject<HTMLDivElement | null>;
 }
 
+/**
+ * Recursively read all files from a FileSystemDirectoryEntry.
+ * Each returned File has its name set to the relative path (e.g. "folder/sub/file.txt").
+ */
+async function readDirectoryEntries(
+  entry: FileSystemDirectoryEntry,
+  basePath: string
+): Promise<File[]> {
+  const reader = entry.createReader();
+  const files: File[] = [];
+
+  const readBatch = (): Promise<FileSystemEntry[]> =>
+    new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+
+  let batch: FileSystemEntry[];
+  do {
+    batch = await readBatch();
+    for (const item of batch) {
+      const itemPath = basePath ? `${basePath}/${item.name}` : item.name;
+      if (item.isFile) {
+        const file = await new Promise<File>((resolve, reject) =>
+          (item as FileSystemFileEntry).file(resolve, reject)
+        );
+        files.push(new File([file], itemPath, { type: file.type, lastModified: file.lastModified }));
+      } else if (item.isDirectory) {
+        const subFiles = await readDirectoryEntries(item as FileSystemDirectoryEntry, itemPath);
+        for (const f of subFiles) files.push(f);
+      }
+    }
+  } while (batch.length > 0);
+
+  return files;
+}
+
 export function useTreeDragDrop({
   treeItems,
   setTreeItems,
@@ -358,8 +392,31 @@ export function useTreeDragDrop({
         return;
       }
 
-      // External file upload
-      const files = Array.from(e.dataTransfer.files);
+      // External file upload — detect directories via DataTransfer items API
+      let files: File[];
+      const items = Array.from(e.dataTransfer.items);
+      const fileEntries = items.filter((item) => item.kind === "file");
+      const entries = fileEntries.map((item) => item.webkitGetAsEntry?.());
+      const hasDirectory = entries.some((entry) => entry?.isDirectory);
+
+      if (hasDirectory) {
+        files = [];
+        for (let i = 0; i < fileEntries.length; i++) {
+          const entry = entries[i];
+          if (entry?.isDirectory) {
+            const dirFiles = await readDirectoryEntries(
+              entry as FileSystemDirectoryEntry,
+              entry.name
+            );
+            for (const f of dirFiles) files.push(f);
+          } else {
+            const file = fileEntries[i].getAsFile();
+            if (file) files.push(file);
+          }
+        }
+      } else {
+        files = Array.from(e.dataTransfer.files);
+      }
       if (files.length === 0) return;
 
       // For virtual folders, add path prefix to uploaded file names

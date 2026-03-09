@@ -21,6 +21,7 @@ export default [
   route("api/workflow/execute-node", "routes/api.workflow.execute-node.tsx"),
   route("api/workflow/mcp-proxy", "routes/api.workflow.mcp-proxy.tsx"),
   route("api/workflow/ai-generate", "routes/api.workflow.ai-generate.tsx"),
+  route("api/workflow/ai-prompt", "routes/api.workflow.ai-prompt.tsx"),
   route("api/workflow/history", "routes/api.workflow.history.tsx"),
   route("api/workflow/request-history", "routes/api.workflow.request-history.tsx"),
   route("api/chat", "routes/api.chat.tsx"),
