@@ -478,6 +478,8 @@ export interface TranslationStrings {
   "workflow.ai.parseFailed": string;
   "workflow.ai.targetFolder": string;
   "workflow.ai.targetDefault": string;
+  "workflow.ai.newSkill": string;
+  "workflow.ai.newSkillFolderPlaceholder": string;
   "workflow.preview.previewPrefix": string;
   "workflow.preview.changesPrefix": string;
   "workflow.preview.defaultName": string;
@@ -491,6 +493,7 @@ export interface TranslationStrings {
   "workflow.preview.parseFailed": string;
   "workflow.preview.noNodes": string;
   "workflow.preview.noDiff": string;
+  "workflow.preview.skillMd": string;
 
   // Trash & Conflicts
   "settings.sync.trashTitle": string;
@@ -1079,6 +1082,8 @@ const en: TranslationStrings = {
   "workflow.ai.parseFailed": "Could not find valid workflow YAML in pasted content",
   "workflow.ai.targetFolder": "Save to",
   "workflow.ai.targetDefault": "workflows/ (default)",
+  "workflow.ai.newSkill": "+ New skill...",
+  "workflow.ai.newSkillFolderPlaceholder": "e.g., code-review",
   "workflow.preview.previewPrefix": "Preview: ",
   "workflow.preview.changesPrefix": "Changes: ",
   "workflow.preview.defaultName": "Workflow",
@@ -1092,6 +1097,7 @@ const en: TranslationStrings = {
   "workflow.preview.parseFailed": "Failed to parse generated YAML. Check the YAML tab for raw content.",
   "workflow.preview.noNodes": "No nodes found",
   "workflow.preview.noDiff": "No differences detected.",
+  "workflow.preview.skillMd": "SKILL.md",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "Trash",
@@ -1680,6 +1686,8 @@ const ja: TranslationStrings = {
   "workflow.ai.parseFailed": "貼り付けた内容からワークフローYAMLを見つけられませんでした",
   "workflow.ai.targetFolder": "保存先",
   "workflow.ai.targetDefault": "workflows/（デフォルト）",
+  "workflow.ai.newSkill": "+ 新しいスキル...",
+  "workflow.ai.newSkillFolderPlaceholder": "例: code-review",
   "workflow.preview.previewPrefix": "プレビュー: ",
   "workflow.preview.changesPrefix": "変更: ",
   "workflow.preview.defaultName": "ワークフロー",
@@ -1693,6 +1701,7 @@ const ja: TranslationStrings = {
   "workflow.preview.parseFailed": "生成されたYAMLの解析に失敗しました。YAMLタブで生の内容を確認してください。",
   "workflow.preview.noNodes": "ノードが見つかりません",
   "workflow.preview.noDiff": "差分はありません。",
+  "workflow.preview.skillMd": "SKILL.md",
 
   // Trash & Manage Files
   "settings.sync.trashTitle": "ゴミ箱",

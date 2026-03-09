@@ -29,6 +29,8 @@ export async function action({ request }: Route.ActionArgs) {
     model,
     history,
     executionSteps,
+    skillMode,
+    skillFolderName,
   } = body as {
     mode?: "create" | "modify";
     name?: string;
@@ -37,6 +39,8 @@ export async function action({ request }: Route.ActionArgs) {
     model?: ModelType;
     history?: Array<{ role: "user" | "model"; text: string }>;
     executionSteps?: ExecutionStep[];
+    skillMode?: boolean;
+    skillFolderName?: string;
   };
 
   if (!description) {
@@ -60,6 +64,7 @@ export async function action({ request }: Route.ActionArgs) {
     ragSettingNames: settings?.ragSettings
       ? Object.keys(settings.ragSettings)
       : undefined,
+    includeSkillGeneration: skillMode,
   });
 
   const userPrompt = buildWorkflowUserPrompt({
@@ -68,6 +73,8 @@ export async function action({ request }: Route.ActionArgs) {
     description,
     currentYaml,
     executionSteps,
+    skillMode,
+    skillFolderName,
   });
 
   const selectedModel = model || (settings?.selectedModel as ModelType) || getDefaultModelForPlan(apiPlan);

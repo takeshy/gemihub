@@ -3,6 +3,7 @@ export interface SkillWorkflowRef {
   name?: string;
   description: string;
   fileId?: string;
+  inputVariables?: string[]; // variables used but not initialized by any node
 }
 
 export interface SkillMetadata {

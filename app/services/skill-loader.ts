@@ -14,6 +14,7 @@ import type {
   SkillWorkflowRef,
   LoadedSkill,
 } from "~/types/skill";
+import { parseWorkflowContentByName } from "~/engine/parser";
 
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
 
@@ -184,11 +185,91 @@ export async function loadSkill(
     }
   }
 
+  // Extract input variables from workflow files (parallel reads)
+  const workflowsWithVars = await Promise.all(
+    metadata.workflows.map(async (wf) => {
+      if (!wf.fileId) return wf;
+      try {
+        const wfCached = await getCachedFile(wf.fileId);
+        if (wfCached) {
+          return { ...wf, inputVariables: extractInputVariables(wfCached.content, wf.name) };
+        }
+      } catch {
+        // Skip unreadable workflow files
+      }
+      return wf;
+    })
+  );
+
   return {
     ...metadata,
+    workflows: workflowsWithVars,
     instructions: body,
     references,
   };
+}
+
+// Constants for extractInputVariables
+const SAVE_PROPERTIES = [
+  "saveTo", "saveFileTo", "savePathTo", "saveStatus",
+  "saveImageTo", "saveUiTo",
+];
+
+const SYSTEM_VARS = new Set([
+  "__workflowName__", "__lastModel__", "__date__", "__time__", "__datetime__",
+  "_clipboard",
+]);
+
+const VAR_PATTERN = /\{\{(\w[\w.[\]]*?)(?::json)?\}\}/g;
+
+/**
+ * Extract input variables from a workflow file.
+ * Input variables are {{variables}} used in node properties but not initialized
+ * by any node (via saveTo, variable/set name, etc.) and not system variables.
+ */
+function extractInputVariables(workflowContent: string, workflowName?: string): string[] {
+  let workflow;
+  try {
+    workflow = parseWorkflowContentByName(workflowContent, workflowName);
+  } catch {
+    return [];
+  }
+
+  const usedVars = new Set<string>();
+  const initializedVars = new Set<string>();
+
+  for (const [, node] of workflow.nodes) {
+    // variable/set nodes initialize the variable named in 'name'
+    if ((node.type === "variable" || node.type === "set") && node.properties.name) {
+      initializedVars.add(node.properties.name);
+    }
+
+    // Save properties initialize variables
+    for (const prop of SAVE_PROPERTIES) {
+      if (node.properties[prop]) {
+        initializedVars.add(node.properties[prop]);
+      }
+    }
+
+    // Scan all property values for {{variable}} references
+    for (const value of Object.values(node.properties)) {
+      let match;
+      VAR_PATTERN.lastIndex = 0;
+      while ((match = VAR_PATTERN.exec(String(value))) !== null) {
+        const rootVar = match[1].split(/[.[\]]/)[0];
+        if (rootVar) usedVars.add(rootVar);
+      }
+    }
+  }
+
+  const inputVars: string[] = [];
+  for (const v of usedVars) {
+    if (!initializedVars.has(v) && !SYSTEM_VARS.has(v)) {
+      inputVars.push(v);
+    }
+  }
+
+  return inputVars.sort();
 }
 
 function findNodeById(
@@ -215,7 +296,7 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[]): string {
     "# Active Agent Skills",
     "",
     "The following agent skills are active. Proactively use the skill's instructions and workflows to fulfill the user's request.",
-    "When you encounter {{variableName}} placeholders in skill instructions or workflow definitions, interpret the variable name and replace it with an appropriate value (e.g., {{today}} → today's date, {{monday}} → this week's Monday date).",
+    "When a workflow lists \"Input variables\", pass them via the variables parameter as a JSON object. Infer values from the user's message when possible. If a required variable cannot be inferred, ask the user before calling the workflow.",
   ];
 
   for (const skill of skills) {
@@ -245,9 +326,11 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[]): string {
       );
       for (const wf of skill.workflows) {
         const wfId = buildWorkflowToolId(skill.id, wf);
-        sections.push(
-          `- **${wfId}**: ${wf.description}`,
-        );
+        let line = `- **${wfId}**: ${wf.description}`;
+        if (wf.inputVariables && wf.inputVariables.length > 0) {
+          line += `\n  Input variables: ${wf.inputVariables.join(", ")}`;
+        }
+        sections.push(line);
       }
     }
   }

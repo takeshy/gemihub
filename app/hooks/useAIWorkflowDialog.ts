@@ -125,6 +125,21 @@ export function useAIWorkflowDialog({
             } catch {
               // IndexedDB write failed — Drive create already succeeded
             }
+            // Create SKILL.md alongside the workflow if in skill mode (fire-and-forget)
+            if (meta.skillMdContent && meta.newSkillId && meta.skillFolderPath) {
+              const skillMdPath = meta.skillFolderPath.replace(/\/workflows$/, "/SKILL.md");
+              fetch("/api/drive/files", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "create",
+                  name: skillMdPath,
+                  content: meta.skillMdContent,
+                }),
+              })
+                .then(() => window.dispatchEvent(new Event("sync-complete")))
+                .catch((err) => console.warn("[AI Accept] SKILL.md creation failed:", err));
+            }
             // Refresh file tree so the new file appears
             window.dispatchEvent(new Event("sync-complete"));
             handleSelectFile(data.file.id, data.file.name, "text/yaml");

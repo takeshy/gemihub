@@ -9,6 +9,7 @@ import {
   Code,
   Eye,
   FileDiff,
+  FileText,
   Loader2,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
@@ -27,18 +28,20 @@ interface WorkflowPreviewModalProps {
   originalYaml?: string;
   mode: "create" | "modify";
   workflowName?: string;
+  skillMd?: string;
   onAccept: () => void | Promise<void>;
   onReject: () => void;
   onClose: () => void;
 }
 
-type ViewTab = "visual" | "yaml" | "diff";
+type ViewTab = "visual" | "yaml" | "diff" | "skillMd";
 
 export function WorkflowPreviewModal({
   yaml,
   originalYaml,
   mode,
   workflowName,
+  skillMd,
   onAccept,
   onReject,
   onClose,
@@ -114,6 +117,14 @@ export function WorkflowPreviewModal({
               label={t("workflow.preview.diff")}
             />
           )}
+          {skillMd && (
+            <TabButton
+              active={activeTab === "skillMd"}
+              onClick={() => setActiveTab("skillMd")}
+              icon={<FileText size={ICON.SM} />}
+              label={t("workflow.preview.skillMd")}
+            />
+          )}
         </div>
 
         {/* Content */}
@@ -123,6 +134,11 @@ export function WorkflowPreviewModal({
           )}
           {activeTab === "yaml" && <YamlPreview yaml={yaml} />}
           {activeTab === "diff" && <DiffPreview lines={diffLines} />}
+          {activeTab === "skillMd" && skillMd && (
+            <pre className="overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300 font-mono whitespace-pre-wrap">
+              {skillMd}
+            </pre>
+          )}
         </div>
 
         {/* Footer */}

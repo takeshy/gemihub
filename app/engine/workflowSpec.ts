@@ -13,6 +13,7 @@ interface WorkflowSpecContext {
   mcpServers?: McpServerConfig[];
   ragSettingNames?: string[];
   outputAsMarkdown?: boolean;
+  includeSkillGeneration?: boolean;
 }
 
 export function getWorkflowSpecification(context?: WorkflowSpecContext): string {
@@ -23,13 +24,37 @@ export function getWorkflowSpecification(context?: WorkflowSpecContext): string 
   const commandRagSection = buildCommandRagSection(context?.ragSettingNames);
   const ragSyncSection = buildRagSyncSection(context?.ragSettingNames);
 
-  const formatSection = context?.outputAsMarkdown
-    ? `## Format
+  let formatSection: string;
+  if (context?.includeSkillGeneration) {
+    formatSection = `## Format
+Output TWO fenced code blocks:
+1. \`\`\`skill.md — The SKILL.md content (YAML frontmatter + markdown instructions)
+2. \`\`\`yaml — The workflow YAML
+
+### SKILL.md Format
+\`\`\`
+---
+name: Skill Display Name
+description: Short description of what this skill does
+workflows:
+  - path: workflows/<workflow-filename>.yaml
+    description: What the workflow does
+---
+
+Instructions for the AI agent when this skill is active.
+Describe the agent's role, behavior rules, and how to use the workflows.
+\`\`\`
+
+Do NOT include any text outside these two code blocks.`;
+  } else if (context?.outputAsMarkdown) {
+    formatSection = `## Format
 Workflows are defined in YAML format inside a \`\`\`yaml code block within a Markdown document.
-Include a brief description and processing overview BEFORE the \`\`\`yaml code block as Markdown text.`
-    : `## Format
+Include a brief description and processing overview BEFORE the \`\`\`yaml code block as Markdown text.`;
+  } else {
+    formatSection = `## Format
 Workflows are defined in YAML format. Output ONLY the YAML content starting with "name:".
 Do NOT include \`\`\`yaml or \`\`\` markers.`;
+  }
 
   return `
 # GemiHub Workflow Specification
@@ -550,6 +575,8 @@ export function buildWorkflowUserPrompt({
   currentYaml,
   executionSteps,
   outputAsMarkdown,
+  skillMode,
+  skillFolderName,
 }: {
   mode: "create" | "modify";
   name?: string;
@@ -557,6 +584,8 @@ export function buildWorkflowUserPrompt({
   currentYaml?: string;
   executionSteps?: import("./types").ExecutionStep[];
   outputAsMarkdown?: boolean;
+  skillMode?: boolean;
+  skillFolderName?: string;
 }): string {
   if (mode === "modify" && currentYaml) {
     let executionContext = "";
@@ -585,6 +614,10 @@ export function buildWorkflowUserPrompt({
       ? "Output the COMPLETE modified workflow YAML inside a ```yaml code block."
       : "Output the COMPLETE modified workflow YAML. Do not omit any nodes.";
     return `Here is the current workflow YAML:\n\n\`\`\`yaml\n${currentYaml}\n\`\`\`${executionContext}\n\nPlease modify this workflow according to the following request:\n${description}\n\n${outputInstruction}`;
+  }
+  if (skillMode && name) {
+    const folderInfo = skillFolderName ? ` in the skill folder "${skillFolderName}"` : "";
+    return `Create a skill${folderInfo} with a workflow named "${name}".\n\nGenerate both a SKILL.md (with appropriate name, description, workflow reference to "workflows/${name.endsWith(".yaml") ? name : name + ".yaml"}", and AI agent instructions) and the workflow YAML.\n\n${description}`;
   }
   return name
     ? `Create a workflow named "${name}".\n\n${description}`

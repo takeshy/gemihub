@@ -20,10 +20,24 @@ import { useI18n } from "~/i18n/context";
 import { useSkills } from "~/contexts/SkillContext";
 import type { ExecutionStep } from "~/engine/types";
 
+const NEW_SKILL_SENTINEL = "__new_skill__";
+
 /** Extract YAML content from a fenced code block, or return text as-is. */
 function extractYamlFromCodeBlock(text: string): string {
   const m = text.match(/```(?:yaml)?\s*([\s\S]*?)```/);
   return m ? m[1].trim() : text;
+}
+
+/** Extract both SKILL.md and workflow YAML from a response with two code blocks. */
+function extractSkillAndYaml(text: string): { skillMd: string | null; yaml: string } {
+  const skillMatch = text.match(/```skill\.md\s*([\s\S]*?)```/);
+  if (skillMatch) {
+    const yamlMatch = text.match(/```yaml\s*([\s\S]*?)```/);
+    if (yamlMatch) {
+      return { skillMd: skillMatch[1].trim(), yaml: yamlMatch[1].trim() };
+    }
+  }
+  return { skillMd: null, yaml: extractYamlFromCodeBlock(text) };
 }
 
 export interface AIWorkflowMeta {
@@ -34,6 +48,10 @@ export interface AIWorkflowMeta {
   history: { role: "user" | "model"; text: string }[];
   /** When set, create the workflow under this folder path instead of "workflows/" */
   skillFolderPath?: string;
+  /** Generated SKILL.md content to create alongside the workflow */
+  skillMdContent?: string;
+  /** Folder name for a new skill (e.g., "code-review") */
+  newSkillId?: string;
 }
 
 interface AIWorkflowDialogProps {
@@ -72,6 +90,7 @@ export function AIWorkflowDialog({
   // Input state
   const [name, setName] = useState(currentName || "");
   const [selectedSkillId, setSelectedSkillId] = useState("");
+  const [newSkillFolderName, setNewSkillFolderName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelType>(getDefaultModelForPlan(apiPlan));
 
@@ -83,6 +102,7 @@ export function AIWorkflowDialog({
   const [phase, setPhase] = useState<Phase>("input");
   const [thinking, setThinking] = useState("");
   const [generatedText, setGeneratedText] = useState("");
+  const [generatedSkillMd, setGeneratedSkillMd] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showThinking, setShowThinking] = useState(false);
 
@@ -102,6 +122,12 @@ export function AIWorkflowDialog({
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const models = getAvailableModels(apiPlan).filter((m) => !m.isImageModel);
+
+  // Skill mode: creating a new skill or targeting an existing one
+  const isNewSkill = selectedSkillId === NEW_SKILL_SENTINEL;
+  const isSkillMode = mode === "create" && (isNewSkill || (selectedSkillId !== "" && skills.some((s) => s.id === selectedSkillId)));
+  const effectiveSkillFolderName = isNewSkill ? newSkillFolderName.trim() : selectedSkillId;
+  const canSubmit = description.trim() && (mode !== "create" || name.trim()) && (!isNewSkill || newSkillFolderName.trim());
 
   // Auto-scroll thinking
   useEffect(() => {
@@ -127,6 +153,7 @@ export function AIWorkflowDialog({
     setPhase("generating");
     setThinking("");
     setGeneratedText("");
+    setGeneratedSkillMd("");
     setError(null);
     setShowThinking(false);
     setLastDescription(desc);
@@ -146,6 +173,8 @@ export function AIWorkflowDialog({
           model: selectedModel,
           history: history.length > 0 ? history : undefined,
           executionSteps: selectedExecutionSteps.length > 0 ? selectedExecutionSteps : undefined,
+          skillMode: isSkillMode || undefined,
+          skillFolderName: isSkillMode ? effectiveSkillFolderName : undefined,
         }),
         signal: controller.signal,
       });
@@ -206,8 +235,8 @@ export function AIWorkflowDialog({
         }
       }
 
-      // Extract YAML from code block if present
-      const yaml = extractYamlFromCodeBlock(fullText);
+      // Extract YAML (and optionally SKILL.md) from code blocks
+      const { skillMd, yaml } = extractSkillAndYaml(fullText);
 
       if (!yaml.trim()) {
         setError(t("workflow.ai.emptyResponse"));
@@ -216,7 +245,8 @@ export function AIWorkflowDialog({
       }
 
       setGeneratedText(yaml);
-      // Update history for potential regeneration
+      if (skillMd) setGeneratedSkillMd(skillMd);
+      // Update history for potential regeneration (include full response for context)
       setHistory((prev) => [
         ...prev,
         { role: "user", text: desc },
@@ -228,7 +258,7 @@ export function AIWorkflowDialog({
       setError(err instanceof Error ? err.message : t("workflow.ai.generationFailed"));
       setPhase("input");
     }
-  }, [description, name, mode, currentYaml, selectedModel, history, showThinking, selectedExecutionSteps, t]);
+  }, [description, name, mode, currentYaml, selectedModel, history, showThinking, selectedExecutionSteps, t, isSkillMode, effectiveSkillFolderName]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -237,12 +267,16 @@ export function AIWorkflowDialog({
 
   const handleAcceptPreview = useCallback(async () => {
     const workflowName = mode === "create" ? name.trim() : (currentName || "workflow");
-    const validSkillId = selectedSkillId && skills.some((s) => s.id === selectedSkillId)
-      ? selectedSkillId
-      : undefined;
-    const skillFolderPath = mode === "create" && validSkillId
-      ? `${skillsFolderName}/${validSkillId}/workflows`
-      : undefined;
+    let skillFolderPath: string | undefined;
+    let newSkillId: string | undefined;
+    if (mode === "create") {
+      if (isNewSkill && effectiveSkillFolderName) {
+        skillFolderPath = `${skillsFolderName}/${effectiveSkillFolderName}/workflows`;
+        newSkillId = effectiveSkillFolderName;
+      } else if (selectedSkillId && skills.some((s) => s.id === selectedSkillId)) {
+        skillFolderPath = `${skillsFolderName}/${selectedSkillId}/workflows`;
+      }
+    }
     await onAccept(generatedText, workflowName, {
       description: lastDescription,
       thinking,
@@ -250,12 +284,15 @@ export function AIWorkflowDialog({
       mode,
       history,
       skillFolderPath,
+      skillMdContent: generatedSkillMd || undefined,
+      newSkillId,
     });
-  }, [generatedText, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history, selectedSkillId, skillsFolderName, skills]);
+  }, [generatedText, generatedSkillMd, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history, isNewSkill, effectiveSkillFolderName, selectedSkillId, skillsFolderName, skills]);
 
   const handleRejectPreview = useCallback(() => {
     // Go back to input for refinement, keep history
     setDescription("");
+    setGeneratedSkillMd("");
     setPhase("input");
     setTimeout(() => descriptionRef.current?.focus(), 100);
   }, []);
@@ -277,6 +314,8 @@ export function AIWorkflowDialog({
           description: desc,
           currentYaml: mode === "modify" ? currentYaml : undefined,
           executionSteps: selectedExecutionSteps.length > 0 ? selectedExecutionSteps : undefined,
+          skillMode: isSkillMode || undefined,
+          skillFolderName: isSkillMode ? effectiveSkillFolderName : undefined,
         }),
       });
 
@@ -295,7 +334,7 @@ export function AIWorkflowDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : t("workflow.ai.generationFailed"));
     }
-  }, [description, name, mode, currentYaml, selectedExecutionSteps, t]);
+  }, [description, name, mode, currentYaml, selectedExecutionSteps, t, isSkillMode, effectiveSkillFolderName]);
 
   const handleApplyPasted = useCallback(async () => {
     const text = pastedText.trim();
@@ -304,8 +343,8 @@ export function AIWorkflowDialog({
       return;
     }
 
-    // Try to extract YAML from code block
-    const yaml = extractYamlFromCodeBlock(text);
+    // Try to extract SKILL.md and YAML from code blocks
+    const { skillMd, yaml } = extractSkillAndYaml(text);
 
     // Validate that it looks like workflow YAML
     if (!yaml.includes("name:") || !yaml.includes("nodes:")) {
@@ -315,10 +354,11 @@ export function AIWorkflowDialog({
 
     setError(null);
     setGeneratedText(yaml);
+    if (skillMd) setGeneratedSkillMd(skillMd);
     setHistory((prev) => [
       ...prev,
       { role: "user", text: lastDescription },
-      { role: "model", text: yaml },
+      { role: "model", text: text },
     ]);
     setPhase("preview");
   }, [pastedText, lastDescription, t]);
@@ -331,6 +371,7 @@ export function AIWorkflowDialog({
         originalYaml={mode === "modify" ? currentYaml : undefined}
         mode={mode}
         workflowName={mode === "create" ? name : currentName}
+        skillMd={generatedSkillMd || undefined}
         onAccept={handleAcceptPreview}
         onReject={handleRejectPreview}
         onClose={onClose}
@@ -378,8 +419,8 @@ export function AIWorkflowDialog({
             </div>
           )}
 
-          {/* Skill target (create mode only, when skills exist) */}
-          {mode === "create" && skills.length > 0 && (
+          {/* Skill target (create mode only) */}
+          {mode === "create" && (
             <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t("workflow.ai.targetFolder")}
@@ -391,12 +432,23 @@ export function AIWorkflowDialog({
                 className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 disabled:opacity-50"
               >
                 <option value="">{t("workflow.ai.targetDefault")}</option>
+                <option value={NEW_SKILL_SENTINEL}>{t("workflow.ai.newSkill")}</option>
                 {skills.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} ({skillsFolderName}/{s.id}/workflows/)
                   </option>
                 ))}
               </select>
+              {isNewSkill && (
+                <input
+                  type="text"
+                  value={newSkillFolderName}
+                  onChange={(e) => setNewSkillFolderName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ""))}
+                  placeholder={t("workflow.ai.newSkillFolderPlaceholder")}
+                  disabled={phase === "generating"}
+                  className="mt-1.5 w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 disabled:opacity-50"
+                />
+              )}
             </div>
           )}
 
@@ -578,9 +630,7 @@ export function AIWorkflowDialog({
               <>
                 <button
                   onClick={handleCopyPrompt}
-                  disabled={
-                    !description.trim() || (mode === "create" && !name.trim())
-                  }
+                  disabled={!canSubmit}
                   className={`flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
                     promptCopied
                       ? "border-green-300 text-green-700 dark:border-green-600 dark:text-green-300"
@@ -592,9 +642,7 @@ export function AIWorkflowDialog({
                 </button>
                 <button
                   onClick={handleGenerate}
-                  disabled={
-                    !description.trim() || (mode === "create" && !name.trim())
-                  }
+                  disabled={!canSubmit}
                   className="flex items-center gap-1.5 rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50"
                 >
                   <Sparkles size={ICON.SM} />

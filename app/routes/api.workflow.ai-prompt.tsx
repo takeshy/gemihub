@@ -15,12 +15,16 @@ export async function action({ request }: Route.ActionArgs) {
     description,
     currentYaml,
     executionSteps,
+    skillMode,
+    skillFolderName,
   } = body as {
     mode?: "create" | "modify";
     name?: string;
     description?: string;
     currentYaml?: string;
     executionSteps?: ExecutionStep[];
+    skillMode?: boolean;
+    skillFolderName?: string;
   };
 
   if (!description) {
@@ -43,7 +47,8 @@ export async function action({ request }: Route.ActionArgs) {
     ragSettingNames: settings?.ragSettings
       ? Object.keys(settings.ragSettings)
       : undefined,
-    outputAsMarkdown: true,
+    outputAsMarkdown: !skillMode,
+    includeSkillGeneration: skillMode,
   });
 
   const userPrompt = buildWorkflowUserPrompt({
@@ -52,7 +57,9 @@ export async function action({ request }: Route.ActionArgs) {
     description,
     currentYaml,
     executionSteps,
-    outputAsMarkdown: true,
+    outputAsMarkdown: !skillMode,
+    skillMode,
+    skillFolderName,
   });
 
   const fullPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
