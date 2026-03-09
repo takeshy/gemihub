@@ -125,8 +125,9 @@ export function useAIWorkflowDialog({
             } catch {
               // IndexedDB write failed — Drive create already succeeded
             }
-            // Create SKILL.md alongside the workflow if in skill mode (fire-and-forget)
+            // Create SKILL.md alongside the workflow if in skill mode
             if (meta.skillMdContent && meta.newSkillId && meta.skillFolderPath) {
+              const skillMdContent = meta.skillMdContent;
               const skillMdPath = meta.skillFolderPath.replace(/\/workflows$/, "/SKILL.md");
               fetch("/api/drive/files", {
                 method: "POST",
@@ -134,10 +135,25 @@ export function useAIWorkflowDialog({
                 body: JSON.stringify({
                   action: "create",
                   name: skillMdPath,
-                  content: meta.skillMdContent,
+                  content: skillMdContent,
                 }),
               })
-                .then(() => window.dispatchEvent(new Event("sync-complete")))
+                .then(async (res) => {
+                  if (res.ok) {
+                    const d = await res.json();
+                    try {
+                      await setCachedFile({
+                        fileId: d.file.id,
+                        content: skillMdContent,
+                        md5Checksum: d.file.md5Checksum ?? "",
+                        modifiedTime: d.file.modifiedTime ?? "",
+                        cachedAt: Date.now(),
+                        fileName: d.file.name,
+                      });
+                    } catch { /* IndexedDB write failed */ }
+                  }
+                  window.dispatchEvent(new Event("sync-complete"));
+                })
                 .catch((err) => console.warn("[AI Accept] SKILL.md creation failed:", err));
             }
             // Refresh file tree so the new file appears

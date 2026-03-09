@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   X,
   Sparkles,
@@ -19,22 +19,27 @@ import { ExecutionHistorySelectModal } from "./ExecutionHistorySelectModal";
 import { useI18n } from "~/i18n/context";
 import { useSkills } from "~/contexts/SkillContext";
 import type { ExecutionStep } from "~/engine/types";
-
-const NEW_SKILL_SENTINEL = "__new_skill__";
+import { fixMarkdownBullets } from "~/utils/yaml-helpers";
 
 /** Extract YAML content from a fenced code block, or return text as-is. */
 function extractYamlFromCodeBlock(text: string): string {
   const m = text.match(/```(?:yaml)?\s*([\s\S]*?)```/);
-  return m ? m[1].trim() : text;
+  const raw = m ? m[1].trim() : text;
+  return fixMarkdownBullets(raw);
 }
 
-/** Extract both SKILL.md and workflow YAML from a response with two code blocks. */
+/** Extract both SKILL.md and workflow YAML from AI response.
+ *  Uses ===WORKFLOW=== delimiter to split the two parts.
+ */
 function extractSkillAndYaml(text: string): { skillMd: string | null; yaml: string } {
-  const skillMatch = text.match(/```skill\.md\s*([\s\S]*?)```/);
-  if (skillMatch) {
-    const yamlMatch = text.match(/```yaml\s*([\s\S]*?)```/);
-    if (yamlMatch) {
-      return { skillMd: skillMatch[1].trim(), yaml: yamlMatch[1].trim() };
+  const delimIdx = text.indexOf("===WORKFLOW===");
+  if (delimIdx !== -1) {
+    const skillPart = fixMarkdownBullets(text.slice(0, delimIdx).trim());
+    let yamlPart = text.slice(delimIdx + "===WORKFLOW===".length).trim();
+    // Strip code fences if LLM wrapped the YAML part
+    yamlPart = extractYamlFromCodeBlock(yamlPart) || yamlPart;
+    if (skillPart && yamlPart) {
+      return { skillMd: skillPart, yaml: yamlPart };
     }
   }
   return { skillMd: null, yaml: extractYamlFromCodeBlock(text) };
@@ -89,8 +94,7 @@ export function AIWorkflowDialog({
 
   // Input state
   const [name, setName] = useState(currentName || "");
-  const [selectedSkillId, setSelectedSkillId] = useState("");
-  const [newSkillFolderName, setNewSkillFolderName] = useState("");
+  const [createAsSkill, setCreateAsSkill] = useState(false);
   const [description, setDescription] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelType>(getDefaultModelForPlan(apiPlan));
 
@@ -123,11 +127,15 @@ export function AIWorkflowDialog({
 
   const models = getAvailableModels(apiPlan).filter((m) => !m.isImageModel);
 
-  // Skill mode: creating a new skill or targeting an existing one
-  const isNewSkill = selectedSkillId === NEW_SKILL_SENTINEL;
-  const isSkillMode = mode === "create" && (isNewSkill || (selectedSkillId !== "" && skills.some((s) => s.id === selectedSkillId)));
-  const effectiveSkillFolderName = isNewSkill ? newSkillFolderName.trim() : selectedSkillId;
-  const canSubmit = description.trim() && (mode !== "create" || name.trim()) && (!isNewSkill || newSkillFolderName.trim());
+  // Skill mode: derive folder name from name input
+  const isSkillMode = mode === "create" && createAsSkill;
+  const skillFolderId = useMemo(
+    () => isSkillMode
+      ? name.trim().replace(/[\s/\\]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+      : "",
+    [isSkillMode, name]
+  );
+  const canSubmit = description.trim() && (mode !== "create" || name.trim());
 
   // Auto-scroll thinking
   useEffect(() => {
@@ -174,7 +182,7 @@ export function AIWorkflowDialog({
           history: history.length > 0 ? history : undefined,
           executionSteps: selectedExecutionSteps.length > 0 ? selectedExecutionSteps : undefined,
           skillMode: isSkillMode || undefined,
-          skillFolderName: isSkillMode ? effectiveSkillFolderName : undefined,
+          skillFolderName: isSkillMode ? skillFolderId : undefined,
         }),
         signal: controller.signal,
       });
@@ -219,7 +227,7 @@ export function AIWorkflowDialog({
               if (eventType === "thinking" || parsed.type === "thinking") {
                 fullThinking += parsed.content || "";
                 setThinking(fullThinking);
-                if (!showThinking) setShowThinking(true);
+                setShowThinking(true);
               } else if (eventType === "text" || parsed.type === "text") {
                 fullText += parsed.content || "";
                 setGeneratedText(fullText);
@@ -258,7 +266,7 @@ export function AIWorkflowDialog({
       setError(err instanceof Error ? err.message : t("workflow.ai.generationFailed"));
       setPhase("input");
     }
-  }, [description, name, mode, currentYaml, selectedModel, history, showThinking, selectedExecutionSteps, t, isSkillMode, effectiveSkillFolderName]);
+  }, [description, name, mode, currentYaml, selectedModel, history, selectedExecutionSteps, t, isSkillMode, skillFolderId]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -267,16 +275,9 @@ export function AIWorkflowDialog({
 
   const handleAcceptPreview = useCallback(async () => {
     const workflowName = mode === "create" ? name.trim() : (currentName || "workflow");
-    let skillFolderPath: string | undefined;
-    let newSkillId: string | undefined;
-    if (mode === "create") {
-      if (isNewSkill && effectiveSkillFolderName) {
-        skillFolderPath = `${skillsFolderName}/${effectiveSkillFolderName}/workflows`;
-        newSkillId = effectiveSkillFolderName;
-      } else if (selectedSkillId && skills.some((s) => s.id === selectedSkillId)) {
-        skillFolderPath = `${skillsFolderName}/${selectedSkillId}/workflows`;
-      }
-    }
+    const skillFolderPath = isSkillMode && skillFolderId
+      ? `${skillsFolderName}/${skillFolderId}/workflows`
+      : undefined;
     await onAccept(generatedText, workflowName, {
       description: lastDescription,
       thinking,
@@ -284,10 +285,10 @@ export function AIWorkflowDialog({
       mode,
       history,
       skillFolderPath,
-      skillMdContent: generatedSkillMd || undefined,
-      newSkillId,
+      skillMdContent: isSkillMode ? (generatedSkillMd || undefined) : undefined,
+      newSkillId: isSkillMode && skillFolderId ? skillFolderId : undefined,
     });
-  }, [generatedText, generatedSkillMd, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history, isNewSkill, effectiveSkillFolderName, selectedSkillId, skillsFolderName, skills]);
+  }, [generatedText, generatedSkillMd, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history, isSkillMode, skillFolderId, skillsFolderName]);
 
   const handleRejectPreview = useCallback(() => {
     // Go back to input for refinement, keep history
@@ -315,7 +316,7 @@ export function AIWorkflowDialog({
           currentYaml: mode === "modify" ? currentYaml : undefined,
           executionSteps: selectedExecutionSteps.length > 0 ? selectedExecutionSteps : undefined,
           skillMode: isSkillMode || undefined,
-          skillFolderName: isSkillMode ? effectiveSkillFolderName : undefined,
+          skillFolderName: isSkillMode ? skillFolderId : undefined,
         }),
       });
 
@@ -334,7 +335,7 @@ export function AIWorkflowDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : t("workflow.ai.generationFailed"));
     }
-  }, [description, name, mode, currentYaml, selectedExecutionSteps, t, isSkillMode, effectiveSkillFolderName]);
+  }, [description, name, mode, currentYaml, selectedExecutionSteps, t, isSkillMode, skillFolderId]);
 
   const handleApplyPasted = useCallback(async () => {
     const text = pastedText.trim();
@@ -354,7 +355,7 @@ export function AIWorkflowDialog({
 
     setError(null);
     setGeneratedText(yaml);
-    if (skillMd) setGeneratedSkillMd(skillMd);
+    setGeneratedSkillMd(skillMd || "");
     setHistory((prev) => [
       ...prev,
       { role: "user", text: lastDescription },
@@ -401,54 +402,36 @@ export function AIWorkflowDialog({
 
         {/* Content */}
         <div className="p-4 space-y-3">
-          {/* Name (create mode only) */}
+          {/* Name + skill checkbox (create mode only) */}
           {mode === "create" && (
             <div>
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t("workflow.ai.workflowName")}
+                {createAsSkill ? t("workflow.ai.skillName") : t("workflow.ai.workflowName")}
               </label>
               <input
                 ref={nameRef}
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={t("workflow.ai.namePlaceholder")}
+                placeholder={createAsSkill ? t("workflow.ai.skillNamePlaceholder") : t("workflow.ai.namePlaceholder")}
                 disabled={phase === "generating"}
                 className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 disabled:opacity-50"
               />
-            </div>
-          )}
-
-          {/* Skill target (create mode only) */}
-          {mode === "create" && (
-            <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t("workflow.ai.targetFolder")}
-              </label>
-              <select
-                value={selectedSkillId}
-                onChange={(e) => setSelectedSkillId(e.target.value)}
-                disabled={phase === "generating"}
-                className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 disabled:opacity-50"
-              >
-                <option value="">{t("workflow.ai.targetDefault")}</option>
-                <option value={NEW_SKILL_SENTINEL}>{t("workflow.ai.newSkill")}</option>
-                {skills.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({skillsFolderName}/{s.id}/workflows/)
-                  </option>
-                ))}
-              </select>
-              {isNewSkill && (
-                <input
-                  type="text"
-                  value={newSkillFolderName}
-                  onChange={(e) => setNewSkillFolderName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ""))}
-                  placeholder={t("workflow.ai.newSkillFolderPlaceholder")}
-                  disabled={phase === "generating"}
-                  className="mt-1.5 w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 disabled:opacity-50"
-                />
+              {createAsSkill && skillFolderId && (
+                <p className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
+                  {skillsFolderName}/{skillFolderId}/
+                </p>
               )}
+              <label className="mt-2 flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createAsSkill}
+                  onChange={(e) => setCreateAsSkill(e.target.checked)}
+                  disabled={phase === "generating"}
+                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 dark:border-gray-600"
+                />
+                {t("workflow.ai.createAsSkill")}
+              </label>
             </div>
           )}
 
@@ -540,32 +523,6 @@ export function AIWorkflowDialog({
             </div>
           )}
 
-          {/* Paste response section (for external LLM flow) */}
-          {showPasteSection && phase === "input" && (
-            <div className="border-t border-gray-200 pt-3 dark:border-gray-700 space-y-2">
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
-                {t("workflow.ai.pasteLabel")}
-              </label>
-              <textarea
-                value={pastedText}
-                onChange={(e) => setPastedText(e.target.value)}
-                placeholder={t("workflow.ai.pastePlaceholder")}
-                rows={6}
-                className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 resize-none font-mono text-xs"
-              />
-              <div className="flex justify-end">
-                <button
-                  onClick={handleApplyPasted}
-                  disabled={!pastedText.trim()}
-                  className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  <ClipboardPaste size={ICON.SM} />
-                  {t("workflow.ai.applyPasted")}
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Generation progress */}
           {phase === "generating" && (
             <div className="space-y-2">
@@ -652,6 +609,32 @@ export function AIWorkflowDialog({
             )}
           </div>
         </div>
+
+        {/* Paste response section (for external LLM flow) — below footer like obsidian-gemini-helper */}
+        {showPasteSection && phase === "input" && (
+          <div className="border-t border-gray-200 px-4 py-3 dark:border-gray-700 space-y-2">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+              {t("workflow.ai.pasteLabel")}
+            </label>
+            <textarea
+              value={pastedText}
+              onChange={(e) => setPastedText(e.target.value)}
+              placeholder={t("workflow.ai.pastePlaceholder")}
+              rows={6}
+              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 resize-none font-mono text-xs"
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={handleApplyPasted}
+                disabled={!pastedText.trim()}
+                className="flex items-center gap-1.5 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <ClipboardPaste size={ICON.SM} />
+                {t("workflow.ai.applyPasted")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
     {showHistorySelect && workflowId && (

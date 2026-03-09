@@ -67,6 +67,9 @@ import { useTreeFileOperations } from "~/hooks/useTreeFileOperations";
 import { useTreeDragDrop } from "~/hooks/useTreeDragDrop";
 import { useTreeFileCreate } from "~/hooks/useTreeFileCreate";
 
+/** Top-level folder names managed by external tools, hidden by default. */
+const MANAGEMENT_FOLDER_NAMES = new Set(["LocalLlmHub"]);
+
 interface DriveFileTreeProps {
   rootFolderId: string;
   onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
@@ -74,6 +77,7 @@ interface DriveFileTreeProps {
   encryptionEnabled: boolean;
   onFileListChange?: (items: FileListItem[]) => void;
   onSearchOpen?: () => void;
+  showManagementFolders?: boolean;
 }
 
 function getFileIcon(name: string, _mimeType: string) {
@@ -96,6 +100,7 @@ export function DriveFileTree({
   encryptionEnabled,
   onFileListChange,
   onSearchOpen,
+  showManagementFolders,
 }: DriveFileTreeProps) {
   const [treeItems, setTreeItems] = useState<CachedTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +143,16 @@ export function DriveFileTree({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { progress, upload, clearProgress } = useFileUpload();
 
+  const filteredTreeItems = useMemo(
+    () =>
+      showManagementFolders
+        ? treeItems
+        : treeItems.filter(
+            (n) => !(n.isFolder && MANAGEMENT_FOLDER_NAMES.has(n.name))
+          ),
+    [treeItems, showManagementFolders]
+  );
+
   const visibleFileIds = useMemo(() => {
     const ids: string[] = [];
     const walk = (nodes: CachedTreeNode[]) => {
@@ -151,13 +166,13 @@ export function DriveFileTree({
         }
       }
     };
-    walk(treeItems);
+    walk(filteredTreeItems);
     return ids;
-  }, [treeItems, expandedFolders]);
+  }, [filteredTreeItems, expandedFolders]);
 
   const modifiedFolderIds = useMemo(
-    () => collectModifiedFolderIds(treeItems, modifiedFiles),
-    [treeItems, modifiedFiles]
+    () => collectModifiedFolderIds(filteredTreeItems, modifiedFiles),
+    [filteredTreeItems, modifiedFiles]
   );
 
   const updateTreeFromMeta = useCallback(async (metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] }) => {
@@ -232,6 +247,8 @@ export function DriveFileTree({
       // ignore
     } finally {
       setLoading(false);
+      // Notify SkillContext (and other listeners) that the tree is ready
+      window.dispatchEvent(new Event("tree-cached"));
     }
   }, [rootFolderId]);
 
@@ -376,9 +393,9 @@ export function DriveFileTree({
   // Auto-expand folders to reveal the active file from URL
   const expandedForFileRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!activeFileId || treeItems.length === 0) return;
+    if (!activeFileId || filteredTreeItems.length === 0) return;
     if (expandedForFileRef.current === activeFileId) return;
-    const ancestors = findAncestorFolderIds(treeItems, activeFileId);
+    const ancestors = findAncestorFolderIds(filteredTreeItems, activeFileId);
     if (ancestors !== null) {
       expandedForFileRef.current = activeFileId;
       if (ancestors.length > 0) {
@@ -390,7 +407,7 @@ export function DriveFileTree({
         });
       }
     }
-  }, [activeFileId, treeItems]);
+  }, [activeFileId, filteredTreeItems]);
 
   // Load tree from IndexedDB cache only (server fetch happens after pull/push)
   useEffect(() => {
@@ -960,11 +977,11 @@ export function DriveFileTree({
         </div>
       </div>
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-1">
-        {loading && treeItems.length === 0 ? (
+        {loading && filteredTreeItems.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 size={ICON.LG} className="animate-spin text-gray-400" />
           </div>
-        ) : treeItems.length === 0 ? (
+        ) : filteredTreeItems.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-gray-400">
             {dragOverTree ? (
               <div className="flex flex-col items-center gap-1">
@@ -976,7 +993,7 @@ export function DriveFileTree({
             )}
           </div>
         ) : (
-          treeItems.map((item) => renderItem(item, 0, rootFolderId))
+          filteredTreeItems.map((item) => renderItem(item, 0, rootFolderId))
         )}
       </div>
 

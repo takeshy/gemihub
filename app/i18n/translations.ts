@@ -476,10 +476,9 @@ export interface TranslationStrings {
   "workflow.ai.applyPasted": string;
   "workflow.ai.enterPastedYaml": string;
   "workflow.ai.parseFailed": string;
-  "workflow.ai.targetFolder": string;
-  "workflow.ai.targetDefault": string;
-  "workflow.ai.newSkill": string;
-  "workflow.ai.newSkillFolderPlaceholder": string;
+  "workflow.ai.createAsSkill": string;
+  "workflow.ai.skillName": string;
+  "workflow.ai.skillNamePlaceholder": string;
   "workflow.preview.previewPrefix": string;
   "workflow.preview.changesPrefix": string;
   "workflow.preview.defaultName": string;
@@ -602,6 +601,8 @@ export interface TranslationStrings {
   // Skills
   "settings.general.skillsFolder": string;
   "settings.general.skillsFolderDescription": string;
+  "settings.general.showManagementFolders": string;
+  "settings.general.showManagementFoldersDescription": string;
   "skills.selector.title": string;
 }
 
@@ -1080,10 +1081,9 @@ const en: TranslationStrings = {
   "workflow.ai.applyPasted": "Apply",
   "workflow.ai.enterPastedYaml": "Please paste YAML content",
   "workflow.ai.parseFailed": "Could not find valid workflow YAML in pasted content",
-  "workflow.ai.targetFolder": "Save to",
-  "workflow.ai.targetDefault": "workflows/ (default)",
-  "workflow.ai.newSkill": "+ New skill...",
-  "workflow.ai.newSkillFolderPlaceholder": "e.g., code-review",
+  "workflow.ai.createAsSkill": "Create as agent skill",
+  "workflow.ai.skillName": "Skill name",
+  "workflow.ai.skillNamePlaceholder": "e.g., Code Review Helper",
   "workflow.preview.previewPrefix": "Preview: ",
   "workflow.preview.changesPrefix": "Changes: ",
   "workflow.preview.defaultName": "Workflow",
@@ -1206,6 +1206,8 @@ const en: TranslationStrings = {
   // Skills
   "settings.general.skillsFolder": "Skills Folder",
   "settings.general.skillsFolderDescription": "Folder name under your root folder containing skill definitions (subfolders with SKILL.md).",
+  "settings.general.showManagementFolders": "Show management folders",
+  "settings.general.showManagementFoldersDescription": "Show folders used by external tools (e.g. LocalLlmHub) in the file tree.",
   "skills.selector.title": "Agent Skills",
 };
 
@@ -1684,10 +1686,9 @@ const ja: TranslationStrings = {
   "workflow.ai.applyPasted": "適用",
   "workflow.ai.enterPastedYaml": "YAMLの内容を貼り付けてください",
   "workflow.ai.parseFailed": "貼り付けた内容からワークフローYAMLを見つけられませんでした",
-  "workflow.ai.targetFolder": "保存先",
-  "workflow.ai.targetDefault": "workflows/（デフォルト）",
-  "workflow.ai.newSkill": "+ 新しいスキル...",
-  "workflow.ai.newSkillFolderPlaceholder": "例: code-review",
+  "workflow.ai.createAsSkill": "エージェントスキルとして作成",
+  "workflow.ai.skillName": "スキル名",
+  "workflow.ai.skillNamePlaceholder": "例: コードレビューヘルパー",
   "workflow.preview.previewPrefix": "プレビュー: ",
   "workflow.preview.changesPrefix": "変更: ",
   "workflow.preview.defaultName": "ワークフロー",
@@ -1810,6 +1811,8 @@ const ja: TranslationStrings = {
   // Skills
   "settings.general.skillsFolder": "スキルフォルダ",
   "settings.general.skillsFolderDescription": "SKILL.mdを含むスキル定義フォルダのルートフォルダ内での名前。",
+  "settings.general.showManagementFolders": "管理フォルダを表示",
+  "settings.general.showManagementFoldersDescription": "外部ツールが使用するフォルダ（例: LocalLlmHub）をファイルツリーに表示します。",
   "skills.selector.title": "エージェントスキル",
 };
 

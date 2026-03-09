@@ -542,6 +542,7 @@ export interface UserSettings {
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
   skillsFolderName: string;
+  showManagementFolders: boolean;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -569,4 +570,5 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   apiKeySalt: "",
   shortcutKeys: [],
   skillsFolderName: "skills",
+  showManagementFolders: false,
 };

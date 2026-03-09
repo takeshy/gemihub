@@ -14,7 +14,7 @@ import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
 import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta, getAllCachedFiles, clearAllCache } from "~/services/indexeddb-cache";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
-import { SkillProvider, useSkills } from "~/contexts/SkillContext";
+import { SkillProvider } from "~/contexts/SkillContext";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally } from "~/engine/local-executor";
 import { processDriveEvent } from "~/utils/drive-file-local";
@@ -977,15 +977,8 @@ function IDEContent({
     return null;
   })();
 
-  // Merge plugin slash commands with settings slash commands for ChatPanel
-  const { skills } = useSkills();
-  const skillSlashCommands = skills.map((s) => ({
-    id: `__skill__${s.id}`,
-    name: s.id,
-    description: `[Skill] ${s.description || s.name}`,
-    promptTemplate: "",
-  }));
-  const allSlashCommands = [...(settings.slashCommands || []), ...skillSlashCommands];
+  // Slash commands for ChatPanel (skills are added inside ChatPanel itself)
+  const allSlashCommands = settings.slashCommands || [];
 
   // Shared components
   const fileTreeContent = (
@@ -995,6 +988,7 @@ function IDEContent({
       activeFileId={activeFileId}
       encryptionEnabled={settings.encryption.enabled}
       onSearchOpen={() => setShowSearch(true)}
+      showManagementFolders={settings.showManagementFolders}
     />
   );
 
@@ -1438,6 +1432,7 @@ function DriveFileTreeWithContext(props: {
   activeFileId: string | null;
   encryptionEnabled: boolean;
   onSearchOpen?: () => void;
+  showManagementFolders?: boolean;
 }) {
   const { setFileList } = useEditorContext();
   return (

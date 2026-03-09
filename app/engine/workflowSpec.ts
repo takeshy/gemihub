@@ -27,12 +27,11 @@ export function getWorkflowSpecification(context?: WorkflowSpecContext): string 
   let formatSection: string;
   if (context?.includeSkillGeneration) {
     formatSection = `## Format
-Output TWO fenced code blocks:
-1. \`\`\`skill.md — The SKILL.md content (YAML frontmatter + markdown instructions)
-2. \`\`\`yaml — The workflow YAML
+Output a single continuous text with a \`===WORKFLOW===\` separator line.
+The first part is the SKILL.md content (YAML frontmatter + markdown instructions) as raw text.
+The second part (after the separator) is the workflow YAML wrapped in a \`\`\`yaml code fence.
 
-### SKILL.md Format
-\`\`\`
+Example structure:
 ---
 name: Skill Display Name
 description: Short description of what this skill does
@@ -43,9 +42,17 @@ workflows:
 
 Instructions for the AI agent when this skill is active.
 Describe the agent's role, behavior rules, and how to use the workflows.
+
+===WORKFLOW===
+\`\`\`yaml
+name: workflow-name
+nodes:
+  - id: first-node
+    type: variable
+    ...
 \`\`\`
 
-Do NOT include any text outside these two code blocks.`;
+IMPORTANT: The workflow YAML MUST be inside a \`\`\`yaml code fence to preserve indentation.`;
   } else if (context?.outputAsMarkdown) {
     formatSection = `## Format
 Workflows are defined in YAML format inside a \`\`\`yaml code block within a Markdown document.

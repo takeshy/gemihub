@@ -15,6 +15,7 @@ import type {
   LoadedSkill,
 } from "~/types/skill";
 import { parseWorkflowContentByName } from "~/engine/parser";
+import { fixMarkdownBullets } from "~/utils/yaml-helpers";
 
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
 
@@ -35,7 +36,7 @@ function parseFrontmatter(content: string): {
   const m = content.match(FM_RE);
   if (!m) return { frontmatter: {}, body: content };
   try {
-    const parsed = yaml.load(m[1]);
+    const parsed = yaml.load(fixMarkdownBullets(m[1]));
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return {
         frontmatter: parsed as SkillFrontmatter,
@@ -68,9 +69,7 @@ export async function discoverSkills(
   if (!tree) return [];
 
   const skillsFolder = findChildByName(tree.items, skillsFolderName);
-  if (!skillsFolder || !skillsFolder.isFolder || !skillsFolder.children) {
-    return [];
-  }
+  if (!skillsFolder || !skillsFolder.isFolder || !skillsFolder.children) return [];
 
   const results: SkillMetadata[] = [];
 

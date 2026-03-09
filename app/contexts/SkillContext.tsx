@@ -22,8 +22,8 @@ interface SkillContextValue {
   activateSkill: (skillId: string) => void;
   loading: boolean;
   refreshSkills: () => void;
-  getActiveSkillsSystemPrompt: () => Promise<string>;
-  getActiveSkillWorkflows: () => Array<{
+  getActiveSkillsSystemPrompt: (extraSkillIds?: string[]) => Promise<string>;
+  getActiveSkillWorkflows: (extraSkillIds?: string[]) => Array<{
     skillId: string;
     skillName: string;
     workflow: SkillWorkflowRef;
@@ -82,11 +82,15 @@ export function SkillProvider({
     discover();
   }, [discover]);
 
-  // Rediscover on sync-complete
+  // Rediscover on sync-complete or tree-cached (initial load)
   useEffect(() => {
     const handler = () => discover();
     window.addEventListener("sync-complete", handler);
-    return () => window.removeEventListener("sync-complete", handler);
+    window.addEventListener("tree-cached", handler);
+    return () => {
+      window.removeEventListener("sync-complete", handler);
+      window.removeEventListener("tree-cached", handler);
+    };
   }, [discover]);
 
   // Persist active skill IDs
@@ -110,8 +114,15 @@ export function SkillProvider({
     );
   }, []);
 
-  const getActiveSkillsSystemPrompt = useCallback(async (): Promise<string> => {
-    const activeSkills = skills.filter((s) => activeSkillIds.includes(s.id));
+  const mergeSkillIds = useCallback((extraSkillIds?: string[]) => {
+    return extraSkillIds
+      ? [...new Set([...activeSkillIds, ...extraSkillIds])]
+      : activeSkillIds;
+  }, [activeSkillIds]);
+
+  const getActiveSkillsSystemPrompt = useCallback(async (extraSkillIds?: string[]): Promise<string> => {
+    const allIds = mergeSkillIds(extraSkillIds);
+    const activeSkills = skills.filter((s) => allIds.includes(s.id));
     if (activeSkills.length === 0) return "";
 
     const loaded: LoadedSkill[] = [];
@@ -125,9 +136,10 @@ export function SkillProvider({
     }
 
     return buildSkillSystemPrompt(loaded);
-  }, [skills, activeSkillIds]);
+  }, [skills, mergeSkillIds]);
 
-  const getActiveSkillWorkflows = useCallback(() => {
+  const getActiveSkillWorkflows = useCallback((extraSkillIds?: string[]) => {
+    const allIds = mergeSkillIds(extraSkillIds);
     const result: Array<{
       skillId: string;
       skillName: string;
@@ -135,7 +147,7 @@ export function SkillProvider({
       folderId: string;
     }> = [];
     for (const s of skills) {
-      if (!activeSkillIds.includes(s.id)) continue;
+      if (!allIds.includes(s.id)) continue;
       for (const wf of s.workflows) {
         result.push({
           skillId: s.id,
@@ -146,7 +158,7 @@ export function SkillProvider({
       }
     }
     return result;
-  }, [skills, activeSkillIds]);
+  }, [skills, mergeSkillIds]);
 
   return (
     <SkillContext.Provider

@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X } from "lucide-react";
-import { ICON } from "~/utils/icon-sizes";
+import { Sparkles, X, Plus } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { SkillMetadata } from "~/types/skill";
 
@@ -8,12 +7,18 @@ interface SkillSelectorProps {
   skills: SkillMetadata[];
   activeSkillIds: string[];
   onToggleSkill: (skillId: string) => void;
+  disabled?: boolean;
 }
 
+/**
+ * Inline skill selector: ✨ [chip ×] [chip ×] [+ dropdown]
+ * Matches the obsidian-gemini-helper design.
+ */
 export function SkillSelector({
   skills,
   activeSkillIds,
   onToggleSkill,
+  disabled,
 }: SkillSelectorProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -35,94 +40,66 @@ export function SkillSelector({
 
   if (skills.length === 0) return null;
 
-  const activeCount = activeSkillIds.filter((id) =>
-    skills.some((s) => s.id === id),
-  ).length;
-
-  return (
-    <div ref={dropdownRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`rounded-md p-1.5 transition-colors ${
-          activeCount > 0
-            ? "text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30"
-            : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-        }`}
-        title={t("skills.selector.title")}
-      >
-        <Sparkles size={ICON.LG} />
-        {activeCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-purple-600 text-[8px] font-bold text-white">
-            {activeCount}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute bottom-full left-0 z-10 mb-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-            {t("skills.selector.title")}
-          </div>
-          {skills.map((skill) => {
-            const isActive = activeSkillIds.includes(skill.id);
-            return (
-              <button
-                key={skill.id}
-                onClick={() => onToggleSkill(skill.id)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                <span
-                  className={`inline-flex h-3 w-3 flex-shrink-0 items-center justify-center rounded border text-[8px] leading-none ${
-                    isActive
-                      ? "border-purple-500 bg-purple-500 text-white"
-                      : "border-gray-400 dark:border-gray-500"
-                  }`}
-                >
-                  {isActive ? "\u2713" : ""}
-                </span>
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="truncate font-medium">{skill.name}</div>
-                  {skill.description && (
-                    <div className="truncate text-gray-500 dark:text-gray-400">
-                      {skill.description}
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function SkillChips({
-  skills,
-  activeSkillIds,
-  onToggleSkill,
-}: SkillSelectorProps) {
   const activeSkills = skills.filter((s) => activeSkillIds.includes(s.id));
-  if (activeSkills.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex items-center gap-1 px-3 py-1 flex-wrap">
+      <Sparkles size={14} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
       {activeSkills.map((skill) => (
         <span
           key={skill.id}
-          className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs text-purple-700 dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+          className="inline-flex items-center gap-1 rounded-full bg-purple-600 px-2 py-0.5 text-[11px] text-white whitespace-nowrap"
         >
-          <Sparkles size={10} />
-          <span className="max-w-[120px] truncate">{skill.name}</span>
+          {skill.name}
           <button
             onClick={() => onToggleSkill(skill.id)}
-            className="ml-0.5 rounded-full p-0.5 text-purple-400 hover:bg-purple-200 hover:text-purple-600 dark:hover:bg-purple-800 dark:hover:text-purple-200"
+            disabled={disabled}
+            className="inline-flex items-center justify-center p-0 ml-0.5 opacity-70 hover:opacity-100 bg-transparent border-none text-white cursor-pointer shadow-none"
           >
             <X size={10} />
           </button>
         </span>
       ))}
+      <div className="relative inline-flex" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          disabled={disabled}
+          className="inline-flex items-center justify-center w-5 h-5 p-0 rounded-full border border-dashed border-gray-400 bg-transparent text-gray-400 cursor-pointer hover:border-gray-600 hover:text-gray-600 dark:border-gray-500 dark:text-gray-500 dark:hover:border-gray-300 dark:hover:text-gray-300 disabled:opacity-50 shadow-none"
+          title={t("skills.selector.title")}
+        >
+          <Plus size={12} />
+        </button>
+        {open && (
+          <div className="absolute bottom-full left-0 z-10 mb-1 min-w-[200px] max-h-[200px] overflow-y-auto rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+            {skills.map((skill) => {
+              const isActive = activeSkillIds.includes(skill.id);
+              return (
+                <label
+                  key={skill.id}
+                  className="flex items-start gap-1.5 rounded px-1.5 py-1 cursor-pointer text-xs hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={() => onToggleSkill(skill.id)}
+                    disabled={disabled}
+                    className="mt-0.5 flex-shrink-0"
+                  />
+                  <div className="flex flex-col gap-px min-w-0">
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{skill.name}</span>
+                    {skill.description && (
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                        {skill.description}
+                      </span>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

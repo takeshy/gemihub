@@ -42,6 +42,7 @@ export interface ChatOverrides {
   driveToolMode?: DriveToolMode | null;
   enabledMcpServers?: string[] | null;
   pluginExecute?: (args: string) => Promise<string>;
+  skillId?: string;
 }
 
 interface ChatPanelProps {
@@ -446,9 +447,16 @@ export function ChatPanel({
         effectiveConstraint.locked && effectiveConstraint.forcedMode === "none";
       const mcpOverride = overrides?.enabledMcpServers !== undefined ? overrides.enabledMcpServers : null;
 
+      // When skill invoked with no message, display /skillName
+      let displayContent = content;
+      if (!displayContent.trim() && overrides?.skillId) {
+        const skill = skills.find(s => s.id === overrides.skillId);
+        displayContent = skill ? `/${skill.name}` : `/${overrides.skillId}`;
+      }
+
       const userMessage: Message = {
         role: "user",
-        content,
+        content: displayContent,
         timestamp: Date.now(),
         attachments,
       };
@@ -495,11 +503,16 @@ export function ChatPanel({
       let mcpApps: McpAppInfo[] = [];
 
       try {
-        const skillPrompt = await getActiveSkillsSystemPrompt();
+        // Activate skill for future messages; pass as extra so current prompt includes it
+        if (overrides?.skillId) {
+          activateSkill(overrides.skillId);
+        }
+        const extraSkillIds = overrides?.skillId ? [overrides.skillId] : undefined;
+        const skillPrompt = await getActiveSkillsSystemPrompt(extraSkillIds);
         const fullSystemPrompt = [settings.systemPrompt, skillPrompt]
           .filter(Boolean)
           .join("\n\n") || undefined;
-        const skillWorkflows = getActiveSkillWorkflows();
+        const skillWorkflows = getActiveSkillWorkflows(extraSkillIds);
 
         const generator = executeLocalChat(
           {
@@ -688,6 +701,7 @@ export function ChatPanel({
       settings,
       saveChat,
       getThinkingToggle,
+      activateSkill,
       getActiveSkillsSystemPrompt,
       getActiveSkillWorkflows,
     ]
@@ -1013,7 +1027,6 @@ export function ChatPanel({
         skills={skills}
         activeSkillIds={activeSkillIds}
         onToggleSkill={toggleSkill}
-        onActivateSkill={activateSkill}
       />
 
       {showCryptoPrompt && settings.encryption.encryptedPrivateKey && (

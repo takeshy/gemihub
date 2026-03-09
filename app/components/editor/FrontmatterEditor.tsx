@@ -23,6 +23,12 @@ import type { TranslationStrings } from "~/i18n/translations";
 
 type PropertyType = "text" | "number" | "checkbox" | "date" | "datetime" | "list";
 
+const YAML_DUMP_OPTS: yaml.DumpOptions = { lineWidth: -1, quotingType: "'", forceQuotes: false };
+
+function isComplexValue(value: unknown): boolean {
+  return Array.isArray(value) || (value !== null && typeof value === "object");
+}
+
 interface FrontmatterProperty {
   id: string;
   key: string;
@@ -76,7 +82,7 @@ export function serializeFrontmatter(
   for (const prop of properties) {
     obj[prop.key] = convertValue(prop.value, prop.type);
   }
-  const yamlStr = yaml.dump(obj, { lineWidth: -1, quotingType: "'", forceQuotes: false });
+  const yamlStr = yaml.dump(obj, YAML_DUMP_OPTS);
   return `---\n${yamlStr}---\n${body}`;
 }
 
@@ -97,7 +103,7 @@ function convertValue(value: unknown, type: PropertyType): unknown {
     case "datetime":
     case "text":
     default:
-      if (Array.isArray(value)) return value.join(", ");
+      if (isComplexValue(value)) return value;
       if (typeof value === "boolean") return String(value);
       return value == null ? "" : value;
   }
@@ -112,7 +118,11 @@ const DATETIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
 
 function inferPropertyType(value: unknown): PropertyType {
   if (typeof value === "boolean") return "checkbox";
-  if (Array.isArray(value)) return "list";
+  // Arrays of primitives → list; arrays containing objects → text (YAML)
+  if (Array.isArray(value)) {
+    const hasObject = value.some(v => v !== null && typeof v === "object");
+    return hasObject ? "text" : "list";
+  }
   if (typeof value === "number") return "number";
   if (value instanceof Date) return "date";
   if (typeof value === "string") {
@@ -510,17 +520,23 @@ function PropertyValueEditor({
       return <ListEditor values={Array.isArray(prop.value) ? prop.value.map(String) : []} readOnly={readOnly} onChange={onChange} />;
 
     case "text":
-    default:
-      return readOnly ? (
-        <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{String(prop.value ?? "")}</span>
+    default: {
+      // Complex values (arrays of objects, nested objects) → show as YAML
+      const isComplex = isComplexValue(prop.value);
+      const displayValue = isComplex
+        ? yaml.dump(prop.value, YAML_DUMP_OPTS).trimEnd()
+        : String(prop.value ?? "");
+      return readOnly || isComplex ? (
+        <span className={`text-xs truncate whitespace-pre-wrap ${readOnly ? "text-gray-700 dark:text-gray-300" : "text-gray-500 dark:text-gray-400"}`}>{displayValue}</span>
       ) : (
         <input
           type="text"
-          value={String(prop.value ?? "")}
+          value={displayValue}
           onChange={(e) => onChange(e.target.value)}
           className="w-full border-b border-transparent bg-transparent text-xs text-gray-700 outline-none focus:border-blue-400 dark:text-gray-300"
         />
       );
+    }
   }
 }
 

@@ -49,6 +49,7 @@ export function GeneralTab({
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
   const [skillsFolderName, setSkillsFolderName] = useState(settings.skillsFolderName || "skills");
+  const [showManagementFolders, setShowManagementFolders] = useState(settings.showManagementFolders ?? false);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
@@ -358,6 +359,24 @@ export function GeneralTab({
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {t("settings.general.skillsFolderDescription")}
           </p>
+        </div>
+
+        {/* Show management folders */}
+        <div className="mb-6 flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="showManagementFolders"
+            name="showManagementFolders"
+            checked={showManagementFolders}
+            onChange={(e) => setShowManagementFolders(e.target.checked)}
+            className={checkboxClass}
+          />
+          <div>
+            <Label htmlFor="showManagementFolders">{t("settings.general.showManagementFolders")}</Label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t("settings.general.showManagementFoldersDescription")}
+            </p>
+          </div>
         </div>
 
         <hr className="my-6 border-gray-200 dark:border-gray-700" />
