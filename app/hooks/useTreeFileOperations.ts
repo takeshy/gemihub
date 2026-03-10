@@ -236,7 +236,11 @@ export function useTreeFileOperations({
 
       if (item.isFolder && item.id.startsWith("vfolder:")) {
         const fileIds = collectFileIds(item);
-        if (fileIds.length === 0) return;
+        if (fileIds.length === 0) {
+          // Empty virtual folder — just remove from tree
+          setTreeItems((prev) => removeNodeFromTree(prev, item.id));
+          return;
+        }
         if (!confirm(t("trash.softDeleteFolderConfirm").replace("{count}", String(fileIds.length)).replace("{name}", item.name))) return;
 
         setBusy(fileIds);

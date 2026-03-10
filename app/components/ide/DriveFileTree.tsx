@@ -1122,25 +1122,30 @@ export function DriveFileTree({
       )}
 
       {folderDialog.open && createPortal(
-        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setFolderDialog({ open: false, name: "" })}>
+        <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={() => setFolderDialog({ open: false, name: "", targetFolderId: null })}>
           <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-lg shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               {t("fileTree.folderName")}
             </h3>
+            {folderDialog.targetFolderId?.startsWith("vfolder:") && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 truncate">
+                {folderDialog.targetFolderId.slice("vfolder:".length)}/
+              </p>
+            )}
             <input
               type="text"
               value={folderDialog.name}
               onChange={(e) => setFolderDialog((prev) => ({ ...prev, name: e.target.value }))}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleCreateFolderSubmit();
-                if (e.key === "Escape") setFolderDialog({ open: false, name: "" });
+                if (e.key === "Escape") setFolderDialog({ open: false, name: "", targetFolderId: null });
               }}
               className="w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               autoFocus
             />
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => setFolderDialog({ open: false, name: "" })}
+                onClick={() => setFolderDialog({ open: false, name: "", targetFolderId: null })}
                 className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 {t("fileTree.cancel")}

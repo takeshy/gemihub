@@ -48,20 +48,21 @@ export function useTreeFileCreate({
     open: boolean; name: string; ext: string; customExt: string; addDateTime: boolean; addLocation: boolean;
   }>({ open: false, name: "", ext: ".md", customExt: "", addDateTime: false, addLocation: false });
 
-  const [folderDialog, setFolderDialog] = useState<{ open: boolean; name: string }>({ open: false, name: "" });
+  const [folderDialog, setFolderDialog] = useState<{ open: boolean; name: string; targetFolderId: string | null }>({ open: false, name: "", targetFolderId: null });
 
   const handleCreateFolder = useCallback(() => {
-    setFolderDialog({ open: true, name: "" });
-  }, []);
+    setFolderDialog({ open: true, name: "", targetFolderId: selectedFolderId });
+  }, [selectedFolderId]);
 
   const handleCreateFolderSubmit = useCallback(() => {
     const name = folderDialog.name.trim();
     if (!name) return;
-    setFolderDialog({ open: false, name: "" });
+    const targetId = folderDialog.targetFolderId;
+    setFolderDialog({ open: false, name: "", targetFolderId: null });
 
-    // Determine parent path from selected folder
-    const parentPath = selectedFolderId?.startsWith("vfolder:")
-      ? selectedFolderId.slice("vfolder:".length)
+    // Determine parent path from the folder selected when the dialog was opened
+    const parentPath = targetId?.startsWith("vfolder:")
+      ? targetId.slice("vfolder:".length)
       : "";
     const folderPath = parentPath ? `${parentPath}/${name}` : name;
     const folderId = `vfolder:${folderPath}`;
@@ -86,7 +87,7 @@ export function useTreeFileCreate({
       // Add into the parent virtual folder
       const insertIntoFolder = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
         nodes.map((n) => {
-          if (n.id === selectedFolderId && n.children) {
+          if (n.id === targetId && n.children) {
             return {
               ...n,
               children: [...n.children, newFolder].sort((a, b) => {
@@ -106,12 +107,12 @@ export function useTreeFileCreate({
     // Expand parent and the new folder
     setExpandedFolders((prev) => {
       const next = new Set(prev);
-      if (selectedFolderId) next.add(selectedFolderId);
+      if (targetId) next.add(targetId);
       next.add(folderId);
       return next;
     });
     setSelectedFolderId(folderId);
-  }, [folderDialog.name, selectedFolderId, setTreeItems, setExpandedFolders, setSelectedFolderId]);
+  }, [folderDialog, setTreeItems, setExpandedFolders, setSelectedFolderId]);
 
   const handleCreateFile = useCallback(() => {
     const saved = localStorage.getItem("createFileOptions");
