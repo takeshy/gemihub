@@ -474,6 +474,23 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 // ---------------------------------------------------------------------------
+// Client loader — apply localStorage language before render to avoid hydration mismatch
+// ---------------------------------------------------------------------------
+
+export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
+  const data = await serverLoader();
+  try {
+    const ls = localStorage.getItem("gemihub-language");
+    if ((ls === "ja" || ls === "en") && data.settings.language !== ls) {
+      return { ...data, settings: { ...data.settings, language: ls as Language } };
+    }
+  } catch { /* localStorage unavailable */ }
+  return data;
+}
+
+clientLoader.hydrate = true as const;
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -481,14 +498,7 @@ export default function Settings() {
   const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
-  const [currentLang, setCurrentLang] = useState<Language>(() => {
-    const serverLang = settings.language ?? "en";
-    try {
-      const ls = localStorage.getItem("gemihub-language");
-      if (ls === "ja" || ls === "en") return ls as Language;
-    } catch { /* localStorage unavailable */ }
-    return serverLang;
-  });
+  const [currentLang, setCurrentLang] = useState<Language>(settings.language ?? "en");
   useApplySettings(currentLang, settings.fontSize, settings.theme);
 
   // Detect OAuth redirect return from mobile flow
