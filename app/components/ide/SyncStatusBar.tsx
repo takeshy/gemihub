@@ -96,11 +96,7 @@ export function SyncStatusBar({
         const remoteFiles = remoteMeta?.files ?? {};
         const localFiles = localMeta?.files ?? {};
 
-        for (const id of diff.remoteOnly) {
-          const name = remoteFiles[id]?.name || id;
-          if (isSyncExcludedPath(name)) continue;
-          files.push({ id, name, type: "new" });
-        }
+        // remoteOnly files are not shown — they have no changes and are fetched on-demand
         for (const id of diff.toPull) {
           const name = remoteFiles[id]?.name || id;
           if (isSyncExcludedPath(name)) continue;

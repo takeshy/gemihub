@@ -115,22 +115,56 @@ export async function resolveFileLocal(
 // File reading
 // ---------------------------------------------------------------------------
 
-/** Read file content as text from IndexedDB cache */
+/** Read file content as text from IndexedDB cache, with server fallback */
 export async function readFileLocal(fileId: string): Promise<string> {
   const cached = await getCachedFile(fileId);
-  if (!cached) throw new Error(`File not found in cache: ${fileId}`);
-  return cached.content;
+  if (cached) return cached.content;
+
+  // Cache miss — fetch from server and cache for future reads
+  const res = await fetch(`/api/drive/files?action=read&fileId=${encodeURIComponent(fileId)}`);
+  if (!res.ok) throw new Error(`File not found: ${fileId}`);
+  const data = await res.json() as { content: string; md5Checksum?: string; modifiedTime?: string };
+
+  const meta = await getCachedRemoteMeta();
+  const fileMeta = meta?.files[fileId];
+  await setCachedFile({
+    fileId,
+    content: data.content,
+    md5Checksum: data.md5Checksum ?? "",
+    modifiedTime: data.modifiedTime ?? "",
+    cachedAt: Date.now(),
+    fileName: fileMeta?.name,
+  });
+  return data.content;
 }
 
-/** Read file as base64 from IndexedDB cache */
+/** Read file as base64 from IndexedDB cache, with server fallback */
 export async function readFileBinaryLocal(fileId: string): Promise<string> {
   const cached = await getCachedFile(fileId);
-  if (!cached) throw new Error(`File not found in cache: ${fileId}`);
-  // If already stored as base64, return directly
-  if (cached.encoding === "base64") return cached.content;
-  // Otherwise encode text content as base64
-  const encoder = new TextEncoder();
-  return base64Encode(encoder.encode(cached.content));
+  if (cached) {
+    if (cached.encoding === "base64") return cached.content;
+    const encoder = new TextEncoder();
+    return base64Encode(encoder.encode(cached.content));
+  }
+
+  // Cache miss — fetch raw content from server and cache as base64
+  const res = await fetch(`/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}`);
+  if (!res.ok) throw new Error(`File not found: ${fileId}`);
+  const arrayBuffer = await res.arrayBuffer();
+  const b64 = base64Encode(new Uint8Array(arrayBuffer));
+
+  const meta = await getCachedRemoteMeta();
+  const fileMeta = meta?.files[fileId];
+  await setCachedFile({
+    fileId,
+    content: b64,
+    md5Checksum: fileMeta?.md5Checksum ?? "",
+    modifiedTime: fileMeta?.modifiedTime ?? "",
+    cachedAt: Date.now(),
+    fileName: fileMeta?.name,
+    encoding: "base64",
+  });
+  return b64;
 }
 
 // ---------------------------------------------------------------------------

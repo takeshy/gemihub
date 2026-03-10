@@ -12,12 +12,13 @@ import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiO
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
-import { setCachedFile, getCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta, getAllCachedFiles, clearAllCache } from "~/services/indexeddb-cache";
+import { setCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta, getAllCachedFiles, clearAllCache } from "~/services/indexeddb-cache";
 import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
 import { SkillProvider } from "~/contexts/SkillContext";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally } from "~/engine/local-executor";
 import { processDriveEvent } from "~/utils/drive-file-local";
+import { readFileLocal } from "~/services/drive-local";
 import { getCachedApiKey } from "~/services/api-key-cache";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
@@ -628,9 +629,8 @@ function IDEContent({
     silentExecAbortRef.current = abortController;
     (async () => {
       try {
-        const cached = await getCachedFile(workflowId);
-        if (!cached) throw new Error("Workflow file not found in cache");
-        const workflow = parseWorkflowYaml(cached.content);
+        const content = await readFileLocal(workflowId);
+        const workflow = parseWorkflowYaml(content);
         const silentSettings = getCachedLoaderDataInMemory()?.settings as import("~/types/settings").UserSettings | undefined;
         const result = await executeWorkflowLocally(
           workflow,

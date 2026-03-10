@@ -111,9 +111,9 @@ export function useSync() {
           const name = remoteFiles[id]?.name || localFiles[id]?.name;
           return name ? isSyncExcludedPath(name) : false;
         };
+        // remoteOnly files are not counted — they have no changes and are fetched on-demand
         const pullCount =
           diff.toPull.filter(id => !isExcluded(id)).length +
-          diff.remoteOnly.filter(id => !isExcluded(id)).length +
           pullLocalOnly.filter(id => !isExcluded(id)).length +
           diff.editDeleteConflicts.filter(id => !isExcluded(id)).length +
           diff.conflicts.filter(c => !isExcluded(c.fileId)).length;
@@ -215,11 +215,11 @@ export function useSync() {
       // 4. Reject push when remote has pending changes (pull first)
       const localMetaFiles = localMeta?.files ?? {};
       const remoteDeletedCount = diff.localOnly.filter(id => id in localMetaFiles).length;
+      // remoteOnly files (no local cache, no changes) do not block push
       if (
         diff.conflicts.length > 0
         || diff.editDeleteConflicts.length > 0
         || diff.toPull.length > 0
-        || diff.remoteOnly.length > 0
         || remoteDeletedCount > 0
       ) {
         // Update cached remoteMeta so subsequent pull uses the fresh data
@@ -426,7 +426,10 @@ export function useSync() {
       }
 
       // 6. Download non-conflict files via pullDirect
-      const allFilesToPull = [...diff.toPull, ...diff.remoteOnly];
+      // remoteOnly files (no local cache, no changes) are NOT downloaded —
+      // they are fetched on-demand when the user clicks them in the file tree.
+      // Only update their metadata in localSyncMeta so subsequent diffs are correct.
+      const allFilesToPull = [...diff.toPull];
       const remoteFiles = remoteMeta?.files ?? {};
 
       // Separate ignored modified files — metadata only, no download
@@ -434,6 +437,12 @@ export function useSync() {
         ignoredIds ? diff.toPull.filter(id => ignoredIds.has(id)) : []
       );
       const filesToPull = allFilesToPull.filter(id => !ignoredModifiedIds.has(id));
+
+      const updatedMeta: LocalSyncMeta = baseMeta ?? {
+        id: "current",
+        lastUpdatedAt: new Date().toISOString(),
+        files: {},
+      };
 
       if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
         const isMobile = window.matchMedia("(max-width: 768px)").matches;
@@ -448,12 +457,6 @@ export function useSync() {
         for (const id of filesToDownload) {
           if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
         }
-
-        const updatedMeta: LocalSyncMeta = baseMeta ?? {
-          id: "current",
-          lastUpdatedAt: new Date().toISOString(),
-          files: {},
-        };
 
         // On mobile, track binary files in localSyncMeta without caching content
         if (isMobile) {
@@ -519,8 +522,23 @@ export function useSync() {
             }],
           });
         }
+      }
 
-        // 8. Save localMeta
+      // 7c. Update localSyncMeta for remoteOnly files (metadata only, no content download)
+      // These files are fetched on-demand when the user clicks them in the file tree.
+      for (const fid of diff.remoteOnly) {
+        const rm = remoteFiles[fid];
+        if (rm) {
+          updatedMeta.files[fid] = {
+            md5Checksum: rm.md5Checksum ?? "",
+            modifiedTime: rm.modifiedTime ?? "",
+            name: rm.name,
+          };
+        }
+      }
+
+      // 8. Save localMeta (once for all changes: toPull, ignored, and remoteOnly)
+      if (filesToPull.length > 0 || ignoredModifiedIds.size > 0 || diff.remoteOnly.length > 0) {
         updatedMeta.lastUpdatedAt = new Date().toISOString();
         await setLocalSyncMeta(updatedMeta);
         baseMeta = updatedMeta;
@@ -529,7 +547,7 @@ export function useSync() {
       if (remoteMeta) await updateCachedRemoteMetaFromSyncMeta(remoteMeta);
 
       // 9. Dispatch events and update counts
-      if (allFilesToPull.length > 0 || localOnlyReal.length > 0) {
+      if (allFilesToPull.length > 0 || localOnlyReal.length > 0 || diff.remoteOnly.length > 0) {
         setLastSyncTime(new Date().toISOString());
         window.dispatchEvent(new Event("sync-complete"));
         if (filesToPull.length > 0) {
