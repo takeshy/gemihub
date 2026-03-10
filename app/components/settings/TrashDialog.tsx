@@ -64,7 +64,7 @@ export function TrashDialog({ onClose }: TrashDialogProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "deleteUntracked",
+          action: "permanentDelete",
           fileIds: Array.from(selected),
         }),
       });

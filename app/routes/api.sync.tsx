@@ -455,6 +455,21 @@ export async function action({ request }: Route.ActionArgs) {
       return logAndReturn({ restored: fileIds.length, remoteMeta });
     }
 
+    case "permanentDelete": {
+      const fileIds = body.fileIds as string[];
+      let deletedCount = 0;
+      await parallelProcess(fileIds, async (id) => {
+        try {
+          await deleteFile(validTokens.accessToken, id);
+          deletedCount++;
+        } catch {
+          // skip files that fail to delete
+        }
+      }, 5);
+      logCtx.details = { fileCount: fileIds.length, deletedCount };
+      return logAndReturn({ deleted: deletedCount });
+    }
+
     case "listTrash": {
       try {
         const trashFolderId = await ensureSubFolder(
