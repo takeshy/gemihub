@@ -281,7 +281,7 @@ export function useTreeFileCreate({
   const buildDefaultName = useCallback(() => {
     const now = new Date();
     const p = (n: number) => String(n).padStart(2, "0");
-    return `${now.getFullYear()}/${p(now.getMonth() + 1)}/${p(now.getDate())}_${p(now.getHours())}_${p(now.getMinutes())}_${p(now.getSeconds())}`;
+    return `daily/${now.getFullYear()}/${p(now.getMonth() + 1)}/${p(now.getDate())}_${p(now.getHours())}_${p(now.getMinutes())}_${p(now.getSeconds())}`;
   }, []);
 
   const handleCreateFileSubmit = useCallback(async () => {
