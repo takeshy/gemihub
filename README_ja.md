@@ -38,6 +38,22 @@ GemiHub はオフラインファーストです。すべてのファイルはブ
 
 ![Push/Pull 同期](./public/images/push_pull.png)
 
+### Obsidian 連携
+
+GemiHub は Obsidian プラグイン [Obsidian Gemini Helper](https://github.com/takeshy/obsidian-gemini-helper) と連携できます。Obsidian で書いたノートを GemiHub の Web インターフェースからアクセスしたり、その逆も可能。両者は同じ `_sync-meta.json` 形式を共有し、シームレスな双方向同期を実現します。
+
+**GemiHub でしか使えない機能**（Obsidian プラグイン単体では再現できない機能）:
+- **自動 RAG** — GemiHub に同期されたファイルは自動的にセマンティック検索にインデックスされる
+- **OAuth2 対応 MCP** — OAuth2 認証が必要な MCP サーバー（Google Calendar、Gmail など）を利用可能
+- **Markdown → PDF/HTML 変換** — Markdown ノートをフォーマット済み PDF や HTML に変換
+- **Web 公開** — 共有可能な公開 URL でドキュメントを公開
+
+**連携により Obsidian 側に追加される機能**:
+- diff プレビュー付きの双方向同期
+- カラー表示の unified diff によるコンフリクト解決
+- Obsidian・GemiHub 双方の変更を追跡する Drive 編集履歴
+- コンフリクトバックアップの管理
+
 ## スクリーンショット
 
 ### ワークフローノード編集

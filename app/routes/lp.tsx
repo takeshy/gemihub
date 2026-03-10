@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -110,6 +110,7 @@ const en: LpStrings = {
     { icon: Puzzle, title: "Plugins", description: "Add new features from GitHub. Plugins can use AI and Drive, so you can build custom tools and advanced automation." },
     { icon: Globe, title: "One-Click Publishing", description: "Turn any Drive file into a public web page. Share via URL with no hosting required." },
     { icon: Zap, title: "Works Offline", description: "All files cached in your browser for instant access — even without internet. Edit offline, then push changes to Drive with one click. Conflicts are detected automatically." },
+    { icon: RefreshCw, title: "Obsidian Sync", description: "Sync with Obsidian via the Gemini Helper plugin. Edit in Obsidian or GemiHub — changes sync both ways through Google Drive with conflict resolution." },
     { icon: Shield, title: "Your Data, Your Control", description: "No external database. Everything stored in your Google Drive. Supports encryption and self-hosting." },
   ],
   screenshotsTitle: "See It in Action",
@@ -200,6 +201,7 @@ const ja: LpStrings = {
     { icon: Puzzle, title: "プラグイン", description: "GitHubから機能を追加。AI や Drive と連携できるので、自分だけのツールや高度な自動化も構築できます。" },
     { icon: Globe, title: "ワンクリック公開", description: "DriveのファイルをそのままWebページに。ホスティング不要でURLを共有できます。" },
     { icon: Zap, title: "オフラインでも快適", description: "すべてのファイルがブラウザにキャッシュされ、ネットがなくても即座にアクセス。オフラインで編集して、ワンクリックでDriveに同期。コンフリクトも自動検出。" },
+    { icon: RefreshCw, title: "Obsidian 連携", description: "Gemini Helper プラグインで Obsidian と同期。Obsidian でも GemiHub でも編集可能 — Google Drive 経由でコンフリクト解決付きの双方向同期。" },
     { icon: Shield, title: "データは自分の手に", description: "外部データベースなし。すべてあなたのGoogle Driveに保存。暗号化やセルフホストにも対応。" },
   ],
   screenshotsTitle: "動作イメージ",
@@ -686,6 +688,10 @@ export default function LandingPage() {
             <a href="https://github.com/takeshy/gemihub" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               <Github size={14} />
               GitHub
+            </a>
+            <a href="https://github.com/takeshy/obsidian-gemini-helper" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+              <RefreshCw size={14} />
+              Obsidian Plugin
             </a>
             <a href={`https://github.com/takeshy/gemihub/blob/main/${lang === "ja" ? "README_ja.md" : "README.md"}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               <BookOpen size={14} />

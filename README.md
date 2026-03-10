@@ -38,6 +38,22 @@ GemiHub is offline-first. All your files are cached in the browser's IndexedDB, 
 
 ![Push/Pull Sync](./public/images/push_pull.png)
 
+### Obsidian Integration
+
+GemiHub works with [Obsidian Gemini Helper](https://github.com/takeshy/obsidian-gemini-helper), an Obsidian plugin that syncs your vault with Google Drive. Edit notes in Obsidian and access them from GemiHub's web interface, or vice versa — both sides share the same `_sync-meta.json` format for seamless bidirectional sync.
+
+**GemiHub-exclusive features** that the Obsidian plugin alone cannot replicate:
+- **Automatic RAG** — Files synced to GemiHub are automatically indexed for semantic search
+- **OAuth2-enabled MCP** — Use MCP servers that require OAuth2 authentication (e.g., Google Calendar, Gmail)
+- **Markdown to PDF/HTML conversion** — Convert Markdown notes to formatted PDF or HTML
+- **Public publishing** — Publish documents with a shareable public URL
+
+**Features added to Obsidian** through the connection:
+- Bidirectional sync with diff preview
+- Conflict resolution with color-coded unified diff
+- Drive edit history tracking changes from both Obsidian and GemiHub
+- Conflict backup management
+
 ## Screenshots
 
 ### Workflow Node Editing
