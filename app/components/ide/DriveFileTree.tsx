@@ -41,6 +41,8 @@ import {
   getAllCachedFileIds,
   getEncryptedCachedFileIds,
   getLocallyModifiedFileIds,
+  getLocalSyncMeta,
+  setLocalSyncMeta,
   type CachedTreeNode,
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
@@ -177,7 +179,7 @@ export function DriveFileTree({
 
   const updateTreeFromMeta = useCallback(async (metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] }) => {
     // Merge local-only "new:" entries from existing CachedRemoteMeta
-    const existingMeta = await getCachedRemoteMeta();
+    const [existingMeta, localMeta] = await Promise.all([getCachedRemoteMeta(), getLocalSyncMeta()]);
     const mergedFiles = { ...metaData.files };
     if (existingMeta) {
       for (const [id, entry] of Object.entries(existingMeta.files)) {
@@ -196,9 +198,28 @@ export function DriveFileTree({
     const items = buildTreeFromMeta(cachedMeta);
     setTreeItems(items);
     setRemoteMeta(mergedFiles);
+    // Update localSyncMeta names so that rename/move operations are reflected
+    // — otherwise the stale local name causes computeSyncDiff to classify
+    // the file as "toPull".  Only update the name field; md5 and modifiedTime
+    // must stay untouched so that real content changes pushed by other devices
+    // are still correctly detected as toPull.
+    const syncMetaPromise = localMeta
+      ? (async () => {
+          let changed = false;
+          for (const [id, remote] of Object.entries(metaData.files)) {
+            const local = localMeta.files[id];
+            if (local && local.name !== remote.name) {
+              local.name = remote.name;
+              changed = true;
+            }
+          }
+          if (changed) await setLocalSyncMeta(localMeta);
+        })()
+      : Promise.resolve();
     await Promise.all([
       setCachedRemoteMeta(cachedMeta),
       setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
+      syncMetaPromise,
     ]);
   }, [rootFolderId]);
 
