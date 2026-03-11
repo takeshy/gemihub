@@ -856,7 +856,7 @@ function WorkflowNodeListView({
         <button
           onClick={onNewWorkflow}
           className="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-          title="New Workflow"
+          title="New Workflow / Skill"
         >
           <FilePlus size={ICON.SM} />
           New
@@ -1014,7 +1014,7 @@ function WorkflowListView({
           <button
             onClick={onNewWorkflow}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="New Workflow"
+            title="New Workflow / Skill"
           >
             <Plus size={ICON.MD} />
           </button>
@@ -1034,14 +1034,14 @@ function WorkflowListView({
               className="mb-3 text-gray-300 dark:text-gray-600"
             />
             <p className="mb-3 text-center text-sm text-gray-500 dark:text-gray-400">
-              No workflows yet.
+              No workflows or skills yet.
             </p>
             <button
               onClick={onNewWorkflow}
               className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
             >
               <Plus size={ICON.MD} />
-              New Workflow
+              New Workflow / Skill
             </button>
           </div>
         ) : (
@@ -1068,7 +1068,7 @@ function WorkflowListView({
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
             >
               <Plus size={ICON.MD} className="flex-shrink-0" />
-              <span>New Workflow</span>
+              <span>New Workflow / Skill</span>
             </button>
           </div>
         )}
