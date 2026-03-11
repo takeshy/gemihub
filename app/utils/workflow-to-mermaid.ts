@@ -216,7 +216,7 @@ export function workflowToMermaid(workflow: Workflow): string {
             : edge.label === "false"
               ? (node.type === "while" ? "No →" : "No")
               : undefined;
-          lines.push(lbl ? `  ${safeId} -->|"${lbl}"| END` : `  ${safeId} --> END`);
+          lines.push(lbl ? `  ${safeId} -->|"${lbl}"| FINISH` : `  ${safeId} --> FINISH`);
         } else {
           defineNode(edge.to);
           const targetId = edge.to.replace(/-/g, "_");
@@ -235,7 +235,7 @@ export function workflowToMermaid(workflow: Workflow): string {
       for (const edge of edges) {
         if (edge.to === "end") {
           hasTerminal = true;
-          lines.push(`  ${safeId} --> END`);
+          lines.push(`  ${safeId} --> FINISH`);
         } else {
           defineNode(edge.to);
           const targetId = edge.to.replace(/-/g, "_");
@@ -254,16 +254,16 @@ export function workflowToMermaid(workflow: Workflow): string {
   for (const [nodeId] of workflow.nodes) {
     if (!hasOutgoing.has(nodeId)) {
       const safeId = nodeId.replace(/-/g, "_");
-      lines.push(`  ${safeId} --> END`);
+      lines.push(`  ${safeId} --> FINISH`);
       hasTerminal = true;
     }
   }
 
   if (hasTerminal) {
-    lines.push(`  END(["■ END"])`);
+    lines.push(`  FINISH(["■ END"])`);
     lines.push("");
     lines.push("  %% Styling");
-    lines.push("  style END fill:#FFB6C1,stroke:#DC143C,color:#000");
+    lines.push("  style FINISH fill:#FFB6C1,stroke:#DC143C,color:#000");
   }
 
   return lines.join("\n");
