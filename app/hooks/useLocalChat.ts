@@ -269,8 +269,9 @@ export async function* executeLocalChat(
         } catch { /* ignore parse errors */ }
 
         // Notify UI that skill workflow execution is starting
-        const workflowName = match.workflow.name || workflowId;
-        callbacks?.onSkillWorkflowStart?.(fileId, workflowName);
+        // Use file basename so the header banner click can navigate correctly
+        const workflowFileName = match.workflow.path.split("/").pop() || match.workflow.name || workflowId;
+        callbacks?.onSkillWorkflowStart?.(fileId, workflowFileName);
 
         const executionCallbacks: LocalExecuteCallbacks = {
           onLog: () => {},
