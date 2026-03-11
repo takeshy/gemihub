@@ -200,6 +200,7 @@ export function workflowToMermaid(workflow: Workflow): string {
   };
 
   // Generate node definitions and edges
+  let hasTerminal = false;
   for (const [nodeId, node] of workflow.nodes) {
     const safeId = nodeId.replace(/-/g, "_");
     defineNode(nodeId);
@@ -208,34 +209,48 @@ export function workflowToMermaid(workflow: Workflow): string {
 
     if (node.type === "if" || node.type === "while") {
       for (const edge of edges) {
-        defineNode(edge.to);
-        const targetId = edge.to.replace(/-/g, "_");
-        if (edge.label === "true") {
-          const lbl = node.type === "while" ? "Yes ↓" : "Yes";
-          lines.push(`  ${safeId} -->|"${lbl}"| ${targetId}`);
-        } else if (edge.label === "false") {
-          const lbl = node.type === "while" ? "No →" : "No";
-          lines.push(`  ${safeId} -->|"${lbl}"| ${targetId}`);
+        if (edge.to === "end") {
+          hasTerminal = true;
+          const lbl = edge.label === "true"
+            ? (node.type === "while" ? "Yes ↓" : "Yes")
+            : edge.label === "false"
+              ? (node.type === "while" ? "No →" : "No")
+              : undefined;
+          lines.push(lbl ? `  ${safeId} -->|"${lbl}"| END` : `  ${safeId} --> END`);
         } else {
-          lines.push(`  ${safeId} --> ${targetId}`);
+          defineNode(edge.to);
+          const targetId = edge.to.replace(/-/g, "_");
+          if (edge.label === "true") {
+            const lbl = node.type === "while" ? "Yes ↓" : "Yes";
+            lines.push(`  ${safeId} -->|"${lbl}"| ${targetId}`);
+          } else if (edge.label === "false") {
+            const lbl = node.type === "while" ? "No →" : "No";
+            lines.push(`  ${safeId} -->|"${lbl}"| ${targetId}`);
+          } else {
+            lines.push(`  ${safeId} --> ${targetId}`);
+          }
         }
       }
     } else {
       for (const edge of edges) {
-        defineNode(edge.to);
-        const targetId = edge.to.replace(/-/g, "_");
-        const isBackEdge = backEdges.has(`${nodeId}->${edge.to}`);
-        if (isBackEdge) {
-          lines.push(`  ${safeId} -.->|"Loop"| ${targetId}`);
+        if (edge.to === "end") {
+          hasTerminal = true;
+          lines.push(`  ${safeId} --> END`);
         } else {
-          lines.push(`  ${safeId} --> ${targetId}`);
+          defineNode(edge.to);
+          const targetId = edge.to.replace(/-/g, "_");
+          const isBackEdge = backEdges.has(`${nodeId}->${edge.to}`);
+          if (isBackEdge) {
+            lines.push(`  ${safeId} -.->|"Loop"| ${targetId}`);
+          } else {
+            lines.push(`  ${safeId} --> ${targetId}`);
+          }
         }
       }
     }
   }
 
-  // Connect terminal nodes to END
-  let hasTerminal = false;
+  // Connect terminal nodes (no outgoing edges) to END
   for (const [nodeId] of workflow.nodes) {
     if (!hasOutgoing.has(nodeId)) {
       const safeId = nodeId.replace(/-/g, "_");
