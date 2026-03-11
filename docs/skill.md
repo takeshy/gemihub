@@ -4,7 +4,7 @@ Agent Skills extend the AI's capabilities by providing custom instructions, refe
 
 ## Folder Structure
 
-Skills are stored in a configurable folder within your Drive's `gemihub/` directory (default: `skills/`). Each skill is a subfolder containing a `SKILL.md` file:
+Skills are stored in the `skills/` folder within your Drive's `gemihub/` directory. Each skill is a subfolder containing a `SKILL.md` file:
 
 ```
 gemihub/
@@ -110,10 +110,7 @@ Skill workflows run in headless mode when invoked by the AI:
 
 ### Setup
 
-1. Go to **Settings > General**
-2. Find the **Skills Folder** field
-3. Set the folder name (default: `skills`)
-4. Create the folder structure on Drive and sync (Push/Pull)
+1. Create the `skills/` folder structure on Drive and sync (Push/Pull)
 
 ### Activating Skills
 
@@ -385,12 +382,6 @@ nodes:
 Usage: Activate the skill, then say "Create meeting notes for the design review with Alice, Bob, and Carol" — the AI calls the workflow with topic/attendees and creates a structured note.
 
 ---
-
-## Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Skills Folder | `skills` | Name of the skills folder inside `gemihub/` on Drive |
 
 ## Technical Details
 
