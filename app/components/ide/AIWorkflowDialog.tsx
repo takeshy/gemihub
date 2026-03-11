@@ -13,11 +13,10 @@ import {
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { ModelType, ApiPlan } from "~/types/settings";
-import { getAvailableModels, getDefaultModelForPlan } from "~/types/settings";
+import { getAvailableModels, getDefaultModelForPlan, SKILLS_FOLDER_NAME } from "~/types/settings";
 import { WorkflowPreviewModal } from "./WorkflowPreviewModal";
 import { ExecutionHistorySelectModal } from "./ExecutionHistorySelectModal";
 import { useI18n } from "~/i18n/context";
-import { useSkills } from "~/contexts/SkillContext";
 import type { ExecutionStep } from "~/engine/types";
 import { fixMarkdownBullets } from "~/utils/yaml-helpers";
 
@@ -90,8 +89,6 @@ export function AIWorkflowDialog({
   onClose,
 }: AIWorkflowDialogProps) {
   const { t } = useI18n();
-  const { skills, skillsFolderName } = useSkills();
-
   // Input state
   const [name, setName] = useState(currentName || "");
   const [createAsSkill, setCreateAsSkill] = useState(false);
@@ -276,7 +273,7 @@ export function AIWorkflowDialog({
   const handleAcceptPreview = useCallback(async () => {
     const workflowName = mode === "create" ? name.trim() : (currentName || "workflow");
     const skillFolderPath = isSkillMode && skillFolderId
-      ? `${skillsFolderName}/${skillFolderId}/workflows`
+      ? `${SKILLS_FOLDER_NAME}/${skillFolderId}/workflows`
       : undefined;
     await onAccept(generatedText, workflowName, {
       description: lastDescription,
@@ -288,7 +285,7 @@ export function AIWorkflowDialog({
       skillMdContent: isSkillMode ? (generatedSkillMd || undefined) : undefined,
       newSkillId: isSkillMode && skillFolderId ? skillFolderId : undefined,
     });
-  }, [generatedText, generatedSkillMd, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history, isSkillMode, skillFolderId, skillsFolderName]);
+  }, [generatedText, generatedSkillMd, name, currentName, mode, onAccept, lastDescription, thinking, selectedModel, history, isSkillMode, skillFolderId]);
 
   const handleRejectPreview = useCallback(() => {
     // Go back to input for refinement, keep history
@@ -419,7 +416,7 @@ export function AIWorkflowDialog({
               />
               {createAsSkill && skillFolderId && (
                 <p className="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
-                  {skillsFolderName}/{skillFolderId}/
+                  {SKILLS_FOLDER_NAME}/{skillFolderId}/
                 </p>
               )}
               <label className="mt-2 flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer">

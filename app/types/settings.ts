@@ -541,7 +541,6 @@ export interface UserSettings {
   encryptedApiKey: string;
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
-  skillsFolderName: string;
   showManagementFolders: boolean;
 }
 
@@ -569,6 +568,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   encryptedApiKey: "",
   apiKeySalt: "",
   shortcutKeys: [],
-  skillsFolderName: "skills",
   showManagementFolders: false,
 };
+
+/** Fixed folder name for agent skills. */
+export const SKILLS_FOLDER_NAME = "skills";

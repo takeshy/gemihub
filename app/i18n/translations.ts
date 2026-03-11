@@ -599,8 +599,6 @@ export interface TranslationStrings {
   "frontmatter.paste": string;
 
   // Skills
-  "settings.general.skillsFolder": string;
-  "settings.general.skillsFolderDescription": string;
   "settings.general.showManagementFolders": string;
   "settings.general.showManagementFoldersDescription": string;
   "skills.selector.title": string;
@@ -1204,8 +1202,6 @@ const en: TranslationStrings = {
   "frontmatter.paste": "Paste",
 
   // Skills
-  "settings.general.skillsFolder": "Skills Folder",
-  "settings.general.skillsFolderDescription": "Folder name under your root folder containing skill definitions (subfolders with SKILL.md).",
   "settings.general.showManagementFolders": "Show management folders",
   "settings.general.showManagementFoldersDescription": "Show folders used by external tools (e.g. LocalLlmHub) in the file tree.",
   "skills.selector.title": "Agent Skills",
@@ -1809,8 +1805,6 @@ const ja: TranslationStrings = {
   "frontmatter.paste": "貼り付け",
 
   // Skills
-  "settings.general.skillsFolder": "スキルフォルダ",
-  "settings.general.skillsFolderDescription": "SKILL.mdを含むスキル定義フォルダのルートフォルダ内での名前。",
   "settings.general.showManagementFolders": "管理フォルダを表示",
   "settings.general.showManagementFoldersDescription": "外部ツールが使用するフォルダ（例: LocalLlmHub）をファイルツリーに表示します。",
   "skills.selector.title": "エージェントスキル",

@@ -48,7 +48,6 @@ export function GeneralTab({
     settings.selectedModel || ""
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
-  const [skillsFolderName, setSkillsFolderName] = useState(settings.skillsFolderName || "skills");
   const [showManagementFolders, setShowManagementFolders] = useState(settings.showManagementFolders ?? false);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
@@ -342,23 +341,6 @@ export function GeneralTab({
             placeholder={t("settings.general.systemPromptPlaceholder")}
             className={inputClass + " resize-y"}
           />
-        </div>
-
-        {/* Skills Folder */}
-        <div className="mb-6">
-          <Label htmlFor="skillsFolderName">{t("settings.general.skillsFolder")}</Label>
-          <input
-            type="text"
-            id="skillsFolderName"
-            name="skillsFolderName"
-            value={skillsFolderName}
-            onChange={(e) => setSkillsFolderName(e.target.value)}
-            placeholder="skills"
-            className={inputClass + " max-w-[300px]"}
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {t("settings.general.skillsFolderDescription")}
-          </p>
         </div>
 
         {/* Show management folders */}

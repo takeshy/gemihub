@@ -69,6 +69,8 @@ import { useTreeFileOperations } from "~/hooks/useTreeFileOperations";
 import { useTreeDragDrop } from "~/hooks/useTreeDragDrop";
 import { useTreeFileCreate } from "~/hooks/useTreeFileCreate";
 
+import { SKILLS_FOLDER_NAME } from "~/types/settings";
+
 /** Top-level folder names managed by external tools, hidden by default. */
 const MANAGEMENT_FOLDER_NAMES = new Set(["LocalLlmHub"]);
 
@@ -755,6 +757,9 @@ export function DriveFileTree({
       const expanded = expandedFolders.has(item.id);
       const isDragOver = dragOverFolderId === item.id;
       const isSelected = selectedFolderId === item.id;
+      const folderEmoji = (depth === 0 && item.name === SKILLS_FOLDER_NAME) ? "✨ "
+        : item.name === "workflows" ? "⚡ "
+        : "";
 
       return (
         <div key={item.id}>
@@ -797,7 +802,7 @@ export function DriveFileTree({
               <Folder size={ICON.MD} className="text-yellow-500 flex-shrink-0" />
             )}
             <span className="truncate text-gray-700 dark:text-gray-300">
-              {item.name}
+              {`${folderEmoji}${item.name}`}
             </span>
             {isMobile && (
               <span

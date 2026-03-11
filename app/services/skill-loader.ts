@@ -14,6 +14,7 @@ import type {
   SkillWorkflowRef,
   LoadedSkill,
 } from "~/types/skill";
+import { SKILLS_FOLDER_NAME } from "~/types/settings";
 import { parseWorkflowContentByName } from "~/engine/parser";
 import { fixMarkdownBullets } from "~/utils/yaml-helpers";
 
@@ -60,15 +61,13 @@ function findChildByName(
 
 /**
  * Discover skills from the cached file tree.
- * Looks for skillsFolderName / * / SKILL.md under the root.
+ * Looks for SKILLS_FOLDER_NAME / * / SKILL.md under the root.
  */
-export async function discoverSkills(
-  skillsFolderName: string,
-): Promise<SkillMetadata[]> {
+export async function discoverSkills(): Promise<SkillMetadata[]> {
   const tree = await getCachedFileTree();
   if (!tree) return [];
 
-  const skillsFolder = findChildByName(tree.items, skillsFolderName);
+  const skillsFolder = findChildByName(tree.items, SKILLS_FOLDER_NAME);
   if (!skillsFolder || !skillsFolder.isFolder || !skillsFolder.children) return [];
 
   const results: SkillMetadata[] = [];

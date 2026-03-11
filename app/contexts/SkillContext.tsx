@@ -15,7 +15,6 @@ import {
 } from "~/services/skill-loader";
 
 interface SkillContextValue {
-  skillsFolderName: string;
   skills: SkillMetadata[];
   activeSkillIds: string[];
   toggleSkill: (skillId: string) => void;
@@ -32,7 +31,6 @@ interface SkillContextValue {
 }
 
 const SkillContext = createContext<SkillContextValue>({
-  skillsFolderName: "skills",
   skills: [],
   activeSkillIds: [],
   toggleSkill: () => {},
@@ -46,10 +44,8 @@ const SkillContext = createContext<SkillContextValue>({
 const STORAGE_KEY = "gemihub:activeSkills";
 
 export function SkillProvider({
-  skillsFolderName,
   children,
 }: {
-  skillsFolderName: string;
   children: ReactNode;
 }) {
   const [skills, setSkills] = useState<SkillMetadata[]>([]);
@@ -66,7 +62,7 @@ export function SkillProvider({
   const discover = useCallback(async () => {
     setLoading(true);
     try {
-      const found = await discoverSkills(skillsFolderName);
+      const found = await discoverSkills();
       setSkills(found);
       // Invalidate cache on rediscovery
       loadedCacheRef.current.clear();
@@ -75,9 +71,9 @@ export function SkillProvider({
     } finally {
       setLoading(false);
     }
-  }, [skillsFolderName]);
+  }, []);
 
-  // Discover on mount and when skillsFolderName changes
+  // Discover on mount
   useEffect(() => {
     discover();
   }, [discover]);
@@ -163,7 +159,6 @@ export function SkillProvider({
   return (
     <SkillContext.Provider
       value={{
-        skillsFolderName,
         skills,
         activeSkillIds,
         toggleSkill,
