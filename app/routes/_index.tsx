@@ -618,12 +618,14 @@ function IDEContent({
 
   // Silent workflow execution status (for shortcut-triggered background execution)
   const [silentExecStatus, setSilentExecStatus] = useState<{ id: string; name: string; state: "running" | "done" | "error" } | null>(null);
+  const [silentExecLogs, setSilentExecLogs] = useState<Array<{ nodeId: string; nodeType: string; message: string; status: "info" | "success" | "error"; timestamp: string; input?: Record<string, unknown>; output?: unknown }>>([]);
   const silentExecTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silentExecAbortRef = useRef<AbortController | null>(null);
   const executeSilentWorkflow = useCallback((workflowId: string, workflowName: string) => {
     // Abort any previous silent execution
     silentExecAbortRef.current?.abort();
     setSilentExecStatus({ id: workflowId, name: workflowName, state: "running" });
+    setSilentExecLogs([]);
     if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
     const abortController = new AbortController();
     silentExecAbortRef.current = abortController;
@@ -635,7 +637,7 @@ function IDEContent({
         const result = await executeWorkflowLocally(
           workflow,
           {
-            onLog: () => { /* silent: no UI logs */ },
+            onLog: (log) => { setSilentExecLogs((prev) => [...prev, { nodeId: log.nodeId, nodeType: log.nodeType, message: log.message, status: log.status, timestamp: log.timestamp.toISOString(), input: log.input, output: log.output }]); },
             onDriveEvent: (event) => { processDriveEvent(event).catch(() => {}); },
             promptCallbacks: {
               promptForValue: async () => null,
@@ -1046,6 +1048,7 @@ function IDEContent({
           onSkillWorkflowStart={(workflowId, workflowName) => {
             if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
             setSilentExecStatus({ id: workflowId, name: workflowName, state: "running" });
+            setSilentExecLogs([]);
           }}
           onSkillWorkflowEnd={(workflowId, status) => {
             const state = status === "completed" ? "done" as const : "error" as const;
@@ -1054,6 +1057,9 @@ function IDEContent({
             if (state === "done") {
               window.dispatchEvent(new Event("workflow-completed"));
             }
+          }}
+          onSkillWorkflowLog={(log) => {
+            setSilentExecLogs((prev) => [...prev, { nodeId: log.nodeId, nodeType: log.nodeType, message: log.message, status: log.status, timestamp: log.timestamp.toISOString(), input: log.input, output: log.output }]);
           }}
         />
       ) : (
@@ -1066,6 +1072,12 @@ function IDEContent({
           onModifyWithAI={handleModifyWithAI}
           settings={settings}
           refreshKey={workflowVersion}
+          externalExecStatus={
+            silentExecStatus
+              ? { fileId: silentExecStatus.id, state: silentExecStatus.state === "done" ? "done" : silentExecStatus.state === "error" ? "error" : "running" }
+              : null
+          }
+          externalLogs={silentExecLogs}
         />
       )}
     </PanelErrorBoundary>

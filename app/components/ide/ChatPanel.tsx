@@ -54,6 +54,7 @@ interface ChatPanelProps {
   pluginSlashCommands?: PluginSlashCommand[];
   onSkillWorkflowStart?: (workflowId: string, workflowName: string) => void;
   onSkillWorkflowEnd?: (workflowId: string, status: string) => void;
+  onSkillWorkflowLog?: (log: import("~/engine/types").ExecutionLog) => void;
 }
 
 export function ChatPanel({
@@ -65,6 +66,7 @@ export function ChatPanel({
   pluginSlashCommands = [],
   onSkillWorkflowStart,
   onSkillWorkflowEnd,
+  onSkillWorkflowLog,
 }: ChatPanelProps) {
   const { t } = useI18n();
   const { skills, activeSkillIds, toggleSkill, activateSkill, getActiveSkillsSystemPrompt, getActiveSkillWorkflows } = useSkills();
@@ -544,6 +546,7 @@ export function ChatPanel({
             },
             onSkillWorkflowStart,
             onSkillWorkflowEnd,
+            onSkillWorkflowLog,
           },
         );
 
@@ -713,6 +716,7 @@ export function ChatPanel({
       skills,
       onSkillWorkflowStart,
       onSkillWorkflowEnd,
+      onSkillWorkflowLog,
     ]
   );
 

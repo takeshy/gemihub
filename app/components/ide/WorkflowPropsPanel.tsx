@@ -56,6 +56,8 @@ interface WorkflowPropsPanelProps {
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
+  externalExecStatus?: { fileId: string; state: "running" | "done" | "error" } | null;
+  externalLogs?: LogEntry[];
 }
 
 function isWorkflowFile(name: string | null): boolean {
@@ -72,6 +74,8 @@ export function WorkflowPropsPanel({
   onModifyWithAI,
   settings,
   refreshKey,
+  externalExecStatus,
+  externalLogs,
 }: WorkflowPropsPanelProps) {
   if (isWorkflowFile(activeFileName) && activeFileId) {
     return (
@@ -84,6 +88,8 @@ export function WorkflowPropsPanel({
         onModifyWithAI={onModifyWithAI}
         settings={settings}
         refreshKey={refreshKey}
+        externalExecStatus={externalExecStatus}
+        externalLogs={externalLogs}
       />
     );
   }
@@ -159,6 +165,8 @@ function WorkflowNodeListView({
   onModifyWithAI,
   settings,
   refreshKey,
+  externalExecStatus,
+  externalLogs,
 }: {
   fileId: string;
   fileName: string;
@@ -168,6 +176,8 @@ function WorkflowNodeListView({
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
+  externalExecStatus?: { fileId: string; state: "running" | "done" | "error" } | null;
+  externalLogs?: LogEntry[];
 }) {
   const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId, refreshKey, "PropsPanel");
 
@@ -230,7 +240,24 @@ function WorkflowNodeListView({
     setPromptData(localExecution.promptData);
   }, [localExecution.status, localExecution.logs, localExecution.promptData]);
 
+  // External execution state (from chat skill or shortcut)
+  const isExternalExec = externalExecStatus?.fileId === fileId;
+  const isExternallyRunning = isExternalExec && externalExecStatus.state === "running";
+  const useExternalDisplay = isExternalExec && executionStatus === "idle" && (externalLogs?.length ?? 0) > 0;
+  const displayLogs = useExternalDisplay ? externalLogs! : logs;
+  const displayStatus: typeof executionStatus = useExternalDisplay
+    ? (externalExecStatus.state === "running" ? "running" : externalExecStatus.state === "done" ? "completed" : "error")
+    : executionStatus;
 
+  // Auto-show logs when external logs arrive
+  const prevExternalLogCountRef = useRef(0);
+  useEffect(() => {
+    const count = (isExternalExec && executionStatus === "idle") ? (externalLogs?.length ?? 0) : 0;
+    if (count > 0 && prevExternalLogCountRef.current === 0) {
+      setShowLogs(true);
+    }
+    prevExternalLogCountRef.current = count;
+  }, [externalLogs?.length, isExternalExec, executionStatus]);
 
   // Drag and drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -505,14 +532,14 @@ function WorkflowNodeListView({
 
   // Current executing nodeId from logs
   const currentNodeId =
-    executionStatus === "running" && logs.length > 0
-      ? logs[logs.length - 1].nodeId
+    displayStatus === "running" && displayLogs.length > 0
+      ? displayLogs[displayLogs.length - 1].nodeId
       : null;
   const completedNodeIds = new Set(
-    logs.filter((l) => l.status === "success").map((l) => l.nodeId)
+    displayLogs.filter((l) => l.status === "success").map((l) => l.nodeId)
   );
   const errorNodeIds = new Set(
-    logs.filter((l) => l.status === "error").map((l) => l.nodeId)
+    displayLogs.filter((l) => l.status === "error").map((l) => l.nodeId)
   );
 
   if (rawContent === null && !fileError && !error) {
@@ -617,8 +644,8 @@ function WorkflowNodeListView({
               <div
                 key={nodeId}
                 className={`px-2 py-0.5 ${isDropAbove ? "border-t-2 border-t-blue-500" : ""} ${isDropBelow ? "border-b-2 border-b-blue-500" : ""}`}
-                draggable={executionStatus === "idle"}
-                onDragStart={() => { if (executionStatus !== "idle") return; setDraggedIndex(index); }}
+                draggable={executionStatus === "idle" && !isExternallyRunning}
+                onDragStart={() => { if (executionStatus !== "idle" || isExternallyRunning) return; setDraggedIndex(index); }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   if (draggedIndex === null || draggedIndex === index) {
@@ -737,7 +764,7 @@ function WorkflowNodeListView({
       </div>
 
       {/* Execution Logs (collapsible) */}
-      {logs.length > 0 && (
+      {displayLogs.length > 0 && (
         <div className="border-t border-gray-200 dark:border-gray-800">
           <button
             onClick={() => setShowLogs(!showLogs)}
@@ -748,11 +775,11 @@ function WorkflowNodeListView({
             ) : (
               <ChevronRight size={10} />
             )}
-            Logs ({logs.length})
+            Logs ({displayLogs.length})
           </button>
           {showLogs && (
             <div className="max-h-48 overflow-y-auto px-2 pb-1 font-mono text-[10px]">
-              {logs.map((log, i) => {
+              {displayLogs.map((log, i) => {
                 const isExpanded = expandedLogIndex === i;
                 const hasDetail = log.input || log.output || (log.mcpApps && log.mcpApps.length > 0);
                 return (
@@ -825,9 +852,9 @@ function WorkflowNodeListView({
         ) : (
           <button
             onClick={() => startExecution()}
-            disabled={!workflow}
+            disabled={!workflow || isExternallyRunning}
             className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
-              !workflow
+              !workflow || isExternallyRunning
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
@@ -861,24 +888,27 @@ function WorkflowNodeListView({
           <FilePlus size={ICON.SM} />
           New
         </button>
-        {executionStatus !== "idle" && (
-          <span className="ml-auto">
-            {executionStatus === "running" && (
-              <Loader2
-                size={ICON.MD}
-                className="animate-spin text-blue-500"
-              />
+        {displayStatus !== "idle" && (
+          <span className="ml-auto flex items-center gap-1">
+            {displayStatus === "running" && (
+              <>
+                <Loader2
+                  size={ICON.MD}
+                  className="animate-spin text-blue-500"
+                />
+                {useExternalDisplay && <span className="text-[10px] text-blue-600 dark:text-blue-400">from chat</span>}
+              </>
             )}
-            {executionStatus === "completed" && (
+            {displayStatus === "completed" && (
               <CheckCircle size={ICON.MD} className="text-green-500" />
             )}
-            {executionStatus === "error" && (
+            {displayStatus === "error" && (
               <XCircle size={ICON.MD} className="text-red-500" />
             )}
-            {executionStatus === "cancelled" && (
+            {displayStatus === "cancelled" && (
               <Square size={ICON.MD} className="text-orange-500" />
             )}
-            {executionStatus === "waiting-prompt" && (
+            {displayStatus === "waiting-prompt" && (
               <Loader2
                 size={ICON.MD}
                 className="animate-spin text-yellow-500"

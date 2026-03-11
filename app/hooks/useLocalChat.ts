@@ -26,6 +26,7 @@ import {
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
 import type { SkillWorkflowRef } from "~/types/skill";
 import type { DriveEvent } from "~/engine/local-executor";
+import type { ExecutionLog } from "~/engine/types";
 import { readFileLocal } from "~/services/drive-local";
 import { parseWorkflowContentByName } from "~/engine/parser";
 import { executeWorkflowLocally, type LocalExecuteCallbacks } from "~/engine/local-executor";
@@ -58,6 +59,7 @@ export interface LocalChatCallbacks {
   onMcpApp?: (app: McpAppInfo) => void;
   onSkillWorkflowStart?: (workflowId: string, workflowName: string) => void;
   onSkillWorkflowEnd?: (workflowId: string, status: string) => void;
+  onSkillWorkflowLog?: (log: ExecutionLog) => void;
 }
 
 export async function* executeLocalChat(
@@ -274,7 +276,7 @@ export async function* executeLocalChat(
         callbacks?.onSkillWorkflowStart?.(fileId, workflowFileName);
 
         const executionCallbacks: LocalExecuteCallbacks = {
-          onLog: () => {},
+          onLog: (log) => callbacks?.onSkillWorkflowLog?.(log),
           onDriveEvent: (event) => callbacks?.onDriveEvent?.(event),
           promptCallbacks: {
             promptForValue: async () => null,
