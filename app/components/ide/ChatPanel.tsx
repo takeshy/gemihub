@@ -52,6 +52,8 @@ interface ChatPanelProps {
   onNeedUnlock?: () => void;
   slashCommands?: SlashCommand[];
   pluginSlashCommands?: PluginSlashCommand[];
+  onSkillWorkflowStart?: (workflowId: string, workflowName: string) => void;
+  onSkillWorkflowEnd?: (workflowId: string, status: string) => void;
 }
 
 export function ChatPanel({
@@ -61,6 +63,8 @@ export function ChatPanel({
   onNeedUnlock,
   slashCommands = [],
   pluginSlashCommands = [],
+  onSkillWorkflowStart,
+  onSkillWorkflowEnd,
 }: ChatPanelProps) {
   const { t } = useI18n();
   const { skills, activeSkillIds, toggleSkill, activateSkill, getActiveSkillsSystemPrompt, getActiveSkillWorkflows } = useSkills();
@@ -538,6 +542,8 @@ export function ChatPanel({
             onMcpApp: (app) => {
               mcpApps = [...mcpApps, app];
             },
+            onSkillWorkflowStart,
+            onSkillWorkflowEnd,
           },
         );
 
@@ -704,6 +710,9 @@ export function ChatPanel({
       activateSkill,
       getActiveSkillsSystemPrompt,
       getActiveSkillWorkflows,
+      skills,
+      onSkillWorkflowStart,
+      onSkillWorkflowEnd,
     ]
   );
 

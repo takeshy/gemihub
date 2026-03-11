@@ -278,7 +278,7 @@ export function ChatInput({
   );
 
   const doSend = useCallback(async (contentOverride?: string) => {
-    let trimmed = (contentOverride ?? content).trim();
+    const trimmed = (contentOverride ?? content).trim();
     if (!trimmed && attachments.length === 0) return;
     if (disabled || isStreaming) return;
 
@@ -291,8 +291,7 @@ export function ChatInput({
       return;
     }
 
-    // Detect /skillId prefix — strip and pass skillId via overrides
-    let effectiveOverrides = pendingOverrides;
+    // Detect /skillId prefix — send immediately with skillId override (like obsidian-local-llm-hub)
     if (trimmed.startsWith("/") && skills.length > 0) {
       const trimmedLower = trimmed.toLowerCase();
       for (const skill of skills) {
@@ -301,12 +300,31 @@ export function ChatInput({
           trimmedLower.startsWith(prefix) &&
           (trimmed.length === prefix.length || trimmed[prefix.length] === " ")
         ) {
-          trimmed = trimmed.slice(prefix.length).trim();
-          effectiveOverrides = { ...effectiveOverrides, skillId: skill.id };
-          break;
+          let message = trimmed.slice(prefix.length).trim();
+          // Resolve template variables in the message part
+          message = resolveTemplateVariables(
+            message,
+            editorCtx.activeFileId,
+            editorCtx.activeFileContent,
+            editorCtx.activeFileName,
+            editorCtx.getActiveSelection()
+          );
+          const skillDriveMode =
+            getDriveToolModeConstraint(selectedModel, selectedRagSetting ?? null).forcedMode ?? driveToolMode;
+          message = await resolveFileReferences(message, editorCtx.fileList, skillDriveMode === "none");
+          onSend(message, attachments.length > 0 ? attachments : undefined, { skillId: skill.id });
+          setContent("");
+          setAttachments([]);
+          setPendingOverrides(null);
+          if (textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+          }
+          return;
         }
       }
     }
+
+    const effectiveOverrides = pendingOverrides;
 
     // Resolve template variables
     let resolved = resolveTemplateVariables(
@@ -356,11 +374,13 @@ export function ChatInput({
       if (!result) return;
 
       if (item.type === "command") {
-        // Skill commands: send immediately (like obsidian-local-llm)
+        // Skill commands: send immediately with skillId override (like obsidian-local-llm-hub)
         if (result.command?.id?.startsWith("__skill__")) {
           const skillId = result.command.id.replace("__skill__", "");
           setContent("");
-          doSend(`/${skillId}`);
+          setAttachments([]);
+          setPendingOverrides(null);
+          onSend("", undefined, { skillId });
           return;
         }
         // Replace entire content with prompt template
@@ -413,7 +433,7 @@ export function ChatInput({
         }, 0);
       }
     },
-    [autocomplete, content, doSend]
+    [autocomplete, content, onSend]
   );
 
   const handleSend = useCallback(async () => {

@@ -1043,6 +1043,18 @@ function IDEContent({
           onNeedUnlock={() => setShowPasswordPrompt(true)}
           slashCommands={allSlashCommands}
           pluginSlashCommands={pluginSlashCommands}
+          onSkillWorkflowStart={(workflowId, workflowName) => {
+            if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
+            setSilentExecStatus({ id: workflowId, name: workflowName, state: "running" });
+          }}
+          onSkillWorkflowEnd={(workflowId, status) => {
+            const state = status === "completed" ? "done" as const : "error" as const;
+            setSilentExecStatus((prev) => ({ id: workflowId, name: prev?.name || workflowId, state }));
+            silentExecTimerRef.current = setTimeout(() => setSilentExecStatus(null), state === "done" ? 3000 : 5000);
+            if (state === "done") {
+              window.dispatchEvent(new Event("workflow-completed"));
+            }
+          }}
         />
       ) : (
         <WorkflowPropsPanel

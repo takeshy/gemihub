@@ -82,7 +82,6 @@ export async function discoverSkills(): Promise<SkillMetadata[]> {
     if (!cached) continue;
 
     const { frontmatter } = parseFrontmatter(cached.content);
-    if (!frontmatter.name) continue;
 
     // Build workflow refs from frontmatter
     const workflows: SkillWorkflowRef[] = [];
@@ -143,7 +142,7 @@ export async function discoverSkills(): Promise<SkillMetadata[]> {
       id: subFolder.name,
       folderId: subFolder.id,
       skillMdFileId: skillMdNode.id,
-      name: frontmatter.name,
+      name: frontmatter.name || subFolder.name,
       description: frontmatter.description || "",
       workflows,
     });

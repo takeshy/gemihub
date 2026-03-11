@@ -56,6 +56,8 @@ export interface LocalChatOptions {
 export interface LocalChatCallbacks {
   onDriveEvent?: (event: DriveEvent) => void;
   onMcpApp?: (app: McpAppInfo) => void;
+  onSkillWorkflowStart?: (workflowId: string, workflowName: string) => void;
+  onSkillWorkflowEnd?: (workflowId: string, status: string) => void;
 }
 
 export async function* executeLocalChat(
@@ -236,8 +238,8 @@ export async function* executeLocalChat(
 
     // Skill workflow tool
     if (name === "run_skill_workflow" && skillWorkflows && skillWorkflows.length > 0) {
+      const workflowId = args.workflowId as string;
       try {
-        const workflowId = args.workflowId as string;
         const variablesJson = (args.variables as string) || "{}";
 
         // Find matching skill workflow
@@ -266,8 +268,11 @@ export async function* executeLocalChat(
           }
         } catch { /* ignore parse errors */ }
 
-        // Execute workflow headlessly with no-op callbacks
-        const headlessCallbacks: LocalExecuteCallbacks = {
+        // Notify UI that skill workflow execution is starting
+        const workflowName = match.workflow.name || workflowId;
+        callbacks?.onSkillWorkflowStart?.(fileId, workflowName);
+
+        const executionCallbacks: LocalExecuteCallbacks = {
           onLog: () => {},
           onDriveEvent: (event) => callbacks?.onDriveEvent?.(event),
           promptCallbacks: {
@@ -276,7 +281,7 @@ export async function* executeLocalChat(
             promptForDriveFile: async () => null,
           },
         };
-        const result = await executeWorkflowLocally(workflow, headlessCallbacks, {
+        const result = await executeWorkflowLocally(workflow, executionCallbacks, {
           initialVariables,
           workflowId: fileId,
         });
@@ -287,11 +292,15 @@ export async function* executeLocalChat(
           resultVars[k] = v;
         }
 
+        const finalStatus = result.historyRecord?.status || "completed";
+        callbacks?.onSkillWorkflowEnd?.(fileId, finalStatus);
+
         return {
-          status: result.historyRecord?.status || "completed",
+          status: finalStatus,
           variables: resultVars,
         };
       } catch (err) {
+        callbacks?.onSkillWorkflowEnd?.(args.workflowId as string, "error");
         return {
           error: err instanceof Error ? err.message : "Skill workflow execution failed",
         };

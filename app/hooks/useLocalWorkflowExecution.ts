@@ -10,7 +10,7 @@ import { getCachedApiKey, setCachedApiKey } from "~/services/api-key-cache";
 import { getCachedLoaderData } from "~/services/indexeddb-cache";
 import { decryptPrivateKey } from "~/services/crypto-core";
 
-interface LogEntry {
+export interface LogEntry {
   nodeId: string;
   nodeType: string;
   message: string;
