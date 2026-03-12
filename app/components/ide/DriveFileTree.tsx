@@ -438,7 +438,12 @@ export function DriveFileTree({
 
     (async () => {
       const cached = await getCachedFileTree();
-      if (!cancelled && cached && cached.rootFolderId === rootFolderId) {
+      const hasUsableCachedTree =
+        cached &&
+        cached.rootFolderId === rootFolderId &&
+        cached.items.length > 0;
+
+      if (!cancelled && hasUsableCachedTree) {
         setTreeItems(cached.items);
       }
 
@@ -449,8 +454,8 @@ export function DriveFileTree({
       }
 
       if (!cancelled) {
-        if (!cached || cached.rootFolderId !== rootFolderId) {
-          // No cache available (new device) — fetch tree from server
+        if (!hasUsableCachedTree) {
+          // No usable cache available (new device or empty cached tree) — fetch tree from server
           fetchAndCacheTree();
         } else {
           setLoading(false);
