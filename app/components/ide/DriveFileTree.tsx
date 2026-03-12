@@ -432,7 +432,7 @@ export function DriveFileTree({
     }
   }, [activeFileId, filteredTreeItems]);
 
-  // Load tree from IndexedDB cache only (server fetch happens after pull/push)
+  // Load tree from IndexedDB cache; fetch from server if cache is empty (e.g. new device)
   useEffect(() => {
     let cancelled = false;
 
@@ -447,13 +447,21 @@ export function DriveFileTree({
       if (!cancelled && cachedMeta && cachedMeta.rootFolderId === rootFolderId) {
         setRemoteMeta(cachedMeta.files);
       }
-      if (!cancelled) setLoading(false);
+
+      if (!cancelled) {
+        if (!cached || cached.rootFolderId !== rootFolderId) {
+          // No cache available (new device) — fetch tree from server
+          fetchAndCacheTree();
+        } else {
+          setLoading(false);
+        }
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [rootFolderId]);
+  }, [rootFolderId, fetchAndCacheTree]);
 
   const toggleFolder = useCallback((folderId: string) => {
     setSelectedFolderId((prev) => (prev === folderId ? null : folderId));
