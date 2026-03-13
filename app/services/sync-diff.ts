@@ -81,9 +81,13 @@ export function computeSyncDiff(
     const hasRemote = !!remote;
 
     const localChanged = locallyModified;
+    // Case-insensitive name comparison: on NTFS/macOS the locally cached
+    // name may differ in case from the Drive name, which is not a real rename.
+    const nameChanged = local != null && remote != null
+      && local.name != null && local.name !== remote.name
+      && local.name.toLowerCase() !== remote.name.toLowerCase();
     const remoteChanged = local && remote
-      ? local.md5Checksum !== remote.md5Checksum
-        || (local.name != null && local.name !== remote.name)
+      ? local.md5Checksum !== remote.md5Checksum || nameChanged
       : false;
 
     if (hasLocal && !hasRemote) {
