@@ -125,10 +125,20 @@ export function useActiveFile({
     [rightPanel, setRightPanel]
   );
 
+  const clearActiveFile = useCallback(() => {
+    setActiveFileId(null);
+    setActiveFileName(null);
+    setActiveFileMimeType(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("file");
+    window.history.pushState({}, "", url.toString());
+  }, []);
+
   return {
     activeFileId,
     activeFileName,
     activeFileMimeType,
     handleSelectFile,
+    clearActiveFile,
   };
 }

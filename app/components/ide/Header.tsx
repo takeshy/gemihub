@@ -40,6 +40,7 @@ interface HeaderProps {
   isMobile?: boolean;
   isOffline?: boolean;
   pullDialogTrigger?: number;
+  onLogoClick?: () => void;
 }
 
 export function Header({
@@ -63,6 +64,7 @@ export function Header({
   isMobile = false,
   isOffline = false,
   pullDialogTrigger = 0,
+  onLogoClick,
 }: HeaderProps) {
   const { t } = useI18n();
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
@@ -98,12 +100,12 @@ export function Header({
     <>
     <header className="flex h-10 items-center justify-between border-b border-gray-200 bg-white px-3 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
-        <a href="/lp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 shrink-0 hover:opacity-80">
+        <button onClick={onLogoClick} className="flex items-center gap-1.5 shrink-0 hover:opacity-80 cursor-pointer">
           <img src="/icons/icon-192x192.png" alt="" width={20} height={20} className="rounded" />
           <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
             GemiHub
           </span>
-        </a>
+        </button>
         <div className="hidden sm:block mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700 shrink-0" />
         {isOffline ? (
           <div className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800">

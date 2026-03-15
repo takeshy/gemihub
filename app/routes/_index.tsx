@@ -269,7 +269,7 @@ function IDELayout({
   const [rightPanel, setRightPanel] = useState<RightPanelId>("chat");
 
   // Active file state (synced with URL, migration events, decryption events)
-  const { activeFileId, activeFileName, activeFileMimeType, handleSelectFile } =
+  const { activeFileId, activeFileName, activeFileMimeType, handleSelectFile, clearActiveFile } =
     useActiveFile({ rightPanel, setRightPanel });
 
   // Workflow version for refreshing MainViewer after sidebar edits
@@ -346,6 +346,7 @@ function IDELayout({
         aiDialog={aiDialog}
         setAiDialog={setAiDialog}
         handleSelectFile={handleSelectFile}
+        clearActiveFile={clearActiveFile}
         handleNewWorkflow={handleNewWorkflow}
         handleWorkflowChanged={handleWorkflowChanged}
         handleModifyWithAI={handleModifyWithAI}
@@ -401,6 +402,7 @@ function IDEContent({
   aiDialog,
   setAiDialog,
   handleSelectFile,
+  clearActiveFile,
   handleNewWorkflow,
   handleWorkflowChanged,
   handleModifyWithAI,
@@ -441,6 +443,7 @@ function IDEContent({
   aiDialog: AIDialogState | null;
   setAiDialog: (v: AIDialogState | null) => void;
   handleSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
+  clearActiveFile: () => void;
   handleNewWorkflow: () => void;
   handleWorkflowChanged: () => void;
   handleModifyWithAI: (yaml: string, name: string) => void;
@@ -1117,6 +1120,7 @@ function IDEContent({
         isMobile={isMobile}
         isOffline={isOffline}
         pullDialogTrigger={pullDialogTrigger}
+        onLogoClick={isMobile ? () => setMobileView("files") : clearActiveFile}
       />
 
       {!hasGeminiApiKey && (
