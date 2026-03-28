@@ -107,6 +107,10 @@ interface LpStrings {
   premiumFeatureGmailDesc: string;
   premiumFeaturePdf: string;
   premiumFeaturePdfDesc: string;
+  premiumFeatureObsidianToken: string;
+  premiumFeatureObsidianTokenDesc: string;
+  premiumFeatureTempUrl: string;
+  premiumFeatureTempUrlDesc: string;
   premiumFeatureSheets: string;
   premiumFeatureSheetsDesc: string;
   premiumFeatureHosting: string;
@@ -233,6 +237,10 @@ const en: LpStrings = {
   premiumFeatureGmailDesc: "Send emails from workflows using a Gmail Send node. Automate notifications, reports, and customer emails.",
   premiumFeaturePdf: "PDF Generation",
   premiumFeaturePdfDesc: "Generate PDF files from Markdown or HTML within workflows. Perfect for invoices, reports, and certificates.",
+  premiumFeatureObsidianToken: "Obsidian Sync Token",
+  premiumFeatureObsidianTokenDesc: "Issue a migration token to sync your GemiHub files with Obsidian. Edit in either app — changes sync both ways through Google Drive.",
+  premiumFeatureTempUrl: "Temporary Upload URL",
+  premiumFeatureTempUrlDesc: "Generate a temporary URL to upload or edit files from any external editor or tool. Work in your favorite environment and push changes back.",
   premiumFeatureSheets: "Google Sheets CRUD",
   premiumFeatureSheetsDesc: "Read, write, append, and query Google Sheets directly from workflows. Build data-driven automations with your spreadsheets.",
   premiumFeatureHosting: "Static Page Hosting (CDN)",
@@ -359,6 +367,10 @@ const ja: LpStrings = {
   premiumFeatureGmailDesc: "ワークフローから Gmail 送信ノードでメールを自動送信。通知、レポート、顧客メールの自動化に。",
   premiumFeaturePdf: "PDF 生成",
   premiumFeaturePdfDesc: "Markdown や HTML からワークフロー内で PDF を生成。請求書、レポート、証明書の作成に最適。",
+  premiumFeatureObsidianToken: "Obsidian 連携トークン",
+  premiumFeatureObsidianTokenDesc: "連携トークンを発行して GemiHub のファイルを Obsidian と同期。どちらで編集しても Google Drive 経由で双方向同期。",
+  premiumFeatureTempUrl: "一時アップロード URL",
+  premiumFeatureTempUrlDesc: "一時的な URL を発行して、外部エディタやツールからファイルをアップロード・編集。お気に入りの環境で作業して変更を反映。",
   premiumFeatureSheets: "Google Sheets CRUD",
   premiumFeatureSheetsDesc: "ワークフローから Google Sheets の読み書き・追記・クエリが可能。スプレッドシートを使ったデータ駆動の自動化を構築。",
   premiumFeatureHosting: "静的ページホスティング（CDN）",
@@ -719,6 +731,8 @@ export default function LandingPage() {
               { label: s.premiumFeatureInteractions, free: false, lite: true, pro: true },
               { label: s.premiumFeatureGmail, free: false, lite: true, pro: true },
               { label: s.premiumFeaturePdf, free: false, lite: true, pro: true },
+              { label: s.premiumFeatureObsidianToken, free: false, lite: true, pro: true },
+              { label: s.premiumFeatureTempUrl, free: false, lite: true, pro: true },
               { label: s.premiumFeatureSheets, free: false, lite: false, pro: true },
               { label: s.premiumFeatureHosting, free: false, lite: false, pro: true },
               { label: s.premiumFeatureDomain, free: false, lite: false, pro: true },
@@ -757,6 +771,8 @@ export default function LandingPage() {
               { icon: MessageSquare, title: s.premiumFeatureInteractions, desc: s.premiumFeatureInteractionsDesc, color: "blue" },
               { icon: Mail, title: s.premiumFeatureGmail, desc: s.premiumFeatureGmailDesc, color: "red" },
               { icon: FileText, title: s.premiumFeaturePdf, desc: s.premiumFeaturePdfDesc, color: "orange" },
+              { icon: RefreshCw, title: s.premiumFeatureObsidianToken, desc: s.premiumFeatureObsidianTokenDesc, color: "teal" },
+              { icon: Upload, title: s.premiumFeatureTempUrl, desc: s.premiumFeatureTempUrlDesc, color: "pink" },
               { icon: FileSpreadsheet, title: s.premiumFeatureSheets, desc: s.premiumFeatureSheetsDesc, color: "green" },
               { icon: Globe, title: s.premiumFeatureHosting, desc: s.premiumFeatureHostingDesc, color: "cyan" },
               { icon: Lock, title: s.premiumFeatureDomain, desc: s.premiumFeatureDomainDesc, color: "indigo" },
@@ -765,7 +781,6 @@ export default function LandingPage() {
               { icon: Server, title: s.premiumFeatureServerExec, desc: s.premiumFeatureServerExecDesc, color: "slate" },
               { icon: PenTool, title: s.premiumFeatureWebBuilder, desc: s.premiumFeatureWebBuilderDesc, color: "purple" },
               { icon: LayoutDashboard, title: s.premiumFeatureAdmin, desc: s.premiumFeatureAdminDesc, color: "teal" },
-              { icon: Upload, title: s.premiumFeatureUpload, desc: s.premiumFeatureUploadPaid, color: "pink" },
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
