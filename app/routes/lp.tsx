@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, LayoutDashboard, Server, Upload, FileText, PenTool, Check, X } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -90,6 +90,41 @@ interface LpStrings {
   footerPolicy: string;
   footerManual: string;
   footerContact: string;
+  premiumTitle: string;
+  premiumIntro: string;
+  premiumFree: string;
+  premiumLite: string;
+  premiumPro: string;
+  premiumLitePrice: string;
+  premiumProPrice: string;
+  premiumFreeTag: string;
+  premiumFeatureUpload: string;
+  premiumFeatureUploadFree: string;
+  premiumFeatureUploadPaid: string;
+  premiumFeatureInteractions: string;
+  premiumFeatureInteractionsDesc: string;
+  premiumFeatureGmail: string;
+  premiumFeatureGmailDesc: string;
+  premiumFeaturePdf: string;
+  premiumFeaturePdfDesc: string;
+  premiumFeatureSheets: string;
+  premiumFeatureSheetsDesc: string;
+  premiumFeatureHosting: string;
+  premiumFeatureHostingDesc: string;
+  premiumFeatureDomain: string;
+  premiumFeatureDomainDesc: string;
+  premiumFeatureApi: string;
+  premiumFeatureApiDesc: string;
+  premiumFeatureSchedule: string;
+  premiumFeatureScheduleDesc: string;
+  premiumFeatureServerExec: string;
+  premiumFeatureServerExecDesc: string;
+  premiumFeatureAdmin: string;
+  premiumFeatureAdminDesc: string;
+  premiumFeatureWebBuilder: string;
+  premiumFeatureWebBuilderDesc: string;
+  premiumIncluded: string;
+  premiumNotIncluded: string;
 }
 
 const en: LpStrings = {
@@ -181,6 +216,41 @@ const en: LpStrings = {
   footerPolicy: "Privacy Policy",
   footerManual: "Manual",
   footerContact: "Contact",
+  premiumTitle: "Premium Plans",
+  premiumIntro: "Unlock powerful features for building web apps, automating workflows, and integrating Google services — all from your Google Drive.",
+  premiumFree: "Free",
+  premiumLite: "Lite",
+  premiumPro: "Pro",
+  premiumLitePrice: "¥300/mo",
+  premiumProPrice: "¥2,000/mo",
+  premiumFreeTag: "¥0",
+  premiumFeatureUpload: "Upload Limit",
+  premiumFeatureUploadFree: "20 MB",
+  premiumFeatureUploadPaid: "5 GB",
+  premiumFeatureInteractions: "Interactions API Chat",
+  premiumFeatureInteractionsDesc: "Multi-round AI chat with server-side proxy — supports function calling, RAG, and web search simultaneously in a single conversation.",
+  premiumFeatureGmail: "Gmail Send",
+  premiumFeatureGmailDesc: "Send emails from workflows using a Gmail Send node. Automate notifications, reports, and customer emails.",
+  premiumFeaturePdf: "PDF Generation",
+  premiumFeaturePdfDesc: "Generate PDF files from Markdown or HTML within workflows. Perfect for invoices, reports, and certificates.",
+  premiumFeatureSheets: "Google Sheets CRUD",
+  premiumFeatureSheetsDesc: "Read, write, append, and query Google Sheets directly from workflows. Build data-driven automations with your spreadsheets.",
+  premiumFeatureHosting: "Static Page Hosting (CDN)",
+  premiumFeatureHostingDesc: "Publish HTML pages from your Drive with global CDN delivery. Build websites, landing pages, and web apps — all served from your files.",
+  premiumFeatureDomain: "Custom Domains & Auto SSL",
+  premiumFeatureDomainDesc: "Use your own domain with automatic SSL certificate provisioning. Every account also gets a built-in subdomain (yourname.gemihub.online).",
+  premiumFeatureApi: "Workflow API",
+  premiumFeatureApiDesc: "Expose workflows as API endpoints (/__gemihub/api/*). Build backends for your hosted pages with authentication, form handling, and data operations.",
+  premiumFeatureSchedule: "Scheduled Workflows",
+  premiumFeatureScheduleDesc: "Run workflows on a cron schedule — daily reports, periodic syncs, automated data processing. Supports retry, timeout, and concurrency control.",
+  premiumFeatureServerExec: "Server-Side Execution",
+  premiumFeatureServerExecDesc: "Execute workflow script nodes in a secure isolated VM on the server. Run complex logic without browser limitations.",
+  premiumFeatureAdmin: "Admin Panel",
+  premiumFeatureAdminDesc: "Manage accounts, monitor usage, and configure settings from a dedicated admin dashboard.",
+  premiumFeatureWebBuilder: "AI Web Builder Skill",
+  premiumFeatureWebBuilderDesc: "An AI agent that helps you build and deploy web pages and APIs. Describe what you want, and it creates the pages, workflows, and configurations for you.",
+  premiumIncluded: "Included",
+  premiumNotIncluded: "Not included",
 };
 
 const ja: LpStrings = {
@@ -272,6 +342,41 @@ const ja: LpStrings = {
   footerPolicy: "プライバシーポリシー",
   footerManual: "マニュアル",
   footerContact: "お問い合わせ",
+  premiumTitle: "有料プラン",
+  premiumIntro: "Webアプリ構築、ワークフロー自動化、Googleサービス連携など — すべてGoogle Driveから。強力な機能をアンロックしましょう。",
+  premiumFree: "Free",
+  premiumLite: "Lite",
+  premiumPro: "Pro",
+  premiumLitePrice: "¥300/月",
+  premiumProPrice: "¥2,000/月",
+  premiumFreeTag: "¥0",
+  premiumFeatureUpload: "アップロード上限",
+  premiumFeatureUploadFree: "20 MB",
+  premiumFeatureUploadPaid: "5 GB",
+  premiumFeatureInteractions: "Interactions API チャット",
+  premiumFeatureInteractionsDesc: "サーバー経由のマルチラウンド AI チャット。ファンクションコール・RAG・Web検索を1つの会話で同時に利用可能。",
+  premiumFeatureGmail: "Gmail 送信",
+  premiumFeatureGmailDesc: "ワークフローから Gmail 送信ノードでメールを自動送信。通知、レポート、顧客メールの自動化に。",
+  premiumFeaturePdf: "PDF 生成",
+  premiumFeaturePdfDesc: "Markdown や HTML からワークフロー内で PDF を生成。請求書、レポート、証明書の作成に最適。",
+  premiumFeatureSheets: "Google Sheets CRUD",
+  premiumFeatureSheetsDesc: "ワークフローから Google Sheets の読み書き・追記・クエリが可能。スプレッドシートを使ったデータ駆動の自動化を構築。",
+  premiumFeatureHosting: "静的ページホスティング（CDN）",
+  premiumFeatureHostingDesc: "Drive の HTML ページをグローバル CDN で配信。Webサイト、LP、Webアプリをファイルから直接公開。",
+  premiumFeatureDomain: "カスタムドメイン & 自動SSL",
+  premiumFeatureDomainDesc: "独自ドメインを自動 SSL 証明書付きで利用可能。全アカウントにビルトインサブドメイン（yourname.gemihub.online）も付属。",
+  premiumFeatureApi: "ワークフロー API",
+  premiumFeatureApiDesc: "ワークフローを API エンドポイント（/__gemihub/api/*）として公開。認証・フォーム処理・データ操作を含むバックエンドを構築。",
+  premiumFeatureSchedule: "スケジュール実行",
+  premiumFeatureScheduleDesc: "ワークフローを cron スケジュールで自動実行。日次レポート、定期同期、データ処理の自動化。リトライ・タイムアウト・同時実行制御に対応。",
+  premiumFeatureServerExec: "サーバーサイド実行",
+  premiumFeatureServerExecDesc: "ワークフローのスクリプトノードをサーバー上の安全な隔離 VM で実行。ブラウザの制約なく複雑なロジックを処理。",
+  premiumFeatureAdmin: "管理パネル",
+  premiumFeatureAdminDesc: "専用の管理ダッシュボードからアカウント管理、利用状況の監視、設定変更が可能。",
+  premiumFeatureWebBuilder: "AI Web Builder スキル",
+  premiumFeatureWebBuilderDesc: "Webページと API の構築・デプロイを支援する AI エージェント。やりたいことを伝えるだけで、ページ・ワークフロー・設定を自動作成。",
+  premiumIncluded: "対応",
+  premiumNotIncluded: "非対応",
 };
 
 export default function LandingPage() {
@@ -579,8 +684,103 @@ export default function LandingPage() {
         </ul>
       </section>
 
-      {/* Plugin Showcase */}
+      {/* Premium Plans */}
       <section className="bg-gray-50/30 px-4 py-20 dark:bg-gray-900/20">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="mb-4 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+            <CreditCard size={28} className="mb-1 mr-2 inline text-emerald-600 dark:text-emerald-400" />
+            {s.premiumTitle}
+          </h2>
+          <p className="mx-auto mb-10 max-w-2xl text-center text-sm text-gray-500 dark:text-gray-400 sm:text-base">
+            {s.premiumIntro}
+          </p>
+
+          {/* Plan headers */}
+          <div className="mb-6 grid grid-cols-4 gap-3 text-center">
+            <div />
+            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{s.premiumFree}</h3>
+              <p className="mt-1 text-xl font-bold text-gray-500 dark:text-gray-400">{s.premiumFreeTag}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-700 dark:bg-emerald-950/40">
+              <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{s.premiumLite}</h3>
+              <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{s.premiumLitePrice}</p>
+            </div>
+            <div className="rounded-xl border border-purple-300 bg-purple-50 p-4 ring-2 ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:ring-purple-500">
+              <h3 className="text-lg font-bold text-purple-700 dark:text-purple-300">{s.premiumPro}</h3>
+              <p className="mt-1 text-xl font-bold text-purple-600 dark:text-purple-400">{s.premiumProPrice}</p>
+            </div>
+          </div>
+
+          {/* Feature comparison */}
+          {(() => {
+            const features: { label: string; free: boolean | string; lite: boolean | string; pro: boolean | string }[] = [
+              { label: s.premiumFeatureUpload, free: s.premiumFeatureUploadFree, lite: s.premiumFeatureUploadPaid, pro: s.premiumFeatureUploadPaid },
+              { label: s.premiumFeatureInteractions, free: false, lite: true, pro: true },
+              { label: s.premiumFeatureGmail, free: false, lite: true, pro: true },
+              { label: s.premiumFeaturePdf, free: false, lite: true, pro: true },
+              { label: s.premiumFeatureSheets, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureHosting, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureDomain, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureApi, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureSchedule, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureServerExec, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureWebBuilder, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureAdmin, free: false, lite: false, pro: true },
+            ];
+            const renderCell = (val: boolean | string) => {
+              if (typeof val === "string") return <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{val}</span>;
+              return val
+                ? <Check size={18} className="mx-auto text-emerald-600 dark:text-emerald-400" aria-label={s.premiumIncluded} />
+                : <X size={18} className="mx-auto text-gray-300 dark:text-gray-600" aria-label={s.premiumNotIncluded} />;
+            };
+            return (
+              <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+                {features.map(({ label, free, lite, pro }, i) => (
+                  <div key={label} className={`grid grid-cols-4 gap-3 px-4 py-3 ${i % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-900/60"}`}>
+                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</div>
+                    <div className="text-center">{renderCell(free)}</div>
+                    <div className="text-center">{renderCell(lite)}</div>
+                    <div className="text-center">{renderCell(pro)}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Pro feature highlights */}
+          <h3 className="mb-6 mt-12 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            Pro
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { icon: MessageSquare, title: s.premiumFeatureInteractions, desc: s.premiumFeatureInteractionsDesc, color: "blue" },
+              { icon: Mail, title: s.premiumFeatureGmail, desc: s.premiumFeatureGmailDesc, color: "red" },
+              { icon: FileText, title: s.premiumFeaturePdf, desc: s.premiumFeaturePdfDesc, color: "orange" },
+              { icon: FileSpreadsheet, title: s.premiumFeatureSheets, desc: s.premiumFeatureSheetsDesc, color: "green" },
+              { icon: Globe, title: s.premiumFeatureHosting, desc: s.premiumFeatureHostingDesc, color: "cyan" },
+              { icon: Lock, title: s.premiumFeatureDomain, desc: s.premiumFeatureDomainDesc, color: "indigo" },
+              { icon: Code, title: s.premiumFeatureApi, desc: s.premiumFeatureApiDesc, color: "violet" },
+              { icon: Calendar, title: s.premiumFeatureSchedule, desc: s.premiumFeatureScheduleDesc, color: "amber" },
+              { icon: Server, title: s.premiumFeatureServerExec, desc: s.premiumFeatureServerExecDesc, color: "slate" },
+              { icon: PenTool, title: s.premiumFeatureWebBuilder, desc: s.premiumFeatureWebBuilderDesc, color: "purple" },
+              { icon: LayoutDashboard, title: s.premiumFeatureAdmin, desc: s.premiumFeatureAdminDesc, color: "teal" },
+              { icon: Upload, title: s.premiumFeatureUpload, desc: s.premiumFeatureUploadPaid, color: "pink" },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                  <Icon size={22} className="text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <h4 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h4>
+                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Plugin Showcase */}
+      <section className="px-4 py-20">
         <div className="mx-auto max-w-3xl">
           <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
             {s.pluginShowcaseTitle}
