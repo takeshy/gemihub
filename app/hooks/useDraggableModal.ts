@@ -1,6 +1,15 @@
 import { useState, useRef, useCallback, useLayoutEffect } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
+const MIN_VISIBLE_MARGIN = 24;
+
+function clampPosition(x: number, y: number, width: number, height: number) {
+  return {
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - Math.min(width, MIN_VISIBLE_MARGIN))),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - Math.min(height, MIN_VISIBLE_MARGIN))),
+  };
+}
+
 /**
  * Hook that makes a modal draggable (via header) and freely resizable.
  * Returns a ref for the modal panel, a style object for absolute positioning,
@@ -20,10 +29,14 @@ export function useDraggableModal() {
   useLayoutEffect(() => {
     if (modalRef.current && pos === null) {
       const rect = modalRef.current.getBoundingClientRect();
-      setPos({
-        x: Math.max(0, (window.innerWidth - rect.width) / 2),
-        y: Math.max(8, (window.innerHeight - rect.height) / 2),
-      });
+      setPos(
+        clampPosition(
+          (window.innerWidth - rect.width) / 2,
+          (window.innerHeight - rect.height) / 2,
+          rect.width,
+          rect.height,
+        ),
+      );
     }
   }, [pos]);
 
@@ -32,8 +45,8 @@ export function useDraggableModal() {
       // Only left-click
       if (e.button !== 0) return;
       // Don't drag when clicking buttons / inputs inside the header
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "BUTTON" || tag === "INPUT" || tag === "A") return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("button, input, a")) return;
 
       if (!pos) return;
       e.preventDefault();
@@ -45,11 +58,16 @@ export function useDraggableModal() {
       };
 
       const onMove = (ev: globalThis.MouseEvent) => {
-        if (!dragging.current) return;
-        setPos({
-          x: dragging.current.origX + (ev.clientX - dragging.current.startX),
-          y: dragging.current.origY + (ev.clientY - dragging.current.startY),
-        });
+        if (!dragging.current || !modalRef.current) return;
+        const rect = modalRef.current.getBoundingClientRect();
+        setPos(
+          clampPosition(
+            dragging.current.origX + (ev.clientX - dragging.current.startX),
+            dragging.current.origY + (ev.clientY - dragging.current.startY),
+            rect.width,
+            rect.height,
+          ),
+        );
       };
       const onUp = () => {
         dragging.current = null;
