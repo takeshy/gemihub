@@ -12,12 +12,20 @@ import { getSettings } from "~/services/user-settings.server";
 import { handleMcpNode } from "~/engine/handlers/mcp";
 import { handleRagSyncNode } from "~/engine/handlers/ragSync";
 import { handleGemihubCommandNode } from "~/engine/handlers/gemihubCommand";
+import { handleSheetReadNode, handleSheetWriteNode, handleSheetUpdateNode, handleSheetDeleteNode } from "~/engine/handlers/hubworkSheets";
+import { handleGmailSendNode } from "~/engine/handlers/hubworkGmail";
+import { getAccountByRootFolderId } from "~/services/hubwork-accounts.server";
 
 // Server-only node types that this endpoint handles
 // (most node types are now handled locally by local-executor.ts)
 const SERVER_NODE_TYPES = new Set<WorkflowNodeType>([
   "mcp", "rag-sync", "gemihub-command",
+  // Hubwork nodes (paid feature, server-only)
+  "sheet-read", "sheet-write", "sheet-update", "sheet-delete", "gmail-send",
 ]);
+
+const SHEET_NODE_TYPES = new Set(["sheet-read", "sheet-write", "sheet-update", "sheet-delete"]);
+const GMAIL_NODE_TYPES = new Set(["gmail-send"]);
 
 interface DriveEvent {
   type: "updated" | "created" | "deleted";
@@ -66,6 +74,8 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
+  // Hubwork nodes require a paid plan
+  const HUBWORK_NODE_TYPES = new Set(["sheet-read", "sheet-write", "sheet-update", "sheet-delete", "gmail-send"]);
   const node: WorkflowNode = {
     id: nodeId || "node",
     type: nodeType,
@@ -93,6 +103,26 @@ export async function action({ request }: Route.ActionArgs) {
     settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
   } catch { /* ignore */ }
 
+  if (SHEET_NODE_TYPES.has(nodeType)) {
+    const { hasProFeatures } = await import("~/types/hubwork");
+    const hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+    if (!hubworkAccount || !hasProFeatures(hubworkAccount)) {
+      return Response.json(
+        { error: "Hubwork Pro subscription required" },
+        { status: 403, headers: responseHeaders }
+      );
+    }
+  } else if (GMAIL_NODE_TYPES.has(nodeType)) {
+    const { hasPaidFeatures } = await import("~/types/hubwork");
+    const hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+    if (!hubworkAccount || !hasPaidFeatures(hubworkAccount)) {
+      return Response.json(
+        { error: "Hubwork Lite or Pro subscription required" },
+        { status: 403, headers: responseHeaders }
+      );
+    }
+  }
+
   const serviceContext: ServiceContext = {
     driveAccessToken: validTokens.accessToken,
     driveRootFolderId: validTokens.rootFolderId,
@@ -115,6 +145,16 @@ export async function action({ request }: Route.ActionArgs) {
     },
   };
 
+  // Populate Hubwork clients if enabled and needed
+  if (HUBWORK_NODE_TYPES.has(nodeType) && settings?.hubwork?.spreadsheetId) {
+    const { google } = await import("googleapis");
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: validTokens.accessToken });
+    serviceContext.hubworkSheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+    serviceContext.hubworkGmailClient = google.gmail({ version: "v1", auth: oauth2Client });
+    serviceContext.hubworkSpreadsheetId = settings.hubwork.spreadsheetId;
+  }
+
   // Execute the server-side node and return JSON
   try {
     switch (nodeType) {
@@ -126,6 +166,22 @@ export async function action({ request }: Route.ActionArgs) {
         break;
       case "gemihub-command":
         await handleGemihubCommandNode(node, context, serviceContext);
+        break;
+      // Hubwork nodes
+      case "sheet-read":
+        await handleSheetReadNode(node, context, serviceContext);
+        break;
+      case "sheet-write":
+        await handleSheetWriteNode(node, context, serviceContext);
+        break;
+      case "sheet-update":
+        await handleSheetUpdateNode(node, context, serviceContext);
+        break;
+      case "sheet-delete":
+        await handleSheetDeleteNode(node, context, serviceContext);
+        break;
+      case "gmail-send":
+        await handleGmailSendNode(node, context, serviceContext);
         break;
     }
 

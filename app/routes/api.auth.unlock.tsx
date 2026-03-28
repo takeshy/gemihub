@@ -21,6 +21,17 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     const apiKey = await decryptPrivateKey(settings.encryptedApiKey, settings.apiKeySalt, password);
     const session = await setTokens(request, { ...validTokens, geminiApiKey: apiKey });
+
+    // Store encrypted API key in Hubwork account for Scheduler access
+    try {
+      const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
+      let account = await getAccountByRootFolderId(validTokens.rootFolderId);
+      if (!account && validTokens.email) account = await getAccountByEmail(validTokens.email);
+      if (account) {
+        await updateAccount(account.id, { encryptedGeminiApiKey: encryptGeminiApiKey(apiKey) });
+      }
+    } catch { /* best-effort */ }
+
     return new Response(JSON.stringify({ success: true }), {
       headers: {
         "Content-Type": "application/json",

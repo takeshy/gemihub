@@ -96,6 +96,7 @@ export async function getFileListFromMeta(
     md5Checksum: f.md5Checksum,
     modifiedTime: f.modifiedTime,
     createdTime: f.createdTime,
+    size: f.size,
   }));
   return { meta, files };
 }
@@ -126,6 +127,7 @@ export async function rebuildSyncMeta(
       createdTime: f.createdTime,
       shared: prev?.shared,
       webViewLink: prev?.webViewLink,
+      size: f.size,
     };
   }
   await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
@@ -152,6 +154,7 @@ export async function upsertFileInMeta(
     md5Checksum: file.md5Checksum ?? "",
     modifiedTime: file.modifiedTime ?? "",
     createdTime: file.createdTime,
+    size: file.size,
   };
   meta.lastUpdatedAt = new Date().toISOString();
   await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);

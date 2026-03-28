@@ -542,6 +542,53 @@ export interface UserSettings {
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
   showManagementFolders: boolean;
+  // Hubwork (paid feature) - web app builder with Sheets/Gmail
+  hubwork?: HubworkSettings;
+}
+
+export interface HubworkAccountIdentity {
+  sheet: string;
+  emailColumn: string;
+}
+
+export interface HubworkDataSource {
+  sheet: string;
+  matchBy: string;
+  fields: string[];
+  limit?: number;
+  sort?: string;
+  shape?: "object" | "array";
+}
+
+export interface HubworkAccountType {
+  identity: HubworkAccountIdentity;
+  data?: Record<string, HubworkDataSource>;
+}
+
+export interface HubworkSchedule {
+  workflowPath: string;
+  cron: string;
+  enabled: boolean;
+  variables?: Record<string, string>;
+  timezone?: string;
+  retry?: number;
+  timeoutSec?: number;
+  concurrencyPolicy?: "allow" | "forbid";
+  missedRunPolicy?: "skip" | "run-once";
+}
+
+export interface HubworkSettings {
+  spreadsheetId?: string;
+  accounts?: Record<string, HubworkAccountType>;
+  schedules?: HubworkSchedule[];
+  customDomain?: string;
+  accountId?: string;
+  plan?: "lite" | "pro" | "granted";
+  accountSlug?: string;
+  defaultDomain?: string;
+  billingStatus?: string;
+  accountStatus?: string;
+  domainStatus?: string;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {

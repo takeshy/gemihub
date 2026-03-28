@@ -24,7 +24,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const body = await request.json();
   const { action: encAction, password } = body as {
-    action: "generate" | "verify" | "reset";
+    action: "generate" | "verify";
     password?: string;
   };
 
@@ -132,24 +132,6 @@ export async function action({ request }: Route.ActionArgs) {
       } catch {
         return Response.json({ success: true, valid: false }, { headers: responseHeaders });
       }
-    }
-
-    // ------------------------------------------------------------------
-    // Reset: clear all encryption settings
-    // ------------------------------------------------------------------
-    case "reset": {
-      const updatedSettings = {
-        ...settings,
-        encryption: { ...DEFAULT_ENCRYPTION_SETTINGS },
-      };
-
-      await saveSettings(
-        validTokens.accessToken,
-        validTokens.rootFolderId,
-        updatedSettings
-      );
-
-      return Response.json({ success: true }, { headers: responseHeaders });
     }
 
     default:

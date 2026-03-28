@@ -70,6 +70,79 @@ resource "google_cloud_run_v2_service" "app" {
         }
       }
 
+      # --- Hubwork env vars (conditional) ---
+
+      dynamic "env" {
+        for_each = var.hubwork_enabled ? [1] : []
+        content {
+          name  = "GCP_PROJECT_ID"
+          value = var.project_id
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.hubwork_enabled ? [1] : []
+        content {
+          name = "STRIPE_SECRET_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.stripe_secret_key[0].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.hubwork_enabled ? [1] : []
+        content {
+          name = "STRIPE_WEBHOOK_SECRET"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.stripe_webhook_secret[0].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.hubwork_enabled ? [1] : []
+        content {
+          name = "HUBWORK_ADMIN_CREDENTIALS"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.hubwork_admin_credentials[0].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.hubwork_enabled && var.stripe_price_id_lite != "" ? [var.stripe_price_id_lite] : []
+        content {
+          name  = "STRIPE_PRICE_ID_LITE"
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.hubwork_enabled && var.stripe_price_id_pro != "" ? [var.stripe_price_id_pro] : []
+        content {
+          name  = "STRIPE_PRICE_ID_PRO"
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.hubwork_enabled ? [var.hubwork_admin_emails] : []
+        content {
+          name  = "HUBWORK_ADMIN_EMAILS"
+          value = env.value
+        }
+      }
+
       startup_probe {
         http_get {
           path = "/"
@@ -93,6 +166,9 @@ resource "google_cloud_run_v2_service" "app" {
     google_secret_manager_secret_iam_member.cloud_run_google_client_id,
     google_secret_manager_secret_iam_member.cloud_run_google_client_secret,
     google_secret_manager_secret_iam_member.cloud_run_session_secret,
+    google_secret_manager_secret_iam_member.cloud_run_stripe_secret_key,
+    google_secret_manager_secret_iam_member.cloud_run_stripe_webhook_secret,
+    google_secret_manager_secret_iam_member.cloud_run_hubwork_admin_credentials,
   ]
 }
 

@@ -65,6 +65,7 @@ export interface Message {
   mcpApps?: McpAppInfo[];
   usage?: StreamChunkUsage;
   elapsedMs?: number;
+  interactionId?: string;
 }
 
 // Streaming chunk types
@@ -81,7 +82,8 @@ export interface StreamChunk {
     | "image_generated"
     | "mcp_app"
     | "drive_file_updated"
-    | "drive_file_created";
+    | "drive_file_created"
+    | "requires_action";
   content?: string;
   toolCall?: ToolCall;
   toolResult?: ToolResult;
@@ -92,6 +94,8 @@ export interface StreamChunk {
   updatedFile?: { fileId: string; fileName: string; content: string };
   createdFile?: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string };
   usage?: StreamChunkUsage;
+  interactionId?: string;
+  pendingToolCalls?: ToolCall[];
 }
 
 // Chat history stored in Drive

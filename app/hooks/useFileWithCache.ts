@@ -7,6 +7,7 @@ import {
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
+import { isBinaryMimeType, isLargeFile } from "~/services/sync-client-utils";
 
 export function useFileWithCache(
   fileId: string | null,
@@ -113,23 +114,26 @@ export function useFileWithCache(
           contentShown = true;
         }
 
-        // 5. Update IndexedDB cache
-        await setCachedFile({
-          fileId: id,
-          content: data.content,
-          md5Checksum: md5,
-          modifiedTime: modTime,
-          cachedAt: Date.now(),
-          fileName: meta.name,
-        });
-        window.dispatchEvent(
-          new CustomEvent("file-cached", { detail: { fileId: id } })
-        );
+        // 5. Skip IndexedDB cache for large binary files (>20MB)
+        const skipCache = isBinaryMimeType(meta.mimeType) && isLargeFile(meta.size);
+        if (!skipCache) {
+          await setCachedFile({
+            fileId: id,
+            content: data.content,
+            md5Checksum: md5,
+            modifiedTime: modTime,
+            cachedAt: Date.now(),
+            fileName: meta.name,
+          });
+          window.dispatchEvent(
+            new CustomEvent("file-cached", { detail: { fileId: id } })
+          );
 
-        // 6. Initialize edit history snapshot
-        addCommitBoundary(id).catch(() => {});
+          // 6. Initialize edit history snapshot
+          addCommitBoundary(id).catch(() => {});
+        }
 
-        // 7. Update local sync meta
+        // 7. Update local sync meta (metadata always tracked)
         if (md5) {
           const syncMeta = (await getLocalSyncMeta()) ?? {
             id: "current" as const,
@@ -139,6 +143,7 @@ export function useFileWithCache(
           syncMeta.files[id] = {
             md5Checksum: md5,
             modifiedTime: modTime,
+            size: meta.size,
           };
           await setLocalSyncMeta(syncMeta);
         }

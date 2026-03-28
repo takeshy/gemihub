@@ -21,7 +21,7 @@ export interface CachedFile {
 export interface LocalSyncMeta {
   id: "current"; // primary key (fixed key, always 1 record)
   lastUpdatedAt: string;
-  files: Record<string, { md5Checksum: string; modifiedTime: string; name?: string }>;
+  files: Record<string, { md5Checksum: string; modifiedTime: string; name?: string; size?: string }>;
 }
 
 export interface EditHistoryDiff {
@@ -56,7 +56,7 @@ export interface CachedRemoteMeta {
   id: "current"; // primary key (fixed key, always 1 record)
   rootFolderId: string;
   lastUpdatedAt: string;
-  files: Record<string, { name: string; mimeType: string; md5Checksum: string; modifiedTime: string; createdTime?: string; shared?: boolean; webViewLink?: string }>;
+  files: Record<string, { name: string; mimeType: string; md5Checksum: string; modifiedTime: string; createdTime?: string; shared?: boolean; webViewLink?: string; size?: string }>;
   cachedAt: number;
 }
 

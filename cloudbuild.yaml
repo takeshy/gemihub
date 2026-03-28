@@ -16,7 +16,7 @@ steps:
       - '--all-tags'
       - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub'
 
-  # Step 3: Deploy to Cloud Run
+  # Step 3: Deploy main service to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
@@ -27,6 +27,20 @@ steps:
       - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}'
       - '--region'
       - '${_REGION}'
+
+  # Step 4: Deploy to all Hubwork account services (if any exist)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        SERVICES=$(gcloud run services list --region=${_REGION} --format='value(name)' --filter='name~^gemihub-hw-' 2>/dev/null || true)
+        for svc in $SERVICES; do
+          echo "Deploying to Hubwork service: $svc"
+          gcloud run deploy "$svc" \
+            --image ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA} \
+            --region ${_REGION}
+        done
 
 images:
   - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub'

@@ -1,0 +1,7 @@
+nodes:
+  - id: save
+    type: drive-save
+    properties:
+      fileName: "{{fileName}}"
+      content: "{{content}}"
+      mimeType: text/plain

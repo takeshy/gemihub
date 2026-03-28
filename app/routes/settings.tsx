@@ -19,6 +19,7 @@ import type {
   FontSize,
   Theme,
   ShortcutKeyBinding,
+  HubworkSchedule,
 } from "~/types/settings";
 import {
   DEFAULT_ENCRYPTION_SETTINGS,
@@ -45,6 +46,7 @@ import {
   RefreshCw,
   Puzzle,
   Keyboard,
+  Globe,
 } from "lucide-react";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
@@ -53,6 +55,7 @@ import { GeneralTab } from "~/components/settings/GeneralTab";
 import { SyncTab } from "~/components/settings/SyncTab";
 import { McpTab } from "~/components/settings/McpTab";
 import { RagTab } from "~/components/settings/RagTab";
+import { HubworkTab } from "~/components/settings/HubworkTab";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { PluginProvider } from "~/contexts/PluginContext";
 
@@ -65,7 +68,7 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shortcuts";
+type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shortcuts" | "hubwork";
 
 import type { TranslationStrings } from "~/i18n/translations";
 
@@ -77,6 +80,7 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
   { id: "shortcuts", labelKey: "settings.tab.shortcuts", icon: Keyboard, desktopOnly: true },
   { id: "plugins", labelKey: "settings.tab.plugins", icon: Puzzle },
+  { id: "hubwork", labelKey: "settings.tab.hubwork", icon: Globe },
 ];
 
 // ---------------------------------------------------------------------------
@@ -87,23 +91,80 @@ export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+  const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
+
+  let hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+  // Also try matching by email for accounts created via Stripe/admin before user enabled
+  if (!hubworkAccount && validTokens.email) {
+    const { getAccountByEmail } = await import("~/services/hubwork-accounts.server");
+    hubworkAccount = await getAccountByEmail(validTokens.email);
+  }
+
+  // Ensure refresh token for all Hubwork accounts, web/ folder + skill for Pro only
+  if (hubworkAccount?.plan) {
+    const isProPlan = hubworkAccount.plan === "pro" || hubworkAccount.plan === "granted";
+    if (isProPlan) {
+      import("~/services/google-drive.server").then(({ ensureSubFolder }) => {
+        ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "web").catch(() => {});
+      });
+      import("~/services/hubwork-skill-provisioner.server").then(({ provisionHubworkSkill }) => {
+        provisionHubworkSkill(validTokens.accessToken, validTokens.rootFolderId).catch(() => {});
+      });
+    }
+    // Always update refresh token if available (ensures new OAuth scopes are persisted)
+    if (validTokens.refreshToken) {
+      import("~/services/hubwork-accounts.server").then(({ updateRefreshToken, updateAccount }) => {
+        updateRefreshToken(hubworkAccount!.id, validTokens.refreshToken).catch(() => {});
+        // Also update rootFolderId/email if missing
+        const updates: Record<string, string> = {};
+        if (!hubworkAccount!.rootFolderId && validTokens.rootFolderId) updates.rootFolderId = validTokens.rootFolderId;
+        if (!hubworkAccount!.email && validTokens.email) updates.email = validTokens.email;
+        if (Object.keys(updates).length > 0) {
+          updateAccount(hubworkAccount!.id, updates).catch(() => {});
+        }
+      });
+    }
+  }
+  const settings = {
+    ...driveSettings,
+    hubwork: driveSettings.hubwork
+      ? {
+          ...driveSettings.hubwork,
+          accountId: hubworkAccount?.id,
+          plan: hubworkAccount?.plan,
+          accountSlug: hubworkAccount?.accountSlug,
+          defaultDomain: hubworkAccount?.defaultDomain,
+          customDomain: hubworkAccount?.customDomain || driveSettings.hubwork.customDomain,
+          billingStatus: hubworkAccount?.billingStatus,
+          accountStatus: hubworkAccount?.accountStatus,
+          domainStatus: hubworkAccount?.domainStatus || driveSettings.hubwork.domainStatus,
+        }
+      : hubworkAccount?.plan
+        ? { plan: hubworkAccount.plan, accountId: hubworkAccount.id, accountSlug: hubworkAccount.accountSlug, defaultDomain: hubworkAccount.defaultDomain }
+        : driveSettings.hubwork,
+  };
 
   // Merge local plugins (dev only)
   const localPlugins = getLocalPlugins();
   const localIds = new Set(localPlugins.map((p) => p.id));
   const mergedPlugins = [
     ...localPlugins,
-    ...(driveSettings.plugins || []).filter((p) => !localIds.has(p.id)),
+    ...(settings.plugins || []).filter((p) => !localIds.has(p.id)),
   ];
-  const settings = { ...driveSettings, plugins: mergedPlugins };
+  const mergedSettings = { ...settings, plugins: mergedPlugins };
   const acceptLanguage = request.headers.get("Accept-Language");
-  const effectiveLanguage = resolveLanguage(settings.language, acceptLanguage);
+  const effectiveLanguage = resolveLanguage(mergedSettings.language, acceptLanguage);
+
+  const grantedScopes = validTokens.grantedScopes || "";
+  const hasGmailScope = grantedScopes.includes("gmail");
+  const hasHubworkScopes = grantedScopes.includes("spreadsheets") && hasGmailScope;
 
   return data(
     {
-      settings: { ...settings, language: effectiveLanguage },
+      settings: { ...mergedSettings, language: effectiveLanguage },
       hasApiKey: !!validTokens.geminiApiKey,
       maskedKey: validTokens.geminiApiKey ? maskApiKey(validTokens.geminiApiKey) : null,
+      hasHubworkScopes,
     },
     { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
   );
@@ -285,6 +346,16 @@ export async function action({ request }: Route.ActionArgs) {
         if (effectiveApiKey) {
           const keySession = await setGeminiApiKey(request, effectiveApiKey);
           baseSession.set("geminiApiKey", keySession.get("geminiApiKey"));
+
+          // Store encrypted API key in Hubwork account for Scheduler access
+          try {
+            const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
+            let hwAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+            if (!hwAccount && validTokens.email) hwAccount = await getAccountByEmail(validTokens.email);
+            if (hwAccount) {
+              await updateAccount(hwAccount.id, { encryptedGeminiApiKey: encryptGeminiApiKey(effectiveApiKey) });
+            }
+          } catch { /* best-effort */ }
         }
         baseSession.set("apiPlan", apiPlan);
         baseSession.set("selectedModel", updatedSettings.selectedModel);
@@ -354,23 +425,7 @@ export async function action({ request }: Route.ActionArgs) {
         return jsonWithCookie({ success: true, message: "RAG settings saved." });
       }
 
-      case "saveEncryptionReset": {
-        const updatedSettings: UserSettings = {
-          ...currentSettings,
-          encryptedApiKey: "",
-          apiKeySalt: "",
-          encryption: { ...DEFAULT_ENCRYPTION_SETTINGS },
-        };
-        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
 
-        // Clear API key from session too
-        // Use baseSession which already has refreshed tokens if applicable
-        baseSession.unset("geminiApiKey");
-        return jsonWithCookie(
-          { success: true, message: "Encryption has been reset." },
-          { headers: { "Set-Cookie": await commitSession(baseSession) } }
-        );
-      }
 
       case "saveCommands": {
         const commandsJson = formData.get("slashCommands") as string;
@@ -419,6 +474,14 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       case "generateMigrationToken": {
+        // Migration token requires a paid plan
+        {
+          const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
+          const account = await getAccountByRootFolderId(validTokens.rootFolderId);
+          if (!account?.plan) {
+            return jsonWithCookie({ success: false, message: "A paid plan is required to generate migration tokens." });
+          }
+        }
         // Generate migration token (XOR-encoded accessToken + rootFolderId)
         const payload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
         const buf = Buffer.from(payload);
@@ -462,6 +525,63 @@ export async function action({ request }: Route.ActionArgs) {
         });
       }
 
+      case "hubwork-accounts": {
+        const spreadsheetId = (formData.get("spreadsheetId") as string || "").trim();
+        const accountsJson = formData.get("accounts") as string;
+        let accounts: Record<string, import("~/types/settings").HubworkAccountType>;
+        try {
+          accounts = JSON.parse(accountsJson || "{}");
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid accounts data" });
+        }
+        const updatedSettings = {
+          ...currentSettings,
+          hubwork: {
+            ...currentSettings.hubwork,
+            spreadsheetId: spreadsheetId || undefined,
+            accounts: Object.keys(accounts).length > 0 ? accounts : undefined,
+          } as typeof currentSettings.hubwork,
+        };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        return jsonWithCookie({ success: true, message: "Account types saved" });
+      }
+
+      case "hubwork-schedules": {
+        const schedulesJson = formData.get("schedules") as string;
+        let schedules: HubworkSchedule[];
+        try {
+          schedules = JSON.parse(schedulesJson || "[]");
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid schedules data" });
+        }
+        schedules = schedules.map((schedule) => ({
+          ...schedule,
+          concurrencyPolicy: schedule.concurrencyPolicy === "forbid" ? "forbid" : "allow",
+        }));
+        const updatedSettings = {
+          ...currentSettings,
+          hubwork: { ...currentSettings.hubwork, schedules } as typeof currentSettings.hubwork,
+        };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+
+        // Rebuild Firestore schedule index
+        // accountId is not reliably in Drive settings (it's injected by the loader),
+        // so resolve from Firestore directly via rootFolderId or email.
+        try {
+          const { getAccountByRootFolderId, getAccountByEmail, rebuildScheduleIndex } = await import("~/services/hubwork-accounts.server");
+          let hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+          if (!hubworkAccount && validTokens.email) {
+            hubworkAccount = await getAccountByEmail(validTokens.email);
+          }
+          if (hubworkAccount) {
+            await rebuildScheduleIndex(hubworkAccount.id, schedules);
+          }
+        } catch (e) {
+          console.warn("[settings] Failed to rebuild schedule index:", e);
+        }
+        return jsonWithCookie({ success: true, message: "Schedules saved" });
+      }
+
       default:
         return jsonWithCookie({ success: false, message: "Unknown action." });
     }
@@ -493,7 +613,7 @@ clientLoader.hydrate = true as const;
 // ---------------------------------------------------------------------------
 
 export default function Settings() {
-  const { settings, hasApiKey, maskedKey } = useLoaderData<typeof loader>();
+  const { settings, hasApiKey, maskedKey, hasHubworkScopes } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
   const [currentLang, setCurrentLang] = useState<Language>(settings.language ?? "en");
@@ -518,6 +638,7 @@ export default function Settings() {
           settings={settings}
           hasApiKey={hasApiKey}
           maskedKey={maskedKey}
+          hasHubworkScopes={hasHubworkScopes}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           onLanguageChange={setCurrentLang}
@@ -531,6 +652,7 @@ function SettingsInner({
   settings,
   hasApiKey,
   maskedKey,
+  hasHubworkScopes,
   activeTab,
   setActiveTab,
   onLanguageChange,
@@ -538,6 +660,7 @@ function SettingsInner({
   settings: UserSettings;
   hasApiKey: boolean;
   maskedKey: string | null;
+  hasHubworkScopes: boolean;
   activeTab: TabId;
   setActiveTab: (tab: TabId) => void;
   onLanguageChange: (lang: Language) => void;
@@ -553,7 +676,15 @@ function SettingsInner({
       <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
           <button
-            onClick={() => window.history.length > 1 ? navigate(-1) : navigate("/")}
+            onClick={() => {
+              // Go back if previous page was same origin, otherwise go to top
+              const prev = document.referrer;
+              if (prev && new URL(prev).origin === window.location.origin) {
+                navigate(-1);
+              } else {
+                navigate("/");
+              }
+            }}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <ArrowLeft size={20} />
@@ -599,6 +730,7 @@ function SettingsInner({
         {activeTab === "commands" && <CommandsTab settings={settings} />}
         {activeTab === "plugins" && <PluginsTab settings={settings} />}
         {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}
+        {activeTab === "hubwork" && <HubworkTab settings={settings} hasHubworkScopes={hasHubworkScopes} />}
       </main>
     </div>
   );

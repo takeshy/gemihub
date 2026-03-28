@@ -1,0 +1,14 @@
+trigger:
+  requireAuth: partner
+
+nodes:
+  - id: read_tickets
+    type: sheet-read
+    sheet: tickets
+    filter: '{"contact_email": "{{auth.email}}"}'
+    saveTo: tickets
+
+  - id: respond
+    type: set
+    name: __response
+    value: "{{tickets}}"

@@ -4,12 +4,23 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { createFileBinary, updateFileBinary, getFileMetadata } from "~/services/google-drive.server";
 import { upsertFileInMeta } from "~/services/sync-meta.server";
 
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB per file
+const MAX_FILE_SIZE_FREE = 20 * 1024 * 1024; // 20MB per file (free)
+const MAX_FILE_SIZE_PAID = 5 * 1024 * 1024 * 1024; // 5GB per file (paid — Drive API limit)
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+
+  // Determine upload limit based on plan
+  let maxFileSize = MAX_FILE_SIZE_FREE;
+  try {
+    const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
+    const account = await getAccountByRootFolderId(validTokens.rootFolderId);
+    if (account?.plan) {
+      maxFileSize = MAX_FILE_SIZE_PAID;
+    }
+  } catch { /* free tier */ }
 
   const formData = await request.formData();
   const folderId = formData.get("folderId") as string | null;
@@ -34,10 +45,11 @@ export async function action({ request }: Route.ActionArgs) {
   const results: { name: string; file?: unknown; error?: string }[] = [];
 
   for (const file of files) {
-    if (file.size > MAX_FILE_SIZE) {
+    if (file.size > maxFileSize) {
+      const limitMB = Math.round(maxFileSize / 1024 / 1024);
       results.push({
         name: file.name,
-        error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 30MB per file.`,
+        error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max ${limitMB}MB per file.`,
       });
       continue;
     }

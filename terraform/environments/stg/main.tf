@@ -61,6 +61,46 @@ variable "google_site_verification_token" {
   default     = ""
 }
 
+# --- Hubwork (paid plan) ---
+
+variable "hubwork_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "stripe_secret_key" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "stripe_webhook_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "stripe_price_id_lite" {
+  type    = string
+  default = ""
+}
+
+variable "stripe_price_id_pro" {
+  type    = string
+  default = ""
+}
+
+variable "hubwork_admin_credentials" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "hubwork_admin_emails" {
+  type    = string
+  default = "takesy.morito@gmail.com"
+}
+
 # --------------- Module ---------------
 
 module "gemihub" {
@@ -76,6 +116,15 @@ module "gemihub" {
   google_site_verification_token = var.google_site_verification_token
   manage_bigquery_views          = false
   root_folder_name               = "gemihub"
+
+  # Hubwork
+  hubwork_enabled           = var.hubwork_enabled
+  stripe_secret_key         = var.stripe_secret_key
+  stripe_webhook_secret     = var.stripe_webhook_secret
+  stripe_price_id_lite      = var.stripe_price_id_lite
+  stripe_price_id_pro       = var.stripe_price_id_pro
+  hubwork_admin_credentials = var.hubwork_admin_credentials
+  hubwork_admin_emails      = var.hubwork_admin_emails
 }
 
 # --------------- Outputs ---------------

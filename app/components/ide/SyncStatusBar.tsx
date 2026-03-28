@@ -100,6 +100,9 @@ export function SyncStatusBar({
         for (const id of diff.toPull) {
           const name = remoteFiles[id]?.name || id;
           if (isSyncExcludedPath(name)) continue;
+          // Skip false positives: cached md5 already matches remote (localMeta stale)
+          const cached = await getCachedFile(id);
+          if (cached && cached.md5Checksum && cached.md5Checksum === remoteFiles[id]?.md5Checksum) continue;
           files.push({ id, name, type: "modified" });
         }
         // Only show files that exist in localMeta (remotely-deleted files).

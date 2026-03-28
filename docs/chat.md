@@ -20,7 +20,12 @@ AI chat with Gemini streaming, function calling, RAG, image generation, and MCP 
 
 ## Streaming Protocol
 
-Chat uses SSE-compatible chunk types. By default, chat executes locally in the browser via `executeLocalChat` (calling the Gemini API directly with a cached API key). The server-side `/api/chat` SSE endpoint exists as a fallback. Both paths produce the same chunk types.
+Chat uses SSE-compatible chunk types. The execution path depends on the user's API plan:
+
+- **Free plan (Chat API)**: Executes locally in the browser via `executeLocalChat`, calling the Gemini Chat API (`ai.chats.create`) directly with a cached API key. Tool calls are executed locally in the same process.
+- **Paid plan (Interactions API)**: Uses the Gemini Interactions API (`ai.interactions.create`) via a server-side proxy (`/api/chat/interactions`). The server streams events to the client. When tool calls are needed, the server sends a `requires_action` chunk; the client executes tools locally (preserving local-first), then POSTs results back to continue the interaction. Conversation state is chained via `previous_interaction_id` (stored as `interactionId` on `Message`).
+
+The legacy server-side `/api/chat` SSE endpoint exists as a fallback.
 
 ### Chunk Types
 
@@ -36,16 +41,25 @@ Chat uses SSE-compatible chunk types. By default, chat executes locally in the b
 | `mcp_app` | MCP tool UI metadata |
 | `drive_file_created` | Drive file was created (triggers file tree refresh) |
 | `drive_file_updated` | Drive file was updated locally (triggers editor refresh) |
+| `requires_action` | Interactions API only: server needs tool results from client |
 | `error` | Error message |
-| `done` | Stream complete |
+| `done` | Stream complete (includes `interactionId` for Interactions API) |
 
 ### Client Handling
 
-1. Call `executeLocalChat` which streams from Gemini API directly in the browser (or fall back to `POST /api/chat` SSE stream)
+**Free plan (local execution)**:
+1. Call `executeLocalChat` which streams from Gemini API directly in the browser
 2. Parse chunks, accumulate text/thinking/toolCalls
-3. On `drive_file_created` → update local sync meta, dispatch `sync-complete` (refreshes file tree)
+3. On `drive_file_created` → update local sync meta, dispatch `tree-meta-updated` (refreshes file tree)
 4. On `drive_file_updated` → save to local cache + edit history, dispatch `file-modified`/`file-restored` (refreshes editor)
 5. On `done` → build final `Message` object and save to history
+
+**Paid plan (Interactions API multi-round)**:
+1. POST to `/api/chat/interactions` with messages, tools, and optional `previousInteractionId`
+2. Parse SSE chunks, accumulate text/thinking
+3. On `requires_action` → execute pending tool calls locally (same dispatchers as local execution: Drive tools via IndexedDB, MCP via `/api/workflow/mcp-proxy`, JS sandbox, skill workflows)
+4. POST tool results back to `/api/chat/interactions` with `currentInteractionId`
+5. Repeat until `done` → build final `Message` (with `interactionId`) and save to history
 
 ---
 
@@ -79,8 +93,10 @@ After `update_drive_file`, the file is **not** written to Drive. A `drive_file_u
 
 Mode is auto-constrained by model and RAG settings:
 - **Gemma models**: forced to `none` (no function calling support)
-- **Web Search mode**: forced to `none` (incompatible with other tools)
-- **RAG enabled**: function calling tools disabled (fileSearch + functionDeclarations not supported by Gemini API)
+- **Web Search mode**: forced to `none` (incompatible with other tools — free plan only)
+- **RAG enabled**: function calling tools disabled (free plan only — the Chat API does not support fileSearch + functionDeclarations simultaneously)
+
+> **Paid plan advantage**: The Interactions API allows function tools + RAG + Web Search simultaneously. The above RAG/Web Search tool restrictions do not apply to paid plan users.
 
 ### MCP Tools
 
@@ -207,6 +223,7 @@ When `encryptChatHistory` is enabled in settings, new chats are encrypted before
 
 ### Data Flow
 
+**Free plan (Chat API — browser-side)**:
 ```
 Browser (ChatPanel)                                  Gemini API
 ┌──────────────────┐                           ┌──────────────┐
@@ -232,20 +249,41 @@ Browser (ChatPanel)                                  Gemini API
    └────────────┘
 ```
 
+**Paid plan (Interactions API — server proxy + local tool execution)**:
+```
+Browser (ChatPanel)                    Server                      Gemini API
+┌──────────────────┐            ┌────────────────┐          ┌──────────────────┐
+│ messages state    │   POST    │ /api/chat/     │  stream  │ interactions.    │
+│ streaming state   │──────────►│ interactions   │◄────────►│ create()         │
+│ tool call display │◄── SSE ──│ (proxy only)   │          │ (server-stored   │
+│ chat history      │           └────────────────┘          │  conversation)   │
+│                   │                                        └──────────────────┘
+│  requires_action: │
+│  execute locally  │──► Drive tools (IndexedDB local-first)
+│  POST results back│──► MCP tools (/api/workflow/mcp-proxy)
+│                   │──► JS sandbox, skill workflows
+└──────────────────┘
+```
+
+The Interactions API endpoint does not support CORS, so browser-side calls are not possible. The server acts as a pure proxy — tool execution remains client-side (local-first). Conversation state is chained via `previous_interaction_id`, reducing token usage on long conversations.
+
 ### Key Files
 
 | File | Role |
 |------|------|
-| `app/routes/api.chat.tsx` | Chat SSE API (server-side fallback) — streaming, tool dispatch |
+| `app/routes/api.chat.tsx` | Chat SSE API (server-side, legacy fallback) — streaming, tool dispatch |
+| `app/routes/api.chat.interactions.tsx` | Interactions API SSE proxy (paid plan) — multi-round tool call protocol |
 | `app/routes/api.chat.history.tsx` | Chat history CRUD (list, save, delete) |
-| `app/hooks/useLocalChat.ts` | Browser-side chat execution — calls Gemini API directly with cached API key |
-| `app/services/gemini-chat-core.ts` | Browser-compatible Gemini API client (streaming, function calling, RAG, thinking, image generation) |
+| `app/hooks/useLocalChat.ts` | Browser-side chat execution (free plan) — calls Gemini Chat API directly |
+| `app/hooks/useInteractionsChat.ts` | Interactions API client (paid plan) — multi-round SSE with local tool execution |
+| `app/services/gemini-chat-core.ts` | Browser-compatible Gemini Chat API client (streaming, function calling, RAG, thinking, image generation) |
+| `app/services/gemini-interactions.server.ts` | Server-only Interactions API wrapper (tool conversion, input building, stream translation) |
 | `app/services/gemini-chat.server.ts` | Server-only re-export of gemini-chat-core.ts |
 | `app/services/drive-tools.server.ts` | Drive tool definitions and execution |
 | `app/services/drive-tool-definitions.ts` | Drive tool schema definitions (7 tools) |
 | `app/services/chat-history.server.ts` | Chat history persistence (Drive + `_meta.json`) |
 | `app/services/mcp-tools.server.ts` | MCP tool discovery and execution |
-| `app/components/ide/ChatPanel.tsx` | Chat panel — state management, local chat execution, history UI |
+| `app/components/ide/ChatPanel.tsx` | Chat panel — state management, plan-based routing (paid→Interactions, free→local) |
 | `app/components/chat/ChatInput.tsx` | Input area — model/RAG/tool selectors, autocomplete, attachments |
 | `app/components/chat/MessageList.tsx` | Message list with streaming partial message |
 | `app/components/chat/MessageBubble.tsx` | Message display — thinking, tool badges, images, markdown |
@@ -257,7 +295,8 @@ Browser (ChatPanel)                                  Gemini API
 
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/api/chat` | POST | Chat SSE stream with function calling |
+| `/api/chat` | POST | Chat SSE stream with function calling (legacy fallback) |
+| `/api/chat/interactions` | POST | Interactions API SSE proxy (paid plan, multi-round) |
 | `/api/chat/history` | GET | List chat histories |
 | `/api/chat/history` | POST | Save chat history |
 | `/api/chat/history` | DELETE | Delete chat history |

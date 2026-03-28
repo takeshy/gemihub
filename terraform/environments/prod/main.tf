@@ -61,6 +61,53 @@ variable "google_site_verification_token" {
   default     = ""
 }
 
+# --- Hubwork (paid plan) ---
+
+variable "hubwork_enabled" {
+  description = "Whether to provision Hubwork resources"
+  type        = bool
+  default     = false
+}
+
+variable "stripe_secret_key" {
+  description = "Stripe API secret key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "stripe_webhook_secret" {
+  description = "Stripe webhook signing secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "stripe_price_id_lite" {
+  description = "Stripe Price ID for the Lite plan (¥300/month)"
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_pro" {
+  description = "Stripe Price ID for the Pro plan (¥2,000/month)"
+  type        = string
+  default     = ""
+}
+
+variable "hubwork_admin_credentials" {
+  description = "Basic auth credentials for admin panel (user:password)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "hubwork_admin_emails" {
+  description = "Comma-separated admin emails"
+  type        = string
+  default     = "takesy.morito@gmail.com"
+}
+
 # --------------- Module ---------------
 
 module "gemihub" {
@@ -75,6 +122,15 @@ module "gemihub" {
   session_secret                 = var.session_secret
   google_site_verification_token = var.google_site_verification_token
   cpu_idle                       = false
+
+  # Hubwork
+  hubwork_enabled           = var.hubwork_enabled
+  stripe_secret_key         = var.stripe_secret_key
+  stripe_webhook_secret     = var.stripe_webhook_secret
+  stripe_price_id_lite      = var.stripe_price_id_lite
+  stripe_price_id_pro       = var.stripe_price_id_pro
+  hubwork_admin_credentials = var.hubwork_admin_credentials
+  hubwork_admin_emails      = var.hubwork_admin_emails
 }
 
 # --------------- Outputs ---------------

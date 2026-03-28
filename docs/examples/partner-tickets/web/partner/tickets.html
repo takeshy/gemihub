@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partner Tickets</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+      <h1 class="text-xl font-bold text-gray-800">Partner Portal</h1>
+      <div id="user-info" class="flex items-center gap-4 text-sm text-gray-500">
+        <span id="user-name"></span>
+        <button id="logout-btn" class="text-gray-400 hover:text-gray-600 transition-colors">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="max-w-5xl mx-auto px-4 py-8">
+    <div id="loading" class="text-center py-20 text-gray-400">Loading...</div>
+    <div id="content" class="hidden">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-lg font-semibold text-gray-800">Tickets</h2>
+        <span id="ticket-count" class="text-sm text-gray-500"></span>
+      </div>
+      <div id="ticket-list" class="space-y-3"></div>
+      <div id="empty-state" class="hidden text-center py-16 text-gray-400">
+        <p class="text-lg mb-1">No tickets</p>
+        <p class="text-sm">There are currently no tickets assigned to your account.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="/__gemihub/api.js"></script>
+  <script>
+    const STATUS_COLORS = {
+      "open":        { bg: "bg-blue-100",   text: "text-blue-700" },
+      "in_progress": { bg: "bg-yellow-100", text: "text-yellow-700" },
+      "closed":      { bg: "bg-gray-100",   text: "text-gray-500" },
+      "resolved":    { bg: "bg-green-100",  text: "text-green-700" },
+    };
+    const DEFAULT_COLOR = { bg: "bg-gray-100", text: "text-gray-600" };
+
+    function statusBadge(status) {
+      const c = STATUS_COLORS[status] || DEFAULT_COLOR;
+      const label = status.replace(/_/g, " ");
+      return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}">${label}</span>`;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" });
+    }
+
+    function renderTicket(ticket) {
+      return `
+        <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
+              <h3 class="font-medium text-gray-800 truncate">${escapeHtml(ticket.subject || "Untitled")}</h3>
+              ${ticket.description ? `<p class="mt-1 text-sm text-gray-500 line-clamp-2">${escapeHtml(ticket.description)}</p>` : ""}
+            </div>
+            <div class="flex-shrink-0">${statusBadge(ticket.status || "open")}</div>
+          </div>
+          <div class="mt-3 flex items-center gap-4 text-xs text-gray-400">
+            ${ticket.createdate ? `<span>Created: ${formatDate(ticket.createdate)}</span>` : ""}
+            ${ticket.updated_date ? `<span>Updated: ${formatDate(ticket.updated_date)}</span>` : ""}
+            ${ticket.category ? `<span class="px-1.5 py-0.5 bg-gray-100 rounded">${escapeHtml(ticket.category)}</span>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    (async () => {
+      const user = await gemihub.auth.require("partner", "/login/partner");
+      if (!user) return;
+
+      // Show user info
+      document.getElementById("user-name").textContent =
+        user.profile?.contact_name || user.profile?.company_name || user.email;
+
+      // Logout handler
+      document.getElementById("logout-btn").addEventListener("click", async () => {
+        await gemihub.auth.logout("partner");
+        window.location.href = "/login/partner";
+      });
+
+      // Fetch tickets
+      try {
+        const tickets = await gemihub.get("partner/tickets");
+        const list = Array.isArray(tickets) ? tickets : [];
+
+        document.getElementById("loading").classList.add("hidden");
+        document.getElementById("content").classList.remove("hidden");
+
+        if (list.length === 0) {
+          document.getElementById("empty-state").classList.remove("hidden");
+        } else {
+          document.getElementById("ticket-count").textContent = `${list.length} tickets`;
+          document.getElementById("ticket-list").innerHTML = list.map(renderTicket).join("");
+        }
+      } catch (err) {
+        document.getElementById("loading").innerHTML =
+          '<p class="text-red-500">Failed to load tickets. Please try again later.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>

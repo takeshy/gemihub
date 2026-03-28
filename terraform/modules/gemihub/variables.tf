@@ -67,3 +67,49 @@ variable "root_folder_name" {
   default     = "gemihub"
 }
 
+# --- Hubwork (paid plan) ---
+
+variable "hubwork_enabled" {
+  description = "Whether to provision Hubwork resources (Stripe secrets, admin credentials)"
+  type        = bool
+  default     = false
+}
+
+variable "stripe_secret_key" {
+  description = "Stripe API secret key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "stripe_webhook_secret" {
+  description = "Stripe webhook signing secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "stripe_price_id_lite" {
+  description = "Stripe Price ID for the Lite plan (¥300/month)"
+  type        = string
+  default     = ""
+}
+
+variable "stripe_price_id_pro" {
+  description = "Stripe Price ID for the Pro plan (¥2,000/month)"
+  type        = string
+  default     = ""
+}
+
+variable "hubwork_admin_credentials" {
+  description = "Basic auth credentials for admin panel (user:password)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "hubwork_admin_emails" {
+  description = "Comma-separated admin emails for admin panel access"
+  type        = string
+  default     = "takesy.morito@gmail.com"
+}

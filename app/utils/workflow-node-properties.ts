@@ -197,6 +197,39 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "text", label: "Text", required: false, placeholder: "new-name.md (for rename)" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "result" },
       ];
+    // Hubwork nodes (paid feature)
+    case "sheet-read":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "filter", label: "Filter", required: false, placeholder: '{"status": "active"}' },
+        { key: "limit", label: "Limit", required: false, placeholder: "10" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "rows" },
+      ];
+    case "sheet-write":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "data", label: "Data (JSON)", required: true, multiline: true, placeholder: '{"name": "{{formData.name}}", "email": "{{formData.email}}"}' },
+      ];
+    case "sheet-update":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "filter", label: "Filter", required: true, placeholder: '{"email": "{{currentUser.email}}"}' },
+        { key: "data", label: "Data (JSON)", required: true, multiline: true, placeholder: '{"status": "updated"}' },
+        { key: "saveTo", label: "Save Updated Count To", required: false, placeholder: "count" },
+      ];
+    case "sheet-delete":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "filter", label: "Filter", required: true, placeholder: '{"email": "{{formData.email}}"}' },
+        { key: "saveTo", label: "Save Deleted Count To", required: false, placeholder: "count" },
+      ];
+    case "gmail-send":
+      return [
+        { key: "to", label: "To", required: true, placeholder: "{{formData.email}}" },
+        { key: "subject", label: "Subject", required: true, placeholder: "Welcome!" },
+        { key: "body", label: "Body (HTML)", required: false, multiline: true, placeholder: "<p>Hello {{formData.name}}</p>" },
+        { key: "saveTo", label: "Save Message ID To", required: false, placeholder: "messageId" },
+      ];
     default:
       return [];
   }

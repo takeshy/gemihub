@@ -78,7 +78,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     case "metadata": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       const meta = await getFileMetadata(validTokens.accessToken, fileId);
-      return logAndReturn({ name: meta.name, mimeType: meta.mimeType, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
+      return logAndReturn({ name: meta.name, mimeType: meta.mimeType, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime, size: meta.size });
     }
     case "read": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
@@ -239,6 +239,12 @@ export async function action({ request }: Route.ActionArgs) {
       return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
     case "create-markdown-pdf": {
+      // PDF generation requires a paid plan
+      const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
+      const pdfAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+      if (!pdfAccount?.plan) {
+        return logAndReturn({ error: "A paid plan is required for PDF generation." }, { status: 403 });
+      }
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
 
       const sourceMeta = await getFileMetadata(validTokens.accessToken, fileId);

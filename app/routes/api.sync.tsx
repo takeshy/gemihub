@@ -18,7 +18,7 @@ import {
   listFiles,
   findFileByExactName,
 } from "~/services/google-drive.server";
-import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { isBinaryMimeType, LARGE_FILE_CACHE_THRESHOLD } from "~/services/sync-client-utils";
 import {
   readRemoteSyncMeta,
   writeRemoteSyncMeta,
@@ -187,6 +187,7 @@ export async function action({ request }: Route.ActionArgs) {
               mimeType: newFile.mimeType,
               md5Checksum: newFile.md5Checksum ?? "",
               modifiedTime: newFile.modifiedTime ?? "",
+              size: newFile.size,
             };
             remoteMeta.lastUpdatedAt = new Date().toISOString();
             await writeRemoteSyncMeta(
@@ -229,6 +230,7 @@ export async function action({ request }: Route.ActionArgs) {
               mimeType: updated.mimeType,
               md5Checksum: updated.md5Checksum ?? "",
               modifiedTime: updated.modifiedTime ?? "",
+              size: updated.size,
             };
           }
         }
@@ -284,6 +286,7 @@ export async function action({ request }: Route.ActionArgs) {
           mimeType: meta.mimeType,
           md5Checksum: meta.md5Checksum ?? "",
           modifiedTime: meta.modifiedTime ?? "",
+          size: meta.size,
         };
       }
 
@@ -331,10 +334,12 @@ export async function action({ request }: Route.ActionArgs) {
         ([_id, f]) => f.name !== SYNC_META_FILE_NAME && f.name !== SETTINGS_FILE_NAME
       );
 
-      // Skip files where local hash matches remote, or binary content on mobile
+      const skipLargeFiles = body.skipLargeFiles === true;
+      // Skip files where local hash matches remote, binary content on mobile, or large files
       const toDownload = fileEntries.filter(
         ([id, f]) => {
           if (skipBinaryContent && isBinaryMimeType(f.mimeType)) return false;
+          if (skipLargeFiles && f.size && Number(f.size) > LARGE_FILE_CACHE_THRESHOLD) return false;
           return !skipHashes[id] || skipHashes[id] !== f.md5Checksum;
         }
       );
@@ -444,6 +449,7 @@ export async function action({ request }: Route.ActionArgs) {
             mimeType: meta.mimeType,
             md5Checksum: meta.md5Checksum ?? "",
             modifiedTime: meta.modifiedTime ?? "",
+            size: meta.size,
           };
         } catch {
           // skip files that can't be read
@@ -520,6 +526,7 @@ export async function action({ request }: Route.ActionArgs) {
               mimeType: meta.mimeType,
               md5Checksum: meta.md5Checksum ?? "",
               modifiedTime: meta.modifiedTime ?? "",
+              size: meta.size,
             };
             restoredCount++;
           } catch {
@@ -592,6 +599,7 @@ export async function action({ request }: Route.ActionArgs) {
             mimeType: newMeta.mimeType,
             md5Checksum: newMeta.md5Checksum ?? "",
             modifiedTime: newMeta.modifiedTime ?? "",
+            size: newMeta.size,
           };
           // Delete the conflict backup
           await deleteFile(validTokens.accessToken, fileId).catch(() => {});
@@ -646,6 +654,7 @@ export async function action({ request }: Route.ActionArgs) {
               modifiedTime: updated.modifiedTime ?? "",
               name: updated.name,
               mimeType: updated.mimeType,
+              size: updated.size,
               oldContent: null,
               newContent: null,
             };
@@ -665,6 +674,7 @@ export async function action({ request }: Route.ActionArgs) {
                   modifiedTime: created.modifiedTime ?? "",
                   name: created.name,
                   mimeType: created.mimeType,
+                  size: created.size,
                   oldContent: null,
                   newContent: null,
                 };
@@ -700,6 +710,7 @@ export async function action({ request }: Route.ActionArgs) {
             modifiedTime: existingMeta?.modifiedTime ?? "",
             name: existingMeta?.name ?? fileName ?? "",
             mimeType: existingMeta?.mimeType ?? "",
+            size: existingMeta?.size,
             oldContent,
             newContent: content,
           };
@@ -718,6 +729,7 @@ export async function action({ request }: Route.ActionArgs) {
             modifiedTime: updated.modifiedTime ?? "",
             name: updated.name,
             mimeType: updated.mimeType,
+            size: updated.size,
             oldContent,
             newContent: content,
           };
@@ -738,6 +750,7 @@ export async function action({ request }: Route.ActionArgs) {
                 modifiedTime: created.modifiedTime ?? "",
                 name: created.name,
                 mimeType: created.mimeType,
+                size: created.size,
                 oldContent: null,
                 newContent: content,
               };
@@ -759,6 +772,7 @@ export async function action({ request }: Route.ActionArgs) {
       type PushSuccess = {
         ok: true;
         uploaded: boolean;
+        size?: string;
         fileId: string;
         newFileId?: string;
         md5Checksum: string;
@@ -783,6 +797,7 @@ export async function action({ request }: Route.ActionArgs) {
           mimeType: r.mimeType || existing?.mimeType || "",
           md5Checksum: r.md5Checksum,
           modifiedTime: r.modifiedTime,
+          size: r.size ?? existing?.size,
         };
       }
 

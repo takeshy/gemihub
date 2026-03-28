@@ -2,6 +2,7 @@ import yaml from "js-yaml";
 import type {
   Workflow,
   WorkflowNode,
+  WorkflowTriggerConfig,
   WorkflowNodeType,
   WorkflowOptions,
 } from "./types";
@@ -34,6 +35,7 @@ const VALID_NODE_TYPES: Set<string> = new Set([
   "drive-folder-list", "drive-file-picker", "drive-save", "drive-delete",
   "dialog", "prompt-value", "prompt-file", "prompt-selection",
   "workflow", "mcp", "rag-sync", "sleep", "script", "gemihub-command",
+  "sheet-read", "sheet-write", "sheet-update", "sheet-delete", "gmail-send",
 ]);
 
 function isWorkflowNodeType(value: unknown): value is WorkflowNodeType {
@@ -54,6 +56,7 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
     nodes?: FrontmatterWorkflowNode[];
     options?: WorkflowOptions;
     positions?: Record<string, { x: number; y: number }>;
+    trigger?: Record<string, unknown>;
   };
 
   if (!workflowData || !Array.isArray(workflowData.nodes)) {
@@ -63,6 +66,17 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
   const nodesList: FrontmatterWorkflowNode[] = workflowData.nodes;
   const options: WorkflowOptions | undefined = workflowData.options;
   const positions = workflowData.positions;
+  const triggerRaw = workflowData.trigger;
+  let trigger: WorkflowTriggerConfig | undefined;
+  if (triggerRaw && typeof triggerRaw === "object" && !Array.isArray(triggerRaw)) {
+    trigger = {};
+    for (const [key, value] of Object.entries(triggerRaw)) {
+      const normalized = normalizeValue(value);
+      if (normalized !== "") {
+        trigger[key] = normalized;
+      }
+    }
+  }
 
   const workflow: Workflow = {
     nodes: new Map(),
@@ -70,6 +84,7 @@ export function parseWorkflowData(data: Record<string, unknown>): Workflow {
     startNode: null,
     options,
     positions,
+    trigger,
   };
 
   const usedIds = new Set<string>();

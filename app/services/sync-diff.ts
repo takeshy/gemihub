@@ -12,6 +12,7 @@ export interface FileSyncMeta {
   createdTime?: string;
   shared?: boolean;
   webViewLink?: string;
+  size?: string;
 }
 
 export interface SyncMeta {

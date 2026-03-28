@@ -24,6 +24,49 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_session_secret" {
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
+# Grant Cloud Run SA access to Firestore
+resource "google_project_iam_member" "cloud_run_firestore" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# Grant Cloud Run SA access to Certificate Manager
+resource "google_project_iam_member" "cloud_run_cert_manager" {
+  project = var.project_id
+  role    = "roles/certificatemanager.editor"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# Grant Cloud Run SA access to update URL maps (for custom domain routing)
+resource "google_project_iam_member" "cloud_run_compute_url_map" {
+  project = var.project_id
+  role    = "roles/compute.loadBalancerAdmin"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# Grant Cloud Run SA access to Hubwork secrets (conditional)
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_secret_key" {
+  count     = var.hubwork_enabled ? 1 : 0
+  secret_id = google_secret_manager_secret.stripe_secret_key[0].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_webhook_secret" {
+  count     = var.hubwork_enabled ? 1 : 0
+  secret_id = google_secret_manager_secret.stripe_webhook_secret[0].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_hubwork_admin_credentials" {
+  count     = var.hubwork_enabled ? 1 : 0
+  secret_id = google_secret_manager_secret.hubwork_admin_credentials[0].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
 # Cloud Build SA permissions
 # NOTE: The Cloud Build default SA is created asynchronously after the API is enabled.
 # These bindings depend on the API being fully ready.

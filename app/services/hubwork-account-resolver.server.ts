@@ -1,0 +1,67 @@
+import type { HubworkAccount, ResolvedAccountTokens } from "~/types/hubwork";
+import { isHubworkFeatureAvailable } from "~/types/hubwork";
+import { getAccountByDomain, getAccountByDefaultDomain, getAccountBySlug, getTokensForAccount } from "./hubwork-accounts.server";
+
+// In-memory cache: domain → account (60s TTL, max 1000 entries)
+const domainCache = new Map<string, { account: HubworkAccount; expiresAt: number }>();
+const CACHE_TTL_MS = 60 * 1000;
+const CACHE_MAX_SIZE = 1000;
+
+/**
+ * Resolve a Hubwork account from the request's Host header.
+ * Two-tier resolution: try customDomain first, then defaultDomain.
+ * Throws 404 if no account matches the domain.
+ */
+export async function resolveHubworkAccount(
+  request: Request
+): Promise<HubworkAccount> {
+  const host = request.headers.get("host");
+  if (!host) {
+    throw new Response("Missing Host header", { status: 400 });
+  }
+
+  // Strip port if present
+  const domain = host.split(":")[0];
+
+  // Check cache
+  const cached = domainCache.get(domain);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.account;
+  }
+
+  // Three-tier lookup: customDomain → defaultDomain → slug from subdomain
+  let account = await getAccountByDomain(domain);
+  if (!account) {
+    account = await getAccountByDefaultDomain(domain);
+  }
+  // Fallback: extract slug from subdomain (e.g. "acme.localhost" → slug "acme")
+  if (!account) {
+    const parts = domain.split(".");
+    if (parts.length >= 2) {
+      account = await getAccountBySlug(parts[0]);
+    }
+  }
+
+  if (!account || !account.plan || !isHubworkFeatureAvailable(account)) {
+    throw new Response("Not Found", { status: 404 });
+  }
+
+  // Evict oldest entries if cache is full
+  if (domainCache.size >= CACHE_MAX_SIZE) {
+    const firstKey = domainCache.keys().next().value;
+    if (firstKey) domainCache.delete(firstKey);
+  }
+  domainCache.set(domain, { account, expiresAt: Date.now() + CACHE_TTL_MS });
+  return account;
+}
+
+/**
+ * Resolve account and get valid access tokens in one call.
+ */
+export async function resolveAccountWithTokens(
+  request: Request
+): Promise<{ account: HubworkAccount; tokens: ResolvedAccountTokens }> {
+  const account = await resolveHubworkAccount(request);
+  const tokens = await getTokensForAccount(account);
+  return { account, tokens };
+}

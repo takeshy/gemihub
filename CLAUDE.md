@@ -24,6 +24,7 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 - `docs/utils.md` — 右クリックメニュー、ゴミ箱、スラッシュコマンド等のユーティリティ
 - `docs/workflow_execution.md` — ワークフロー実行エンジン（パーサー、ローカル実行、プロンプト、AI生成）
 - `docs/search.md` — 検索機能（ローカル/Drive/RAG検索、Quick Open）
+- `docs/hubwork.md` — Hubwork有料プラン（マルチテナント、Firestore、Cloud Storage静的配信、カスタムドメイン、スケジュール実行、isolated-vm）
 
 ## Commands
 
@@ -54,14 +55,14 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 2. **Services** (`app/services/`) — Server-side business logic. Files ending in `.server.ts` are server-only (never bundled to client). Key services: `gemini-chat.server.ts` (streaming AI), `google-drive.server.ts` (Drive API), `google-auth.server.ts` (OAuth), `mcp-client.server.ts` (MCP JSON-RPC).
 3. **Components** (`app/components/`) — React UI organized by feature: `chat/` (chat panel), `flow/` (Mermaid-based workflow diagram), `editor/` (markdown editor), `ide/` (main layout and panels).
 4. **Engine** (`app/engine/`) — Workflow execution engine. `parser.ts` converts YAML to AST. `local-executor.ts` runs 22/25 node types in the browser; `executor.ts` handles the remaining 3 server-side nodes (mcp, rag-sync, gemihub-command) via `handlers/`. Local handlers live in `local-handlers/`. Supports 25 node types (variable, set, if, while, command, http, json, drive-file, drive-read, drive-search, drive-list, drive-folder-list, drive-file-picker, drive-save, drive-delete, dialog, prompt-value, prompt-file, prompt-selection, workflow, mcp, rag-sync, sleep, script, gemihub-command).
-5. **Hooks** (`app/hooks/`) — `useSync.ts` (push/pull with conflict resolution), `useFileWithCache.ts` (IndexedDB cache-first reads), `useLocalWorkflowExecution.ts` (client-side workflow execution), `useAutocomplete.ts` (slash command and @file autocomplete).
+5. **Hooks** (`app/hooks/`) — `useSync.ts` (push/pull with conflict resolution), `useFileWithCache.ts` (IndexedDB cache-first reads), `useLocalWorkflowExecution.ts` (client-side workflow execution), `useAutocomplete.ts` (slash command and @file autocomplete), `useInteractionsChat.ts` (paid plan Interactions API multi-round SSE with local tool execution).
 6. **Contexts** (`app/contexts/`) — `EditorContext.tsx` (shared file content, selection, file list for template resolution), `PluginContext.tsx` (plugin lifecycle and API management).
 7. **Utils** (`app/utils/`) — Workflow-to-Mermaid diagram conversion (`workflow-to-mermaid.ts`), node property definitions, and connection helpers.
 
 ### Key Patterns
 
-- **Streaming:** Chat executes locally in the browser via `executeLocalChat` (calling Gemini API directly with a cached API key). The server-side `/api/chat` SSE endpoint exists as a fallback. Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used. Workflow execution also runs locally in the browser (22/25 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
-- **Function Calling:** Gemini calls Drive tools (read/search/list/create/update), Google Search, RAG/File Search, and dynamically-discovered MCP tools (prefixed `mcp_{server}_{tool}`).
+- **Streaming:** Free plan: chat executes locally in the browser via `executeLocalChat` (calling Gemini API directly with a cached API key). Paid plan: chat uses the Interactions API via server-side proxy (`/api/chat/interactions`), with multi-round SSE for tool calls (client executes tools locally, sends results back to server). The server-side `/api/chat` SSE endpoint exists as a legacy fallback. Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used, requires_action. Workflow execution also runs locally in the browser (22/25 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
+- **Function Calling:** Gemini calls Drive tools (read/search/list/create/update), Google Search, RAG/File Search, and dynamically-discovered MCP tools (prefixed `mcp_{server}_{tool}`). Paid plan (Interactions API) allows function tools + RAG + Web Search simultaneously; free plan (Chat API) has mutual exclusivity between RAG and function tools.
 - **Cache-First Sync:** Files cached in IndexedDB. MD5 hash comparison detects changes. Manual push/pull with conflict resolution dialog.
 - **Local-First File Updates:** ファイルを更新する機能（チャットの `update_drive_file`、ワークフローの `drive-save` ノード等）は、Google Driveに直接書き込まず、IndexedDB のキャッシュと editHistory のみを更新する。Drive への反映は Push フローで行う。詳細は `docs/sync.md`「Chat-Initiated File Operations」を参照。
 - **Encryption:** Optional hybrid RSA+AES encryption for chat history and workflow logs (`crypto.server.ts`).
@@ -70,7 +71,7 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 
 ### Route Configuration
 
-Routes are explicitly defined in `app/routes.ts` (not file-based). Page routes: `/` (IDE dashboard), `/settings`, `/auth/*`. API routes: `/api/chat`, `/api/drive/*`, `/api/workflow/*`, `/api/settings/*`, `/api/sync`, `/api/mcp/*`, `/api/plugins/*`. Public: `/public/file/:fileId/:fileName`.
+Routes are explicitly defined in `app/routes.ts` (not file-based). Page routes: `/` (IDE dashboard), `/settings`, `/auth/*`. API routes: `/api/chat`, `/api/chat/interactions`, `/api/drive/*`, `/api/workflow/*`, `/api/settings/*`, `/api/sync`, `/api/mcp/*`, `/api/plugins/*`. Public: `/public/file/:fileId/:fileName`.
 
 ### Main IDE Layout
 

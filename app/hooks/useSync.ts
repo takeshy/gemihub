@@ -20,6 +20,7 @@ import { ragRegisterInBackground } from "~/services/rag-sync";
 import {
   isSyncExcludedPath,
   isBinaryMimeType,
+  isLargeFile,
   getSyncCompletionStatus,
 } from "~/services/sync-client-utils";
 import { computeSyncDiff, type SyncMeta } from "~/services/sync-diff";
@@ -112,8 +113,17 @@ export function useSync() {
           return name ? isSyncExcludedPath(name) : false;
         };
         // remoteOnly files are not counted — they have no changes and are fetched on-demand
+        // Filter toPull: skip files whose cached md5 already matches remote md5
+        // (localMeta may be stale from on-demand fetch, but cached content is up-to-date)
+        let toPullCount = 0;
+        for (const id of diff.toPull) {
+          if (isExcluded(id)) continue;
+          const cached = await getCachedFile(id);
+          if (cached && cached.md5Checksum && cached.md5Checksum === remoteFiles[id]?.md5Checksum) continue;
+          toPullCount++;
+        }
         const pullCount =
-          diff.toPull.filter(id => !isExcluded(id)).length +
+          toPullCount +
           pullLocalOnly.filter(id => !isExcluded(id)).length +
           diff.editDeleteConflicts.filter(id => !isExcluded(id)).length +
           diff.conflicts.filter(c => !isExcluded(c.fileId)).length;
@@ -447,10 +457,12 @@ export function useSync() {
       if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
         const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-        // On mobile, skip downloading binary file content (save storage)
-        const filesToDownload = isMobile
-          ? filesToPull.filter((id) => !isBinaryMimeType(remoteFiles[id]?.mimeType))
-          : filesToPull;
+        // Skip downloading: binary on mobile, large files (>100MB) everywhere
+        const filesToDownload = filesToPull.filter((id) => {
+          if (isMobile && isBinaryMimeType(remoteFiles[id]?.mimeType)) return false;
+          if (isLargeFile(remoteFiles[id]?.size)) return false;
+          return true;
+        });
 
         // Build mimeTypes map so server can use readFileBase64 for binary files
         const mimeTypes: Record<string, string> = {};
@@ -458,17 +470,18 @@ export function useSync() {
           if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
         }
 
-        // On mobile, track binary files in localSyncMeta without caching content
-        if (isMobile) {
-          for (const id of filesToPull) {
-            if (isBinaryMimeType(remoteFiles[id]?.mimeType)) {
-              const rm = remoteFiles[id];
-              updatedMeta.files[id] = {
-                md5Checksum: rm?.md5Checksum ?? "",
-                modifiedTime: rm?.modifiedTime ?? "",
-                name: rm?.name,
-              };
-            }
+        // Track skipped files (mobile binary / large files) in localSyncMeta without caching content
+        for (const id of filesToPull) {
+          const rm = remoteFiles[id];
+          const skippedMobile = isMobile && isBinaryMimeType(rm?.mimeType);
+          const skippedLarge = isLargeFile(rm?.size);
+          if (skippedMobile || skippedLarge) {
+            updatedMeta.files[id] = {
+              md5Checksum: rm?.md5Checksum ?? "",
+              modifiedTime: rm?.modifiedTime ?? "",
+              name: rm?.name,
+              size: rm?.size,
+            };
           }
         }
 
@@ -498,6 +511,7 @@ export function useSync() {
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
               name: rm?.name,
+              size: rm?.size,
             };
           }
         }
@@ -739,6 +753,7 @@ export function useSync() {
           action: "fullPull",
           skipHashes,
           skipBinaryContent: isMobile,
+          skipLargeFiles: true,
         }),
       });
 
@@ -753,11 +768,12 @@ export function useSync() {
       };
 
       // Include skipped files in meta too (including binary files not downloaded on mobile)
-      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { name?: string; md5Checksum: string; modifiedTime: string }>)) {
+      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { name?: string; md5Checksum: string; modifiedTime: string; size?: string }>)) {
         updatedMeta.files[fileId] = {
           md5Checksum: fileMeta.md5Checksum,
           modifiedTime: fileMeta.modifiedTime,
           name: fileMeta.name,
+          size: fileMeta.size,
         };
       }
 
@@ -776,13 +792,15 @@ export function useSync() {
 
       // Delete cached files that no longer exist on remote,
       // or binary files that should not be cached on mobile
-      const remoteMetaFiles = data.remoteMeta.files as Record<string, { mimeType?: string }>;
+      const remoteMetaFiles = data.remoteMeta.files as Record<string, { mimeType?: string; size?: string }>;
       const remoteFileIds = new Set(Object.keys(remoteMetaFiles));
       const allCachedIds = await getAllCachedFileIds();
       for (const cachedId of allCachedIds) {
         if (!remoteFileIds.has(cachedId)) {
           await deleteCachedFile(cachedId);
         } else if (isMobile && isBinaryMimeType(remoteMetaFiles[cachedId]?.mimeType)) {
+          await deleteCachedFile(cachedId);
+        } else if (isLargeFile(remoteMetaFiles[cachedId]?.size)) {
           await deleteCachedFile(cachedId);
         }
       }

@@ -27,14 +27,32 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const tokens = await exchangeCode(code, request);
 
+  // Capture granted scopes from the callback
+  const scope = url.searchParams.get("scope") || "";
+
   // Ensure root folder exists on Drive
   const rootFolderId = await ensureRootFolder(tokens.accessToken);
+
+  // Fetch user email from Drive API
+  let email: string | undefined;
+  try {
+    const aboutRes = await fetch(
+      "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)",
+      { headers: { Authorization: `Bearer ${tokens.accessToken}` } }
+    );
+    if (aboutRes.ok) {
+      const about = await aboutRes.json();
+      email = about.user?.emailAddress;
+    }
+  } catch { /* non-critical */ }
 
   const session = await setTokens(request, {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiryTime: tokens.expiryTime,
     rootFolderId,
+    email,
+    grantedScopes: scope,
   });
 
   return redirect("/", {

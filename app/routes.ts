@@ -25,6 +25,7 @@ export default [
   route("api/workflow/history", "routes/api.workflow.history.tsx"),
   route("api/workflow/request-history", "routes/api.workflow.request-history.tsx"),
   route("api/chat", "routes/api.chat.tsx"),
+  route("api/chat/interactions", "routes/api.chat.interactions.tsx"),
   route("api/chat/compact", "routes/api.chat.compact.tsx"),
   route("api/chat/history", "routes/api.chat.history.tsx"),
   route("api/settings/mcp-test", "routes/api.settings.mcp-test.tsx"),
@@ -35,6 +36,7 @@ export default [
   route("api/settings/edit-history", "routes/api.settings.edit-history.tsx"),
   route("api/settings/edit-history-stats", "routes/api.settings.edit-history-stats.tsx"),
   route("api/settings/edit-history-prune", "routes/api.settings.edit-history-prune.tsx"),
+  route("api/settings/hubwork-sheets", "routes/api.settings.hubwork-sheets.tsx"),
   route("api/mcp/tool-call", "routes/api.mcp.tool-call.tsx"),
   route("api/mcp/resource-read", "routes/api.mcp.resource-read.tsx"),
   route("api/search", "routes/api.search.tsx"),
@@ -48,4 +50,25 @@ export default [
   route("api/plugins", "routes/api.plugins.tsx"),
   route("api/plugins/:id", "routes/api.plugins.$id.tsx"),
   route("api/obsidian/token", "routes/api.obsidian.token.tsx"),
+  // Hubwork routes
+  route("hubwork/api/domain", "routes/hubwork.api.domain.tsx"),
+  // Hubwork internal endpoints (/__gemihub/ prefix)
+  route("__gemihub/auth/login", "routes/hubwork.internal.auth.login.tsx"),
+  route("__gemihub/auth/verify/:token", "routes/hubwork.internal.auth.verify.$token.tsx"),
+  route("__gemihub/auth/logout", "routes/hubwork.internal.auth.logout.tsx"),
+  route("__gemihub/auth/me", "routes/hubwork.internal.auth.me.tsx"),
+  route("__gemihub/api.js", "routes/hubwork.internal.api-js.tsx"),
+  route("__gemihub/api/*", "routes/hubwork.internal.api.$.tsx"),
+  route("api/workflow/execute-full", "routes/api.workflow.execute-full.tsx"),
+  route("hubwork/api/workflow/scheduled", "routes/hubwork.api.workflow.scheduled.tsx"),
+  // Hubwork admin
+  route("hubwork/admin", "routes/hubwork.admin.tsx"),
+  route("hubwork/admin/accounts/:accountId", "routes/hubwork.admin.account.tsx"),
+  route("hubwork/admin/accounts/create", "routes/hubwork.admin.account-create.tsx"),
+  // Hubwork Stripe
+  route("hubwork/api/stripe/checkout", "routes/hubwork.api.stripe.checkout.tsx"),
+  route("hubwork/api/stripe/webhook", "routes/hubwork.api.stripe.webhook.tsx"),
+  route("hubwork/api/stripe/portal", "routes/hubwork.api.stripe.portal.tsx"),
+  // Hubwork site catch-all (must be last — serves pages from Drive on Hubwork domains)
+  route("*", "routes/hubwork.site.$.tsx"),
 ] satisfies RouteConfig;
