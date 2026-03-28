@@ -28,6 +28,7 @@ const SERVER_NODE_TYPES = new Set<WorkflowNodeType>([
 
 const SHEET_NODE_TYPES = new Set(["sheet-read", "sheet-write", "sheet-update", "sheet-delete"]);
 const GMAIL_NODE_TYPES = new Set(["gmail-send"]);
+const CALENDAR_NODE_TYPES = new Set(["calendar-list", "calendar-create", "calendar-update", "calendar-delete"]);
 
 interface DriveEvent {
   type: "updated" | "created" | "deleted";
@@ -114,7 +115,7 @@ export async function action({ request }: Route.ActionArgs) {
         { status: 403, headers: responseHeaders }
       );
     }
-  } else if (GMAIL_NODE_TYPES.has(nodeType)) {
+  } else if (GMAIL_NODE_TYPES.has(nodeType) || CALENDAR_NODE_TYPES.has(nodeType)) {
     const { hasPaidFeatures } = await import("~/types/hubwork");
     const hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
     if (!hubworkAccount || !hasPaidFeatures(hubworkAccount)) {
