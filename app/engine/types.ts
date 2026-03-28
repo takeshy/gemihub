@@ -30,7 +30,11 @@ export type WorkflowNodeType =
   | "sheet-write"
   | "sheet-update"
   | "sheet-delete"
-  | "gmail-send";
+  | "gmail-send"
+  | "calendar-list"
+  | "calendar-create"
+  | "calendar-update"
+  | "calendar-delete";
 
 export interface WorkflowNode {
   id: string;
@@ -246,5 +250,6 @@ export interface ServiceContext {
   // Hubwork (paid feature) - optional Google API clients
   hubworkSheetsClient?: import("googleapis").sheets_v4.Sheets;
   hubworkGmailClient?: import("googleapis").gmail_v1.Gmail;
+  hubworkCalendarClient?: import("googleapis").calendar_v3.Calendar;
   hubworkSpreadsheetId?: string;
 }

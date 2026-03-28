@@ -22,7 +22,6 @@ import type {
   HubworkSchedule,
 } from "~/types/settings";
 import {
-  DEFAULT_ENCRYPTION_SETTINGS,
   normalizeMcpServers,
   normalizeSelectedMcpServerIds,
   getDefaultModelForPlan,
@@ -100,17 +99,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     hubworkAccount = await getAccountByEmail(validTokens.email);
   }
 
-  // Ensure refresh token for all Hubwork accounts, web/ folder + skill for Pro only
+  // Ensure refresh token for all Hubwork accounts
   if (hubworkAccount?.plan) {
-    const isProPlan = hubworkAccount.plan === "pro" || hubworkAccount.plan === "granted";
-    if (isProPlan) {
-      import("~/services/google-drive.server").then(({ ensureSubFolder }) => {
-        ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "web").catch(() => {});
-      });
-      import("~/services/hubwork-skill-provisioner.server").then(({ provisionHubworkSkill }) => {
-        provisionHubworkSkill(validTokens.accessToken, validTokens.rootFolderId).catch(() => {});
-      });
-    }
     // Always update refresh token if available (ensures new OAuth scopes are persisted)
     if (validTokens.refreshToken) {
       import("~/services/hubwork-accounts.server").then(({ updateRefreshToken, updateAccount }) => {
@@ -157,7 +147,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const grantedScopes = validTokens.grantedScopes || "";
   const hasGmailScope = grantedScopes.includes("gmail");
-  const hasHubworkScopes = grantedScopes.includes("spreadsheets") && hasGmailScope;
+  const hasCalendarScope = grantedScopes.includes("calendar");
+  const hasHubworkScopes = grantedScopes.includes("spreadsheets") && hasGmailScope && hasCalendarScope;
 
   return data(
     {
@@ -526,19 +517,27 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       case "hubwork-accounts": {
-        const spreadsheetId = (formData.get("spreadsheetId") as string || "").trim();
+        const spreadsheetsJson = formData.get("spreadsheets") as string;
         const accountsJson = formData.get("accounts") as string;
+        let spreadsheets: import("~/types/settings").HubworkSpreadsheet[];
         let accounts: Record<string, import("~/types/settings").HubworkAccountType>;
+        try {
+          spreadsheets = JSON.parse(spreadsheetsJson || "[]");
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid spreadsheets data" });
+        }
         try {
           accounts = JSON.parse(accountsJson || "{}");
         } catch {
           return jsonWithCookie({ success: false, message: "Invalid accounts data" });
         }
+        const validSpreadsheets = spreadsheets.filter((s) => s.id?.trim());
         const updatedSettings = {
           ...currentSettings,
           hubwork: {
             ...currentSettings.hubwork,
-            spreadsheetId: spreadsheetId || undefined,
+            spreadsheets: validSpreadsheets.length > 0 ? validSpreadsheets : undefined,
+            spreadsheetId: validSpreadsheets[0]?.id || undefined,
             accounts: Object.keys(accounts).length > 0 ? accounts : undefined,
           } as typeof currentSettings.hubwork,
         };
@@ -619,15 +618,22 @@ export default function Settings() {
   const [currentLang, setCurrentLang] = useState<Language>(settings.language ?? "en");
   useApplySettings(currentLang, settings.fontSize, settings.theme);
 
-  // Detect OAuth redirect return from mobile flow
+  // Detect redirect return params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has("mcp-oauth-return")) {
       setActiveTab("mcp");
-      // Clean up the URL without triggering a navigation
+    }
+    if (params.has("hubwork_subscribed") || params.has("hubwork_upgraded")) {
+      setActiveTab("hubwork");
+    }
+    // Clean up the URL without triggering a navigation
+    if (params.toString()) {
       const url = new URL(window.location.href);
       url.searchParams.delete("mcp-oauth-return");
-      window.history.replaceState({}, "", url.pathname + url.search);
+      url.searchParams.delete("hubwork_subscribed");
+      url.searchParams.delete("hubwork_upgraded");
+      window.history.replaceState({}, "", url.pathname + (url.search || ""));
     }
   }, []);
 

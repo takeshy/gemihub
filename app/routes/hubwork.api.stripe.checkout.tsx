@@ -11,27 +11,82 @@ export async function action({ request }: Route.ActionArgs) {
   const sessionTokens = await requireAuth(request);
   const { tokens } = await getValidTokens(request, sessionTokens);
 
-  // Prevent duplicate subscriptions
-  const existing = await getAccountByRootFolderId(tokens.rootFolderId);
-  if (existing?.plan && existing.billingStatus === "active") {
-    throw new Response("Active subscription already exists", { status: 400 });
-  }
-
   const formData = await request.formData();
+  const planType = (formData.get("plan") as string || "pro") === "lite" ? "lite" : "pro";
   const accountSlug = (formData.get("accountSlug") as string || "").toLowerCase().trim();
 
-  // Validate slug
-  if (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug)) {
+  const existing = await getAccountByRootFolderId(tokens.rootFolderId);
+
+  // Upgrade existing subscription (e.g. Lite → Pro)
+  if (existing?.stripeSubscriptionId && existing.billingStatus === "active") {
+    if (existing.plan === planType) {
+      throw new Response("Already on this plan", { status: 400 });
+    }
+    // Pro requires a slug
+    if (planType === "pro") {
+      if (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug)) {
+        throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
+      }
+      if (!existing.accountSlug) {
+        const slugTaken = await getAccountBySlug(accountSlug);
+        if (slugTaken && slugTaken.id !== existing.id) {
+          throw new Response("This slug is already taken", { status: 409 });
+        }
+      }
+    }
+
+    const newPriceId = planType === "lite"
+      ? process.env.STRIPE_PRICE_ID_LITE
+      : process.env.STRIPE_PRICE_ID_PRO;
+    if (!newPriceId) {
+      throw new Response("Stripe is not configured for this plan", { status: 500 });
+    }
+
+    const stripe = getStripe();
+    const subscription = await stripe.subscriptions.retrieve(existing.stripeSubscriptionId);
+    const itemId = subscription.items.data[0]?.id;
+    if (!itemId) {
+      throw new Response("Could not find subscription item", { status: 500 });
+    }
+
+    await stripe.subscriptions.update(existing.stripeSubscriptionId, {
+      items: [{ id: itemId, price: newPriceId }],
+      proration_behavior: "create_prorations",
+      metadata: {
+        rootFolderId: tokens.rootFolderId,
+        accountSlug: accountSlug || existing.accountSlug || "",
+        plan: planType,
+      },
+    });
+
+    // Update account immediately (webhook will also fire, but this gives instant feedback)
+    const { updateAccount } = await import("~/services/hubwork-accounts.server");
+    const updates: Record<string, string> = { plan: planType };
+    if (planType === "pro" && accountSlug && !existing.accountSlug) {
+      updates.accountSlug = accountSlug;
+      updates.defaultDomain = `${accountSlug}.gemihub.online`;
+    }
+    await updateAccount(existing.id, updates);
+
+    const url = new URL(request.url);
+    const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+    return redirect(`${proto}://${url.host}/settings?hubwork_upgraded=1`);
+  }
+
+  // New subscription
+  if (!accountSlug && planType === "pro") {
     throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
   }
-
-  // Check slug uniqueness
-  const slugTaken = await getAccountBySlug(accountSlug);
-  if (slugTaken) {
-    throw new Response("This slug is already taken", { status: 409 });
+  if (planType === "pro" && (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug))) {
+    throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
+  }
+  if (planType === "pro") {
+    const slugTaken = await getAccountBySlug(accountSlug);
+    if (slugTaken) {
+      throw new Response("This slug is already taken", { status: 409 });
+    }
   }
 
-  const planType = (formData.get("plan") as string || "pro") === "lite" ? "lite" : "pro";
   const priceId = planType === "lite"
     ? process.env.STRIPE_PRICE_ID_LITE
     : process.env.STRIPE_PRICE_ID_PRO;

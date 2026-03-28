@@ -7,7 +7,7 @@ import {
   encryptPrivateKey,
   verifyPassword,
 } from "~/services/crypto.server";
-import { DEFAULT_ENCRYPTION_SETTINGS } from "~/types/settings";
+
 
 // ---------------------------------------------------------------------------
 // POST -- Encryption key management

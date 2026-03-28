@@ -617,6 +617,10 @@ export interface TranslationStrings {
   "settings.hubwork.dataSourceSort": string;
   "settings.hubwork.spreadsheetId": string;
   "settings.hubwork.spreadsheetIdPlaceholder": string;
+  "settings.hubwork.spreadsheetAdd": string;
+  "settings.hubwork.spreadsheetLabel": string;
+  "settings.hubwork.spreadsheetFetchRequired": string;
+  "settings.hubwork.selectSpreadsheet": string;
   "settings.hubwork.scopeUpgradeRequired": string;
   "settings.hubwork.scopeUpgradeDescription": string;
   "settings.hubwork.scopeUpgradeButton": string;
@@ -1268,8 +1272,12 @@ const en: TranslationStrings = {
   "settings.hubwork.dataSourceShape": "Shape",
   "settings.hubwork.dataSourceLimit": "Limit",
   "settings.hubwork.dataSourceSort": "Sort",
-  "settings.hubwork.spreadsheetId": "Spreadsheet ID",
+  "settings.hubwork.spreadsheetId": "Spreadsheets",
   "settings.hubwork.spreadsheetIdPlaceholder": "Paste Google Sheets URL or ID",
+  "settings.hubwork.spreadsheetAdd": "Add Spreadsheet",
+  "settings.hubwork.spreadsheetLabel": "Label (optional)",
+  "settings.hubwork.spreadsheetFetchRequired": "Fetch sheet names for all spreadsheets used in account types before saving.",
+  "settings.hubwork.selectSpreadsheet": "Select spreadsheet",
   "settings.hubwork.scopeUpgradeRequired": "Additional permissions required",
   "settings.hubwork.scopeUpgradeDescription": "Hubwork needs Google Sheets and Gmail access. Click to re-authorize with the required permissions.",
   "settings.hubwork.scopeUpgradeButton": "Grant permissions",
@@ -1921,8 +1929,12 @@ const ja: TranslationStrings = {
   "settings.hubwork.dataSourceShape": "形式",
   "settings.hubwork.dataSourceLimit": "件数制限",
   "settings.hubwork.dataSourceSort": "ソート",
-  "settings.hubwork.spreadsheetId": "スプレッドシートID",
+  "settings.hubwork.spreadsheetId": "スプレッドシート",
   "settings.hubwork.spreadsheetIdPlaceholder": "Google SheetsのURLまたはIDを貼り付け",
+  "settings.hubwork.spreadsheetAdd": "スプレッドシートを追加",
+  "settings.hubwork.spreadsheetLabel": "ラベル（任意）",
+  "settings.hubwork.spreadsheetFetchRequired": "保存前にアカウント種別で使用する全スプレッドシートのシート名を取得してください。",
+  "settings.hubwork.selectSpreadsheet": "スプレッドシートを選択",
   "settings.hubwork.scopeUpgradeRequired": "追加の権限が必要です",
   "settings.hubwork.scopeUpgradeDescription": "HubworkにはGoogle SheetsとGmailへのアクセス権限が必要です。クリックして権限を付与してください。",
   "settings.hubwork.scopeUpgradeButton": "権限を付与",

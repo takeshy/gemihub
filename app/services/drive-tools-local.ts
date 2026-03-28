@@ -158,7 +158,7 @@ export async function executeLocalDriveTool(
       if (typeof content !== "string") {
         return { error: "create_drive_file: 'content' must be a string" };
       }
-      const name = rawName.startsWith("temporaries/") ? rawName : `temporaries/${rawName}`;
+      const name = rawName;
       const result = await writeFileLocal(name, content);
 
       callbacks?.onDriveEvent?.({

@@ -27,7 +27,7 @@ export async function buildCurrentUser(
 
   for (const [key, source] of Object.entries(dataConfig)) {
     const res = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId,
+      spreadsheetId: source.spreadsheetId || spreadsheetId,
       range: `'${source.sheet.replace(/'/g, "''")}'`,
     });
     const rows = res.data.values || [];

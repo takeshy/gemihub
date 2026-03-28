@@ -9,6 +9,7 @@ const BASE_SCOPES = [
 const HUBWORK_SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/calendar",
 ];
 
 function getOAuth2Client(request?: Request) {

@@ -75,7 +75,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   // Hubwork nodes require a paid plan
-  const HUBWORK_NODE_TYPES = new Set(["sheet-read", "sheet-write", "sheet-update", "sheet-delete", "gmail-send"]);
+  const HUBWORK_NODE_TYPES = new Set(["sheet-read", "sheet-write", "sheet-update", "sheet-delete", "gmail-send", "calendar-list", "calendar-create", "calendar-update", "calendar-delete"]);
   const node: WorkflowNode = {
     id: nodeId || "node",
     type: nodeType,
@@ -146,13 +146,17 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   // Populate Hubwork clients if enabled and needed
-  if (HUBWORK_NODE_TYPES.has(nodeType) && settings?.hubwork?.spreadsheetId) {
+  const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  if (HUBWORK_NODE_TYPES.has(nodeType)) {
     const { google } = await import("googleapis");
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: validTokens.accessToken });
-    serviceContext.hubworkSheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+    if (hubworkSpreadsheetId) {
+      serviceContext.hubworkSheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+      serviceContext.hubworkSpreadsheetId = hubworkSpreadsheetId;
+    }
     serviceContext.hubworkGmailClient = google.gmail({ version: "v1", auth: oauth2Client });
-    serviceContext.hubworkSpreadsheetId = settings.hubwork.spreadsheetId;
+    serviceContext.hubworkCalendarClient = google.calendar({ version: "v3", auth: oauth2Client });
   }
 
   // Execute the server-side node and return JSON

@@ -52,7 +52,8 @@ export async function action({ request }: Route.ActionArgs) {
   const settings = await getSettings(accessToken, rootFolderId);
 
   const accountType = settings?.hubwork?.accounts?.[type];
-  if (!accountType || !settings?.hubwork?.spreadsheetId) {
+  const resolvedSpreadsheetId = accountType?.identity?.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  if (!accountType || !resolvedSpreadsheetId) {
     console.warn(`[auth-login] accounts[${type}] not found or spreadsheetId missing`);
     return Response.json({ ok: true });
   }
@@ -67,7 +68,7 @@ export async function action({ request }: Route.ActionArgs) {
     console.log(`[auth-login] Looking up email in sheet "${identity.sheet}" column "${identity.emailColumn}"`);
 
     const res = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId: settings.hubwork.spreadsheetId,
+      spreadsheetId: resolvedSpreadsheetId,
       range: `'${identity.sheet.replace(/'/g, "''")}'`,
     });
     const rows = res.data.values || [];

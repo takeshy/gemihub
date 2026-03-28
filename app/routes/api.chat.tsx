@@ -196,7 +196,7 @@ export async function action({ request }: Route.ActionArgs) {
             name,
             args,
             validTokens.accessToken,
-            validTokens.rootFolderId
+            validTokens.rootFolderId,
           );
           if (name === "update_drive_file") {
             const r = result as { id?: string; name?: string; content?: string };

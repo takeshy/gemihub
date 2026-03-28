@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { KeyRound, Lock, Check } from "lucide-react";
 import { useI18n } from "~/i18n/context";
@@ -68,7 +68,7 @@ export function GeneralTab({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isEncryptionSetup = !!settings.encryptedApiKey;
-  const isRsaSetup = settings.encryption.enabled && !!settings.encryption.publicKey;
+
 
   // When plan changes, reset model if it's not available
   useEffect(() => {

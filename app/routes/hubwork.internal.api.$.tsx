@@ -92,11 +92,12 @@ async function handleApiRequest(request: Request, apiPath: string) {
 
     const settings = await getSettings(accessToken, rootFolderId);
     const accountType = settings?.hubwork?.accounts?.[requireAuth];
-    if (accountType?.data && settings?.hubwork?.spreadsheetId) {
+    const authSpreadsheetId = accountType?.identity?.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+    if (accountType?.data && authSpreadsheetId) {
       try {
         currentUserData = await buildCurrentUser(
           accessToken,
-          settings.hubwork.spreadsheetId,
+          authSpreadsheetId,
           authEmail,
           accountType.data,
         );
@@ -214,12 +215,16 @@ async function handleApiRequest(request: Request, apiPath: string) {
     settings,
   };
 
-  if (settings?.hubwork?.spreadsheetId) {
+  const defaultSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
-    serviceContext.hubworkSheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+    if (defaultSpreadsheetId) {
+      serviceContext.hubworkSheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+      serviceContext.hubworkSpreadsheetId = defaultSpreadsheetId;
+    }
     serviceContext.hubworkGmailClient = google.gmail({ version: "v1", auth: oauth2Client });
-    serviceContext.hubworkSpreadsheetId = settings.hubwork.spreadsheetId;
+    serviceContext.hubworkCalendarClient = google.calendar({ version: "v3", auth: oauth2Client });
   }
 
   // Timeout

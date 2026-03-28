@@ -208,6 +208,50 @@ function buildToolDispatcher(
       }
     }
 
+    // Hubwork spreadsheet schema tool — route via settings API
+    if (name === "get_spreadsheet_schema") {
+      try {
+        const ssId = (args.spreadsheetId as string) || "";
+        const url = ssId
+          ? `/api/settings/hubwork-sheets?spreadsheetId=${encodeURIComponent(ssId)}`
+          : "/api/settings/hubwork-sheets?spreadsheetId=__default__";
+        const res = await fetch(url, { signal: abortSignal });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          return { error: (data as { error?: string }).error || "Failed to fetch spreadsheet schema" };
+        }
+        const data = await res.json();
+        return { spreadsheetId: ssId || "(default)", ...data };
+      } catch (err) {
+        if (abortSignal?.aborted) throw err;
+        return { error: err instanceof Error ? err.message : "Failed to fetch spreadsheet schema" };
+      }
+    }
+
+    // Calendar tools — route via server API
+    if (name === "calendar_list_events" || name === "calendar_create_event" || name === "calendar_update_event" || name === "calendar_delete_event") {
+      const actionMap: Record<string, string> = {
+        calendar_list_events: "list",
+        calendar_create_event: "create",
+        calendar_update_event: "update",
+        calendar_delete_event: "delete",
+      };
+      try {
+        const res = await fetch("/api/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: actionMap[name], ...args }),
+          signal: abortSignal,
+        });
+        const data = await res.json();
+        if (!res.ok) return { error: (data as { error?: string }).error || "Calendar operation failed" };
+        return data;
+      } catch (err) {
+        if (abortSignal?.aborted) throw err;
+        return { error: err instanceof Error ? err.message : "Calendar operation failed" };
+      }
+    }
+
     // MCP tools — route via server proxy
     if (mcpServerIds.length > 0) {
       try {

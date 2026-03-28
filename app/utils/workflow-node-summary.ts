@@ -95,6 +95,10 @@ export function getNodeTypeLabel(type: WorkflowNodeType): string {
     "sheet-update": "Sheet Update",
     "sheet-delete": "Sheet Delete",
     "gmail-send": "Gmail Send",
+    "calendar-list": "Calendar List",
+    "calendar-create": "Calendar Create",
+    "calendar-update": "Calendar Update",
+    "calendar-delete": "Calendar Delete",
   };
   return labels[type] || type;
 }

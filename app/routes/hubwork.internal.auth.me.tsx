@@ -25,11 +25,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const { accessToken, rootFolderId } = tokens;
   const settings = await getSettings(accessToken, rootFolderId);
 
-  if (!settings?.hubwork?.spreadsheetId) {
+  const accountType = settings?.hubwork?.accounts?.[type];
+  const resolvedSpreadsheetId = accountType?.identity?.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  if (!resolvedSpreadsheetId) {
     return Response.json({ error: "Hubwork not configured" }, { status: 500 });
   }
 
-  const accountType = settings.hubwork.accounts?.[type];
   if (!accountType) {
     return Response.json({ error: "Account type not configured" }, { status: 500 });
   }
@@ -37,7 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   try {
     const userData = await buildCurrentUser(
       accessToken,
-      settings.hubwork.spreadsheetId,
+      resolvedSpreadsheetId,
       email,
       accountType.data,
     );

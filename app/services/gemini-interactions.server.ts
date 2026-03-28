@@ -269,12 +269,35 @@ export interface ToolResultInput {
   result: unknown;
 }
 
+/**
+ * Strip empty arrays/objects and null/undefined from tool results
+ * to avoid Gemini API "empty value" errors in function_response.
+ */
+function sanitizeToolResult(val: unknown): unknown {
+  if (val === null || val === undefined) return "(empty)";
+  if (Array.isArray(val)) {
+    if (val.length === 0) return "(empty list)";
+    return val.map(sanitizeToolResult);
+  }
+  if (typeof val === "object") {
+    const obj = val as Record<string, unknown>;
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === null || v === undefined) continue;
+      if (Array.isArray(v) && v.length === 0) continue;
+      cleaned[k] = sanitizeToolResult(v);
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : "(empty)";
+  }
+  return val;
+}
+
 export function buildToolResultInput(toolResults: ToolResultInput[]): Interactions.Content[] {
   return toolResults.map((tr) => ({
     type: "function_result" as const,
     call_id: tr.callId,
     name: tr.name,
-    result: tr.result,
+    result: sanitizeToolResult(tr.result),
   } as Interactions.Content));
 }
 

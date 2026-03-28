@@ -69,11 +69,13 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   // Add hubwork clients if configured
-  if (settings?.hubwork?.spreadsheetId) {
+  const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  if (hubworkSpreadsheetId) {
     serviceContext.hubworkSheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
-    serviceContext.hubworkGmailClient = google.gmail({ version: "v1", auth: oauth2Client });
-    serviceContext.hubworkSpreadsheetId = settings.hubwork.spreadsheetId;
+    serviceContext.hubworkSpreadsheetId = hubworkSpreadsheetId;
   }
+  serviceContext.hubworkGmailClient = google.gmail({ version: "v1", auth: oauth2Client });
+  serviceContext.hubworkCalendarClient = google.calendar({ version: "v3", auth: oauth2Client });
 
   // SSE streaming
   const stream = new ReadableStream({

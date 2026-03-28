@@ -546,12 +546,19 @@ export interface UserSettings {
   hubwork?: HubworkSettings;
 }
 
+export interface HubworkSpreadsheet {
+  id: string;
+  label?: string;
+}
+
 export interface HubworkAccountIdentity {
+  spreadsheetId?: string;
   sheet: string;
   emailColumn: string;
 }
 
 export interface HubworkDataSource {
+  spreadsheetId?: string;
   sheet: string;
   matchBy: string;
   fields: string[];
@@ -579,6 +586,7 @@ export interface HubworkSchedule {
 
 export interface HubworkSettings {
   spreadsheetId?: string;
+  spreadsheets?: HubworkSpreadsheet[];
   accounts?: Record<string, HubworkAccountType>;
   schedules?: HubworkSchedule[];
   customDomain?: string;

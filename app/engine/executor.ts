@@ -24,6 +24,7 @@ import { handleRagSyncNode } from "./handlers/ragSync";
 import { handleGemihubCommandNode } from "./handlers/gemihubCommand";
 import { handleSheetReadNode, handleSheetWriteNode, handleSheetUpdateNode, handleSheetDeleteNode } from "./handlers/hubworkSheets";
 import { handleGmailSendNode } from "./handlers/hubworkGmail";
+import { handleCalendarListNode, handleCalendarCreateNode, handleCalendarUpdateNode, handleCalendarDeleteNode } from "./handlers/hubworkCalendar";
 
 const MAX_WHILE_ITERATIONS = 1000;
 const MAX_TOTAL_STEPS = 100000;
@@ -569,6 +570,60 @@ export async function executeWorkflow(
           addHistoryStep(node.id, node.type, { to: gmTo }, gmOutput);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-list": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const clQuery = replaceVariables(node.properties["query"] || "", context);
+          log(node.id, node.type, `Listing calendar events${clQuery ? `: ${clQuery}` : ""}`, "info");
+          await handleCalendarListNode(node, context, serviceContext);
+          const clSaveTo = node.properties["saveTo"];
+          const clOutput = clSaveTo ? context.variables.get(clSaveTo) : undefined;
+          log(node.id, node.type, `Calendar events listed`, "success", { query: clQuery }, clOutput);
+          addHistoryStep(node.id, node.type, { query: clQuery }, clOutput);
+          const clNext = getNextNodes(workflow, node.id);
+          for (const id of clNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-create": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const ccSummary = replaceVariables(node.properties["summary"] || "", context);
+          log(node.id, node.type, `Creating event: ${ccSummary}`, "info");
+          await handleCalendarCreateNode(node, context, serviceContext);
+          const ccSaveTo = node.properties["saveTo"];
+          const ccOutput = ccSaveTo ? context.variables.get(ccSaveTo) : undefined;
+          log(node.id, node.type, `Event created`, "success", { summary: ccSummary }, ccOutput);
+          addHistoryStep(node.id, node.type, { summary: ccSummary }, ccOutput);
+          const ccNext = getNextNodes(workflow, node.id);
+          for (const id of ccNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-update": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const cuEventId = replaceVariables(node.properties["eventId"] || "", context);
+          log(node.id, node.type, `Updating event: ${cuEventId}`, "info");
+          await handleCalendarUpdateNode(node, context, serviceContext);
+          const cuSaveTo = node.properties["saveTo"];
+          const cuOutput = cuSaveTo ? context.variables.get(cuSaveTo) : undefined;
+          log(node.id, node.type, `Event updated`, "success", { eventId: cuEventId }, cuOutput);
+          addHistoryStep(node.id, node.type, { eventId: cuEventId }, cuOutput);
+          const cuNext = getNextNodes(workflow, node.id);
+          for (const id of cuNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-delete": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const cdEventId = replaceVariables(node.properties["eventId"] || "", context);
+          log(node.id, node.type, `Deleting event: ${cdEventId}`, "info");
+          await handleCalendarDeleteNode(node, context, serviceContext);
+          log(node.id, node.type, `Event deleted`, "success", { eventId: cdEventId });
+          addHistoryStep(node.id, node.type, { eventId: cdEventId });
+          const cdNext = getNextNodes(workflow, node.id);
+          for (const id of cdNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;
         }
 

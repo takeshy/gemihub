@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, LayoutDashboard, Server, Upload, FileText, PenTool, Check, X } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -117,14 +117,10 @@ interface LpStrings {
   premiumFeatureHostingDesc: string;
   premiumFeatureDomain: string;
   premiumFeatureDomainDesc: string;
-  premiumFeatureApi: string;
-  premiumFeatureApiDesc: string;
   premiumFeatureSchedule: string;
   premiumFeatureScheduleDesc: string;
   premiumFeatureServerExec: string;
   premiumFeatureServerExecDesc: string;
-  premiumFeatureAdmin: string;
-  premiumFeatureAdminDesc: string;
   premiumFeatureWebBuilder: string;
   premiumFeatureWebBuilderDesc: string;
   premiumIncluded: string;
@@ -228,7 +224,7 @@ const en: LpStrings = {
   premiumLitePrice: "¥300/mo",
   premiumProPrice: "¥2,000/mo",
   premiumFreeTag: "¥0",
-  premiumFeatureUpload: "Upload Limit",
+  premiumFeatureUpload: "Max File Size",
   premiumFeatureUploadFree: "20 MB",
   premiumFeatureUploadPaid: "5 GB",
   premiumFeatureInteractions: "Interactions API Chat",
@@ -247,14 +243,10 @@ const en: LpStrings = {
   premiumFeatureHostingDesc: "Publish HTML pages from your Drive with global CDN delivery. Build websites, landing pages, and web apps — all served from your files.",
   premiumFeatureDomain: "Custom Domains & Auto SSL",
   premiumFeatureDomainDesc: "Use your own domain with automatic SSL certificate provisioning. Every account also gets a built-in subdomain (yourname.gemihub.online).",
-  premiumFeatureApi: "Workflow API",
-  premiumFeatureApiDesc: "Expose workflows as API endpoints (/__gemihub/api/*). Build backends for your hosted pages with authentication, form handling, and data operations.",
   premiumFeatureSchedule: "Scheduled Workflows",
   premiumFeatureScheduleDesc: "Run workflows on a cron schedule — daily reports, periodic syncs, automated data processing. Supports retry, timeout, and concurrency control.",
   premiumFeatureServerExec: "Server-Side Execution",
   premiumFeatureServerExecDesc: "Execute workflow script nodes in a secure isolated VM on the server. Run complex logic without browser limitations.",
-  premiumFeatureAdmin: "Admin Panel",
-  premiumFeatureAdminDesc: "Manage accounts, monitor usage, and configure settings from a dedicated admin dashboard.",
   premiumFeatureWebBuilder: "AI Web Builder Skill",
   premiumFeatureWebBuilderDesc: "An AI agent that helps you build and deploy web pages and APIs. Describe what you want, and it creates the pages, workflows, and configurations for you.",
   premiumIncluded: "Included",
@@ -358,7 +350,7 @@ const ja: LpStrings = {
   premiumLitePrice: "¥300/月",
   premiumProPrice: "¥2,000/月",
   premiumFreeTag: "¥0",
-  premiumFeatureUpload: "アップロード上限",
+  premiumFeatureUpload: "1ファイル最大サイズ",
   premiumFeatureUploadFree: "20 MB",
   premiumFeatureUploadPaid: "5 GB",
   premiumFeatureInteractions: "Interactions API チャット",
@@ -377,14 +369,10 @@ const ja: LpStrings = {
   premiumFeatureHostingDesc: "Drive の HTML ページをグローバル CDN で配信。Webサイト、LP、Webアプリをファイルから直接公開。",
   premiumFeatureDomain: "カスタムドメイン & 自動SSL",
   premiumFeatureDomainDesc: "独自ドメインを自動 SSL 証明書付きで利用可能。全アカウントにビルトインサブドメイン（yourname.gemihub.online）も付属。",
-  premiumFeatureApi: "ワークフロー API",
-  premiumFeatureApiDesc: "ワークフローを API エンドポイント（/__gemihub/api/*）として公開。認証・フォーム処理・データ操作を含むバックエンドを構築。",
   premiumFeatureSchedule: "スケジュール実行",
   premiumFeatureScheduleDesc: "ワークフローを cron スケジュールで自動実行。日次レポート、定期同期、データ処理の自動化。リトライ・タイムアウト・同時実行制御に対応。",
   premiumFeatureServerExec: "サーバーサイド実行",
   premiumFeatureServerExecDesc: "ワークフローのスクリプトノードをサーバー上の安全な隔離 VM で実行。ブラウザの制約なく複雑なロジックを処理。",
-  premiumFeatureAdmin: "管理パネル",
-  premiumFeatureAdminDesc: "専用の管理ダッシュボードからアカウント管理、利用状況の監視、設定変更が可能。",
   premiumFeatureWebBuilder: "AI Web Builder スキル",
   premiumFeatureWebBuilderDesc: "Webページと API の構築・デプロイを支援する AI エージェント。やりたいことを伝えるだけで、ページ・ワークフロー・設定を自動作成。",
   premiumIncluded: "対応",
@@ -736,11 +724,9 @@ export default function LandingPage() {
               { label: s.premiumFeatureSheets, free: false, lite: false, pro: true },
               { label: s.premiumFeatureHosting, free: false, lite: false, pro: true },
               { label: s.premiumFeatureDomain, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureApi, free: false, lite: false, pro: true },
               { label: s.premiumFeatureSchedule, free: false, lite: false, pro: true },
               { label: s.premiumFeatureServerExec, free: false, lite: false, pro: true },
               { label: s.premiumFeatureWebBuilder, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureAdmin, free: false, lite: false, pro: true },
             ];
             const renderCell = (val: boolean | string) => {
               if (typeof val === "string") return <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{val}</span>;
@@ -762,25 +748,40 @@ export default function LandingPage() {
             );
           })()}
 
+          {/* Lite feature highlights */}
+          <h3 className="mb-6 mt-12 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            Lite
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { icon: MessageSquare, title: s.premiumFeatureInteractions, desc: s.premiumFeatureInteractionsDesc },
+              { icon: Mail, title: s.premiumFeatureGmail, desc: s.premiumFeatureGmailDesc },
+              { icon: FileText, title: s.premiumFeaturePdf, desc: s.premiumFeaturePdfDesc },
+              { icon: RefreshCw, title: s.premiumFeatureObsidianToken, desc: s.premiumFeatureObsidianTokenDesc },
+              { icon: Upload, title: s.premiumFeatureTempUrl, desc: s.premiumFeatureTempUrlDesc },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 dark:bg-sky-900/40">
+                  <Icon size={22} className="text-sky-600 dark:text-sky-400" />
+                </div>
+                <h4 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h4>
+                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">{desc}</p>
+              </div>
+            ))}
+          </div>
+
           {/* Pro feature highlights */}
           <h3 className="mb-6 mt-12 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
             Pro
           </h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { icon: MessageSquare, title: s.premiumFeatureInteractions, desc: s.premiumFeatureInteractionsDesc, color: "blue" },
-              { icon: Mail, title: s.premiumFeatureGmail, desc: s.premiumFeatureGmailDesc, color: "red" },
-              { icon: FileText, title: s.premiumFeaturePdf, desc: s.premiumFeaturePdfDesc, color: "orange" },
-              { icon: RefreshCw, title: s.premiumFeatureObsidianToken, desc: s.premiumFeatureObsidianTokenDesc, color: "teal" },
-              { icon: Upload, title: s.premiumFeatureTempUrl, desc: s.premiumFeatureTempUrlDesc, color: "pink" },
-              { icon: FileSpreadsheet, title: s.premiumFeatureSheets, desc: s.premiumFeatureSheetsDesc, color: "green" },
-              { icon: Globe, title: s.premiumFeatureHosting, desc: s.premiumFeatureHostingDesc, color: "cyan" },
-              { icon: Lock, title: s.premiumFeatureDomain, desc: s.premiumFeatureDomainDesc, color: "indigo" },
-              { icon: Code, title: s.premiumFeatureApi, desc: s.premiumFeatureApiDesc, color: "violet" },
-              { icon: Calendar, title: s.premiumFeatureSchedule, desc: s.premiumFeatureScheduleDesc, color: "amber" },
-              { icon: Server, title: s.premiumFeatureServerExec, desc: s.premiumFeatureServerExecDesc, color: "slate" },
-              { icon: PenTool, title: s.premiumFeatureWebBuilder, desc: s.premiumFeatureWebBuilderDesc, color: "purple" },
-              { icon: LayoutDashboard, title: s.premiumFeatureAdmin, desc: s.premiumFeatureAdminDesc, color: "teal" },
+              { icon: FileSpreadsheet, title: s.premiumFeatureSheets, desc: s.premiumFeatureSheetsDesc },
+              { icon: Globe, title: s.premiumFeatureHosting, desc: s.premiumFeatureHostingDesc },
+              { icon: Lock, title: s.premiumFeatureDomain, desc: s.premiumFeatureDomainDesc },
+              { icon: Calendar, title: s.premiumFeatureSchedule, desc: s.premiumFeatureScheduleDesc },
+              { icon: Server, title: s.premiumFeatureServerExec, desc: s.premiumFeatureServerExecDesc },
+              { icon: PenTool, title: s.premiumFeatureWebBuilder, desc: s.premiumFeatureWebBuilderDesc },
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">

@@ -5,6 +5,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions } from "~/services/mcp-tools.server";
+import { HUBWORK_TOOL_DEFINITIONS } from "~/services/hubwork-tool-definitions";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 import { createLogContext, emitLog } from "~/services/logger.server";
@@ -143,6 +144,9 @@ export async function action({ request }: Route.ActionArgs) {
       console.error("Failed to get MCP tool definitions:", error);
     }
   }
+
+  // Hubwork spreadsheet schema tool
+  tools.push(...HUBWORK_TOOL_DEFINITIONS);
 
   // Extra tool definitions from client (JS sandbox, skill workflows)
   if (extraToolDefinitions && extraToolDefinitions.length > 0) {
