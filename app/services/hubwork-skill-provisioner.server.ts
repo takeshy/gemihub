@@ -1,4 +1,4 @@
-import { findFileByExactName, createFile } from "~/services/google-drive.server";
+import { findFileByExactName, createFile, readFile } from "~/services/google-drive.server";
 import { upsertFileInMeta } from "~/services/sync-meta.server";
 
 // Skill template files embedded as strings
@@ -87,12 +87,15 @@ async function collectExistingFiles(
       // Ensure registered in sync-meta
       await upsertFileInMeta(accessToken, rootFolderId, driveFile);
 
+      // Read actual content from Drive (user may have edited the file)
+      const content = await readFile(accessToken, driveFile.id);
+
       result.push({
         id: driveFile.id,
         name: driveFile.name,
         path: file.path,
         mimeType: file.mimeType,
-        content: file.content, // Use embedded template content (canonical)
+        content,
         md5Checksum: driveFile.md5Checksum,
         modifiedTime: driveFile.modifiedTime,
       });

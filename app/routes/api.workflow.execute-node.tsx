@@ -14,6 +14,7 @@ import { handleRagSyncNode } from "~/engine/handlers/ragSync";
 import { handleGemihubCommandNode } from "~/engine/handlers/gemihubCommand";
 import { handleSheetReadNode, handleSheetWriteNode, handleSheetUpdateNode, handleSheetDeleteNode } from "~/engine/handlers/hubworkSheets";
 import { handleGmailSendNode } from "~/engine/handlers/hubworkGmail";
+import { handleCalendarListNode, handleCalendarCreateNode, handleCalendarUpdateNode, handleCalendarDeleteNode } from "~/engine/handlers/hubworkCalendar";
 import { getAccountByRootFolderId } from "~/services/hubwork-accounts.server";
 
 // Server-only node types that this endpoint handles
@@ -22,6 +23,7 @@ const SERVER_NODE_TYPES = new Set<WorkflowNodeType>([
   "mcp", "rag-sync", "gemihub-command",
   // Hubwork nodes (paid feature, server-only)
   "sheet-read", "sheet-write", "sheet-update", "sheet-delete", "gmail-send",
+  "calendar-list", "calendar-create", "calendar-update", "calendar-delete",
 ]);
 
 const SHEET_NODE_TYPES = new Set(["sheet-read", "sheet-write", "sheet-update", "sheet-delete"]);
@@ -186,6 +188,18 @@ export async function action({ request }: Route.ActionArgs) {
         break;
       case "gmail-send":
         await handleGmailSendNode(node, context, serviceContext);
+        break;
+      case "calendar-list":
+        await handleCalendarListNode(node, context, serviceContext);
+        break;
+      case "calendar-create":
+        await handleCalendarCreateNode(node, context, serviceContext);
+        break;
+      case "calendar-update":
+        await handleCalendarUpdateNode(node, context, serviceContext);
+        break;
+      case "calendar-delete":
+        await handleCalendarDeleteNode(node, context, serviceContext);
         break;
     }
 
