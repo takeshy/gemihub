@@ -7,16 +7,42 @@ import {
   GoogleGenAI,
   Type,
   ThinkingLevel,
+  FinishReason,
+  HarmCategory,
+  HarmBlockThreshold,
   createPartFromFunctionResponse,
   createFunctionResponsePartFromBase64,
   type Content,
   type Part,
   type Tool,
+  type SafetySetting,
   type Schema,
   type Chat,
 } from "@google/genai";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall, GeneratedImage } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
+
+// Default safety settings per Gemini best practices
+// Using BLOCK_MEDIUM_AND_ABOVE as a balanced default
+const DEFAULT_SAFETY_SETTINGS: SafetySetting[] = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+];
+
+// Check finishReason for blocked/filtered responses
+function checkFinishReason(candidates: Array<{ finishReason?: string }> | undefined): string | null {
+  if (!candidates || candidates.length === 0) return null;
+  const reason = candidates[0].finishReason;
+  if (reason === FinishReason.SAFETY) {
+    return "Response blocked by safety filters. Please rephrase your message.";
+  }
+  if (reason === FinishReason.RECITATION) {
+    return "Response blocked due to potential recitation of copyrighted content.";
+  }
+  return null;
+}
 
 export interface DriveToolMediaResult {
   __mediaData: {
@@ -310,6 +336,7 @@ export async function* chatStream(
       contents,
       config: {
         systemInstruction: systemPrompt,
+        safetySettings: DEFAULT_SAFETY_SETTINGS,
       },
     });
 
@@ -318,6 +345,12 @@ export async function* chatStream(
     for await (const chunk of response) {
       hasReceivedChunk = true;
       if (chunk.usageMetadata) lastUsage = extractUsage(chunk.usageMetadata, { model });
+      const chunkWithCandidates = chunk as { candidates?: Array<{ finishReason?: string }> };
+      const blockReason = checkFinishReason(chunkWithCandidates.candidates);
+      if (blockReason) {
+        yield { type: "error", error: blockReason };
+        return;
+      }
       const text = chunk.text;
       if (text) {
         yield { type: "text", content: text };
@@ -370,7 +403,7 @@ export async function* chatWithToolsStream(
   const webSearchEnabled = options?.webSearchEnabled ?? false;
 
   if (webSearchEnabled) {
-    geminiTools = [{ googleSearch: {} } as Tool];
+    geminiTools = [{ googleSearch: {} }];
   } else if (!options?.disableTools) {
     if (tools.length > 0 && !ragEnabled) {
       geminiTools = toolsToGeminiFormat(tools);
@@ -384,7 +417,7 @@ export async function* chatWithToolsStream(
           fileSearchStoreNames: ragStoreIds,
           topK: clampedTopK,
         },
-      } as Tool);
+      });
     }
   }
 
@@ -397,6 +430,7 @@ export async function* chatWithToolsStream(
     history,
     config: {
       systemInstruction: systemPrompt,
+      safetySettings: DEFAULT_SAFETY_SETTINGS,
       ...(geminiTools ? { tools: geminiTools } : {}),
       ...(thinkingConfig ? { thinkingConfig } : {}),
     },
@@ -444,6 +478,7 @@ export async function* chatWithToolsStream(
         if (chunk.usageMetadata) roundUsage = extractUsage(chunk.usageMetadata, { model });
         const chunkWithCandidates = chunk as {
           candidates?: Array<{
+            finishReason?: string;
             content?: {
               parts?: Array<{ text?: string; thought?: boolean; functionCall?: { name?: string; args?: unknown }; thoughtSignature?: string }>;
             };
@@ -455,6 +490,14 @@ export async function* chatWithToolsStream(
           }>;
         };
         const candidates = chunkWithCandidates.candidates;
+
+        // Check finishReason for blocked responses
+        const blockReason = checkFinishReason(candidates);
+        if (blockReason) {
+          yield { type: "error", error: blockReason };
+          continueLoop = false;
+          break;
+        }
 
         if (candidates && candidates.length > 0) {
           const parts = candidates[0]?.content?.parts;
@@ -727,9 +770,17 @@ export async function* generateImageStream(
       contents: [...history, { role: "user", parts: messageParts }],
       config: {
         systemInstruction: systemPrompt,
+        safetySettings: DEFAULT_SAFETY_SETTINGS,
         responseModalities: ["TEXT", "IMAGE"],
       },
     });
+
+    // Check for blocked responses
+    const blockReason = checkFinishReason(response.candidates);
+    if (blockReason) {
+      yield { type: "error", error: blockReason };
+      return;
+    }
 
     if (response.candidates && response.candidates.length > 0) {
       const candidate = response.candidates[0];

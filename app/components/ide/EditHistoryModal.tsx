@@ -14,7 +14,8 @@ import type { EditHistoryEntry } from "~/services/edit-history.server";
 import { getEditHistoryForFile, getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
 import { reconstructContent, restoreToHistoryEntry, type DiffWithOrigin } from "~/services/edit-history-local";
 import { useI18n } from "~/i18n/context";
-import { DiffView } from "~/components/shared/DiffView";
+import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
+import { useDraggableModal } from "~/hooks/useDraggableModal";
 
 interface EditHistoryModalProps {
   fileId: string;
@@ -52,6 +53,8 @@ export function EditHistoryModal({
     content: string;
   }>({ open: false, name: "", content: "" });
   const [saving, setSaving] = useState(false);
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("split");
+  const { modalRef, modalStyle, onDragStart } = useDraggableModal();
 
   // Load local entries from IndexedDB
   useEffect(() => {
@@ -233,10 +236,10 @@ export function EditHistoryModal({
   );
 
   const modal = (
-    <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+    <div className="fixed inset-0 z-50 bg-black/50">
+      <div ref={modalRef} style={modalStyle} className="w-[min(1024px,calc(100vw-2rem))] h-[80vh] rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col resize overflow-auto">
+        {/* Header — drag handle */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700 cursor-move select-none" onMouseDown={onDragStart}>
           <div>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {t("editHistory.title")}
@@ -334,7 +337,10 @@ export function EditHistoryModal({
                     {/* Expanded diff */}
                     {isExpanded && (
                       <div className="border-t border-gray-200 dark:border-gray-700 overflow-x-auto">
-                        <DiffView diff={entry.diff} />
+                        <div className="flex justify-end px-2 py-1">
+                          <DiffViewToggle viewMode={diffViewMode} onViewModeChange={setDiffViewMode} />
+                        </div>
+                        <DiffView diff={entry.diff} viewMode={diffViewMode} />
                       </div>
                     )}
                   </div>

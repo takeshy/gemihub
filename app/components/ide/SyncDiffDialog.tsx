@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Loader2, ExternalLink, ArrowUp, ArrowDown, EyeOff, Eye } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
-import { DiffView } from "~/components/shared/DiffView";
+import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
+import { useDraggableModal } from "~/hooks/useDraggableModal";
 import { useI18n } from "~/i18n/context";
 import { getCachedFile } from "~/services/indexeddb-cache";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
@@ -58,6 +59,8 @@ export function SyncDiffDialog({
 }: SyncDiffDialogProps) {
   const { t } = useI18n();
   const [diffStates, setDiffStates] = useState<Record<string, DiffState>>({});
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("split");
+  const { modalRef, modalStyle, onDragStart } = useDraggableModal();
   const diffStatesRef = useRef(diffStates);
   useEffect(() => { diffStatesRef.current = diffStates; }, [diffStates]);
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
@@ -169,10 +172,10 @@ export function SyncDiffDialog({
   const title = type === "push" ? t("sync.pushChanges") : t("sync.pullChanges");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+    <div className="fixed inset-0 z-50 bg-black/50">
+      <div ref={modalRef} style={modalStyle} className="w-[min(1024px,calc(100vw-2rem))] h-[80vh] rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col resize overflow-auto">
+        {/* Header — drag handle */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700 cursor-move select-none" onMouseDown={onDragStart}>
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {title} ({ignoredIds.size > 0 ? `${files.length - ignoredIds.size} / ${files.length}` : files.length})
           </h3>
@@ -284,7 +287,10 @@ export function SyncDiffDialog({
                           </div>
                         ) : ds.diff ? (
                           <div className="rounded border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
-                            <DiffView diff={ds.diff} />
+                            <div className="flex justify-end px-2 py-1 border-b border-gray-200 dark:border-gray-700">
+                              <DiffViewToggle viewMode={diffViewMode} onViewModeChange={setDiffViewMode} />
+                            </div>
+                            <DiffView diff={ds.diff} viewMode={diffViewMode} />
                           </div>
                         ) : null}
                       </div>

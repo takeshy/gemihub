@@ -3,7 +3,7 @@ import { Loader2, X } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
-import { DiffView } from "~/components/shared/DiffView";
+import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
 import { getCachedFile } from "~/services/indexeddb-cache";
 
 export interface DiffEditorProps {
@@ -28,6 +28,7 @@ export function DiffEditor({
   const { t } = useI18n();
   const [content, setContent] = useState(currentContent);
   const [targetContent, setTargetContent] = useState<string | null>(null);
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("split");
   const [loadingTarget, setLoadingTarget] = useState(true);
 
   // Debounced auto-save
@@ -153,7 +154,12 @@ export function DiffEditor({
               <Loader2 size={20} className="animate-spin text-gray-400" />
             </div>
           ) : (
-            <DiffView diff={diff} />
+            <>
+              <div className="flex justify-end px-2 py-1 border-b border-gray-200 dark:border-gray-700">
+                <DiffViewToggle viewMode={diffViewMode} onViewModeChange={setDiffViewMode} />
+              </div>
+              <DiffView diff={diff} viewMode={diffViewMode} />
+            </>
           )}
         </div>
       </div>

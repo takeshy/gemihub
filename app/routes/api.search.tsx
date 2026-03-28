@@ -52,7 +52,7 @@ export async function action({ request }: Route.ActionArgs) {
             fileSearchStoreNames: ragStoreIds,
             topK: clampedTopK,
           },
-        } as Tool,
+        },
       ];
 
       const plan = tokens.apiPlan === "free" ? "free" : "paid";

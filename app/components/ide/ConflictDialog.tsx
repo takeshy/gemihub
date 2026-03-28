@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { X, AlertTriangle, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
-import { DiffView } from "~/components/shared/DiffView";
+import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
+import { useDraggableModal } from "~/hooks/useDraggableModal";
 import { useI18n } from "~/i18n/context";
 import { getCachedFile } from "~/services/indexeddb-cache";
 import { isEncryptedFile } from "~/services/crypto-core";
@@ -31,6 +32,8 @@ export function ConflictDialog({
   const [resolving, setResolving] = useState<string | null>(null);
   const [batchResolving, setBatchResolving] = useState(false);
   const [diffStates, setDiffStates] = useState<Record<string, DiffState>>({});
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("split");
+  const { modalRef, modalStyle, onDragStart } = useDraggableModal();
   const choicesRef = useRef(choices);
   useEffect(() => { choicesRef.current = choices; }, [choices]);
 
@@ -133,10 +136,10 @@ export function ConflictDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+    <div className="fixed inset-0 z-50 bg-black/50">
+      <div ref={modalRef} style={modalStyle} className="w-[min(1024px,calc(100vw-2rem))] h-[80vh] rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col resize overflow-auto">
+        {/* Header — drag handle */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700 cursor-move select-none" onMouseDown={onDragStart}>
           <div className="flex items-center gap-2">
             <AlertTriangle size={ICON.LG} className="text-amber-500" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -259,7 +262,10 @@ export function ConflictDialog({
                         </div>
                       ) : ds.diff ? (
                         <div className="rounded border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
-                          <DiffView diff={ds.diff} />
+                          <div className="flex justify-end px-2 py-1 border-b border-gray-200 dark:border-gray-700">
+                            <DiffViewToggle viewMode={diffViewMode} onViewModeChange={setDiffViewMode} />
+                          </div>
+                          <DiffView diff={ds.diff} viewMode={diffViewMode} />
                         </div>
                       ) : null}
                     </div>

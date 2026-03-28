@@ -1,5 +1,32 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import {
+  GoogleGenAI,
+  FinishReason,
+  HarmCategory,
+  HarmBlockThreshold,
+  type SafetySetting,
+} from "@google/genai";
 import type { ModelType } from "~/types/settings";
+import { getThinkingConfig } from "~/services/gemini-chat-core";
+
+// Default safety settings per Gemini best practices
+const DEFAULT_SAFETY_SETTINGS: SafetySetting[] = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+];
+
+function checkFinishReason(candidates: Array<{ finishReason?: string }> | undefined): string | null {
+  if (!candidates || candidates.length === 0) return null;
+  const reason = candidates[0].finishReason;
+  if (reason === FinishReason.SAFETY) {
+    return "Response blocked by safety filters. Please rephrase your message.";
+  }
+  if (reason === FinishReason.RECITATION) {
+    return "Response blocked due to potential recitation of copyrighted content.";
+  }
+  return null;
+}
 
 export async function generateWorkflow(
   userPrompt: string,
@@ -13,6 +40,7 @@ export async function generateWorkflow(
     contents: userPrompt,
     config: {
       systemInstruction: systemPrompt,
+      safetySettings: DEFAULT_SAFETY_SETTINGS,
     },
   });
 
@@ -33,10 +61,6 @@ export interface WorkflowStreamChunk {
   content?: string;
 }
 
-function isGemmaModel(model: string): boolean {
-  return model.startsWith("gemma-");
-}
-
 export async function* generateWorkflowStream(
   userPrompt: string,
   systemPrompt: string,
@@ -47,15 +71,8 @@ export async function* generateWorkflowStream(
   try {
     const ai = new GoogleGenAI({ apiKey });
 
-    // Build thinking config (Gemma models don't support thinking)
     // Always enable thinking for workflow generation (quality improvement)
-    const thinkingConfig = isGemmaModel(model)
-      ? undefined
-      : model.includes("gemini-3.1-flash-lite")
-        ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
-        : model === "gemini-2.5-flash-lite"
-          ? { includeThoughts: true, thinkingBudget: -1 }
-          : { includeThoughts: true };
+    const thinkingConfig = getThinkingConfig(model, true);
 
     // Build contents with history for regeneration
     const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
@@ -77,11 +94,20 @@ export async function* generateWorkflowStream(
       contents,
       config: {
         systemInstruction: systemPrompt,
+        safetySettings: DEFAULT_SAFETY_SETTINGS,
         ...(thinkingConfig ? { thinkingConfig } : {}),
       },
     });
 
     for await (const chunk of response) {
+      // Check finishReason for blocked responses (before content check —
+      // blocked responses may have finishReason but no content.parts)
+      const blockReason = checkFinishReason(chunk.candidates as Array<{ finishReason?: string }> | undefined);
+      if (blockReason) {
+        yield { type: "error", content: blockReason };
+        return;
+      }
+
       if (!chunk.candidates?.[0]?.content?.parts) continue;
 
       for (const part of chunk.candidates[0].content.parts) {

@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
-import { DiffView } from "~/components/shared/DiffView";
+import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
+import { useDraggableModal } from "~/hooks/useDraggableModal";
 import { useI18n } from "~/i18n/context";
 
 interface TempDiffModalProps {
@@ -27,6 +28,8 @@ export function TempDiffModal({
   onReject,
 }: TempDiffModalProps) {
   const { t } = useI18n();
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("split");
+  const { modalRef, modalStyle, onDragStart } = useDraggableModal();
 
   const diffStr = useMemo(() => {
     if (isBinary) return null;
@@ -45,10 +48,10 @@ export function TempDiffModal({
   const noDiff = !isBinary && currentContent === tempContent;
 
   const modal = (
-    <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+    <div className="fixed inset-0 z-50 bg-black/50">
+      <div ref={modalRef} style={modalStyle} className="w-[min(1024px,calc(100vw-2rem))] h-[80vh] rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col resize overflow-auto">
+        {/* Header — drag handle */}
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700 cursor-move select-none" onMouseDown={onDragStart}>
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {t("tempDiff.title")}
@@ -87,7 +90,10 @@ export function TempDiffModal({
             </div>
           ) : (
             <div className="border border-gray-200 dark:border-gray-700 rounded overflow-x-auto">
-              <DiffView diff={diffStr || ""} />
+              <div className="flex justify-end px-2 py-1 border-b border-gray-200 dark:border-gray-700">
+                <DiffViewToggle viewMode={diffViewMode} onViewModeChange={setDiffViewMode} />
+              </div>
+              <DiffView diff={diffStr || ""} viewMode={diffViewMode} />
             </div>
           )}
         </div>
