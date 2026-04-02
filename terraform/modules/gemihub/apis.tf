@@ -10,6 +10,9 @@ locals {
     "dns.googleapis.com",
     "bigquery.googleapis.com",
     "logging.googleapis.com",
+    "firestore.googleapis.com",
+    "certificatemanager.googleapis.com",
+    "cloudscheduler.googleapis.com",
   ]
 }
 

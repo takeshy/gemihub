@@ -7,7 +7,7 @@ import { type SyncMeta } from "~/services/sync-diff";
 
 export function toLocalSyncMeta(remoteMeta: {
   lastUpdatedAt: string;
-  files: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string }>;
+  files: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string; size?: string }>;
 }): LocalSyncMeta {
   const files: LocalSyncMeta["files"] = {};
   for (const [id, f] of Object.entries(remoteMeta.files)) {
@@ -15,6 +15,7 @@ export function toLocalSyncMeta(remoteMeta: {
       md5Checksum: f.md5Checksum ?? "",
       modifiedTime: f.modifiedTime ?? "",
       name: f.name,
+      size: f.size,
     };
   }
   return {

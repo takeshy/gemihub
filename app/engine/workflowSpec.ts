@@ -375,6 +375,40 @@ Command results:
 - convert-to-html → HTML file name (saved to temporaries/)
 - rename → new file name
 
+### Hubwork (Sheets/Gmail — paid feature)
+
+#### sheet-read
+Read rows from a Google Sheets sheet.
+- **sheet** (required): Sheet name (tab name)
+- **filter** (optional): JSON filter like \`{"status": "active"}\` or simple \`column == value\`
+- **limit** (optional): Max rows to return
+- **saveTo** (required): Variable for result (JSON array of objects)
+
+#### sheet-write
+Append rows to a Google Sheets sheet.
+- **sheet** (required): Sheet name
+- **data** (required): JSON object or array of objects matching sheet headers
+
+#### sheet-update
+Update rows matching a filter.
+- **sheet** (required): Sheet name
+- **filter** (required): JSON filter to match rows
+- **data** (required): JSON object with columns to update
+- **saveTo** (optional): Variable for updated row count
+
+#### sheet-delete
+Delete rows matching a filter.
+- **sheet** (required): Sheet name
+- **filter** (required): JSON filter to match rows
+- **saveTo** (optional): Variable for deleted row count
+
+#### gmail-send
+Send an email via Gmail API.
+- **to** (required): Recipient email address
+- **subject** (required): Email subject
+- **body** (optional): HTML email body
+- **saveTo** (optional): Variable for message ID
+
 ### Integration
 
 #### workflow
@@ -464,6 +498,7 @@ Loop key points:
 8. Use drive-file-picker when the user needs to choose a file interactively
 9. Use prompt-value for simple text input, prompt-selection for longer text, prompt-file when you need file content
 10. When building JSON payloads with user content, use \`{{variable:json}}\` to safely escape strings
+11. **Use comment field**: Add a \`comment\` property to nodes to describe their purpose. This is displayed in the sidebar for readability. Example: \`comment: "Fetch latest articles from RSS feed"\`
 `;
 }
 

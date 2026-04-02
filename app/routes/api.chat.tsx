@@ -196,7 +196,7 @@ export async function action({ request }: Route.ActionArgs) {
             name,
             args,
             validTokens.accessToken,
-            validTokens.rootFolderId
+            validTokens.rootFolderId,
           );
           if (name === "update_drive_file") {
             const r = result as { id?: string; name?: string; content?: string };
@@ -266,9 +266,8 @@ export async function action({ request }: Route.ActionArgs) {
             {
               ragTopK: requestSettings?.ragTopK,
               functionCallLimits: {
-                maxFunctionCalls: requestSettings?.maxFunctionCalls,
-                functionCallWarningThreshold:
-                  requestSettings?.functionCallWarningThreshold,
+                maxFunctionCalls: 50,
+                functionCallWarningThreshold: 10,
               },
               webSearchEnabled,
               enableThinking,

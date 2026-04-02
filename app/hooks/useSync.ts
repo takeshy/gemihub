@@ -20,6 +20,7 @@ import { ragRegisterInBackground } from "~/services/rag-sync";
 import {
   isSyncExcludedPath,
   isBinaryMimeType,
+  isLargeFile,
   getSyncCompletionStatus,
 } from "~/services/sync-client-utils";
 import { computeSyncDiff, type SyncMeta } from "~/services/sync-diff";
@@ -106,17 +107,33 @@ export function useSync() {
         // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
         // Exclude localOnly files only in editHistory (new local files — shown in push badge).
         // Include conflicts and editDeleteConflicts — shown in pull dialog with conflict badge.
-        const pullLocalOnly = diff.localOnly.filter(id => id in localFiles);
+        // Include remoteOnly files — new files from other devices that need explicit pull.
+        const pullLocalOnly = diff.localOnly.filter(id => {
+          if (!(id in localFiles)) return false;
+          // Skip orphaned entries with no resolvable name (stale migration artifacts)
+          const name = remoteFiles[id]?.name || localFiles[id]?.name;
+          if (!name) return false;
+          return true;
+        });
         const isExcluded = (id: string) => {
           const name = remoteFiles[id]?.name || localFiles[id]?.name;
           return name ? isSyncExcludedPath(name) : false;
         };
-        // remoteOnly files are not counted — they have no changes and are fetched on-demand
+        // Filter toPull: skip files whose cached md5 already matches remote md5
+        // (localMeta may be stale from on-demand fetch, but cached content is up-to-date)
+        let toPullCount = 0;
+        for (const id of diff.toPull) {
+          if (isExcluded(id)) continue;
+          const cached = await getCachedFile(id);
+          if (cached && cached.md5Checksum && cached.md5Checksum === remoteFiles[id]?.md5Checksum) continue;
+          toPullCount++;
+        }
         const pullCount =
-          diff.toPull.filter(id => !isExcluded(id)).length +
+          toPullCount +
           pullLocalOnly.filter(id => !isExcluded(id)).length +
           diff.editDeleteConflicts.filter(id => !isExcluded(id)).length +
-          diff.conflicts.filter(c => !isExcluded(c.fileId)).length;
+          diff.conflicts.filter(c => !isExcluded(c.fileId)).length +
+          diff.remoteOnly.filter(id => !isExcluded(id)).length;
         setRemoteModifiedCount(pullCount);
       }
     } catch {
@@ -362,22 +379,12 @@ export function useSync() {
     setSyncStatus("pulling");
     setError(null);
     try {
-      // 1. Get remoteMeta (cached or fresh), excluding local-only "new:" entries
+      // 1. Get fresh remoteMeta from server (always fetch to avoid stale cache)
       let remoteMeta: SyncMeta | null = null;
-      const cachedRemote = await getCachedRemoteMeta();
-      if (cachedRemote) {
-        remoteMeta = {
-          lastUpdatedAt: cachedRemote.lastUpdatedAt,
-          files: Object.fromEntries(
-            Object.entries(cachedRemote.files).filter(([id]) => !id.startsWith("new:"))
-          ),
-        };
-      } else {
-        const res = await fetch("/api/sync");
-        if (!res.ok) throw new Error("Failed to fetch remote meta");
-        const data = await res.json();
-        remoteMeta = data.remoteMeta as SyncMeta | null;
-      }
+      const res = await fetch("/api/sync");
+      if (!res.ok) throw new Error("Failed to fetch remote meta");
+      const data = await res.json();
+      remoteMeta = data.remoteMeta as SyncMeta | null;
 
       // 2. Get local state
       const localMeta = (await getLocalSyncMeta()) ?? null;
@@ -426,10 +433,8 @@ export function useSync() {
       }
 
       // 6. Download non-conflict files via pullDirect
-      // remoteOnly files (no local cache, no changes) are NOT downloaded —
-      // they are fetched on-demand when the user clicks them in the file tree.
-      // Only update their metadata in localSyncMeta so subsequent diffs are correct.
-      const allFilesToPull = [...diff.toPull];
+      // remoteOnly files (new files from other devices) are also downloaded.
+      const allFilesToPull = [...diff.toPull, ...diff.remoteOnly];
       const remoteFiles = remoteMeta?.files ?? {};
 
       // Separate ignored modified files — metadata only, no download
@@ -447,10 +452,12 @@ export function useSync() {
       if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
         const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-        // On mobile, skip downloading binary file content (save storage)
-        const filesToDownload = isMobile
-          ? filesToPull.filter((id) => !isBinaryMimeType(remoteFiles[id]?.mimeType))
-          : filesToPull;
+        // Skip downloading: binary on mobile, large files (>100MB) everywhere
+        const filesToDownload = filesToPull.filter((id) => {
+          if (isMobile && isBinaryMimeType(remoteFiles[id]?.mimeType)) return false;
+          if (isLargeFile(remoteFiles[id]?.size)) return false;
+          return true;
+        });
 
         // Build mimeTypes map so server can use readFileBase64 for binary files
         const mimeTypes: Record<string, string> = {};
@@ -458,17 +465,18 @@ export function useSync() {
           if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
         }
 
-        // On mobile, track binary files in localSyncMeta without caching content
-        if (isMobile) {
-          for (const id of filesToPull) {
-            if (isBinaryMimeType(remoteFiles[id]?.mimeType)) {
-              const rm = remoteFiles[id];
-              updatedMeta.files[id] = {
-                md5Checksum: rm?.md5Checksum ?? "",
-                modifiedTime: rm?.modifiedTime ?? "",
-                name: rm?.name,
-              };
-            }
+        // Track skipped files (mobile binary / large files) in localSyncMeta without caching content
+        for (const id of filesToPull) {
+          const rm = remoteFiles[id];
+          const skippedMobile = isMobile && isBinaryMimeType(rm?.mimeType);
+          const skippedLarge = isLargeFile(rm?.size);
+          if (skippedMobile || skippedLarge) {
+            updatedMeta.files[id] = {
+              md5Checksum: rm?.md5Checksum ?? "",
+              modifiedTime: rm?.modifiedTime ?? "",
+              name: rm?.name,
+              size: rm?.size,
+            };
           }
         }
 
@@ -498,6 +506,7 @@ export function useSync() {
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
               name: rm?.name,
+              size: rm?.size,
             };
           }
         }
@@ -524,21 +533,8 @@ export function useSync() {
         }
       }
 
-      // 7c. Update localSyncMeta for remoteOnly files (metadata only, no content download)
-      // These files are fetched on-demand when the user clicks them in the file tree.
-      for (const fid of diff.remoteOnly) {
-        const rm = remoteFiles[fid];
-        if (rm) {
-          updatedMeta.files[fid] = {
-            md5Checksum: rm.md5Checksum ?? "",
-            modifiedTime: rm.modifiedTime ?? "",
-            name: rm.name,
-          };
-        }
-      }
-
-      // 8. Save localMeta (once for all changes: toPull, ignored, and remoteOnly)
-      if (filesToPull.length > 0 || ignoredModifiedIds.size > 0 || diff.remoteOnly.length > 0) {
+      // 8. Save localMeta (once for all changes: toPull and ignored)
+      if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
         updatedMeta.lastUpdatedAt = new Date().toISOString();
         await setLocalSyncMeta(updatedMeta);
         baseMeta = updatedMeta;
@@ -547,7 +543,7 @@ export function useSync() {
       if (remoteMeta) await updateCachedRemoteMetaFromSyncMeta(remoteMeta);
 
       // 9. Dispatch events and update counts
-      if (allFilesToPull.length > 0 || localOnlyReal.length > 0 || diff.remoteOnly.length > 0) {
+      if (allFilesToPull.length > 0 || localOnlyReal.length > 0) {
         setLastSyncTime(new Date().toISOString());
         window.dispatchEvent(new Event("sync-complete"));
         if (filesToPull.length > 0) {
@@ -739,6 +735,7 @@ export function useSync() {
           action: "fullPull",
           skipHashes,
           skipBinaryContent: isMobile,
+          skipLargeFiles: true,
         }),
       });
 
@@ -753,11 +750,12 @@ export function useSync() {
       };
 
       // Include skipped files in meta too (including binary files not downloaded on mobile)
-      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { name?: string; md5Checksum: string; modifiedTime: string }>)) {
+      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { name?: string; md5Checksum: string; modifiedTime: string; size?: string }>)) {
         updatedMeta.files[fileId] = {
           md5Checksum: fileMeta.md5Checksum,
           modifiedTime: fileMeta.modifiedTime,
           name: fileMeta.name,
+          size: fileMeta.size,
         };
       }
 
@@ -776,13 +774,15 @@ export function useSync() {
 
       // Delete cached files that no longer exist on remote,
       // or binary files that should not be cached on mobile
-      const remoteMetaFiles = data.remoteMeta.files as Record<string, { mimeType?: string }>;
+      const remoteMetaFiles = data.remoteMeta.files as Record<string, { mimeType?: string; size?: string }>;
       const remoteFileIds = new Set(Object.keys(remoteMetaFiles));
       const allCachedIds = await getAllCachedFileIds();
       for (const cachedId of allCachedIds) {
         if (!remoteFileIds.has(cachedId)) {
           await deleteCachedFile(cachedId);
         } else if (isMobile && isBinaryMimeType(remoteMetaFiles[cachedId]?.mimeType)) {
+          await deleteCachedFile(cachedId);
+        } else if (isLargeFile(remoteMetaFiles[cachedId]?.size)) {
           await deleteCachedFile(cachedId);
         }
       }

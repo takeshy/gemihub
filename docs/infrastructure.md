@@ -54,7 +54,7 @@ Google Cloud deployment managed by Terraform.
 |---------|---------|
 | **Cloud Run** | Node.js SSR application hosting |
 | **Artifact Registry** | Docker image repository |
-| **Secret Manager** | OAuth credentials, session secret |
+| **Secret Manager** | OAuth credentials, session secret, Hubwork secrets |
 | **Compute Engine** | Global external Application Load Balancer (`EXTERNAL_MANAGED`), static IP, managed SSL |
 | **Cloud DNS** | DNS zone management (A record + TXT verification) |
 | **Cloud Build** | CI/CD pipeline (build & deploy on push) |
@@ -76,7 +76,7 @@ terraform/
       outputs.tf       # Output values (LB IP, Cloud Run URL, nameservers)
       apis.tf          # GCP API enablement (10 APIs)
       artifact-registry.tf # Docker image repository
-      secrets.tf       # Secret Manager secrets
+      secrets.tf       # Secret Manager data references
       iam.tf           # Service accounts and IAM bindings
       cloud-run.tf     # Cloud Run service
       networking.tf    # Load Balancer (IP, NEG, backend, URL map, SSL, proxies, forwarding rules)
@@ -84,7 +84,7 @@ terraform/
       bigquery-logging.tf  # Cloud Logging → BigQuery pipeline
       bigquery-views.tf    # BigQuery view definitions
       cloud-build.tf   # Cloud Build trigger (reference only, created via Cloud Console)
-  terraform.tfvars     # Variable values (git-ignored, contains secrets)
+  terraform.tfvars     # Variable values (git-ignored, non-secret config only)
 ```
 
 ## Environment Variables (Cloud Run)
@@ -95,7 +95,14 @@ terraform/
 | `GOOGLE_CLIENT_SECRET` | Secret Manager |
 | `SESSION_SECRET` | Secret Manager |
 | `GOOGLE_REDIRECT_URI` | Set directly (`https://<domain>/auth/google/callback`) |
+| `GCP_PROJECT_ID` | Set directly (project ID) |
 | `ROOT_FOLDER_NAME` | Conditionally set when `root_folder_name` differs from default `"gemihub"` |
+| `STRIPE_SECRET_KEY` | Secret Manager |
+| `STRIPE_WEBHOOK_SECRET` | Secret Manager |
+| `STRIPE_PRICE_ID_LITE` | Secret Manager |
+| `STRIPE_PRICE_ID_PRO` | Secret Manager |
+| `HUBWORK_ADMIN_CREDENTIALS` | Secret Manager (`user:password` format, enables Basic Auth for admin panel) |
+| `HUBWORK_ADMIN_EMAILS` | Secret Manager (comma-separated admin emails for OAuth check) |
 | `NODE_ENV` | Set in Dockerfile: `production` |
 | `PORT` | Set in Dockerfile: `8080` |
 
@@ -186,8 +193,17 @@ Multi-stage Dockerfile (`node:22-slim`):
 gcloud auth login
 gcloud auth application-default login
 
-# Create terraform.tfvars with secrets, then:
-cd terraform
+# Create secrets in Secret Manager (9 total)
+gcloud secrets create google-client-id --replication-policy=automatic
+gcloud secrets versions add google-client-id --data-file=-
+# Repeat for: google-client-secret, session-secret,
+# stripe-secret-key, stripe-webhook-secret,
+# stripe-price-id-lite, stripe-price-id-pro,
+# hubwork-admin-credentials (user:password format),
+# hubwork-admin-emails (comma-separated emails)
+
+# Create terraform.tfvars with non-secret config, then:
+cd terraform/environments/prod
 terraform init
 terraform apply
 ```

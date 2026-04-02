@@ -103,6 +103,33 @@ function getNodeLabel(node: WorkflowNode): string {
     case "gemihub-command":
       label = `**${id}**\nCmd: ${p.command || ""}\n${p.path || ""}`;
       break;
+    case "sheet-read":
+      label = `**${id}**\nSheet Read: ${p.sheet || ""}\n→ ${p.saveTo || ""}`;
+      break;
+    case "sheet-write":
+      label = `**${id}**\nSheet Write: ${p.sheet || ""}\n${p.data || ""}`;
+      break;
+    case "sheet-update":
+      label = `**${id}**\nSheet Update: ${p.sheet || ""}\n→ ${p.saveTo || ""}`;
+      break;
+    case "sheet-delete":
+      label = `**${id}**\nSheet Delete: ${p.sheet || ""}\n→ ${p.saveTo || ""}`;
+      break;
+    case "gmail-send":
+      label = `**${id}**\nMail: ${p.to || ""}\n${p.subject || ""}`;
+      break;
+    case "calendar-list":
+      label = `**${id}**\nCal List: ${p.calendarId || "primary"}\n→ ${p.saveTo || ""}`;
+      break;
+    case "calendar-create":
+      label = `**${id}**\nCal Create: ${p.summary || ""}\n${p.start || ""}`;
+      break;
+    case "calendar-update":
+      label = `**${id}**\nCal Update: ${p.eventId || ""}\n${p.summary || ""}`;
+      break;
+    case "calendar-delete":
+      label = `**${id}**\nCal Delete: ${p.eventId || ""}`;
+      break;
     default:
       label = `**${id}**\n${node.type}`;
   }

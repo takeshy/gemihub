@@ -74,41 +74,13 @@ export function usePendingFileMigration(isOffline: boolean) {
           if (!latest) continue; // entry was deleted before migration completed
 
           const currentContent = latest.content;
+          const emptyMd5 = file.md5Checksum ?? "";
+          const emptyModifiedTime = file.modifiedTime ?? "";
 
-          // Delete old new: editHistory entry — will re-create only if upload fails
+          // Migrate editHistory from new: ID to real Drive ID
           const editHistory = await getEditHistoryForFile(pf.fileId);
           if (editHistory) {
             await deleteEditHistoryEntry(pf.fileId);
-          }
-
-          // If user edited content, upload to Drive and get final checksum
-          let finalMd5 = file.md5Checksum ?? "";
-          let finalModifiedTime = file.modifiedTime ?? "";
-          let contentUploaded = !currentContent; // true if nothing to upload
-          if (currentContent) {
-            try {
-              const updateRes = await fetch("/api/drive/files", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action: "update",
-                  fileId: file.id,
-                  content: currentContent,
-                }),
-              });
-              if (updateRes.ok) {
-                const updateData = await updateRes.json();
-                finalMd5 = updateData.md5Checksum ?? finalMd5;
-                finalModifiedTime = updateData.file?.modifiedTime ?? finalModifiedTime;
-                contentUploaded = true;
-              }
-            } catch {
-              // Content upload failed — file exists on Drive with empty content
-            }
-          }
-
-          // Preserve editHistory only if content upload failed (file still needs push)
-          if (!contentUploaded && editHistory) {
             await setEditHistoryEntry({
               ...editHistory,
               fileId: file.id,
@@ -117,12 +89,13 @@ export function usePendingFileMigration(isOffline: boolean) {
           }
 
           // Swap cache entries: delete temp, create real
+          // md5 is the empty file's checksum — content will be pushed via Push flow
           await deleteCachedFile(pf.fileId);
           await setCachedFile({
             fileId: file.id,
             content: currentContent,
-            md5Checksum: finalMd5,
-            modifiedTime: finalModifiedTime,
+            md5Checksum: emptyMd5,
+            modifiedTime: emptyModifiedTime,
             cachedAt: Date.now(),
             fileName: file.name,
           });
@@ -134,20 +107,20 @@ export function usePendingFileMigration(isOffline: boolean) {
             meta.files[file.id] = {
               name: file.name,
               mimeType: file.mimeType,
-              md5Checksum: finalMd5,
-              modifiedTime: finalModifiedTime,
-              createdTime: file.createdTime ?? finalModifiedTime,
+              md5Checksum: emptyMd5,
+              modifiedTime: emptyModifiedTime,
+              createdTime: file.createdTime ?? emptyModifiedTime,
             };
             await setCachedRemoteMeta(meta);
           }
 
-          // Add to localSyncMeta so computeSyncDiff sees it as synced
-          // (the file is already on Drive via the create+update above)
+          // Add to localSyncMeta with the empty file's md5.
+          // Since editHistory is preserved, computeSyncDiff treats this as a push candidate.
           const localMeta = await getLocalSyncMeta();
           if (localMeta) {
             localMeta.files[file.id] = {
-              md5Checksum: finalMd5,
-              modifiedTime: finalModifiedTime,
+              md5Checksum: emptyMd5,
+              modifiedTime: emptyModifiedTime,
             };
             await setLocalSyncMeta(localMeta);
           }

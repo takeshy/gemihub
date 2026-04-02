@@ -3,6 +3,7 @@ import type { Route } from "./+types/auth.google.callback";
 import { exchangeCode } from "~/services/google-auth.server";
 import { getSession, setTokens, commitSession } from "~/services/session.server";
 import { ensureRootFolder } from "~/services/google-drive.server";
+import { ensureSettingsFile } from "~/services/user-settings.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -27,17 +28,39 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const tokens = await exchangeCode(code, request);
 
-  // Ensure root folder exists on Drive
+  // Capture granted scopes from the callback
+  const scope = url.searchParams.get("scope") || "";
+
+  // Ensure root folder and settings.json exist on Drive
   const rootFolderId = await ensureRootFolder(tokens.accessToken);
+  await ensureSettingsFile(tokens.accessToken, rootFolderId);
+
+  // Fetch user email from Drive API
+  let email: string | undefined;
+  try {
+    const aboutRes = await fetch(
+      "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)",
+      { headers: { Authorization: `Bearer ${tokens.accessToken}` } }
+    );
+    if (aboutRes.ok) {
+      const about = await aboutRes.json();
+      email = about.user?.emailAddress;
+    }
+  } catch { /* non-critical */ }
+
+  // Read returnTo before setTokens (which creates a new session)
+  const returnTo = stateSession.get("oauthReturnTo") || "/";
 
   const session = await setTokens(request, {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiryTime: tokens.expiryTime,
     rootFolderId,
+    email,
+    grantedScopes: scope,
   });
 
-  return redirect("/", {
+  return redirect(returnTo, {
     headers: {
       "Set-Cookie": await commitSession(session),
     },

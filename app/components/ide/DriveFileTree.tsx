@@ -833,6 +833,7 @@ export function DriveFileTree({
       const isSelected = selectedFolderId === item.id;
       const folderEmoji = (depth === 0 && item.name === SKILLS_FOLDER_NAME) ? "✨ "
         : item.name === "workflows" ? "⚡ "
+        : item.name === "web" ? "🌐 "
         : "";
 
       return (

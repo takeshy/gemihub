@@ -117,6 +117,16 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "generateEditUrl": {
+      // Temp edit URL requires a paid plan
+      const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
+      const tempAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+      if (!tempAccount?.plan) {
+        return Response.json(
+          { error: "A paid plan is required to generate edit URLs." },
+          { status: 403, headers: responseHeaders }
+        );
+      }
+
       const { fileId, fileName, content } = body;
       if (!fileId || !fileName) {
         return Response.json(

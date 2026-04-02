@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { KeyRound, Lock, Check } from "lucide-react";
 import { useI18n } from "~/i18n/context";
@@ -64,12 +64,11 @@ export function GeneralTab({
   const [encryptChatHistory, setEncryptChatHistory] = useState(settings.encryption.encryptChatHistory);
   const [encryptWorkflowHistory, setEncryptWorkflowHistory] = useState(settings.encryption.encryptWorkflowHistory);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isEncryptionSetup = !!settings.encryptedApiKey;
-  const isRsaSetup = settings.encryption.enabled && !!settings.encryption.publicKey;
+
 
   // When plan changes, reset model if it's not available
   useEffect(() => {
@@ -104,13 +103,6 @@ export function GeneralTab({
     }
   }, [fetcherData]);
 
-  const handleResetEncryption = useCallback(() => {
-    // Reset encryption by submitting with cleared values
-    const fd = new FormData();
-    fd.set("_action", "saveEncryptionReset");
-    fetcher.submit(fd, { method: "post" });
-    setConfirmReset(false);
-  }, [fetcher]);
 
   return (
     <SectionCard>
@@ -391,43 +383,6 @@ export function GeneralTab({
           />
           <Label htmlFor="encryptWorkflowHistory">{t("settings.encryption.encryptWorkflow")}</Label>
         </div>
-
-        {/* Reset encryption keys */}
-        {isRsaSetup && (
-          <div className="mb-6">
-            {!confirmReset ? (
-              <button
-                type="button"
-                onClick={() => setConfirmReset(true)}
-                className="text-sm text-red-600 dark:text-red-400 hover:underline"
-              >
-                {t("settings.encryption.reset")}
-              </button>
-            ) : (
-              <div className="p-3 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20 space-y-2">
-                <p className="text-sm text-red-700 dark:text-red-300">
-                  {t("settings.encryption.resetWarning")}
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleResetEncryption}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
-                  >
-                    {t("settings.encryption.confirmReset")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmReset(false)}
-                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <hr className="my-6 border-gray-200 dark:border-gray-700" />
 

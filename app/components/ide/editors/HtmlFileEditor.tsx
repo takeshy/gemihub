@@ -10,6 +10,7 @@ import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { TempDiffModal } from "../TempDiffModal";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { buildHtmlPreviewSrcDoc, buildMockGemihubScript } from "./html-preview-mock";
 
 type HtmlEditMode = "preview" | "raw";
 
@@ -154,19 +155,53 @@ export function HtmlFileEditor({
 
   const isMobile = useIsMobile();
 
-  // Inject touch tracking script into srcDoc so swipe gestures are forwarded
-  // to the parent via postMessage. The script is tiny and harmless on desktop
-  // (touch events simply don't fire). sandbox="allow-scripts" (without
-  // allow-same-origin) keeps the iframe in an opaque origin -- safe.
-  const srcDocWithTouch = useMemo(() => {
-    const script = `<script>
-var _sx,_sy,_st;
-document.addEventListener('touchstart',function(e){var t=e.touches[0];_sx=t.clientX;_sy=t.clientY;_st=Date.now();});
-document.addEventListener('touchend',function(e){var t=e.changedTouches[0];
-parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.clientX,ey:t.clientY,et:Date.now()},'*');});
-</script>`;
-    return content + script;
-  }, [content]);
+  // Load mock data from IndexedDB for IDE preview of Hubwork pages.
+  // Sandboxed iframes (origin: null) cannot fetch from the server, so we
+  // inject an inline mock api.js that returns cached mock data directly.
+  const needsMock = content.includes("/__gemihub/api.js");
+  const [mockReady, setMockReady] = useState(!needsMock);
+  const [mockScript, setMockScript] = useState("");
+  useEffect(() => {
+    if (!needsMock) {
+      setMockScript("");
+      setMockReady(true);
+      return;
+    }
+    setMockReady(false);
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getCachedRemoteMeta, getCachedFile } = await import("~/services/indexeddb-cache");
+        const meta = await getCachedRemoteMeta();
+        if (cancelled) return;
+
+        const mockData: Record<string, string> = {};
+        for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
+          if (fmeta.name?.startsWith("web/__gemihub/") && fmeta.name.endsWith(".json")) {
+            const cached = await getCachedFile(fid);
+            if (cached?.content) {
+              mockData[fmeta.name] = cached.content;
+            }
+          }
+        }
+        if (cancelled) return;
+        setMockScript(buildMockGemihubScript(mockData));
+        setMockReady(true);
+      } catch {
+        setMockScript("");
+        setMockReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [content, needsMock]);
+
+  // Inject touch tracking + mock api.js into srcDoc.
+  // sandbox="allow-scripts" (without allow-same-origin) keeps the iframe in
+  // an opaque origin — safe, but fetch() is blocked by CORS. So we always
+  // strip the api.js src tag (it can never work) and inject our mock instead.
+  const srcDocWithScripts = useMemo(() => {
+    return buildHtmlPreviewSrcDoc(content, mockScript);
+  }, [content, mockScript]);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -224,13 +259,16 @@ parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.client
       </div>
 
       {/* Content area */}
-      {mode === "preview" && (
+      {mode === "preview" && mockReady && (
         <iframe
-          srcDoc={srcDocWithTouch}
+          srcDoc={srcDocWithScripts}
           className="flex-1 w-full border-0 bg-white"
           title={fileName}
           sandbox="allow-scripts"
         />
+      )}
+      {mode === "preview" && !mockReady && (
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading...</div>
       )}
 
       {mode === "raw" && (

@@ -42,11 +42,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html: [
-              // Register SW and warm cache on every activation (first install AND updates).
-              // On the very first visit, the initial navigation request happens BEFORE the SW
-              // is active, so the HTML and assets are NOT cached. On SW updates, skipWaiting +
-              // clients.claim cause controllerchange to fire, so we always listen for it.
-              'if("serviceWorker"in navigator){window.addEventListener("load",function(){',
+              // Register SW only on main app domains (skip hubwork custom domains).
+              'var _h=location.hostname;',
+              'var _isMain=_h==="localhost"||_h==="gemihub.online"||_h==="www.gemihub.online";',
+              'if(_isMain&&"serviceWorker"in navigator){window.addEventListener("load",function(){',
               'navigator.serviceWorker.register("/sw.js").then(function(){',
               'navigator.serviceWorker.addEventListener("controllerchange",function cc(){',
               'navigator.serviceWorker.removeEventListener("controllerchange",cc);',

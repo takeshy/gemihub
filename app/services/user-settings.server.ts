@@ -14,7 +14,7 @@ const settingsCache = new Map<string, { settings: UserSettings; fileId: string |
 const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Find or create the settings.json file ID in the root folder
+ * Find the settings.json file ID in the root folder
  */
 async function getSettingsFileId(
   accessToken: string,
@@ -103,7 +103,19 @@ export async function getSettings(
 }
 
 /**
- * Save user settings to Drive
+ * Ensure settings.json exists on Drive. Called once during login.
+ */
+export async function ensureSettingsFile(
+  accessToken: string,
+  rootFolderId: string
+): Promise<void> {
+  const fileId = await getSettingsFileId(accessToken, rootFolderId);
+  if (fileId) return;
+  await createFile(accessToken, SETTINGS_FILE_NAME, JSON.stringify(DEFAULT_USER_SETTINGS, null, 2), rootFolderId, "application/json");
+}
+
+/**
+ * Save user settings to Drive (update only — settings.json must already exist)
  */
 export async function saveSettings(
   accessToken: string,
@@ -126,16 +138,16 @@ export async function saveSettings(
     }),
   };
   const content = JSON.stringify(normalizedSettings, null, 2);
-  const fileId = await getSettingsFileId(accessToken, rootFolderId);
 
-  if (fileId) {
-    await updateFile(accessToken, fileId, content, "application/json");
-  } else {
-    await createFile(accessToken, SETTINGS_FILE_NAME, content, rootFolderId, "application/json");
+  const cacheKey = rootFolderId;
+  const cached = settingsCache.get(cacheKey);
+  const fileId = cached?.fileId ?? await getSettingsFileId(accessToken, rootFolderId);
+
+  if (!fileId) {
+    throw new Error("settings.json not found on Drive");
   }
 
-  // Update cache
-  const cacheKey = rootFolderId;
+  await updateFile(accessToken, fileId, content, "application/json");
   settingsCache.set(cacheKey, { settings: normalizedSettings, fileId, cachedAt: Date.now() });
 }
 

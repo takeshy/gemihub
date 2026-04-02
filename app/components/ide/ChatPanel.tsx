@@ -33,6 +33,7 @@ import {
 } from "~/services/indexeddb-cache";
 import { getCachedApiKey } from "~/services/api-key-cache";
 import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
+import { executeInteractionsChat } from "~/hooks/useInteractionsChat";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { useSkills } from "~/contexts/SkillContext";
 
@@ -43,6 +44,17 @@ export interface ChatOverrides {
   enabledMcpServers?: string[] | null;
   pluginExecute?: (args: string) => Promise<string>;
   skillId?: string;
+}
+
+function isPlanApprovalMessage(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) return false;
+
+  return [
+    /^(ok|okay|yes|y|sure|go ahead|proceed|continue|approved|approve)$/i,
+    /^(looks good|sounds good|that works|do it)$/i,
+    /^(進めて|続けて|そのまま|お願いします|お願い|承認|okです|了解|はい)$/i,
+  ].some((pattern) => pattern.test(normalized));
 }
 
 interface ChatPanelProps {
@@ -418,8 +430,10 @@ export function ChatPanel({
         return;
       }
 
+      // Paid plan uses server-side API key; free plan needs local key
+      const isPaidPlan = settings.apiPlan === "paid";
       const localApiKey = getCachedApiKey();
-      if (!localApiKey) {
+      if (!isPaidPlan && !localApiKey) {
         if (hasEncryptedApiKey && onNeedUnlock) {
           pendingSendRef.current = { content, attachments, overrides };
           onNeedUnlock();
@@ -514,41 +528,107 @@ export function ChatPanel({
           activateSkill(overrides.skillId);
         }
         const extraSkillIds = overrides?.skillId ? [overrides.skillId] : undefined;
-        const skillPrompt = await getActiveSkillsSystemPrompt(extraSkillIds);
-        const fullSystemPrompt = [settings.systemPrompt, skillPrompt]
+        const skillPrompt = await getActiveSkillsSystemPrompt(extraSkillIds, settings.hubwork?.accounts);
+
+        // Inject Plan → Create → Verify instruction when webpage-builder skill is active
+        // and the user's message looks like a web creation request
+        let planInstruction = "";
+        if (skillPrompt) {
+          const allIds = extraSkillIds
+            ? [...new Set([...activeSkillIds, ...extraSkillIds])]
+            : activeSkillIds;
+          if (allIds.includes("webpage-builder")) {
+            planInstruction = [
+              "## IMPORTANT: Plan Before Action",
+              "",
+              "If the user's message is a request to create, modify, or build web pages/APIs, you MUST follow this process:",
+              "1. **Plan** — Present a numbered list of ALL files (HTML, API YAML, mock JSON) with full `web/` paths. Wait for user confirmation before proceeding.",
+              "2. **Create** — After approval, save files one by one using skill workflows.",
+              "3. **Verify** — After all saves, read back every file with `read_drive_file` and check against the skill's checklist. Fix any issues.",
+              "",
+              "Do NOT call `run_skill_workflow` until the user approves the plan.",
+            ].join("\n");
+          }
+        }
+
+        const fullSystemPrompt = [settings.systemPrompt, planInstruction, skillPrompt]
           .filter(Boolean)
           .join("\n\n") || undefined;
         const skillWorkflows = getActiveSkillWorkflows(extraSkillIds);
 
-        const generator = executeLocalChat(
-          {
-            apiKey: localApiKey,
-            model: effectiveModel,
-            messages: updatedMessages,
-            systemPrompt: fullSystemPrompt,
-            skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
-            driveToolMode: effectiveDriveToolMode,
-            mcpServerIds: effectiveMcpIds,
-            ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
-            webSearchEnabled: isWebSearch,
-            enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
-            maxFunctionCalls: settings.maxFunctionCalls,
-            functionCallWarningThreshold: settings.functionCallWarningThreshold,
-            ragTopK: settings.ragTopK,
-            abortSignal: abortController.signal,
+        // Paid plan (non-image models) → Interactions API via server
+        const useInteractions = settings.apiPlan === "paid" && !isImageGenerationModel(effectiveModel);
+
+        const chatCallbacks = {
+          onDriveEvent: (event: import("~/engine/local-executor").DriveEvent) => {
+            processDriveEvent(event).catch(() => {});
           },
-          {
-            onDriveEvent: (event) => {
-              processDriveEvent(event).catch(() => {});
-            },
-            onMcpApp: (app) => {
-              mcpApps = [...mcpApps, app];
-            },
-            onSkillWorkflowStart,
-            onSkillWorkflowEnd,
-            onSkillWorkflowLog,
+          onMcpApp: (app: McpAppInfo) => {
+            mcpApps = [...mcpApps, app];
           },
-        );
+          onSkillWorkflowStart,
+          onSkillWorkflowEnd,
+          onSkillWorkflowLog,
+        };
+
+        // Resolve previousInteractionId from last assistant message
+        const previousInteractionId = useInteractions
+          ? (() => {
+              for (let i = updatedMessages.length - 1; i >= 0; i--) {
+                if (updatedMessages[i].role === "assistant" && updatedMessages[i].interactionId) {
+                  return updatedMessages[i].interactionId;
+                }
+              }
+              return undefined;
+            })()
+          : undefined;
+
+        // Require explicit approval on the current turn before allowing
+        // webpage-builder workflows to run. Prior workflow history in the same
+        // thread should not unlock future unrelated requests.
+        const needsPlanApproval =
+          !!planInstruction && !isPlanApprovalMessage(content);
+
+        const generator = useInteractions
+          ? executeInteractionsChat(
+              {
+                model: effectiveModel,
+                messages: updatedMessages,
+                systemPrompt: fullSystemPrompt,
+                previousInteractionId,
+                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
+                driveToolMode: effectiveDriveToolMode,
+                mcpServerIds: effectiveMcpIds,
+                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
+                webSearchEnabled: isWebSearch,
+                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                maxFunctionCalls: 50,
+                functionCallWarningThreshold: 10,
+                ragTopK: settings.ragTopK,
+                abortSignal: abortController.signal,
+                requirePlanApproval: needsPlanApproval,
+              },
+              chatCallbacks,
+            )
+          : executeLocalChat(
+              {
+                apiKey: localApiKey!,
+                model: effectiveModel,
+                messages: updatedMessages,
+                systemPrompt: fullSystemPrompt,
+                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
+                driveToolMode: effectiveDriveToolMode,
+                mcpServerIds: effectiveMcpIds,
+                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
+                webSearchEnabled: isWebSearch,
+                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                maxFunctionCalls: 50,
+                functionCallWarningThreshold: 10,
+                ragTopK: settings.ragTopK,
+                abortSignal: abortController.signal,
+              },
+              chatCallbacks,
+            );
 
         for await (const chunk of generator) {
           if (abortController.signal.aborted) {
@@ -603,11 +683,13 @@ export function ChatPanel({
               setStreamingContent(accumulatedContent);
               break;
             case "done": {
+              console.log("[chat] done: accumulatedContent length:", accumulatedContent.length, "first 100:", accumulatedContent.slice(0, 100));
               const assistantMessage: Message = {
                 role: "assistant",
                 content: accumulatedContent,
                 timestamp: Date.now(),
                 model: effectiveModel,
+                interactionId: chunk.interactionId || undefined,
                 thinking: accumulatedThinking || undefined,
                 toolCalls:
                   accumulatedToolCalls && accumulatedToolCalls.length > 0

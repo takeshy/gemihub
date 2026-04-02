@@ -309,9 +309,24 @@ export async function handleDriveSaveNodeLocal(
 
   let fileData: FileExplorerData;
   try {
-    fileData = JSON.parse(String(sourceValue));
+    const parsed = JSON.parse(String(sourceValue));
+    if (parsed && typeof parsed === "object" && "data" in parsed && "contentType" in parsed) {
+      fileData = parsed;
+    } else {
+      throw new Error("not FileExplorerData");
+    }
   } catch {
-    throw new Error(`Variable '${sourceRaw}' does not contain valid FileExplorerData JSON`);
+    // Fallback: treat source as plain text content
+    const ext = path.includes(".") ? path.split(".").pop() || "" : "";
+    fileData = {
+      path,
+      basename: path.split("/").pop() || path,
+      name: path.split("/").pop()?.replace(/\.[^.]+$/, "") || path,
+      extension: ext,
+      mimeType: ext === "html" ? "text/html" : ext === "yaml" || ext === "yml" ? "text/yaml" : ext === "json" ? "application/json" : "text/plain",
+      contentType: "text",
+      data: String(sourceValue),
+    };
   }
 
   let fileName = path;

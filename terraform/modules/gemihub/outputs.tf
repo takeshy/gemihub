@@ -12,3 +12,8 @@ output "nameservers" {
   description = "Set these nameservers at your domain registrar (Onamae.com)"
   value       = var.manage_dns ? google_dns_managed_zone.default[0].name_servers : []
 }
+
+output "cloud_run_service_account_email" {
+  description = "Cloud Run service account email"
+  value       = google_service_account.cloud_run.email
+}

@@ -183,6 +183,7 @@ function WorkflowNodeListView({
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [workflowName, setWorkflowName] = useState("");
+  const [yamlName, setYamlName] = useState<string | undefined>(undefined);
   const [rawYaml, setRawYaml] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -197,10 +198,11 @@ function WorkflowNodeListView({
       setError(null);
       try {
         const yamlData = yaml.load(rawContent) as Record<string, unknown>;
-        setWorkflowName(
-          typeof yamlData?.name === "string" ? yamlData.name : fileName.replace(/\.ya?ml$/, "")
-        );
+        const nameInYaml = typeof yamlData?.name === "string" ? yamlData.name : undefined;
+        setYamlName(nameInYaml);
+        setWorkflowName(nameInYaml || fileName.replace(/\.ya?ml$/, ""));
       } catch {
+        setYamlName(undefined);
         setWorkflowName(fileName.replace(/\.ya?ml$/, ""));
       }
     } catch (err) {
@@ -266,7 +268,7 @@ function WorkflowNodeListView({
   const saveWorkflow = useCallback(
     async (updated: Workflow) => {
       try {
-        const yamlContent = serializeWorkflow(updated, workflowName);
+        const yamlContent = serializeWorkflow(updated, yamlName);
         await saveToCache(yamlContent);
         setWorkflow(updated);
         setRawYaml(yamlContent);
@@ -276,7 +278,7 @@ function WorkflowNodeListView({
         setError(err instanceof Error ? err.message : "Failed to save");
       }
     },
-    [saveToCache, workflowName, onWorkflowChanged]
+    [saveToCache, yamlName, onWorkflowChanged]
   );
 
   const handleAddNode = useCallback(() => {

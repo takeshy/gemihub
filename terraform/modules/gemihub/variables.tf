@@ -19,24 +19,6 @@ variable "domain" {
   type        = string
 }
 
-variable "google_client_id" {
-  description = "Google OAuth client ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "google_client_secret" {
-  description = "Google OAuth client secret"
-  type        = string
-  sensitive   = true
-}
-
-variable "session_secret" {
-  description = "Session encryption secret"
-  type        = string
-  sensitive   = true
-}
-
 variable "google_site_verification_token" {
   description = "Google site verification token (without the 'google-site-verification=' prefix). Empty disables TXT record."
   type        = string

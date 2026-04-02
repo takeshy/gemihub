@@ -1,0 +1,21 @@
+{
+  "hubwork": {
+    "spreadsheetId": "YOUR_SPREADSHEET_ID",
+    "accounts": {
+      "partner": {
+        "identity": {
+          "sheet": "Partners",
+          "emailColumn": "email"
+        },
+        "data": {
+          "profile": {
+            "sheet": "Partners",
+            "matchBy": "email",
+            "fields": ["email", "company_name", "contact_name"],
+            "shape": "object"
+          }
+        }
+      }
+    }
+  }
+}

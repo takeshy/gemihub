@@ -1,0 +1,243 @@
+import { google } from "googleapis";
+import { updateAccount } from "./hubwork-accounts.server";
+import type { HubworkDomainStatus } from "~/types/hubwork";
+
+/**
+ * GCP resource names. Set via environment variables in production.
+ */
+const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
+const CERT_MAP_NAME = process.env.HUBWORK_CERT_MAP_NAME || "gemihub-map";
+const URL_MAP_NAME = process.env.HUBWORK_URL_MAP_NAME || "gemini-hub-https";
+
+function getAuthClient() {
+  return new google.auth.GoogleAuth({
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+}
+
+/**
+ * Provision a custom domain for a Hubwork account.
+ * 1. Create a Certificate Manager certificate (DNS authorization)
+ * 2. Create a Certificate Map entry
+ * 3. Add a host rule to the LB URL map pointing to the shared Cloud Run backend
+ * 4. Update account status in Firestore
+ */
+export async function provisionDomain(
+  accountId: string,
+  domain: string
+): Promise<{ domainStatus: HubworkDomainStatus; message: string }> {
+  if (!PROJECT_ID) {
+    throw new Error("GCP_PROJECT_ID environment variable is required for domain provisioning");
+  }
+
+  const auth = getAuthClient();
+  const certManager = google.certificatemanager({ version: "v1", auth });
+
+  // 1. Create DNS authorization
+  const authId = `hw-auth-${accountId}`;
+  try {
+    await certManager.projects.locations.dnsAuthorizations.create({
+      parent: `projects/${PROJECT_ID}/locations/global`,
+      dnsAuthorizationId: authId,
+      requestBody: {
+        domain,
+      },
+    });
+  } catch (e: unknown) {
+    const status = (e as { code?: number })?.code;
+    if (status !== 409) throw e; // 409 = already exists, ok
+  }
+
+  // 2. Create certificate
+  const certId = `hw-cert-${accountId}`;
+  try {
+    await certManager.projects.locations.certificates.create({
+      parent: `projects/${PROJECT_ID}/locations/global`,
+      certificateId: certId,
+      requestBody: {
+        managed: {
+          domains: [domain],
+          dnsAuthorizations: [
+            `projects/${PROJECT_ID}/locations/global/dnsAuthorizations/${authId}`,
+          ],
+        },
+      },
+    });
+  } catch (e: unknown) {
+    const status = (e as { code?: number })?.code;
+    if (status !== 409) throw e;
+  }
+
+  // 3. Create certificate map entry
+  const entryId = `hw-entry-${accountId}`;
+  try {
+    await certManager.projects.locations.certificateMaps.certificateMapEntries.create({
+      parent: `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}`,
+      certificateMapEntryId: entryId,
+      requestBody: {
+        hostname: domain,
+        certificates: [
+          `projects/${PROJECT_ID}/locations/global/certificates/${certId}`,
+        ],
+      },
+    });
+  } catch (e: unknown) {
+    const status = (e as { code?: number })?.code;
+    if (status !== 409) throw e;
+  }
+
+  // 4. Add host rule to URL map (pointing to same Cloud Run backend)
+  try {
+    await addHostRuleToUrlMap(domain);
+  } catch (e) {
+    console.warn(`[hubwork-domain] Failed to update URL map for ${domain}:`, e);
+  }
+
+  // 5. Update Firestore
+  await updateAccount(accountId, {
+    customDomain: domain,
+    domainStatus: "pending_dns",
+  });
+
+  // Get DNS authorization record for the user
+  const dnsAuth = await certManager.projects.locations.dnsAuthorizations.get({
+    name: `projects/${PROJECT_ID}/locations/global/dnsAuthorizations/${authId}`,
+  });
+
+  const dnsRecord = dnsAuth.data.dnsResourceRecord;
+  const message = dnsRecord
+    ? `Add a CNAME record: ${dnsRecord.name} → ${dnsRecord.data}`
+    : "DNS authorization created. Check the Google Cloud Console for the required DNS record.";
+
+  return { domainStatus: "pending_dns", message };
+}
+
+/**
+ * Check the provisioning status of a custom domain.
+ */
+export async function getDomainStatus(
+  accountId: string
+): Promise<{ domainStatus: HubworkDomainStatus; certState?: string; message?: string }> {
+  if (!PROJECT_ID) {
+    return { domainStatus: "active", message: "Domain provisioning not available (no GCP_PROJECT_ID)" };
+  }
+
+  const auth = getAuthClient();
+  const certManager = google.certificatemanager({ version: "v1", auth });
+  const certId = `hw-cert-${accountId}`;
+
+  try {
+    const cert = await certManager.projects.locations.certificates.get({
+      name: `projects/${PROJECT_ID}/locations/global/certificates/${certId}`,
+    });
+
+    const state = cert.data.managed?.state || "unknown";
+
+    if (state === "ACTIVE") {
+      await updateAccount(accountId, { domainStatus: "active" });
+      return { domainStatus: "active", certState: state };
+    }
+
+    if (state === "PROVISIONING") {
+      await updateAccount(accountId, { domainStatus: "provisioning_cert" });
+      return { domainStatus: "provisioning_cert", certState: state, message: "Certificate is being provisioned. This may take a few minutes." };
+    }
+
+    if (state === "FAILED") {
+      await updateAccount(accountId, { domainStatus: "failed" });
+      return { domainStatus: "failed", certState: state, message: "Certificate provisioning failed." };
+    }
+
+    return {
+      domainStatus: "pending_dns",
+      certState: state,
+      message: `Certificate state: ${state}. Please verify your DNS records are correct.`,
+    };
+  } catch (e: unknown) {
+    const errCode = (e as { code?: number })?.code;
+    if (errCode === 404) {
+      return { domainStatus: "pending_dns", message: "Certificate not found. Run domain provisioning first." };
+    }
+    throw e;
+  }
+}
+
+/**
+ * Remove a custom domain from a Hubwork account.
+ */
+export async function removeDomain(accountId: string): Promise<void> {
+  if (!PROJECT_ID) return;
+
+  const auth = getAuthClient();
+  const certManager = google.certificatemanager({ version: "v1", auth });
+
+  const entryId = `hw-entry-${accountId}`;
+  const certId = `hw-cert-${accountId}`;
+  const authId = `hw-auth-${accountId}`;
+
+  // Remove in reverse order: entry → cert → auth
+  try {
+    await certManager.projects.locations.certificateMaps.certificateMapEntries.delete({
+      name: `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}/certificateMapEntries/${entryId}`,
+    });
+  } catch { /* ignore */ }
+
+  try {
+    await certManager.projects.locations.certificates.delete({
+      name: `projects/${PROJECT_ID}/locations/global/certificates/${certId}`,
+    });
+  } catch { /* ignore */ }
+
+  try {
+    await certManager.projects.locations.dnsAuthorizations.delete({
+      name: `projects/${PROJECT_ID}/locations/global/dnsAuthorizations/${authId}`,
+    });
+  } catch { /* ignore */ }
+
+  await updateAccount(accountId, { customDomain: "", domainStatus: "none" });
+}
+
+/**
+ * Add a host rule to the HTTPS URL map pointing to the default backend service.
+ * All custom domains share the same Cloud Run backend.
+ */
+async function addHostRuleToUrlMap(domain: string): Promise<void> {
+  const auth = getAuthClient();
+  const compute = google.compute({ version: "v1", auth });
+
+  const urlMap = await compute.urlMaps.get({
+    project: PROJECT_ID,
+    urlMap: URL_MAP_NAME,
+  });
+
+  const data = urlMap.data;
+  if (!data) throw new Error("URL map not found");
+
+  // Check if host rule already exists
+  const hostRules = data.hostRules || [];
+  const exists = hostRules.some((r) => r.hosts?.includes(domain));
+  if (exists) return;
+
+  // The default path matcher (if any) or create a simple one
+  const pathMatcherName = `hw-${domain.replace(/\./g, "-")}`;
+  const pathMatchers = data.pathMatchers || [];
+
+  pathMatchers.push({
+    name: pathMatcherName,
+    defaultService: data.defaultService,
+  });
+
+  hostRules.push({
+    hosts: [domain],
+    pathMatcher: pathMatcherName,
+  });
+
+  await compute.urlMaps.patch({
+    project: PROJECT_ID,
+    urlMap: URL_MAP_NAME,
+    requestBody: {
+      hostRules,
+      pathMatchers,
+    },
+  });
+}

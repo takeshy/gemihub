@@ -7,8 +7,10 @@ import yaml from "js-yaml";
 import {
   getCachedFileTree,
   getCachedFile,
+  getCachedRemoteMeta,
   type CachedTreeNode,
 } from "./indexeddb-cache";
+import { buildTreeFromMeta } from "~/utils/file-tree-operations";
 import type {
   SkillMetadata,
   SkillWorkflowRef,
@@ -64,8 +66,14 @@ function findChildByName(
  * Looks for SKILLS_FOLDER_NAME / * / SKILL.md under the root.
  */
 export async function discoverSkills(): Promise<SkillMetadata[]> {
-  const tree = await getCachedFileTree();
-  if (!tree) return [];
+  let tree = await getCachedFileTree();
+  // Fallback: build tree from CachedRemoteMeta if file tree cache is missing
+  if (!tree) {
+    const remoteMeta = await getCachedRemoteMeta();
+    if (!remoteMeta) return [];
+    const items = buildTreeFromMeta(remoteMeta);
+    tree = { id: "current", rootFolderId: remoteMeta.rootFolderId, items, cachedAt: Date.now() };
+  }
 
   const skillsFolder = findChildByName(tree.items, SKILLS_FOLDER_NAME);
   if (!skillsFolder || !skillsFolder.isFolder || !skillsFolder.children) return [];
@@ -286,8 +294,10 @@ function findNodeById(
 /**
  * Build a system prompt section for active skills.
  */
-export function buildSkillSystemPrompt(skills: LoadedSkill[]): string {
+export function buildSkillSystemPrompt(skills: LoadedSkill[], hubworkAccounts?: Record<string, unknown>): string {
   if (skills.length === 0) return "";
+
+  const hasWorkflows = skills.some((s) => s.workflows.length > 0);
 
   const sections: string[] = [
     "# Active Agent Skills",
@@ -295,6 +305,8 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[]): string {
     "The following agent skills are active. Proactively use the skill's instructions and workflows to fulfill the user's request.",
     "When a workflow lists \"Input variables\", pass them via the variables parameter as a JSON object. Infer values from the user's message when possible. If a required variable cannot be inferred, ask the user before calling the workflow.",
   ];
+
+  // Plan → Create → Verify process is enforced via run_skill_workflow tool description
 
   for (const skill of skills) {
     sections.push("");
@@ -305,6 +317,16 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[]): string {
     sections.push("");
     sections.push("### Instructions");
     sections.push(skill.instructions);
+
+    // Inject account type info directly after webpage-builder instructions
+    if (skill.id === "webpage-builder" && hubworkAccounts && Object.keys(hubworkAccounts).length > 0) {
+      const types = Object.keys(hubworkAccounts);
+      sections.push("");
+      sections.push("### Configured Account Types (use exact spelling)");
+      for (const t of types) {
+        sections.push(`- accountType = \`"${t}"\` → auth.require("${t}"), auth.login("${t}"), auth.logout("${t}"), login page: /login/${t}, requireAuth: ${t}`);
+      }
+    }
 
     if (skill.references.length > 0) {
       sections.push("");

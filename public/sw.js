@@ -67,8 +67,9 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // Skip API and auth routes — API data is managed by IndexedDB on the client
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) {
+  // Skip API, auth, and admin routes — API data is managed by IndexedDB on the client;
+  // admin routes use Basic Auth which requires raw WWW-Authenticate headers.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/") || url.pathname.startsWith("/hubwork/admin")) {
     return;
   }
 

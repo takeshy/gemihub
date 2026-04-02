@@ -37,24 +37,6 @@ variable "domain" {
   type        = string
 }
 
-variable "google_client_id" {
-  description = "Google OAuth client ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "google_client_secret" {
-  description = "Google OAuth client secret"
-  type        = string
-  sensitive   = true
-}
-
-variable "session_secret" {
-  description = "Session encryption secret"
-  type        = string
-  sensitive   = true
-}
-
 variable "google_site_verification_token" {
   description = "Google site verification token"
   type        = string
@@ -70,9 +52,6 @@ module "gemihub" {
   project_number                 = var.project_number
   region                         = var.region
   domain                         = var.domain
-  google_client_id               = var.google_client_id
-  google_client_secret           = var.google_client_secret
-  session_secret                 = var.session_secret
   google_site_verification_token = var.google_site_verification_token
   manage_bigquery_views          = false
   root_folder_name               = "gemihub"

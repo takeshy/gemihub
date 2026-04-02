@@ -82,9 +82,9 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 
 ## Features
 
-- **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments
+- **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments. Paid plan uses the Interactions API for simultaneous function tools + RAG + Web Search and conversation chaining
 - **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides. `/run @workflow.yaml` executes workflows directly from chat with inline streaming logs
-- **Visual Workflow Editor** — Visual node-based builder (24 node types), YAML import/export, real-time SSE execution
+- **Visual Workflow Editor** — Visual node-based builder (30 node types), YAML import/export, real-time SSE execution
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
 - **Keyboard Shortcuts** — Configurable shortcuts with modifier key support (Ctrl/Cmd, Shift, Alt) via Settings
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
@@ -120,6 +120,7 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 | Workflow Execution Engine | [workflow_execution.md](./docs/workflow_execution.md) | [workflow_execution_ja.md](./docs/workflow_execution_ja.md) |
 | Agent Skills | [skill.md](./docs/skill.md) | — |
 | Search | [search.md](./docs/search.md) | [search_ja.md](./docs/search_ja.md) |
+| Premium Plan | [premium.md](./docs/premium.md) | [premium_ja.md](./docs/premium_ja.md) |
 
 ## Getting Started
 
@@ -233,6 +234,78 @@ docker run -p 8080:8080 \
   gemihub
 ```
 
+## Paid Plans
+
+Two paid plans extend GemiHub with Google Sheets/Gmail integration and web app builder capabilities. See [docs/premium.md](docs/premium.md) for full details.
+
+### Lite (¥300/month)
+
+| Feature | Description |
+|---------|-------------|
+| **Gmail Send** | Workflow node: `gmail-send`. Send emails via Gmail API |
+| **PDF Generation** | Convert Markdown/HTML to PDF |
+| **Upload Limit Removed** | Free plan has 20MB limit; Lite and Pro have no practical limit |
+| **Migration Token** | Export token for external migration tools |
+| **Temp Edit URL** | Generate temporary URLs for external editor integration |
+| **Interactions API Chat** | Chat uses the Gemini Interactions API: function tools + RAG + Web Search simultaneously, conversation chaining via `previous_interaction_id` |
+
+### Pro (¥2,000/month)
+
+All Lite features, plus:
+
+| Feature | Description |
+|---------|-------------|
+| **Google Sheets CRUD** | Workflow nodes: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete` |
+| **File-Based Page Hosting** | Place files in `web/` on Drive — served directly via Drive API + CDN with file-based routing and `[param]` dynamic routes |
+| **Built-in Subdomain** | `{slug}.gemihub.online` available immediately on account creation |
+| **Custom Domains** | Optional per-account domain with auto-provisioned SSL via Certificate Manager |
+| **Multi-Type Auth** | Multiple account types (e.g., "talent", "company") with independent magic link sessions per type |
+| **Workflow API** | YAML workflows in `web/api/` exposed as JSON endpoints via `/__gemihub/api/*`, with form POST support |
+| **Client Helper** | `/__gemihub/api.js` provides `gemihub.get()`, `gemihub.post()`, and `gemihub.auth.*` for frontend integration |
+| **AI Web Builder Skill** | Auto-provisioned "Webpage Builder" skill lets AI create pages and APIs via chat |
+| **Server-Side Execution** | All node types run server-side, including `script` (via `isolated-vm`) |
+| **Scheduled Workflows** | Cron-based multi-tenant execution via Cloud Scheduler + Firestore with deferred retry |
+
+### Architecture
+
+```
+Load Balancer + Cloud CDN + Certificate Manager
+  ├── *.gemihub.online     → Cloud Run (wildcard subdomain)
+  ├── app.acme.com         → Cloud Run (custom domain)
+  └── app.other.com        → Cloud Run (same backend)
+
+Cloud Run (single instance, multi-tenant)
+  ├── GemiHub IDE (free features)
+  ├── Premium API (per-account, resolved by Host header)
+  ├── Page proxy (file-based routing from Drive, CDN-cached)
+  ├── Scheduled workflow execution
+  └── isolated-vm (server-side script execution)
+
+Firestore
+  ├── accounts + tokens
+  ├── scheduleIndex + runtime
+  ├── form submissions (TTL)
+  └── magic link tokens (TTL)
+```
+
+### Workflow Nodes (Paid Only)
+
+| Node | Description |
+|------|-------------|
+| `sheet-read` | Read rows with optional filter and limit |
+| `sheet-write` | Append rows to a sheet |
+| `sheet-update` | Update rows matching a filter |
+| `sheet-delete` | Delete rows matching a filter |
+| `gmail-send` | Send email via Gmail API |
+
+### Setup
+
+1. Subscribe via the **Settings > Premium Plan** tab — choose your subdomain slug
+2. Premium features are automatically enabled after subscription
+3. Configure account types and Sheets integration in `settings.json` (`accounts` with identity/data config)
+4. Optionally set a custom domain — DNS records and SSL certificates are provisioned automatically
+5. Place HTML/CSS/JS files in `web/` and workflow APIs in `web/api/` — Push to publish
+
 ## Architecture
 
 | Layer | Tech |
@@ -240,9 +313,9 @@ docker run -p 8080:8080 \
 | Frontend | React 19, React Router 7, Tailwind CSS v4, Mermaid |
 | Backend | React Router server (SSR + API routes) |
 | AI | Google Gemini API (`@google/genai`) |
-| Storage | Google Drive API |
+| Storage | Google Drive API, Firestore |
 | Auth | Google OAuth 2.0 → session cookies |
-| Infrastructure | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Secret Manager, Global HTTPS LB |
+| Infrastructure | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Certificate Manager, Cloud Scheduler, Global HTTPS LB + CDN |
 | Editor | wysimark-lite (Slate-based WYSIWYG) |
 
 ## License

@@ -307,10 +307,10 @@ export async function handleCommandNodeLocal(
     {
       webSearchEnabled,
       enableThinking: node.properties["enableThinking"] !== "false",
-      functionCallLimits: settings ? {
-        maxFunctionCalls: settings.maxFunctionCalls,
-        functionCallWarningThreshold: settings.functionCallWarningThreshold,
-      } : undefined,
+      functionCallLimits: {
+        maxFunctionCalls: 50,
+        functionCallWarningThreshold: 10,
+      },
       ragTopK: settings?.ragTopK,
     },
   );

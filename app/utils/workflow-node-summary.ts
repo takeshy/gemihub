@@ -90,6 +90,15 @@ export function getNodeTypeLabel(type: WorkflowNodeType): string {
     script: "Script",
     sleep: "Sleep",
     "gemihub-command": "GemiHub Command",
+    "sheet-read": "Sheet Read",
+    "sheet-write": "Sheet Write",
+    "sheet-update": "Sheet Update",
+    "sheet-delete": "Sheet Delete",
+    "gmail-send": "Gmail Send",
+    "calendar-list": "Calendar List",
+    "calendar-create": "Calendar Create",
+    "calendar-update": "Calendar Update",
+    "calendar-delete": "Calendar Delete",
   };
   return labels[type] || type;
 }
@@ -138,6 +147,13 @@ export function getNodeTypeColor(type: WorkflowNodeType): string {
     // GemHub commands: rose
     case "gemihub-command":
       return "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300";
+    // Hubwork: teal (Sheets/Gmail)
+    case "sheet-read":
+    case "sheet-write":
+    case "sheet-update":
+    case "sheet-delete":
+    case "gmail-send":
+      return "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300";
     // Misc
     case "sleep":
       return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";

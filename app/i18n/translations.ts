@@ -165,9 +165,6 @@ export interface TranslationStrings {
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": string;
   "settings.encryption.encryptWorkflow": string;
-  "settings.encryption.reset": string;
-  "settings.encryption.resetWarning": string;
-  "settings.encryption.confirmReset": string;
 
   // Password / API Key encryption
   "settings.general.password": string;
@@ -576,6 +573,75 @@ export interface TranslationStrings {
   "settings.shortcuts.executionDone": string;
   "settings.shortcuts.executionError": string;
 
+  // Hubwork tab
+  "settings.tab.hubwork": string;
+  "settings.hubwork.title": string;
+  "settings.hubwork.domain": string;
+  "settings.hubwork.domainPlaceholder": string;
+  "settings.hubwork.domainProvision": string;
+  "settings.hubwork.domainRemove": string;
+  "settings.hubwork.domainStatus": string;
+  "settings.hubwork.domainStatusActive": string;
+  "settings.hubwork.domainStatusPendingDns": string;
+  "settings.hubwork.domainStatusProvisioningCert": string;
+  "settings.hubwork.domainStatusFailed": string;
+  "settings.hubwork.schedules": string;
+  "settings.hubwork.schedulesEmpty": string;
+  "settings.hubwork.scheduleAdd": string;
+  "settings.hubwork.scheduleWorkflow": string;
+  "settings.hubwork.scheduleCron": string;
+  "settings.hubwork.scheduleEnabled": string;
+  "settings.hubwork.scheduleRemove": string;
+  "settings.hubwork.subscription": string;
+  "settings.hubwork.subscribeButton": string;
+  "settings.hubwork.slugLabel": string;
+  "settings.hubwork.slugRequired": string;
+  "settings.hubwork.slugInvalid": string;
+  "settings.hubwork.siteUrl": string;
+  "settings.hubwork.subscriptionActive": string;
+  "settings.hubwork.subscriptionGranted": string;
+  "settings.hubwork.manageSubscription": string;
+  "settings.hubwork.subscriptionRequired": string;
+  "settings.hubwork.accounts": string;
+  "settings.hubwork.accountsEmpty": string;
+  "settings.hubwork.accountAdd": string;
+  "settings.hubwork.accountTypeNamePlaceholder": string;
+  "settings.hubwork.identitySheet": string;
+  "settings.hubwork.identityEmailColumn": string;
+  "settings.hubwork.dataSources": string;
+  "settings.hubwork.dataSourceAdd": string;
+  "settings.hubwork.dataSourceKey": string;
+  "settings.hubwork.dataSourceSheet": string;
+  "settings.hubwork.dataSourceMatchBy": string;
+  "settings.hubwork.dataSourceFields": string;
+  "settings.hubwork.dataSourceFieldsPlaceholder": string;
+  "settings.hubwork.dataSourceShape": string;
+  "settings.hubwork.dataSourceLimit": string;
+  "settings.hubwork.dataSourceSort": string;
+  "settings.hubwork.spreadsheetId": string;
+  "settings.hubwork.spreadsheetIdPlaceholder": string;
+  "settings.hubwork.spreadsheetAdd": string;
+  "settings.hubwork.spreadsheetFetchRequired": string;
+  "settings.hubwork.selectSpreadsheet": string;
+  "settings.hubwork.scopeUpgradeRequired": string;
+  "settings.hubwork.scopeUpgradeDescription": string;
+  "settings.hubwork.scopeUpgradeButton": string;
+  "settings.hubwork.paidApiKeyRequired": string;
+  "settings.hubwork.provisioning": string;
+  "settings.hubwork.welcomeTitle": string;
+  "settings.hubwork.welcomeDescription": string;
+  "settings.hubwork.welcomeFeature1": string;
+  "settings.hubwork.welcomeFeature2": string;
+  "settings.hubwork.welcomeFeature3": string;
+  "settings.hubwork.spreadsheetInUse": string;
+  "settings.hubwork.skillMissingTitle": string;
+  "settings.hubwork.skillMissingDescription": string;
+  "settings.hubwork.skillInstall": string;
+  "settings.hubwork.skillUpdate": string;
+  "settings.hubwork.skillUpdateConfirm": string;
+  "settings.hubwork.skillUpdateSuccess": string;
+  "settings.hubwork.skillUpdateError": string;
+
   // Offline
   "offline.indicator": string;
   "offline.banner": string;
@@ -772,9 +838,6 @@ const en: TranslationStrings = {
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "Encrypt Chat History",
   "settings.encryption.encryptWorkflow": "Encrypt Workflow History",
-  "settings.encryption.reset": "Reset encryption keys...",
-  "settings.encryption.resetWarning": "This will remove all encryption keys. Encrypted data will become unreadable. Are you sure?",
-  "settings.encryption.confirmReset": "Confirm Reset",
 
   // Password / API Key encryption
   "settings.general.password": "Password",
@@ -1183,6 +1246,75 @@ const en: TranslationStrings = {
   "settings.shortcuts.executionDone": "Completed: {name}",
   "settings.shortcuts.executionError": "Error: {name}",
 
+  // Hubwork tab
+  "settings.tab.hubwork": "Premium Plan",
+  "settings.hubwork.title": "Premium Plan",
+  "settings.hubwork.domain": "Custom Domain",
+  "settings.hubwork.domainPlaceholder": "app.example.com",
+  "settings.hubwork.domainProvision": "Provision",
+  "settings.hubwork.domainRemove": "Remove",
+  "settings.hubwork.domainStatus": "Status",
+  "settings.hubwork.domainStatusActive": "Active",
+  "settings.hubwork.domainStatusPendingDns": "Pending DNS verification",
+  "settings.hubwork.domainStatusProvisioningCert": "Provisioning certificate...",
+  "settings.hubwork.domainStatusFailed": "Domain provisioning failed",
+  "settings.hubwork.schedules": "Scheduled Workflows",
+  "settings.hubwork.schedulesEmpty": "No scheduled workflows configured.",
+  "settings.hubwork.scheduleAdd": "Add Schedule",
+  "settings.hubwork.scheduleWorkflow": "Workflow file",
+  "settings.hubwork.scheduleCron": "Cron expression",
+  "settings.hubwork.scheduleEnabled": "Enabled",
+  "settings.hubwork.scheduleRemove": "Remove",
+  "settings.hubwork.subscription": "Subscription",
+  "settings.hubwork.subscribeButton": "Subscribe — ¥2,000/month",
+  "settings.hubwork.slugLabel": "Your subdomain",
+  "settings.hubwork.slugRequired": "Please enter a subdomain",
+  "settings.hubwork.slugInvalid": "3+ chars, lowercase letters, numbers, and hyphens only",
+  "settings.hubwork.siteUrl": "Site URL",
+  "settings.hubwork.subscriptionActive": "Active",
+  "settings.hubwork.subscriptionGranted": "Granted account (free)",
+  "settings.hubwork.manageSubscription": "Manage Subscription",
+  "settings.hubwork.subscriptionRequired": "A Premium subscription is required to enable this feature.",
+  "settings.hubwork.accounts": "Account Types",
+  "settings.hubwork.accountsEmpty": "No account types configured.",
+  "settings.hubwork.accountAdd": "Add Account Type",
+  "settings.hubwork.accountTypeNamePlaceholder": "(select a sheet)",
+  "settings.hubwork.identitySheet": "Auth Sheet",
+  "settings.hubwork.identityEmailColumn": "Email Column",
+  "settings.hubwork.dataSources": "Data Sources",
+  "settings.hubwork.dataSourceAdd": "Add Data Source",
+  "settings.hubwork.dataSourceKey": "Key",
+  "settings.hubwork.dataSourceSheet": "Sheet",
+  "settings.hubwork.dataSourceMatchBy": "Match By",
+  "settings.hubwork.dataSourceFields": "Fields",
+  "settings.hubwork.dataSourceFieldsPlaceholder": "email, name, company",
+  "settings.hubwork.dataSourceShape": "Shape",
+  "settings.hubwork.dataSourceLimit": "Limit",
+  "settings.hubwork.dataSourceSort": "Sort",
+  "settings.hubwork.spreadsheetId": "Spreadsheets",
+  "settings.hubwork.spreadsheetIdPlaceholder": "Paste Google Sheets URL or ID",
+  "settings.hubwork.spreadsheetAdd": "Add Spreadsheet",
+  "settings.hubwork.spreadsheetFetchRequired": "Fetch sheet names for all spreadsheets used in account types before saving.",
+  "settings.hubwork.selectSpreadsheet": "Select spreadsheet",
+  "settings.hubwork.scopeUpgradeRequired": "Additional permissions required",
+  "settings.hubwork.scopeUpgradeDescription": "The Premium plan needs Google Sheets and Gmail access. Click to re-authorize with the required permissions.",
+  "settings.hubwork.scopeUpgradeButton": "Grant permissions",
+  "settings.hubwork.paidApiKeyRequired": "A paid API key is required to subscribe. Please set API Plan to \"Paid\" in the General tab.",
+  "settings.hubwork.provisioning": "Setting up Webpage Builder skill...",
+  "settings.hubwork.welcomeTitle": "Pro Plan is ready!",
+  "settings.hubwork.welcomeDescription": "The \"Webpage Builder\" skill has been automatically activated. Here's what you can do:",
+  "settings.hubwork.welcomeFeature1": "Open Chat and describe the page you want — the AI will build it for you.",
+  "settings.hubwork.welcomeFeature2": "Register Google Spreadsheets in Data Sources to use sheet data in pages and APIs.",
+  "settings.hubwork.welcomeFeature3": "Set up Account Types to add login and user authentication to your site.",
+  "settings.hubwork.spreadsheetInUse": "This spreadsheet is used by the following Account Types. Please remove them first:",
+  "settings.hubwork.skillMissingTitle": "Webpage Builder skill is not installed",
+  "settings.hubwork.skillMissingDescription": "The AI Web Builder requires the \"Webpage Builder\" skill. Please install it to start building pages with AI.",
+  "settings.hubwork.skillInstall": "Install Webpage Builder Skill",
+  "settings.hubwork.skillUpdate": "Update Skill to Latest",
+  "settings.hubwork.skillUpdateConfirm": "This will overwrite the current \"Webpage Builder\" skill with the latest version. Your previous version is preserved in edit history. Continue?",
+  "settings.hubwork.skillUpdateSuccess": "Skill updated successfully.",
+  "settings.hubwork.skillUpdateError": "Failed to update skill.",
+
   // Offline
   "offline.indicator": "Offline",
   "offline.banner": "You are in offline mode. Some features are unavailable.",
@@ -1379,9 +1511,6 @@ const ja: TranslationStrings = {
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "チャット履歴を暗号化",
   "settings.encryption.encryptWorkflow": "ワークフロー履歴を暗号化",
-  "settings.encryption.reset": "暗号化キーをリセット...",
-  "settings.encryption.resetWarning": "すべての暗号化キーが削除されます。暗号化されたデータは読み取れなくなります。よろしいですか？",
-  "settings.encryption.confirmReset": "リセットを確認",
 
   // Password / API Key encryption
   "settings.general.password": "パスワード",
@@ -1789,6 +1918,75 @@ const ja: TranslationStrings = {
   "settings.shortcuts.executing": "実行中: {name}",
   "settings.shortcuts.executionDone": "完了: {name}",
   "settings.shortcuts.executionError": "エラー: {name}",
+
+  // Hubwork tab
+  "settings.tab.hubwork": "プレミアムプラン",
+  "settings.hubwork.title": "プレミアムプラン",
+  "settings.hubwork.domain": "カスタムドメイン",
+  "settings.hubwork.domainPlaceholder": "app.example.com",
+  "settings.hubwork.domainProvision": "設定開始",
+  "settings.hubwork.domainRemove": "削除",
+  "settings.hubwork.domainStatus": "ステータス",
+  "settings.hubwork.domainStatusActive": "有効",
+  "settings.hubwork.domainStatusPendingDns": "DNS検証待ち",
+  "settings.hubwork.domainStatusProvisioningCert": "証明書を発行中...",
+  "settings.hubwork.domainStatusFailed": "ドメイン設定に失敗しました",
+  "settings.hubwork.schedules": "スケジュール実行",
+  "settings.hubwork.schedulesEmpty": "スケジュールが設定されていません。",
+  "settings.hubwork.scheduleAdd": "スケジュール追加",
+  "settings.hubwork.scheduleWorkflow": "ワークフローファイル",
+  "settings.hubwork.scheduleCron": "Cron式",
+  "settings.hubwork.scheduleEnabled": "有効",
+  "settings.hubwork.scheduleRemove": "削除",
+  "settings.hubwork.subscription": "サブスクリプション",
+  "settings.hubwork.subscribeButton": "登録する — ¥2,000/月",
+  "settings.hubwork.slugLabel": "サブドメイン",
+  "settings.hubwork.slugRequired": "サブドメインを入力してください",
+  "settings.hubwork.slugInvalid": "3文字以上、小文字英数字とハイフンのみ",
+  "settings.hubwork.siteUrl": "サイトURL",
+  "settings.hubwork.subscriptionActive": "有効",
+  "settings.hubwork.subscriptionGranted": "管理者付与アカウント（無料）",
+  "settings.hubwork.manageSubscription": "サブスクリプション管理",
+  "settings.hubwork.subscriptionRequired": "この機能を有効にするにはプレミアムプランのサブスクリプションが必要です。",
+  "settings.hubwork.accounts": "アカウント種別",
+  "settings.hubwork.accountsEmpty": "アカウント種別が設定されていません。",
+  "settings.hubwork.accountAdd": "アカウント種別を追加",
+  "settings.hubwork.accountTypeNamePlaceholder": "（シートを選択）",
+  "settings.hubwork.identitySheet": "認証シート",
+  "settings.hubwork.identityEmailColumn": "メールカラム",
+  "settings.hubwork.dataSources": "データソース",
+  "settings.hubwork.dataSourceAdd": "データソース追加",
+  "settings.hubwork.dataSourceKey": "キー",
+  "settings.hubwork.dataSourceSheet": "シート",
+  "settings.hubwork.dataSourceMatchBy": "照合カラム",
+  "settings.hubwork.dataSourceFields": "フィールド",
+  "settings.hubwork.dataSourceFieldsPlaceholder": "email, name, company",
+  "settings.hubwork.dataSourceShape": "形式",
+  "settings.hubwork.dataSourceLimit": "件数制限",
+  "settings.hubwork.dataSourceSort": "ソート",
+  "settings.hubwork.spreadsheetId": "スプレッドシート",
+  "settings.hubwork.spreadsheetIdPlaceholder": "Google SheetsのURLまたはIDを貼り付け",
+  "settings.hubwork.spreadsheetAdd": "スプレッドシートを追加",
+  "settings.hubwork.spreadsheetFetchRequired": "保存前にアカウント種別で使用する全スプレッドシートのシート名を取得してください。",
+  "settings.hubwork.selectSpreadsheet": "スプレッドシートを選択",
+  "settings.hubwork.scopeUpgradeRequired": "追加の権限が必要です",
+  "settings.hubwork.scopeUpgradeDescription": "プレミアムプランにはGoogle SheetsとGmailへのアクセス権限が必要です。クリックして権限を付与してください。",
+  "settings.hubwork.scopeUpgradeButton": "権限を付与",
+  "settings.hubwork.paidApiKeyRequired": "サブスクリプションにはPaid APIキーが必要です。Generalタブで「Paid」に設定してください。",
+  "settings.hubwork.provisioning": "Webpage Builderスキルをセットアップ中...",
+  "settings.hubwork.welcomeTitle": "Proプランの準備ができました！",
+  "settings.hubwork.welcomeDescription": "「Webpage Builder」スキルが自動的に有効化されました。以下の機能が利用できます：",
+  "settings.hubwork.welcomeFeature1": "Chatで作りたいページを伝えるだけで、AIがWebページを作成します。",
+  "settings.hubwork.welcomeFeature2": "Data SourcesにGoogle Spreadsheetsを登録すると、ページやAPIでシートデータを利用できます。",
+  "settings.hubwork.welcomeFeature3": "Account Typesを設定すると、サイトにログイン・ユーザー認証を追加できます。",
+  "settings.hubwork.spreadsheetInUse": "このスプレッドシートは以下のAccount Typeで使用されています。先にAccount Typeを削除してください：",
+  "settings.hubwork.skillMissingTitle": "Webpage Builderスキルが未インストールです",
+  "settings.hubwork.skillMissingDescription": "AI Web Builderを使用するには「Webpage Builder」スキルが必要です。インストールしてAIによるページ作成を始めましょう。",
+  "settings.hubwork.skillInstall": "Webpage Builderスキルをインストール",
+  "settings.hubwork.skillUpdate": "スキルを最新版に更新",
+  "settings.hubwork.skillUpdateConfirm": "「Webpage Builder」スキルを最新版で上書きします。以前の内容は編集履歴から確認できます。続行しますか？",
+  "settings.hubwork.skillUpdateSuccess": "スキルを更新しました。",
+  "settings.hubwork.skillUpdateError": "スキルの更新に失敗しました。",
 
   // Offline
   "offline.indicator": "オフライン",

@@ -42,11 +42,12 @@ export function MessageList({
   }, [messages, streamingContent, streamingThinking]);
 
   // Build a partial assistant message from streaming data
+  const hasStreamingData = streamingContent || streamingThinking || (streamingToolCalls && streamingToolCalls.length > 0);
   const streamingMessage: Message | null =
-    isStreaming && (streamingContent || streamingThinking || (streamingToolCalls && streamingToolCalls.length > 0))
+    isStreaming
       ? {
           role: "assistant",
-          content: streamingContent || "",
+          content: hasStreamingData ? (streamingContent || "") : "",
           thinking: streamingThinking || undefined,
           toolCalls: streamingToolCalls && streamingToolCalls.length > 0 ? streamingToolCalls : undefined,
           ragUsed: streamingRagUsed || undefined,

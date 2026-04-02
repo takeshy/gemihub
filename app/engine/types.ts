@@ -24,7 +24,17 @@ export type WorkflowNodeType =
   | "rag-sync"
   | "sleep"
   | "script"
-  | "gemihub-command";
+  | "gemihub-command"
+  // Hubwork nodes (paid feature)
+  | "sheet-read"
+  | "sheet-write"
+  | "sheet-update"
+  | "sheet-delete"
+  | "gmail-send"
+  | "calendar-list"
+  | "calendar-create"
+  | "calendar-update"
+  | "calendar-delete";
 
 export interface WorkflowNode {
   id: string;
@@ -42,12 +52,23 @@ export interface WorkflowOptions {
   showProgress?: boolean;
 }
 
+export interface WorkflowTriggerConfig {
+  type?: string;
+  requireAuth?: string;
+  idempotencyKeyField?: string;
+  honeypotField?: string;
+  successRedirect?: string;
+  errorRedirect?: string;
+  [key: string]: string | undefined;
+}
+
 export interface Workflow {
   nodes: Map<string, WorkflowNode>;
   edges: WorkflowEdge[];
   startNode: string | null;
   options?: WorkflowOptions;
   positions?: Record<string, { x: number; y: number }>;
+  trigger?: WorkflowTriggerConfig;
 }
 
 // Execution context
@@ -226,4 +247,9 @@ export interface ServiceContext {
   onDriveFileUpdated?: (data: { fileId: string; fileName: string; content?: string }) => void;
   onDriveFileCreated?: (data: { fileId: string; fileName: string; content: string; md5Checksum: string; modifiedTime: string }) => void;
   onDriveFileDeleted?: (data: { fileId: string; fileName: string }) => void;
+  // Hubwork (paid feature) - optional Google API clients
+  hubworkSheetsClient?: import("googleapis").sheets_v4.Sheets;
+  hubworkGmailClient?: import("googleapis").gmail_v1.Gmail;
+  hubworkCalendarClient?: import("googleapis").calendar_v3.Calendar;
+  hubworkSpreadsheetId?: string;
 }

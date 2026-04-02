@@ -6,6 +6,8 @@ RUN npm ci
 FROM node:22-slim AS production-dependencies-env
 COPY ./package.json package-lock.json /app/
 WORKDIR /app
+# isolated-vm requires build tools for native compilation
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 RUN npm ci --omit=dev
 
 FROM node:22-slim AS build-env

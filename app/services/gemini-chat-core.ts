@@ -44,6 +44,29 @@ function checkFinishReason(candidates: Array<{ finishReason?: string }> | undefi
   return null;
 }
 
+/**
+ * Strip empty arrays/objects and null/undefined from tool results
+ * to avoid Gemini API "empty value" errors in function_response.
+ */
+function sanitizeToolResult(val: unknown): unknown {
+  if (val === null || val === undefined) return "(empty)";
+  if (Array.isArray(val)) {
+    if (val.length === 0) return "(empty list)";
+    return val.map(sanitizeToolResult);
+  }
+  if (typeof val === "object") {
+    const obj = val as Record<string, unknown>;
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === null || v === undefined) continue;
+      if (Array.isArray(v) && v.length === 0) continue;
+      cleaned[k] = sanitizeToolResult(v);
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : "(empty)";
+  }
+  return val;
+}
+
 export interface DriveToolMediaResult {
   __mediaData: {
     mimeType: string;
@@ -75,8 +98,8 @@ export interface ChatWithToolsOptions {
   enableThinking?: boolean;
 }
 
-const DEFAULT_MAX_FUNCTION_CALLS = 20;
-const DEFAULT_WARNING_THRESHOLD = 5;
+const DEFAULT_MAX_FUNCTION_CALLS = 50;
+const DEFAULT_WARNING_THRESHOLD = 10;
 const DEFAULT_RAG_TOP_K = 5;
 
 // Convert our Message format to Gemini Content format
@@ -110,7 +133,7 @@ export function messagesToContents(messages: Message[]): Content[] {
             functionResponse: {
               name: matchingCall?.name ?? tr.toolCallId,
               id: tr.toolCallId,
-              response: { result: tr.result } as Record<string, unknown>,
+              response: { result: sanitizeToolResult(tr.result) } as Record<string, unknown>,
             },
           });
         }
@@ -223,7 +246,7 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
 
 // Model pricing per token (USD)
 // Source: https://ai.google.dev/pricing
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "gemini-2.5-flash":       { input: 0.30 / 1e6, output: 2.50 / 1e6 },
   "gemini-2.5-flash-lite":  { input: 0.10 / 1e6, output: 0.40 / 1e6 },
   "gemini-2.5-pro":         { input: 1.25 / 1e6, output: 10.00 / 1e6 },
@@ -236,7 +259,7 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 };
 
 // Grounding with Google Search cost per prompt (USD)
-const SEARCH_GROUNDING_COST: Record<string, number> = {
+export const SEARCH_GROUNDING_COST: Record<string, number> = {
   "gemini-3-flash-preview": 14 / 1000,
   "gemini-3.1-pro-preview": 14 / 1000,
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
@@ -661,7 +684,7 @@ export async function* chatWithToolsStream(
               functionResponse: {
                 name: fc.name,
                 id: toolCall.id,
-                response: { result } as Record<string, unknown>,
+                response: { result: sanitizeToolResult(result) } as Record<string, unknown>,
               },
             });
           }

@@ -197,6 +197,74 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "text", label: "Text", required: false, placeholder: "new-name.md (for rename)" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "result" },
       ];
+    // Hubwork nodes (paid feature)
+    case "sheet-read":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "filter", label: "Filter", required: false, placeholder: '{"status": "active"}' },
+        { key: "limit", label: "Limit", required: false, placeholder: "10" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "rows" },
+      ];
+    case "sheet-write":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "data", label: "Data (JSON)", required: true, multiline: true, placeholder: '{"name": "{{formData.name}}", "email": "{{formData.email}}"}' },
+      ];
+    case "sheet-update":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "filter", label: "Filter", required: true, placeholder: '{"email": "{{currentUser.email}}"}' },
+        { key: "data", label: "Data (JSON)", required: true, multiline: true, placeholder: '{"status": "updated"}' },
+        { key: "saveTo", label: "Save Updated Count To", required: false, placeholder: "count" },
+      ];
+    case "sheet-delete":
+      return [
+        { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
+        { key: "filter", label: "Filter", required: true, placeholder: '{"email": "{{formData.email}}"}' },
+        { key: "saveTo", label: "Save Deleted Count To", required: false, placeholder: "count" },
+      ];
+    case "gmail-send":
+      return [
+        { key: "to", label: "To", required: true, placeholder: "{{formData.email}}" },
+        { key: "subject", label: "Subject", required: true, placeholder: "Welcome!" },
+        { key: "body", label: "Body (HTML)", required: false, multiline: true, placeholder: "<p>Hello {{formData.name}}</p>" },
+        { key: "saveTo", label: "Save Message ID To", required: false, placeholder: "messageId" },
+      ];
+    case "calendar-list":
+      return [
+        { key: "calendarId", label: "Calendar ID", required: false, placeholder: "primary" },
+        { key: "timeMin", label: "From (ISO 8601)", required: false, placeholder: "2025-01-01T00:00:00+09:00" },
+        { key: "timeMax", label: "To (ISO 8601)", required: false, placeholder: "2025-01-31T23:59:59+09:00" },
+        { key: "maxResults", label: "Max Results", required: false, placeholder: "50" },
+        { key: "query", label: "Search Query", required: false, placeholder: "meeting" },
+        { key: "saveTo", label: "Save To", required: true, placeholder: "events" },
+      ];
+    case "calendar-create":
+      return [
+        { key: "calendarId", label: "Calendar ID", required: false, placeholder: "primary" },
+        { key: "summary", label: "Title", required: true, placeholder: "Team Meeting" },
+        { key: "description", label: "Description", required: false, multiline: true, placeholder: "Weekly sync" },
+        { key: "start", label: "Start (ISO 8601)", required: true, placeholder: "2025-01-15T10:00:00+09:00" },
+        { key: "end", label: "End (ISO 8601)", required: true, placeholder: "2025-01-15T11:00:00+09:00" },
+        { key: "location", label: "Location", required: false, placeholder: "Conference Room A" },
+        { key: "saveTo", label: "Save Event ID To", required: false, placeholder: "eventId" },
+      ];
+    case "calendar-update":
+      return [
+        { key: "calendarId", label: "Calendar ID", required: false, placeholder: "primary" },
+        { key: "eventId", label: "Event ID", required: true, placeholder: "{{eventId}}" },
+        { key: "summary", label: "Title", required: false, placeholder: "Updated Meeting" },
+        { key: "description", label: "Description", required: false, multiline: true },
+        { key: "start", label: "Start (ISO 8601)", required: false, placeholder: "2025-01-15T10:00:00+09:00" },
+        { key: "end", label: "End (ISO 8601)", required: false, placeholder: "2025-01-15T11:00:00+09:00" },
+        { key: "location", label: "Location", required: false },
+        { key: "saveTo", label: "Save Event ID To", required: false, placeholder: "eventId" },
+      ];
+    case "calendar-delete":
+      return [
+        { key: "calendarId", label: "Calendar ID", required: false, placeholder: "primary" },
+        { key: "eventId", label: "Event ID", required: true, placeholder: "{{eventId}}" },
+      ];
     default:
       return [];
   }

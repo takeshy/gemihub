@@ -24,13 +24,14 @@ import {
   type DriveToolMode,
 } from "~/types/settings";
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
-import type { SkillWorkflowRef } from "~/types/skill";
 import type { DriveEvent } from "~/engine/local-executor";
 import type { ExecutionLog } from "~/engine/types";
-import { readFileLocal } from "~/services/drive-local";
-import { parseWorkflowContentByName } from "~/engine/parser";
-import { executeWorkflowLocally, type LocalExecuteCallbacks } from "~/engine/local-executor";
 import { buildWorkflowToolId } from "~/services/skill-loader";
+import {
+  executeSkillWorkflowTool,
+  type SkillWorkflowCallbacks,
+  type SkillWorkflowEntry,
+} from "./skillWorkflowTool";
 
 export interface LocalChatOptions {
   apiKey: string;
@@ -46,19 +47,12 @@ export interface LocalChatOptions {
   functionCallWarningThreshold?: number;
   ragTopK?: number;
   abortSignal?: AbortSignal;
-  skillWorkflows?: Array<{
-    skillId: string;
-    skillName: string;
-    workflow: SkillWorkflowRef;
-    folderId: string;
-  }>;
+  skillWorkflows?: SkillWorkflowEntry[];
 }
 
-export interface LocalChatCallbacks {
+export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
   onDriveEvent?: (event: DriveEvent) => void;
   onMcpApp?: (app: McpAppInfo) => void;
-  onSkillWorkflowStart?: (workflowId: string, workflowName: string) => void;
-  onSkillWorkflowEnd?: (workflowId: string, status: string) => void;
   onSkillWorkflowLog?: (log: ExecutionLog) => void;
 }
 
@@ -152,7 +146,7 @@ export async function* executeLocalChat(
           },
           variables: {
             type: "string",
-            description: "Optional JSON object of input variables",
+            description: "JSON object of input variables for the workflow",
           },
         },
         required: ["workflowId"],
@@ -240,70 +234,14 @@ export async function* executeLocalChat(
 
     // Skill workflow tool
     if (name === "run_skill_workflow" && skillWorkflows && skillWorkflows.length > 0) {
-      const workflowId = args.workflowId as string;
       try {
-        const variablesJson = (args.variables as string) || "{}";
-
-        // Find matching skill workflow
-        const match = skillWorkflows.find(
-          (sw) => buildWorkflowToolId(sw.skillId, sw.workflow) === workflowId,
+        return await executeSkillWorkflowTool(
+          args.workflowId as string,
+          (args.variables as string) || "{}",
+          skillWorkflows,
+          callbacks,
         );
-        if (!match) {
-          return { error: `Skill workflow not found: ${workflowId}` };
-        }
-
-        // Resolve the workflow file from pre-resolved fileId
-        const fileId = match.workflow.fileId;
-        if (!fileId) {
-          return { error: `Workflow file not found: ${match.workflow.path}` };
-        }
-
-        const content = await readFileLocal(fileId);
-        const workflow = parseWorkflowContentByName(content);
-
-        // Parse input variables
-        let initialVariables: Record<string, string | number> = {};
-        try {
-          const parsed = JSON.parse(variablesJson);
-          if (typeof parsed === "object" && parsed !== null) {
-            initialVariables = parsed;
-          }
-        } catch { /* ignore parse errors */ }
-
-        // Notify UI that skill workflow execution is starting
-        // Use file basename so the header banner click can navigate correctly
-        const workflowFileName = match.workflow.path.split("/").pop() || match.workflow.name || workflowId;
-        callbacks?.onSkillWorkflowStart?.(fileId, workflowFileName);
-
-        const executionCallbacks: LocalExecuteCallbacks = {
-          onLog: (log) => callbacks?.onSkillWorkflowLog?.(log),
-          onDriveEvent: (event) => callbacks?.onDriveEvent?.(event),
-          promptCallbacks: {
-            promptForValue: async () => null,
-            promptForDialog: async () => null,
-            promptForDriveFile: async () => null,
-          },
-        };
-        const result = await executeWorkflowLocally(workflow, executionCallbacks, {
-          initialVariables,
-          workflowId: fileId,
-        });
-
-        // Collect result variables
-        const resultVars: Record<string, string | number> = {};
-        for (const [k, v] of result.context.variables) {
-          resultVars[k] = v;
-        }
-
-        const finalStatus = result.historyRecord?.status || "completed";
-        callbacks?.onSkillWorkflowEnd?.(fileId, finalStatus);
-
-        return {
-          status: finalStatus,
-          variables: resultVars,
-        };
       } catch (err) {
-        callbacks?.onSkillWorkflowEnd?.(args.workflowId as string, "error");
         return {
           error: err instanceof Error ? err.message : "Skill workflow execution failed",
         };

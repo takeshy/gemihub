@@ -7,19 +7,76 @@ resource "google_service_account" "cloud_run" {
 
 # Grant Cloud Run SA access to read secrets
 resource "google_secret_manager_secret_iam_member" "cloud_run_google_client_id" {
-  secret_id = google_secret_manager_secret.google_client_id.id
+  secret_id = data.google_secret_manager_secret.google_client_id.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "cloud_run_google_client_secret" {
-  secret_id = google_secret_manager_secret.google_client_secret.id
+  secret_id = data.google_secret_manager_secret.google_client_secret.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "cloud_run_session_secret" {
-  secret_id = google_secret_manager_secret.session_secret.id
+  secret_id = data.google_secret_manager_secret.session_secret.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# Grant Cloud Run SA access to Firestore
+resource "google_project_iam_member" "cloud_run_firestore" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# Grant Cloud Run SA access to Certificate Manager
+resource "google_project_iam_member" "cloud_run_cert_manager" {
+  project = var.project_id
+  role    = "roles/certificatemanager.editor"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+# Grant Cloud Run SA access to update URL maps (for custom domain routing)
+resource "google_project_iam_member" "cloud_run_compute_url_map" {
+  project = var.project_id
+  role    = "roles/compute.loadBalancerAdmin"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_secret_key" {
+  secret_id = data.google_secret_manager_secret.stripe_secret_key.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_webhook_secret" {
+  secret_id = data.google_secret_manager_secret.stripe_webhook_secret.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_hubwork_admin_credentials" {
+  secret_id = data.google_secret_manager_secret.hubwork_admin_credentials.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_hubwork_admin_emails" {
+  secret_id = data.google_secret_manager_secret.hubwork_admin_emails.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_lite" {
+  secret_id = data.google_secret_manager_secret.stripe_price_id_lite.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_pro" {
+  secret_id = data.google_secret_manager_secret.stripe_price_id_pro.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }

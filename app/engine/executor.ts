@@ -22,6 +22,9 @@ import { handleWorkflowNode, handleJsonNode } from "./handlers/integration";
 import { handleMcpNode } from "./handlers/mcp";
 import { handleRagSyncNode } from "./handlers/ragSync";
 import { handleGemihubCommandNode } from "./handlers/gemihubCommand";
+import { handleSheetReadNode, handleSheetWriteNode, handleSheetUpdateNode, handleSheetDeleteNode } from "./handlers/hubworkSheets";
+import { handleGmailSendNode } from "./handlers/hubworkGmail";
+import { handleCalendarListNode, handleCalendarCreateNode, handleCalendarUpdateNode, handleCalendarDeleteNode } from "./handlers/hubworkCalendar";
 
 const MAX_WHILE_ITERATIONS = 1000;
 const MAX_TOTAL_STEPS = 100000;
@@ -496,6 +499,150 @@ export async function executeWorkflow(
           const ghOutput = ghSaveTo ? context.variables.get(ghSaveTo) : undefined;
           log(node.id, node.type, `Command completed: ${ghCmd}`, "success", { command: ghCmd, path: ghPath }, ghOutput);
           addHistoryStep(node.id, node.type, { command: ghCmd, path: ghPath }, ghOutput);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        // Hubwork nodes (paid feature)
+        case "sheet-read": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const srSheet = replaceVariables(node.properties["sheet"] || "", context);
+          log(node.id, node.type, `Reading sheet: ${srSheet}`, "info");
+          await handleSheetReadNode(node, context, serviceContext);
+          const srSaveTo = node.properties["saveTo"];
+          const srOutput = srSaveTo ? context.variables.get(srSaveTo) : undefined;
+          log(node.id, node.type, `Sheet read completed`, "success", { sheet: srSheet }, srOutput);
+          addHistoryStep(node.id, node.type, { sheet: srSheet }, srOutput);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "sheet-write": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const swSheet = replaceVariables(node.properties["sheet"] || "", context);
+          log(node.id, node.type, `Writing to sheet: ${swSheet}`, "info");
+          await handleSheetWriteNode(node, context, serviceContext);
+          log(node.id, node.type, `Sheet write completed`, "success", { sheet: swSheet });
+          addHistoryStep(node.id, node.type, { sheet: swSheet });
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "sheet-update": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const suSheet = replaceVariables(node.properties["sheet"] || "", context);
+          log(node.id, node.type, `Updating sheet: ${suSheet}`, "info");
+          await handleSheetUpdateNode(node, context, serviceContext);
+          const suSaveTo = node.properties["saveTo"];
+          const suCount = suSaveTo ? context.variables.get(suSaveTo) : undefined;
+          log(node.id, node.type, `Sheet update completed`, "success", { sheet: suSheet }, suCount);
+          addHistoryStep(node.id, node.type, { sheet: suSheet }, suCount);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "sheet-delete": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const sdSheet = replaceVariables(node.properties["sheet"] || "", context);
+          log(node.id, node.type, `Deleting from sheet: ${sdSheet}`, "info");
+          await handleSheetDeleteNode(node, context, serviceContext);
+          const sdSaveTo = node.properties["saveTo"];
+          const sdCount = sdSaveTo ? context.variables.get(sdSaveTo) : undefined;
+          log(node.id, node.type, `Sheet delete completed`, "success", { sheet: sdSheet }, sdCount);
+          addHistoryStep(node.id, node.type, { sheet: sdSheet }, sdCount);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "gmail-send": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const gmTo = replaceVariables(node.properties["to"] || "", context);
+          log(node.id, node.type, `Sending email to: ${gmTo}`, "info");
+          await handleGmailSendNode(node, context, serviceContext);
+          const gmSaveTo = node.properties["saveTo"];
+          const gmOutput = gmSaveTo ? context.variables.get(gmSaveTo) : undefined;
+          log(node.id, node.type, `Email sent`, "success", { to: gmTo }, gmOutput);
+          addHistoryStep(node.id, node.type, { to: gmTo }, gmOutput);
+          const next = getNextNodes(workflow, node.id);
+          for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-list": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const clQuery = replaceVariables(node.properties["query"] || "", context);
+          log(node.id, node.type, `Listing calendar events${clQuery ? `: ${clQuery}` : ""}`, "info");
+          await handleCalendarListNode(node, context, serviceContext);
+          const clSaveTo = node.properties["saveTo"];
+          const clOutput = clSaveTo ? context.variables.get(clSaveTo) : undefined;
+          log(node.id, node.type, `Calendar events listed`, "success", { query: clQuery }, clOutput);
+          addHistoryStep(node.id, node.type, { query: clQuery }, clOutput);
+          const clNext = getNextNodes(workflow, node.id);
+          for (const id of clNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-create": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const ccSummary = replaceVariables(node.properties["summary"] || "", context);
+          log(node.id, node.type, `Creating event: ${ccSummary}`, "info");
+          await handleCalendarCreateNode(node, context, serviceContext);
+          const ccSaveTo = node.properties["saveTo"];
+          const ccOutput = ccSaveTo ? context.variables.get(ccSaveTo) : undefined;
+          log(node.id, node.type, `Event created`, "success", { summary: ccSummary }, ccOutput);
+          addHistoryStep(node.id, node.type, { summary: ccSummary }, ccOutput);
+          const ccNext = getNextNodes(workflow, node.id);
+          for (const id of ccNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-update": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const cuEventId = replaceVariables(node.properties["eventId"] || "", context);
+          log(node.id, node.type, `Updating event: ${cuEventId}`, "info");
+          await handleCalendarUpdateNode(node, context, serviceContext);
+          const cuSaveTo = node.properties["saveTo"];
+          const cuOutput = cuSaveTo ? context.variables.get(cuSaveTo) : undefined;
+          log(node.id, node.type, `Event updated`, "success", { eventId: cuEventId }, cuOutput);
+          addHistoryStep(node.id, node.type, { eventId: cuEventId }, cuOutput);
+          const cuNext = getNextNodes(workflow, node.id);
+          for (const id of cuNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "calendar-delete": {
+          if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
+          const cdEventId = replaceVariables(node.properties["eventId"] || "", context);
+          log(node.id, node.type, `Deleting event: ${cdEventId}`, "info");
+          await handleCalendarDeleteNode(node, context, serviceContext);
+          log(node.id, node.type, `Event deleted`, "success", { eventId: cdEventId });
+          addHistoryStep(node.id, node.type, { eventId: cdEventId });
+          const cdNext = getNextNodes(workflow, node.id);
+          for (const id of cdNext.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+          break;
+        }
+
+        case "script": {
+          const { executeIsolatedJS } = await import("~/services/isolated-vm-executor.server");
+          const { replaceVariables } = await import("~/engine/handlers/utils");
+          const codeTemplate = node.properties["code"];
+          if (!codeTemplate) throw new Error("Script node missing 'code' property");
+          const scriptCode = replaceVariables(codeTemplate, context);
+          const scriptSaveTo = node.properties["saveTo"];
+          const scriptTimeout = node.properties["timeout"]
+            ? parseInt(node.properties["timeout"], 10) || 10_000
+            : 10_000;
+          const scriptResult = await executeIsolatedJS(scriptCode, undefined, scriptTimeout);
+          if (scriptSaveTo) {
+            context.variables.set(scriptSaveTo, scriptResult);
+          }
+          log(node.id, node.type, "Script executed", "success", undefined, scriptResult);
+          addHistoryStep(node.id, node.type, undefined, scriptResult);
           const next = getNextNodes(workflow, node.id);
           for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
           break;

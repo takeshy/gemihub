@@ -11,6 +11,7 @@ export const DRIVE_SEARCH_TOOL_NAMES = new Set([
   "list_drive_files",
 ]);
 
+
 /**
  * Drive tool definitions for Gemini Function Calling
  */
@@ -66,13 +67,13 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "create_drive_file",
-    description: "Create a new file in Google Drive under the 'temporaries/' folder. The 'temporaries/' prefix is automatically added if omitted. You can add sub-paths (e.g. 'report.md' becomes 'temporaries/report.md', 'drafts/note.md' becomes 'temporaries/drafts/note.md')",
+    description: "Create a new file in Google Drive. Specify the full path including folder (e.g. 'web/index.html', 'notes/memo.md', 'temporaries/draft.md').",
     parameters: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "The file name, optionally including sub-folder path (e.g. 'report.md' or 'drafts/note.md'). The 'temporaries/' prefix is added automatically",
+          description: "The file path (e.g. 'web/about.html', 'temporaries/report.md')",
         },
         content: {
           type: "string",

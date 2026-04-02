@@ -74,6 +74,13 @@ export function replaceVariables(
         return match;
       }
 
+      // Try full path as a literal variable name first (e.g., "auth.email" stored with dot in key)
+      const fullPathValue = context.variables.get(fullPath);
+      if (fullPathValue !== undefined) {
+        const strValue = String(fullPathValue);
+        return shouldJsonEscape ? jsonEscapeString(strValue) : strValue;
+      }
+
       const varName = fullPath.substring(0, firstSpecialIndex);
       const restPath = fullPath.substring(
         firstSpecialIndex + (fullPath[firstSpecialIndex] === "." ? 1 : 0)

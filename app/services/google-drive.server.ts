@@ -173,7 +173,7 @@ export async function listFiles(
   do {
     const url = new URL(`${DRIVE_API}/files`);
     url.searchParams.set("q", query);
-    url.searchParams.set("fields", "nextPageToken,files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum)");
+    url.searchParams.set("fields", "nextPageToken,files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size)");
     url.searchParams.set("orderBy", "modifiedTime desc");
     url.searchParams.set("pageSize", "1000");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
@@ -304,7 +304,7 @@ export async function createFile(
     `--${boundary}--`;
 
   const res = await driveRequest(
-    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
     accessToken,
     {
       method: "POST",
@@ -327,7 +327,7 @@ export async function updateFile(
   options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const res = await driveRequest(
-    `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
     accessToken,
     {
       method: "PATCH",
@@ -347,7 +347,7 @@ export async function renameFile(
   options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const res = await driveRequest(
-    `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
     accessToken,
     {
       method: "PATCH",
@@ -403,7 +403,7 @@ export async function searchFiles(
   do {
     const url = new URL(`${DRIVE_API}/files`);
     url.searchParams.set("q", driveQuery);
-    url.searchParams.set("fields", "nextPageToken,files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum)");
+    url.searchParams.set("fields", "nextPageToken,files(id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size)");
     url.searchParams.set("pageSize", "100");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
 
@@ -524,7 +524,7 @@ export async function createFileBinary(
   const body = Buffer.concat([preamble, contentBuffer, epilogue]);
 
   const res = await driveRequest(
-    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
     accessToken,
     {
       method: "POST",
@@ -562,7 +562,7 @@ export async function createGoogleDocFromHtml(
     `--${boundary}--`;
 
   const res = await driveRequest(
-    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    `${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
     accessToken,
     {
       method: "POST",
@@ -585,7 +585,7 @@ export async function updateFileBinary(
   options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const res = await driveRequest(
-    `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum`,
+    `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=media&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
     accessToken,
     {
       method: "PATCH",

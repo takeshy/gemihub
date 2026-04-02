@@ -16,7 +16,7 @@ import type {
   PromptCallbacks,
 } from "./types";
 import type { UserSettings } from "~/types/settings";
-import { getNextNodes } from "./parser";
+import { getNextNodes, serializeWorkflow } from "./parser";
 import { replaceVariables, parseCondition } from "./handlers/utils";
 import {
   handleVariableNode,
@@ -68,6 +68,8 @@ export interface LocalExecuteOptions {
   geminiApiKey?: string;
   settings?: UserSettings;
   subWorkflowDepth?: number;
+  /** When "server", delegate entire workflow to /api/workflow/execute-full (paid feature). */
+  executionMode?: "local" | "server";
 }
 
 export interface LocalExecuteCallbacks {
@@ -268,6 +270,11 @@ export async function executeWorkflowLocally(
   callbacks: LocalExecuteCallbacks,
   options: LocalExecuteOptions,
 ): Promise<LocalExecuteResult> {
+  // Server delegation mode: send entire workflow to server for execution
+  if (options.executionMode === "server") {
+    return executeWorkflowOnServer(workflow, callbacks, options);
+  }
+
   const context: ExecutionContext = {
     variables: new Map(),
     logs: [],
@@ -862,4 +869,105 @@ function getNodeCompletionLog(
     default:
       return { message: `${node.type} completed` };
   }
+}
+
+/**
+ * Delegate entire workflow execution to the server via SSE.
+ * Used when executionMode is "server" (paid feature).
+ */
+async function executeWorkflowOnServer(
+  workflow: Workflow,
+  callbacks: LocalExecuteCallbacks,
+  options: LocalExecuteOptions,
+): Promise<LocalExecuteResult> {
+  const workflowYaml = serializeWorkflow(workflow, options.workflowName);
+
+  const response = await fetch("/api/workflow/execute-full", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workflowYaml,
+      workflowName: options.workflowName,
+      variables: options.initialVariables || {},
+    }),
+    signal: options.abortSignal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Server execution failed: ${response.status} ${response.statusText}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResult: LocalExecuteResult | null = null;
+
+  const historyRecord: ExecutionRecord = {
+    id: `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    workflowId: options.workflowId,
+    workflowName: options.workflowName,
+    startTime: new Date().toISOString(),
+    status: "running",
+    steps: [],
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    let eventType = "";
+    let eventData = "";
+
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        eventType = line.slice(7);
+      } else if (line.startsWith("data: ")) {
+        eventData = line.slice(6);
+      } else if (line === "" && eventType && eventData) {
+        try {
+          const parsed = JSON.parse(eventData);
+          if (eventType === "log") {
+            callbacks.onLog({
+              nodeId: parsed.nodeId,
+              nodeType: parsed.nodeType,
+              message: parsed.message,
+              status: parsed.status,
+              timestamp: new Date(parsed.timestamp),
+            });
+          } else if (eventType === "result") {
+            historyRecord.status = parsed.status;
+            historyRecord.endTime = new Date().toISOString();
+            const context: ExecutionContext = {
+              variables: new Map(Object.entries(parsed.variables || {})),
+              logs: [],
+            };
+            finalResult = { context, historyRecord };
+          } else if (eventType === "error") {
+            historyRecord.status = "error";
+            historyRecord.endTime = new Date().toISOString();
+            throw new Error(parsed.message);
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message !== eventData) throw e;
+        }
+        eventType = "";
+        eventData = "";
+      }
+    }
+  }
+
+  if (finalResult) return finalResult;
+
+  historyRecord.status = "completed";
+  historyRecord.endTime = new Date().toISOString();
+  return {
+    context: { variables: new Map(), logs: [] },
+    historyRecord,
+  };
 }

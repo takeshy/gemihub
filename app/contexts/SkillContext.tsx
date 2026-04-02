@@ -21,7 +21,7 @@ interface SkillContextValue {
   activateSkill: (skillId: string) => void;
   loading: boolean;
   refreshSkills: () => void;
-  getActiveSkillsSystemPrompt: (extraSkillIds?: string[]) => Promise<string>;
+  getActiveSkillsSystemPrompt: (extraSkillIds?: string[], hubworkAccounts?: Record<string, unknown>) => Promise<string>;
   getActiveSkillWorkflows: (extraSkillIds?: string[]) => Array<{
     skillId: string;
     skillName: string;
@@ -43,10 +43,16 @@ const SkillContext = createContext<SkillContextValue>({
 
 const STORAGE_KEY = "gemihub:activeSkills";
 
+function getPendingSkillActivationKey(rootFolderId?: string): string {
+  return `gemihub:pendingSkillActivation:${rootFolderId || "default"}`;
+}
+
 export function SkillProvider({
   children,
+  rootFolderId,
 }: {
   children: ReactNode;
+  rootFolderId?: string;
 }) {
   const [skills, setSkills] = useState<SkillMetadata[]>([]);
   const [activeSkillIds, setActiveSkillIds] = useState<string[]>(() => {
@@ -58,12 +64,20 @@ export function SkillProvider({
   });
   const [loading, setLoading] = useState(false);
   const loadedCacheRef = useRef<Map<string, LoadedSkill>>(new Map());
+  const pendingSkillActivationKey = getPendingSkillActivationKey(rootFolderId);
 
   const discover = useCallback(async () => {
     setLoading(true);
     try {
       const found = await discoverSkills();
       setSkills(found);
+      try {
+        const pendingSkillId = localStorage.getItem(pendingSkillActivationKey);
+        if (pendingSkillId && found.some((skill) => skill.id === pendingSkillId)) {
+          setActiveSkillIds((prev) => (prev.includes(pendingSkillId) ? prev : [...prev, pendingSkillId]));
+          localStorage.removeItem(pendingSkillActivationKey);
+        }
+      } catch { /* ignore */ }
       // Invalidate cache on rediscovery
       loadedCacheRef.current.clear();
     } catch (err) {
@@ -71,7 +85,7 @@ export function SkillProvider({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pendingSkillActivationKey]);
 
   // Discover on mount
   useEffect(() => {
@@ -116,7 +130,7 @@ export function SkillProvider({
       : activeSkillIds;
   }, [activeSkillIds]);
 
-  const getActiveSkillsSystemPrompt = useCallback(async (extraSkillIds?: string[]): Promise<string> => {
+  const getActiveSkillsSystemPrompt = useCallback(async (extraSkillIds?: string[], hubworkAccounts?: Record<string, unknown>): Promise<string> => {
     const allIds = mergeSkillIds(extraSkillIds);
     const activeSkills = skills.filter((s) => allIds.includes(s.id));
     if (activeSkills.length === 0) return "";
@@ -131,7 +145,7 @@ export function SkillProvider({
       loaded.push(cached);
     }
 
-    return buildSkillSystemPrompt(loaded);
+    return buildSkillSystemPrompt(loaded, hubworkAccounts);
   }, [skills, mergeSkillIds]);
 
   const getActiveSkillWorkflows = useCallback((extraSkillIds?: string[]) => {

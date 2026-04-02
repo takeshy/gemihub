@@ -528,8 +528,6 @@ export interface UserSettings {
   ragSettings: Record<string, RagSetting>;
   selectedRagSetting: string | null;
   systemPrompt: string;
-  maxFunctionCalls: number;
-  functionCallWarningThreshold: number;
   rootFolderName: string;
   language: Language | null;
   fontSize: FontSize;
@@ -542,6 +540,85 @@ export interface UserSettings {
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
   showManagementFolders: boolean;
+  // Hubwork (paid feature) - web app builder with Sheets/Gmail
+  hubwork?: HubworkSettings;
+}
+
+export interface HubworkSpreadsheet {
+  id: string;
+  label?: string;
+}
+
+export interface HubworkAccountIdentity {
+  spreadsheetId?: string;
+  sheet: string;
+  emailColumn: string;
+}
+
+export interface HubworkDataSource {
+  spreadsheetId?: string;
+  sheet: string;
+  matchBy: string;
+  fields: string[];
+  limit?: number;
+  sort?: string;
+  shape?: "object" | "array";
+}
+
+export interface HubworkAccountType {
+  identity: HubworkAccountIdentity;
+  data?: Record<string, HubworkDataSource>;
+}
+
+/**
+ * Resolve an account type by name with fallback:
+ * 1. Exact match
+ * 2. Case-insensitive match
+ * 3. If only one account type exists, use it regardless of name
+ */
+export function resolveAccountType(
+  accounts: Record<string, HubworkAccountType> | undefined,
+  type: string,
+): { key: string; accountType: HubworkAccountType } | null {
+  if (!accounts) return null;
+  // Exact match
+  if (accounts[type]) return { key: type, accountType: accounts[type] };
+  // Case-insensitive match
+  const lower = type.toLowerCase();
+  for (const [key, value] of Object.entries(accounts)) {
+    if (key.toLowerCase() === lower) return { key, accountType: value };
+  }
+  // Single account type fallback
+  const keys = Object.keys(accounts);
+  if (keys.length === 1) return { key: keys[0], accountType: accounts[keys[0]] };
+  return null;
+}
+
+export interface HubworkSchedule {
+  workflowPath: string;
+  cron: string;
+  enabled: boolean;
+  variables?: Record<string, string>;
+  timezone?: string;
+  retry?: number;
+  timeoutSec?: number;
+  concurrencyPolicy?: "allow" | "forbid";
+  missedRunPolicy?: "skip" | "run-once";
+}
+
+export interface HubworkSettings {
+  spreadsheetId?: string;
+  spreadsheets?: HubworkSpreadsheet[];
+  accounts?: Record<string, HubworkAccountType>;
+  schedules?: HubworkSchedule[];
+  customDomain?: string;
+  accountId?: string;
+  plan?: "lite" | "pro" | "granted";
+  accountSlug?: string;
+  defaultDomain?: string;
+  billingStatus?: string;
+  accountStatus?: string;
+  domainStatus?: string;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -555,8 +632,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   ragSettings: {},
   selectedRagSetting: null,
   systemPrompt: "",
-  maxFunctionCalls: 20,
-  functionCallWarningThreshold: 5,
   rootFolderName: "gemihub",
   language: null,
   fontSize: 16,

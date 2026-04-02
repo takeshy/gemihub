@@ -83,6 +83,15 @@ function SettingsEn() {
           <li>Background execution option (no workflow panel needed).</li>
         </ul>
 
+        <h2>Hubwork</h2>
+        <ul>
+          <li>Subscribe to Lite or Pro plan via Stripe.</li>
+          <li>Configure Spreadsheet ID for Google Sheets nodes.</li>
+          <li>Set up custom domain and view domain status.</li>
+          <li>Manage scheduled workflows (cron, timezone, retry, timeout).</li>
+          <li>Access Stripe Billing Portal for subscription management.</li>
+        </ul>
+
         <h2>Sync</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
           <img src="/images/setting_sync.png" alt="Sync settings" className="w-full" loading="lazy" />
@@ -174,6 +183,15 @@ function SettingsJa() {
           <li>キーボードショートカットにワークフロー実行を割り当て。</li>
           <li>Ctrl/Cmd + キー、Alt + キー、ファンクションキー（F1〜F12）に対応。</li>
           <li>バックグラウンド実行オプション（ワークフローパネル不要）。</li>
+        </ul>
+
+        <h2>Hubwork</h2>
+        <ul>
+          <li>StripeでLiteまたはProプランに登録。</li>
+          <li>Google Sheetsノード用のスプレッドシートIDを設定。</li>
+          <li>カスタムドメインの設定とドメインステータスの確認。</li>
+          <li>スケジュール実行の管理（cron、タイムゾーン、リトライ、タイムアウト）。</li>
+          <li>Stripe Billing Portalでサブスクリプション管理。</li>
         </ul>
 
         <h2>同期</h2>

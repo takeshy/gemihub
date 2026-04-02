@@ -66,6 +66,16 @@ export function looksLikeBinary(content: string): boolean {
   return controlCount / sample.length >= 0.1;
 }
 
+/** Files larger than this threshold are not cached in IndexedDB (20 MB). */
+export const LARGE_FILE_CACHE_THRESHOLD = 20 * 1024 * 1024;
+
+/** Returns true if the file exceeds the cache size threshold. */
+export function isLargeFile(size: string | undefined | null): boolean {
+  if (!size) return false;
+  const bytes = Number(size);
+  return !Number.isNaN(bytes) && bytes > LARGE_FILE_CACHE_THRESHOLD;
+}
+
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"]);
 
 /** Check if a file name has an image extension (for thumbnail display). */

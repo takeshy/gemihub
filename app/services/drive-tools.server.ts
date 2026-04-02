@@ -56,7 +56,7 @@ export async function executeDriveTool(
   args: Record<string, unknown>,
   accessToken: string,
   rootFolderId: string,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
 ): Promise<unknown> {
   if (abortSignal?.aborted) {
     throw new Error("Execution cancelled");
@@ -161,7 +161,7 @@ export async function executeDriveTool(
       if (typeof content !== "string") {
         return { error: "create_drive_file: 'content' must be a string" };
       }
-      const name = rawName.startsWith("temporaries/") ? rawName : `temporaries/${rawName}`;
+      const name = rawName;
       const file = await createFile(accessToken, name, content, rootFolderId, "text/plain", { signal: abortSignal });
       await upsertFileInMeta(accessToken, rootFolderId, file, { signal: abortSignal });
       return {

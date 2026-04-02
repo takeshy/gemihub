@@ -60,10 +60,18 @@ export function SyncStatusBar({
     setDialogFiles([]);
 
     try {
-      const remoteMeta = await getCachedRemoteMeta();
+      const cachedRemoteMeta = await getCachedRemoteMeta();
+      const remoteMeta = cachedRemoteMeta
+        ? {
+            lastUpdatedAt: cachedRemoteMeta.lastUpdatedAt,
+            files: Object.fromEntries(
+              Object.entries(cachedRemoteMeta.files).filter(([id]) => !id.startsWith("new:"))
+            ),
+          }
+        : null;
       const localMeta = await getLocalSyncMeta();
       const modifiedIds = await getLocallyModifiedFileIds();
-      const diff = computeSyncDiff(localMeta ?? null, remoteMeta ? { lastUpdatedAt: remoteMeta.lastUpdatedAt, files: remoteMeta.files } : null, modifiedIds);
+      const diff = computeSyncDiff(localMeta ?? null, remoteMeta, modifiedIds);
 
       if (type === "push") {
         const files: FileListItem[] = [];
@@ -96,10 +104,18 @@ export function SyncStatusBar({
         const remoteFiles = remoteMeta?.files ?? {};
         const localFiles = localMeta?.files ?? {};
 
-        // remoteOnly files are not shown — they have no changes and are fetched on-demand
+        // remoteOnly files are shown as "new" — new files from other devices
+        for (const id of diff.remoteOnly) {
+          const name = remoteFiles[id]?.name || id;
+          if (isSyncExcludedPath(name)) continue;
+          files.push({ id, name, type: "new" });
+        }
         for (const id of diff.toPull) {
           const name = remoteFiles[id]?.name || id;
           if (isSyncExcludedPath(name)) continue;
+          // Skip false positives: cached md5 already matches remote (localMeta stale)
+          const cached = await getCachedFile(id);
+          if (cached && cached.md5Checksum && cached.md5Checksum === remoteFiles[id]?.md5Checksum) continue;
           files.push({ id, name, type: "modified" });
         }
         // Only show files that exist in localMeta (remotely-deleted files).
@@ -107,7 +123,9 @@ export function SyncStatusBar({
         for (const id of diff.localOnly) {
           if (!(id in localFiles)) continue;
           const cached = await getCachedFile(id);
-          const name = cached?.fileName || id;
+          const name = cached?.fileName || localFiles[id]?.name;
+          // Skip orphaned entries with no resolvable name (stale migration artifacts)
+          if (!name) continue;
           if (isSyncExcludedPath(name)) continue;
           files.push({ id, name, type: "deleted" });
         }

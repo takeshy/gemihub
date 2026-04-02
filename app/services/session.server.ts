@@ -67,6 +67,8 @@ export interface SessionTokens {
   geminiApiKey?: string;
   apiPlan?: ApiPlan;
   selectedModel?: string;
+  email?: string;
+  grantedScopes?: string;
 }
 
 export async function getTokens(request: Request): Promise<SessionTokens | null> {
@@ -93,8 +95,11 @@ export async function getTokens(request: Request): Promise<SessionTokens | null>
 
   const apiPlan = session.get("apiPlan") as ApiPlan | undefined;
   const selectedModel = session.get("selectedModel") as string | undefined;
+  const email = session.get("email") as string | undefined;
 
-  return { accessToken, refreshToken, expiryTime, rootFolderId, geminiApiKey, apiPlan, selectedModel };
+  const grantedScopes = session.get("grantedScopes") as string | undefined;
+
+  return { accessToken, refreshToken, expiryTime, rootFolderId, geminiApiKey, apiPlan, selectedModel, email, grantedScopes };
 }
 
 export async function setTokens(
@@ -114,6 +119,12 @@ export async function setTokens(
   }
   if (tokens.selectedModel !== undefined) {
     session.set("selectedModel", tokens.selectedModel);
+  }
+  if (tokens.email !== undefined) {
+    session.set("email", tokens.email);
+  }
+  if (tokens.grantedScopes !== undefined) {
+    session.set("grantedScopes", tokens.grantedScopes);
   }
   return session;
 }

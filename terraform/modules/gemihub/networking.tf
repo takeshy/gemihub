@@ -37,31 +37,44 @@ resource "google_compute_backend_service" "default" {
 }
 
 # HTTPS URL map
+# Custom domain host rules are added dynamically by the app via Compute API.
 resource "google_compute_url_map" "https" {
   name            = "gemini-hub-https"
   default_service = google_compute_backend_service.default.id
 }
 
-# Google-managed SSL certificate
-resource "google_compute_managed_ssl_certificate" "default" {
-  name = "gemihub-cert"
+# --- Certificate Manager (supports dynamic custom domain certs) ---
+
+resource "google_certificate_manager_certificate_map" "default" {
+  name = "gemihub-map"
+
+  depends_on = [google_project_service.apis]
+}
+
+# Main domain certificate (Google-managed)
+resource "google_certificate_manager_certificate" "main" {
+  name = "gemihub-main-cert"
 
   managed {
     domains = [var.domain]
   }
 
-  lifecycle {
-    create_before_destroy = true
-  }
-
   depends_on = [google_project_service.apis]
 }
 
-# HTTPS proxy
+# Certificate map entry for main domain
+resource "google_certificate_manager_certificate_map_entry" "main" {
+  name         = "gemihub-main-entry"
+  map          = google_certificate_manager_certificate_map.default.name
+  hostname     = var.domain
+  certificates = [google_certificate_manager_certificate.main.id]
+}
+
+# HTTPS proxy (uses Certificate Map instead of ssl_certificates)
 resource "google_compute_target_https_proxy" "default" {
-  name             = "gemini-hub-https-proxy"
-  url_map          = google_compute_url_map.https.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.default.id]
+  name            = "gemini-hub-https-proxy"
+  url_map         = google_compute_url_map.https.id
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.default.id}"
 }
 
 # HTTPS forwarding rule (port 443)

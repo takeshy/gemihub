@@ -2,8 +2,14 @@ import { google } from "googleapis";
 import crypto from "node:crypto";
 import { getSession, commitSession, destroySession, setTokens, type SessionTokens } from "./session.server";
 
-const SCOPES = [
+const BASE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
+];
+
+const HUBWORK_SCOPES = [
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/calendar",
 ];
 
 function getOAuth2Client(request?: Request) {
@@ -23,21 +29,33 @@ function getOAuth2Client(request?: Request) {
  * Generate OAuth URL with CSRF state parameter.
  * Returns the URL and a Set-Cookie header to persist the state in the session.
  */
-export async function getAuthUrl(request: Request): Promise<{ url: string; setCookieHeader: string }> {
+export async function getAuthUrl(
+  request: Request,
+  options?: { includeHubworkScopes?: boolean; returnTo?: string }
+): Promise<{ url: string; setCookieHeader: string }> {
   const state = crypto.randomUUID();
   const session = await getSession(request);
   session.set("oauthState", state);
+  if (options?.returnTo) {
+    session.set("oauthReturnTo", options.returnTo);
+  }
   const setCookieHeader = await commitSession(session);
+
+  const scopes = options?.includeHubworkScopes
+    ? [...BASE_SCOPES, ...HUBWORK_SCOPES]
+    : BASE_SCOPES;
 
   const oauth2Client = getOAuth2Client(request);
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: SCOPES,
+    scope: scopes,
     prompt: "consent",
     state,
   });
   return { url, setCookieHeader };
 }
+
+export { HUBWORK_SCOPES };
 
 export async function exchangeCode(code: string, request: Request): Promise<{
   accessToken: string;
