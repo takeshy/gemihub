@@ -523,6 +523,101 @@ export async function action({ request }: Route.ActionArgs) {
       const updatedMeta = await removeFileFromMeta(validTokens.accessToken, validTokens.rootFolderId, fileId);
       return logAndReturn({ ok: true, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
+    case "bulkDelete": {
+      const fileIds = body.fileIds as string[] | undefined;
+      const permanent = body.permanent === true;
+      if (!fileIds || fileIds.length === 0) return logAndReturn({ error: "Missing fileIds" }, { status: 400 });
+
+      // Read meta once
+      const metaFile = await findFileByExactName(validTokens.accessToken, SYNC_META_FILE_NAME, validTokens.rootFolderId);
+      let bulkMeta: SyncMeta = { lastUpdatedAt: new Date().toISOString(), files: {} };
+      const metaFileId: string | null = metaFile?.id ?? null;
+      if (metaFile) {
+        try {
+          const raw = await readFile(validTokens.accessToken, metaFile.id);
+          bulkMeta = JSON.parse(raw) as SyncMeta;
+        } catch { /* use empty meta */ }
+      }
+
+      // Resolve trash folder once if needed
+      const trashFolderPromise = permanent
+        ? Promise.resolve("")
+        : ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "trash");
+
+      const trashFolderId = await trashFolderPromise;
+
+      // Parallel delete via Drive API
+      const failedFileIds: string[] = [];
+      await parallelProcess(
+        fileIds,
+        async (fid) => {
+          try {
+            if (permanent) {
+              await deleteFile(validTokens.accessToken, fid);
+            } else {
+              await moveFile(validTokens.accessToken, fid, trashFolderId, validTokens.rootFolderId);
+            }
+          } catch {
+            failedFileIds.push(fid);
+          }
+        },
+        5,
+      );
+
+      const failedFileIdSet = new Set(failedFileIds);
+      const deletedFileIds = fileIds.filter((fid) => !failedFileIdSet.has(fid));
+      const deletedFileNames = deletedFileIds
+        .map((fid) => bulkMeta.files[fid]?.name)
+        .filter((name): name is string => Boolean(name));
+
+      // Update meta: remove successfully deleted files
+      for (const fid of deletedFileIds) {
+        delete bulkMeta.files[fid];
+      }
+      bulkMeta.lastUpdatedAt = new Date().toISOString();
+
+      // Write meta once
+      const metaContent = JSON.stringify(bulkMeta, null, 2);
+      const writeMetaPromise = metaFileId
+        ? updateFile(validTokens.accessToken, metaFileId, metaContent, "application/json")
+        : createFile(validTokens.accessToken, SYNC_META_FILE_NAME, metaContent, validTokens.rootFolderId, "application/json");
+
+      // RAG cleanup is best-effort and should only apply to files that were actually deleted.
+      const ragCleanupPromise = (async () => {
+        try {
+          if (deletedFileIds.length === 0) return;
+          const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+          const ragSetting = settings.ragSettings[DEFAULT_RAG_STORE_KEY];
+          if (!ragSetting?.files) return;
+          let changed = false;
+          for (const fileName of deletedFileNames) {
+            const ragFile = ragSetting.files[fileName];
+            if (!ragFile) continue;
+            let canRemoveTracking = !ragFile.fileId;
+            if (ragFile.fileId && validTokens.geminiApiKey) {
+              canRemoveTracking = await deleteSingleFileFromRag(validTokens.geminiApiKey, ragFile.fileId);
+            }
+            if (canRemoveTracking) {
+              delete ragSetting.files[fileName];
+              changed = true;
+            }
+          }
+          if (changed) {
+            await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
+          }
+        } catch {
+          // Best-effort: don't block delete
+        }
+      })();
+
+      await Promise.all([writeMetaPromise, ragCleanupPromise]);
+
+      return logAndReturn({
+        ok: true,
+        failedFileIds,
+        meta: { lastUpdatedAt: bulkMeta.lastUpdatedAt, files: bulkMeta.files },
+      });
+    }
     case "encrypt": {
       if (!fileId) {
         return logAndReturn({ error: "Missing fileId" }, { status: 400 });

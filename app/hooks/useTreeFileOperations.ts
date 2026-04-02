@@ -27,6 +27,60 @@ import {
 import { findFullFileName, findNodeById, collectFileIds } from "~/utils/tree-helpers";
 import type { TranslationStrings } from "~/i18n/translations";
 
+/**
+ * Bulk-delete a set of fileIds, handling local-only (new:*) and remote files.
+ * Returns { lastMeta, failCount }.
+ */
+async function bulkDeleteFiles(
+  fileIds: string[],
+  permanent: boolean,
+): Promise<{ lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null; failCount: number }> {
+  const localIds = fileIds.filter((fid) => fid.startsWith("new:"));
+  const remoteIds = fileIds.filter((fid) => !fid.startsWith("new:"));
+
+  // Clean up local-only files in parallel
+  if (localIds.length > 0) {
+    await Promise.all(localIds.map(async (fid) => {
+      await deleteCachedFile(fid);
+      await deleteEditHistoryEntry(fid);
+    }));
+    const meta = await getCachedRemoteMeta();
+    if (meta) {
+      let changed = false;
+      for (const fid of localIds) {
+        if (meta.files[fid]) { delete meta.files[fid]; changed = true; }
+      }
+      if (changed) await setCachedRemoteMeta(meta);
+    }
+  }
+
+  // Bulk delete remote files in a single request
+  let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
+  let failCount = 0;
+  if (remoteIds.length > 0) {
+    const res = await fetch("/api/drive/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "bulkDelete", fileIds: remoteIds, permanent }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.meta) lastMeta = data.meta;
+      failCount = data.failedFileIds?.length ?? 0;
+      const successIds = remoteIds.filter((fid: string) => !data.failedFileIds?.includes(fid));
+      await Promise.all(successIds.map(async (fid: string) => {
+        await deleteCachedFile(fid);
+        await removeLocalSyncMetaEntry(fid);
+        await deleteEditHistoryEntry(fid);
+      }));
+    } else {
+      failCount = remoteIds.length;
+    }
+  }
+
+  return { lastMeta, failCount };
+}
+
 interface UseTreeFileOperationsParams {
   treeItems: CachedTreeNode[];
   setTreeItems: Dispatch<SetStateAction<CachedTreeNode[]>>;
@@ -270,34 +324,7 @@ export function useTreeFileOperations({
 
         setBusy(fileIds);
         try {
-          let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
-          let failCount = 0;
-          for (const fid of fileIds) {
-            if (fid.startsWith("new:")) {
-              await deleteCachedFile(fid);
-              await deleteEditHistoryEntry(fid);
-              const meta = await getCachedRemoteMeta();
-              if (meta?.files[fid]) {
-                delete meta.files[fid];
-                await setCachedRemoteMeta(meta);
-              }
-              continue;
-            }
-            const res = await fetch("/api/drive/files", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "delete", fileId: fid, permanent }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.meta) lastMeta = data.meta;
-              await deleteCachedFile(fid);
-              await removeLocalSyncMetaEntry(fid);
-              await deleteEditHistoryEntry(fid);
-            } else {
-              failCount++;
-            }
-          }
+          const { lastMeta, failCount } = await bulkDeleteFiles(fileIds, permanent);
           if (failCount > 0) alert(t("trash.deleteFailed"));
           if (lastMeta) {
             await updateTreeFromMeta(lastMeta);
@@ -320,18 +347,12 @@ export function useTreeFileOperations({
 
         setBusy([item.id]);
         try {
-          const res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "delete", fileId: item.id, permanent }),
-          });
-          if (res.ok) {
-            await deleteCachedFile(item.id);
-            await removeLocalSyncMetaEntry(item.id);
-            await deleteEditHistoryEntry(item.id);
-            const data = await res.json();
-            if (data.meta) {
-              await updateTreeFromMeta(data.meta);
+          const { lastMeta, failCount } = await bulkDeleteFiles([item.id], permanent);
+          if (failCount > 0) {
+            alert(t("trash.deleteFailed"));
+          } else {
+            if (lastMeta) {
+              await updateTreeFromMeta(lastMeta);
             } else {
               const updated = removeNodeFromTree(treeItems, item.id);
               setTreeItems(updated);
@@ -341,8 +362,6 @@ export function useTreeFileOperations({
               window.history.pushState({}, "", "/");
               window.dispatchEvent(new PopStateEvent("popstate"));
             }
-          } else {
-            alert(t("trash.deleteFailed"));
           }
         } catch {
           alert(t("trash.deleteFailed"));
@@ -364,34 +383,7 @@ export function useTreeFileOperations({
 
       setBusy(targetIds);
       try {
-        let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
-        let failCount = 0;
-        for (const fid of targetIds) {
-          if (fid.startsWith("new:")) {
-            await deleteCachedFile(fid);
-            await deleteEditHistoryEntry(fid);
-            const meta = await getCachedRemoteMeta();
-            if (meta?.files[fid]) {
-              delete meta.files[fid];
-              await setCachedRemoteMeta(meta);
-            }
-            continue;
-          }
-          const res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "delete", fileId: fid, permanent }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.meta) lastMeta = data.meta;
-            await deleteCachedFile(fid);
-            await removeLocalSyncMetaEntry(fid);
-            await deleteEditHistoryEntry(fid);
-          } else {
-            failCount++;
-          }
-        }
+        const { lastMeta, failCount } = await bulkDeleteFiles(targetIds, permanent);
         if (failCount > 0) alert(t("trash.deleteFailed"));
         if (lastMeta) {
           await updateTreeFromMeta(lastMeta);
