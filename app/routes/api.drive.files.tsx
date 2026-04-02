@@ -512,9 +512,14 @@ export async function action({ request }: Route.ActionArgs) {
         // Best-effort: don't block delete
       }
 
-      // Soft delete: move to trash/ subfolder instead of permanent deletion
-      const trashFolderId = await ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "trash");
-      await moveFile(validTokens.accessToken, fileId, trashFolderId, validTokens.rootFolderId);
+      if (body.permanent) {
+        // Permanent delete: remove from Drive entirely
+        await deleteFile(validTokens.accessToken, fileId);
+      } else {
+        // Soft delete: move to trash/ subfolder instead of permanent deletion
+        const trashFolderId = await ensureSubFolder(validTokens.accessToken, validTokens.rootFolderId, "trash");
+        await moveFile(validTokens.accessToken, fileId, trashFolderId, validTokens.rootFolderId);
+      }
       const updatedMeta = await removeFileFromMeta(validTokens.accessToken, validTokens.rootFolderId, fileId);
       return logAndReturn({ ok: true, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
     }
