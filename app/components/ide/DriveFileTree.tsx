@@ -64,7 +64,7 @@ import {
   collectModifiedFolderIds,
   findAncestorFolderIds,
 } from "~/utils/file-tree-operations";
-import { findFullFileName, collectFileIds } from "~/utils/tree-helpers";
+import { findFullFileName, collectFileIds, collectFilesWithPaths } from "~/utils/tree-helpers";
 import { useTreeFileOperations } from "~/hooks/useTreeFileOperations";
 import { useTreeDragDrop } from "~/hooks/useTreeDragDrop";
 import { useTreeFileCreate } from "~/hooks/useTreeFileCreate";
@@ -716,6 +716,65 @@ export function DriveFileTree({
             });
           }
         }
+      }
+
+      if (item.isFolder) {
+        items.push({
+          label: t("contextMenu.downloadZip"),
+          icon: <Download size={ICON.MD} />,
+          onClick: async () => {
+            try {
+              const JSZip = (await import("jszip")).default;
+              const zip = new JSZip();
+              const files = collectFilesWithPaths(item, "");
+              const folderName = item.name;
+
+              // Fetch files with concurrency limit to avoid overwhelming the browser
+              const CONCURRENCY = 5;
+              let addedCount = 0;
+              for (let i = 0; i < files.length; i += CONCURRENCY) {
+                const batch = files.slice(i, i + CONCURRENCY);
+                await Promise.all(
+                  batch.map(async ({ id, fullPath }) => {
+                    const relativePath = fullPath.startsWith(folderName + "/")
+                      ? fullPath.slice(folderName.length + 1)
+                      : fullPath;
+                    const cached = await getCachedFile(id);
+                    if (cached) {
+                      if (cached.encoding === "base64") {
+                        zip.file(relativePath, cached.content, { base64: true });
+                      } else {
+                        zip.file(relativePath, cached.content);
+                      }
+                      addedCount++;
+                    } else if (!id.startsWith("new:")) {
+                      const res = await fetch(`/api/drive/files?action=raw&fileId=${id}`);
+                      if (res.ok) {
+                        const blob = await res.blob();
+                        zip.file(relativePath, blob);
+                        addedCount++;
+                      }
+                    }
+                  }),
+                );
+              }
+
+              if (addedCount === 0) return;
+
+              const blob = await zip.generateAsync({ type: "blob" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${folderName}.zip`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            } catch {
+              alert(t("contextMenu.downloadZipFailed"));
+            }
+          },
+        });
       }
 
       // Cache clear - available for both files and folders

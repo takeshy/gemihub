@@ -260,6 +260,8 @@ export interface TranslationStrings {
   "contextMenu.convertToHtml": string;
   "contextMenu.convertedHtml": string;
   "contextMenu.convertHtmlFailed": string;
+  "contextMenu.downloadZip": string;
+  "contextMenu.downloadZipFailed": string;
 
   // Temp files
   "settings.general.tempFiles": string;
@@ -863,6 +865,8 @@ const en: TranslationStrings = {
   "contextMenu.convertToHtml": "Convert to HTML",
   "contextMenu.convertedHtml": "HTML created in temporaries/.",
   "contextMenu.convertHtmlFailed": "Failed to convert file to HTML.",
+  "contextMenu.downloadZip": "Download as ZIP",
+  "contextMenu.downloadZipFailed": "Failed to create ZIP.",
 
   // Temp files
   "settings.general.tempFiles": "Temporary Files",
@@ -1466,6 +1470,8 @@ const ja: TranslationStrings = {
   "contextMenu.convertToHtml": "HTMLに変換",
   "contextMenu.convertedHtml": "temporaries/ にHTMLを作成しました。",
   "contextMenu.convertHtmlFailed": "HTML変換に失敗しました。",
+  "contextMenu.downloadZip": "ZIPでダウンロード",
+  "contextMenu.downloadZipFailed": "ZIP作成に失敗しました。",
 
   // Temp files
   "settings.general.tempFiles": "一時ファイル",
