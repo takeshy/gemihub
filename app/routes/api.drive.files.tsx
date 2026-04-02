@@ -512,7 +512,7 @@ export async function action({ request }: Route.ActionArgs) {
         // Best-effort: don't block delete
       }
 
-      if (body.permanent) {
+      if (body.permanent === true) {
         // Permanent delete: remove from Drive entirely
         await deleteFile(validTokens.accessToken, fileId);
       } else {

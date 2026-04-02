@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { DeleteConfirmRequest } from "~/components/ide/DeleteConfirmDialog";
 import {
@@ -67,12 +67,20 @@ export function useTreeFileOperations({
   setTempDiffData,
 }: UseTreeFileOperationsParams) {
   const [deleteConfirmRequest, setDeleteConfirmRequest] = useState<DeleteConfirmRequest | null>(null);
+  const pendingResolveRef = useRef<((result: { confirmed: boolean; permanent: boolean }) => void) | null>(null);
 
   const askDeleteConfirm = useCallback((message: string): Promise<{ confirmed: boolean; permanent: boolean }> => {
+    // Cancel any existing dialog before opening a new one
+    if (pendingResolveRef.current) {
+      pendingResolveRef.current({ confirmed: false, permanent: false });
+      pendingResolveRef.current = null;
+    }
     return new Promise((resolve) => {
+      pendingResolveRef.current = resolve;
       setDeleteConfirmRequest({
         message,
         resolve: (result) => {
+          pendingResolveRef.current = null;
           setDeleteConfirmRequest(null);
           resolve(result);
         },

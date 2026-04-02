@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
 import { useI18n } from "~/i18n/context";
@@ -15,9 +15,25 @@ export function DeleteConfirmDialog({
 }) {
   const { t } = useI18n();
   const [permanent, setPermanent] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleConfirm = () => request.resolve({ confirmed: true, permanent });
   const handleCancel = () => request.resolve({ confirmed: false, permanent: false });
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
 
   const dialog = (
     <div
@@ -25,7 +41,11 @@ export function DeleteConfirmDialog({
       onClick={handleCancel}
     >
       <div
-        className="mx-4 w-full max-w-sm rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col"
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        className="mx-4 w-full max-w-sm rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-4">
@@ -60,6 +80,7 @@ export function DeleteConfirmDialog({
             {t("common.cancel")}
           </button>
           <button
+            autoFocus
             onClick={handleConfirm}
             className={`px-3 py-1.5 text-sm text-white rounded ${
               permanent
