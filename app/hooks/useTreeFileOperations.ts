@@ -1,5 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import type { DeleteConfirmRequest } from "~/components/ide/DeleteConfirmDialog";
 import {
   getCachedFile,
   setCachedFile,
@@ -65,6 +66,28 @@ export function useTreeFileOperations({
   tempDiffData,
   setTempDiffData,
 }: UseTreeFileOperationsParams) {
+  const [deleteConfirmRequest, setDeleteConfirmRequest] = useState<DeleteConfirmRequest | null>(null);
+  const pendingResolveRef = useRef<((result: { confirmed: boolean; permanent: boolean }) => void) | null>(null);
+
+  const askDeleteConfirm = useCallback((message: string): Promise<{ confirmed: boolean; permanent: boolean }> => {
+    // Cancel any existing dialog before opening a new one
+    if (pendingResolveRef.current) {
+      pendingResolveRef.current({ confirmed: false, permanent: false });
+      pendingResolveRef.current = null;
+    }
+    return new Promise((resolve) => {
+      pendingResolveRef.current = resolve;
+      setDeleteConfirmRequest({
+        message,
+        resolve: (result) => {
+          pendingResolveRef.current = null;
+          setDeleteConfirmRequest(null);
+          resolve(result);
+        },
+      });
+    });
+  }, []);
+
   const handleRenameSubmit = useCallback(
     async (item: CachedTreeNode, newName: string) => {
       const trimmed = newName.trim();
@@ -217,7 +240,8 @@ export function useTreeFileOperations({
   const handleDelete = useCallback(
     async (item: CachedTreeNode) => {
       if (!item.isFolder && item.id.startsWith("new:")) {
-        if (!confirm(t("trash.softDeleteConfirm").replace("{name}", item.name))) return;
+        const { confirmed } = await askDeleteConfirm(t("trash.softDeleteConfirm").replace("{name}", item.name));
+        if (!confirmed) return;
         await deleteCachedFile(item.id);
         await deleteEditHistoryEntry(item.id);
         const meta = await getCachedRemoteMeta();
@@ -241,7 +265,8 @@ export function useTreeFileOperations({
           setTreeItems((prev) => removeNodeFromTree(prev, item.id));
           return;
         }
-        if (!confirm(t("trash.softDeleteFolderConfirm").replace("{count}", String(fileIds.length)).replace("{name}", item.name))) return;
+        const { confirmed, permanent } = await askDeleteConfirm(t("trash.softDeleteFolderConfirm").replace("{count}", String(fileIds.length)).replace("{name}", item.name));
+        if (!confirmed) return;
 
         setBusy(fileIds);
         try {
@@ -261,7 +286,7 @@ export function useTreeFileOperations({
             const res = await fetch("/api/drive/files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "delete", fileId: fid }),
+              body: JSON.stringify({ action: "delete", fileId: fid, permanent }),
             });
             if (res.ok) {
               const data = await res.json();
@@ -290,14 +315,15 @@ export function useTreeFileOperations({
           clearBusy(fileIds);
         }
       } else {
-        if (!confirm(t("trash.softDeleteConfirm").replace("{name}", item.name))) return;
+        const { confirmed, permanent } = await askDeleteConfirm(t("trash.softDeleteConfirm").replace("{name}", item.name));
+        if (!confirmed) return;
 
         setBusy([item.id]);
         try {
           const res = await fetch("/api/drive/files", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "delete", fileId: item.id }),
+            body: JSON.stringify({ action: "delete", fileId: item.id, permanent }),
           });
           if (res.ok) {
             await deleteCachedFile(item.id);
@@ -325,7 +351,7 @@ export function useTreeFileOperations({
         }
       }
     },
-    [treeItems, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, setTreeItems]
+    [treeItems, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, setTreeItems, askDeleteConfirm]
   );
 
   const handleDeleteMultiple = useCallback(
@@ -333,7 +359,8 @@ export function useTreeFileOperations({
       // Exclude virtual folders (they have no real entity)
       const targetIds = fileIds.filter((id) => !id.startsWith("vfolder:"));
       if (targetIds.length === 0) return false;
-      if (!confirm(t("trash.bulkDeleteConfirm").replace("{count}", String(targetIds.length)))) return false;
+      const { confirmed, permanent } = await askDeleteConfirm(t("trash.bulkDeleteConfirm").replace("{count}", String(targetIds.length)));
+      if (!confirmed) return false;
 
       setBusy(targetIds);
       try {
@@ -353,7 +380,7 @@ export function useTreeFileOperations({
           const res = await fetch("/api/drive/files", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "delete", fileId: fid }),
+            body: JSON.stringify({ action: "delete", fileId: fid, permanent }),
           });
           if (res.ok) {
             const data = await res.json();
@@ -384,7 +411,7 @@ export function useTreeFileOperations({
         clearBusy(targetIds);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId]
+    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, askDeleteConfirm]
   );
 
   const handleEncrypt = useCallback(
@@ -871,5 +898,6 @@ export function useTreeFileOperations({
     handleCopyLink,
     handleConvertMarkdownToPdf,
     handleConvertMarkdownToHtml,
+    deleteConfirmRequest,
   };
 }

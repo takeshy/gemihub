@@ -66,6 +66,7 @@ import {
 } from "~/utils/file-tree-operations";
 import { findFullFileName, collectFileIds, collectFilesWithPaths } from "~/utils/tree-helpers";
 import { useTreeFileOperations } from "~/hooks/useTreeFileOperations";
+import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { useTreeDragDrop } from "~/hooks/useTreeDragDrop";
 import { useTreeFileCreate } from "~/hooks/useTreeFileCreate";
 
@@ -575,6 +576,7 @@ export function DriveFileTree({
     handleCopyLink,
     handleConvertMarkdownToPdf,
     handleConvertMarkdownToHtml,
+    deleteConfirmRequest,
   } = useTreeFileOperations({
     treeItems,
     setTreeItems,
@@ -1448,6 +1450,10 @@ export function DriveFileTree({
           onAccept={handleTempDiffAccept}
           onReject={() => setTempDiffData(null)}
         />
+      )}
+
+      {deleteConfirmRequest && (
+        <DeleteConfirmDialog request={deleteConfirmRequest} />
       )}
     </div>
   );
