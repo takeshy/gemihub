@@ -28,9 +28,9 @@ export interface HubworkAccount {
   createdAt: Timestamp;
 }
 
-/** Check if account is active (enabled status) */
+/** Check if account is active (enabled status and billing not past_due) */
 export function isHubworkFeatureAvailable(account: HubworkAccount): boolean {
-  return account.accountStatus === "enabled";
+  return account.accountStatus === "enabled" && account.billingStatus !== "past_due";
 }
 
 /** Check if account has paid features (Gmail, no upload limit, etc.) — lite or above */

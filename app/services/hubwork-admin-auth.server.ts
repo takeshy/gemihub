@@ -1,9 +1,10 @@
 import { requireAuth } from "./session.server";
 
-const DEFAULT_ADMIN_EMAILS = "takesy.morito@gmail.com";
-
 function getAdminEmails(): string[] {
-  const raw = process.env.HUBWORK_ADMIN_EMAILS || DEFAULT_ADMIN_EMAILS;
+  const raw = process.env.HUBWORK_ADMIN_EMAILS;
+  if (!raw) {
+    throw new Response("HUBWORK_ADMIN_EMAILS not configured", { status: 500 });
+  }
   return raw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 }
 

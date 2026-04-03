@@ -120,6 +120,7 @@ export async function action({ request }: Route.ActionArgs) {
     "listTrash", "restoreTrash", "listConflicts", "restoreConflict",
     "pushFiles", "rebuildTree", "migrateRootFolder",
     "ragRegister", "ragSave", "ragDeleteDoc", "ragRetryPending",
+    "permanentDelete",
   ]);
   if (!actionType || !VALID_ACTIONS.has(actionType)) {
     emitLog(logCtx, 400, { error: `Invalid action: ${actionType}` });

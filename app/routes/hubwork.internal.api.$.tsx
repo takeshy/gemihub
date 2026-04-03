@@ -279,14 +279,8 @@ async function handleApiRequest(request: Request, apiPath: string) {
           body = responseVar;
         }
       } else {
-        // Return all non-__ variables
-        const obj: Record<string, string | number> = {};
-        for (const [k, v] of result.context.variables) {
-          if (!k.startsWith("__")) {
-            obj[k] = v;
-          }
-        }
-        body = obj;
+        // No __response set — return empty object to avoid leaking internal variables
+        body = {};
       }
 
       return Response.json(body, {

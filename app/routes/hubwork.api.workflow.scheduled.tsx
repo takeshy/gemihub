@@ -1,10 +1,12 @@
 import type { Route } from "./+types/hubwork.api.workflow.scheduled";
 import { FieldValue } from "@google-cloud/firestore";
-import { getDriveContext } from "~/services/google-drive.server";
+import { getDriveContext, readFile } from "~/services/google-drive.server";
 import { getSettings } from "~/services/user-settings.server";
+import { readRemoteSyncMeta } from "~/services/sync-meta.server";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflow } from "~/engine/executor";
 import type { WorkflowInput, ServiceContext } from "~/engine/types";
+import type { SyncMeta } from "~/services/sync-diff";
 import {
   getAllActiveAccounts,
   getTokensForAccount,
@@ -15,6 +17,25 @@ import {
   decryptGeminiApiKey,
 } from "~/services/hubwork-accounts.server";
 import { google } from "googleapis";
+
+export function resolveScheduledWorkflowFileId(syncMeta: SyncMeta, workflowPath: string): string | null {
+  const trimmed = workflowPath.trim();
+  if (!trimmed || trimmed.includes("\0") || trimmed.includes("..")) {
+    return null;
+  }
+  const entry = Object.entries(syncMeta.files).find(([, meta]) => meta.name === trimmed);
+  return entry?.[0] ?? null;
+}
+
+export function getScheduledWorkflowResolutionError(syncMeta: SyncMeta, workflowPath: string): string {
+  const trimmed = workflowPath.trim();
+  if (!trimmed || trimmed.includes("\0") || trimmed.includes("..")) {
+    return "Invalid workflow path";
+  }
+  return Object.values(syncMeta.files).some((meta) => meta.name === trimmed)
+    ? "Invalid workflow path"
+    : "File not found";
+}
 
 /**
  * Scheduled workflow execution endpoint.
@@ -75,10 +96,14 @@ export async function action({ request }: Route.ActionArgs) {
       const { accessToken, rootFolderId } = tokens;
       const settings = await getSettings(accessToken, rootFolderId);
       const driveContext = await getDriveContext({ accessToken, refreshToken: "", expiryTime: 0, rootFolderId });
+      const syncMeta = await readRemoteSyncMeta(accessToken, rootFolderId);
+      if (!syncMeta) {
+        console.warn(`[hubwork-scheduled] Missing sync meta for account ${account.id}`);
+        continue;
+      }
 
       const oauth2Client = new google.auth.OAuth2();
       oauth2Client.setCredentials({ access_token: accessToken });
-      const drive = google.drive({ version: "v3", auth: oauth2Client });
 
       // Decrypt Gemini API key from Hubwork account (stored by Settings/Unlock)
       let geminiApiKey: string | undefined;
@@ -125,39 +150,25 @@ export async function action({ request }: Route.ActionArgs) {
             continue;
           }
 
-          const fileName = schedule.workflowPath.split("/").pop() || "";
-          if (!fileName || !/^[a-zA-Z0-9_\-. ]+$/.test(fileName)) {
-            allResults.push({ accountId: account.id, workflowPath: schedule.workflowPath, status: "error", error: "Invalid workflow path" });
+          const workflowPath = schedule.workflowPath.trim();
+          const workflowFileId = resolveScheduledWorkflowFileId(syncMeta, workflowPath);
+          if (!workflowFileId) {
+            const resolutionError = getScheduledWorkflowResolutionError(syncMeta, workflowPath);
             await updateScheduleRuntime(account.id, schedule.id, {
               retryCount: 0,
               lockedUntil: FieldValue.delete(),
-              lastError: "Invalid workflow path",
+              lastError: resolutionError,
+            });
+            allResults.push({
+              accountId: account.id,
+              workflowPath: schedule.workflowPath,
+              status: "error",
+              error: resolutionError,
             });
             continue;
           }
 
-          const searchRes = await drive.files.list({
-            q: `'${rootFolderId}' in parents and name = '${fileName}' and trashed = false`,
-            fields: "files(id, name)",
-            spaces: "drive",
-          });
-
-          const wfFile = searchRes.data.files?.[0];
-          if (!wfFile) {
-            allResults.push({ accountId: account.id, workflowPath: schedule.workflowPath, status: "error", error: "File not found" });
-            await updateScheduleRuntime(account.id, schedule.id, {
-              retryCount: 0,
-              lockedUntil: FieldValue.delete(),
-              lastError: "File not found",
-            });
-            continue;
-          }
-
-          const wfContent = await drive.files.get(
-            { fileId: wfFile.id!, alt: "media" },
-            { responseType: "text" }
-          );
-          const yamlContent = wfContent.data as string;
+          const yamlContent = await readFile(accessToken, workflowFileId);
           const workflow = parseWorkflowYaml(yamlContent);
 
           const variables = new Map<string, string | number>(

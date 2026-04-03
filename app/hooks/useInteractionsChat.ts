@@ -79,6 +79,7 @@ async function* parseSSEStream(
       }
     }
   } finally {
+    await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 }
@@ -99,7 +100,7 @@ function buildToolDispatcher(
   driveToolNames: Set<string>;
   mcpToolNames: Set<string>;
 } {
-  let planApprovalPending = options?.requirePlanApproval ?? false;
+  const planApprovalPending = options?.requirePlanApproval ?? false;
   // Drive tools
   const driveTools = driveToolMode === "none"
     ? []
@@ -341,7 +342,11 @@ export async function* executeInteractionsChat(
   }
 
   while (true) {
-    if (abortSignal?.aborted) break;
+    if (abortSignal?.aborted) {
+      // Emit done so ChatPanel saves any partial message accumulated so far
+      yield { type: "done", interactionId: currentInteractionId, usage: totalUsage.totalTokens ? totalUsage : undefined };
+      return;
+    }
 
     // Build request body
     const requestBody: Record<string, unknown> = {

@@ -48,6 +48,9 @@ const MAX_TOTAL_STEPS = 100000;
 /** Node types that still need server API for execution */
 const SERVER_NODE_TYPES = new Set<WorkflowNodeType>([
   "mcp", "rag-sync", "gemihub-command",
+  "sheet-read", "sheet-write", "sheet-update", "sheet-delete",
+  "gmail-send",
+  "calendar-list", "calendar-create", "calendar-update", "calendar-delete",
 ]);
 
 export interface DriveEvent {
@@ -954,7 +957,8 @@ async function executeWorkflowOnServer(
             throw new Error(parsed.message);
           }
         } catch (e) {
-          if (e instanceof Error && e.message !== eventData) throw e;
+          // Re-throw explicit errors from event handlers; ignore JSON parse errors
+          if (e instanceof Error && e.message !== eventData && !(e instanceof SyntaxError)) throw e;
         }
         eventType = "";
         eventData = "";

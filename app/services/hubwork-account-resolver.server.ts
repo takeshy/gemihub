@@ -9,6 +9,16 @@ const notFoundCache = new Map<string, number>(); // domain → expiresAt
 const CACHE_TTL_MS = 60 * 1000;
 const CACHE_MAX_SIZE = 1000;
 
+export function extractAllowedSlugHost(domain: string): string | null {
+  if (domain.endsWith(".gemihub.online")) {
+    return domain.slice(0, -".gemihub.online".length);
+  }
+  if (domain.endsWith(".localhost")) {
+    return domain.slice(0, -".localhost".length);
+  }
+  return null;
+}
+
 /**
  * Resolve a Hubwork account from the request's Host header.
  * Two-tier resolution: try customDomain first, then defaultDomain.
@@ -42,11 +52,11 @@ export async function resolveHubworkAccount(
   if (!account) {
     account = await getAccountByDefaultDomain(domain);
   }
-  // Fallback: extract slug from subdomain (e.g. "acme.localhost" → slug "acme")
+  // Fallback: allow slug-based routing only on explicitly supported suffixes.
   if (!account) {
-    const parts = domain.split(".");
-    if (parts.length >= 2) {
-      account = await getAccountBySlug(parts[0]);
+    const slug = extractAllowedSlugHost(domain);
+    if (slug) {
+      account = await getAccountBySlug(slug);
     }
   }
 

@@ -77,7 +77,16 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    emitLog(logCtx, 400, { error: "Invalid JSON" });
+    return new Response(
+      JSON.stringify({ error: "Invalid JSON in request body" }),
+      { status: 400, headers: { "Content-Type": "application/json", ...responseHeaders } },
+    );
+  }
   const parsed = InteractionsChatRequestSchema.safeParse(body);
   if (!parsed.success) {
     emitLog(logCtx, 400, { error: "Invalid request body" });

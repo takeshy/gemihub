@@ -42,6 +42,12 @@ export async function action({ request }: Route.ActionArgs) {
         return data({ error: "Invalid domain" }, { status: 400 });
       }
 
+      // Block platform domains to prevent hijacking
+      const BLOCKED_DOMAINS = ["gemihub.online", "www.gemihub.online"];
+      if (BLOCKED_DOMAINS.includes(domain) || domain.endsWith(".gemihub.online")) {
+        return data({ error: "This domain is reserved and cannot be used" }, { status: 400 });
+      }
+
       // Check domain is not already in use
       const existing = await getAccountByDomain(domain);
       if (existing && existing.id !== account.id) {

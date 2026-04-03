@@ -4,10 +4,12 @@ import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getAccountByRootFolderId, getAccountBySlug } from "~/services/hubwork-accounts.server";
 import { getStripe } from "~/services/stripe.server";
+import { validateOrigin } from "~/utils/security";
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
 
 export async function action({ request }: Route.ActionArgs) {
+  validateOrigin(request);
   const sessionTokens = await requireAuth(request);
   const { tokens } = await getValidTokens(request, sessionTokens);
 

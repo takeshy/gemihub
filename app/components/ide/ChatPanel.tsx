@@ -795,6 +795,7 @@ export function ChatPanel({
       activateSkill,
       getActiveSkillsSystemPrompt,
       getActiveSkillWorkflows,
+      activeSkillIds,
       skills,
       onSkillWorkflowStart,
       onSkillWorkflowEnd,
@@ -912,21 +913,37 @@ export function ChatPanel({
         },
       ];
 
-      // Call Gemini directly for compact
-      const compactApiKey = getCachedApiKey();
-      if (!compactApiKey) throw new Error("API key not available");
-
+      // Call Gemini directly for compact (local key), or via Interactions API (paid plan)
       let summary = "";
-      const compactGenerator = chatStream(
-        compactApiKey,
-        selectedModel,
-        summaryMessages as Message[],
-        "You are a conversation summarizer. Output only the summary without any preamble.",
-      );
-      for await (const chunk of compactGenerator) {
-        if (chunk.type === "text" && chunk.content) {
-          summary += chunk.content;
+      const compactApiKey = getCachedApiKey();
+      if (compactApiKey) {
+        const compactGenerator = chatStream(
+          compactApiKey,
+          selectedModel,
+          summaryMessages as Message[],
+          "You are a conversation summarizer. Output only the summary without any preamble.",
+        );
+        for await (const chunk of compactGenerator) {
+          if (chunk.type === "text" && chunk.content) {
+            summary += chunk.content;
+          }
         }
+      } else if (settings.apiPlan === "paid") {
+        const compactGenerator = executeInteractionsChat({
+          model: selectedModel,
+          messages: summaryMessages,
+          systemPrompt: "You are a conversation summarizer. Output only the summary without any preamble.",
+          driveToolMode: "none",
+          mcpServerIds: [],
+          maxFunctionCalls: 0,
+        });
+        for await (const chunk of compactGenerator) {
+          if (chunk.type === "text" && chunk.content) {
+            summary += chunk.content;
+          }
+        }
+      } else {
+        throw new Error("API key not available");
       }
 
       if (!summary.trim()) {
@@ -990,7 +1007,7 @@ export function ChatPanel({
     } finally {
       setIsCompacting(false);
     }
-  }, [messages, isStreaming, isCompacting, saveChat, selectedModel, t]);
+  }, [messages, isStreaming, isCompacting, saveChat, selectedModel, settings.apiPlan, t]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

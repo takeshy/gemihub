@@ -12,6 +12,26 @@ function normalizeEmail(email: string): string {
   return email.toLowerCase().trim().replace(/\u3000/g, "").replace(/\s+/g, "");
 }
 
+export function getAuthLoginErrorResponse(error: unknown): Response {
+  const status =
+    typeof error === "object" && error !== null && "status" in error && typeof error.status === "number"
+      ? error.status
+      : typeof error === "object" && error !== null && "code" in error && typeof error.code === "number"
+        ? error.code
+        : undefined;
+  const hasScopeError =
+    error instanceof Error && /insufficient authentication scopes/i.test(error.message);
+  const message =
+    hasScopeError
+      ? "Hubwork Gmail/Sheets scopes are required"
+      : "Failed to send login email";
+
+  if (hasScopeError || status === 401 || status === 403) {
+    return Response.json({ error: message }, { status: 403 });
+  }
+  return Response.json({ error: message }, { status: 500 });
+}
+
 export async function action({ request }: Route.ActionArgs) {
   validateOrigin(request);
 
@@ -138,6 +158,7 @@ export async function action({ request }: Route.ActionArgs) {
     console.log(`[auth-login] Magic link sent successfully`);
   } catch (e) {
     console.error(`[auth-login] Error:`, e);
+    return getAuthLoginErrorResponse(e);
   }
 
   return Response.json({ ok: true });

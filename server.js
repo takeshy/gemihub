@@ -1,11 +1,16 @@
 import express from "express";
 import compression from "compression";
 import morgan from "morgan";
+import crypto from "node:crypto";
 import { createRequestHandler } from "@react-router/express";
 import path from "node:path";
 
 const build = await import("./build/server/index.js");
 const app = express();
+
+function isSlugHost(domain) {
+  return domain.endsWith(".gemihub.online") || domain.endsWith(".localhost");
+}
 
 app.use(compression());
 
@@ -24,7 +29,11 @@ app.use(morgan("tiny"));
 // Basic Auth for admin routes
 app.use("/hubwork/admin", (req, res, next) => {
   const creds = process.env.HUBWORK_ADMIN_CREDENTIALS;
-  if (!creds || !creds.includes(":")) return next();
+  if (!creds || !creds.includes(":")) {
+    // No credentials configured — deny access instead of silently skipping
+    res.status(401).set("WWW-Authenticate", 'Basic realm="Hubwork Admin"').end("Unauthorized");
+    return;
+  }
   const sep0 = creds.indexOf(":");
   const user = creds.slice(0, sep0);
   const pass = creds.slice(sep0 + 1);
@@ -33,12 +42,17 @@ app.use("/hubwork/admin", (req, res, next) => {
   if (header.startsWith("Basic ")) {
     const decoded = Buffer.from(header.slice(6), "base64").toString();
     const sep = decoded.indexOf(":");
-    if (
-      sep !== -1 &&
-      decoded.slice(0, sep) === user &&
-      decoded.slice(sep + 1) === pass
-    ) {
-      return next();
+    if (sep !== -1) {
+      const inputUser = decoded.slice(0, sep);
+      const inputPass = decoded.slice(sep + 1);
+      // Use timing-safe comparison to prevent timing attacks
+      const userMatch = inputUser.length === user.length &&
+        crypto.timingSafeEqual(Buffer.from(inputUser), Buffer.from(user));
+      const passMatch = inputPass.length === pass.length &&
+        crypto.timingSafeEqual(Buffer.from(inputPass), Buffer.from(pass));
+      if (userMatch && passMatch) {
+        return next();
+      }
     }
   }
 
@@ -51,7 +65,7 @@ app.get("/", (req, res, next) => {
   const host = req.headers.host;
   if (!host) return next();
   const domain = host.split(":")[0];
-  if (domain === "localhost" || domain === "gemihub.online" || domain === "www.gemihub.online") return next();
+  if (!isSlugHost(domain)) return next();
   req.url = "/__gemihub_root";
   next();
 });
