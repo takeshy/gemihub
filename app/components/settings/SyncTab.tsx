@@ -408,6 +408,10 @@ export function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
           {t("settings.sync.migrationToolDescription")}
         </p>
+        <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 mb-3">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>{t("settings.sync.migrationTokenFreeNotice")}</span>
+        </div>
         {!backupToken ? (
           <button
             type="button"

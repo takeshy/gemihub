@@ -466,14 +466,14 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       case "generateMigrationToken": {
-        // Migration token requires a paid plan
-        {
-          const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
-          const account = await getAccountByRootFolderId(validTokens.rootFolderId);
-          if (!account?.plan) {
-            return jsonWithCookie({ success: false, message: "A paid plan is required to generate migration tokens." });
-          }
-        }
+        // TODO: Re-enable paid plan check once Premium Plan is fully launched
+        // {
+        //   const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
+        //   const account = await getAccountByRootFolderId(validTokens.rootFolderId);
+        //   if (!account?.plan) {
+        //     return jsonWithCookie({ success: false, message: "A paid plan is required to generate migration tokens." });
+        //   }
+        // }
         // Generate migration token (XOR-encoded accessToken + rootFolderId)
         const payload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
         const buf = Buffer.from(payload);

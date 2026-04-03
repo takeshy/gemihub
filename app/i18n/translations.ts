@@ -503,6 +503,7 @@ export interface TranslationStrings {
   "settings.sync.migrationToolDescription": string;
   "settings.sync.migrationTokenGenerate": string;
   "settings.sync.migrationTokenWarning": string;
+  "settings.sync.migrationTokenFreeNotice": string;
   "settings.sync.backupTokenCopy": string;
   "settings.sync.backupTokenCopied": string;
   "settings.sync.backupTokenHide": string;
@@ -1176,6 +1177,7 @@ const en: TranslationStrings = {
   "settings.sync.migrationToolDescription": "Generate a token for Obsidian Gemini Helper or external migration tools. If encryption is enabled, authentication credentials are also exported to Google Drive.",
   "settings.sync.migrationTokenGenerate": "Generate Token",
   "settings.sync.migrationTokenWarning": "This token grants access to your GemHub files in Google Drive. It expires in about 1 hour.",
+  "settings.sync.migrationTokenFreeNotice": "This feature is temporarily available for free while the Premium Plan is being prepared.",
   "settings.sync.backupTokenCopy": "Copy",
   "settings.sync.backupTokenCopied": "Copied!",
   "settings.sync.backupTokenHide": "Hide Token",
@@ -1849,6 +1851,7 @@ const ja: TranslationStrings = {
   "settings.sync.migrationToolDescription": "Obsidian Gemini Helper や外部移行ツール用のトークンを生成します。暗号化が有効な場合、認証情報も Google Drive にエクスポートされます。",
   "settings.sync.migrationTokenGenerate": "トークンを生成",
   "settings.sync.migrationTokenWarning": "このトークンは Google Drive の GemHub ファイルへのアクセス権を付与します。約1時間で失効します。",
+  "settings.sync.migrationTokenFreeNotice": "Premium Plan 準備中のため、この機能は一時的に無料で利用できます。",
   "settings.sync.backupTokenCopy": "コピー",
   "settings.sync.backupTokenCopied": "コピーしました！",
   "settings.sync.backupTokenHide": "トークンを非表示",
