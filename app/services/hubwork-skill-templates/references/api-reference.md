@@ -165,9 +165,42 @@ For API workflows, commonly used nodes:
 | `sheet-write` | Append rows |
 | `sheet-update` | Update rows matching filter |
 | `sheet-delete` | Delete rows matching filter |
+| `calendar-list` | List calendar events (calendarId, timeMin, timeMax, maxResults, query, saveTo) |
+| `calendar-create` | Create calendar event (calendarId, summary, start, end, description?, location?) |
+| `calendar-update` | Update calendar event (calendarId, eventId, summary?, start?, end?, description?, location?) |
+| `calendar-delete` | Delete calendar event (calendarId, eventId) |
 | `gmail-send` | Send email (to, subject, body) |
 | `set` | Set a variable value |
 | `if` | Conditional branch |
 | `json` | Parse/build JSON |
 | `http` | HTTP request |
 | `variable` | Declare a variable with default value |
+
+### `calendar-list` Response Format
+
+`calendar-list` returns a JSON array of event objects. **`start` and `end` are flat ISO 8601 strings, NOT nested objects.** Use `evt.start` directly — never `evt.start.dateTime`.
+
+```json
+[
+  {
+    "id": "abc123",
+    "summary": "Meeting",
+    "description": "...",
+    "start": "2025-04-01T10:00:00+09:00",
+    "end": "2025-04-01T11:00:00+09:00",
+    "location": "...",
+    "status": "confirmed",
+    "htmlLink": "https://calendar.google.com/..."
+  }
+]
+```
+
+**In HTML pages**, parse the response like this:
+
+```javascript
+const events = await gemihub.get("interview/events", { start: "...", end: "..." });
+events.forEach(evt => {
+  const startTime = new Date(evt.start);  // Direct string — NOT evt.start.dateTime
+  const endTime = new Date(evt.end);      // Direct string — NOT evt.end.dateTime
+});
+```

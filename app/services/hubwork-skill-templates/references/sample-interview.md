@@ -42,10 +42,13 @@ Auth guard, data loading, form submission, and logout — the structural pattern
     document.getElementById("content").classList.remove("hidden");
 
     // 5. Fetch data from GET API
+    // calendar-list returns flat start/end strings — use evt.start directly, NOT evt.start.dateTime
     const events = await gemihub.get("interview/events", {
       start: "2025-04-01T00:00:00+09:00",
       end: "2025-04-01T23:59:59+09:00"
     });
+    // Each event: { id, summary, start: "ISO string", end: "ISO string", ... }
+    // Check conflicts: compare with new Date(evt.start) and new Date(evt.end)
 
     // 6. Submit via POST API
     document.getElementById("booking-form").addEventListener("submit", async (e) => {

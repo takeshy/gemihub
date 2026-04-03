@@ -109,6 +109,7 @@ Before saving AND after reading back each file, check ALL applicable items:
 6. **Missing web/ prefix** — All paths must start with `web/` (e.g., `web/about.html`, not `about.html`).
 7. **Skipping plan or verification** — ALWAYS plan first, ALWAYS verify after.
 8. **Guessing column names** — NEVER guess spreadsheet column names. ALWAYS call `get_spreadsheet_schema` first to get exact column names, then use those names in `sheet-read` filter and `sheet-write` data. Column names are case-sensitive and may use formats like `contact-email` instead of `email`.
+9. **Wrong calendar event format** — `calendar-list` returns events with **flat** `start`/`end` strings (e.g., `evt.start` = `"2025-04-01T10:00:00+09:00"`). NEVER use `evt.start.dateTime` — that is the raw Google Calendar API format, not what our API returns. Always use `new Date(evt.start)` and `new Date(evt.end)` directly.
 
 ## Rules
 
