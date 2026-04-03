@@ -79,21 +79,11 @@ resource "google_certificate_manager_certificate_map_entry" "main" {
   certificates = [google_certificate_manager_certificate.main.id]
 }
 
-# HTTPS proxy (uses Certificate Map; keeps legacy ssl_certificates until cert is active)
+# HTTPS proxy (uses Certificate Map for dynamic custom domain certs)
 resource "google_compute_target_https_proxy" "default" {
-  name             = "gemini-hub-https-proxy"
-  url_map          = google_compute_url_map.https.id
-  certificate_map  = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.default.id}"
-  ssl_certificates = [data.google_compute_ssl_certificate.legacy.self_link]
-
-  lifecycle {
-    ignore_changes = [ssl_certificates]
-  }
-}
-
-# Reference the existing legacy SSL certificate (will be removed after Certificate Manager is active)
-data "google_compute_ssl_certificate" "legacy" {
-  name = "gemihub-cert"
+  name            = "gemini-hub-https-proxy"
+  url_map         = google_compute_url_map.https.id
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.default.id}"
 }
 
 # HTTPS forwarding rule (port 443)
