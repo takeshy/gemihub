@@ -373,11 +373,16 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
               <input type="hidden" name="plan" value="pro" />
               <button
                 type="submit"
-                disabled={stripeFetcher.state !== "idle"}
-                className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                disabled
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
+                title="Currently unavailable"
               >
                 Upgrade
               </button>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
+                New subscriptions are temporarily unavailable while OAuth verification is in progress.
+              </p>
             </stripeFetcher.Form>
           </div>
         )}
@@ -459,12 +464,17 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
                     <input type="hidden" name="plan" value={p} />
                     <button
                       type="submit"
-                      disabled={stripeFetcher.state !== "idle"}
-                      className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                      disabled
+                      className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
+                      title="Currently unavailable"
                     >
                       Subscribe
                     </button>
                   </stripeFetcher.Form>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
+                    New subscriptions are temporarily unavailable while OAuth verification is in progress.
+                  </p>
                 </div>
               ))}
             </div>
