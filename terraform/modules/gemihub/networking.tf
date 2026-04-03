@@ -51,12 +51,21 @@ resource "google_certificate_manager_certificate_map" "default" {
   depends_on = [google_project_service.apis]
 }
 
-# Main domain certificate (Google-managed)
+# DNS authorization for certificate validation
+resource "google_certificate_manager_dns_authorization" "main" {
+  name   = "gemihub-dns-auth"
+  domain = var.domain
+
+  depends_on = [google_project_service.apis]
+}
+
+# Main domain certificate (Google-managed, DNS-authorized)
 resource "google_certificate_manager_certificate" "main" {
   name = "gemihub-main-cert"
 
   managed {
-    domains = [var.domain]
+    domains            = [var.domain]
+    dns_authorizations = [google_certificate_manager_dns_authorization.main.id]
   }
 
   depends_on = [google_project_service.apis]
@@ -70,11 +79,21 @@ resource "google_certificate_manager_certificate_map_entry" "main" {
   certificates = [google_certificate_manager_certificate.main.id]
 }
 
-# HTTPS proxy (uses Certificate Map instead of ssl_certificates)
+# HTTPS proxy (uses Certificate Map; keeps legacy ssl_certificates until cert is active)
 resource "google_compute_target_https_proxy" "default" {
-  name            = "gemini-hub-https-proxy"
-  url_map         = google_compute_url_map.https.id
-  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.default.id}"
+  name             = "gemini-hub-https-proxy"
+  url_map          = google_compute_url_map.https.id
+  certificate_map  = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.default.id}"
+  ssl_certificates = [data.google_compute_ssl_certificate.legacy.self_link]
+
+  lifecycle {
+    ignore_changes = [ssl_certificates]
+  }
+}
+
+# Reference the existing legacy SSL certificate (will be removed after Certificate Manager is active)
+data "google_compute_ssl_certificate" "legacy" {
+  name = "gemihub-cert"
 }
 
 # HTTPS forwarding rule (port 443)

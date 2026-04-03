@@ -18,6 +18,17 @@ resource "google_dns_record_set" "a" {
   rrdatas      = [google_compute_global_address.default.address]
 }
 
+# CNAME record for Certificate Manager DNS authorization
+resource "google_dns_record_set" "cert_validation" {
+  count = var.manage_dns ? 1 : 0
+
+  name         = google_certificate_manager_dns_authorization.main.dns_resource_record[0].name
+  type         = google_certificate_manager_dns_authorization.main.dns_resource_record[0].type
+  ttl          = 300
+  managed_zone = google_dns_managed_zone.default[0].name
+  rrdatas      = [google_certificate_manager_dns_authorization.main.dns_resource_record[0].data]
+}
+
 resource "google_dns_record_set" "txt_verification" {
   count = var.manage_dns && var.google_site_verification_token != "" ? 1 : 0
 
