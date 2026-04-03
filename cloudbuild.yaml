@@ -34,10 +34,10 @@ steps:
     args:
       - '-c'
       - |
-        SERVICES=$(gcloud run services list --region=${_REGION} --format='value(name)' --filter='name~^gemihub-hw-' 2>/dev/null || true)
-        for svc in $SERVICES; do
-          echo "Deploying to Hubwork service: $svc"
-          gcloud run deploy "$svc" \
+        SERVICES=$$(gcloud run services list --region=${_REGION} --format='value(name)' --filter='name~^gemihub-hw-' 2>/dev/null || true)
+        for svc in $$SERVICES; do
+          echo "Deploying to Hubwork service: $$svc"
+          gcloud run deploy "$$svc" \
             --image ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA} \
             --region ${_REGION}
         done
