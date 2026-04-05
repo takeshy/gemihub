@@ -102,37 +102,26 @@ export function createPluginAPI(
 
     drive: {
       async readFile(fileId: string) {
-        const res = await fetch(
-          `/api/drive/files?action=read&fileId=${encodeURIComponent(fileId)}`
-        );
-        if (!res.ok) throw new Error(`Drive read error: ${res.status}`);
-        const data = await res.json();
-        return data.content;
+        const { readFileLocal } = await import("~/services/drive-local");
+        return readFileLocal(fileId);
       },
 
       async searchFiles(query: string) {
-        const res = await fetch(
-          `/api/drive/files?action=search&query=${encodeURIComponent(query)}`
-        );
-        if (!res.ok) throw new Error(`Drive search error: ${res.status}`);
-        const data = await res.json();
-        return data.files;
+        const { searchFilesLocal } = await import("~/services/drive-local");
+        return searchFilesLocal(query);
       },
 
-      async listFiles(folderId?: string) {
-        const params = new URLSearchParams({ action: "list" });
-        if (folderId) params.set("folderId", folderId);
-        const res = await fetch(`/api/drive/files?${params}`);
-        if (!res.ok) throw new Error(`Drive list error: ${res.status}`);
-        const data = await res.json();
-        return data.files;
+      async listFiles(folder?: string) {
+        const { listFilesLocal, mimeTypeFromFileName } = await import("~/services/drive-local");
+        const { files } = await listFilesLocal(folder, { limit: 1000 });
+        return files.map((f) => ({ id: f.id, name: f.name, mimeType: mimeTypeFromFileName(f.name) }));
       },
 
       async createFile(name: string, content: string | ArrayBuffer) {
-        const ext = name.split(".").pop()?.toLowerCase();
-
-        // Binary path: ArrayBuffer → base64 → create-image action
         if (content instanceof ArrayBuffer) {
+          const { saveBinaryFileLocal } = await import("~/services/drive-local");
+          const base64 = arrayBufferToBase64(content);
+          const ext = name.split(".").pop()?.toLowerCase();
           const binaryMimeMap: Record<string, string> = {
             png: "image/png",
             jpg: "image/jpeg",
@@ -147,98 +136,33 @@ export function createPluginAPI(
             tif: "image/tiff",
           };
           const mimeType = (ext && binaryMimeMap[ext]) || "application/octet-stream";
-          const base64 = arrayBufferToBase64(content);
-          const res = await fetch("/api/drive/files", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "create-image", name, data: base64, mimeType }),
-          });
-          if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
-          const data = await res.json();
-          const file = data.file;
-          const { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } = await import("~/services/indexeddb-cache");
-          await setCachedFile({
-            fileId: file.id,
-            content: base64,
-            md5Checksum: file.md5Checksum ?? "",
-            modifiedTime: file.modifiedTime ?? "",
-            cachedAt: Date.now(),
-            fileName: file.name,
-            encoding: "base64",
-          });
-          // Update localSyncMeta so the file doesn't appear as a pull candidate
-          const localMeta = await getLocalSyncMeta();
-          if (localMeta) {
-            localMeta.files[file.id] = {
-              md5Checksum: file.md5Checksum ?? "",
-              modifiedTime: file.modifiedTime ?? "",
-            };
-            localMeta.lastUpdatedAt = data.meta?.lastUpdatedAt || new Date().toISOString();
-            await setLocalSyncMeta(localMeta);
-          }
-          if (data.meta) {
-            window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
-          }
-          window.dispatchEvent(new Event("sync-complete"));
-          return { id: file.id, name: file.name };
+          const { fileId } = await saveBinaryFileLocal(name, base64, mimeType);
+          return { id: fileId, name };
         }
 
-        // Text path: existing flow
-        const mimeMap: Record<string, string> = {
-          md: "text/markdown",
-          txt: "text/plain",
-          json: "application/json",
-          yaml: "text/yaml",
-          yml: "text/yaml",
-          js: "application/javascript",
-          css: "text/css",
-          html: "text/html",
-        };
-        const mimeType = (ext && mimeMap[ext]) || "text/plain";
-        const res = await fetch("/api/drive/files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "create", name, content, mimeType, dedup: true }),
-        });
-        if (!res.ok) throw new Error(`Drive create error: ${res.status}`);
-        const data = await res.json();
-        const file = data.file;
-        // Cache locally so it doesn't appear in Pull diff
-        const { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } = await import("~/services/indexeddb-cache");
-        await setCachedFile({
-          fileId: file.id,
-          content,
-          md5Checksum: file.md5Checksum ?? "",
-          modifiedTime: file.modifiedTime ?? "",
-          cachedAt: Date.now(),
-          fileName: file.name,
-        });
-        // Update localSyncMeta so the file doesn't appear as a pull candidate
-        const localMeta = await getLocalSyncMeta();
-        if (localMeta) {
-          localMeta.files[file.id] = {
-            md5Checksum: file.md5Checksum ?? "",
-            modifiedTime: file.modifiedTime ?? "",
-          };
-          localMeta.lastUpdatedAt = data.meta?.lastUpdatedAt || new Date().toISOString();
-          await setLocalSyncMeta(localMeta);
-        }
-        if (data.meta) {
-          window.dispatchEvent(new CustomEvent("tree-meta-updated", { detail: { meta: data.meta } }));
-        }
-        window.dispatchEvent(new Event("sync-complete"));
-        return { id: file.id, name: file.name };
+        const { writeFileLocal } = await import("~/services/drive-local");
+        const { fileId } = await writeFileLocal(name, content as string);
+        return { id: fileId, name };
       },
 
       async updateFile(fileId: string, content: string | ArrayBuffer) {
-        // Update local cache only; user pushes to Drive manually
-        const { getCachedFile, setCachedFile } = await import("~/services/indexeddb-cache");
-        const cached = await getCachedFile(fileId);
+        const { getCachedFile } = await import("~/services/indexeddb-cache");
+        let cached = await getCachedFile(fileId);
+        // After pending-file migration, "new:*" IDs are replaced with real Drive IDs.
+        // Fall back to name-based lookup so plugins holding stale IDs still work.
+        if (!cached && fileId.startsWith("new:")) {
+          const { findFileByNameLocal } = await import("~/services/drive-local");
+          const found = await findFileByNameLocal(fileId.slice(4));
+          if (found) {
+            fileId = found.id;
+            cached = await getCachedFile(fileId);
+          }
+        }
         if (!cached) throw new Error(`File not in local cache: ${fileId}`);
 
         if (content instanceof ArrayBuffer) {
-          // Binary path: base64 cache + binary edit history marker
           const { markBinaryFileModified } = await import("~/services/drive-local");
+          const { setCachedFile } = await import("~/services/indexeddb-cache");
           const base64 = arrayBufferToBase64(content);
           await markBinaryFileModified(fileId, cached.fileName ?? fileId);
           await setCachedFile({
@@ -251,17 +175,8 @@ export function createPluginAPI(
             encoding: "base64",
           });
         } else {
-          // Text path: existing flow
-          const { saveLocalEdit } = await import("~/services/edit-history-local");
-          await saveLocalEdit(fileId, cached.fileName ?? fileId, content);
-          await setCachedFile({
-            fileId,
-            content,
-            md5Checksum: cached.md5Checksum ?? "",
-            modifiedTime: cached.modifiedTime ?? "",
-            cachedAt: Date.now(),
-            fileName: cached.fileName,
-          });
+          const { writeFileLocal } = await import("~/services/drive-local");
+          await writeFileLocal(cached.fileName ?? fileId, content as string, { existingFileId: fileId });
         }
 
         window.dispatchEvent(

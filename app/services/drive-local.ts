@@ -23,7 +23,7 @@ import { replaceVariables } from "~/engine/handlers/utils";
 const EXCLUDED_PREFIXES = ["trash/", "history/", "plugins/"];
 
 /** Infer a reasonable MIME type from the file name extension. */
-function mimeTypeFromFileName(fileName: string): string {
+export function mimeTypeFromFileName(fileName: string): string {
   const dotIdx = fileName.lastIndexOf(".");
   if (dotIdx < 0) return "text/plain";
   const ext = fileName.slice(dotIdx + 1).toLowerCase();
