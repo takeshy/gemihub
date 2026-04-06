@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { CodeChallengeMethod } from "google-auth-library";
 import crypto from "node:crypto";
 import { getSession, commitSession, destroySession, setTokens, type SessionTokens } from "./session.server";
 
@@ -34,8 +35,17 @@ export async function getAuthUrl(
   options?: { includeHubworkScopes?: boolean; returnTo?: string }
 ): Promise<{ url: string; setCookieHeader: string }> {
   const state = crypto.randomUUID();
+
+  // PKCE: generate code_verifier and code_challenge (S256)
+  const codeVerifier = crypto.randomBytes(48).toString("base64url");
+  const codeChallenge = crypto
+    .createHash("sha256")
+    .update(codeVerifier)
+    .digest("base64url");
+
   const session = await getSession(request);
   session.set("oauthState", state);
+  session.set("oauthCodeVerifier", codeVerifier);
   if (options?.returnTo) {
     session.set("oauthReturnTo", options.returnTo);
   }
@@ -51,19 +61,21 @@ export async function getAuthUrl(
     scope: scopes,
     prompt: "consent",
     state,
+    code_challenge: codeChallenge,
+    code_challenge_method: CodeChallengeMethod.S256,
   });
   return { url, setCookieHeader };
 }
 
 export { HUBWORK_SCOPES };
 
-export async function exchangeCode(code: string, request: Request): Promise<{
+export async function exchangeCode(code: string, request: Request, codeVerifier: string): Promise<{
   accessToken: string;
   refreshToken: string;
   expiryTime: number;
 }> {
   const oauth2Client = getOAuth2Client(request);
-  const { tokens } = await oauth2Client.getToken(code);
+  const { tokens } = await oauth2Client.getToken({ code, codeVerifier });
 
   if (!tokens.access_token || !tokens.refresh_token) {
     throw new Error("Failed to exchange authorization code for tokens");

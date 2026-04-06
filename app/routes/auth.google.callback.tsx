@@ -26,7 +26,13 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw new Response("Invalid OAuth state parameter", { status: 400 });
   }
 
-  const tokens = await exchangeCode(code, request);
+  // PKCE: retrieve code_verifier from session
+  const codeVerifier = stateSession.get("oauthCodeVerifier");
+  if (!codeVerifier) {
+    throw new Response("Missing PKCE code verifier", { status: 400 });
+  }
+
+  const tokens = await exchangeCode(code, request, codeVerifier);
 
   // Capture granted scopes from the callback
   const scope = url.searchParams.get("scope") || "";
