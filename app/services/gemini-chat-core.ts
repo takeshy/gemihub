@@ -324,8 +324,8 @@ function toStreamChunkUsage(usage: ExtractedUsage | undefined): StreamChunkUsage
 
 export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
-  const supportsThinking = !modelLower.includes("gemma");
-  if (!supportsThinking) return undefined;
+  // Gemma 4: thinking is built-in (always on), config parameters not supported
+  if (modelLower.includes("gemma")) return undefined;
   // gemini-3.1-flash-lite: uses thinkingLevel instead of thinkingBudget
   // Default is "minimal" (no thinking). thinkingBudget: 0 is invalid for this model.
   if (modelLower.includes("gemini-3.1-flash-lite")) {
@@ -421,8 +421,7 @@ export async function* chatWithToolsStream(
   let warningEmitted = false;
   let geminiTools: Tool[] | undefined;
 
-  const isGemma = model.toLowerCase().includes("gemma");
-  const ragEnabled = !isGemma && ragStoreIds && ragStoreIds.length > 0;
+  const ragEnabled = ragStoreIds && ragStoreIds.length > 0;
   const webSearchEnabled = options?.webSearchEnabled ?? false;
 
   if (webSearchEnabled) {

@@ -69,6 +69,9 @@ export async function getSettings(
     if ((parsed.selectedModel as string) === "gemini-2.5-flash-image") {
       parsed.selectedModel = "gemini-3.1-flash-image-preview";
     }
+    if ((parsed.selectedModel as string) === "gemma-3-27b-it") {
+      parsed.selectedModel = "gemma-4-31b-it";
+    }
 
     // Merge with defaults to handle missing fields from older versions
     const settings: UserSettings = {

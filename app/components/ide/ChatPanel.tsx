@@ -355,18 +355,10 @@ export function ChatPanel({
       const c = getDriveToolModeConstraint(model, ragSetting);
       setDriveToolMode(c.forcedMode ?? c.defaultMode);
       // Modes that disable function calling should also disable MCP.
-      const modelLower = model.toLowerCase();
-      const isGemma = modelLower.includes("gemma");
       const hasRag = !!(ragSetting && ragSetting !== "__websearch__");
-      // Gemma models don't support tools including RAG; reset RAG setting.
-      if (isGemma && ragSetting) {
-        setSelectedRagSetting(null);
-        try { localStorage.setItem("gemihub:selectedRagSetting", ""); } catch { /* ignore */ }
-      }
       if (
-        isGemma ||
         ragSetting === "__websearch__" ||
-        (modelLower.includes("flash-lite") && hasRag)
+        (model.toLowerCase().includes("flash-lite") && hasRag)
       ) {
         setEnabledMcpServerIds([]);
       }

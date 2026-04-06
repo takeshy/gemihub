@@ -48,7 +48,7 @@ export interface TranslationStrings {
   "chat.alwaysThinkLabel": string;
   "chat.thinkFlash": string;
   "chat.thinkFlashLite": string;
-  "chat.toolModeLockGemma": string;
+  "chat.toolModeLockGemma4WebSearch": string;
   "chat.toolModeLockWebSearch": string;
   "chat.toolModeLockRag": string;
   "chat.toolModeLocked": string;
@@ -721,7 +721,7 @@ const en: TranslationStrings = {
   "chat.alwaysThinkLabel": "Always Think",
   "chat.thinkFlash": "Flash",
   "chat.thinkFlashLite": "Flash Lite",
-  "chat.toolModeLockGemma": "Gemma models don't support function calling",
+  "chat.toolModeLockGemma4WebSearch": "Gemma 4 cannot use function calling with Web Search",
   "chat.toolModeLockWebSearch": "Drive tools are disabled during Web Search",
   "chat.toolModeLockRag": "Drive tools are disabled when RAG is enabled",
   "chat.toolModeLocked": "Auto (locked)",
@@ -1395,7 +1395,7 @@ const ja: TranslationStrings = {
   "chat.alwaysThinkLabel": "常に思考",
   "chat.thinkFlash": "Flash",
   "chat.thinkFlashLite": "Flash Lite",
-  "chat.toolModeLockGemma": "Gemmaモデルはファンクションコールに対応していません",
+  "chat.toolModeLockGemma4WebSearch": "Gemma 4はWeb Searchとファンクションコールを同時に使用できません",
   "chat.toolModeLockWebSearch": "Web Search中はDriveツールは無効です",
   "chat.toolModeLockRag": "RAG使用時はDriveツールは無効です",
   "chat.toolModeLocked": "自動（ロック中）",

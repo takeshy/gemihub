@@ -154,10 +154,7 @@ export async function* executeLocalChat(
     });
   }
 
-  // JavaScript sandbox tool (not available for Gemma models which lack function calling)
-  if (!model.toLowerCase().includes("gemma")) {
-    tools.push(EXECUTE_JAVASCRIPT_TOOL);
-  }
+  tools.push(EXECUTE_JAVASCRIPT_TOOL);
 
   // Build tool dispatcher
   const driveToolNames = new Set(DRIVE_TOOL_DEFINITIONS.map((t) => t.name));

@@ -239,8 +239,8 @@ export function buildGenerationConfig(
   enableThinking?: boolean,
 ): Interactions.GenerationConfig | undefined {
   const modelLower = model.toLowerCase();
-  const supportsThinking = !modelLower.includes("gemma");
-  if (!supportsThinking) return undefined;
+  // Gemma 4: thinking is built-in (always on), config parameters not supported
+  if (modelLower.includes("gemma")) return undefined;
 
   const thinkingRequired = modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
   let thinkingLevel: ThinkingLevel;

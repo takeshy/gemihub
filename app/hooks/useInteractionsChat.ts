@@ -290,9 +290,7 @@ export async function* executeInteractionsChat(
 
   // Build extra tool definitions (client-only tools) to send to server
   const extraToolDefinitions: ToolDefinition[] = [];
-  if (!model.toLowerCase().includes("gemma")) {
-    extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
-  }
+  extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
   if (skillWorkflows && skillWorkflows.length > 0) {
     const workflowIds = skillWorkflows.map((sw) => buildWorkflowToolId(sw.skillId, sw.workflow));
     extraToolDefinitions.push({

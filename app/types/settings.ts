@@ -155,13 +155,18 @@ export interface DriveToolModeConstraint {
   reasonKey?: string;
 }
 
+/** Returns true for Gemma 4 models (function calling supported, but not with Web Search). */
+export function isGemma4(model: string): boolean {
+  return model.toLowerCase().includes("gemma-4");
+}
+
 export function getDriveToolModeConstraint(
   model: string,
   ragSetting: string | null
 ): DriveToolModeConstraint {
-  const m = model.toLowerCase();
-  if (m.includes("gemma")) {
-    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockGemma" };
+  // Gemma 4 + Web Search: function calling disabled
+  if (isGemma4(model) && ragSetting === "__websearch__") {
+    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockGemma4WebSearch" };
   }
   if (ragSetting === "__websearch__") {
     return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockWebSearch" };
@@ -211,7 +216,8 @@ export type ModelType =
   | "gemini-2.5-flash-lite"
   | "gemini-3-pro-image-preview"
   | "gemini-3.1-flash-image-preview"
-  | "gemma-3-27b-it";
+  | "gemma-4-31b-it"
+  | "gemma-4-26b-a4b-it";
 
 export interface ModelInfo {
   name: ModelType;
@@ -263,6 +269,16 @@ export const PAID_MODELS: ModelInfo[] = [
     description: "Fast, low-cost image generation",
     isImageModel: true,
   },
+  {
+    name: "gemma-4-31b-it",
+    displayName: "Gemma 4 31B",
+    description: "Gemma 4 model with function calling and thinking",
+  },
+  {
+    name: "gemma-4-26b-a4b-it",
+    displayName: "Gemma 4 26B A4B (MoE)",
+    description: "Gemma 4 MoE model with function calling and thinking",
+  },
 ];
 
 export const FREE_MODELS: ModelInfo[] = [
@@ -287,9 +303,14 @@ export const FREE_MODELS: ModelInfo[] = [
     description: "Free tier cost-effective model",
   },
   {
-    name: "gemma-3-27b-it",
-    displayName: "Gemma 3 27B (No tools)",
-    description: "Free tier Gemma model (no function calling)",
+    name: "gemma-4-31b-it",
+    displayName: "Gemma 4 31B",
+    description: "Free tier Gemma 4 model with function calling and thinking",
+  },
+  {
+    name: "gemma-4-26b-a4b-it",
+    displayName: "Gemma 4 26B A4B (MoE)",
+    description: "Free tier Gemma 4 MoE model with function calling and thinking",
   },
 ];
 
