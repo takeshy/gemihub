@@ -271,6 +271,9 @@ export function createPluginAPI(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create", ...event }),
       });
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Calendar access requires premium plan with calendar permissions");
+      }
       if (!res.ok) throw new Error(`Calendar create error: ${res.status}`);
       return res.json();
     },
@@ -281,6 +284,9 @@ export function createPluginAPI(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "update", eventId, ...event }),
       });
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Calendar access requires premium plan with calendar permissions");
+      }
       if (!res.ok) throw new Error(`Calendar update error: ${res.status}`);
       return res.json();
     },
@@ -291,6 +297,9 @@ export function createPluginAPI(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete", eventId, calendarId }),
       });
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Calendar access requires premium plan with calendar permissions");
+      }
       if (!res.ok) throw new Error(`Calendar delete error: ${res.status}`);
     },
   };
