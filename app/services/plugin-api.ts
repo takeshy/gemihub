@@ -100,6 +100,12 @@ export function createPluginAPI(
       },
     },
 
+    onActiveFileChanged(callback: (detail: { fileId: string | null; fileName: string | null; mimeType: string | null }) => void): () => void {
+      const handler = (e: Event) => callback((e as CustomEvent).detail);
+      window.addEventListener("active-file-changed", handler);
+      return () => window.removeEventListener("active-file-changed", handler);
+    },
+
     drive: {
       async readFile(fileId: string) {
         const { readFileLocal } = await import("~/services/drive-local");

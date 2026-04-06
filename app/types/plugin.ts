@@ -79,14 +79,19 @@ export interface PluginAPI {
     ): Promise<string>;
   };
 
-  // Drive operations (via host /api/drive/*)
+  // Active file change listener
+  onActiveFileChanged(
+    callback: (detail: { fileId: string | null; fileName: string | null; mimeType: string | null }) => void
+  ): () => void;
+
+  // Drive operations (local-first via IndexedDB)
   drive: {
     readFile(fileId: string): Promise<string>;
     searchFiles(
       query: string
     ): Promise<Array<{ id: string; name: string; mimeType: string }>>;
     listFiles(
-      folderId?: string
+      folder?: string
     ): Promise<Array<{ id: string; name: string; mimeType: string }>>;
     createFile(
       name: string,

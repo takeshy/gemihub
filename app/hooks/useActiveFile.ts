@@ -121,6 +121,7 @@ export function useActiveFile({
       const url = new URL(window.location.href);
       url.searchParams.set("file", fileId);
       window.history.pushState({}, "", url.toString());
+      window.dispatchEvent(new CustomEvent("active-file-changed", { detail: { fileId, fileName, mimeType } }));
     },
     [rightPanel, setRightPanel]
   );
@@ -132,6 +133,7 @@ export function useActiveFile({
     const url = new URL(window.location.href);
     url.searchParams.delete("file");
     window.history.pushState({}, "", url.toString());
+    window.dispatchEvent(new CustomEvent("active-file-changed", { detail: { fileId: null, fileName: null, mimeType: null } }));
   }, []);
 
   return {
