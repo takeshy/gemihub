@@ -9,7 +9,7 @@ Extend Gemini Hub with community plugins installed from GitHub Releases. Inspire
 - **Drive Storage**: Plugin files and data stored in Google Drive (`plugins/` folder)
 - **IndexedDB Cache**: Plugin assets cached client-side for fast loading
 - **Hot Enable/Disable**: Toggle plugins without page reload
-- **Plugin API**: Access Gemini AI, Drive files, and plugin-scoped storage
+- **Plugin API**: Access Gemini AI, Drive files, Google Calendar, Gmail, and plugin-scoped storage
 
 ## For Users
 
@@ -164,7 +164,25 @@ const response = await api.gemini.chat(
 // response is the model's text reply
 ```
 
+#### Active File Change Listener
+
+```typescript
+// Subscribe to file selection changes in the IDE
+const unsubscribe = api.onActiveFileChanged(({ fileId, fileName, mimeType }) => {
+  if (fileId) {
+    console.log(`File opened: ${fileName} (${fileId})`);
+  } else {
+    console.log("File closed");
+  }
+});
+
+// Call the returned function to unsubscribe
+unsubscribe();
+```
+
 #### Google Drive
+
+All drive operations are local-first — reads come from the IndexedDB cache (with server fallback on cache miss), and writes update the local cache and edit history. Changes are synced to Google Drive when the user pushes.
 
 ```typescript
 // Read a file
@@ -173,8 +191,8 @@ const content = await api.drive.readFile(fileId);
 // Search files by name
 const files = await api.drive.searchFiles("query");
 
-// List files in a folder (omit folderId to list files in the gemihub root folder)
-const files = await api.drive.listFiles(folderId);
+// List files in a folder (omit folder to list files in the gemihub root folder)
+const files = await api.drive.listFiles(folder);
 
 // Create a text file (created in the gemihub root folder)
 const { id, name } = await api.drive.createFile("notes.md", "# Notes");
@@ -192,6 +210,52 @@ await api.drive.updateFile(fileId, arrayBuffer);
 
 // Rebuild the file tree from Drive
 await api.drive.rebuildTree();
+```
+
+> **Note:** `createFile` returns a temporary `new:*` prefixed ID for newly created files. This ID works with all other `api.drive` methods. After a push, the file receives a real Drive ID. `updateFile` automatically resolves stale `new:*` IDs by falling back to file name lookup.
+
+#### Google Calendar (Premium)
+
+Requires the premium plan with calendar scope. The `calendar` property is optional — check for its existence before use.
+
+```typescript
+if (api.calendar) {
+  // List events
+  const events = await api.calendar.listEvents({
+    timeMin: "2026-04-01T00:00:00Z",
+    timeMax: "2026-04-30T23:59:59Z",
+    maxResults: 10,
+  });
+
+  // Create an event
+  const { eventId, htmlLink } = await api.calendar.createEvent({
+    summary: "Meeting",
+    start: "2026-04-10T10:00:00+09:00",
+    end: "2026-04-10T11:00:00+09:00",
+  });
+
+  // Update an event
+  await api.calendar.updateEvent(eventId, { summary: "Updated Meeting" });
+
+  // Delete an event
+  await api.calendar.deleteEvent(eventId);
+}
+```
+
+#### Gmail (Premium)
+
+Requires the premium plan with gmail.send scope. The `gmail` property is optional — check for its existence before use.
+
+```typescript
+if (api.gmail) {
+  const { messageId } = await api.gmail.sendEmail({
+    to: "recipient@example.com",
+    subject: "Hello from GemiHub",
+    body: "<p>This is an HTML email.</p>",
+    cc: "cc@example.com",    // optional
+    bcc: "bcc@example.com",  // optional
+  });
+}
 ```
 
 #### Plugin Storage
@@ -298,3 +362,5 @@ To publish an update, create a new release with an updated version tag. Users cl
 | GET | `/api/plugins/:id?asset={name}` | Serve a cached external asset declared in manifest |
 | POST | `/api/plugins/:id` | Actions: `toggle`, `getData`, `setData`, `update`, `checkUpdate` |
 | DELETE | `/api/plugins/:id` | Uninstall plugin |
+| POST | `/api/calendar` | Calendar operations: `list`, `create`, `update`, `delete` |
+| POST | `/api/gmail` | Gmail operations: `send` |

@@ -92,11 +92,11 @@ After `update_drive_file`, the file is **not** written to Drive. A `drive_file_u
 | `none` | No drive tools |
 
 Mode is auto-constrained by model and RAG settings:
-- **Gemma models**: forced to `none` (no function calling support)
+- **Gemma 4 + Web Search**: forced to `none` (Gemma 4 cannot combine function calling with Web Search)
 - **Web Search mode**: forced to `none` (incompatible with other tools — free plan only)
 - **RAG enabled**: function calling tools disabled (free plan only — the Chat API does not support fileSearch + functionDeclarations simultaneously)
 
-> **Paid plan advantage**: The Interactions API allows function tools + RAG + Web Search simultaneously. The above RAG/Web Search tool restrictions do not apply to paid plan users.
+> **Paid plan advantage**: The Interactions API allows function tools + RAG + Web Search simultaneously. The above RAG/Web Search tool restrictions do not apply to paid plan users (except Gemma 4 + Web Search, which is a model-level limitation).
 
 ### MCP Tools
 
@@ -119,7 +119,7 @@ Models are determined by the user's API plan (Free or Paid). Each model has diff
 
 - **Standard models**: Streaming text + function calling + thinking
 - **Image models**: Image generation (no function calling)
-- **Gemma models**: Text only (no function calling, no thinking)
+- **Gemma 4 models**: Function calling + built-in thinking (always on, thinking config parameters not supported). Cannot combine function calling with Web Search
 - **Flash Lite**: When thinking is enabled, uses `thinkingBudget: -1` (no explicit limit)
 - **gemini-3-pro / gemini-3.1-pro models**: Thinking is required and cannot be disabled (thinkingBudget cannot be set to 0)
 

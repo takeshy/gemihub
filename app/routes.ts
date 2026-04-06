@@ -39,6 +39,7 @@ export default [
   route("api/settings/hubwork-sheets", "routes/api.settings.hubwork-sheets.tsx"),
   route("api/settings/hubwork-provision", "routes/api.settings.hubwork-provision.tsx"),
   route("api/calendar", "routes/api.calendar.tsx"),
+  route("api/gmail", "routes/api.gmail.tsx"),
   route("api/mcp/tool-call", "routes/api.mcp.tool-call.tsx"),
   route("api/mcp/resource-read", "routes/api.mcp.resource-read.tsx"),
   route("api/search", "routes/api.search.tsx"),

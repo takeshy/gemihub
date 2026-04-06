@@ -71,7 +71,7 @@ Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 
 ### Route Configuration
 
-Routes are explicitly defined in `app/routes.ts` (not file-based). Page routes: `/` (IDE dashboard), `/settings`, `/auth/*`. API routes: `/api/chat`, `/api/chat/interactions`, `/api/drive/*`, `/api/workflow/*`, `/api/settings/*`, `/api/sync`, `/api/mcp/*`, `/api/plugins/*`. Public: `/public/file/:fileId/:fileName`.
+Routes are explicitly defined in `app/routes.ts` (not file-based). Page routes: `/` (IDE dashboard), `/settings`, `/auth/*`. API routes: `/api/chat`, `/api/chat/interactions`, `/api/drive/*`, `/api/workflow/*`, `/api/settings/*`, `/api/sync`, `/api/mcp/*`, `/api/plugins/*`, `/api/calendar`, `/api/gmail`. Public: `/public/file/:fileId/:fileName`.
 
 ### Main IDE Layout
 
@@ -79,7 +79,7 @@ The index route (`_index.tsx`) renders the IDE with: Header (sync controls), Lef
 
 ### Plugin System
 
-Plugins extend the app via GitHub Release installation. Plugin files (`manifest.json`, `main.js`, optional `styles.css`) are stored in `gemihub/plugins/{id}/` on Drive and cached in IndexedDB. Plugins receive a `PluginAPI` with access to language, UI registration (views, slash commands, settings tabs), Gemini AI, Drive operations, and scoped storage. See `docs/plugins.md` for the full developer guide.
+Plugins extend the app via GitHub Release installation. Plugin files (`manifest.json`, `main.js`, optional `styles.css`) are stored in `gemihub/plugins/{id}/` on Drive and cached in IndexedDB. Plugins receive a `PluginAPI` with access to language, UI registration (views, slash commands, settings tabs), Gemini AI, Drive operations (local-first via IndexedDB), active file change events, Google Calendar, Gmail, and scoped storage. See `docs/plugins.md` for the full developer guide.
 
 Key files: `app/types/plugin.ts` (types), `app/services/plugin-api.ts` (API factory), `app/services/plugin-loader.ts` (loading), `app/contexts/PluginContext.tsx` (lifecycle), `app/services/plugin-manager.server.ts` (Drive storage).
 

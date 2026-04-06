@@ -118,6 +118,59 @@ export interface PluginAPI {
     fetch(name: string): Promise<ArrayBuffer>;
   };
 
+  // Google Calendar API (requires premium plan with calendar scope)
+  calendar?: {
+    listEvents(options?: {
+      timeMin?: string;
+      timeMax?: string;
+      query?: string;
+      maxResults?: number;
+      calendarId?: string;
+    }): Promise<
+      Array<{
+        id: string;
+        summary: string;
+        description?: string;
+        start: string;
+        end: string;
+        location?: string;
+        status?: string;
+        htmlLink?: string;
+      }>
+    >;
+    createEvent(event: {
+      summary: string;
+      start: string;
+      end: string;
+      description?: string;
+      location?: string;
+      calendarId?: string;
+    }): Promise<{ eventId: string; htmlLink: string }>;
+    updateEvent(
+      eventId: string,
+      event: {
+        summary?: string;
+        start?: string;
+        end?: string;
+        description?: string;
+        location?: string;
+        calendarId?: string;
+      }
+    ): Promise<{ eventId: string; htmlLink: string }>;
+    deleteEvent(eventId: string, calendarId?: string): Promise<void>;
+  };
+
+  // Gmail API (requires premium plan with gmail.send scope)
+  gmail?: {
+    sendEmail(options: {
+      to: string;
+      subject: string;
+      body: string;
+      cc?: string;
+      bcc?: string;
+    }): Promise<{ messageId: string }>;
+  };
+
   // Host React instances (shared)
   React: typeof React;
   ReactDOM: typeof import("react-dom");
