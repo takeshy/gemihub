@@ -92,6 +92,9 @@ export interface PluginAPI {
     callback: (detail: { fileId: string | null; fileName: string | null; mimeType: string | null }) => void
   ): () => void;
 
+  // Open a file in the main viewer
+  selectFile(fileId: string, fileName: string, mimeType?: string): void;
+
   // Drive operations (local-first via IndexedDB) — requires "drive" permission
   drive?: {
     readFile(fileId: string): Promise<string>;

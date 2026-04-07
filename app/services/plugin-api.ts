@@ -70,6 +70,11 @@ export function createPluginAPI(
       return () => window.removeEventListener("active-file-changed", handler);
     },
 
+    selectFile(fileId: string, fileName: string, mimeType?: string) {
+      const mime = mimeType || "text/plain";
+      window.dispatchEvent(new CustomEvent("plugin-select-file", { detail: { fileId, fileName, mimeType: mime } }));
+    },
+
     assets: {
       async fetch(name: string) {
         const res = await fetch(

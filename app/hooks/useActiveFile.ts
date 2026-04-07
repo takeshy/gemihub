@@ -103,6 +103,24 @@ export function useActiveFile({
     return () => window.removeEventListener("file-decrypted", handler);
   }, [activeFileId]);
 
+  // Listen for plugin-initiated file selection
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { fileId, fileName, mimeType } = (e as CustomEvent).detail;
+      if (fileId && fileName) {
+        setActiveFileId(fileId);
+        setActiveFileName(fileName);
+        setActiveFileMimeType(mimeType || null);
+        const url = new URL(window.location.href);
+        url.searchParams.set("file", fileId);
+        window.history.pushState({}, "", url.toString());
+        window.dispatchEvent(new CustomEvent("active-file-changed", { detail: { fileId, fileName, mimeType } }));
+      }
+    };
+    window.addEventListener("plugin-select-file", handler);
+    return () => window.removeEventListener("plugin-select-file", handler);
+  }, []);
+
   // ---- File selection ----
   const handleSelectFile = useCallback(
     (fileId: string, fileName: string, mimeType: string) => {
