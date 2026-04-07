@@ -134,6 +134,24 @@ export async function loader({ request }: Route.LoaderArgs) {
         : driveSettings.hubwork,
   };
 
+  // Persist plan/billingStatus into Drive settings.json so _index loader can
+  // read it without querying Firestore on every page load.
+  if (hubworkAccount?.plan && driveSettings.hubwork) {
+    const drivePlan = driveSettings.hubwork.plan;
+    const driveBilling = driveSettings.hubwork.billingStatus;
+    if (drivePlan !== hubworkAccount.plan || driveBilling !== hubworkAccount.billingStatus) {
+      const updatedHubwork = {
+        ...driveSettings.hubwork,
+        plan: hubworkAccount.plan,
+        billingStatus: hubworkAccount.billingStatus,
+      };
+      saveSettings(validTokens.accessToken, validTokens.rootFolderId, {
+        ...driveSettings,
+        hubwork: updatedHubwork,
+      }).catch(() => {});
+    }
+  }
+
   // Merge local plugins (dev only)
   const localPlugins = getLocalPlugins();
   const localIds = new Set(localPlugins.map((p) => p.id));

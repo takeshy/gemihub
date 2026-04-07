@@ -74,6 +74,12 @@ export interface TranslationStrings {
   "chat.welcomeImage": string;
   "chat.welcomeCompact": string;
   "chat.welcomeNewChat": string;
+  "chat.welcomeBuilderTitle": string;
+  "chat.welcomeBuilderHint": string;
+  "chat.welcomeBuilderButton": string;
+  "chat.welcomeBuilderLogin": string;
+  "chat.welcomeBuilderCalendar": string;
+  "chat.welcomeBuilderApi": string;
 
   // Message usage
   "message.tokens": string;
@@ -747,6 +753,12 @@ const en: TranslationStrings = {
   "chat.welcomeImage": "Use \"generate image\" or \"create image\" to auto-switch to image model",
   "chat.welcomeCompact": "Type /compact to compress a long conversation into a new chat",
   "chat.welcomeNewChat": "Gemini has no memory, so the entire chat history is sent each time. Always click + to start a new chat when changing topics",
+  "chat.welcomeBuilderTitle": "Build a Web App",
+  "chat.welcomeBuilderHint": "Create web apps through AI chat — login pages, booking systems, APIs, and more.",
+  "chat.welcomeBuilderButton": "Build a Web App",
+  "chat.welcomeBuilderLogin": "User login via Google Sheets — add emails to a spreadsheet to manage access",
+  "chat.welcomeBuilderCalendar": "Booking system — let logged-in users reserve your available Google Calendar slots",
+  "chat.welcomeBuilderApi": "Custom APIs — build endpoints that interact with Google Sheets, Calendar, and more",
 
   // Message usage
   "message.tokens": "Tokens",
@@ -1421,6 +1433,12 @@ const ja: TranslationStrings = {
   "chat.welcomeImage": "「画像を生成」「generate image」で自動的に画像モデルに切り替わります",
   "chat.welcomeCompact": "/compact で長い会話を要約して新しいチャットに引き継げます",
   "chat.welcomeNewChat": "Geminiは記憶ができないため、毎回このチャットの全会話を送信します。話題を変える時は必ず + ボタンで新しいチャットを始めてください",
+  "chat.welcomeBuilderTitle": "Webアプリを構築する",
+  "chat.welcomeBuilderHint": "AIチャットでWebアプリを構築 — ログインページ、予約システム、APIなど。",
+  "chat.welcomeBuilderButton": "Webアプリを構築する",
+  "chat.welcomeBuilderLogin": "Google Sheetsでユーザーログイン — スプレッドシートにメールアドレスを追加してアクセス管理",
+  "chat.welcomeBuilderCalendar": "予約システム — ログインしたユーザーがGoogleカレンダーの空き時間を予約",
+  "chat.welcomeBuilderApi": "カスタムAPI — Google Sheets、Calendar等と連携するエンドポイントを構築",
 
   // Message usage
   "message.tokens": "トークン",

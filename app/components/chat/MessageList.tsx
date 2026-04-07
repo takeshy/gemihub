@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Brain, ImageIcon, Minimize2, Plus } from "lucide-react";
+import { Brain, ImageIcon, Minimize2, Plus, Globe, Users, Calendar, Code } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { MessageBubble } from "./MessageBubble";
 import type { Message, ToolCall } from "~/types/chat";
@@ -17,6 +17,8 @@ interface MessageListProps {
   streamingWebSearchUsed?: boolean;
   isStreaming?: boolean;
   alwaysThink?: boolean;
+  isPro?: boolean;
+  onBuildWebApp?: () => void;
 }
 
 export function MessageList({
@@ -29,6 +31,8 @@ export function MessageList({
   streamingWebSearchUsed,
   isStreaming,
   alwaysThink,
+  isPro,
+  onBuildWebApp,
 }: MessageListProps) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -64,6 +68,45 @@ export function MessageList({
     >
       {messages.length === 0 && !streamingMessage ? (
         <div className="flex h-full items-center justify-center">
+          {isPro && onBuildWebApp ? (
+            <div className="mx-auto max-w-md text-center">
+              <Globe size={32} className="mx-auto mb-3 text-blue-500" />
+              <h2 className="mb-1 text-lg font-medium text-gray-700 dark:text-gray-300">
+                {t("chat.welcomeBuilderTitle")}
+              </h2>
+              <p className="mb-5 text-sm text-gray-400 dark:text-gray-500">
+                {t("chat.welcomeBuilderHint")}
+              </p>
+              <button
+                type="button"
+                onClick={onBuildWebApp}
+                className="mb-6 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              >
+                <Globe size={ICON.MD} />
+                {t("chat.welcomeBuilderButton")}
+              </button>
+              <div className="space-y-2.5 text-left">
+                <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+                  <Users size={ICON.LG} className="mt-0.5 shrink-0 text-green-500" />
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t("chat.welcomeBuilderLogin")}
+                  </p>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+                  <Calendar size={ICON.LG} className="mt-0.5 shrink-0 text-blue-500" />
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t("chat.welcomeBuilderCalendar")}
+                  </p>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+                  <Code size={ICON.LG} className="mt-0.5 shrink-0 text-purple-500" />
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {t("chat.welcomeBuilderApi")}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="mx-auto max-w-md text-center">
             <h2 className="mb-1 text-lg font-medium text-gray-700 dark:text-gray-300">
               {t("chat.welcomeTitle")}
@@ -100,6 +143,7 @@ export function MessageList({
               </div>
             </div>
           </div>
+          )}
         </div>
       ) : (
         <div className="mx-auto max-w-3xl space-y-4">

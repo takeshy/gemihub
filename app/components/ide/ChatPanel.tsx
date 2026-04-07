@@ -492,6 +492,13 @@ export function ChatPanel({
             : activeSkillIds;
           if (allIds.includes("webpage-builder")) {
             planInstruction = [
+              "## IMPORTANT: Communication Style",
+              "",
+              "The user may not be familiar with IT or web development. Always:",
+              "- Use plain, non-technical language. Avoid jargon (API, YAML, JSON, endpoint, etc.) unless absolutely necessary, and explain briefly when used.",
+              "- Present choices and plans in a simple, easy-to-understand way.",
+              "- Focus on WHAT the app will do from the user's perspective, not HOW it works internally.",
+              "",
               "## IMPORTANT: Plan Before Action",
               "",
               "If the user's message is a request to create, modify, or build web pages/APIs, you MUST follow this process:",
@@ -504,7 +511,10 @@ export function ChatPanel({
           }
         }
 
-        const fullSystemPrompt = [settings.systemPrompt, planInstruction, skillPrompt]
+        const langInstruction = settings.language === "ja"
+          ? "You MUST respond in Japanese (日本語で応答してください)."
+          : undefined;
+        const fullSystemPrompt = [settings.systemPrompt, langInstruction, planInstruction, skillPrompt]
           .filter(Boolean)
           .join("\n\n") || undefined;
         const skillWorkflows = getActiveSkillWorkflows(extraSkillIds);
@@ -1044,6 +1054,8 @@ export function ChatPanel({
         streamingWebSearchUsed={streamingWebSearchUsed}
         isStreaming={isStreaming}
         alwaysThink={getThinkingToggle(selectedModel) === true}
+        isPro={settings.hubwork?.plan === "pro" || settings.hubwork?.plan === "granted"}
+        onBuildWebApp={() => handleSend("", undefined, { skillId: "webpage-builder" })}
       />
 
       {/* Input */}
