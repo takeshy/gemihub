@@ -8,6 +8,7 @@ import {
   savePluginDataFile,
   uninstallPlugin,
   installPlugin,
+  previewPlugin,
   checkPluginUpdate,
   PluginClientError,
 } from "~/services/plugin-manager.server";
@@ -414,6 +415,24 @@ export async function action({ request, params }: Route.ActionArgs) {
           );
         }
 
+        const { approvedPermissions } = body as { approvedPermissions?: string[] };
+
+        // Preview the new version to check for permission changes
+        const preview = await previewPlugin(plugin.repo);
+        const newManifestPerms = preview.manifest.permissions ?? [];
+        const oldPerms = new Set(plugin.permissions ?? []);
+        const addedPermissions = newManifestPerms.filter((p) => !oldPerms.has(p));
+
+        // If new permissions were added and not yet approved, ask the client
+        if (addedPermissions.length > 0 && !approvedPermissions) {
+          return jsonWithCookie({
+            needsApproval: true,
+            manifest: preview.manifest,
+            version: preview.version,
+            addedPermissions,
+          });
+        }
+
         // Clear cached assets so updated plugin re-downloads fresh ones
         clearAssetCache(pluginId);
 
@@ -424,8 +443,9 @@ export async function action({ request, params }: Route.ActionArgs) {
           plugin.id
         );
 
-        // Update version in settings
+        // Update version and permissions in settings
         plugin.version = version;
+        plugin.permissions = approvedPermissions ?? newManifestPerms;
         await saveSettings(
           validTokens.accessToken,
           validTokens.rootFolderId,

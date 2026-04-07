@@ -3,6 +3,25 @@
 import type React from "react";
 import type { PluginConfig } from "~/types/settings";
 
+/** Permission scopes a plugin can request in manifest.json */
+export type PluginPermission =
+  | "gemini"    // Gemini AI API
+  | "drive"     // Drive file operations (read/search/list/create/update)
+  | "storage"   // Plugin-scoped persistent storage
+  | "calendar"  // Google Calendar API (premium)
+  | "gmail"     // Gmail API (premium)
+  | "sheets";   // Google Sheets API (premium)
+
+/** All known permission values (for validation) */
+export const PLUGIN_PERMISSIONS: PluginPermission[] = [
+  "gemini",
+  "drive",
+  "storage",
+  "calendar",
+  "gmail",
+  "sheets",
+];
+
 /** External asset declared in manifest.json */
 export interface PluginAsset {
   /** Filename used to reference this asset via api.assets.fetch(name) */
@@ -21,6 +40,8 @@ export interface PluginManifest {
   author: string;
   /** Optional list of external assets the plugin needs (served via api.assets.fetch) */
   assets?: PluginAsset[];
+  /** API permissions this plugin requires (declared for user confirmation on install) */
+  permissions?: PluginPermission[];
 }
 
 /** View registered by a plugin */
@@ -58,8 +79,8 @@ export interface PluginAPI {
     component: React.ComponentType<{ api: PluginAPI; language?: string; onClose?: () => void }>;
   }): void;
 
-  // Gemini API (via host /api/chat)
-  gemini: {
+  // Gemini API (via host /api/chat) — requires "gemini" permission
+  gemini?: {
     chat(
       messages: Array<{ role: string; content: string }>,
       options?: { model?: string; systemPrompt?: string }
@@ -71,8 +92,8 @@ export interface PluginAPI {
     callback: (detail: { fileId: string | null; fileName: string | null; mimeType: string | null }) => void
   ): () => void;
 
-  // Drive operations (local-first via IndexedDB)
-  drive: {
+  // Drive operations (local-first via IndexedDB) — requires "drive" permission
+  drive?: {
     readFile(fileId: string): Promise<string>;
     searchFiles(
       query: string
@@ -88,8 +109,8 @@ export interface PluginAPI {
     rebuildTree(): Promise<void>;
   };
 
-  // Plugin-scoped storage (data.json on Drive)
-  storage: {
+  // Plugin-scoped storage (data.json on Drive) — requires "storage" permission
+  storage?: {
     get(key: string): Promise<unknown>;
     set(key: string, value: unknown): Promise<void>;
     getAll(): Promise<Record<string, unknown>>;

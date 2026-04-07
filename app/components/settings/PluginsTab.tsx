@@ -9,9 +9,14 @@ import {
   Power,
   PowerOff,
   Settings,
+  Shield,
+  X,
 } from "lucide-react";
 import type { UserSettings, PluginConfig } from "~/types/settings";
+import type { PluginManifest, PluginPermission } from "~/types/plugin";
+import { PLUGIN_PERMISSIONS } from "~/types/plugin";
 import { useI18n } from "~/i18n/context";
+import type { TranslationStrings } from "~/i18n/translations";
 import { invalidateIndexCache } from "~/routes/_index";
 import { clearPluginCache } from "~/services/plugin-loader";
 import { usePlugins } from "~/contexts/PluginContext";
@@ -20,8 +25,30 @@ import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 const inputClass =
   "w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
 
+const PERMISSION_I18N_KEYS: Record<PluginPermission, keyof TranslationStrings> = {
+  gemini: "plugins.permissionGemini",
+  drive: "plugins.permissionDrive",
+  storage: "plugins.permissionStorage",
+  calendar: "plugins.permissionCalendar",
+  gmail: "plugins.permissionGmail",
+  sheets: "plugins.permissionSheets",
+};
+
 interface PluginsTabProps {
   settings: UserSettings;
+}
+
+interface PreviewState {
+  manifest: PluginManifest;
+  version: string;
+  repo: string;
+}
+
+interface UpdateApprovalState {
+  pluginId: string;
+  manifest: PluginManifest;
+  version: string;
+  addedPermissions: string[];
 }
 
 export function PluginsTab({ settings }: PluginsTabProps) {
@@ -32,7 +59,10 @@ export function PluginsTab({ settings }: PluginsTabProps) {
   );
   const [repoInput, setRepoInput] = useState("");
   const [installing, setInstalling] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updateApproval, setUpdateApproval] = useState<UpdateApprovalState | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openSettingsId, setOpenSettingsId] = useState<string | null>(null);
@@ -51,19 +81,50 @@ export function PluginsTab({ settings }: PluginsTabProps) {
     []
   );
 
-  const handleInstall = useCallback(async () => {
+  // Step 1: Preview — fetch manifest and show permission confirmation
+  const handlePreview = useCallback(async () => {
     const repo = repoInput.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
     if (!repo || !repo.includes("/")) {
       showStatus("error", t("plugins.invalidRepo"));
       return;
     }
 
+    setPreviewing(true);
+    try {
+      const res = await fetch("/api/plugins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo, action: "preview" }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showStatus("error", data.error || t("plugins.previewFailed"));
+        return;
+      }
+      setPreview({ manifest: data.manifest, version: data.version, repo });
+    } catch (err) {
+      showStatus(
+        "error",
+        err instanceof Error ? err.message : t("plugins.previewFailed")
+      );
+    } finally {
+      setPreviewing(false);
+    }
+  }, [repoInput, showStatus, t]);
+
+  // Step 2: Confirm and install
+  const handleConfirmInstall = useCallback(async () => {
+    if (!preview) return;
+
     setInstalling(true);
     try {
       const res = await fetch("/api/plugins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo }),
+        body: JSON.stringify({
+          repo: preview.repo,
+          permissions: preview.manifest.permissions ?? [],
+        }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -80,6 +141,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
         return [...prev, data.config];
       });
       setRepoInput("");
+      setPreview(null);
       invalidateIndexCache();
       showStatus("success", t("plugins.installSuccess"));
       if (confirm(t("plugins.reloadConfirm"))) {
@@ -93,7 +155,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
     } finally {
       setInstalling(false);
     }
-  }, [repoInput, showStatus, t]);
+  }, [preview, showStatus, t]);
 
   const handleToggle = useCallback(
     async (pluginId: string) => {
@@ -155,21 +217,37 @@ export function PluginsTab({ settings }: PluginsTabProps) {
   );
 
   const handleUpdate = useCallback(
-    async (pluginId: string) => {
+    async (pluginId: string, approvedPermissions?: string[]) => {
       setUpdatingId(pluginId);
       try {
+        const bodyPayload: Record<string, unknown> = { action: "update" };
+        if (approvedPermissions) bodyPayload.approvedPermissions = approvedPermissions;
+
         const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update" }),
+          body: JSON.stringify(bodyPayload),
         });
         const data = await res.json();
+
+        // Server asks for permission approval before completing update
+        if (data.needsApproval) {
+          setUpdateApproval({
+            pluginId,
+            manifest: data.manifest,
+            version: data.version,
+            addedPermissions: data.addedPermissions,
+          });
+          return;
+        }
+
         if (data.success) {
           setPlugins((prev) =>
             prev.map((p) =>
               p.id === pluginId ? { ...p, version: data.version } : p
             )
           );
+          setUpdateApproval(null);
           invalidateIndexCache();
           showStatus("success", t("plugins.updated"));
           if (confirm(t("plugins.reloadConfirm"))) {
@@ -222,19 +300,19 @@ export function PluginsTab({ settings }: PluginsTabProps) {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                handleInstall();
+                handlePreview();
               }
             }}
             placeholder={t("plugins.repoPlaceholder")}
             className={inputClass}
-            disabled={installing}
+            disabled={previewing || installing}
           />
           <button
-            onClick={handleInstall}
-            disabled={installing || !repoInput.trim()}
+            onClick={handlePreview}
+            disabled={previewing || installing || !repoInput.trim()}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm whitespace-nowrap"
           >
-            {installing ? (
+            {previewing ? (
               <Loader2 size={16} className="animate-spin" />
             ) : (
               <Plus size={16} />
@@ -243,6 +321,135 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           </button>
         </div>
       </div>
+
+      {/* Permission confirmation dialog */}
+      {preview && (
+        <div className="bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield size={18} className="text-blue-600 dark:text-blue-400" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {preview.manifest.name} <span className="font-normal text-gray-500 dark:text-gray-400">v{preview.version}</span>
+            </h3>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+            {preview.manifest.description}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            by {preview.manifest.author}
+          </p>
+
+          <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+            {t("plugins.permissionsTitle")}
+          </h4>
+
+          {preview.manifest.permissions && preview.manifest.permissions.length > 0 ? (
+            <>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                {t("plugins.permissionsDescription")}
+              </p>
+              <ul className="space-y-1 mb-4">
+                {preview.manifest.permissions
+                  .filter((p): p is PluginPermission => PLUGIN_PERMISSIONS.includes(p))
+                  .map((perm) => (
+                    <li
+                      key={perm}
+                      className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded"
+                    >
+                      <Shield size={14} className="text-amber-500 shrink-0" />
+                      {t(PERMISSION_I18N_KEYS[perm])}
+                    </li>
+                  ))}
+              </ul>
+            </>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {t("plugins.noPermissions")}
+            </p>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirmInstall}
+              disabled={installing}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              {installing ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Check size={16} />
+              )}
+              {t("plugins.confirmInstall")}
+            </button>
+            <button
+              onClick={() => setPreview(null)}
+              disabled={installing}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors text-sm"
+            >
+              <X size={16} />
+              {t("plugins.cancelInstall")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Update permission approval dialog */}
+      {updateApproval && (
+        <div className="bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield size={18} className="text-amber-600 dark:text-amber-400" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {updateApproval.manifest.name} <span className="font-normal text-gray-500 dark:text-gray-400">v{updateApproval.version}</span>
+            </h3>
+          </div>
+
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+            {t("plugins.updateNewPermissions")}
+          </p>
+          <ul className="space-y-1 mb-4">
+            {updateApproval.addedPermissions
+              .filter((p): p is PluginPermission => PLUGIN_PERMISSIONS.includes(p as PluginPermission))
+              .map((perm) => (
+                <li
+                  key={perm}
+                  className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 px-2 py-1 bg-amber-50 dark:bg-amber-900/20 rounded"
+                >
+                  <Shield size={14} className="text-amber-500 shrink-0" />
+                  {t(PERMISSION_I18N_KEYS[perm])}
+                </li>
+              ))}
+          </ul>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const plugin = plugins.find((p) => p.id === updateApproval.pluginId);
+                const allPerms = [
+                  ...(plugin?.permissions ?? []),
+                  ...updateApproval.addedPermissions,
+                ];
+                handleUpdate(updateApproval.pluginId, allPerms);
+              }}
+              disabled={updatingId === updateApproval.pluginId}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              {updatingId === updateApproval.pluginId ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Check size={16} />
+              )}
+              {t("plugins.confirmUpdate")}
+            </button>
+            <button
+              onClick={() => setUpdateApproval(null)}
+              disabled={updatingId === updateApproval.pluginId}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors text-sm"
+            >
+              <X size={16} />
+              {t("plugins.cancelInstall")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Plugin list */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
@@ -287,6 +494,22 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                       <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {plugin.source === "local" ? `plugins/${plugin.id}/` : plugin.repo}
                       </div>
+                      {/* Show permissions for non-local plugins */}
+                      {plugin.source !== "local" && plugin.permissions && plugin.permissions.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          <Shield size={10} className="text-amber-500 shrink-0" />
+                          {plugin.permissions
+                            .filter((p): p is PluginPermission => PLUGIN_PERMISSIONS.includes(p as PluginPermission))
+                            .map((perm) => (
+                              <span
+                                key={perm}
+                                className="text-[10px] px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300"
+                              >
+                                {perm}
+                              </span>
+                            ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 ml-2">
                       {/* Settings */}

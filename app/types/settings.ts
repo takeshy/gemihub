@@ -476,6 +476,8 @@ export interface PluginConfig {
   version: string;
   enabled: boolean;
   source?: "local" | "github";
+  /** Approved API permissions (from manifest.json, confirmed by user on install) */
+  permissions?: string[];
 }
 
 // Slash command for chat

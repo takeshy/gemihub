@@ -369,6 +369,7 @@ export async function action({ request }: Route.ActionArgs) {
         }
         baseSession.set("apiPlan", apiPlan);
         baseSession.set("selectedModel", updatedSettings.selectedModel);
+        baseSession.set("language", language);
 
         return jsonWithCookie(
           { success: true, message: "General settings saved.", apiKeyUpdated: !!effectiveApiKey },

@@ -2,8 +2,9 @@ import type { Route } from "./+types/api.plugins";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
-import { installPlugin, PluginClientError } from "~/services/plugin-manager.server";
+import { installPlugin, previewPlugin, PluginClientError } from "~/services/plugin-manager.server";
 import type { PluginConfig } from "~/types/settings";
+import { PLUGIN_PERMISSIONS } from "~/types/plugin";
 
 // ---------------------------------------------------------------------------
 // GET /api/plugins — list installed plugins
@@ -42,7 +43,11 @@ export async function action({ request }: Route.ActionArgs) {
   );
 
   const body = await request.json();
-  const { repo } = body as { repo: string };
+  const { repo, action, permissions: approvedPermissions } = body as {
+    repo: string;
+    action?: string;
+    permissions?: string[];
+  };
 
   // Validate repo format: must be "owner/repo" with no extra segments or special chars
   const repoPattern = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
@@ -51,6 +56,27 @@ export async function action({ request }: Route.ActionArgs) {
       { error: "Invalid repo format. Use owner/repo" },
       { status: 400 }
     );
+  }
+
+  // Preview action: fetch manifest without installing
+  if (action === "preview") {
+    try {
+      const { manifest, version } = await previewPlugin(repo);
+      return Response.json(
+        { manifest, version },
+        {
+          headers: setCookieHeader
+            ? { "Set-Cookie": setCookieHeader }
+            : undefined,
+        }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Preview failed";
+      if (err instanceof PluginClientError) {
+        return Response.json({ error: message }, { status: 400 });
+      }
+      return Response.json({ error: message }, { status: 500 });
+    }
   }
 
   try {
@@ -69,11 +95,19 @@ export async function action({ request }: Route.ActionArgs) {
 
     // Replace existing or add new
     const existingIdx = plugins.findIndex((p) => p.id === manifest.id);
+    // Validate: only allow permissions declared in manifest
+    const manifestPerms = new Set<string>(manifest.permissions ?? []);
+    const knownPerms = new Set<string>(PLUGIN_PERMISSIONS);
+    const validatedPermissions = approvedPermissions
+      ? approvedPermissions.filter((p) => manifestPerms.has(p) && knownPerms.has(p))
+      : (manifest.permissions as string[] | undefined) ?? [];
+
     const config: PluginConfig = {
       id: manifest.id,
       repo,
       version,
       enabled: true,
+      permissions: validatedPermissions,
     };
 
     if (existingIdx >= 0) {

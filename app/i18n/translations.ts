@@ -379,6 +379,20 @@ export interface TranslationStrings {
   "plugins.uninstallFailed": string;
   "plugins.localCannotUninstall": string;
   "plugins.localBadge": string;
+  "plugins.permissionsTitle": string;
+  "plugins.permissionsDescription": string;
+  "plugins.permissionGemini": string;
+  "plugins.permissionDrive": string;
+  "plugins.permissionStorage": string;
+  "plugins.permissionCalendar": string;
+  "plugins.permissionGmail": string;
+  "plugins.permissionSheets": string;
+  "plugins.noPermissions": string;
+  "plugins.confirmInstall": string;
+  "plugins.cancelInstall": string;
+  "plugins.previewFailed": string;
+  "plugins.updateNewPermissions": string;
+  "plugins.confirmUpdate": string;
 
   // Commands tab
   "settings.tab.commands": string;
@@ -1059,6 +1073,20 @@ const en: TranslationStrings = {
   "plugins.uninstallFailed": "Uninstall failed",
   "plugins.localCannotUninstall": "Local plugins cannot be uninstalled from the UI.",
   "plugins.localBadge": "Local",
+  "plugins.permissionsTitle": "Permissions Required",
+  "plugins.permissionsDescription": "This plugin requests access to the following APIs:",
+  "plugins.permissionGemini": "Gemini AI — Send messages to Gemini AI",
+  "plugins.permissionDrive": "Drive — Read, create, and update files",
+  "plugins.permissionStorage": "Storage — Save plugin data",
+  "plugins.permissionCalendar": "Calendar — Read and manage Google Calendar events",
+  "plugins.permissionGmail": "Gmail — Send emails",
+  "plugins.permissionSheets": "Sheets — Create and edit Google Sheets",
+  "plugins.noPermissions": "This plugin does not request any special permissions.",
+  "plugins.confirmInstall": "Install",
+  "plugins.cancelInstall": "Cancel",
+  "plugins.previewFailed": "Failed to fetch plugin info",
+  "plugins.updateNewPermissions": "This update adds new permissions:",
+  "plugins.confirmUpdate": "Update",
 
   // Commands tab
   "settings.tab.commands": "Commands",
@@ -1739,6 +1767,20 @@ const ja: TranslationStrings = {
   "plugins.uninstallFailed": "アンインストールに失敗しました",
   "plugins.localCannotUninstall": "ローカルプラグインはUIからアンインストールできません。",
   "plugins.localBadge": "ローカル",
+  "plugins.permissionsTitle": "必要な権限",
+  "plugins.permissionsDescription": "このプラグインは以下のAPIへのアクセスを要求しています:",
+  "plugins.permissionGemini": "Gemini AI — Gemini AIにメッセージを送信",
+  "plugins.permissionDrive": "Drive — ファイルの読み取り・作成・更新",
+  "plugins.permissionStorage": "Storage — プラグインデータの保存",
+  "plugins.permissionCalendar": "Calendar — Googleカレンダーの予定を読み取り・管理",
+  "plugins.permissionGmail": "Gmail — メールの送信",
+  "plugins.permissionSheets": "Sheets — Googleスプレッドシートの作成・編集",
+  "plugins.noPermissions": "このプラグインは特別な権限を要求していません。",
+  "plugins.confirmInstall": "インストール",
+  "plugins.cancelInstall": "キャンセル",
+  "plugins.previewFailed": "プラグイン情報の取得に失敗しました",
+  "plugins.updateNewPermissions": "この更新により新しい権限が追加されます:",
+  "plugins.confirmUpdate": "更新",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

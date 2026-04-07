@@ -9,7 +9,8 @@ import {
   deleteFile,
   findFileByExactName,
 } from "./google-drive.server";
-import type { PluginManifest } from "~/types/plugin";
+import type { PluginManifest, PluginPermission } from "~/types/plugin";
+import { PLUGIN_PERMISSIONS } from "~/types/plugin";
 
 const PLUGINS_FOLDER = "plugins";
 const GITHUB_API = "https://api.github.com";
@@ -77,6 +78,20 @@ export function parsePluginManifest(
     );
   }
 
+  // Parse and validate permissions
+  let permissions: PluginPermission[] | undefined;
+  const raw = manifest as Record<string, unknown>;
+  if (raw.permissions != null) {
+    if (!Array.isArray(raw.permissions)) {
+      throw new PluginClientError('Invalid manifest.json: "permissions" must be an array');
+    }
+    const valid = (raw.permissions as unknown[]).filter(
+      (p): p is PluginPermission =>
+        typeof p === "string" && PLUGIN_PERMISSIONS.includes(p as PluginPermission)
+    );
+    if (valid.length > 0) permissions = valid;
+  }
+
   return {
     id,
     name: manifest.name!.trim(),
@@ -84,6 +99,7 @@ export function parsePluginManifest(
     minAppVersion: manifest.minAppVersion!.trim(),
     description: manifest.description!.trim(),
     author: manifest.author!.trim(),
+    permissions,
   };
 }
 
@@ -119,6 +135,32 @@ async function downloadAsset(url: string): Promise<string> {
     throw new Error(`Failed to download ${url}: ${res.status}`);
   }
   return res.text();
+}
+
+/**
+ * Preview a plugin before install: fetch manifest from GitHub without writing to Drive.
+ */
+export async function previewPlugin(
+  repo: string
+): Promise<{ manifest: PluginManifest; version: string }> {
+  const release = await fetchLatestRelease(repo);
+  const version = release.tag_name;
+
+  const manifestAsset = release.assets.find((a) => a.name === "manifest.json");
+  if (!manifestAsset) {
+    throw new PluginClientError("Release must contain a manifest.json asset");
+  }
+
+  const manifestContent = await downloadAsset(manifestAsset.browser_download_url);
+  const manifest = parsePluginManifest(manifestContent);
+
+  // Verify main.js also exists (required for install)
+  const mainAsset = release.assets.find((a) => a.name === "main.js");
+  if (!mainAsset) {
+    throw new PluginClientError("Release must contain a main.js asset");
+  }
+
+  return { manifest, version };
 }
 
 /**

@@ -21,6 +21,10 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 interface PluginAPIOptions {
   hasPremium?: boolean;
+  /** Approved permissions from PluginConfig. Undefined = all (local plugins). */
+  permissions?: string[];
+  /** Plugin source — local plugins bypass permission checks. */
+  source?: "local" | "github";
 }
 
 /**
@@ -32,6 +36,11 @@ export function createPluginAPI(
   callbacks: PluginAPICallbacks,
   options?: PluginAPIOptions
 ): PluginAPI {
+  // Local plugins bypass permission checks (all APIs available)
+  const isLocal = options?.source === "local";
+  const hasPermission = (perm: string): boolean =>
+    isLocal || !options?.permissions || options.permissions.includes(perm);
+
   const api: PluginAPI = {
     language,
 
@@ -55,8 +64,30 @@ export function createPluginAPI(
       });
     },
 
-    gemini: {
-      async chat(messages, options) {
+    onActiveFileChanged(callback: (detail: { fileId: string | null; fileName: string | null; mimeType: string | null }) => void): () => void {
+      const handler = (e: Event) => callback((e as CustomEvent).detail);
+      window.addEventListener("active-file-changed", handler);
+      return () => window.removeEventListener("active-file-changed", handler);
+    },
+
+    assets: {
+      async fetch(name: string) {
+        const res = await fetch(
+          `/api/plugins/${encodeURIComponent(pluginId)}?asset=${encodeURIComponent(name)}`
+        );
+        if (!res.ok) throw new Error(`Asset fetch error: ${res.status}`);
+        return res.arrayBuffer();
+      },
+    },
+
+    React,
+    ReactDOM,
+  };
+
+  // Permission-gated APIs: gemini, drive, storage
+  if (hasPermission("gemini")) {
+    api.gemini = {
+      async chat(messages, chatOpts) {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -66,13 +97,12 @@ export function createPluginAPI(
               content: m.content,
               timestamp: Date.now(),
             })),
-            model: options?.model || "gemini-2.5-flash",
-            systemPrompt: options?.systemPrompt,
+            model: chatOpts?.model || "gemini-2.5-flash",
+            systemPrompt: chatOpts?.systemPrompt,
           }),
         });
         if (!res.ok) throw new Error(`Chat API error: ${res.status}`);
         const text = await res.text();
-        // Parse SSE response to extract text
         const lines = text.split("\n");
         let result = "";
         for (const line of lines) {
@@ -81,7 +111,7 @@ export function createPluginAPI(
             try {
               data = JSON.parse(line.slice(6));
             } catch {
-              continue; // skip non-JSON lines
+              continue;
             }
             if (data.type === "error") {
               throw new Error((data.error || data.content || "Gemini API error") as string);
@@ -93,15 +123,11 @@ export function createPluginAPI(
         }
         return result;
       },
-    },
+    };
+  }
 
-    onActiveFileChanged(callback: (detail: { fileId: string | null; fileName: string | null; mimeType: string | null }) => void): () => void {
-      const handler = (e: Event) => callback((e as CustomEvent).detail);
-      window.addEventListener("active-file-changed", handler);
-      return () => window.removeEventListener("active-file-changed", handler);
-    },
-
-    drive: {
+  if (hasPermission("drive")) {
+    api.drive = {
       async readFile(fileId: string) {
         const { readFileLocal } = await import("~/services/drive-local");
         return readFileLocal(fileId);
@@ -149,8 +175,6 @@ export function createPluginAPI(
       async updateFile(fileId: string, content: string | ArrayBuffer) {
         const { getCachedFile } = await import("~/services/indexeddb-cache");
         let cached = await getCachedFile(fileId);
-        // After pending-file migration, "new:*" IDs are replaced with real Drive IDs.
-        // Fall back to name-based lookup so plugins holding stale IDs still work.
         if (!cached && fileId.startsWith("new:")) {
           const { findFileByNameLocal } = await import("~/services/drive-local");
           const found = await findFileByNameLocal(fileId.slice(4));
@@ -194,19 +218,11 @@ export function createPluginAPI(
         if (!res.ok) throw new Error(`Rebuild tree error: ${res.status}`);
         window.dispatchEvent(new Event("sync-complete"));
       },
-    },
+    };
+  }
 
-    assets: {
-      async fetch(name: string) {
-        const res = await fetch(
-          `/api/plugins/${encodeURIComponent(pluginId)}?asset=${encodeURIComponent(name)}`
-        );
-        if (!res.ok) throw new Error(`Asset fetch error: ${res.status}`);
-        return res.arrayBuffer();
-      },
-    },
-
-    storage: {
+  if (hasPermission("storage")) {
+    api.storage = {
       async get(key: string) {
         const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}`, {
           method: "POST",
@@ -237,16 +253,13 @@ export function createPluginAPI(
         const { data } = await res.json();
         return data || {};
       },
-    },
+    };
+  }
 
-    React,
-    ReactDOM,
-  };
-
-  // Google Workspace APIs — only attached for premium plan users.
+  // Google Workspace APIs — only attached for premium plan users with matching permission.
   // Plugins can check `api.calendar` / `api.gmail` / `api.sheets` existence
   // to decide whether to show related UI.
-  if (options?.hasPremium) {
+  if (options?.hasPremium && hasPermission("calendar")) {
     api.calendar = {
       async listEvents(options = {}) {
         const res = await fetch("/api/calendar", {
@@ -300,7 +313,9 @@ export function createPluginAPI(
         if (!res.ok) throw new Error(`Calendar delete error: ${res.status}`);
       },
     };
+  }
 
+  if (options?.hasPremium && hasPermission("gmail")) {
     api.gmail = {
       async sendEmail(options) {
         const res = await fetch("/api/gmail", {
@@ -315,7 +330,9 @@ export function createPluginAPI(
         return res.json();
       },
     };
+  }
 
+  if (options?.hasPremium && hasPermission("sheets")) {
     api.sheets = {
       async createSpreadsheet(options) {
         const res = await fetch("/api/sheets", {

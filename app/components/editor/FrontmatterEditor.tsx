@@ -371,7 +371,7 @@ export function FrontmatterEditor({ parsed, onFrontmatterChange, readOnly }: Fro
       </button>
       {!collapsed && (
         <>
-          <div className="space-y-1">
+          <div className="space-y-1 max-h-[50vh] overflow-y-auto">
             {properties.map((prop, index) => (
               <div
                 key={prop.id}

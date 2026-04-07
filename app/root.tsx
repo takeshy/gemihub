@@ -5,9 +5,13 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { getSession } from "~/services/session.server";
+import { resolveLanguage } from "~/i18n/resolve-language";
+import type { Language } from "~/types/settings";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -26,9 +30,19 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+export async function loader({ request }: Route.LoaderArgs) {
+  const session = await getSession(request);
+  const sessionLang = session.get("language") as Language | undefined;
+  const acceptLanguage = request.headers.get("Accept-Language");
+  const lang = resolveLanguage(sessionLang ?? null, acceptLanguage);
+  return { lang };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const data = useRouteLoaderData<typeof loader>("root");
+  const lang = data?.lang ?? "en";
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={lang} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />

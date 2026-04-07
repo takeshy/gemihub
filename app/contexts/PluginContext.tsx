@@ -118,7 +118,11 @@ export function PluginProvider({
           const api = createPluginAPI(config.id, language, {
             onRegisterView: addView,
             onRegisterSettingsTab: addSettingsTab,
-          }, { hasPremium });
+          }, {
+            hasPremium,
+            permissions: config.permissions,
+            source: config.source,
+          });
 
           const instance = await loadPlugin(config, api);
           await loadPluginStyles(config);
