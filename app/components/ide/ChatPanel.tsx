@@ -10,7 +10,7 @@ import type {
   McpAppInfo,
 } from "~/types/chat";
 import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
-import type { PluginSlashCommand } from "~/types/plugin";
+
 import {
   getAvailableModels,
   getDefaultModelForPlan,
@@ -42,7 +42,6 @@ export interface ChatOverrides {
   searchSetting?: string | null;
   driveToolMode?: DriveToolMode | null;
   enabledMcpServers?: string[] | null;
-  pluginExecute?: (args: string) => Promise<string>;
   skillId?: string;
 }
 
@@ -63,7 +62,6 @@ interface ChatPanelProps {
   hasEncryptedApiKey?: boolean;
   onNeedUnlock?: () => void;
   slashCommands?: SlashCommand[];
-  pluginSlashCommands?: PluginSlashCommand[];
   onSkillWorkflowStart?: (workflowId: string, workflowName: string) => void;
   onSkillWorkflowEnd?: (workflowId: string, status: string) => void;
   onSkillWorkflowLog?: (log: import("~/engine/types").ExecutionLog) => void;
@@ -75,7 +73,6 @@ export function ChatPanel({
   hasEncryptedApiKey = false,
   onNeedUnlock,
   slashCommands = [],
-  pluginSlashCommands = [],
   onSkillWorkflowStart,
   onSkillWorkflowEnd,
   onSkillWorkflowLog,
@@ -386,42 +383,6 @@ export function ChatPanel({
   // ---- Send message ----
   const handleSend = useCallback(
     async (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => {
-      // Handle plugin slash commands with execute()
-      if (overrides?.pluginExecute) {
-        const userMessage: Message = {
-          role: "user",
-          content,
-          timestamp: Date.now(),
-          attachments,
-        };
-        const updatedMessages = [...messages, userMessage];
-        setMessages(updatedMessages);
-        setIsStreaming(true);
-        try {
-          // Strip command name: "/cmd args" -> "args"
-          const args = content.replace(/^\/[^\s]+\s*/, "");
-          const result = await overrides.pluginExecute(args);
-          const assistantMessage: Message = {
-            role: "assistant",
-            content: result,
-            timestamp: Date.now(),
-          };
-          const finalMessages = [...updatedMessages, assistantMessage];
-          setMessages(finalMessages);
-          await saveChat(finalMessages);
-        } catch (err) {
-          const errorMessage: Message = {
-            role: "assistant",
-            content: `**Error:** ${err instanceof Error ? err.message : "Plugin command failed"}`,
-            timestamp: Date.now(),
-          };
-          setMessages([...updatedMessages, errorMessage]);
-        } finally {
-          setIsStreaming(false);
-        }
-        return;
-      }
-
       // Paid plan uses server-side API key; free plan needs local key
       const isPaidPlan = settings.apiPlan === "paid";
       const localApiKey = getCachedApiKey();
@@ -1104,13 +1065,6 @@ export function ChatPanel({
         onEnabledMcpServerIdsChange={setEnabledMcpServerIds}
         slashCommands={[
           ...slashCommands,
-          ...pluginSlashCommands.map((cmd) => ({
-            id: `plugin-${cmd.pluginId}-${cmd.name}`,
-            name: cmd.name,
-            description: cmd.description,
-            promptTemplate: `/${cmd.name} `,
-            execute: cmd.execute,
-          })),
           ...skills.map((skill) => ({
             id: `__skill__${skill.id}`,
             name: skill.id,

@@ -12,7 +12,6 @@ import type {
   PluginAPI,
   PluginInstance,
   PluginView,
-  PluginSlashCommand,
   PluginSettingsTab,
 } from "~/types/plugin";
 import { loadPlugin, loadPluginStyles, unloadPlugin } from "~/services/plugin-loader";
@@ -22,7 +21,6 @@ interface PluginContextValue {
   plugins: PluginInstance[];
   sidebarViews: PluginView[];
   mainViews: PluginView[];
-  slashCommands: PluginSlashCommand[];
   settingsTabs: PluginSettingsTab[];
   loading: boolean;
   getPluginAPI: (pluginId: string) => PluginAPI | null;
@@ -32,7 +30,6 @@ const PluginContext = createContext<PluginContextValue>({
   plugins: [],
   sidebarViews: [],
   mainViews: [],
-  slashCommands: [],
   settingsTabs: [],
   loading: false,
   getPluginAPI: () => null,
@@ -52,7 +49,6 @@ export function PluginProvider({
   const [plugins, setPlugins] = useState<PluginInstance[]>([]);
   const [sidebarViews, setSidebarViews] = useState<PluginView[]>([]);
   const [mainViews, setMainViews] = useState<PluginView[]>([]);
-  const [slashCommands, setSlashCommands] = useState<PluginSlashCommand[]>([]);
   const [settingsTabs, setSettingsTabs] = useState<PluginSettingsTab[]>([]);
   const [loading, setLoading] = useState(false);
   const loadedRef = useRef<Set<string>>(new Set());
@@ -64,13 +60,6 @@ export function PluginProvider({
     } else {
       setMainViews((prev) => [...prev.filter((v) => v.id !== view.id), view]);
     }
-  }, []);
-
-  const addSlashCommand = useCallback((cmd: PluginSlashCommand) => {
-    setSlashCommands((prev) => [
-      ...prev.filter((c) => !(c.pluginId === cmd.pluginId && c.name === cmd.name)),
-      cmd,
-    ]);
   }, []);
 
   const addSettingsTab = useCallback((tab: PluginSettingsTab) => {
@@ -108,7 +97,6 @@ export function PluginProvider({
       });
       setSidebarViews((prev) => prev.filter((v) => enabledIds.has(v.pluginId)));
       setMainViews((prev) => prev.filter((v) => enabledIds.has(v.pluginId)));
-      setSlashCommands((prev) => prev.filter((c) => enabledIds.has(c.pluginId)));
       setSettingsTabs((prev) => prev.filter((t) => enabledIds.has(t.pluginId)));
     }
 
@@ -129,7 +117,6 @@ export function PluginProvider({
         try {
           const api = createPluginAPI(config.id, language, {
             onRegisterView: addView,
-            onRegisterSlashCommand: addSlashCommand,
             onRegisterSettingsTab: addSettingsTab,
           }, { hasPremium });
 
@@ -187,7 +174,7 @@ export function PluginProvider({
 
   return (
     <PluginContext.Provider
-      value={{ plugins, sidebarViews, mainViews, slashCommands, settingsTabs, loading, getPluginAPI }}
+      value={{ plugins, sidebarViews, mainViews, settingsTabs, loading, getPluginAPI }}
     >
       {children}
     </PluginContext.Provider>

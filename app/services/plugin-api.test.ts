@@ -1,18 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createPluginAPI } from "./plugin-api.ts";
-import type { PluginSettingsTab, PluginSlashCommand, PluginView } from "~/types/plugin";
+import type { PluginSettingsTab, PluginView } from "~/types/plugin";
 
 test("registerView namespaces view IDs with pluginId", () => {
   const views: PluginView[] = [];
   const apiA = createPluginAPI("alpha", "en", {
     onRegisterView: (view) => views.push(view),
-    onRegisterSlashCommand: () => {},
     onRegisterSettingsTab: () => {},
   });
   const apiB = createPluginAPI("beta", "en", {
     onRegisterView: (view) => views.push(view),
-    onRegisterSlashCommand: () => {},
     onRegisterSettingsTab: () => {},
   });
 
@@ -35,26 +33,17 @@ test("registerView namespaces view IDs with pluginId", () => {
   assert.equal(views[1]?.id, "beta:panel");
 });
 
-test("registerSlashCommand and registerSettingsTab stamp pluginId", () => {
-  const slashCommands: PluginSlashCommand[] = [];
+test("registerSettingsTab stamps pluginId", () => {
   const settingsTabs: PluginSettingsTab[] = [];
   const api = createPluginAPI("my-plugin", "ja", {
     onRegisterView: () => {},
-    onRegisterSlashCommand: (cmd) => slashCommands.push(cmd),
     onRegisterSettingsTab: (tab) => settingsTabs.push(tab),
   });
 
-  api.registerSlashCommand({
-    name: "hello",
-    description: "desc",
-    execute: async () => "ok",
-  });
   api.registerSettingsTab({
     component: () => null,
   });
 
-  assert.equal(slashCommands.length, 1);
-  assert.equal(slashCommands[0]?.pluginId, "my-plugin");
   assert.equal(settingsTabs.length, 1);
   assert.equal(settingsTabs[0]?.pluginId, "my-plugin");
 });

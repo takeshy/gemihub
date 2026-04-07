@@ -34,14 +34,6 @@ export interface PluginView {
   component: React.ComponentType<{ api: PluginAPI; language?: string; fileId?: string; fileName?: string }>;
 }
 
-/** Slash command registered by a plugin */
-export interface PluginSlashCommand {
-  pluginId: string;
-  name: string;
-  description: string;
-  execute: (args: string) => Promise<string>;
-}
-
 /** Settings tab registered by a plugin */
 export interface PluginSettingsTab {
   pluginId: string;
@@ -61,11 +53,6 @@ export interface PluginAPI {
     location: "sidebar" | "main";
     extensions?: string[];
     component: React.ComponentType<{ api: PluginAPI; language?: string; fileId?: string; fileName?: string }>;
-  }): void;
-  registerSlashCommand(cmd: {
-    name: string;
-    description: string;
-    execute: (args: string) => Promise<string>;
   }): void;
   registerSettingsTab(tab: {
     component: React.ComponentType<{ api: PluginAPI; language?: string; onClose?: () => void }>;

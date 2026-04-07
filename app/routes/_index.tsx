@@ -456,7 +456,7 @@ function IDEContent({
 }) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
-  const { sidebarViews, mainViews, slashCommands: pluginSlashCommands, getPluginAPI } = usePlugins();
+  const { sidebarViews, mainViews, getPluginAPI } = usePlugins();
   const { fileList } = useEditorContext();
 
   // On iOS Safari the layout viewport (and 100dvh) does NOT shrink when the
@@ -1047,7 +1047,6 @@ function IDEContent({
           hasEncryptedApiKey={hasEncryptedApiKey}
           onNeedUnlock={() => setShowPasswordPrompt(true)}
           slashCommands={allSlashCommands}
-          pluginSlashCommands={pluginSlashCommands}
           onSkillWorkflowStart={(workflowId, workflowName) => {
             if (silentExecTimerRef.current) clearTimeout(silentExecTimerRef.current);
             setSilentExecStatus({ id: workflowId, name: workflowName, state: "running" });

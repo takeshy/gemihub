@@ -2,11 +2,10 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
-import type { PluginAPI, PluginView, PluginSlashCommand, PluginSettingsTab } from "~/types/plugin";
+import type { PluginAPI, PluginView, PluginSettingsTab } from "~/types/plugin";
 
 interface PluginAPICallbacks {
   onRegisterView: (view: PluginView) => void;
-  onRegisterSlashCommand: (cmd: PluginSlashCommand) => void;
   onRegisterSettingsTab: (tab: PluginSettingsTab) => void;
 }
 
@@ -46,15 +45,6 @@ export function createPluginAPI(
         location: view.location,
         extensions: view.extensions,
         component: view.component,
-      });
-    },
-
-    registerSlashCommand(cmd) {
-      callbacks.onRegisterSlashCommand({
-        pluginId,
-        name: cmd.name,
-        description: cmd.description,
-        execute: cmd.execute,
       });
     },
 
