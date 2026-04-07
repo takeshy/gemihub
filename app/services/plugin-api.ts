@@ -20,13 +20,18 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+interface PluginAPIOptions {
+  hasPremium?: boolean;
+}
+
 /**
  * Create a PluginAPI instance for a specific plugin
  */
 export function createPluginAPI(
   pluginId: string,
   language: string,
-  callbacks: PluginAPICallbacks
+  callbacks: PluginAPICallbacks,
+  options?: PluginAPIOptions
 ): PluginAPI {
   const api: PluginAPI = {
     language,
@@ -248,78 +253,118 @@ export function createPluginAPI(
     ReactDOM,
   };
 
-  // Calendar API — always attached; the server returns 401/403 if the user
-  // does not have the calendar scope, which is handled gracefully by the plugin.
-  api.calendar = {
-    async listEvents(options = {}) {
-      const res = await fetch("/api/calendar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "list", ...options }),
-      });
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("Calendar access requires premium plan with calendar permissions");
-      }
-      if (!res.ok) throw new Error(`Calendar list error: ${res.status}`);
-      const data = await res.json();
-      return data.events;
-    },
+  // Google Workspace APIs — only attached for premium plan users.
+  // Plugins can check `api.calendar` / `api.gmail` / `api.sheets` existence
+  // to decide whether to show related UI.
+  if (options?.hasPremium) {
+    api.calendar = {
+      async listEvents(options = {}) {
+        const res = await fetch("/api/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "list", ...options }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Calendar access requires premium plan with calendar permissions");
+        }
+        if (!res.ok) throw new Error(`Calendar list error: ${res.status}`);
+        const data = await res.json();
+        return data.events;
+      },
 
-    async createEvent(event) {
-      const res = await fetch("/api/calendar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", ...event }),
-      });
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("Calendar access requires premium plan with calendar permissions");
-      }
-      if (!res.ok) throw new Error(`Calendar create error: ${res.status}`);
-      return res.json();
-    },
+      async createEvent(event) {
+        const res = await fetch("/api/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "create", ...event }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Calendar access requires premium plan with calendar permissions");
+        }
+        if (!res.ok) throw new Error(`Calendar create error: ${res.status}`);
+        return res.json();
+      },
 
-    async updateEvent(eventId, event) {
-      const res = await fetch("/api/calendar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update", eventId, ...event }),
-      });
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("Calendar access requires premium plan with calendar permissions");
-      }
-      if (!res.ok) throw new Error(`Calendar update error: ${res.status}`);
-      return res.json();
-    },
+      async updateEvent(eventId, event) {
+        const res = await fetch("/api/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update", eventId, ...event }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Calendar access requires premium plan with calendar permissions");
+        }
+        if (!res.ok) throw new Error(`Calendar update error: ${res.status}`);
+        return res.json();
+      },
 
-    async deleteEvent(eventId, calendarId) {
-      const res = await fetch("/api/calendar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", eventId, calendarId }),
-      });
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("Calendar access requires premium plan with calendar permissions");
-      }
-      if (!res.ok) throw new Error(`Calendar delete error: ${res.status}`);
-    },
-  };
+      async deleteEvent(eventId, calendarId) {
+        const res = await fetch("/api/calendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete", eventId, calendarId }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Calendar access requires premium plan with calendar permissions");
+        }
+        if (!res.ok) throw new Error(`Calendar delete error: ${res.status}`);
+      },
+    };
 
-  // Gmail API — always attached; the server returns 403 if the user
-  // does not have the gmail.send scope, which is handled gracefully by the plugin.
-  api.gmail = {
-    async sendEmail(options) {
-      const res = await fetch("/api/gmail", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send", ...options }),
-      });
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("Gmail access requires premium plan with Gmail permissions");
-      }
-      if (!res.ok) throw new Error(`Gmail send error: ${res.status}`);
-      return res.json();
-    },
-  };
+    api.gmail = {
+      async sendEmail(options) {
+        const res = await fetch("/api/gmail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "send", ...options }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Gmail access requires premium plan with Gmail permissions");
+        }
+        if (!res.ok) throw new Error(`Gmail send error: ${res.status}`);
+        return res.json();
+      },
+    };
+
+    api.sheets = {
+      async createSpreadsheet(options) {
+        const res = await fetch("/api/sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "create", ...options }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Sheets access requires premium plan with Sheets permissions");
+        }
+        if (!res.ok) throw new Error(`Sheets create error: ${res.status}`);
+        return res.json();
+      },
+
+      async writeSheet(options) {
+        const res = await fetch("/api/sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "write", ...options }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Sheets access requires premium plan with Sheets permissions");
+        }
+        if (!res.ok) throw new Error(`Sheets write error: ${res.status}`);
+      },
+
+      async batchWriteSheet(options) {
+        const res = await fetch("/api/sheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "batchWrite", ...options }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Sheets access requires premium plan with Sheets permissions");
+        }
+        if (!res.ok) throw new Error(`Sheets batchWrite error: ${res.status}`);
+      },
+    };
+  }
 
   return api;
 }

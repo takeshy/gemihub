@@ -313,7 +313,7 @@ function IDELayout({
   return (
     <I18nProvider language={settings.language ?? "en"}>
       <EditorContextProvider>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language ?? "en"}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language ?? "en"} hasPremium={settings.hubwork?.plan === "pro" || settings.hubwork?.plan === "granted"}>
       <SkillProvider rootFolderId={rootFolderId}>
       <IDEContent
         settings={settings}

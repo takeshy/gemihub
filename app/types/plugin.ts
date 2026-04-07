@@ -171,6 +171,23 @@ export interface PluginAPI {
     }): Promise<{ messageId: string }>;
   };
 
+  // Google Sheets API (requires premium plan with spreadsheets scope)
+  sheets?: {
+    createSpreadsheet(options: {
+      title: string;
+      sheets?: string[];
+    }): Promise<{ spreadsheetId: string; url: string }>;
+    writeSheet(options: {
+      spreadsheetId: string;
+      range: string;
+      values: (string | number)[][];
+    }): Promise<void>;
+    batchWriteSheet(options: {
+      spreadsheetId: string;
+      data: Array<{ range: string; values: (string | number)[][] }>;
+    }): Promise<void>;
+  };
+
   // Host React instances (shared)
   React: typeof React;
   ReactDOM: typeof import("react-dom");

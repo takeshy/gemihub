@@ -41,10 +41,12 @@ const PluginContext = createContext<PluginContextValue>({
 export function PluginProvider({
   pluginConfigs,
   language,
+  hasPremium,
   children,
 }: {
   pluginConfigs: PluginConfig[];
   language: string;
+  hasPremium?: boolean;
   children: ReactNode;
 }) {
   const [plugins, setPlugins] = useState<PluginInstance[]>([]);
@@ -129,7 +131,7 @@ export function PluginProvider({
             onRegisterView: addView,
             onRegisterSlashCommand: addSlashCommand,
             onRegisterSettingsTab: addSettingsTab,
-          });
+          }, { hasPremium });
 
           const instance = await loadPlugin(config, api);
           await loadPluginStyles(config);

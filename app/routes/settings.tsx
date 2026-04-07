@@ -646,7 +646,7 @@ export default function Settings() {
 
   return (
     <I18nProvider language={currentLang}>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={currentLang}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={currentLang} hasPremium={settings.hubwork?.plan === "pro" || settings.hubwork?.plan === "granted"}>
         <SettingsInner
           settings={settings}
           hasApiKey={hasApiKey}
