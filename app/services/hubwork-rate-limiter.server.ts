@@ -24,6 +24,7 @@ export function checkRateLimit(
   maxRequests: number,
   windowMs: number
 ): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
   const now = Date.now();
   const cutoff = now - windowMs;
   const timestamps = (windows.get(key) || []).filter((t) => t > cutoff);

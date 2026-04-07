@@ -4,7 +4,8 @@ let _firestore: Firestore | null = null;
 
 export function getFirestore(): Firestore {
   if (!_firestore) {
-    _firestore = new Firestore();
+    const databaseId = process.env.FIRESTORE_DATABASE_ID;
+    _firestore = databaseId ? new Firestore({ databaseId }) : new Firestore();
   }
   return _firestore;
 }

@@ -203,40 +203,56 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
     }
   }, []);
 
-  // Auto-save spreadsheets and account types on change (debounced).
-  // Compare against the last-saved snapshot to avoid saving on initial mount
-  // (React Strict Mode runs effects twice, bypassing simple useRef guards).
-  const lastSavedRef = useRef(() => {
-    const ss = spreadsheets.filter((s) => s.id.trim());
-    const ac = entriesToAccounts(accountTypes);
-    return JSON.stringify({ ss, ac });
-  });
-  const lastSavedJson = useRef(lastSavedRef.current());
-  useEffect(() => {
-    const ss = spreadsheets.filter((s) => s.id.trim());
-    const ac = entriesToAccounts(accountTypes);
-    const json = JSON.stringify({ ss, ac });
-    if (json === lastSavedJson.current) return;
-    const timer = setTimeout(() => {
-      if (accountsFetcher.state !== "idle") return;
-      lastSavedJson.current = json;
+  // --- Spreadsheets save (per-row) ---
+  const [savingSSIds, setSavingSSIds] = useState<Set<string>>(new Set());
+  const [savedSSIds, setSavedSSIds] = useState<Set<string>>(new Set());
+
+  const saveSpreadsheet = useCallback(async (ssId: string) => {
+    if (!ssId.trim()) return;
+    setSavingSSIds((prev) => new Set(prev).add(ssId));
+    try {
+      const ss = spreadsheets.filter((s) => s.id.trim());
+      const ac = entriesToAccounts(accountTypes);
       const formData = new FormData();
       formData.set("_action", "hubwork-accounts");
       formData.set("spreadsheets", JSON.stringify(ss));
       formData.set("accounts", JSON.stringify(ac));
-      accountsFetcher.submit(formData, { method: "post", action: "/settings" });
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [spreadsheets, accountTypes]); // eslint-disable-line react-hooks/exhaustive-deps
+      const res = await fetch("/settings", { method: "POST", body: formData });
+      if (!res.ok) throw new Error();
+      await fetchSheetMeta(ssId);
+      setSavedSSIds((prev) => new Set(prev).add(ssId));
+    } catch {
+      // fetchSheetMeta already sets fetchErrors
+    } finally {
+      setSavingSSIds((prev) => { const n = new Set(prev); n.delete(ssId); return n; });
+    }
+  }, [spreadsheets, accountTypes, fetchSheetMeta]);
 
-  // Auto-fetch sheet metadata for all registered spreadsheets on mount
+  // --- Account types save ---
+  const lastSavedAcJson = useRef(JSON.stringify(entriesToAccounts(accountTypes)));
+  const hasUnsavedAccounts = JSON.stringify(entriesToAccounts(accountTypes)) !== lastSavedAcJson.current;
+
+  const saveAccounts = useCallback(() => {
+    const ss = spreadsheets.filter((s) => s.id.trim());
+    const ac = entriesToAccounts(accountTypes);
+    lastSavedAcJson.current = JSON.stringify(ac);
+    const formData = new FormData();
+    formData.set("_action", "hubwork-accounts");
+    formData.set("spreadsheets", JSON.stringify(ss));
+    formData.set("accounts", JSON.stringify(ac));
+    accountsFetcher.submit(formData, { method: "post", action: "/settings" });
+  }, [spreadsheets, accountTypes, accountsFetcher]);
+
+  // Auto-fetch sheet metadata for saved spreadsheets on mount
   const autoFetchedRef = useRef(false);
   useEffect(() => {
     if (autoFetchedRef.current) return;
     autoFetchedRef.current = true;
     for (const ss of spreadsheets) {
       if (ss.id.trim() && !sheetMeta[ss.id]) {
-        fetchSheetMeta(ss.id);
+        fetchSheetMeta(ss.id).then(() => {
+          setSavedSSIds((prev) => new Set(prev).add(ss.id));
+        });
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -562,41 +578,45 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
                           </p>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => fetchSheetMeta(ss.id)}
-                        disabled={!ss.id.trim() || fetchingIds.has(ss.id)}
-                        className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 flex items-center gap-1"
-                      >
-                        {fetchingIds.has(ss.id) ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : (
-                          <RefreshCw size={14} />
-                        )}
-                        Fetch
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const referencingTypes = accountTypes
-                            .filter((at) => {
-                              const idSsId = at.config.identity.spreadsheetId || spreadsheets[0]?.id;
-                              if (idSsId === ss.id) return true;
-                              const dataSources = Object.values(at.config.data || {});
-                              return dataSources.some((ds) => (ds.spreadsheetId || spreadsheets[0]?.id) === ss.id);
-                            })
-                            .map((at) => at.config.identity.sheet || "(unnamed)");
-                          if (referencingTypes.length > 0) {
-                            alert(t("settings.hubwork.spreadsheetInUse") + "\n" + referencingTypes.join(", "));
-                            return;
-                          }
-                          setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
-                          setSpreadsheets(spreadsheets.filter((_, j) => j !== i));
-                        }}
-                        className="p-2 text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {savedSSIds.has(ss.id) && sheetMeta[ss.id] ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const referencingTypes = accountTypes
+                              .filter((at) => {
+                                const idSsId = at.config.identity.spreadsheetId || spreadsheets[0]?.id;
+                                if (idSsId === ss.id) return true;
+                                const dataSources = Object.values(at.config.data || {});
+                                return dataSources.some((ds) => (ds.spreadsheetId || spreadsheets[0]?.id) === ss.id);
+                              })
+                              .map((at) => at.config.identity.sheet || "(unnamed)");
+                            if (referencingTypes.length > 0) {
+                              alert(t("settings.hubwork.spreadsheetInUse") + "\n" + referencingTypes.join(", "));
+                              return;
+                            }
+                            setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
+                            setSavedSSIds((prev) => { const n = new Set(prev); n.delete(ss.id); return n; });
+                            setSpreadsheets(spreadsheets.filter((_, j) => j !== i));
+                          }}
+                          className="p-2 text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => saveSpreadsheet(ss.id)}
+                          disabled={!ss.id.trim() || savingSSIds.has(ss.id)}
+                          className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {savingSSIds.has(ss.id) ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <CheckCircle size={14} />
+                          )}
+                          Save
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -652,7 +672,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
                   </div>
                 )}
 
-                <div className="flex gap-2 mt-4">
+                <div className="flex items-center gap-4 mt-4">
                   <button
                     onClick={() =>
                       setAccountTypes([
@@ -667,6 +687,14 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
                   >
                     <Plus size={14} />
                     {t("settings.hubwork.accountAdd")}
+                  </button>
+                  <button
+                    onClick={saveAccounts}
+                    disabled={!hasUnsavedAccounts || accountsFetcher.state !== "idle"}
+                    className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {accountsFetcher.state !== "idle" ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                    Save
                   </button>
                 </div>
 
