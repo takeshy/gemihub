@@ -157,6 +157,44 @@ nodes:
 </form>
 ```
 
+## Spec File Template (`web/__gemihub/spec.md`)
+
+````markdown
+# {Site Name}
+
+## Overview
+
+{1-2 sentence description of what this site does}
+
+## Pages
+
+| Path | Description | Auth |
+|------|-------------|------|
+| `/login/{type}` | Login page | - |
+| `/{page}` | {description} | {type} |
+
+## API Endpoints
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/__gemihub/api/{path}` | {description} | {type} |
+| POST | `/__gemihub/api/{path}` | {description} | {type} |
+
+## Data Sources
+
+| Type | Name | Usage |
+|------|------|-------|
+| Spreadsheet | {SheetName} | {what data it stores} |
+
+## Account Types
+
+| Type | Description |
+|------|-------------|
+| {type} | {who uses this account} |
+````
+
+Fill in the placeholders based on the actual pages and APIs created. Remove sections that don't apply (e.g., remove "Account Types" if no auth is used).
+
 ## IDE Preview Mock Data
 
 When creating pages with auth or API calls, also create mock data files for IDE preview.

@@ -646,7 +646,6 @@ export function ChatPanel({
               setStreamingContent(accumulatedContent);
               break;
             case "done": {
-              console.log("[chat] done: accumulatedContent length:", accumulatedContent.length, "first 100:", accumulatedContent.slice(0, 100));
               const assistantMessage: Message = {
                 role: "assistant",
                 content: accumulatedContent,
@@ -734,14 +733,19 @@ export function ChatPanel({
           await saveChat(finalMessages);
         }
       } finally {
-        setStreamingContent("");
-        setStreamingThinking("");
-        setStreamingToolCalls([]);
-        setStreamingRagSources([]);
-        setStreamingRagUsed(false);
-        setStreamingWebSearchUsed(false);
-        setIsStreaming(false);
-        abortControllerRef.current = null;
+        // Only clear streaming state if this is still the active call.
+        // A newer handleSend may have already started, in which case
+        // abortControllerRef.current points to the new controller.
+        if (abortControllerRef.current === abortController) {
+          setStreamingContent("");
+          setStreamingThinking("");
+          setStreamingToolCalls([]);
+          setStreamingRagSources([]);
+          setStreamingRagUsed(false);
+          setStreamingWebSearchUsed(false);
+          setIsStreaming(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [
