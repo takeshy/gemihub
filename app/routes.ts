@@ -14,6 +14,7 @@ export default [
   route("auth/google/callback", "routes/auth.google.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
   route("api/auth/unlock", "routes/api.auth.unlock.tsx"),
+  route("api/auth/picker-token", "routes/api.auth.picker-token.tsx"),
   route("settings", "routes/settings.tsx"),
   // API routes
   route("api/drive/files", "routes/api.drive.files.tsx"),

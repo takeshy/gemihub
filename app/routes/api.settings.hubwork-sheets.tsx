@@ -19,7 +19,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Resolve __default__ to first configured spreadsheet
   if (spreadsheetId === "__default__") {
     const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-    spreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId || null;
+    spreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || null;
   }
 
   if (!spreadsheetId) {

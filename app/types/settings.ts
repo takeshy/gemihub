@@ -630,7 +630,6 @@ export interface HubworkSchedule {
 }
 
 export interface HubworkSettings {
-  spreadsheetId?: string;
   spreadsheets?: HubworkSpreadsheet[];
   accounts?: Record<string, HubworkAccountType>;
   schedules?: HubworkSchedule[];

@@ -40,7 +40,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const { resolveAccountType } = await import("~/types/settings");
   const resolved = resolveAccountType(settings?.hubwork?.accounts, type);
-  const resolvedSpreadsheetId = resolved?.accountType.identity.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  const resolvedSpreadsheetId = resolved?.accountType.identity.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id;
   if (!resolvedSpreadsheetId) {
     return Response.json({ error: "Hubwork not configured" }, { status: 500 });
   }

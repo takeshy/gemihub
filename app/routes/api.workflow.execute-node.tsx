@@ -149,7 +149,7 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   // Populate Hubwork clients if enabled and needed
-  const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id;
   if (HUBWORK_NODE_TYPES.has(nodeType)) {
     const { google } = await import("googleapis");
     const oauth2Client = new google.auth.OAuth2();

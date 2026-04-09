@@ -166,7 +166,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const grantedScopes = validTokens.grantedScopes || "";
   const hasGmailScope = grantedScopes.includes("gmail");
   const hasCalendarScope = grantedScopes.includes("calendar");
-  const hasHubworkScopes = grantedScopes.includes("spreadsheets") && hasGmailScope && hasCalendarScope;
+  const hasHubworkScopes = hasGmailScope && hasCalendarScope;
 
   return data(
     {
@@ -536,6 +536,25 @@ export async function action({ request }: Route.ActionArgs) {
         });
       }
 
+      case "hubwork-spreadsheet-labels": {
+        // Merge labels into existing spreadsheets without changing the list.
+        const labelsJson = formData.get("labels") as string;
+        let labels: Record<string, string>;
+        try {
+          labels = JSON.parse(labelsJson || "{}");
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid labels data" });
+        }
+        const existingSS = currentSettings.hubwork?.spreadsheets || [];
+        const updated = existingSS.map((s) => labels[s.id] ? { ...s, label: labels[s.id] } : s);
+        const updatedSettings = {
+          ...currentSettings,
+          hubwork: { ...currentSettings.hubwork, spreadsheets: updated } as typeof currentSettings.hubwork,
+        };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        return jsonWithCookie({ success: true, message: "Labels updated" });
+      }
+
       case "hubwork-accounts": {
         const spreadsheetsJson = formData.get("spreadsheets") as string;
         const accountsJson = formData.get("accounts") as string;
@@ -552,14 +571,16 @@ export async function action({ request }: Route.ActionArgs) {
           return jsonWithCookie({ success: false, message: "Invalid accounts data" });
         }
         const validSpreadsheets = spreadsheets.filter((s) => s.id?.trim());
+        // Preserve existing values only when the field was not sent at all.
+        // An explicit empty value ([] or {}) means intentional deletion.
+        const finalSpreadsheets = spreadsheetsJson != null ? validSpreadsheets : currentSettings.hubwork?.spreadsheets;
+        const finalAccounts = accountsJson != null ? accounts : currentSettings.hubwork?.accounts;
         const updatedSettings = {
           ...currentSettings,
           hubwork: {
             ...currentSettings.hubwork,
-            // Preserve existing values when new data is empty
-            spreadsheets: validSpreadsheets.length > 0 ? validSpreadsheets : currentSettings.hubwork?.spreadsheets,
-            spreadsheetId: validSpreadsheets[0]?.id || currentSettings.hubwork?.spreadsheetId,
-            accounts: Object.keys(accounts).length > 0 ? accounts : currentSettings.hubwork?.accounts,
+            spreadsheets: finalSpreadsheets,
+            accounts: finalAccounts,
           } as typeof currentSettings.hubwork,
         };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);

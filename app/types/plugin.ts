@@ -182,7 +182,7 @@ export interface PluginAPI {
     }): Promise<{ messageId: string }>;
   };
 
-  // Google Sheets API (requires premium plan with spreadsheets scope)
+  // Google Sheets API (requires premium plan; uses drive.file scope — works with app-created or Picker-selected spreadsheets)
   sheets?: {
     createSpreadsheet(options: {
       title: string;

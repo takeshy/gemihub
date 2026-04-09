@@ -72,7 +72,6 @@ hubwork-accounts/{accountId}
   customDomain?: string              — e.g. "app.acme.com"
   rootFolderName: string
   rootFolderId: string
-  spreadsheetId?: string
   plan: "lite" | "pro" | "granted"   — lite = ¥300/month, pro = ¥2,000/month, granted = admin-created free
   stripeCustomerId?: string          — Stripe customer ID (set by webhook)
   stripeSubscriptionId?: string      — Stripe subscription ID (set by webhook)
@@ -216,7 +215,7 @@ Account types define multiple login identities (e.g., "talent", "company", "staf
 ```json
 {
   "hubwork": {
-    "spreadsheetId": "...",
+    "spreadsheets": [{ "id": "...", "label": "My Sheet" }],
     "accounts": {
       "talent": {
         "identity": {
@@ -755,7 +754,7 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
 
 ```
 {rootDir}/
-  settings.json        ← hubwork config (spreadsheetId, accounts, schedules)
+  settings.json        ← hubwork config (spreadsheets, accounts, schedules)
   web/                   ← static site files (served directly by Cloud Run via Drive API)
     index.html
     about.html

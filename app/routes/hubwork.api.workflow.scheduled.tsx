@@ -123,7 +123,7 @@ export async function action({ request }: Route.ActionArgs) {
         geminiApiKey,
       };
 
-      const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+      const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id;
       if (hubworkSpreadsheetId) {
         serviceContext.hubworkSheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
         serviceContext.hubworkSpreadsheetId = hubworkSpreadsheetId;

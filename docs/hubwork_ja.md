@@ -68,7 +68,6 @@ hubwork-accounts/{accountId}
   customDomain?: string              — 例: "app.acme.com"
   rootFolderName: string
   rootFolderId: string
-  spreadsheetId?: string
   plan: "lite" | "pro" | "granted"   — lite = ¥300/月、pro = ¥2,000/月、granted = 管理者作成の無料
   stripeCustomerId?: string          — Stripe顧客ID（webhookで設定）
   stripeSubscriptionId?: string      — StripeサブスクリプションID（webhookで設定）
@@ -609,7 +608,7 @@ Stripe Checkoutによる月額¥2,000のサブスクリプション。フロー:
 
 ```
 {rootDir}/
-  settings.json        ← hubwork設定（spreadsheetId、sheets、schedules、currentUser）
+  settings.json        ← hubwork設定（spreadsheets、accounts、schedules、currentUser）
   web/                   ← 静的サイトファイル（Cloud RunがDrive APIで直接配信、Hubworkアカウントに自動作成）
     index.html
     about.html

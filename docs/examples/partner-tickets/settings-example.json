@@ -1,6 +1,6 @@
 {
   "hubwork": {
-    "spreadsheetId": "YOUR_SPREADSHEET_ID",
+    "spreadsheets": [{ "id": "YOUR_SPREADSHEET_ID", "label": "Partners" }],
     "accounts": {
       "partner": {
         "identity": {

@@ -104,7 +104,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
     const { resolveAccountType } = await import("~/types/settings");
     const resolvedAccount = resolveAccountType(settings?.hubwork?.accounts, requireAuth);
     const accountType = resolvedAccount?.accountType;
-    const authSpreadsheetId = accountType?.identity?.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+    const authSpreadsheetId = accountType?.identity?.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id;
     if (accountType?.data && authSpreadsheetId) {
       try {
         currentUserData = await buildCurrentUser(
@@ -227,7 +227,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
     settings,
   };
 
-  const defaultSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  const defaultSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id;
   {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });

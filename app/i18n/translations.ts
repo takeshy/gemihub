@@ -640,8 +640,8 @@ export interface TranslationStrings {
   "settings.hubwork.dataSourceLimit": string;
   "settings.hubwork.dataSourceSort": string;
   "settings.hubwork.spreadsheetId": string;
-  "settings.hubwork.spreadsheetIdPlaceholder": string;
   "settings.hubwork.spreadsheetAdd": string;
+  "settings.hubwork.spreadsheetPickerTitle": string;
   "settings.hubwork.spreadsheetFetchRequired": string;
   "settings.hubwork.selectSpreadsheet": string;
   "settings.hubwork.scopeUpgradeRequired": string;
@@ -1334,12 +1334,12 @@ const en: TranslationStrings = {
   "settings.hubwork.dataSourceLimit": "Limit",
   "settings.hubwork.dataSourceSort": "Sort",
   "settings.hubwork.spreadsheetId": "Spreadsheets",
-  "settings.hubwork.spreadsheetIdPlaceholder": "Paste Google Sheets URL or ID",
   "settings.hubwork.spreadsheetAdd": "Add Spreadsheet",
+  "settings.hubwork.spreadsheetPickerTitle": "Select a Spreadsheet",
   "settings.hubwork.spreadsheetFetchRequired": "Fetch sheet names for all spreadsheets used in account types before saving.",
   "settings.hubwork.selectSpreadsheet": "Select spreadsheet",
   "settings.hubwork.scopeUpgradeRequired": "Additional permissions required",
-  "settings.hubwork.scopeUpgradeDescription": "The Premium plan needs Google Sheets and Gmail access. Click to re-authorize with the required permissions.",
+  "settings.hubwork.scopeUpgradeDescription": "The Premium plan needs Gmail and Calendar access. Click to re-authorize with the required permissions.",
   "settings.hubwork.scopeUpgradeButton": "Grant permissions",
   "settings.hubwork.paidApiKeyRequired": "A paid API key is required to subscribe. Please set API Plan to \"Paid\" in the General tab.",
   "settings.hubwork.provisioning": "Setting up Webpage Builder skill...",
@@ -2028,12 +2028,12 @@ const ja: TranslationStrings = {
   "settings.hubwork.dataSourceLimit": "件数制限",
   "settings.hubwork.dataSourceSort": "ソート",
   "settings.hubwork.spreadsheetId": "スプレッドシート",
-  "settings.hubwork.spreadsheetIdPlaceholder": "Google SheetsのURLまたはIDを貼り付け",
   "settings.hubwork.spreadsheetAdd": "スプレッドシートを追加",
+  "settings.hubwork.spreadsheetPickerTitle": "スプレッドシートを選択",
   "settings.hubwork.spreadsheetFetchRequired": "保存前にアカウント種別で使用する全スプレッドシートのシート名を取得してください。",
   "settings.hubwork.selectSpreadsheet": "スプレッドシートを選択",
   "settings.hubwork.scopeUpgradeRequired": "追加の権限が必要です",
-  "settings.hubwork.scopeUpgradeDescription": "プレミアムプランにはGoogle SheetsとGmailへのアクセス権限が必要です。クリックして権限を付与してください。",
+  "settings.hubwork.scopeUpgradeDescription": "プレミアムプランにはGmailとカレンダーへのアクセス権限が必要です。クリックして権限を付与してください。",
   "settings.hubwork.scopeUpgradeButton": "権限を付与",
   "settings.hubwork.paidApiKeyRequired": "サブスクリプションにはPaid APIキーが必要です。Generalタブで「Paid」に設定してください。",
   "settings.hubwork.provisioning": "Webpage Builderスキルをセットアップ中...",

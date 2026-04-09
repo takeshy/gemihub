@@ -73,7 +73,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { resolveAccountType } = await import("~/types/settings");
   const resolved = resolveAccountType(settings?.hubwork?.accounts, type);
-  const resolvedSpreadsheetId = resolved?.accountType.identity.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id || settings?.hubwork?.spreadsheetId;
+  const resolvedSpreadsheetId = resolved?.accountType.identity.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id;
   if (!resolved || !resolvedSpreadsheetId) {
     console.warn(`[auth-login] accounts[${type}] not found or spreadsheetId missing`);
     return Response.json({ ok: true });

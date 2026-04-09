@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
-import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCard, Users, ChevronDown, ChevronRight, Database, RefreshCw, Upload, Sparkles, X } from "lucide-react";
+import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCard, Users, ChevronDown, ChevronRight, Database, RefreshCw, Upload, Sparkles, X, FolderOpen } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { SectionCard } from "~/components/settings/shared";
+import { useGooglePicker } from "~/hooks/useGooglePicker";
 import type { UserSettings, HubworkSchedule, HubworkAccountType, HubworkDataSource, HubworkSpreadsheet } from "~/types/settings";
 
 interface AccountTypeEntry {
@@ -54,11 +55,8 @@ function entriesToData(entries: DataSourceEntry[]): Record<string, HubworkDataSo
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-/** Migrate legacy single spreadsheetId to spreadsheets array */
 function initSpreadsheets(hubwork?: UserSettings["hubwork"]): HubworkSpreadsheet[] {
-  if (hubwork?.spreadsheets && hubwork.spreadsheets.length > 0) return hubwork.spreadsheets;
-  if (hubwork?.spreadsheetId) return [{ id: hubwork.spreadsheetId }];
-  return [];
+  return hubwork?.spreadsheets || [];
 }
 
 /** Get a display label for a spreadsheet entry */
@@ -67,24 +65,19 @@ function spreadsheetLabel(ss: HubworkSpreadsheet): string {
   return ss.id.length > 16 ? `${ss.id.slice(0, 16)}…` : ss.id;
 }
 
-/** Extract spreadsheet ID from URL or raw ID */
-function parseSpreadsheetId(raw: string): string {
-  const match = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : raw;
-}
 
-export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallback }: { settings: UserSettings; hasHubworkScopes: boolean; rootFolderId: string; isCallback?: boolean }) {
+export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFolderId, isCallback }: { settings: UserSettings; hasHubworkScopes: boolean; rootFolderId: string; isCallback?: boolean }) {
   const { t } = useI18n();
   const hubwork = settings.hubwork;
   const domainFetcher = useFetcher();
   const scheduleFetcher = useFetcher();
   const stripeFetcher = useFetcher();
   const accountsFetcher = useFetcher();
+  const { openSpreadsheetPicker } = useGooglePicker();
   const [domain, setDomain] = useState(hubwork?.customDomain || "");
   const [schedules, setSchedules] = useState<HubworkSchedule[]>(hubwork?.schedules || []);
   const [spreadsheets, setSpreadsheets] = useState<HubworkSpreadsheet[]>(initSpreadsheets(hubwork));
   const [sheetMeta, setSheetMeta] = useState<Record<string, SheetMeta>>({});
-  const [fetchingIds, setFetchingIds] = useState<Set<string>>(new Set());
   const [fetchErrors, setFetchErrors] = useState<Record<string, string>>({});
   const [accountTypes, setAccountTypes] = useState<AccountTypeEntry[]>(
     accountsToEntries(hubwork?.accounts)
@@ -178,9 +171,8 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
     })();
   }, [isCallback, hubwork?.plan]);
 
-  const fetchSheetMeta = useCallback(async (ssId: string) => {
-    if (!ssId.trim()) return;
-    setFetchingIds((prev) => new Set(prev).add(ssId));
+  const fetchSheetMeta = useCallback(async (ssId: string): Promise<string | undefined> => {
+    if (!ssId.trim()) return undefined;
     setFetchErrors((prev) => { const n = { ...prev }; delete n[ssId]; return n; });
     try {
       const res = await fetch(`/api/settings/hubwork-sheets?spreadsheetId=${encodeURIComponent(ssId)}`);
@@ -193,40 +185,58 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
         // Use spreadsheet title as label
         if (data.title) {
           setSpreadsheets((prev) => prev.map((s) => s.id === ssId ? { ...s, label: data.title } : s));
+          return data.title as string;
         }
       }
     } catch {
       setFetchErrors((prev) => ({ ...prev, [ssId]: "Failed to fetch" }));
       setSheetMeta((prev) => { const n = { ...prev }; delete n[ssId]; return n; });
-    } finally {
-      setFetchingIds((prev) => { const n = new Set(prev); n.delete(ssId); return n; });
     }
+    return undefined;
   }, []);
 
-  // --- Spreadsheets save (per-row) ---
+  // --- Spreadsheets ---
   const [savingSSIds, setSavingSSIds] = useState<Set<string>>(new Set());
-  const [savedSSIds, setSavedSSIds] = useState<Set<string>>(new Set());
 
-  const saveSpreadsheet = useCallback(async (ssId: string) => {
-    if (!ssId.trim()) return;
-    setSavingSSIds((prev) => new Set(prev).add(ssId));
+  // --- Add spreadsheet via Google Picker ---
+  const [pickerLoading, setPickerLoading] = useState(false);
+
+  const addSpreadsheetViaPicker = useCallback(async () => {
+    if (pickerLoading) return;
+    setPickerLoading(true);
     try {
-      const ss = spreadsheets.filter((s) => s.id.trim());
-      const ac = entriesToAccounts(accountTypes);
-      const formData = new FormData();
-      formData.set("_action", "hubwork-accounts");
-      formData.set("spreadsheets", JSON.stringify(ss));
-      formData.set("accounts", JSON.stringify(ac));
-      const res = await fetch("/settings", { method: "POST", body: formData });
-      if (!res.ok) throw new Error();
-      await fetchSheetMeta(ssId);
-      setSavedSSIds((prev) => new Set(prev).add(ssId));
-    } catch {
-      // fetchSheetMeta already sets fetchErrors
+      const picked = await openSpreadsheetPicker({
+        title: t("settings.hubwork.spreadsheetPickerTitle"),
+        locale: settings.language === "ja" ? "ja" : "en",
+      });
+      if (!picked) return;
+
+      // Check for duplicates
+      if (spreadsheets.some((s) => s.id === picked.id)) return;
+
+      const newSS: HubworkSpreadsheet = { id: picked.id, label: picked.name };
+      const updatedList = [...spreadsheets, newSS];
+      setSpreadsheets(updatedList);
+
+      // Auto-save
+      setSavingSSIds((prev) => new Set(prev).add(picked.id));
+      try {
+        const ss = updatedList.filter((s) => s.id.trim());
+        const formData = new FormData();
+        formData.set("_action", "hubwork-accounts");
+        formData.set("spreadsheets", JSON.stringify(ss));
+        const res = await fetch("/settings", { method: "POST", body: formData });
+        if (!res.ok) throw new Error();
+        await fetchSheetMeta(picked.id);
+      } catch {
+        // fetchSheetMeta already sets fetchErrors
+      } finally {
+        setSavingSSIds((prev) => { const n = new Set(prev); n.delete(picked.id); return n; });
+      }
     } finally {
-      setSavingSSIds((prev) => { const n = new Set(prev); n.delete(ssId); return n; });
+      setPickerLoading(false);
     }
-  }, [spreadsheets, accountTypes, fetchSheetMeta]);
+  }, [pickerLoading, openSpreadsheetPicker, t, settings.language, spreadsheets, fetchSheetMeta]);
 
   // --- Account types save ---
   const lastSavedAcJson = useRef(JSON.stringify(entriesToAccounts(accountTypes)));
@@ -243,18 +253,31 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
     accountsFetcher.submit(formData, { method: "post", action: "/settings" });
   }, [spreadsheets, accountTypes, accountsFetcher]);
 
-  // Auto-fetch sheet metadata for saved spreadsheets on mount
+  // Auto-fetch sheet metadata for saved spreadsheets on mount.
+  // If any labels were missing, persist them to settings.
   const autoFetchedRef = useRef(false);
   useEffect(() => {
     if (autoFetchedRef.current) return;
     autoFetchedRef.current = true;
-    for (const ss of spreadsheets) {
-      if (ss.id.trim() && !sheetMeta[ss.id]) {
-        fetchSheetMeta(ss.id).then(() => {
-          setSavedSSIds((prev) => new Set(prev).add(ss.id));
+    const ssNeedingFetch = spreadsheets.filter((ss) => ss.id.trim() && !sheetMeta[ss.id]);
+    if (ssNeedingFetch.length === 0) return;
+    const ssNeedingLabel = ssNeedingFetch.filter((ss) => !ss.label);
+    Promise.all(ssNeedingFetch.map((ss) => fetchSheetMeta(ss.id))).then(() => {
+      // Persist labels only (merge into existing spreadsheets on server)
+      if (ssNeedingLabel.length > 0) {
+        setSpreadsheets((current) => {
+          const labels: Record<string, string> = {};
+          for (const s of current) {
+            if (s.id.trim() && s.label) labels[s.id] = s.label;
+          }
+          const formData = new FormData();
+          formData.set("_action", "hubwork-spreadsheet-labels");
+          formData.set("labels", JSON.stringify(labels));
+          fetch("/settings", { method: "POST", body: formData }).catch(() => {});
+          return current;
         });
       }
-    }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const plan = hubwork?.plan;
@@ -550,83 +573,68 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId, isCallbac
 
                 <div className="space-y-3">
                   {spreadsheets.map((ss, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <div className="flex-1 space-y-1">
-                        <input
-                          type="text"
-                          value={ss.id}
-                          onChange={(e) => {
-                            const updated = [...spreadsheets];
-                            const newId = parseSpreadsheetId(e.target.value.trim());
-                            // Clear old meta if ID changed
-                            if (newId !== ss.id) {
-                              setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
-                            }
-                            updated[i] = { ...updated[i], id: newId, label: undefined };
-                            setSpreadsheets(updated);
-                          }}
-                          placeholder={t("settings.hubwork.spreadsheetIdPlaceholder")}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono"
-                        />
+                    <div key={ss.id || i} className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50">
+                      <Database size={14} className="text-gray-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {ss.label || ss.id}
+                        </p>
+                        {savingSSIds.has(ss.id) && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                            <Loader2 size={10} className="animate-spin" />
+                            Loading...
+                          </p>
+                        )}
                         {fetchErrors[ss.id] && (
                           <p className="text-xs text-red-600 dark:text-red-400">{fetchErrors[ss.id]}</p>
                         )}
                         {sheetMeta[ss.id] && (
-                          <p className="text-xs text-green-600 dark:text-green-400">
-                            {ss.label && <span className="font-medium">{ss.label} — </span>}
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
                             {sheetMeta[ss.id].sheets.length} sheets: {sheetMeta[ss.id].sheets.join(", ")}
                           </p>
                         )}
                       </div>
-                      {savedSSIds.has(ss.id) && sheetMeta[ss.id] ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const referencingTypes = accountTypes
-                              .filter((at) => {
-                                const idSsId = at.config.identity.spreadsheetId || spreadsheets[0]?.id;
-                                if (idSsId === ss.id) return true;
-                                const dataSources = Object.values(at.config.data || {});
-                                return dataSources.some((ds) => (ds.spreadsheetId || spreadsheets[0]?.id) === ss.id);
-                              })
-                              .map((at) => at.config.identity.sheet || "(unnamed)");
-                            if (referencingTypes.length > 0) {
-                              alert(t("settings.hubwork.spreadsheetInUse") + "\n" + referencingTypes.join(", "));
-                              return;
-                            }
-                            setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
-                            setSavedSSIds((prev) => { const n = new Set(prev); n.delete(ss.id); return n; });
-                            setSpreadsheets(spreadsheets.filter((_, j) => j !== i));
-                          }}
-                          className="p-2 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => saveSpreadsheet(ss.id)}
-                          disabled={!ss.id.trim() || savingSSIds.has(ss.id)}
-                          className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
-                        >
-                          {savingSSIds.has(ss.id) ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <CheckCircle size={14} />
-                          )}
-                          Save
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const referencingTypes = accountTypes
+                            .filter((at) => {
+                              const idSsId = at.config.identity.spreadsheetId || spreadsheets[0]?.id;
+                              if (idSsId === ss.id) return true;
+                              const dataSources = Object.values(at.config.data || {});
+                              return dataSources.some((ds) => (ds.spreadsheetId || spreadsheets[0]?.id) === ss.id);
+                            })
+                            .map((at) => at.config.identity.sheet || "(unnamed)");
+                          if (referencingTypes.length > 0) {
+                            alert(t("settings.hubwork.spreadsheetInUse") + "\n" + referencingTypes.join(", "));
+                            return;
+                          }
+                          setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
+                          const updated = spreadsheets.filter((_, j) => j !== i);
+                          setSpreadsheets(updated);
+                          // Persist deletion to server
+                          const remaining = updated.filter((s) => s.id.trim());
+                          const formData = new FormData();
+                          formData.set("_action", "hubwork-accounts");
+                          formData.set("spreadsheets", JSON.stringify(remaining));
+                          // Do not send "accounts" — server preserves existing when field is absent
+                          fetch("/settings", { method: "POST", body: formData }).catch(() => {});
+                        }}
+                        className="p-1.5 text-red-500 hover:text-red-700 shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   ))}
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setSpreadsheets([...spreadsheets, { id: "" }])}
-                  className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline mt-3"
+                  onClick={addSpreadsheetViaPicker}
+                  disabled={pickerLoading}
+                  className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline mt-3 disabled:opacity-50"
                 >
-                  <Plus size={14} />
+                  {pickerLoading ? <Loader2 size={14} className="animate-spin" /> : <FolderOpen size={14} />}
                   {t("settings.hubwork.spreadsheetAdd")}
                 </button>
 
