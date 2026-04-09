@@ -201,9 +201,12 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   // --- Add spreadsheet via Google Picker ---
   const [pickerLoading, setPickerLoading] = useState(false);
 
+  const [pickerError, setPickerError] = useState<string | null>(null);
+
   const addSpreadsheetViaPicker = useCallback(async () => {
     if (pickerLoading) return;
     setPickerLoading(true);
+    setPickerError(null);
     try {
       const picked = await openSpreadsheetPicker({
         title: t("settings.hubwork.spreadsheetPickerTitle"),
@@ -216,9 +219,8 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
 
       const newSS: HubworkSpreadsheet = { id: picked.id, label: picked.name };
       const updatedList = [...spreadsheets, newSS];
-      setSpreadsheets(updatedList);
 
-      // Auto-save
+      // Save first, then update UI
       setSavingSSIds((prev) => new Set(prev).add(picked.id));
       try {
         const ss = updatedList.filter((s) => s.id.trim());
@@ -226,13 +228,16 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         formData.set("_action", "hubwork-accounts");
         formData.set("spreadsheets", JSON.stringify(ss));
         const res = await fetch("/settings", { method: "POST", body: formData });
-        if (!res.ok) throw new Error();
+        if (!res.ok) throw new Error("Save failed");
+        setSpreadsheets(updatedList);
         await fetchSheetMeta(picked.id);
       } catch {
-        // fetchSheetMeta already sets fetchErrors
+        setFetchErrors((prev) => ({ ...prev, [picked.id]: "Failed to save" }));
       } finally {
         setSavingSSIds((prev) => { const n = new Set(prev); n.delete(picked.id); return n; });
       }
+    } catch {
+      setPickerError(settings.language === "ja" ? "Pickerの起動に失敗しました" : "Failed to open Picker");
     } finally {
       setPickerLoading(false);
     }
@@ -596,7 +601,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const referencingTypes = accountTypes
                             .filter((at) => {
                               const idSsId = at.config.identity.spreadsheetId || spreadsheets[0]?.id;
@@ -609,16 +614,20 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                             alert(t("settings.hubwork.spreadsheetInUse") + "\n" + referencingTypes.join(", "));
                             return;
                           }
-                          setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
                           const updated = spreadsheets.filter((_, j) => j !== i);
-                          setSpreadsheets(updated);
-                          // Persist deletion to server
                           const remaining = updated.filter((s) => s.id.trim());
                           const formData = new FormData();
                           formData.set("_action", "hubwork-accounts");
                           formData.set("spreadsheets", JSON.stringify(remaining));
                           // Do not send "accounts" — server preserves existing when field is absent
-                          fetch("/settings", { method: "POST", body: formData }).catch(() => {});
+                          try {
+                            const res = await fetch("/settings", { method: "POST", body: formData });
+                            if (!res.ok) throw new Error();
+                            setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
+                            setSpreadsheets(updated);
+                          } catch {
+                            setFetchErrors((prev) => ({ ...prev, [ss.id]: "Failed to delete" }));
+                          }
                         }}
                         className="p-1.5 text-red-500 hover:text-red-700 shrink-0"
                       >
@@ -637,6 +646,9 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                   {pickerLoading ? <Loader2 size={14} className="animate-spin" /> : <FolderOpen size={14} />}
                   {t("settings.hubwork.spreadsheetAdd")}
                 </button>
+                {pickerError && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{pickerError}</p>
+                )}
 
               </SectionCard>
 
