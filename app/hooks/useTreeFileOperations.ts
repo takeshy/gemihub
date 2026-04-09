@@ -11,7 +11,7 @@ import {
   deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
-  removeLocalSyncMetaEntry,
+  bulkRemoveLocalSyncMetaEntries,
   type CachedTreeNode,
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
@@ -70,9 +70,9 @@ async function bulkDeleteFiles(
       const successIds = remoteIds.filter((fid: string) => !data.failedFileIds?.includes(fid));
       await Promise.all(successIds.map(async (fid: string) => {
         await deleteCachedFile(fid);
-        await removeLocalSyncMetaEntry(fid);
         await deleteEditHistoryEntry(fid);
       }));
+      await bulkRemoveLocalSyncMetaEntries(successIds);
     } else {
       failCount = remoteIds.length;
     }

@@ -18,11 +18,17 @@ export async function action({ request }: Route.ActionArgs) {
   const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
   const returnUrl = `${proto}://${url.host}/settings`;
 
-  const stripe = getStripe();
-  const portalSession = await stripe.billingPortal.sessions.create({
-    customer: account.stripeCustomerId,
-    return_url: returnUrl,
-  });
+  let portalSession;
+  try {
+    const stripe = getStripe();
+    portalSession = await stripe.billingPortal.sessions.create({
+      customer: account.stripeCustomerId,
+      return_url: returnUrl,
+    });
+  } catch (err) {
+    console.error("Stripe billing portal error:", err);
+    throw new Response("Failed to create billing portal session", { status: 502 });
+  }
 
   return redirect(portalSession.url);
 }

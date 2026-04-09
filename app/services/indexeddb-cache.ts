@@ -325,6 +325,24 @@ export async function removeLocalSyncMetaEntry(fileId: string): Promise<void> {
   }
 }
 
+export async function bulkRemoveLocalSyncMetaEntries(fileIds: string[]): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    const meta = await getLocalSyncMeta();
+    if (!meta) return;
+    let changed = false;
+    for (const fid of fileIds) {
+      if (meta.files[fid]) {
+        delete meta.files[fid];
+        changed = true;
+      }
+    }
+    if (changed) await setLocalSyncMeta(meta);
+  } catch {
+    // ignore
+  }
+}
+
 // --- editHistory store ---
 
 export async function getEditHistoryForFile(
