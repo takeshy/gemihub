@@ -20,6 +20,7 @@ export interface ProvisionedFile {
 export interface ProvisionHubworkSkillFilesResult {
   files: ProvisionedFile[];
   isFirstProvision: boolean;
+  spreadsheetId?: string;
 }
 
 export async function provisionHubworkSkillFiles(
@@ -36,8 +37,7 @@ export async function provisionHubworkSkillFiles(
     return { files: await collectExistingFiles(accessToken, rootFolderId, skillFiles), isFirstProvision: false };
   }
 
-  const result: ProvisionedFile[] = [];
-  for (const file of skillFiles) {
+  const result = await Promise.all(skillFiles.map(async (file) => {
     let driveFile;
     const existingFile = await findFileByExactName(accessToken, file.path, rootFolderId);
     if (existingFile) {
@@ -49,7 +49,7 @@ export async function provisionHubworkSkillFiles(
     }
     await upsertFileInMeta(accessToken, rootFolderId, driveFile);
 
-    result.push({
+    return {
       id: driveFile.id,
       name: driveFile.name,
       path: file.path,
@@ -57,8 +57,8 @@ export async function provisionHubworkSkillFiles(
       content: file.content,
       md5Checksum: driveFile.md5Checksum,
       modifiedTime: driveFile.modifiedTime,
-    });
-  }
+    };
+  }));
 
   return { files: result, isFirstProvision: !force };
 }
@@ -68,24 +68,25 @@ async function collectExistingFiles(
   rootFolderId: string,
   skillFiles: SkillFile[],
 ): Promise<ProvisionedFile[]> {
-  const result: ProvisionedFile[] = [];
-
-  for (const file of skillFiles) {
+  const results = await Promise.all(skillFiles.map(async (file) => {
     const driveFile = await findFileByExactName(accessToken, file.path, rootFolderId);
-    if (!driveFile) continue;
+    if (!driveFile) return null;
 
-    await upsertFileInMeta(accessToken, rootFolderId, driveFile);
+    const [content] = await Promise.all([
+      readFile(accessToken, driveFile.id),
+      upsertFileInMeta(accessToken, rootFolderId, driveFile),
+    ]);
 
-    result.push({
+    return {
       id: driveFile.id,
       name: driveFile.name,
       path: file.path,
       mimeType: file.mimeType,
-      content: await readFile(accessToken, driveFile.id),
+      content,
       md5Checksum: driveFile.md5Checksum,
       modifiedTime: driveFile.modifiedTime,
-    });
-  }
+    };
+  }));
 
-  return result;
+  return results.filter((r) => r !== null) as ProvisionedFile[];
 }

@@ -642,6 +642,8 @@ export interface TranslationStrings {
   "settings.hubwork.spreadsheetId": string;
   "settings.hubwork.spreadsheetAdd": string;
   "settings.hubwork.spreadsheetPickerTitle": string;
+  "settings.hubwork.spreadsheetNamePlaceholder": string;
+  "settings.hubwork.spreadsheetCreate": string;
   "settings.hubwork.spreadsheetFetchRequired": string;
   "settings.hubwork.selectSpreadsheet": string;
   "settings.hubwork.scopeUpgradeRequired": string;
@@ -1336,6 +1338,8 @@ const en: TranslationStrings = {
   "settings.hubwork.spreadsheetId": "Spreadsheets",
   "settings.hubwork.spreadsheetAdd": "Add Spreadsheet",
   "settings.hubwork.spreadsheetPickerTitle": "Select a Spreadsheet",
+  "settings.hubwork.spreadsheetNamePlaceholder": "Spreadsheet name",
+  "settings.hubwork.spreadsheetCreate": "Create",
   "settings.hubwork.spreadsheetFetchRequired": "Fetch sheet names for all spreadsheets used in account types before saving.",
   "settings.hubwork.selectSpreadsheet": "Select spreadsheet",
   "settings.hubwork.scopeUpgradeRequired": "Additional permissions required",
@@ -1344,10 +1348,10 @@ const en: TranslationStrings = {
   "settings.hubwork.paidApiKeyRequired": "A paid API key is required to subscribe. Please set API Plan to \"Paid\" in the General tab.",
   "settings.hubwork.provisioning": "Setting up Webpage Builder skill...",
   "settings.hubwork.welcomeTitle": "Pro Plan is ready!",
-  "settings.hubwork.welcomeDescription": "The \"Webpage Builder\" skill has been automatically activated. Here's what you can do:",
+  "settings.hubwork.welcomeDescription": "The \"Webpage Builder\" skill and a spreadsheet have been automatically set up. Here's what you can do:",
   "settings.hubwork.welcomeFeature1": "Open Chat and describe the page you want — the AI will build it for you.",
-  "settings.hubwork.welcomeFeature2": "Register Google Spreadsheets in Data Sources to use sheet data in pages and APIs.",
-  "settings.hubwork.welcomeFeature3": "Set up Account Types to add login and user authentication to your site.",
+  "settings.hubwork.welcomeFeature2": "A \"webpage_builder\" spreadsheet with an \"accounts\" sheet has been created. The AI can add more sheets (e.g. tickets, meetings) as needed when building pages.",
+  "settings.hubwork.welcomeFeature3": "To enable login, add user email addresses to the \"email\" column in the \"accounts\" sheet of the spreadsheet.",
   "settings.hubwork.spreadsheetInUse": "This spreadsheet is used by the following Account Types. Please remove them first:",
   "settings.hubwork.skillMissingTitle": "Webpage Builder skill is not installed",
   "settings.hubwork.skillMissingDescription": "The AI Web Builder requires the \"Webpage Builder\" skill. Please install it to start building pages with AI.",
@@ -2030,6 +2034,8 @@ const ja: TranslationStrings = {
   "settings.hubwork.spreadsheetId": "スプレッドシート",
   "settings.hubwork.spreadsheetAdd": "スプレッドシートを追加",
   "settings.hubwork.spreadsheetPickerTitle": "スプレッドシートを選択",
+  "settings.hubwork.spreadsheetNamePlaceholder": "スプレッドシート名",
+  "settings.hubwork.spreadsheetCreate": "作成",
   "settings.hubwork.spreadsheetFetchRequired": "保存前にアカウント種別で使用する全スプレッドシートのシート名を取得してください。",
   "settings.hubwork.selectSpreadsheet": "スプレッドシートを選択",
   "settings.hubwork.scopeUpgradeRequired": "追加の権限が必要です",
@@ -2038,10 +2044,10 @@ const ja: TranslationStrings = {
   "settings.hubwork.paidApiKeyRequired": "サブスクリプションにはPaid APIキーが必要です。Generalタブで「Paid」に設定してください。",
   "settings.hubwork.provisioning": "Webpage Builderスキルをセットアップ中...",
   "settings.hubwork.welcomeTitle": "Proプランの準備ができました！",
-  "settings.hubwork.welcomeDescription": "「Webpage Builder」スキルが自動的に有効化されました。以下の機能が利用できます：",
+  "settings.hubwork.welcomeDescription": "「Webpage Builder」スキルとスプレッドシートが自動的にセットアップされました：",
   "settings.hubwork.welcomeFeature1": "Chatで作りたいページを伝えるだけで、AIがWebページを作成します。",
-  "settings.hubwork.welcomeFeature2": "Data SourcesにGoogle Spreadsheetsを登録すると、ページやAPIでシートデータを利用できます。",
-  "settings.hubwork.welcomeFeature3": "Account Typesを設定すると、サイトにログイン・ユーザー認証を追加できます。",
+  "settings.hubwork.welcomeFeature2": "accountsシートを含む「webpage_builder」スプレッドシートが作成されました。AIがページ作成時に必要に応じてシート（tickets、meetingsなど）を追加します。",
+  "settings.hubwork.welcomeFeature3": "ログインを有効にするには、スプレッドシートのaccountsシートの「email」列にユーザーのメールアドレスを追加してください。",
   "settings.hubwork.spreadsheetInUse": "このスプレッドシートは以下のAccount Typeで使用されています。先にAccount Typeを削除してください：",
   "settings.hubwork.skillMissingTitle": "Webpage Builderスキルが未インストールです",
   "settings.hubwork.skillMissingDescription": "AI Web Builderを使用するには「Webpage Builder」スキルが必要です。インストールしてAIによるページ作成を始めましょう。",

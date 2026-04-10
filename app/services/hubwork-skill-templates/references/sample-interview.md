@@ -11,7 +11,27 @@ web/
   api/interview/events.yaml       → GET /__gemihub/api/interview/events (calendar API)
   api/interview/book.yaml         → POST /__gemihub/api/interview/book (booking API)
   __gemihub/auth/me.json          → IDE preview mock data
+  __gemihub/schema.md             → Spreadsheet schema (updated to add meetings sheet)
 ```
+
+## Schema Update (before creating pages)
+
+This sample uses a `meetings` sheet. Before building, update `web/__gemihub/schema.md` to add it:
+
+```markdown
+## accounts
+- email: string (e.g. "taro@example.com")
+- name: string (e.g. "山田 太郎")
+- created_at: datetime (e.g. "2025-04-01T10:00:00+09:00")
+- logined_at: datetime (e.g. "2025-04-10T09:30:00+09:00")
+
+## meetings
+- account_email: string (e.g. "taro@example.com")
+- subject: string (e.g. "事前面談予約")
+- start_at: datetime (e.g. "2025-04-15T14:00:00+09:00")
+```
+
+Then call `migrate_spreadsheet_schema` with the schema content to create the sheet in the spreadsheet.
 
 ## Protected Page Key Patterns (`web/partner/interview.html`)
 
@@ -95,7 +115,7 @@ nodes:
 
 ## POST API Endpoint (`web/api/interview/book.yaml`)
 
-Creates a calendar event, records in a sheet, and sends confirmation email. Side effects (write, email) use POST.
+Creates a calendar event, records in a sheet, and sends confirmation email. Side effects (write, email) use POST. The `meetings` sheet is created automatically on the first `sheet-write` — no manual setup needed.
 
 ```yaml
 trigger:
@@ -114,7 +134,7 @@ nodes:
     comment: "スプレッドシート(meetingsシート)に予約情報を記録する"
     type: sheet-write
     sheet: meetings
-    data: '[{"contact_email": "{{auth.email}}", "subject": "{{body.name}} 事前予約", "start_at": "{{body.start}}"}]'
+    data: '[{"account_email": "{{auth.email}}", "subject": "{{body.name}} 事前予約", "start_at": "{{body.start}}"}]'
 
   - id: send_mail
     comment: "予約者へ予約完了の通知メールを送信する"

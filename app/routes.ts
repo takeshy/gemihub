@@ -14,7 +14,6 @@ export default [
   route("auth/google/callback", "routes/auth.google.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
   route("api/auth/unlock", "routes/api.auth.unlock.tsx"),
-  route("api/auth/picker-token", "routes/api.auth.picker-token.tsx"),
   route("settings", "routes/settings.tsx"),
   // API routes
   route("api/drive/files", "routes/api.drive.files.tsx"),
@@ -39,6 +38,7 @@ export default [
   route("api/settings/edit-history-prune", "routes/api.settings.edit-history-prune.tsx"),
   route("api/settings/hubwork-sheets", "routes/api.settings.hubwork-sheets.tsx"),
   route("api/settings/hubwork-provision", "routes/api.settings.hubwork-provision.tsx"),
+  route("api/settings/hubwork-migrate", "routes/api.settings.hubwork-migrate.tsx"),
   route("api/calendar", "routes/api.calendar.tsx"),
   route("api/gmail", "routes/api.gmail.tsx"),
   route("api/sheets", "routes/api.sheets.tsx"),

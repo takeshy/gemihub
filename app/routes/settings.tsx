@@ -150,6 +150,13 @@ export async function loader({ request }: Route.LoaderArgs) {
         hubwork: updatedHubwork,
       }).catch(() => {});
     }
+  } else if (!hubworkAccount?.plan && driveSettings.hubwork?.plan) {
+    // Clean up stale plan from Drive settings when Firestore account no longer exists
+    const { plan: _stale, billingStatus: _staleBilling, ...rest } = driveSettings.hubwork;
+    saveSettings(validTokens.accessToken, validTokens.rootFolderId, {
+      ...driveSettings,
+      hubwork: Object.keys(rest).length > 0 ? rest : undefined,
+    }).catch(() => {});
   }
 
   // Merge local plugins (dev only)
@@ -558,6 +565,7 @@ export async function action({ request }: Route.ActionArgs) {
       case "hubwork-accounts": {
         const spreadsheetsJson = formData.get("spreadsheets") as string;
         const accountsJson = formData.get("accounts") as string;
+        const newSpreadsheetId = formData.get("newSpreadsheetId") as string | null;
         let spreadsheets: import("~/types/settings").HubworkSpreadsheet[];
         let accounts: Record<string, import("~/types/settings").HubworkAccountType>;
         try {
@@ -574,7 +582,37 @@ export async function action({ request }: Route.ActionArgs) {
         // Preserve existing values only when the field was not sent at all.
         // An explicit empty value ([] or {}) means intentional deletion.
         const finalSpreadsheets = spreadsheetsJson != null ? validSpreadsheets : currentSettings.hubwork?.spreadsheets;
-        const finalAccounts = accountsJson != null ? accounts : currentSettings.hubwork?.accounts;
+        let finalAccounts: Record<string, import("~/types/settings").HubworkAccountType> | undefined = accountsJson != null ? accounts : (currentSettings.hubwork?.accounts ?? {});
+
+        // Auto-create "accounts" account type for a newly created spreadsheet
+        if (newSpreadsheetId) {
+          finalAccounts = {
+            ...finalAccounts,
+            accounts: { identity: { spreadsheetId: newSpreadsheetId, sheet: "accounts", emailColumn: "email" } },
+          };
+        }
+
+        // Remove account types whose identity or data sources reference a deleted spreadsheet
+        if (finalAccounts && finalSpreadsheets) {
+          const ssIds = new Set(finalSpreadsheets.map((s) => s.id));
+          const defaultSsId = finalSpreadsheets[0]?.id;
+          const cleaned: Record<string, import("~/types/settings").HubworkAccountType> = {};
+          for (const [key, at] of Object.entries(finalAccounts)) {
+            const identityRef = at.identity.spreadsheetId || defaultSsId;
+            if (!identityRef || !ssIds.has(identityRef)) continue;
+            // Also strip data sources referencing deleted spreadsheets
+            if (at.data) {
+              const cleanedData: Record<string, import("~/types/settings").HubworkDataSource> = {};
+              for (const [dk, ds] of Object.entries(at.data)) {
+                const dsRef = ds.spreadsheetId || defaultSsId;
+                if (dsRef && ssIds.has(dsRef)) cleanedData[dk] = ds;
+              }
+              at.data = Object.keys(cleanedData).length > 0 ? cleanedData : undefined;
+            }
+            cleaned[key] = at;
+          }
+          finalAccounts = Object.keys(cleaned).length > 0 ? cleaned : undefined;
+        }
         const updatedSettings = {
           ...currentSettings,
           hubwork: {

@@ -499,14 +499,15 @@ export function ChatPanel({
               "- Present choices and plans in a simple, easy-to-understand way.",
               "- Focus on WHAT the app will do from the user's perspective, not HOW it works internally.",
               "",
-              "## IMPORTANT: Plan Before Action",
+              "## CRITICAL: Plan Before Action — MANDATORY",
               "",
-              "If the user's message is a request to create, modify, or build web pages/APIs, you MUST follow this process:",
-              "1. **Plan** — Present a numbered list of ALL files (HTML, API YAML, mock JSON) with full `web/` paths. Wait for user confirmation before proceeding.",
-              "2. **Create** — After approval, save files one by one using skill workflows.",
+              "When the user requests to create, modify, or build web pages/APIs, you MUST follow this EXACT process. NEVER skip directly to creating files.",
+              "",
+              "1. **Plan FIRST** — Read `web/__gemihub/spec.md` and `web/__gemihub/schema.md` with `read_drive_file`. Then present a numbered list of ALL files you will create/modify (with full `web/` paths) and any schema changes needed. STOP here and wait for explicit user approval.",
+              "2. **Create** — Only after the user approves, save files one by one using `run_skill_workflow`.",
               "3. **Verify** — After all saves, read back every file with `read_drive_file` and check against the skill's checklist. Fix any issues.",
               "",
-              "Do NOT call `run_skill_workflow` until the user approves the plan.",
+              "Do NOT call `run_skill_workflow` or `migrate_spreadsheet_schema` until the user explicitly approves the plan. If you call these tools before approval, they will be BLOCKED.",
             ].join("\n");
           }
         }

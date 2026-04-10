@@ -189,6 +189,29 @@ function buildToolDispatcher(
       }
     }
 
+    // Hubwork migrate schema tool
+    if (name === "migrate_spreadsheet_schema") {
+      if (planApprovalPending) {
+        return { error: "BLOCKED: You must present a plan to the user FIRST and wait for their confirmation before calling this tool." };
+      }
+      try {
+        const schema = args.schema as string;
+        if (!schema) return { error: "schema parameter is required" };
+        const res = await fetch("/api/settings/hubwork-migrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ schema }),
+          signal: abortSignal,
+        });
+        const data = await res.json();
+        if (!res.ok) return { error: (data as { error?: string }).error || "Migration failed" };
+        return data;
+      } catch (err) {
+        if (abortSignal?.aborted) throw err;
+        return { error: err instanceof Error ? err.message : "Migration failed" };
+      }
+    }
+
     // Calendar tools — route via server API
     if (name === "calendar_list_events" || name === "calendar_create_event" || name === "calendar_update_event" || name === "calendar_delete_event") {
       const actionMap: Record<string, string> = {

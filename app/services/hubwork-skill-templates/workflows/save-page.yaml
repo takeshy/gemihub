@@ -1,7 +1,0 @@
-nodes:
-  - id: save
-    type: drive-save
-    properties:
-      source: "{{content}}"
-      path: "{{path}}"
-      savePathTo: savedPath

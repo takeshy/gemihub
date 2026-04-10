@@ -1,69 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
-import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCard, Users, ChevronDown, ChevronRight, Database, RefreshCw, Upload, Sparkles, X, FolderOpen } from "lucide-react";
+import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCard, RefreshCw, Upload, Sparkles, X } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { SectionCard } from "~/components/settings/shared";
-import { useGooglePicker } from "~/hooks/useGooglePicker";
-import type { UserSettings, HubworkSchedule, HubworkAccountType, HubworkDataSource, HubworkSpreadsheet } from "~/types/settings";
-
-interface AccountTypeEntry {
-  config: HubworkAccountType;
-  expanded: boolean;
-}
-
-interface DataSourceEntry {
-  key: string;
-  source: HubworkDataSource;
-}
-
-/** Per-spreadsheet fetched metadata */
-interface SheetMeta {
-  sheets: string[];
-  headers: Record<string, string[]>;
-}
-
-function accountsToEntries(accounts?: Record<string, HubworkAccountType>): AccountTypeEntry[] {
-  if (!accounts) return [];
-  return Object.values(accounts).map((config) => ({
-    config,
-    expanded: false,
-  }));
-}
-
-/** Use identity.sheet as the key (type name) for each account type */
-function entriesToAccounts(entries: AccountTypeEntry[]): Record<string, HubworkAccountType> {
-  const result: Record<string, HubworkAccountType> = {};
-  for (const entry of entries) {
-    const key = entry.config.identity.sheet.trim();
-    if (!key) continue;
-    result[key] = entry.config;
-  }
-  return result;
-}
-
-function dataToEntries(data?: Record<string, HubworkDataSource>): DataSourceEntry[] {
-  if (!data) return [];
-  return Object.entries(data).map(([key, source]) => ({ key, source }));
-}
-
-function entriesToData(entries: DataSourceEntry[]): Record<string, HubworkDataSource> | undefined {
-  const result: Record<string, HubworkDataSource> = {};
-  for (const entry of entries) {
-    if (!entry.key.trim()) continue;
-    result[entry.key.trim()] = entry.source;
-  }
-  return Object.keys(result).length > 0 ? result : undefined;
-}
-
-function initSpreadsheets(hubwork?: UserSettings["hubwork"]): HubworkSpreadsheet[] {
-  return hubwork?.spreadsheets || [];
-}
-
-/** Get a display label for a spreadsheet entry */
-function spreadsheetLabel(ss: HubworkSpreadsheet): string {
-  if (ss.label) return ss.label;
-  return ss.id.length > 16 ? `${ss.id.slice(0, 16)}…` : ss.id;
-}
+import type { UserSettings, HubworkSchedule } from "~/types/settings";
 
 
 export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFolderId, isCallback }: { settings: UserSettings; hasHubworkScopes: boolean; rootFolderId: string; isCallback?: boolean }) {
@@ -72,16 +12,8 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   const domainFetcher = useFetcher();
   const scheduleFetcher = useFetcher();
   const stripeFetcher = useFetcher();
-  const accountsFetcher = useFetcher();
-  const { openSpreadsheetPicker } = useGooglePicker();
   const [domain, setDomain] = useState(hubwork?.customDomain || "");
   const [schedules, setSchedules] = useState<HubworkSchedule[]>(hubwork?.schedules || []);
-  const [spreadsheets, setSpreadsheets] = useState<HubworkSpreadsheet[]>(initSpreadsheets(hubwork));
-  const [sheetMeta, setSheetMeta] = useState<Record<string, SheetMeta>>({});
-  const [fetchErrors, setFetchErrors] = useState<Record<string, string>>({});
-  const [accountTypes, setAccountTypes] = useState<AccountTypeEntry[]>(
-    accountsToEntries(hubwork?.accounts)
-  );
 
   const [slug, setSlug] = useState("");
   const [slugError, setSlugError] = useState("");
@@ -91,7 +23,40 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   const [skillMissing, setSkillMissing] = useState(false);
   const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
 
-  // Check whether the webpage-builder skill exists locally
+  /** Cache provisioned skill files into IndexedDB and rebuild the file tree. */
+  const cacheSkillFiles = useCallback(async (
+    files: Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }>,
+  ) => {
+    const { setCachedFile, getCachedRemoteMeta, setCachedRemoteMeta, getLocalSyncMeta, setLocalSyncMeta, setCachedFileTree } = await import("~/services/indexeddb-cache");
+    const { buildTreeFromMeta } = await import("~/utils/file-tree-operations");
+    const now = new Date().toISOString();
+    for (const f of files) {
+      await setCachedFile({
+        fileId: f.id,
+        content: f.content,
+        md5Checksum: f.md5Checksum || "",
+        modifiedTime: f.modifiedTime || now,
+        cachedAt: Date.now(),
+        fileName: f.path,
+      });
+    }
+    const meta = await getCachedRemoteMeta() ?? { id: "current" as const, rootFolderId: "", lastUpdatedAt: now, files: {}, cachedAt: Date.now() };
+    for (const f of files) {
+      meta.files[f.id] = { name: f.path, mimeType: f.mimeType, md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now };
+    }
+    await setCachedRemoteMeta(meta);
+    const localMeta = await getLocalSyncMeta() ?? { id: "current" as const, lastUpdatedAt: now, files: {} };
+    for (const f of files) {
+      localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
+    }
+    await setLocalSyncMeta(localMeta);
+    const items = buildTreeFromMeta(meta);
+    await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items, cachedAt: Date.now() });
+  }, []);
+
+  // Check whether the webpage-builder skill exists locally; if missing from
+  // IndexedDB but present on Drive, silently cache it so the warning doesn't
+  // keep appearing on every visit.
   useEffect(() => {
     const isPro = hubwork?.plan === "pro" || hubwork?.plan === "granted";
     if (!isPro) return;
@@ -102,10 +67,27 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         const exists = cachedMeta && Object.values(cachedMeta.files).some(
           (f) => f.name?.startsWith("skills/webpage-builder/")
         );
-        setSkillMissing(!exists);
+        if (exists) {
+          setSkillMissing(false);
+          return;
+        }
+        // Not in IndexedDB — fetch from Drive via provision endpoint (no-op if already exists)
+        const res = await fetch("/api/settings/hubwork-provision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force: false }),
+        });
+        const data = await res.json();
+        const files = data.files as Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }> | undefined;
+        if (!files || files.length === 0) {
+          setSkillMissing(true);
+          return;
+        }
+        await cacheSkillFiles(files);
+        setSkillMissing(false);
       } catch { /* ignore */ }
     })();
-  }, [hubwork?.plan]);
+  }, [hubwork?.plan, cacheSkillFiles]);
 
   // Provision skill files only on Stripe callback redirect
   const provisionedRef = useRef(false);
@@ -118,9 +100,6 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
     (async () => {
       setProvisioning(true);
       try {
-        const { setCachedFile, getCachedRemoteMeta, setCachedRemoteMeta, getLocalSyncMeta, setLocalSyncMeta, setCachedFileTree } = await import("~/services/indexeddb-cache");
-        const { buildTreeFromMeta } = await import("~/utils/file-tree-operations");
-
         // Activate the skill in localStorage so it's active when IDE loads
         try {
           const stored = localStorage.getItem("gemihub:activeSkills");
@@ -138,31 +117,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         }
         const files = data.files as Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }> | undefined;
         if (!files || files.length === 0) return;
-        // Register in IndexedDB
-        const now = new Date().toISOString();
-        for (const f of files) {
-          await setCachedFile({
-            fileId: f.id,
-            content: f.content,
-            md5Checksum: f.md5Checksum || "",
-            modifiedTime: f.modifiedTime || now,
-            cachedAt: Date.now(),
-            fileName: f.path,
-          });
-        }
-        const meta = await getCachedRemoteMeta() ?? { id: "current", rootFolderId: "", lastUpdatedAt: now, files: {}, cachedAt: Date.now() };
-        for (const f of files) {
-          meta.files[f.id] = { name: f.path, mimeType: f.mimeType, md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now };
-        }
-        await setCachedRemoteMeta(meta);
-        const localMeta = await getLocalSyncMeta() ?? { id: "current" as const, lastUpdatedAt: now, files: {} };
-        for (const f of files) {
-          localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
-        }
-        await setLocalSyncMeta(localMeta);
-        // Rebuild file tree cache so skills are discoverable immediately on IDE load
-        const items = buildTreeFromMeta(meta);
-        await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items, cachedAt: Date.now() });
+        await cacheSkillFiles(files);
         setSkillMissing(false);
       } catch { /* best-effort */ }
       finally {
@@ -171,149 +126,12 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
     })();
   }, [isCallback, hubwork?.plan]);
 
-  const fetchSheetMeta = useCallback(async (ssId: string): Promise<string | undefined> => {
-    if (!ssId.trim()) return undefined;
-    setFetchErrors((prev) => { const n = { ...prev }; delete n[ssId]; return n; });
-    try {
-      const res = await fetch(`/api/settings/hubwork-sheets?spreadsheetId=${encodeURIComponent(ssId)}`);
-      const data = await res.json();
-      if (data.error) {
-        setFetchErrors((prev) => ({ ...prev, [ssId]: data.error }));
-        setSheetMeta((prev) => { const n = { ...prev }; delete n[ssId]; return n; });
-      } else {
-        setSheetMeta((prev) => ({ ...prev, [ssId]: { sheets: data.sheets || [], headers: data.headers || {} } }));
-        // Use spreadsheet title as label
-        if (data.title) {
-          setSpreadsheets((prev) => prev.map((s) => s.id === ssId ? { ...s, label: data.title } : s));
-          return data.title as string;
-        }
-      }
-    } catch {
-      setFetchErrors((prev) => ({ ...prev, [ssId]: "Failed to fetch" }));
-      setSheetMeta((prev) => { const n = { ...prev }; delete n[ssId]; return n; });
-    }
-    return undefined;
-  }, []);
-
-  // --- Spreadsheets ---
-  const [savingSSIds, setSavingSSIds] = useState<Set<string>>(new Set());
-
-  // --- Add spreadsheet via Google Picker ---
-  const [pickerLoading, setPickerLoading] = useState(false);
-
-  const [pickerError, setPickerError] = useState<string | null>(null);
-
-  const addSpreadsheetViaPicker = useCallback(async () => {
-    if (pickerLoading) return;
-    setPickerLoading(true);
-    setPickerError(null);
-    try {
-      const picked = await openSpreadsheetPicker({
-        title: t("settings.hubwork.spreadsheetPickerTitle"),
-        locale: settings.language === "ja" ? "ja" : "en",
-      });
-      if (!picked) return;
-
-      // Check for duplicates
-      if (spreadsheets.some((s) => s.id === picked.id)) return;
-
-      const newSS: HubworkSpreadsheet = { id: picked.id, label: picked.name };
-      const updatedList = [...spreadsheets, newSS];
-
-      // Save first, then update UI
-      setSavingSSIds((prev) => new Set(prev).add(picked.id));
-      try {
-        const ss = updatedList.filter((s) => s.id.trim());
-        const formData = new FormData();
-        formData.set("_action", "hubwork-accounts");
-        formData.set("spreadsheets", JSON.stringify(ss));
-        const res = await fetch("/settings", { method: "POST", body: formData });
-        if (!res.ok) throw new Error("Save failed");
-        setSpreadsheets(updatedList);
-        await fetchSheetMeta(picked.id);
-      } catch {
-        setFetchErrors((prev) => ({ ...prev, [picked.id]: "Failed to save" }));
-      } finally {
-        setSavingSSIds((prev) => { const n = new Set(prev); n.delete(picked.id); return n; });
-      }
-    } catch {
-      setPickerError(settings.language === "ja" ? "Pickerの起動に失敗しました" : "Failed to open Picker");
-    } finally {
-      setPickerLoading(false);
-    }
-  }, [pickerLoading, openSpreadsheetPicker, t, settings.language, spreadsheets, fetchSheetMeta]);
-
-  // --- Account types save ---
-  const lastSavedAcJson = useRef(JSON.stringify(entriesToAccounts(accountTypes)));
-  const hasUnsavedAccounts = JSON.stringify(entriesToAccounts(accountTypes)) !== lastSavedAcJson.current;
-
-  const saveAccounts = useCallback(() => {
-    const ss = spreadsheets.filter((s) => s.id.trim());
-    const ac = entriesToAccounts(accountTypes);
-    lastSavedAcJson.current = JSON.stringify(ac);
-    const formData = new FormData();
-    formData.set("_action", "hubwork-accounts");
-    formData.set("spreadsheets", JSON.stringify(ss));
-    formData.set("accounts", JSON.stringify(ac));
-    accountsFetcher.submit(formData, { method: "post", action: "/settings" });
-  }, [spreadsheets, accountTypes, accountsFetcher]);
-
-  // Auto-fetch sheet metadata for saved spreadsheets on mount.
-  // If any labels were missing, persist them to settings.
-  const autoFetchedRef = useRef(false);
-  useEffect(() => {
-    if (autoFetchedRef.current) return;
-    autoFetchedRef.current = true;
-    const ssNeedingFetch = spreadsheets.filter((ss) => ss.id.trim() && !sheetMeta[ss.id]);
-    if (ssNeedingFetch.length === 0) return;
-    const ssNeedingLabel = ssNeedingFetch.filter((ss) => !ss.label);
-    Promise.all(ssNeedingFetch.map((ss) => fetchSheetMeta(ss.id))).then(() => {
-      // Persist labels only (merge into existing spreadsheets on server)
-      if (ssNeedingLabel.length > 0) {
-        setSpreadsheets((current) => {
-          const labels: Record<string, string> = {};
-          for (const s of current) {
-            if (s.id.trim() && s.label) labels[s.id] = s.label;
-          }
-          const formData = new FormData();
-          formData.set("_action", "hubwork-spreadsheet-labels");
-          formData.set("labels", JSON.stringify(labels));
-          fetch("/settings", { method: "POST", body: formData }).catch(() => {});
-          return current;
-        });
-      }
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const plan = hubwork?.plan;
   const isEnabled = !!plan;
   const isPro = plan === "pro" || plan === "granted";
   const isPaidApiKey = settings.apiPlan === "paid";
 
-  // Compute whether all spreadsheets used by account types have been fetched
-  const usedSpreadsheetIds = new Set<string>();
-  for (const entry of accountTypes) {
-    const idId = entry.config.identity.spreadsheetId || spreadsheets[0]?.id;
-    if (idId) usedSpreadsheetIds.add(idId);
-    if (entry.config.data) {
-      for (const ds of Object.values(entry.config.data)) {
-        const dsId = ds.spreadsheetId || spreadsheets[0]?.id;
-        if (dsId) usedSpreadsheetIds.add(dsId);
-      }
-    }
-  }
-  const hasMissingFetch = accountTypes.length > 0 && [...usedSpreadsheetIds].some((id) => !sheetMeta[id]);
-
-  // Collect all sheet names across spreadsheets for the given spreadsheetId
-  const getSheetsForId = (ssId?: string): string[] => {
-    if (!ssId) return [];
-    return sheetMeta[ssId]?.sheets || [];
-  };
-
-  const getColumnsForSheet = (ssId?: string, sheetName?: string): string[] => {
-    if (!ssId || !sheetName) return [];
-    return sheetMeta[ssId]?.headers?.[sheetName] || [];
-  };
 
   return (
     <div className="space-y-6">
@@ -415,18 +233,29 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             >
               <input type="hidden" name="accountSlug" value={slug} />
               <input type="hidden" name="plan" value="pro" />
-              <button
-                type="submit"
-                disabled
-                className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
-                title="Currently unavailable"
-              >
-                Upgrade
-              </button>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
-                New subscriptions are temporarily unavailable while OAuth verification is in progress.
-              </p>
+              {slug === "takeshy" ? (
+                <button
+                  type="submit"
+                  className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Upgrade
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="submit"
+                    disabled
+                    className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
+                    title="Currently unavailable"
+                  >
+                    Upgrade
+                  </button>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                    <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
+                    New subscriptions are temporarily unavailable while OAuth verification is in progress.
+                  </p>
+                </>
+              )}
             </stripeFetcher.Form>
           </div>
         )}
@@ -506,19 +335,30 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                   >
                     <input type="hidden" name="accountSlug" value={slug} />
                     <input type="hidden" name="plan" value={p} />
-                    <button
-                      type="submit"
-                      disabled
-                      className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
-                      title="Currently unavailable"
-                    >
-                      Subscribe
-                    </button>
+                    {p === "pro" && slug === "takeshy" ? (
+                      <button
+                        type="submit"
+                        className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                      >
+                        Subscribe
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="submit"
+                          disabled
+                          className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
+                          title="Currently unavailable"
+                        >
+                          Subscribe
+                        </button>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                          <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
+                          New subscriptions are temporarily unavailable while OAuth verification is in progress.
+                        </p>
+                      </>
+                    )}
                   </stripeFetcher.Form>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                    <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
-                    New subscriptions are temporarily unavailable while OAuth verification is in progress.
-                  </p>
                 </div>
               ))}
             </div>
@@ -566,159 +406,9 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             </SectionCard>
           )}
 
-          {/* Pro-only: Spreadsheets, Account Types, Domain, Schedules */}
+          {/* Pro-only: Domain, Schedules */}
           {isPro && (
             <>
-              {/* Spreadsheets */}
-              <SectionCard>
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
-                  <Database size={16} />
-                  {t("settings.hubwork.spreadsheetId")}
-                </h3>
-
-                <div className="space-y-3">
-                  {spreadsheets.map((ss, i) => (
-                    <div key={ss.id || i} className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50">
-                      <Database size={14} className="text-gray-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {ss.label || ss.id}
-                        </p>
-                        {savingSSIds.has(ss.id) && (
-                          <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                            <Loader2 size={10} className="animate-spin" />
-                            Loading...
-                          </p>
-                        )}
-                        {fetchErrors[ss.id] && (
-                          <p className="text-xs text-red-600 dark:text-red-400">{fetchErrors[ss.id]}</p>
-                        )}
-                        {sheetMeta[ss.id] && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {sheetMeta[ss.id].sheets.length} sheets: {sheetMeta[ss.id].sheets.join(", ")}
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const referencingTypes = accountTypes
-                            .filter((at) => {
-                              const idSsId = at.config.identity.spreadsheetId || spreadsheets[0]?.id;
-                              if (idSsId === ss.id) return true;
-                              const dataSources = Object.values(at.config.data || {});
-                              return dataSources.some((ds) => (ds.spreadsheetId || spreadsheets[0]?.id) === ss.id);
-                            })
-                            .map((at) => at.config.identity.sheet || "(unnamed)");
-                          if (referencingTypes.length > 0) {
-                            alert(t("settings.hubwork.spreadsheetInUse") + "\n" + referencingTypes.join(", "));
-                            return;
-                          }
-                          const updated = spreadsheets.filter((_, j) => j !== i);
-                          const remaining = updated.filter((s) => s.id.trim());
-                          const formData = new FormData();
-                          formData.set("_action", "hubwork-accounts");
-                          formData.set("spreadsheets", JSON.stringify(remaining));
-                          // Do not send "accounts" — server preserves existing when field is absent
-                          try {
-                            const res = await fetch("/settings", { method: "POST", body: formData });
-                            if (!res.ok) throw new Error();
-                            setSheetMeta((prev) => { const n = { ...prev }; delete n[ss.id]; return n; });
-                            setSpreadsheets(updated);
-                          } catch {
-                            setFetchErrors((prev) => ({ ...prev, [ss.id]: "Failed to delete" }));
-                          }
-                        }}
-                        className="p-1.5 text-red-500 hover:text-red-700 shrink-0"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={addSpreadsheetViaPicker}
-                  disabled={pickerLoading}
-                  className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline mt-3 disabled:opacity-50"
-                >
-                  {pickerLoading ? <Loader2 size={14} className="animate-spin" /> : <FolderOpen size={14} />}
-                  {t("settings.hubwork.spreadsheetAdd")}
-                </button>
-                {pickerError && (
-                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">{pickerError}</p>
-                )}
-
-              </SectionCard>
-
-              {/* Account Types (multi-type auth) */}
-              <SectionCard>
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
-                  <Users size={16} />
-                  {t("settings.hubwork.accounts")}
-                </h3>
-
-                {hasMissingFetch && (
-                  <div className="mb-4 flex items-center gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2">
-                    <AlertCircle size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
-                      {t("settings.hubwork.spreadsheetFetchRequired")}
-                    </p>
-                  </div>
-                )}
-
-                {accountTypes.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t("settings.hubwork.accountsEmpty")}
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {accountTypes.map((entry, i) => (
-                      <AccountTypeEditor
-                        key={i}
-                        entry={entry}
-                        spreadsheets={spreadsheets.filter((s) => s.id.trim())}
-                        getSheetsForId={getSheetsForId}
-                        getColumnsForSheet={getColumnsForSheet}
-                        onChange={(updated) => {
-                          const list = [...accountTypes];
-                          list[i] = updated;
-                          setAccountTypes(list);
-                        }}
-                        onRemove={() => setAccountTypes(accountTypes.filter((_, j) => j !== i))}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-4 mt-4">
-                  <button
-                    onClick={() =>
-                      setAccountTypes([
-                        ...accountTypes,
-                        {
-                          config: { identity: { spreadsheetId: spreadsheets[0]?.id, sheet: "", emailColumn: "" } },
-                          expanded: true,
-                        },
-                      ])
-                    }
-                    className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    <Plus size={14} />
-                    {t("settings.hubwork.accountAdd")}
-                  </button>
-                  <button
-                    onClick={saveAccounts}
-                    disabled={!hasUnsavedAccounts || accountsFetcher.state !== "idle"}
-                    className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {accountsFetcher.state !== "idle" ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                    Save
-                  </button>
-                </div>
-
-              </SectionCard>
 
               {/* Custom Domain */}
               <SectionCard>
@@ -1102,328 +792,6 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         </div>
       )}
     </div>
-  );
-}
-
-function AccountTypeEditor({
-  entry,
-  spreadsheets,
-  getSheetsForId,
-  getColumnsForSheet,
-  onChange,
-  onRemove,
-}: {
-  entry: AccountTypeEntry;
-  spreadsheets: HubworkSpreadsheet[];
-  getSheetsForId: (ssId?: string) => string[];
-  getColumnsForSheet: (ssId?: string, sheetName?: string) => string[];
-  onChange: (updated: AccountTypeEntry) => void;
-  onRemove: () => void;
-}) {
-  const { t } = useI18n();
-  const [dataSources, setDataSources] = useState<DataSourceEntry[]>(
-    dataToEntries(entry.config.data)
-  );
-
-  const updateConfig = (patch: Partial<HubworkAccountType>) => {
-    onChange({ ...entry, config: { ...entry.config, ...patch } });
-  };
-
-  const updateIdentity = (field: string, value: string) => {
-    updateConfig({ identity: { ...entry.config.identity, [field]: value } });
-  };
-
-  const syncDataSources = (updated: DataSourceEntry[]) => {
-    setDataSources(updated);
-    updateConfig({ data: entriesToData(updated) });
-  };
-
-  const identitySsId = entry.config.identity.spreadsheetId || spreadsheets[0]?.id;
-  const identitySheetNames = getSheetsForId(identitySsId);
-  const identityColumns = getColumnsForSheet(identitySsId, entry.config.identity.sheet);
-
-  return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-md">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 p-3 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-800"
-        onClick={() => onChange({ ...entry, expanded: !entry.expanded })}
-      >
-        {entry.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200">
-          {entry.config.identity.sheet || <span className="text-gray-400 italic">{t("settings.hubwork.accountTypeNamePlaceholder")}</span>}
-        </span>
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="text-red-500 hover:text-red-700"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-
-      {/* Body */}
-      {entry.expanded && (
-        <div className="px-3 pb-3 space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-          {/* Identity */}
-          {spreadsheets.length > 1 && (
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                {t("settings.hubwork.selectSpreadsheet")}
-              </label>
-              <SpreadsheetSelect
-                value={entry.config.identity.spreadsheetId || spreadsheets[0]?.id || ""}
-                spreadsheets={spreadsheets}
-                onChange={(v) => updateIdentity("spreadsheetId", v)}
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                {t("settings.hubwork.identitySheet")}
-              </label>
-              <SheetSelect
-                value={entry.config.identity.sheet}
-                sheetNames={identitySheetNames}
-                onChange={(v) => {
-                  // Reset emailColumn when sheet changes and columns are available
-                  const newCols = getColumnsForSheet(identitySsId, v);
-                  const currentCol = entry.config.identity.emailColumn;
-                  const keep = newCols.length === 0 || newCols.includes(currentCol);
-                  updateConfig({
-                    identity: {
-                      ...entry.config.identity,
-                      sheet: v,
-                      emailColumn: keep ? currentCol : "",
-                    },
-                  });
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                {t("settings.hubwork.identityEmailColumn")}
-              </label>
-              <ColumnSelect
-                value={entry.config.identity.emailColumn}
-                columns={identityColumns}
-                onChange={(v) => updateIdentity("emailColumn", v)}
-              />
-            </div>
-          </div>
-
-          {/* Data Sources */}
-          <div>
-            <label className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
-              <Database size={12} />
-              {t("settings.hubwork.dataSources")}
-            </label>
-            {dataSources.map((ds, j) => (
-              <DataSourceEditor
-                key={j}
-                entry={ds}
-                spreadsheets={spreadsheets}
-                getSheetsForId={getSheetsForId}
-                getColumnsForSheet={getColumnsForSheet}
-                onChange={(updated) => {
-                  const list = [...dataSources];
-                  list[j] = updated;
-                  syncDataSources(list);
-                }}
-                onRemove={() => syncDataSources(dataSources.filter((_, k) => k !== j))}
-              />
-            ))}
-            <button
-              onClick={() => syncDataSources([...dataSources, { key: "", source: { spreadsheetId: identitySsId, sheet: "", matchBy: "", fields: [], shape: "object" } }])}
-              className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1"
-            >
-              <Plus size={12} />
-              {t("settings.hubwork.dataSourceAdd")}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DataSourceEditor({
-  entry,
-  spreadsheets,
-  getSheetsForId,
-  getColumnsForSheet,
-  onChange,
-  onRemove,
-}: {
-  entry: DataSourceEntry;
-  spreadsheets: HubworkSpreadsheet[];
-  getSheetsForId: (ssId?: string) => string[];
-  getColumnsForSheet: (ssId?: string, sheetName?: string) => string[];
-  onChange: (updated: DataSourceEntry) => void;
-  onRemove: () => void;
-}) {
-  const { t } = useI18n();
-
-  const update = (field: string, value: string | string[] | number | undefined) => {
-    onChange({ ...entry, source: { ...entry.source, [field]: value } });
-  };
-
-  const dsSpreadsheetId = entry.source.spreadsheetId || spreadsheets[0]?.id;
-  const dsSheetNames = getSheetsForId(dsSpreadsheetId);
-  const dsColumns = getColumnsForSheet(dsSpreadsheetId, entry.source.sheet);
-
-  return (
-    <div className="p-2 mb-2 bg-gray-50 dark:bg-gray-800 rounded space-y-2">
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={entry.key}
-          onChange={(e) => onChange({ ...entry, key: e.target.value })}
-          placeholder={t("settings.hubwork.dataSourceKey")}
-          className="w-24 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono"
-        />
-        {spreadsheets.length > 1 && (
-          <SpreadsheetSelect
-            value={dsSpreadsheetId || ""}
-            spreadsheets={spreadsheets}
-            onChange={(v) => update("spreadsheetId", v)}
-            size="xs"
-          />
-        )}
-        <SheetSelect
-          value={entry.source.sheet}
-          sheetNames={dsSheetNames}
-          onChange={(v) => update("sheet", v)}
-          className="flex-1"
-          size="xs"
-        />
-        <ColumnSelect
-          value={entry.source.matchBy}
-          columns={dsColumns}
-          onChange={(v) => update("matchBy", v)}
-          size="xs"
-        />
-        <button onClick={onRemove} className="text-red-500 hover:text-red-700">
-          <Trash2 size={12} />
-        </button>
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={entry.source.fields.join(", ")}
-          onChange={(e) => update("fields", e.target.value.split(",").map((f) => f.trim()).filter(Boolean))}
-          placeholder={t("settings.hubwork.dataSourceFieldsPlaceholder")}
-          className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-        />
-        <select
-          value={entry.source.shape || "array"}
-          onChange={(e) => update("shape", e.target.value as "object" | "array")}
-          className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-        >
-          <option value="object">object</option>
-          <option value="array">array</option>
-        </select>
-        <input
-          type="number"
-          value={entry.source.limit || ""}
-          onChange={(e) => update("limit", e.target.value ? parseInt(e.target.value, 10) : undefined)}
-          placeholder={t("settings.hubwork.dataSourceLimit")}
-          className="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-        />
-        <input
-          type="text"
-          value={entry.source.sort || ""}
-          onChange={(e) => update("sort", e.target.value || undefined)}
-          placeholder={t("settings.hubwork.dataSourceSort")}
-          className="w-20 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-        />
-      </div>
-    </div>
-  );
-}
-
-/**
- * Sheet name selector — shows a dropdown if sheet names have been fetched, otherwise a text input.
- */
-function SheetSelect({
-  value,
-  sheetNames,
-  onChange,
-  className,
-  size,
-}: {
-  value: string;
-  sheetNames: string[];
-  onChange: (value: string) => void;
-  className?: string;
-  size?: "xs" | "sm";
-}) {
-  const py = size === "xs" ? "py-1" : "py-1.5";
-  const text = size === "xs" ? "text-xs" : "text-sm";
-  const base = `${className || "w-full"} px-2 ${py} ${text} border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100`;
-
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={sheetNames.length === 0} className={`${base} disabled:opacity-50`}>
-      {!value && <option value="">—</option>}
-      {sheetNames.map((name) => (
-        <option key={name} value={name}>{name}</option>
-      ))}
-    </select>
-  );
-}
-
-function ColumnSelect({
-  value,
-  columns,
-  onChange,
-  className,
-  size,
-}: {
-  value: string;
-  columns: string[];
-  onChange: (value: string) => void;
-  className?: string;
-  size?: "xs" | "sm";
-}) {
-  const py = size === "xs" ? "py-1" : "py-1.5";
-  const text = size === "xs" ? "text-xs" : "text-sm";
-  const base = `${className || "w-full"} px-2 ${py} ${text} border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100`;
-
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={columns.length === 0} className={`${base} disabled:opacity-50`}>
-      {!value && <option value="">—</option>}
-      {columns.map((col) => (
-        <option key={col} value={col}>{col}</option>
-      ))}
-    </select>
-  );
-}
-
-/**
- * Spreadsheet selector — dropdown of registered spreadsheets.
- */
-function SpreadsheetSelect({
-  value,
-  spreadsheets,
-  onChange,
-  size,
-}: {
-  value: string;
-  spreadsheets: HubworkSpreadsheet[];
-  onChange: (value: string) => void;
-  size?: "xs" | "sm";
-}) {
-  const py = size === "xs" ? "py-1" : "py-1.5";
-  const text = size === "xs" ? "text-xs" : "text-sm";
-  const base = `px-2 ${py} ${text} border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100`;
-
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={base}>
-      {spreadsheets.map((ss) => (
-        <option key={ss.id} value={ss.id}>{spreadsheetLabel(ss)}</option>
-      ))}
-    </select>
   );
 }
 

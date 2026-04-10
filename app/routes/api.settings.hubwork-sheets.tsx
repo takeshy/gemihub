@@ -57,7 +57,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
 
     return Response.json({ title, sheets: sheetNames, headers });
-  } catch {
-    return Response.json({ error: "Failed to fetch spreadsheet. Check the ID and permissions." }, { status: 400 });
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    return Response.json({ error: `Failed to fetch spreadsheet: ${detail}` }, { status: 400 });
   }
 }
