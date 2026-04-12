@@ -42,7 +42,7 @@ export async function getOrCreateClient(config: McpServerConfig): Promise<McpCli
     const baseKey = `${config.url}:${JSON.stringify(config.headers || {})}:`;
     for (const [k, old] of mcpClients) {
       if (k.startsWith(baseKey) && k !== key) {
-        old.close().catch(() => {});
+        old.close().catch((e: unknown) => console.warn("MCP client close error:", e));
         mcpClients.delete(k);
       }
     }

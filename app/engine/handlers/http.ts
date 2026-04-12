@@ -54,6 +54,19 @@ export async function handleHttpNode(
 
   if (!url) throw new Error("HTTP node missing 'url' property");
 
+  // Validate URL scheme
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new Error(`Unsupported URL scheme: ${parsed.protocol} (only http/https allowed)`);
+    }
+  } catch (e) {
+    if (e instanceof TypeError) {
+      throw new Error(`Invalid URL: ${url}`);
+    }
+    throw e;
+  }
+
   const headers: Record<string, string> = {};
 
   const headersStr = node.properties["headers"];

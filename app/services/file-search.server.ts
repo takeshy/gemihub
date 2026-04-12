@@ -162,6 +162,17 @@ export async function smartSync(
     return result;
   }
 
+  // Pre-compile exclude pattern regexes
+  const compiledExcludePatterns: RegExp[] = [];
+  for (const pattern of excludePatterns) {
+    if (!pattern) continue;
+    try {
+      compiledExcludePatterns.push(new RegExp(pattern));
+    } catch {
+      // Invalid regex pattern, skip
+    }
+  }
+
   // Filter by target folders (virtual path prefixes) if specified
   const allDriveFiles: Array<{ id: string; name: string }> = [];
   for (const f of allFiles) {
@@ -174,17 +185,12 @@ export async function smartSync(
       if (!matched) continue;
     }
 
-    // Apply exclude patterns
+    // Apply exclude patterns (pre-compiled)
     let excluded = false;
-    for (const pattern of excludePatterns) {
-      if (!pattern) continue;
-      try {
-        if (new RegExp(pattern).test(f.name)) {
-          excluded = true;
-          break;
-        }
-      } catch {
-        // Invalid regex
+    for (const regex of compiledExcludePatterns) {
+      if (regex.test(f.name)) {
+        excluded = true;
+        break;
       }
     }
     if (!excluded && isRagEligible(f.name)) {

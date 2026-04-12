@@ -81,6 +81,10 @@ export function ChatPanel({
   const { skills, activeSkillIds, toggleSkill, activateSkill, getActiveSkillsSystemPrompt, getActiveSkillWorkflows } = useSkills();
   const [histories, setHistories] = useState<ChatHistoryItem[]>([]);
 
+  // Session ID to track which chat session owns the UI; incremented on new/load chat
+  // so background streams can detect they've been detached from the UI.
+  const activeSessionIdRef = useRef(0);
+
   // Fetch chat histories on mount
   useEffect(() => {
     fetch("/api/chat/history")
@@ -102,6 +106,12 @@ export function ChatPanel({
   const [chatListOpen, setChatListOpen] = useState(false);
   const [saveMarkdownState, setSaveMarkdownState] = useState<"idle" | "saving" | "saved">("idle");
   const abortControllerRef = useRef<AbortController | null>(null);
+  const MAX_BACKGROUND_STREAMS = 3;
+  // AbortControllers for background (detached) streams, capped at MAX_BACKGROUND_STREAMS.
+  const backgroundAbortControllersRef = useRef<AbortController[]>([]);
+  // Chat IDs that have been deleted — background streams check this to avoid
+  // resurrecting a deleted chat when they complete.
+  const deletedChatIdsRef = useRef<Set<string>>(new Set());
   const pendingSendRef = useRef<{ content: string; attachments?: Attachment[]; overrides?: ChatOverrides } | null>(null);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
@@ -153,6 +163,7 @@ export function ChatPanel({
     } catch { /* ignore */ }
   }, [enabledMcpServerIds]);
 
+
   // Migrate legacy name-based selections to ID-based selections and drop stale entries.
   useEffect(() => {
     setEnabledMcpServerIds((prev) => {
@@ -167,14 +178,41 @@ export function ChatPanel({
     });
   }, [settings.mcpServers]);
 
+  // Detach the currently running stream so it continues in the background.
+  const detachActiveStream = useCallback(() => {
+    activeSessionIdRef.current += 1;
+
+    if (abortControllerRef.current) {
+      backgroundAbortControllersRef.current.push(abortControllerRef.current);
+      abortControllerRef.current = null;
+      while (backgroundAbortControllersRef.current.length > MAX_BACKGROUND_STREAMS) {
+        const oldest = backgroundAbortControllersRef.current.shift();
+        oldest?.abort();
+      }
+    }
+
+    setIsStreaming(false);
+    setStreamingContent("");
+    setStreamingThinking("");
+    setStreamingToolCalls([]);
+    setStreamingRagSources([]);
+    setStreamingRagUsed(false);
+    setStreamingWebSearchUsed(false);
+  }, []);
+
   // ---- Chat history management ----
   const handleNewChat = useCallback(() => {
+    if (isStreaming) {
+      detachActiveStream();
+    } else {
+      activeSessionIdRef.current += 1;
+    }
     setMessages([]);
     setActiveChatId(null);
     setActiveChatFileId(null);
     setActiveChatCreatedAt(null);
     setChatListOpen(false);
-  }, []);
+  }, [isStreaming, detachActiveStream]);
 
   const parseChatContent = useCallback((content: string) => {
     try {
@@ -192,6 +230,11 @@ export function ChatPanel({
 
   const handleSelectChat = useCallback(
     async (chatId: string, fileId: string) => {
+      if (isStreaming) {
+        detachActiveStream();
+      } else {
+        activeSessionIdRef.current += 1;
+      }
       setChatListOpen(false);
       setActiveChatId(chatId);
       setActiveChatFileId(fileId);
@@ -238,7 +281,7 @@ export function ChatPanel({
         // ignore
       }
     },
-    [histories, parseChatContent]
+    [histories, parseChatContent, isStreaming, detachActiveStream]
   );
 
   const handleCryptoUnlock = useCallback(
@@ -265,6 +308,10 @@ export function ChatPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileId }),
         });
+        // Tombstone only after successful delete so background streams
+        // don't lose data on transient network errors.
+        const target = histories.find((h) => h.fileId === fileId);
+        if (target) deletedChatIdsRef.current.add(target.id);
         setHistories((prev) => prev.filter((h) => h.fileId !== fileId));
         if (activeChatFileId === fileId) {
           handleNewChat();
@@ -273,15 +320,24 @@ export function ChatPanel({
         // ignore
       }
     },
-    [activeChatFileId, handleNewChat]
+    [activeChatFileId, handleNewChat, histories]
   );
 
   // ---- Save chat ----
-  const saveChat = useCallback(
-    async (updatedMessages: Message[], title?: string) => {
+  // Low-level save: takes explicit chatId/createdAt to avoid stale closures in background streams.
+  const saveChatToDisk = useCallback(
+    async (
+      updatedMessages: Message[],
+      chatId: string,
+      createdAt: number,
+      opts: { foreground?: boolean; title?: string } = {},
+    ) => {
+      if (updatedMessages.length === 0) return;
+      // Skip if this chat was deleted while the stream was running
+      if (deletedChatIdsRef.current.has(chatId)) return;
+
+      const { foreground = false, title } = opts;
       const now = Date.now();
-      const chatId = activeChatId || `chat-${Date.now()}`;
-      const createdAt = activeChatCreatedAt ?? now;
       const chatHistory: ChatHistory = {
         id: chatId,
         title:
@@ -302,18 +358,16 @@ export function ChatPanel({
         if (res.ok) {
           const data = await res.json();
           const fileId =
-            typeof data.fileId === "string" ? data.fileId : activeChatFileId ?? "";
-          if (!activeChatId) {
+            typeof data.fileId === "string" ? data.fileId : "";
+          if (foreground) {
             setActiveChatId(chatId);
             setActiveChatCreatedAt(createdAt);
-          }
-          if (fileId) {
-            setActiveChatFileId(fileId);
+            if (fileId) setActiveChatFileId(fileId);
           }
           setHistories((prev) => [
             {
               id: chatId,
-              fileId,
+              fileId: fileId || prev.find((h) => h.id === chatId)?.fileId || "",
               title: chatHistory.title,
               createdAt: chatHistory.createdAt,
               updatedAt: chatHistory.updatedAt,
@@ -326,8 +380,56 @@ export function ChatPanel({
         // ignore
       }
     },
-    [activeChatCreatedAt, activeChatFileId, activeChatId]
+    []
   );
+
+  // Foreground save (convenience wrapper matching old signature)
+  const saveChat = useCallback(
+    async (updatedMessages: Message[], title?: string) => {
+      const chatId = activeChatId || `chat-${Date.now()}`;
+      const createdAt = activeChatCreatedAt ?? Date.now();
+      await saveChatToDisk(updatedMessages, chatId, createdAt, { foreground: true, title });
+    },
+    [activeChatId, activeChatCreatedAt, saveChatToDisk]
+  );
+
+  // Create a stream session that tracks whether this stream still owns the UI.
+  // Increments activeSessionIdRef so any prior stream detects it is no longer foreground.
+  const createStreamSession = useCallback(() => {
+    activeSessionIdRef.current += 1;
+    const mySessionId = activeSessionIdRef.current;
+    const myChatId = activeChatId || `chat-${Date.now()}`;
+    const myCreatedAt = activeChatCreatedAt ?? Date.now();
+    const isActive = () => mySessionId === activeSessionIdRef.current;
+
+    const saveResult = async (msgs: Message[]) => {
+      if (isActive()) {
+        setMessages(msgs);
+        await saveChatToDisk(msgs, myChatId, myCreatedAt, { foreground: true });
+      } else {
+        await saveChatToDisk(msgs, myChatId, myCreatedAt);
+      }
+    };
+
+    // Called in `finally` — cleans up UI state if still foreground.
+    const cleanup = (myAbortController?: AbortController | null) => {
+      if (isActive()) {
+        setStreamingContent("");
+        setStreamingThinking("");
+        setStreamingToolCalls([]);
+        setStreamingRagSources([]);
+        setStreamingRagUsed(false);
+        setStreamingWebSearchUsed(false);
+        setIsStreaming(false);
+        abortControllerRef.current = null;
+      } else if (myAbortController) {
+        backgroundAbortControllersRef.current =
+          backgroundAbortControllersRef.current.filter(ac => ac !== myAbortController);
+      }
+    };
+
+    return { mySessionId, myChatId, myCreatedAt, isActive, saveResult, cleanup };
+  }, [activeChatId, activeChatCreatedAt, saveChatToDisk]);
 
   // Extract the last fileId mentioned in user messages via [Currently open file: ..., fileId: ...]
   const lastFileIdInMessages = useMemo(() => {
@@ -442,6 +544,8 @@ export function ChatPanel({
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
+
+      const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
       const isWebSearch = effectiveRagSetting === "__websearch__";
 
@@ -601,11 +705,11 @@ export function ChatPanel({
           switch (chunk.type) {
             case "text":
               accumulatedContent += chunk.content || "";
-              setStreamingContent(accumulatedContent);
+              if (isActive()) setStreamingContent(accumulatedContent);
               break;
             case "thinking":
               accumulatedThinking += chunk.content || "";
-              setStreamingThinking(accumulatedThinking);
+              if (isActive()) setStreamingThinking(accumulatedThinking);
               break;
             case "tool_call":
               if (chunk.toolCall) {
@@ -613,7 +717,7 @@ export function ChatPanel({
                   ...(accumulatedToolCalls || []),
                   chunk.toolCall,
                 ];
-                setStreamingToolCalls([...accumulatedToolCalls]);
+                if (isActive()) setStreamingToolCalls([...accumulatedToolCalls]);
               }
               break;
             case "tool_result":
@@ -627,14 +731,18 @@ export function ChatPanel({
             case "rag_used":
               ragUsed = true;
               ragSources = chunk.ragSources || [];
-              setStreamingRagUsed(true);
-              setStreamingRagSources([...ragSources]);
+              if (isActive()) {
+                setStreamingRagUsed(true);
+                setStreamingRagSources([...ragSources]);
+              }
               break;
             case "web_search_used":
               webSearchUsed = true;
               ragSources = chunk.ragSources || [];
-              setStreamingWebSearchUsed(true);
-              setStreamingRagSources([...ragSources]);
+              if (isActive()) {
+                setStreamingWebSearchUsed(true);
+                setStreamingRagSources([...ragSources]);
+              }
               break;
             case "image_generated":
               if (chunk.generatedImage) {
@@ -644,7 +752,7 @@ export function ChatPanel({
             case "error":
               accumulatedContent +=
                 `\n\n**Error:** ${chunk.error || "Unknown error"}`;
-              setStreamingContent(accumulatedContent);
+              if (isActive()) setStreamingContent(accumulatedContent);
               break;
             case "done": {
               const assistantMessage: Message = {
@@ -681,15 +789,7 @@ export function ChatPanel({
                 ...updatedMessages,
                 assistantMessage,
               ];
-              setMessages(finalMessages);
-              setStreamingContent("");
-              setStreamingThinking("");
-              setStreamingToolCalls([]);
-              setStreamingRagSources([]);
-              setStreamingRagUsed(false);
-              setStreamingWebSearchUsed(false);
-              setIsStreaming(false);
-              await saveChat(finalMessages);
+              await saveResult(finalMessages);
               break;
             }
           }
@@ -720,8 +820,7 @@ export function ChatPanel({
               elapsedMs: Date.now() - sendStartTime,
             };
             const finalMessages = [...updatedMessages, partialMessage];
-            setMessages(finalMessages);
-            await saveChat(finalMessages);
+            await saveResult(finalMessages);
           }
         } else {
           const errorMessage: Message = {
@@ -730,23 +829,10 @@ export function ChatPanel({
             timestamp: Date.now(),
           };
           const finalMessages = [...updatedMessages, errorMessage];
-          setMessages(finalMessages);
-          await saveChat(finalMessages);
+          await saveResult(finalMessages);
         }
       } finally {
-        // Only clear streaming state if this is still the active call.
-        // A newer handleSend may have already started, in which case
-        // abortControllerRef.current points to the new controller.
-        if (abortControllerRef.current === abortController) {
-          setStreamingContent("");
-          setStreamingThinking("");
-          setStreamingToolCalls([]);
-          setStreamingRagSources([]);
-          setStreamingRagUsed(false);
-          setStreamingWebSearchUsed(false);
-          setIsStreaming(false);
-          abortControllerRef.current = null;
-        }
+        cleanupStream(abortController);
       }
     },
     [
@@ -758,7 +844,7 @@ export function ChatPanel({
       driveToolMode,
       enabledMcpServerIds,
       settings,
-      saveChat,
+      createStreamSession,
       getThinkingToggle,
       activateSkill,
       getActiveSkillsSystemPrompt,

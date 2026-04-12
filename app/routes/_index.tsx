@@ -1040,7 +1040,9 @@ function IDEContent({
             <activePluginSidebarView.component api={getPluginAPI(activePluginSidebarView.pluginId)!} language={settings.language ?? "en"} fileId={activeFileId ?? undefined} fileName={activeFileName ?? undefined} />
           ) : null}
         </div>
-      ) : rightPanel === "chat" ? (
+      ) : null}
+      {/* ChatPanel is always mounted so streaming state survives tab switches */}
+      <div className={`h-full flex flex-col ${rightPanel === "chat" && !activePluginSidebarView ? "" : "hidden"}`}>
         <ChatPanel
           settings={settings}
           hasApiKey={hasGeminiApiKey}
@@ -1064,7 +1066,8 @@ function IDEContent({
             setSilentExecLogs((prev) => [...prev, { nodeId: log.nodeId, nodeType: log.nodeType, message: log.message, status: log.status, timestamp: log.timestamp.toISOString(), input: log.input, output: log.output }]);
           }}
         />
-      ) : (
+      </div>
+      {rightPanel === "workflow" && !activePluginSidebarView ? (
         <WorkflowPropsPanel
           activeFileId={activeFileId}
           activeFileName={activeFileName}
@@ -1081,7 +1084,7 @@ function IDEContent({
           }
           externalLogs={silentExecLogs}
         />
-      )}
+      ) : null}
     </PanelErrorBoundary>
   );
 
