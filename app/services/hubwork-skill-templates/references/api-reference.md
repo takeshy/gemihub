@@ -125,22 +125,21 @@ When previewing Hubwork pages in the IDE (localhost or gemihub.online), real Hub
 
 ### Auth Mock (`web/__gemihub/auth/me.json`)
 
-Keys are account type names. Each value is the user data normally returned by `auth.me()`.
+Flat structure containing the user data normally returned by `auth.me()`. The optional `accountType` field restricts the mock to a specific account type (returns null/401 for other types). Omit it to allow any type.
 
 ```json
 {
-  "partner": {
+  "accountType": "partner",
+  "email": "test@example.com",
+  "profile": {
     "email": "test@example.com",
-    "profile": {
-      "email": "test@example.com",
-      "company_name": "テスト株式会社",
-      "contact_name": "テスト太郎"
-    }
+    "company_name": "テスト株式会社",
+    "contact_name": "テスト太郎"
   }
 }
 ```
 
-`gemihub.auth.me("partner")` returns `{ type: "partner", email: "test@example.com", profile: { ... } }` in IDE mode.
+`gemihub.auth.me("partner")` returns `{ type: "partner", email: "test@example.com", profile: { ... } }` in IDE mode (the `accountType` field is stripped from the response).
 
 ### API Mock (`web/__gemihub/api/{path}.json`)
 

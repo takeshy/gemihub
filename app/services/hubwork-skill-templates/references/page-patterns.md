@@ -201,20 +201,21 @@ When creating pages with auth or API calls, also create mock data files for IDE 
 
 ### Auth mock file (`web/__gemihub/auth/me.json`)
 
+Flat structure. The fields match what `auth.me()` returns (i.e., the `data` fields configured in settings.json for that account type). The optional `accountType` field restricts the mock to a specific account type — if omitted, the mock applies to any type requested by the page.
+
 ```json
 {
-  "ACCOUNT_TYPE": {
+  "accountType": "ACCOUNT_TYPE",
+  "email": "test@example.com",
+  "profile": {
     "email": "test@example.com",
-    "profile": {
-      "email": "test@example.com",
-      "company_name": "テスト株式会社",
-      "contact_name": "テスト太郎"
-    }
+    "company_name": "テスト株式会社",
+    "contact_name": "テスト太郎"
   }
 }
 ```
 
-Replace `ACCOUNT_TYPE` with the actual type name. The data structure under each key should match what `auth.me()` returns (i.e., the `data` fields configured in settings.json for that account type).
+Replace `ACCOUNT_TYPE` with the actual type name (e.g., `"partner"`, `"customer"`).
 
 **Note:** Mock files must be pushed (synced) to Drive before they take effect in IDE preview.
 

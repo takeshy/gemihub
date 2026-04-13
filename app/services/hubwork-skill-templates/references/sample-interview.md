@@ -161,13 +161,12 @@ nodes:
 
 ```json
 {
-  "partner": {
-    "email": "test-partner@example.com",
-    "name": "山田 パートナー",
-    "profile": {
-      "contact_name": "山田 太郎",
-      "company_name": "株式会社パートナーズ"
-    }
+  "accountType": "partner",
+  "email": "test-partner@example.com",
+  "name": "山田 パートナー",
+  "profile": {
+    "contact_name": "山田 太郎",
+    "company_name": "株式会社パートナーズ"
   }
 }
 ```

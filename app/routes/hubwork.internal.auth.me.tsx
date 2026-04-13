@@ -71,11 +71,14 @@ async function handleIdeMock(request: Request, type: string) {
   }
   try {
     const data = JSON.parse(content);
-    const typeData = data[type];
-    if (!typeData) {
+    if (!data || typeof data !== "object") {
       return Response.json({ error: "Not authenticated" }, { status: 401 });
     }
-    return Response.json({ type, ...typeData });
+    if (data.accountType && data.accountType !== type) {
+      return Response.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    const { accountType: _accountType, ...userData } = data;
+    return Response.json({ type, ...userData });
   } catch {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
