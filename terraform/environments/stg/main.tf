@@ -55,6 +55,8 @@ module "gemihub" {
   google_site_verification_token = var.google_site_verification_token
   manage_bigquery_views          = false
   root_folder_name               = "gemihub"
+  hubwork_review_slugs           = ["googletest1", "googletest2", "googletest3"]
+  hubwork_stripe_allowed_slugs   = ["takeshy"]
 }
 
 # --------------- Outputs ---------------

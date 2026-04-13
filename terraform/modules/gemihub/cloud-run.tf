@@ -135,6 +135,22 @@ resource "google_cloud_run_v2_service" "app" {
         }
       }
 
+      dynamic "env" {
+        for_each = length(var.hubwork_review_slugs) > 0 ? [join(",", var.hubwork_review_slugs)] : []
+        content {
+          name  = "HUBWORK_REVIEW_SLUGS"
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = length(var.hubwork_stripe_allowed_slugs) > 0 ? [join(",", var.hubwork_stripe_allowed_slugs)] : []
+        content {
+          name  = "HUBWORK_STRIPE_ALLOWED_SLUGS"
+          value = env.value
+        }
+      }
+
       startup_probe {
         http_get {
           path = "/"

@@ -678,6 +678,7 @@ export interface TranslationStrings {
   "settings.hubwork.slugLabel": string;
   "settings.hubwork.slugRequired": string;
   "settings.hubwork.slugInvalid": string;
+  "settings.hubwork.slugUnavailable": string;
   "settings.hubwork.siteUrl": string;
   "settings.hubwork.subscriptionActive": string;
   "settings.hubwork.subscriptionGranted": string;
@@ -1434,6 +1435,7 @@ const en: TranslationStrings = {
   "settings.hubwork.slugLabel": "Your subdomain",
   "settings.hubwork.slugRequired": "Please enter a subdomain",
   "settings.hubwork.slugInvalid": "3+ chars, lowercase letters, numbers, and hyphens only",
+  "settings.hubwork.slugUnavailable": "New subscriptions are temporarily unavailable while OAuth verification is in progress.",
   "settings.hubwork.siteUrl": "Site URL",
   "settings.hubwork.subscriptionActive": "Active",
   "settings.hubwork.subscriptionGranted": "Granted account (free)",
@@ -2190,6 +2192,7 @@ const ja: TranslationStrings = {
   "settings.hubwork.slugLabel": "サブドメイン",
   "settings.hubwork.slugRequired": "サブドメインを入力してください",
   "settings.hubwork.slugInvalid": "3文字以上、小文字英数字とハイフンのみ",
+  "settings.hubwork.slugUnavailable": "OAuth 認証審査中のため、新規サブスクリプションは現在ご利用いただけません。",
   "settings.hubwork.siteUrl": "サイトURL",
   "settings.hubwork.subscriptionActive": "有効",
   "settings.hubwork.subscriptionGranted": "管理者付与アカウント（無料）",

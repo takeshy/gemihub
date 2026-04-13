@@ -49,3 +49,15 @@ variable "root_folder_name" {
   default     = "gemihub"
 }
 
+variable "hubwork_review_slugs" {
+  description = "Account slugs that bypass Stripe and receive a granted Pro account. Used for Google OAuth verification review."
+  type        = list(string)
+  default     = []
+}
+
+variable "hubwork_stripe_allowed_slugs" {
+  description = "Account slugs allowed to proceed to Stripe checkout for new Pro subscriptions. Any other slug returns a 'currently unavailable' response."
+  type        = list(string)
+  default     = []
+}
+

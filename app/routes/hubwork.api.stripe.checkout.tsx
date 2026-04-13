@@ -2,11 +2,15 @@ import { redirect } from "react-router";
 import type { Route } from "./+types/hubwork.api.stripe.checkout";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
-import { getAccountByRootFolderId, getAccountBySlug } from "~/services/hubwork-accounts.server";
+import { createAccount, getAccountByRootFolderId, getAccountBySlug } from "~/services/hubwork-accounts.server";
 import { getStripe } from "~/services/stripe.server";
 import { validateOrigin } from "~/utils/security";
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+
+function parseSlugList(value: string | undefined): string[] {
+  return (value || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
 
 export async function action({ request }: Route.ActionArgs) {
   validateOrigin(request);
@@ -17,7 +21,49 @@ export async function action({ request }: Route.ActionArgs) {
   const planType = (formData.get("plan") as string || "pro") === "lite" ? "lite" : "pro";
   const accountSlug = (formData.get("accountSlug") as string || "").toLowerCase().trim();
 
+  const reviewSlugs = parseSlugList(process.env.HUBWORK_REVIEW_SLUGS);
+  const stripeAllowedSlugs = parseSlugList(process.env.HUBWORK_STRIPE_ALLOWED_SLUGS);
+
   const existing = await getAccountByRootFolderId(tokens.rootFolderId);
+
+  const url = new URL(request.url);
+  const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+  const baseUrl = `${proto}://${url.host}`;
+
+  // Google OAuth verification bypass: create a granted Pro account without Stripe.
+  // Only effective when HUBWORK_REVIEW_SLUGS contains the submitted slug and the
+  // user has no existing account yet.
+  if (planType === "pro" && !existing && accountSlug && reviewSlugs.includes(accountSlug)) {
+    if (accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug)) {
+      throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
+    }
+    const slugTaken = await getAccountBySlug(accountSlug);
+    if (slugTaken) {
+      throw new Response("This slug is already taken", { status: 409 });
+    }
+    await createAccount({
+      email: tokens.email || "",
+      refreshToken: sessionTokens.refreshToken,
+      rootFolderName: "gemihub",
+      rootFolderId: tokens.rootFolderId,
+      plan: "granted",
+      accountSlug,
+    });
+    return redirect(`${baseUrl}/settings?hubwork_subscribed=1`);
+  }
+
+  // Stripe checkout allowlist: any non-listed Pro slug is treated as "not yet
+  // available" while OAuth verification is in progress. The UI displays the
+  // returned error message without navigating away.
+  if (planType === "pro") {
+    const effectiveSlug = accountSlug || existing?.accountSlug || "";
+    if (!stripeAllowedSlugs.includes(effectiveSlug)) {
+      return Response.json(
+        { error: "unavailable" },
+        { status: 200 }
+      );
+    }
+  }
 
   // Upgrade existing subscription (e.g. Lite → Pro)
   if (existing?.stripeSubscriptionId && existing.billingStatus === "active") {
@@ -70,9 +116,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
     await updateAccount(existing.id, updates);
 
-    const url = new URL(request.url);
-    const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
-    return redirect(`${proto}://${url.host}/settings?hubwork_upgraded=1`);
+    return redirect(`${baseUrl}/settings?hubwork_upgraded=1`);
   }
 
   // New subscription
@@ -95,10 +139,6 @@ export async function action({ request }: Route.ActionArgs) {
   if (!priceId) {
     throw new Response("Stripe is not configured for this plan", { status: 500 });
   }
-
-  const url = new URL(request.url);
-  const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
-  const baseUrl = `${proto}://${url.host}`;
 
   const stripe = getStripe();
   const session = await stripe.checkout.sessions.create({

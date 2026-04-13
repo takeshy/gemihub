@@ -54,6 +54,8 @@ module "gemihub" {
   domain                         = var.domain
   google_site_verification_token = var.google_site_verification_token
   cpu_idle                       = false
+  hubwork_review_slugs           = ["googletest1", "googletest2", "googletest3"]
+  hubwork_stripe_allowed_slugs   = ["takeshy"]
 }
 
 # --------------- Outputs ---------------

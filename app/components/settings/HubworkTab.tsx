@@ -17,6 +17,15 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
 
   const [slug, setSlug] = useState("");
   const [slugError, setSlugError] = useState("");
+
+  // Surface server-returned "unavailable" errors (e.g. new subscriptions disabled
+  // while OAuth verification is in progress) as a slug error message.
+  useEffect(() => {
+    const data = stripeFetcher.data as { error?: string } | undefined;
+    if (data?.error === "unavailable") {
+      setSlugError(t("settings.hubwork.slugUnavailable"));
+    }
+  }, [stripeFetcher.data, t]);
   const [skillUpdating, setSkillUpdating] = useState(false);
   const [skillUpdateResult, setSkillUpdateResult] = useState<"success" | "error" | null>(null);
   const [provisioning, setProvisioning] = useState(false);
@@ -233,29 +242,12 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             >
               <input type="hidden" name="accountSlug" value={slug} />
               <input type="hidden" name="plan" value="pro" />
-              {slug === "takeshy" ? (
-                <button
-                  type="submit"
-                  className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  Upgrade
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="submit"
-                    disabled
-                    className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
-                    title="Currently unavailable"
-                  >
-                    Upgrade
-                  </button>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                    <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
-                    New subscriptions are temporarily unavailable while OAuth verification is in progress.
-                  </p>
-                </>
-              )}
+              <button
+                type="submit"
+                className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Upgrade
+              </button>
             </stripeFetcher.Form>
           </div>
         )}
@@ -335,29 +327,12 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                   >
                     <input type="hidden" name="accountSlug" value={slug} />
                     <input type="hidden" name="plan" value={p} />
-                    {p === "pro" && slug === "takeshy" ? (
-                      <button
-                        type="submit"
-                        className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-                      >
-                        Subscribe
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          type="submit"
-                          disabled
-                          className="w-full px-4 py-2 text-sm font-medium text-white bg-gray-400 rounded-md cursor-not-allowed opacity-50"
-                          title="Currently unavailable"
-                        >
-                          Subscribe
-                        </button>
-                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                          <AlertCircle size={12} className="inline mr-1 -mt-0.5" />
-                          New subscriptions are temporarily unavailable while OAuth verification is in progress.
-                        </p>
-                      </>
-                    )}
+                    <button
+                      type="submit"
+                      className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Subscribe
+                    </button>
                   </stripeFetcher.Form>
                 </div>
               ))}
