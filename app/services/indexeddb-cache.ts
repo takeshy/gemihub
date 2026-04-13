@@ -391,6 +391,34 @@ export async function getLocallyModifiedFileIds(): Promise<Set<string>> {
   }
 }
 
+/**
+ * Delete editHistory entries whose fileId is not in `keepIds`.
+ * Used to prune orphaned entries left behind when a file was deleted from
+ * both localMeta and remoteMeta but its editHistory entry survived.
+ * Returns the list of pruned fileIds.
+ */
+export async function pruneOrphanedEditHistory(keepIds: Set<string>): Promise<string[]> {
+  if (typeof indexedDB === "undefined") return [];
+  try {
+    const db = await getDB();
+    return await new Promise<string[]>((resolve, reject) => {
+      const tx = db.transaction("editHistory", "readwrite");
+      const store = tx.objectStore("editHistory");
+      const keysReq = store.getAllKeys();
+      keysReq.onsuccess = () => {
+        const allKeys = keysReq.result.map(String);
+        const toDelete = allKeys.filter((k) => !keepIds.has(k));
+        for (const k of toDelete) store.delete(k);
+        tx.oncomplete = () => resolve(toDelete);
+        tx.onerror = () => reject(tx.error);
+      };
+      keysReq.onerror = () => reject(keysReq.error);
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function getAllEditHistory(): Promise<CachedEditHistoryEntry[]> {
   if (typeof indexedDB === "undefined") return [];
   try {

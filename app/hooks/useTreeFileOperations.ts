@@ -342,12 +342,14 @@ export function useTreeFileOperations({
           clearBusy(fileIds);
         }
       } else {
+        const childIds = item.isFolder ? collectFileIds(item) : [];
+        const fileIds = [item.id, ...childIds];
         const { confirmed, permanent } = await askDeleteConfirm(t("trash.softDeleteConfirm").replace("{name}", item.name));
         if (!confirmed) return;
 
-        setBusy([item.id]);
+        setBusy(fileIds);
         try {
-          const { lastMeta, failCount } = await bulkDeleteFiles([item.id], permanent);
+          const { lastMeta, failCount } = await bulkDeleteFiles(fileIds, permanent);
           if (failCount > 0) {
             alert(t("trash.deleteFailed"));
           } else {
@@ -358,7 +360,7 @@ export function useTreeFileOperations({
               setTreeItems(updated);
             }
             window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
-            if (item.id === activeFileId) {
+            if (item.id === activeFileId || (activeFileId && childIds.includes(activeFileId))) {
               window.history.pushState({}, "", "/");
               window.dispatchEvent(new PopStateEvent("popstate"));
             }
@@ -366,7 +368,7 @@ export function useTreeFileOperations({
         } catch {
           alert(t("trash.deleteFailed"));
         } finally {
-          clearBusy([item.id]);
+          clearBusy(fileIds);
         }
       }
     },

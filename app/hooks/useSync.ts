@@ -13,6 +13,7 @@ import {
   setCachedRemoteMeta,
   deleteEditHistoryEntry,
   setEditHistoryEntry,
+  pruneOrphanedEditHistory,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
@@ -60,7 +61,6 @@ export function useSync() {
    */
   const refreshSyncCounts = useCallback(async (freshRemoteMeta?: SyncMeta | null) => {
     try {
-      const ids = await getLocallyModifiedFileIds();
       const cachedRemote = await getCachedRemoteMeta();
       const remoteMeta = freshRemoteMeta !== undefined
         ? freshRemoteMeta
@@ -74,6 +74,12 @@ export function useSync() {
             }
           : null;
       const localMeta = await getLocalSyncMeta();
+      const keepIds = new Set<string>([
+        ...Object.keys(localMeta?.files ?? {}),
+        ...Object.keys(remoteMeta?.files ?? {}),
+      ]);
+      await pruneOrphanedEditHistory(keepIds);
+      const ids = await getLocallyModifiedFileIds();
       const diff = computeSyncDiff(
         localMeta ?? null,
         remoteMeta,

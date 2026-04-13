@@ -8,6 +8,7 @@ import {
   getCachedFile,
   getLocallyModifiedFileIds,
   getLocalSyncMeta,
+  pruneOrphanedEditHistory,
 } from "~/services/indexeddb-cache";
 import { hasNetContentChange } from "~/services/edit-history-local";
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
@@ -70,6 +71,11 @@ export function SyncStatusBar({
           }
         : null;
       const localMeta = await getLocalSyncMeta();
+      const keepIds = new Set<string>([
+        ...Object.keys(localMeta?.files ?? {}),
+        ...Object.keys(remoteMeta?.files ?? {}),
+      ]);
+      await pruneOrphanedEditHistory(keepIds);
       const modifiedIds = await getLocallyModifiedFileIds();
       const diff = computeSyncDiff(localMeta ?? null, remoteMeta, modifiedIds);
 
