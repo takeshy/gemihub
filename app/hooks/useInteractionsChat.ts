@@ -320,7 +320,8 @@ export async function* executeInteractionsChat(
       name: "run_skill_workflow",
       description:
         "Execute a workflow provided by an active agent skill. Available workflows: " +
-        workflowIds.join(", "),
+        workflowIds.join(", ") +
+        ". If the workflow fails, do NOT retry automatically — report the error to the user instead.",
       parameters: {
         type: "object",
         properties: {

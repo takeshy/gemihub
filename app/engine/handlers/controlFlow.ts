@@ -7,6 +7,13 @@ export function handleVariableNode(
 ): void {
   const name = node.properties["name"];
   if (!name) throw new Error("Variable node missing 'name' property");
+
+  // Omitting `value` makes the node act as an input declaration: preserve the
+  // existing value (e.g. passed from a parent skill or workflow caller).
+  if (!("value" in node.properties) && context.variables.has(name)) {
+    return;
+  }
+
   const value: string | number = replaceVariables(
     node.properties["value"] || "",
     context

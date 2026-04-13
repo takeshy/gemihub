@@ -20,6 +20,7 @@ export default [
   route("api/drive/tree", "routes/api.drive.tree.tsx"),
   route("api/workflow/execute-node", "routes/api.workflow.execute-node.tsx"),
   route("api/workflow/mcp-proxy", "routes/api.workflow.mcp-proxy.tsx"),
+  route("api/workflow/http-fetch", "routes/api.workflow.http-fetch.tsx"),
   route("api/workflow/ai-generate", "routes/api.workflow.ai-generate.tsx"),
   route("api/workflow/ai-prompt", "routes/api.workflow.ai-prompt.tsx"),
   route("api/workflow/history", "routes/api.workflow.history.tsx"),

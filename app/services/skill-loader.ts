@@ -32,7 +32,7 @@ interface SkillFrontmatter {
   }>;
 }
 
-function parseFrontmatter(content: string): {
+export function parseFrontmatter(content: string): {
   frontmatter: SkillFrontmatter;
   body: string;
 } {
@@ -296,8 +296,6 @@ function findNodeById(
  */
 export function buildSkillSystemPrompt(skills: LoadedSkill[], hubworkAccounts?: Record<string, unknown>): string {
   if (skills.length === 0) return "";
-
-  const hasWorkflows = skills.some((s) => s.workflows.length > 0);
 
   const sections: string[] = [
     "# Active Agent Skills",

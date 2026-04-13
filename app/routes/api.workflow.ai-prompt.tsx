@@ -14,6 +14,7 @@ export async function action({ request }: Route.ActionArgs) {
     name,
     description,
     currentYaml,
+    existingInstructions,
     executionSteps,
     skillMode,
     skillFolderName,
@@ -22,6 +23,7 @@ export async function action({ request }: Route.ActionArgs) {
     name?: string;
     description?: string;
     currentYaml?: string;
+    existingInstructions?: string;
     executionSteps?: ExecutionStep[];
     skillMode?: boolean;
     skillFolderName?: string;
@@ -56,6 +58,7 @@ export async function action({ request }: Route.ActionArgs) {
     name,
     description,
     currentYaml,
+    existingInstructions,
     executionSteps,
     outputAsMarkdown: !skillMode,
     skillMode,

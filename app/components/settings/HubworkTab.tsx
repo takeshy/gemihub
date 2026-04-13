@@ -124,7 +124,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         setProvisioning(false);
       }
     })();
-  }, [isCallback, hubwork?.plan]);
+  }, [isCallback, hubwork?.plan, cacheSkillFiles]);
 
 
   const plan = hubwork?.plan;

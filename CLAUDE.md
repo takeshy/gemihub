@@ -35,7 +35,10 @@ npm run start        # Serve production build via server.js (port 8080)
 npm run typecheck    # Type generation + TypeScript check (react-router typegen && tsc)
 npm run lint         # ESLint check (eslint app/)
 npm run lint:fix     # ESLint auto-fix
+npm run precommit    # Run typecheck + lint (what the pre-commit git hook runs)
 ```
+
+**Pre-commit hook**: a pre-commit hook at `.githooks/pre-commit` runs typecheck + lint and blocks the commit on failure. Enable once per clone with `git config core.hooksPath .githooks`.
 
 Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test` for all tests, `npm run test:sync-diff` for sync diff tests, or `npm run test:parser` for parser tests. To run a single test file: `npx tsx --test path/to/file.test.ts`.
 

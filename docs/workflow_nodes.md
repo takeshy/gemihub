@@ -39,6 +39,29 @@ Declare and initialize a variable.
 
 Numeric values are auto-detected: if the value parses as a number, it's stored as a number.
 
+**`value` is optional on `variable` nodes.** Omitting it gives two useful behaviors:
+
+- **Input declaration** — If the variable has already been set by the caller (parent workflow, skill invocation, or hotkey trigger), the existing value is preserved. This lets a workflow declare the inputs it expects without overwriting them.
+- **Empty accumulator** — If no caller set the variable, it is initialized to `""`. This is safe for accumulators that will be appended to later.
+
+```yaml
+# Input declaration — uses the caller's value, or "" if not provided
+- id: declare-input
+  type: variable
+  name: inputText
+
+# Accumulator — starts as "" and is appended to downstream
+- id: init-output
+  type: variable
+  name: outputMarkdown
+
+# Explicit initial value — always resets to 0 regardless of caller state
+- id: init-counter
+  type: variable
+  name: counter
+  value: 0
+```
+
 ---
 
 ### set
@@ -191,7 +214,37 @@ Make HTTP requests.
 | `responseType` | No | Yes | `auto` (default), `text`, `binary` — override Content-Type auto-detection |
 | `saveTo` | No | No | Variable for response body |
 | `saveStatus` | No | No | Variable for HTTP status code |
-| `throwOnError` | No | Yes | `"true"` to throw error on 4xx/5xx responses |
+| `throwOnError` | No | Yes | Throw on 4xx/5xx responses. **Default: `"true"`** — HTTP errors abort the workflow. Set `"false"` only when the workflow explicitly handles errors downstream. |
+
+**`throwOnError` — default is `"true"`.** A 4xx/5xx response aborts the workflow so the failure surfaces to the chat AI, the user, and the "Open workflow" recovery UI (for skill workflows). Only set `"false"` when the workflow genuinely reads `saveStatus` and takes a different downstream path on failure — not merely to prevent a crash.
+
+```yaml
+# ✅ Default: HTTP errors abort the workflow
+- id: fetch
+  type: http
+  url: "{{url}}"
+  saveTo: body
+  saveStatus: status
+
+# ✅ Acceptable: explicit error-handling branch downstream
+- id: fetch
+  type: http
+  url: "{{url}}"
+  throwOnError: "false"
+  saveTo: body
+  saveStatus: status
+- id: check-status
+  type: if
+  condition: "{{status}} >= 400"
+  trueNext: handle-error    # real branch that does something useful
+
+# ❌ Anti-pattern: swallows every HTTP failure with no handler
+- id: fetch
+  type: http
+  url: "{{url}}"
+  throwOnError: "false"   # workflow "succeeds" even on 503
+  saveTo: body
+```
 
 **Response type detection:** By default (`auto`), binary vs text is auto-detected from the Content-Type header. Use `responseType: text` to force text processing (e.g., when a server returns `application/octet-stream` for JSON), or `responseType: binary` to force binary handling.
 
@@ -229,14 +282,29 @@ Parse a JSON string into an object for property access.
 
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
-| `source` | Yes | Yes | Variable name or template containing JSON string |
+| `source` | Yes | No | **Bare variable name** holding the JSON string — no `{{...}}`, no surrounding quotes |
 | `saveTo` | Yes | No | Variable for parsed result |
 
 After parsing, access properties using dot notation: `{{data.items[0].name}}`
 
 **JSON in markdown code blocks:** Automatically extracted from `` ```json ... ``` `` fences.
 
-**Template support:** The `source` property resolves `{{variable}}` templates first, then tries variable lookup (backward compat for `source: myVar`), then uses the resolved string directly as JSON.
+**`source` is a bare variable name.** Pass just the name — don't interpolate, don't wrap it, don't put it inside brackets:
+
+```yaml
+# ✅ Correct
+- id: parse-body
+  type: json
+  source: apiResponseBody
+  saveTo: parsed
+
+# ❌ Wrong
+- id: parse-body
+  type: json
+  source: "{{apiResponseBody}}"          # no interpolation here
+  # or: source: "[{{apiResponseBody}}]"  # wrapping corrupts valid JSON
+  saveTo: parsed
+```
 
 ---
 
@@ -847,15 +915,42 @@ path: "{{parsed.notes[counter].path}}"
 
 ### JSON Escape Modifier
 
-Use `{{variable:json}}` to escape the value for embedding in JSON strings. This properly escapes newlines, quotes, and other special characters.
+Use `{{variable:json}}` to escape the value for embedding **inside a string literal**. It properly escapes newlines, quotes, and other special characters.
+
+**Important:** `:json` only escapes the *content* — it does **not** add surrounding quotes. You must provide the quotes yourself when embedding inside a string.
 
 ```yaml
 # Without :json - breaks if content has newlines/quotes
 args: '{"text": "{{content}}"}'       # ERROR if content has special chars
 
-# With :json - safe for any content
+# With :json - safe for any content (the "..." around it is your string literal)
 args: '{"text": "{{content:json}}"}'  # OK - properly escaped
 ```
+
+**In `script` nodes (JavaScript):**
+
+`:json` substitutes plain text before the code runs, so you must wrap it in quotes when the value should be a JS string:
+
+```yaml
+# ✅ Correct — string literal with escaped content
+code: |
+  var text = "{{userInput:json}}";
+  var data = JSON.parse("{{jsonStr:json}}");
+
+# ❌ Wrong — missing outer quotes, produces invalid JS
+code: |
+  var text = {{userInput:json}};          # syntax error
+  JSON.parse({{jsonStr:json}});           # needs a string argument
+```
+
+If the variable already holds a parsed object/array (e.g. from a previous `json` node), use `{{var:json}}` *without* quotes so it becomes a JS object/array literal:
+
+```yaml
+code: |
+  var arr = {{parsedArray:json}};         # becomes: var arr = [{"url":"..."}]
+```
+
+This is essential when passing file content or user input to `mcp`, `http`, or `script` nodes with JSON bodies.
 
 ---
 

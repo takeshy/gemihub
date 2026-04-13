@@ -39,6 +39,7 @@ import { PromptModal } from "~/components/execution/PromptModal";
 import yaml from "js-yaml";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { useLocalWorkflowExecution } from "~/hooks/useLocalWorkflowExecution";
+import { useI18n } from "~/i18n/context";
 
 interface WorkflowFile {
   id: string;
@@ -50,10 +51,11 @@ interface WorkflowFile {
 interface WorkflowPropsPanelProps {
   activeFileId: string | null;
   activeFileName: string | null;
-  onNewWorkflow: () => void;
+  onNewWorkflow: (options?: { forceSkill?: boolean }) => void;
   onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
+  onModifySkillWithAI?: (skillFileId: string, skillFileName: string) => void;
   settings?: import("~/types/settings").UserSettings;
   refreshKey?: number;
   externalExecStatus?: { fileId: string; state: "running" | "done" | "error" } | null;
@@ -65,6 +67,11 @@ function isWorkflowFile(name: string | null): boolean {
   return name.endsWith(".yaml") || name.endsWith(".yml");
 }
 
+function isSkillMdFile(name: string | null): boolean {
+  if (!name) return false;
+  return name === "SKILL.md" || name.endsWith("/SKILL.md");
+}
+
 export function WorkflowPropsPanel({
   activeFileId,
   activeFileName,
@@ -72,6 +79,7 @@ export function WorkflowPropsPanel({
   onSelectFile,
   onWorkflowChanged,
   onModifyWithAI,
+  onModifySkillWithAI,
   settings,
   refreshKey,
   externalExecStatus,
@@ -98,6 +106,10 @@ export function WorkflowPropsPanel({
     <WorkflowListView
       onNewWorkflow={onNewWorkflow}
       onSelectFile={onSelectFile}
+      activeFileId={activeFileId}
+      activeFileName={activeFileName}
+      onModifySkillWithAI={onModifySkillWithAI}
+      isActiveFileSkill={isSkillMdFile(activeFileName)}
     />
   );
 }
@@ -170,7 +182,7 @@ function WorkflowNodeListView({
 }: {
   fileId: string;
   fileName: string;
-  onNewWorkflow: () => void;
+  onNewWorkflow: (options?: { forceSkill?: boolean }) => void;
   onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
   onWorkflowChanged?: () => void;
   onModifyWithAI?: (currentYaml: string, workflowName: string) => void;
@@ -179,6 +191,7 @@ function WorkflowNodeListView({
   externalExecStatus?: { fileId: string; state: "running" | "done" | "error" } | null;
   externalLogs?: LogEntry[];
 }) {
+  const { t: nodeListT } = useI18n();
   const { content: rawContent, error: fileError, saveToCache, refresh } = useFileWithCache(fileId, refreshKey, "PropsPanel");
 
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
@@ -876,16 +889,16 @@ function WorkflowNodeListView({
           <button
             onClick={() => onModifyWithAI(rawYaml, workflowName)}
             className="flex items-center gap-1 rounded bg-purple-100 px-2 py-1 text-xs text-purple-700 hover:bg-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:hover:bg-purple-900/60"
-            title="Modify with AI"
+            title={nodeListT("workflow.modifyWorkflowWithAI")}
           >
             <Sparkles size={ICON.SM} />
             AI
           </button>
         )}
         <button
-          onClick={onNewWorkflow}
+          onClick={() => onNewWorkflow()}
           className="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-          title="New Workflow / Skill"
+          title={nodeListT("workflow.createWorkflowWithAI")}
         >
           <FilePlus size={ICON.SM} />
           New
@@ -999,10 +1012,19 @@ function getNodeOrder(workflow: Workflow): string[] {
 function WorkflowListView({
   onNewWorkflow,
   onSelectFile,
+  activeFileId,
+  activeFileName,
+  onModifySkillWithAI,
+  isActiveFileSkill,
 }: {
-  onNewWorkflow: () => void;
+  onNewWorkflow: (options?: { forceSkill?: boolean }) => void;
   onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
+  activeFileId: string | null;
+  activeFileName: string | null;
+  onModifySkillWithAI?: (skillFileId: string, skillFileName: string) => void;
+  isActiveFileSkill: boolean;
 }) {
+  const { t } = useI18n();
   const [workflows, setWorkflows] = useState<WorkflowFile[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1033,24 +1055,48 @@ function WorkflowListView({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2 dark:border-gray-800">
         <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-          Workflows
+          {t("header.workflow")}
         </span>
-        <div className="flex items-center gap-1">
+        <button
+          onClick={fetchWorkflows}
+          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+          title="Refresh"
+        >
+          <RefreshCw size={ICON.SM} />
+        </button>
+      </div>
+
+      {/* Create actions + explainer */}
+      <div className="border-b border-gray-200 px-3 py-3 dark:border-gray-800 space-y-2">
+        <div className="flex flex-col gap-1.5">
           <button
-            onClick={fetchWorkflows}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="Refresh"
+            onClick={() => onNewWorkflow({ forceSkill: false })}
+            className="flex items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700"
           >
-            <RefreshCw size={ICON.SM} />
+            <Sparkles size={ICON.SM} />
+            {t("workflow.createWorkflowWithAI")}
           </button>
           <button
-            onClick={onNewWorkflow}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="New Workflow / Skill"
+            onClick={() => onNewWorkflow({ forceSkill: true })}
+            className="flex items-center justify-center gap-1.5 rounded-md border border-purple-300 bg-white px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:bg-gray-900 dark:text-purple-300 dark:hover:bg-purple-900/20"
           >
-            <Plus size={ICON.MD} />
+            <Sparkles size={ICON.SM} />
+            {t("workflow.createSkillWithAI")}
           </button>
         </div>
+        <div className="space-y-1 text-[11px] text-gray-500 dark:text-gray-400">
+          <p>{t("workflow.createHintWorkflow")}</p>
+          <p>{t("workflow.createHintSkill")}</p>
+        </div>
+        {isActiveFileSkill && onModifySkillWithAI && activeFileId && activeFileName && (
+          <button
+            onClick={() => onModifySkillWithAI(activeFileId, activeFileName)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+          >
+            <Sparkles size={ICON.SM} />
+            {t("workflow.modifySkillWithAI")}
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -1065,16 +1111,9 @@ function WorkflowListView({
               size={32}
               className="mb-3 text-gray-300 dark:text-gray-600"
             />
-            <p className="mb-3 text-center text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-center text-sm text-gray-500 dark:text-gray-400">
               No workflows or skills yet.
             </p>
-            <button
-              onClick={onNewWorkflow}
-              className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
-            >
-              <Plus size={ICON.MD} />
-              New Workflow / Skill
-            </button>
           </div>
         ) : (
           <div className="py-1">
@@ -1095,13 +1134,6 @@ function WorkflowListView({
                 </span>
               </button>
             ))}
-            <button
-              onClick={onNewWorkflow}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            >
-              <Plus size={ICON.MD} className="flex-shrink-0" />
-              <span>New Workflow / Skill</span>
-            </button>
           </div>
         )}
       </div>

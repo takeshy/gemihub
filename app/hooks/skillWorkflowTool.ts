@@ -79,6 +79,22 @@ export async function executeSkillWorkflowTool(
     const finalStatus = result.historyRecord?.status || "completed";
     callbacks?.onSkillWorkflowEnd?.(fileId, finalStatus);
 
+    // If a node inside the workflow threw, local-executor records status="error"
+    // but does NOT rethrow. Surface that as an error-shape result so the chat
+    // AI sees a failure and the UI can render the "Open workflow" recovery
+    // button. Carries `workflowPath` (the Drive file id) so the UI can open
+    // the workflow file without needing a skill-context reverse lookup.
+    if (finalStatus === "error") {
+      const errorStep = result.historyRecord?.steps?.find((s) => s.status === "error");
+      const errorMessage = errorStep?.error || "Workflow execution failed";
+      return {
+        error: `Workflow execution failed: ${errorMessage}. Do not retry automatically — report the error to the user and ask how to proceed.`,
+        workflowId,
+        workflowPath: fileId,
+        variables: resultVars,
+      };
+    }
+
     return {
       status: finalStatus,
       variables: resultVars,
@@ -87,6 +103,12 @@ export async function executeSkillWorkflowTool(
   } catch (error) {
     console.error("[skill-workflow] execution failed:", workflowFileName, error);
     callbacks?.onSkillWorkflowEnd?.(fileId, "error");
-    throw error;
+    // Match llm-hub's contract: return error-shape with workflowPath so the
+    // chat UI can offer the "Open workflow" recovery button.
+    return {
+      error: `Workflow execution failed: ${error instanceof Error ? error.message : String(error)}. Do not retry automatically — report the error to the user and ask how to proceed.`,
+      workflowId,
+      workflowPath: fileId,
+    };
   }
 }

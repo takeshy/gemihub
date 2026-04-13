@@ -2,10 +2,11 @@
 
 import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug, Music } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug, Music, FolderOpen, Sparkles } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
-import type { Message, Attachment, GeneratedImage, ToolCall, StreamChunkUsage } from "~/types/chat";
+import type { Message, Attachment, GeneratedImage, ToolCall, ToolResult, StreamChunkUsage } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
+import { useSkills } from "~/contexts/SkillContext";
 import { McpAppRenderer } from "./McpAppRenderer";
 import { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } from "~/services/indexeddb-cache";
 
@@ -90,42 +91,159 @@ function getMcpToolLabel(name: string, mcpServerIds?: string[]) {
   return name;
 }
 
+/**
+ * Collect unique skills invoked by run_skill_workflow tool calls on a message.
+ * Returns skills with { id, name, skillMdFileId } so the UI can render a chip
+ * per skill that is clickable to open SKILL.md.
+ */
+function getInvokedSkills(
+  toolCalls: ToolCall[],
+  skills: ReturnType<typeof useSkills>["skills"],
+): Array<{ id: string; name: string; skillMdFileId: string }> {
+  const seen = new Set<string>();
+  const result: Array<{ id: string; name: string; skillMdFileId: string }> = [];
+  for (const tc of toolCalls) {
+    if (tc.name !== "run_skill_workflow") continue;
+    const workflowId = typeof tc.args.workflowId === "string" ? tc.args.workflowId : "";
+    const [skillId] = workflowId.split("/", 2);
+    if (!skillId || seen.has(skillId)) continue;
+    const skill = skills.find((s) => s.id === skillId);
+    if (!skill) continue;
+    seen.add(skillId);
+    result.push({ id: skill.id, name: skill.name, skillMdFileId: skill.skillMdFileId });
+  }
+  return result;
+}
+
+
+/**
+ * Returns the workflow file id for a failed run_skill_workflow call.
+ *
+ * Matches the obsidian-llm-hub contract: the tool itself surfaces
+ * `{ error, workflowPath }` in its result when the workflow fails, so the UI
+ * just reads those fields directly (no skill-context reverse lookup required).
+ * Returns null when the call succeeded or wasn't a skill-workflow call.
+ */
+function getFailedSkillWorkflowFileId(
+  tc: ToolCall,
+  toolResults: ToolResult[] | undefined,
+): string | null {
+  if (tc.name !== "run_skill_workflow") return null;
+  const result = toolResults?.find((r) => r.toolCallId === tc.id)?.result;
+  if (!result || typeof result !== "object") return null;
+  const r = result as Record<string, unknown>;
+  if (typeof r.error !== "string") return null;
+  return typeof r.workflowPath === "string" ? r.workflowPath : null;
+}
+
 function ToolCallBadges({
   toolCalls,
+  toolResults,
   mcpServerIds,
 }: {
   toolCalls: ToolCall[];
+  toolResults?: ToolResult[];
   mcpServerIds?: string[];
 }) {
+  const { t } = useI18n();
+  const { skills } = useSkills();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const hasAnyFailedWorkflow = toolCalls.some(
+    (tc) => getFailedSkillWorkflowFileId(tc, toolResults) !== null,
+  );
+  const invokedSkills = getInvokedSkills(toolCalls, skills);
+
+  const openWorkflow = (fileId: string) => {
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId, fileName: "workflow.yaml", mimeType: "text/yaml" },
+      }),
+    );
+    window.dispatchEvent(new CustomEvent("gemihub:open-workflow-tab"));
+  };
+
+  const openSkill = (fileId: string, name: string) => {
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId, fileName: `${name}/SKILL.md`, mimeType: "text/markdown" },
+      }),
+    );
+  };
 
   return (
     <div className="mb-2">
+      {invokedSkills.length > 0 && (
+        <div className="mb-1 flex flex-wrap items-center gap-1">
+          <Sparkles size={10} className="flex-shrink-0 text-purple-500" />
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            {t("chat.skillsUsed")}:
+          </span>
+          {invokedSkills.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => openSkill(s.skillMdFileId, s.name)}
+              className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700 hover:bg-purple-200 hover:underline dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+              title={t("chat.clickToOpen").replace("{{source}}", s.name)}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap gap-1">
-        {toolCalls.map((tc) => (
-          <button
-            key={tc.id}
-            onClick={() => setExpandedId(expandedId === tc.id ? null : tc.id)}
-            className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
-            title={JSON.stringify(tc.args, null, 2)}
-          >
-            {getToolIcon(tc.name)}
-            {getMcpToolLabel(tc.name, mcpServerIds)}
-          </button>
-        ))}
+        {toolCalls.map((tc) => {
+          const failedFileId = getFailedSkillWorkflowFileId(tc, toolResults);
+          return (
+            <span key={tc.id} className="inline-flex items-center gap-1">
+              <button
+                onClick={() => setExpandedId(expandedId === tc.id ? null : tc.id)}
+                className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+                title={JSON.stringify(tc.args, null, 2)}
+              >
+                {getToolIcon(tc.name)}
+                {getMcpToolLabel(tc.name, mcpServerIds)}
+              </button>
+              {failedFileId && (
+                <button
+                  onClick={() => openWorkflow(failedFileId)}
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                >
+                  <FolderOpen size={10} />
+                  {t("chat.openWorkflow")}
+                </button>
+              )}
+            </span>
+          );
+        })}
       </div>
       {expandedId && (() => {
         const tc = toolCalls.find(t => t.id === expandedId);
         if (!tc) return null;
+        const tr = toolResults?.find(r => r.toolCallId === tc.id);
         return (
           <div className="mt-1 rounded-md border border-purple-200 bg-purple-50 p-2 text-xs text-purple-700 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-300">
             <div className="font-medium">{tc.name}</div>
-            <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-[10px] opacity-80">
+            <div className="mt-0.5 text-[10px] font-semibold uppercase opacity-70">args</div>
+            <pre className="whitespace-pre-wrap break-words font-mono text-[10px] opacity-80">
               {JSON.stringify(tc.args, null, 2)}
             </pre>
+            {tr && (
+              <>
+                <div className="mt-1 text-[10px] font-semibold uppercase opacity-70">result</div>
+                <pre className="whitespace-pre-wrap break-words font-mono text-[10px] opacity-80">
+                  {typeof tr.result === "string" ? tr.result : JSON.stringify(tr.result, null, 2)}
+                </pre>
+              </>
+            )}
           </div>
         );
       })()}
+      {hasAnyFailedWorkflow && (
+        <div className="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+          {t("chat.workflowErrorHint")}
+        </div>
+      )}
     </div>
   );
 }
@@ -397,7 +515,11 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
 
           {/* Tool calls (assistant only) */}
           {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-            <ToolCallBadges toolCalls={message.toolCalls} mcpServerIds={mcpServerIds} />
+            <ToolCallBadges
+              toolCalls={message.toolCalls}
+              toolResults={message.toolResults}
+              mcpServerIds={mcpServerIds}
+            />
           )}
 
           {/* RAG sources (assistant only) */}

@@ -62,7 +62,7 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "responseType", label: "Response Type", required: false, options: ["auto", "text", "binary"], defaultValue: "auto" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "response" },
         { key: "saveStatus", label: "Save Status To", required: false, placeholder: "statusCode" },
-        { key: "throwOnError", label: "Throw On Error", required: false, options: ["false", "true"], defaultValue: "false" },
+        { key: "throwOnError", label: "Throw On Error", required: false, options: ["true", "false"], defaultValue: "true" },
       ];
     case "json":
       return [

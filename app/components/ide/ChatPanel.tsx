@@ -65,6 +65,8 @@ interface ChatPanelProps {
   onSkillWorkflowStart?: (workflowId: string, workflowName: string) => void;
   onSkillWorkflowEnd?: (workflowId: string, status: string) => void;
   onSkillWorkflowLog?: (log: import("~/engine/types").ExecutionLog) => void;
+  /** Open a file in the main viewer (used for clickable skill chips). */
+  onOpenFile?: (fileId: string, fileName: string, mimeType: string) => void;
 }
 
 export function ChatPanel({
@@ -76,6 +78,7 @@ export function ChatPanel({
   onSkillWorkflowStart,
   onSkillWorkflowEnd,
   onSkillWorkflowLog,
+  onOpenFile,
 }: ChatPanelProps) {
   const { t } = useI18n();
   const { skills, activeSkillIds, toggleSkill, activateSkill, getActiveSkillsSystemPrompt, getActiveSkillWorkflows } = useSkills();
@@ -1188,6 +1191,7 @@ export function ChatPanel({
         skills={skills}
         activeSkillIds={activeSkillIds}
         onToggleSkill={toggleSkill}
+        onOpenSkill={onOpenFile ? (fileId, name) => onOpenFile(fileId, name, "text/markdown") : undefined}
       />
 
       {showCryptoPrompt && settings.encryption.encryptedPrivateKey && (

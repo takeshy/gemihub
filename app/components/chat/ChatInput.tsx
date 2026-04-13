@@ -59,6 +59,7 @@ interface ChatInputProps {
   skills?: SkillMetadata[];
   activeSkillIds?: string[];
   onToggleSkill?: (skillId: string) => void;
+  onOpenSkill?: (skillMdFileId: string, skillName: string) => void;
 }
 
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
@@ -183,6 +184,7 @@ export function ChatInput({
   skills = [],
   activeSkillIds = [],
   onToggleSkill,
+  onOpenSkill,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -830,6 +832,7 @@ export function ChatInput({
             skills={skills}
             activeSkillIds={activeSkillIds}
             onToggleSkill={onToggleSkill}
+            onOpenSkill={onOpenSkill}
             disabled={disabled}
           />
         )}

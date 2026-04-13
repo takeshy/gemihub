@@ -272,6 +272,14 @@ function IDELayout({
   const { activeFileId, activeFileName, activeFileMimeType, handleSelectFile, clearActiveFile } =
     useActiveFile({ rightPanel, setRightPanel });
 
+  // Listen for the failed-workflow "Open workflow" button, which opens the file
+  // via plugin-select-file and then asks us to switch the right sidebar to the workflow tab.
+  useEffect(() => {
+    const handler = () => setRightPanel("workflow");
+    window.addEventListener("gemihub:open-workflow-tab", handler);
+    return () => window.removeEventListener("gemihub:open-workflow-tab", handler);
+  }, []);
+
   // Workflow version for refreshing MainViewer after sidebar edits
   const [workflowVersion, setWorkflowVersion] = useState(0);
   const handleWorkflowChanged = useCallback(() => {
@@ -307,6 +315,7 @@ function IDELayout({
     setAiDialog,
     handleNewWorkflow,
     handleModifyWithAI,
+    handleModifySkillWithAI,
     handleAIAccept,
   } = useAIWorkflowDialog({ activeFileId, handleSelectFile, handleWorkflowChanged });
 
@@ -350,6 +359,7 @@ function IDELayout({
         handleNewWorkflow={handleNewWorkflow}
         handleWorkflowChanged={handleWorkflowChanged}
         handleModifyWithAI={handleModifyWithAI}
+        handleModifySkillWithAI={handleModifySkillWithAI}
         handleAIAccept={handleAIAccept}
         showPushRejected={showPushRejected}
         setShowPushRejected={setShowPushRejected}
@@ -406,6 +416,7 @@ function IDEContent({
   handleNewWorkflow,
   handleWorkflowChanged,
   handleModifyWithAI,
+  handleModifySkillWithAI,
   handleAIAccept,
   showPushRejected,
   setShowPushRejected,
@@ -444,9 +455,10 @@ function IDEContent({
   setAiDialog: (v: AIDialogState | null) => void;
   handleSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
   clearActiveFile: () => void;
-  handleNewWorkflow: () => void;
+  handleNewWorkflow: (options?: { forceSkill?: boolean }) => void;
   handleWorkflowChanged: () => void;
   handleModifyWithAI: (yaml: string, name: string) => void;
+  handleModifySkillWithAI: (skillFileId: string, skillFileName: string) => void;
   handleAIAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void;
   showPushRejected: boolean;
   setShowPushRejected: (v: boolean) => void;
@@ -1065,6 +1077,7 @@ function IDEContent({
           onSkillWorkflowLog={(log) => {
             setSilentExecLogs((prev) => [...prev, { nodeId: log.nodeId, nodeType: log.nodeType, message: log.message, status: log.status, timestamp: log.timestamp.toISOString(), input: log.input, output: log.output }]);
           }}
+          onOpenFile={handleSelectFile}
         />
       </div>
       {rightPanel === "workflow" && !activePluginSidebarView ? (
@@ -1075,6 +1088,7 @@ function IDEContent({
           onSelectFile={handleSelectFile}
           onWorkflowChanged={handleWorkflowChanged}
           onModifyWithAI={handleModifyWithAI}
+          onModifySkillWithAI={handleModifySkillWithAI}
           settings={settings}
           refreshKey={workflowVersion}
           externalExecStatus={
@@ -1379,6 +1393,9 @@ function IDEContent({
           apiPlan={settings.apiPlan}
           encryptedPrivateKey={settings.encryption?.encryptedPrivateKey}
           salt={settings.encryption?.salt}
+          forceSkill={aiDialog.forceSkill}
+          existingInstructions={aiDialog.existingInstructions}
+          workflowFilePath={aiDialog.workflowFilePath}
           onAccept={handleAIAccept}
           onClose={() => setAiDialog(null)}
         />

@@ -187,7 +187,35 @@ export async function handleHttpNodeLocal(
     if (body && ["POST", "PUT", "PATCH"].includes(method)) {
       requestOptions.body = body;
     }
-    response = await fetch(url, requestOptions);
+
+    // Cross-origin requests in the browser are blocked by CORS when the
+    // target has no Access-Control-Allow-Origin header. For public URL
+    // fetches (common in skill workflows like OGP scraping), route through
+    // the server proxy so the request actually succeeds. Same-origin
+    // requests go direct to keep local/auth-cookie flows unchanged.
+    const targetOrigin = (() => {
+      try { return new URL(url).origin; } catch { return ""; }
+    })();
+    const needsProxy = targetOrigin !== "" && targetOrigin !== window.location.origin;
+
+    if (needsProxy) {
+      // body can be FormData/Blob for multipart uploads; the proxy only
+      // accepts JSON-serializable bodies, so we force same-origin fetch for
+      // those cases even if cross-origin.
+      const bodyIsJsonSafe = body === undefined || typeof body === "string";
+      if (bodyIsJsonSafe) {
+        response = await fetch("/api/workflow/http-fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, method, headers, body }),
+          signal: requestSignal,
+        });
+      } else {
+        response = await fetch(url, requestOptions);
+      }
+    } else {
+      response = await fetch(url, requestOptions);
+    }
   } catch (err) {
     if (abortSignal?.aborted) throw new Error("Execution cancelled");
     throw new Error(`HTTP request failed: ${method} ${url} - ${err instanceof Error ? err.message : String(err)}`);
@@ -196,7 +224,14 @@ export async function handleHttpNodeLocal(
   const saveStatus = node.properties["saveStatus"];
   if (saveStatus) context.variables.set(saveStatus, response.status);
 
-  if (response.status >= 400 && replaceVariables(node.properties["throwOnError"] || "", context) === "true") {
+  // Default to throwing on HTTP 4xx/5xx so failures surface to the chat AI
+  // and the user (and the "Open workflow" recovery UI for skill workflows).
+  // Set `throwOnError: "false"` explicitly to opt into silent handling.
+  const throwOnErrorProp = replaceVariables(
+    node.properties["throwOnError"] || "true",
+    context,
+  );
+  if (response.status >= 400 && throwOnErrorProp !== "false") {
     const responseText = await response.text();
     throw new Error(`HTTP ${response.status} ${method} ${url}: ${responseText}`);
   }

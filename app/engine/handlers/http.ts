@@ -187,7 +187,16 @@ export async function handleHttpNode(
   const saveStatus = node.properties["saveStatus"];
   if (saveStatus) context.variables.set(saveStatus, response.status);
 
-  if (response.status >= 400 && replaceVariables(node.properties["throwOnError"] || "", context) === "true") {
+  // Default to throwing on HTTP 4xx/5xx so failures surface to the chat AI
+  // and the user (and the "Open workflow" recovery UI for skill workflows).
+  // Set `throwOnError: "false"` explicitly to opt into silent handling, which
+  // is only appropriate when the workflow inspects `saveStatus` and branches
+  // on it.
+  const throwOnErrorProp = replaceVariables(
+    node.properties["throwOnError"] || "true",
+    context,
+  );
+  if (response.status >= 400 && throwOnErrorProp !== "false") {
     const responseText = await response.text();
     throw new Error(`HTTP ${response.status} ${method} ${url}: ${responseText}`);
   }

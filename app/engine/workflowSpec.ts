@@ -87,16 +87,32 @@ nodes:
 - Object: \`{{obj.property}}\`, \`{{obj.nested.value}}\`
 - Array: \`{{arr[0]}}\`, \`{{arr[0].name}}\`
 - Variable index: \`{{arr[index]}}\` (where index is a variable)
-- JSON escape: \`{{variable:json}}\` for embedding in JSON strings (escapes quotes, newlines, etc.)
+- JSON escape: \`{{variable:json}}\` — escapes content to be safely embedded **inside a string literal** (escapes quotes, newlines, etc.)
 - Expression (in set node): \`{{a}} + {{b}}\`, operators: +, -, *, /, %
 
-Example — JSON escape usage:
+### CRITICAL: \`:json\` does NOT add surrounding quotes
+\`{{var:json}}\` only ESCAPES the content — it does not add outer quotes. You must provide the quotes yourself when embedding inside a string.
+
+✅ Correct (inside a JSON string):
 \`\`\`yaml
-- id: build-json
-  type: set
-  name: payload
-  value: '{"content": "{{userInput:json}}"}'
+args: '{"text": "{{content:json}}"}'   # the "..." around it provides the string literal
 \`\`\`
+
+✅ Correct (inside JavaScript code in a script node):
+\`\`\`yaml
+code: |
+  var text = "{{content:json}}";       # wrap in quotes to make it a JS string
+  return JSON.parse("{{jsonStr:json}}"); # quotes turn it into a parseable string
+\`\`\`
+
+❌ Wrong — missing quotes produces invalid JavaScript:
+\`\`\`yaml
+code: |
+  var text = {{content:json}};          # syntax error — bare escaped text isn't valid JS
+  return JSON.parse({{jsonStr:json}});  # same error
+\`\`\`
+
+**Rule of thumb for script/http/json-string contexts**: if the variable holds a plain string that should become a string literal, always write \`"{{var:json}}"\` with the surrounding quotes.
 
 ## Condition Syntax
 Operators: ==, !=, <, >, <=, >=, contains
@@ -111,9 +127,12 @@ condition: "{{text}} contains keyword"
 ### Control Flow
 
 #### variable
-Initialize a variable.
+Initialize or declare a variable.
 - **name** (required): Variable name
-- **value** (optional): Initial value (string or number, default: empty string)
+- **value** (optional): Initial value (string or number).
+  - Omit to declare an INPUT variable: keeps the value passed by the caller (parent workflow / skill / hotkey); defaults to "" if no caller value was provided.
+  - Specify \`value: ""\` (or a number/string) to force a known initial value regardless of caller state.
+  - Omitting \`value\` is perfectly valid for accumulators that will be appended to later — the node writes "" if the variable doesn't exist yet.
 
 #### set
 Update a variable with expression support.
@@ -303,7 +322,12 @@ Make HTTP request.
 - **body** (optional): Request body (supports {{variables}})
 - **saveTo** (optional): Variable for response (text, JSON, or FileExplorerData for binary)
 - **saveStatus** (optional): Variable for HTTP status code (number)
-- **throwOnError** (optional): "true" to throw error on 4xx/5xx status
+- **throwOnError** (optional): Whether to throw on 4xx/5xx status. **Default:
+  \`"true"\`** — HTTP errors abort the workflow so the failure surfaces to the
+  chat AI, the user, and the "Open workflow" recovery UI. Set \`"false"\`
+  ONLY when the workflow **explicitly branches on \`saveStatus\`** (e.g. an
+  \`if\` node checking \`{{status}} >= 400\`) and the downstream path
+  legitimately handles the error case — not just to "not crash".
 
 Form-data example with file upload:
 \`\`\`yaml
@@ -326,24 +350,71 @@ Sync a Drive file to a Gemini RAG (File Search) store.
 ### Data Processing
 
 #### json
-Parse JSON string into an object for property access in templates.
-- **source** (required): Variable containing JSON string
-- **saveTo** (required): Variable for parsed JSON object
+Parse a JSON string into an object/array for property access in templates.
+- **source** (required): The **variable name** holding the JSON string — NOT an interpolated expression, NOT wrapped in quotes, NOT with \`{{...}}\`. Just the bare name.
+- **saveTo** (required): Variable for the parsed object
 
 After parsing, access nested values with template syntax such as \`{{data.items[0].name}}\`.
 
+✅ Correct:
+\`\`\`yaml
+- id: parse-result
+  type: json
+  source: apiResponseBody     # just the variable name
+  saveTo: parsed
+\`\`\`
+
+❌ Wrong:
+\`\`\`yaml
+- id: parse-result
+  type: json
+  source: "{{apiResponseBody}}"       # WRONG — no interpolation here
+  source: "[{{apiResponseBody}}]"     # WRONG — you'll corrupt valid JSON by wrapping it
+  saveTo: parsed
+\`\`\`
+
 #### script
 Execute JavaScript code in a sandboxed environment (no DOM, network, or storage access). Useful for string manipulation, data transformation, calculations, and encoding/decoding that the set node cannot handle.
-- **code** (required): JavaScript code (supports {{variables}}). Use \`return\` to return a value. Non-string return values are JSON-serialized.
+- **code** (required): JavaScript code. \`{{variable}}\` is substituted as plain text BEFORE the code runs. Use \`return\` to return a value. Non-string return values are JSON-serialized.
 - **saveTo** (optional): Variable for the result
 - **timeout** (optional): Timeout in milliseconds (default: 10000)
+
+### Variable interpolation in script code — READ CAREFULLY
+
+The substitution is a plain text replace. Pay attention to what makes valid JavaScript AFTER substitution.
+
+- If the variable is a **plain string** and you want it as a JS string, wrap in quotes with \`:json\`:
+\`\`\`yaml
+code: |
+  var text = "{{userInput:json}}";      # becomes: var text = "hello \\"world\\"";
+\`\`\`
+
+- If the variable is a **JSON string that you want to parse**, wrap in quotes with \`:json\` and pass to \`JSON.parse\`:
+\`\`\`yaml
+code: |
+  var data = JSON.parse("{{jsonStr:json}}");  # becomes: JSON.parse("[{\\"url\\":\\"...\\"}]")
+\`\`\`
+
+- If the variable already holds a **parsed object/array** (e.g., from a previous \`json\` node), use it directly without quotes:
+\`\`\`yaml
+code: |
+  var arr = {{parsedArray:json}};       # becomes: var arr = [{"url":"..."}];  (valid JS literal)
+\`\`\`
+
+❌ Common mistakes:
+\`\`\`yaml
+code: |
+  var text = {{userInput:json}};        # WRONG — missing quotes, invalid JS
+  JSON.parse({{jsonStr:json}});         # WRONG — JSON.parse needs a string, you removed the quotes
+  var html = '{{content}}';             # RISKY — breaks if content contains a single quote or newline; prefer "{{content:json}}"
+\`\`\`
 
 Example — split and sort a comma-separated list:
 \`\`\`yaml
 - id: sort-items
   type: script
   code: |
-    var items = '{{rawList}}'.split(',').map(function(s){ return s.trim(); });
+    var items = "{{rawList:json}}".split(',').map(function(s){ return s.trim(); });
     items.sort();
     return items.join('\\n');
   saveTo: sortedList
@@ -353,7 +424,7 @@ Example — Base64 encode:
 \`\`\`yaml
 - id: encode
   type: script
-  code: "return btoa('{{plainText}}')"
+  code: return btoa("{{plainText:json}}")
   saveTo: encoded
 \`\`\`
 
@@ -499,6 +570,55 @@ Loop key points:
 9. Use prompt-value for simple text input, prompt-selection for longer text, prompt-file when you need file content
 10. When building JSON payloads with user content, use \`{{variable:json}}\` to safely escape strings
 11. **Use comment field**: Add a \`comment\` property to nodes to describe their purpose. This is displayed in the sidebar for readability. Example: \`comment: "Fetch latest articles from RSS feed"\`
+12. **Let HTTP failures surface.** \`http\` nodes throw on 4xx/5xx **by default** — don't override this unless you genuinely handle the error downstream. A workflow that silently continues on HTTP errors (\`throwOnError: "false"\` without a handler, or \`script\` nodes that read \`saveStatus\` and return "error" strings) looks like a success to the chat AI and the runtime, hides the failure from the user, and blocks the "Open workflow" recovery UI. Reserve \`throwOnError: "false"\` for the case where the workflow has a real error-handling branch (e.g. an \`if\` node reading \`saveStatus\` and taking a different path on failure). Example:
+    \`\`\`yaml
+    # ✅ Default: HTTP errors abort the workflow
+    - id: fetch
+      type: http
+      url: "{{url}}"
+      saveTo: body
+      saveStatus: status
+
+    # ✅ Acceptable: explicit error-handling branch
+    - id: fetch
+      type: http
+      url: "{{url}}"
+      throwOnError: "false"
+      saveTo: body
+      saveStatus: status
+    - id: check-status
+      type: if
+      condition: "{{status}} >= 400"
+      trueNext: handle-error    # real branch that does something useful
+
+    # ❌ Anti-pattern: swallows every HTTP failure
+    - id: fetch
+      type: http
+      url: "{{url}}"
+      throwOnError: "false"   # workflow "succeeds" even on 503, no handler
+      saveTo: body
+    \`\`\`
+
+## How workflow output reaches the user
+
+When a workflow is invoked by a skill (via the \`run_skill_workflow\` tool), the
+runtime **automatically returns every variable whose name does NOT start with
+\`_\`** back to the chat AI. The chat AI then decides how to present those
+values to the user, guided by the SKILL.md instructions.
+
+- You do NOT need to add a final \`command\` node just to "output" a variable.
+  The chat-side AI already receives it.
+- A \`command\` node runs a separate LLM call **inside** the workflow; its
+  output gets saved to a variable — it does not bypass the chat AI to write
+  directly to the chat.
+- If the user wants a specific variable (e.g. \`ogpMarkdown\`) rendered verbatim
+  in the chat reply, write that requirement into the SKILL.md instructions
+  body: _"After the workflow completes, output the value of \`ogpMarkdown\` to
+  the user verbatim."_ The instructions steer the chat AI's behavior.
+- For plain workflows triggered from the Workflow panel (not via a skill),
+  variables are not surfaced to the chat — in that case use UI-producing
+  nodes such as \`dialog\`, or file-writing nodes like \`drive-save\`, for
+  visible results.
 `;
 }
 
@@ -615,6 +735,8 @@ export function buildWorkflowUserPrompt({
   name,
   description,
   currentYaml,
+  existingInstructions,
+  workflowFilePath,
   executionSteps,
   outputAsMarkdown,
   skillMode,
@@ -624,11 +746,50 @@ export function buildWorkflowUserPrompt({
   name?: string;
   description: string;
   currentYaml?: string;
+  existingInstructions?: string;
+  /** For Modify Skill with AI: actual path of the referenced workflow file
+   *  relative to the skill folder (e.g., "workflows/run-lint.yaml"). Used to
+   *  preserve the correct frontmatter reference instead of inventing one
+   *  from the skill name. */
+  workflowFilePath?: string;
   executionSteps?: import("./types").ExecutionStep[];
   outputAsMarkdown?: boolean;
   skillMode?: boolean;
   skillFolderName?: string;
 }): string {
+  if (mode === "modify" && skillMode && currentYaml) {
+    let executionContext = "";
+    if (executionSteps && executionSteps.length > 0) {
+      executionContext = "\n\nEXECUTION HISTORY (selected steps):\n";
+      executionSteps.forEach((step, i) => {
+        executionContext += `\nStep ${i + 1} [${step.nodeType}] ${step.nodeId}\n`;
+        if (step.input) {
+          const inputStr = typeof step.input === "string"
+            ? step.input
+            : JSON.stringify(step.input, null, 2);
+          executionContext += `  Input: ${inputStr}\n`;
+        }
+        if (step.error) {
+          executionContext += `  Error: ${step.error}\n`;
+        } else if (step.output !== undefined) {
+          const outputStr = typeof step.output === "string"
+            ? step.output
+            : JSON.stringify(step.output, null, 2);
+          executionContext += `  Output: ${outputStr}\n`;
+        }
+        executionContext += `  Status: ${step.status}\n`;
+      });
+    }
+    // Use the caller-supplied workflow path when available (it's the actual
+    // path in the skill folder). Only fall back to skill-name-based invention
+    // when the caller didn't tell us — this happens for create-skill flows.
+    const workflowRefPath = workflowFilePath
+      ?? `workflows/${name?.endsWith(".yaml") ? name : `${name || "workflow"}.yaml`}`;
+    const instructionsSection = existingInstructions
+      ? `Here is the current SKILL.md instructions body:\n\n${existingInstructions}\n\n`
+      : "";
+    return `Here is the current workflow YAML:\n\n\`\`\`yaml\n${currentYaml}\n\`\`\`\n\n${instructionsSection}${executionContext}\nPlease modify this skill according to the following request:\n${description}\n\nOutput the updated SKILL.md instructions body first as raw markdown text, then a line containing only "===WORKFLOW===", then the COMPLETE modified workflow YAML inside a \`\`\`yaml code block.\nPreserve the workflow reference to "${workflowRefPath}" in the SKILL.md frontmatter conceptually; only output the instructions body, not the frontmatter.`;
+  }
   if (mode === "modify" && currentYaml) {
     let executionContext = "";
     if (executionSteps && executionSteps.length > 0) {

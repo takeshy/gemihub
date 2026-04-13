@@ -104,6 +104,20 @@ Skill workflows run in headless mode when invoked by the AI:
 - Drive events are forwarded to the chat so file changes appear in the conversation
 - The AI receives the workflow's result variables as the tool result
 
+### Returning values to the chat
+
+When the AI invokes a skill workflow via `run_skill_workflow`, **every variable whose name does not start with `_` is automatically returned to the chat AI** as part of the tool result. You do not need to add a trailing `command` node just to "output" a result — simply `saveTo:` the value you want the chat AI to see.
+
+A `command` node runs a separate LLM call *inside* the workflow and stores its output to a variable; it does not write directly to the chat. If the user needs a specific variable rendered verbatim in the chat reply, put that instruction in the SKILL.md instructions body, for example:
+
+> After the workflow completes, output the value of `ogpMarkdown` to the user verbatim, with no additional commentary.
+
+The chat-side AI, guided by those instructions, will include the variable in its response.
+
+### Error recovery
+
+If a skill workflow fails during a chat, the failing tool call shows an **Open workflow** button. Clicking it opens the workflow file *and* switches the right sidebar to the Workflow / skill tab so you can edit the flow and re-run. A hint line below also points you at "Modify skill with AI" → referencing the execution history for the failing step.
+
 ---
 
 ## Using Skills in Chat

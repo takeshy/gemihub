@@ -39,6 +39,29 @@
 
 数値は自動検出されます。値が数値としてパースできる場合、数値型として保存されます。
 
+**`variable` ノードの `value` は省略可能です。** 省略した場合、2 つの便利な挙動があります:
+
+- **入力宣言** — 呼び出し元（親ワークフロー、スキル呼び出し、ホットキートリガー）で既に変数がセットされていれば、その値を保持します。ワークフローが受け取る入力変数を宣言するのに使えます（上書きしません）。
+- **空のアキュムレータ** — 呼び出し元で値がセットされていなければ、`""` で初期化されます。後から追記していくアキュムレータ用途に安全です。
+
+```yaml
+# 入力宣言 — 呼び出し元の値を使用、なければ ""
+- id: declare-input
+  type: variable
+  name: inputText
+
+# アキュムレータ — "" で開始し、後から追記される
+- id: init-output
+  type: variable
+  name: outputMarkdown
+
+# 明示的な初期値 — 呼び出し元の状態に関係なく常に 0 にリセット
+- id: init-counter
+  type: variable
+  name: counter
+  value: 0
+```
+
 ---
 
 ### set
@@ -189,7 +212,37 @@ HTTP リクエストを実行します。
 | `responseType` | No | Yes | `auto`（デフォルト）, `text`, `binary` — Content-Type 自動判定をオーバーライド |
 | `saveTo` | No | No | レスポンスボディを保存する変数 |
 | `saveStatus` | No | No | HTTP ステータスコードを保存する変数 |
-| `throwOnError` | No | No | `"true"` で 4xx/5xx 時にエラーをスロー |
+| `throwOnError` | No | Yes | 4xx/5xx 時にエラーをスローするか。**デフォルト: `"true"`** — HTTP エラーでワークフロー停止。明示的なエラー処理分岐がある場合のみ `"false"` を使用。 |
+
+**`throwOnError` のデフォルトは `"true"`。** 4xx/5xx レスポンスでワークフローが停止し、失敗がチャット AI・ユーザー・復旧 UI（スキル失敗時の「Open workflow」ボタン）に伝わります。`saveStatus` を実際に読み取って分岐する場合など、ワークフロー内で実際にエラーハンドリング分岐がある場合のみ `"false"` を使ってください（単に "crash させないため" の用途は避ける）。
+
+```yaml
+# ✅ デフォルト: HTTP エラーでワークフロー停止
+- id: fetch
+  type: http
+  url: "{{url}}"
+  saveTo: body
+  saveStatus: status
+
+# ✅ 許容: 明示的なエラー処理分岐を下流に持つ場合
+- id: fetch
+  type: http
+  url: "{{url}}"
+  throwOnError: "false"
+  saveTo: body
+  saveStatus: status
+- id: check-status
+  type: if
+  condition: "{{status}} >= 400"
+  trueNext: handle-error    # 実際に何かする分岐
+
+# ❌ アンチパターン: ハンドラなしですべての HTTP 失敗を握り潰す
+- id: fetch
+  type: http
+  url: "{{url}}"
+  throwOnError: "false"   # 503 でもワークフローは「成功」扱い
+  saveTo: body
+```
 
 **レスポンスタイプ判定:** デフォルト（`auto`）では Content-Type ヘッダーからバイナリ/テキストを自動判定します。`responseType: text` でテキスト処理を強制（例: サーバーが JSON を `application/octet-stream` で返す場合）、`responseType: binary` でバイナリ処理を強制できます。
 
@@ -227,14 +280,29 @@ JSON 文字列をパースしてプロパティアクセスを可能にします
 
 | プロパティ | 必須 | テンプレート | 説明 |
 |-----------|:----:|:----------:|------|
-| `source` | Yes | Yes | JSON 文字列を含む変数名またはテンプレート |
+| `source` | Yes | No | JSON 文字列を保持する **素の変数名**（`{{...}}` 不要、クォートで囲まない） |
 | `saveTo` | Yes | No | パース結果を保存する変数 |
 
 パース後、ドット表記でプロパティにアクセス: `{{data.items[0].name}}`
 
 **マークダウンコードブロック内の JSON:** `` ```json ... ``` `` から自動抽出されます。
 
-**テンプレートサポート:** `source` プロパティは `{{variable}}` テンプレートを先に解決し、次に変数ルックアップを試行（`source: myVar` の後方互換性）、最後に解決された文字列を直接 JSON としてパースします。
+**`source` は素の変数名です。** 変数名だけを渡してください — 補間しない、クォートで囲まない、角括弧で囲まない:
+
+```yaml
+# ✅ 正しい
+- id: parse-body
+  type: json
+  source: apiResponseBody
+  saveTo: parsed
+
+# ❌ 誤り
+- id: parse-body
+  type: json
+  source: "{{apiResponseBody}}"          # ここでは補間しない
+  # または: source: "[{{apiResponseBody}}]"  # ラップすると有効な JSON が壊れる
+  saveTo: parsed
+```
 
 ---
 
@@ -843,15 +911,42 @@ path: "{{parsed.notes[counter].path}}"
 
 ### JSON エスケープ修飾子
 
-`{{variable:json}}` で JSON 文字列に埋め込むための値をエスケープします。改行、クォート、その他の特殊文字を適切にエスケープします。
+`{{variable:json}}` で **文字列リテラル内に埋め込む** ための値をエスケープします。改行、クォート、その他の特殊文字を適切にエスケープします。
+
+**重要:** `:json` は *内容のみ* をエスケープし、**外側のクォートは付けません**。文字列内に埋め込む場合は自分でクォートを書く必要があります。
 
 ```yaml
 # :json なし - 内容に改行/クォートがあると壊れる
 args: '{"text": "{{content}}"}'       # 特殊文字があるとエラー
 
-# :json あり - どんな内容でも安全
+# :json あり - どんな内容でも安全（周囲の "..." は自分で書いた文字列リテラル）
 args: '{"text": "{{content:json}}"}'  # OK - 適切にエスケープ
 ```
+
+**`script` ノード（JavaScript）内:**
+
+`:json` はコード実行前にプレーンテキストとして置換されるため、JS 文字列にしたい場合はクォートで囲む必要があります:
+
+```yaml
+# ✅ 正しい — エスケープされた内容の文字列リテラル
+code: |
+  var text = "{{userInput:json}}";
+  var data = JSON.parse("{{jsonStr:json}}");
+
+# ❌ 誤り — 外側のクォートがない、無効な JS
+code: |
+  var text = {{userInput:json}};          # 構文エラー
+  JSON.parse({{jsonStr:json}});           # JSON.parse は文字列引数が必要
+```
+
+変数が既にパース済みのオブジェクト/配列を保持している場合（前の `json` ノードの結果など）は、`{{var:json}}` を *クォートなし* で使って JS のオブジェクト/配列リテラルにしてください:
+
+```yaml
+code: |
+  var arr = {{parsedArray:json}};         # var arr = [{"url":"..."}] になる
+```
+
+これはファイル内容やユーザー入力を JSON ボディを持つ `mcp`、`http`、`script` ノードに渡すときに不可欠です。
 
 ---
 

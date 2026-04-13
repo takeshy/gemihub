@@ -498,6 +498,58 @@ export interface TranslationStrings {
   "workflow.ai.createAsSkill": string;
   "workflow.ai.skillName": string;
   "workflow.ai.skillNamePlaceholder": string;
+  "workflow.ai.createSkillTitle": string;
+  "workflow.ai.modifySkillTitle": string;
+  "workflow.ai.confirmSkillChanges": string;
+  "workflow.ai.describeCreate": string;
+  "workflow.ai.describeCreateSkill": string;
+  "workflow.ai.placeholderCreateSkill": string;
+  "workflow.ai.planning": string;
+  "workflow.ai.reviewing": string;
+  "workflow.ai.refining": string;
+  "workflow.ai.phasePlan": string;
+  "workflow.ai.phaseGenerate": string;
+  "workflow.ai.phaseReview": string;
+  "workflow.ai.planComplete": string;
+  "workflow.ai.planReplan": string;
+  "workflow.ai.planReplanPlaceholder": string;
+  "workflow.ai.planOk": string;
+  "workflow.ai.reviewApproved": string;
+  "workflow.ai.reviewRefining": string;
+  "workflow.ai.reviewComplete": string;
+  "workflow.ai.refineBtn": string;
+  "workflow.ai.refinePlaceholderReview": string;
+  "workflow.ai.acceptWithIssuesConfirm": string;
+  "workflow.ai.reviewVerdictPass": string;
+  "workflow.ai.reviewVerdictFail": string;
+  "workflow.ai.reviewSummary": string;
+  "workflow.ai.reviewIssues": string;
+  "workflow.ai.reviewNoIssues": string;
+  "workflow.ai.severityHigh": string;
+  "workflow.ai.severityMedium": string;
+  "workflow.ai.severityLow": string;
+  "workflow.ai.contextPlan": string;
+  "workflow.ai.contextThinking": string;
+  "workflow.ai.contextReview": string;
+  "workflow.ai.noChanges": string;
+  "workflow.ai.skillInstructionsChanges": string;
+  "workflow.ai.workflowYamlChanges": string;
+  "workflow.ai.autoRepair": string;
+  "workflow.ai.parseFailureTitle": string;
+  "workflow.ai.parseFailureHint": string;
+  "workflow.ai.parseFailureCopy": string;
+  "workflow.createWorkflowWithAI": string;
+  "workflow.createSkillWithAI": string;
+  "workflow.modifyWorkflowWithAI": string;
+  "workflow.modifySkillWithAI": string;
+  "workflow.createHintWorkflow": string;
+  "workflow.createHintSkill": string;
+  "workflow.skillNoInlineWorkflow": string;
+  "workflow.tabLabel": string;
+  "chat.openWorkflow": string;
+  "chat.workflowErrorHint": string;
+  "chat.skillsUsed": string;
+  "chat.clickToOpen": string;
   "workflow.preview.previewPrefix": string;
   "workflow.preview.changesPrefix": string;
   "workflow.preview.defaultName": string;
@@ -708,7 +760,7 @@ const en: TranslationStrings = {
 
   // Header
   "header.chat": "Chat",
-  "header.workflow": "Workflow",
+  "header.workflow": "Workflow / skill",
   "header.files": "Files",
   "header.editor": "Editor",
   "header.plugins": "Plugins",
@@ -1162,7 +1214,7 @@ const en: TranslationStrings = {
   "workflow.historySelect.stepsSelected": "{count} step(s) selected",
   "workflow.historySelect.skipped": "Skipped",
   "workflow.historySelect.error": "Error",
-  "workflow.ai.createTitle": "Create Workflow / Skill with AI",
+  "workflow.ai.createTitle": "Create workflow with AI",
   "workflow.ai.modifyTitle": "Modify Workflow with AI",
   "workflow.ai.workflowName": "Workflow Name",
   "workflow.ai.namePlaceholder": "e.g., process-notes",
@@ -1194,6 +1246,58 @@ const en: TranslationStrings = {
   "workflow.ai.createAsSkill": "Create as agent skill",
   "workflow.ai.skillName": "Skill name",
   "workflow.ai.skillNamePlaceholder": "e.g., Code Review Helper",
+  "workflow.ai.createSkillTitle": "Create skill with AI",
+  "workflow.ai.modifySkillTitle": "Modify skill with AI",
+  "workflow.ai.confirmSkillChanges": "Confirm skill changes",
+  "workflow.ai.describeCreate": "Describe the workflow you want to create:",
+  "workflow.ai.describeCreateSkill": "Describe the skill you want to create:",
+  "workflow.ai.placeholderCreateSkill": "E.g., a code review skill that reviews the active note and suggests improvements when requested",
+  "workflow.ai.planning": "Planning",
+  "workflow.ai.reviewing": "Reviewing",
+  "workflow.ai.refining": "Refining",
+  "workflow.ai.phasePlan": "Plan",
+  "workflow.ai.phaseGenerate": "Generate",
+  "workflow.ai.phaseReview": "Review",
+  "workflow.ai.planComplete": "Plan ready — review and proceed",
+  "workflow.ai.planReplan": "Re-plan",
+  "workflow.ai.planReplanPlaceholder": "Describe what to change in the plan...",
+  "workflow.ai.planOk": "OK",
+  "workflow.ai.reviewApproved": "Review passed",
+  "workflow.ai.reviewRefining": "Issues found, refining...",
+  "workflow.ai.reviewComplete": "Review complete — accept or refine",
+  "workflow.ai.refineBtn": "Refine",
+  "workflow.ai.refinePlaceholderReview": "Describe what to fix...",
+  "workflow.ai.acceptWithIssuesConfirm": "The review flagged issues. Accept this result anyway?",
+  "workflow.ai.reviewVerdictPass": "Review passed",
+  "workflow.ai.reviewVerdictFail": "Issues found",
+  "workflow.ai.reviewSummary": "Summary",
+  "workflow.ai.reviewIssues": "Issues",
+  "workflow.ai.reviewNoIssues": "No issues found.",
+  "workflow.ai.severityHigh": "High",
+  "workflow.ai.severityMedium": "Medium",
+  "workflow.ai.severityLow": "Low",
+  "workflow.ai.contextPlan": "Plan",
+  "workflow.ai.contextThinking": "Thinking",
+  "workflow.ai.contextReview": "Review",
+  "workflow.ai.noChanges": "(no changes)",
+  "workflow.ai.skillInstructionsChanges": "SKILL.md instructions — changes:",
+  "workflow.ai.workflowYamlChanges": "Workflow YAML — changes:",
+  "workflow.ai.autoRepair": "Auto-repair {{attempt}}/{{max}}",
+  "workflow.ai.parseFailureTitle": "Could not parse generated workflow",
+  "workflow.ai.parseFailureHint": "After auto-repair attempts failed, the raw response is shown below. You can copy it and try a stronger LLM.",
+  "workflow.ai.parseFailureCopy": "Copy raw response",
+  "workflow.createWorkflowWithAI": "Create workflow with AI",
+  "workflow.createSkillWithAI": "Create skill with AI",
+  "workflow.modifyWorkflowWithAI": "Modify workflow with AI",
+  "workflow.modifySkillWithAI": "Modify skill with AI",
+  "workflow.createHintWorkflow": "Workflow: automates a predefined series of steps, run from the sidebar panel or a hotkey.",
+  "workflow.createHintSkill": "Skill: bundles instructions and workflows the chat assistant can call on demand when the conversation matches its description.",
+  "workflow.skillNoInlineWorkflow": "This skill stores its workflow in a separate file. Use \"Modify skill with AI\" to edit it as a whole.",
+  "workflow.tabLabel": "Workflow / skill",
+  "chat.openWorkflow": "Open workflow",
+  "chat.workflowErrorHint": "Tip: open the workflow, modify it with AI, reference the execution history to pick the failing step, and ask the AI to fix it.",
+  "chat.skillsUsed": "Skills used",
+  "chat.clickToOpen": "Click to open: {{source}}",
   "workflow.preview.previewPrefix": "Preview: ",
   "workflow.preview.changesPrefix": "Changes: ",
   "workflow.preview.defaultName": "Workflow",
@@ -1404,7 +1508,7 @@ const ja: TranslationStrings = {
 
   // Header
   "header.chat": "チャット",
-  "header.workflow": "ワークフロー",
+  "header.workflow": "ワークフロー / スキル",
   "header.files": "ファイル",
   "header.editor": "エディタ",
   "header.plugins": "プラグイン",
@@ -1858,7 +1962,7 @@ const ja: TranslationStrings = {
   "workflow.historySelect.stepsSelected": "{count}件のステップを選択中",
   "workflow.historySelect.skipped": "スキップ",
   "workflow.historySelect.error": "エラー",
-  "workflow.ai.createTitle": "AIでワークフロー / スキルを作成",
+  "workflow.ai.createTitle": "AIでワークフローを作成",
   "workflow.ai.modifyTitle": "AIでワークフローを修正",
   "workflow.ai.workflowName": "ワークフロー名",
   "workflow.ai.namePlaceholder": "例: process-notes",
@@ -1890,6 +1994,58 @@ const ja: TranslationStrings = {
   "workflow.ai.createAsSkill": "エージェントスキルとして作成",
   "workflow.ai.skillName": "スキル名",
   "workflow.ai.skillNamePlaceholder": "例: コードレビューヘルパー",
+  "workflow.ai.createSkillTitle": "AIでスキルを作成",
+  "workflow.ai.modifySkillTitle": "AIでスキルを修正",
+  "workflow.ai.confirmSkillChanges": "スキル変更の確認",
+  "workflow.ai.describeCreate": "作成したいワークフローを説明してください:",
+  "workflow.ai.describeCreateSkill": "作成したいスキルを説明してください:",
+  "workflow.ai.placeholderCreateSkill": "例: 依頼されたときに現在のノートをレビューして改善案を提案するコードレビュースキル",
+  "workflow.ai.planning": "計画中",
+  "workflow.ai.reviewing": "レビュー中",
+  "workflow.ai.refining": "修正中",
+  "workflow.ai.phasePlan": "計画",
+  "workflow.ai.phaseGenerate": "生成",
+  "workflow.ai.phaseReview": "レビュー",
+  "workflow.ai.planComplete": "計画が完成しました — 確認して進めてください",
+  "workflow.ai.planReplan": "再計画",
+  "workflow.ai.planReplanPlaceholder": "計画の変更点を記述してください...",
+  "workflow.ai.planOk": "OK",
+  "workflow.ai.reviewApproved": "レビュー通過",
+  "workflow.ai.reviewRefining": "問題が見つかりました、修正中...",
+  "workflow.ai.reviewComplete": "レビュー完了 — 承認または修正",
+  "workflow.ai.refineBtn": "修正",
+  "workflow.ai.refinePlaceholderReview": "修正内容を記述してください...",
+  "workflow.ai.acceptWithIssuesConfirm": "レビューで問題が指摘されました。それでもこの結果を承認しますか？",
+  "workflow.ai.reviewVerdictPass": "レビュー通過",
+  "workflow.ai.reviewVerdictFail": "問題あり",
+  "workflow.ai.reviewSummary": "概要",
+  "workflow.ai.reviewIssues": "問題点",
+  "workflow.ai.reviewNoIssues": "問題は見つかりませんでした。",
+  "workflow.ai.severityHigh": "高",
+  "workflow.ai.severityMedium": "中",
+  "workflow.ai.severityLow": "低",
+  "workflow.ai.contextPlan": "計画",
+  "workflow.ai.contextThinking": "思考過程",
+  "workflow.ai.contextReview": "レビュー",
+  "workflow.ai.noChanges": "（変更なし）",
+  "workflow.ai.skillInstructionsChanges": "SKILL.md の説明 — 変更内容:",
+  "workflow.ai.workflowYamlChanges": "ワークフロー YAML — 変更内容:",
+  "workflow.ai.autoRepair": "自動修復 {{attempt}}/{{max}}",
+  "workflow.ai.parseFailureTitle": "生成されたワークフローをパースできませんでした",
+  "workflow.ai.parseFailureHint": "自動修復に失敗しました。以下に生のレスポンスを表示しています。コピーしてより強力な LLM で試せます。",
+  "workflow.ai.parseFailureCopy": "生レスポンスをコピー",
+  "workflow.createWorkflowWithAI": "AIでワークフローを作成",
+  "workflow.createSkillWithAI": "AIでスキルを作成",
+  "workflow.modifyWorkflowWithAI": "AIでワークフローを修正",
+  "workflow.modifySkillWithAI": "AIでスキルを修正",
+  "workflow.createHintWorkflow": "ワークフロー: あらかじめ定義した一連の手順を自動化し、サイドバーパネルまたはホットキーから実行します。",
+  "workflow.createHintSkill": "スキル: チャットアシスタントが会話の内容に応じてオンデマンドで呼び出す、指示とワークフローのセットです。",
+  "workflow.skillNoInlineWorkflow": "このスキルはワークフローを別ファイルに保存しています。「AIでスキルを修正」で全体を編集してください。",
+  "workflow.tabLabel": "ワークフロー / スキル",
+  "chat.openWorkflow": "ワークフローを開く",
+  "chat.workflowErrorHint": "ヒント: ワークフローを開き、AIで修正、実行履歴からエラーステップを参照してAIに修正を依頼してください。",
+  "chat.skillsUsed": "使用スキル",
+  "chat.clickToOpen": "クリックで開く: {{source}}",
   "workflow.preview.previewPrefix": "プレビュー: ",
   "workflow.preview.changesPrefix": "変更: ",
   "workflow.preview.defaultName": "ワークフロー",

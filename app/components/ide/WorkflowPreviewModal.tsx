@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import {
   X,
   Check,
@@ -11,6 +12,8 @@ import {
   FileDiff,
   FileText,
   Loader2,
+  Copy,
+  Brain,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { parseWorkflowYaml } from "~/engine/parser";
@@ -22,6 +25,7 @@ import {
 } from "~/utils/workflow-node-summary";
 import { buildOutgoingMap } from "~/utils/workflow-connections";
 import { useI18n } from "~/i18n/context";
+import type { GenerationContext } from "~/services/ai-workflow-generation";
 
 interface WorkflowPreviewModalProps {
   yaml: string;
@@ -29,6 +33,10 @@ interface WorkflowPreviewModalProps {
   mode: "create" | "modify";
   workflowName?: string;
   skillMd?: string;
+  /** For Modify Skill with AI: the previous SKILL.md instructions body. */
+  originalSkillMd?: string;
+  /** Optional plan/thinking/review context from the generation pipeline. */
+  generationContext?: GenerationContext;
   onAccept: () => void | Promise<void>;
   onReject: () => void;
   onClose: () => void;
@@ -42,6 +50,8 @@ export function WorkflowPreviewModal({
   mode,
   workflowName,
   skillMd,
+  originalSkillMd,
+  generationContext,
   onAccept,
   onReject,
   onClose,
@@ -129,15 +139,33 @@ export function WorkflowPreviewModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
+          {/* Generation context panel (plan/thinking/review) — expanded on
+              create (primary content) and collapsed on modify (diff is primary). */}
+          {generationContext && (generationContext.plan || generationContext.thinking || generationContext.review) && (
+            <GenerationContextPanel
+              context={generationContext}
+              defaultOpen={false}
+            />
+          )}
           {activeTab === "visual" && (
             <VisualPreview workflow={workflow} yaml={yaml} />
           )}
           {activeTab === "yaml" && <YamlPreview yaml={yaml} />}
-          {activeTab === "diff" && <DiffPreview lines={diffLines} />}
+          {activeTab === "diff" && (
+            originalYaml !== undefined && originalYaml === yaml ? (
+              <NoChangesPlaceholder />
+            ) : (
+              <DiffPreview lines={diffLines} />
+            )
+          )}
           {activeTab === "skillMd" && skillMd && (
-            <pre className="overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300 font-mono whitespace-pre-wrap">
-              {skillMd}
-            </pre>
+            originalSkillMd !== undefined && mode === "modify" ? (
+              <SkillMdDiff oldBody={originalSkillMd} newBody={skillMd} />
+            ) : (
+              <pre className="overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300 font-mono whitespace-pre-wrap">
+                {skillMd}
+              </pre>
+            )
           )}
         </div>
 
@@ -172,6 +200,109 @@ export function WorkflowPreviewModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Generation Context Panel ─────────────────────────────────────────────────
+
+function GenerationContextPanel({
+  context,
+  defaultOpen,
+}: {
+  context: GenerationContext;
+  defaultOpen: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mb-3 space-y-2">
+      {context.plan && (
+        <CollapsibleSection
+          label={t("workflow.ai.contextPlan")}
+          icon={null}
+          content={context.plan}
+          defaultOpen={defaultOpen}
+          markdown
+        />
+      )}
+      {context.thinking && (
+        <CollapsibleSection
+          label={t("workflow.ai.contextThinking")}
+          icon={<Brain size={ICON.SM} />}
+          content={context.thinking}
+          defaultOpen={false}
+          markdown={false}
+        />
+      )}
+      {context.review && (
+        <CollapsibleSection
+          label={t("workflow.ai.contextReview")}
+          icon={null}
+          content={context.review}
+          defaultOpen={defaultOpen}
+          markdown
+        />
+      )}
+    </div>
+  );
+}
+
+function CollapsibleSection({
+  label,
+  icon,
+  content,
+  defaultOpen,
+  markdown,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  content: string;
+  defaultOpen: boolean;
+  markdown: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [copied, setCopied] = useState(false);
+  const onCopy = useCallback(() => {
+    navigator.clipboard.writeText(content).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      },
+      (err) => console.warn("[WorkflowPreview] clipboard copy failed:", err),
+    );
+  }, [content]);
+  return (
+    <div className="rounded border border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-2 py-1 dark:border-gray-700 dark:bg-gray-800">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-gray-300"
+        >
+          {open ? <ChevronDown size={ICON.SM} /> : <ChevronRight size={ICON.SM} />}
+          {icon}
+          {label}
+        </button>
+        <button
+          onClick={onCopy}
+          className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 dark:hover:bg-gray-700"
+          title="Copy"
+        >
+          {copied ? <Check size={ICON.SM} /> : <Copy size={ICON.SM} />}
+        </button>
+      </div>
+      {open && (
+        <div className="max-h-[40vh] overflow-y-auto p-3 text-xs">
+          {markdown ? (
+            <div className="prose prose-xs prose-sm max-w-none dark:prose-invert dark:text-gray-200">
+              <ReactMarkdown>{content}</ReactMarkdown>
+            </div>
+          ) : (
+            <pre className="whitespace-pre-wrap font-mono text-gray-600 dark:text-gray-400">
+              {content}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -314,6 +445,39 @@ function YamlPreview({ yaml }: { yaml: string }) {
     <pre className="overflow-auto rounded bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300 font-mono whitespace-pre-wrap">
       {yaml}
     </pre>
+  );
+}
+
+// ─── SKILL.md diff — for Modify Skill with AI showing before/after body ──────
+
+function SkillMdDiff({ oldBody, newBody }: { oldBody: string; newBody: string }) {
+  const { t } = useI18n();
+  const unchanged = oldBody === newBody;
+  const lines = useMemo(
+    () => (unchanged ? [] : computeSimpleDiff(oldBody, newBody)),
+    [unchanged, oldBody, newBody],
+  );
+  if (unchanged) {
+    return <NoChangesPlaceholder />;
+  }
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] font-medium text-gray-600 dark:text-gray-400">
+        {t("workflow.ai.skillInstructionsChanges")}
+      </div>
+      <DiffPreview lines={lines} />
+    </div>
+  );
+}
+
+// ─── No-changes placeholder — shown when old and new content are identical ───
+
+function NoChangesPlaceholder() {
+  const { t } = useI18n();
+  return (
+    <div className="rounded border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-center text-xs italic text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+      {t("workflow.ai.noChanges")}
+    </div>
   );
 }
 

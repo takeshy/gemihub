@@ -7,6 +7,8 @@ interface SkillSelectorProps {
   skills: SkillMetadata[];
   activeSkillIds: string[];
   onToggleSkill: (skillId: string) => void;
+  /** Open a skill's SKILL.md file — chip name clickable when provided. */
+  onOpenSkill?: (skillMdFileId: string, skillName: string) => void;
   disabled?: boolean;
 }
 
@@ -18,6 +20,7 @@ export function SkillSelector({
   skills,
   activeSkillIds,
   onToggleSkill,
+  onOpenSkill,
   disabled,
 }: SkillSelectorProps) {
   const { t } = useI18n();
@@ -45,21 +48,35 @@ export function SkillSelector({
   return (
     <div className="flex items-center gap-1 px-3 py-1 flex-wrap">
       <Sparkles size={14} className="flex-shrink-0 text-gray-400 dark:text-gray-500" />
-      {activeSkills.map((skill) => (
-        <span
-          key={skill.id}
-          className="inline-flex items-center gap-1 rounded-full bg-purple-600 px-2 py-0.5 text-[11px] text-white whitespace-nowrap"
-        >
-          {skill.name}
-          <button
-            onClick={() => onToggleSkill(skill.id)}
-            disabled={disabled}
-            className="inline-flex items-center justify-center p-0 ml-0.5 opacity-70 hover:opacity-100 bg-transparent border-none text-white cursor-pointer shadow-none"
+      {activeSkills.map((skill) => {
+        const clickable = onOpenSkill && skill.skillMdFileId;
+        return (
+          <span
+            key={skill.id}
+            className="inline-flex items-center gap-1 rounded-full bg-purple-600 px-2 py-0.5 text-[11px] text-white whitespace-nowrap"
+            title={skill.description}
           >
-            <X size={10} />
-          </button>
-        </span>
-      ))}
+            {clickable ? (
+              <button
+                type="button"
+                onClick={() => onOpenSkill(skill.skillMdFileId, skill.name)}
+                className="bg-transparent border-none text-white p-0 m-0 cursor-pointer underline-offset-2 hover:underline shadow-none"
+              >
+                {skill.name}
+              </button>
+            ) : (
+              <span>{skill.name}</span>
+            )}
+            <button
+              onClick={() => onToggleSkill(skill.id)}
+              disabled={disabled}
+              className="inline-flex items-center justify-center p-0 ml-0.5 opacity-70 hover:opacity-100 bg-transparent border-none text-white cursor-pointer shadow-none"
+            >
+              <X size={10} />
+            </button>
+          </span>
+        );
+      })}
       <div className="relative inline-flex" ref={dropdownRef}>
         <button
           type="button"
