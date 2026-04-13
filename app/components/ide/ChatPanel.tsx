@@ -36,7 +36,7 @@ import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
 import { executeInteractionsChat } from "~/hooks/useInteractionsChat";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { useSkills } from "~/contexts/SkillContext";
-import { readFileLocal } from "~/services/drive-local";
+import { readFileLocal, findFileByNameLocal } from "~/services/drive-local";
 import type { ReviewResult } from "~/services/ai-workflow-generation";
 
 export interface ChatOverrides {
@@ -137,7 +137,12 @@ async function runWebpageAutoReview(args: RunAutoReviewArgs): Promise<void> {
   const reads = await Promise.all(
     [...savedWebFiles.entries()].map(async ([fileId, { path, action }]) => {
       try {
-        const content = await readFileLocal(fileId);
+        // usePendingFileMigration can swap a "new:" id for a real Drive id
+        // mid-turn, so resolve by path to pick up the post-migration id.
+        const resolvedId = fileId.startsWith("new:")
+          ? (await findFileByNameLocal(path))?.id ?? fileId
+          : fileId;
+        const content = await readFileLocal(resolvedId);
         return { ok: true as const, path, content, action };
       } catch (err) {
         return { ok: false as const, path, error: err instanceof Error ? err.message : String(err) };
