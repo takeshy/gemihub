@@ -36,6 +36,8 @@ import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
 import { executeInteractionsChat } from "~/hooks/useInteractionsChat";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { useSkills } from "~/contexts/SkillContext";
+import { readFileLocal } from "~/services/drive-local";
+import type { ReviewResult } from "~/services/ai-workflow-generation";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -44,6 +46,11 @@ export interface ChatOverrides {
   enabledMcpServers?: string[] | null;
   skillId?: string;
 }
+
+const WEBPAGE_REVIEW_MAX_ITERATIONS = 1;
+const WEBPAGE_BUILDER_SKILL_ID = "webpage-builder";
+
+type T = (key: keyof TranslationStrings) => string;
 
 function isPlanApprovalMessage(message: string): boolean {
   const normalized = message.trim().toLowerCase();
@@ -54,6 +61,131 @@ function isPlanApprovalMessage(message: string): boolean {
     /^(looks good|sounds good|that works|do it)$/i,
     /^(進めて|続けて|そのまま|お願いします|お願い|承認|okです|了解|はい)$/i,
   ].some((pattern) => pattern.test(normalized));
+}
+
+function findOriginalUserDescription(messages: Message[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "user") continue;
+    const text = (m.content ?? "").trim();
+    if (text && !isPlanApprovalMessage(text)) return text;
+  }
+  return messages[messages.length - 1]?.content ?? "";
+}
+
+function formatReviewIssue(i: ReviewResult["issues"][number]): string {
+  return `- [${i.severity}] ${i.description}`;
+}
+
+function formatReviewMessage(review: ReviewResult, t: T): string {
+  const lines: string[] = [];
+  if (review.verdict === "pass" && review.issues.length === 0) {
+    lines.push(t("chat.autoReview.pass"));
+    if (review.summary) lines.push("", review.summary);
+    return lines.join("\n");
+  }
+
+  lines.push(t("chat.autoReview.fail"));
+  if (review.summary) lines.push("", review.summary);
+  if (review.issues.length > 0) {
+    lines.push("", `**${t("chat.autoReview.issuesLabel")}:**`);
+    for (const i of review.issues) lines.push(formatReviewIssue(i));
+  }
+  return lines.join("\n");
+}
+
+function buildReviewFixPrompt(review: ReviewResult, t: T): string {
+  const issueList = review.issues
+    .filter((i) => i.severity === "high")
+    .map(formatReviewIssue)
+    .join("\n");
+  return t("chat.autoReview.fixPrompt").replace("{{issues}}", issueList);
+}
+
+interface RunAutoReviewArgs {
+  savedWebFiles: Map<string, { path: string; action: "created" | "updated" }>;
+  baseMessages: Message[];
+  originalDescription: string;
+  effectiveModel: ModelType;
+  abortSignal: AbortSignal;
+  t: T;
+  saveResult: (msgs: Message[]) => Promise<void>;
+  iterationCount: number;
+  onScheduleAutoFix: (fixPrompt: string, originalDescription: string) => void;
+  onPass: () => void;
+}
+
+async function runWebpageAutoReview(args: RunAutoReviewArgs): Promise<void> {
+  const {
+    savedWebFiles, baseMessages, originalDescription, effectiveModel,
+    abortSignal, t, saveResult, iterationCount, onScheduleAutoFix, onPass,
+  } = args;
+
+  const reads = await Promise.all(
+    [...savedWebFiles.entries()].map(async ([fileId, { path, action }]) => {
+      try {
+        const content = await readFileLocal(fileId);
+        return { path, content, action };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const reviewFiles = reads.filter(
+    (f): f is { path: string; content: string; action: "created" | "updated" } => f !== null,
+  );
+  if (reviewFiles.length === 0 || abortSignal.aborted) return;
+
+  const appendError = async (message: string) => {
+    await saveResult([
+      ...baseMessages,
+      {
+        role: "assistant",
+        content: t("chat.autoReview.failed").replace("{{message}}", message),
+        timestamp: Date.now(),
+        model: effectiveModel,
+      },
+    ]);
+  };
+
+  let review: ReviewResult;
+  try {
+    const res = await fetch("/api/hubwork/webpage-review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: originalDescription, files: reviewFiles, model: effectiveModel }),
+      signal: abortSignal,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      await appendError(body?.error ?? `HTTP ${res.status}`);
+      return;
+    }
+    review = (await res.json()) as ReviewResult;
+  } catch (err) {
+    if (abortSignal.aborted) return;
+    await appendError(err instanceof Error ? err.message : String(err));
+    return;
+  }
+
+  const highSeverity = (review.issues ?? []).filter((i) => i.severity === "high");
+  const shouldAutoFix =
+    review.verdict === "fail"
+    && highSeverity.length > 0
+    && iterationCount < WEBPAGE_REVIEW_MAX_ITERATIONS;
+
+  const body = formatReviewMessage(review, t)
+    + (shouldAutoFix ? "\n\n" + t("chat.autoReview.autoFixing") : "");
+  await saveResult([
+    ...baseMessages,
+    { role: "assistant", content: body, timestamp: Date.now(), model: effectiveModel },
+  ]);
+
+  if (shouldAutoFix) {
+    onScheduleAutoFix(buildReviewFixPrompt(review, t), originalDescription);
+  } else if (review.verdict === "pass") {
+    onPass();
+  }
 }
 
 interface ChatPanelProps {
@@ -116,6 +248,16 @@ export function ChatPanel({
   // resurrecting a deleted chat when they complete.
   const deletedChatIdsRef = useRef<Set<string>>(new Set());
   const pendingSendRef = useRef<{ content: string; attachments?: Attachment[]; overrides?: ChatOverrides } | null>(null);
+  const autoReviewIterationRef = useRef(0);
+  // Carries the original user request into an auto-fix re-entry. Non-null on
+  // re-entry means this is an auto-review turn (don't reset the iteration
+  // counter, and reuse the description the reviewer saw).
+  const pendingAutoReviewRef = useRef<{ originalDescription: string } | null>(null);
+  // Latest handleSend, so the deferred auto-fix reads the re-rendered closure
+  // (which sees the appended review message).
+  const handleSendRef = useRef<
+    ((content: string, attachments?: Attachment[], overrides?: ChatOverrides) => Promise<void>) | null
+  >(null);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
@@ -499,6 +641,10 @@ export function ChatPanel({
         return;
       }
 
+      const autoReviewEntry = pendingAutoReviewRef.current;
+      pendingAutoReviewRef.current = null;
+      if (!autoReviewEntry) autoReviewIterationRef.current = 0;
+
       // Apply overrides from slash commands
       let effectiveModel = overrides?.model || selectedModel;
       // Auto-switch to image model when image keywords detected
@@ -581,6 +727,8 @@ export function ChatPanel({
       let ragSources: string[] = [];
       let generatedImages: GeneratedImage[] = [];
       let mcpApps: McpAppInfo[] = [];
+      const savedWebFiles = new Map<string, { path: string; action: "created" | "updated" }>();
+      let finalMessagesForReview: Message[] | null = null;
 
       try {
         // Activate skill for future messages; pass as extra so current prompt includes it
@@ -589,15 +737,15 @@ export function ChatPanel({
         }
         const extraSkillIds = overrides?.skillId ? [overrides.skillId] : undefined;
         const skillPrompt = await getActiveSkillsSystemPrompt(extraSkillIds, settings.hubwork?.accounts);
+        const allSkillIds = extraSkillIds
+          ? [...new Set([...activeSkillIds, ...extraSkillIds])]
+          : activeSkillIds;
+        const webpageBuilderActive = allSkillIds.includes(WEBPAGE_BUILDER_SKILL_ID);
 
         // Inject Plan → Create → Verify instruction when webpage-builder skill is active
         // and the user's message looks like a web creation request
         let planInstruction = "";
-        if (skillPrompt) {
-          const allIds = extraSkillIds
-            ? [...new Set([...activeSkillIds, ...extraSkillIds])]
-            : activeSkillIds;
-          if (allIds.includes("webpage-builder")) {
+        if (skillPrompt && webpageBuilderActive) {
             planInstruction = [
               "## IMPORTANT: Communication Style",
               "",
@@ -616,7 +764,6 @@ export function ChatPanel({
               "",
               "Do NOT call `run_skill_workflow` or `migrate_spreadsheet_schema` until the user explicitly approves the plan. If you call these tools before approval, they will be BLOCKED.",
             ].join("\n");
-          }
         }
 
         const langInstruction = settings.language === "ja"
@@ -632,6 +779,14 @@ export function ChatPanel({
 
         const chatCallbacks = {
           onDriveEvent: (event: import("~/engine/local-executor").DriveEvent) => {
+            if (
+              webpageBuilderActive &&
+              (event.type === "created" || event.type === "updated") &&
+              typeof event.fileName === "string" &&
+              event.fileName.startsWith("web/")
+            ) {
+              savedWebFiles.set(event.fileId, { path: event.fileName, action: event.type });
+            }
             processDriveEvent(event).catch(() => {});
           },
           onMcpApp: (app: McpAppInfo) => {
@@ -792,10 +947,46 @@ export function ChatPanel({
                 ...updatedMessages,
                 assistantMessage,
               ];
+              finalMessagesForReview = finalMessages;
               await saveResult(finalMessages);
               break;
             }
           }
+        }
+
+        if (
+          webpageBuilderActive &&
+          savedWebFiles.size > 0 &&
+          finalMessagesForReview &&
+          !abortController.signal.aborted
+        ) {
+          await runWebpageAutoReview({
+            savedWebFiles,
+            baseMessages: finalMessagesForReview,
+            originalDescription:
+              autoReviewEntry?.originalDescription
+              ?? findOriginalUserDescription(finalMessagesForReview),
+            effectiveModel,
+            abortSignal: abortController.signal,
+            t,
+            saveResult,
+            iterationCount: autoReviewIterationRef.current,
+            onScheduleAutoFix: (fixPrompt, originalDescription) => {
+              autoReviewIterationRef.current += 1;
+              pendingAutoReviewRef.current = { originalDescription };
+              // Defer re-entry so the outer cleanup runs first, and route
+              // through the ref so we pick up the re-rendered handleSend
+              // closure (which sees the appended review message).
+              setTimeout(() => {
+                void handleSendRef.current?.(fixPrompt, undefined, {
+                  skillId: WEBPAGE_BUILDER_SKILL_ID,
+                });
+              }, 0);
+            },
+            onPass: () => {
+              autoReviewIterationRef.current = 0;
+            },
+          });
         }
       } catch (error) {
         if ((error as Error).name === "AbortError") {
@@ -857,6 +1048,7 @@ export function ChatPanel({
       onSkillWorkflowStart,
       onSkillWorkflowEnd,
       onSkillWorkflowLog,
+      t,
     ]
   );
 
@@ -871,6 +1063,10 @@ export function ChatPanel({
     };
     window.addEventListener("api-key-cached", handler);
     return () => window.removeEventListener("api-key-cached", handler);
+  }, [handleSend]);
+
+  useEffect(() => {
+    handleSendRef.current = handleSend;
   }, [handleSend]);
 
   const handleStop = useCallback(() => {

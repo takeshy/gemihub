@@ -67,6 +67,14 @@ export interface TranslationStrings {
   "chat.compactFailed": string;
   "chat.compactedContext": string;
 
+  // Webpage-builder auto-review
+  "chat.autoReview.pass": string;
+  "chat.autoReview.fail": string;
+  "chat.autoReview.issuesLabel": string;
+  "chat.autoReview.autoFixing": string;
+  "chat.autoReview.failed": string;
+  "chat.autoReview.fixPrompt": string;
+
   // Welcome hints
   "chat.welcomeTitle": string;
   "chat.welcomeHint": string;
@@ -813,6 +821,14 @@ const en: TranslationStrings = {
   "chat.compacted": "Conversation compressed: {{before}} messages → {{after}}",
   "chat.compactFailed": "Failed to compress conversation",
   "chat.compactedContext": "Compacted conversation context",
+
+  // Webpage-builder auto-review
+  "chat.autoReview.pass": "✅ Auto-review: looks good",
+  "chat.autoReview.fail": "⚠️ Auto-review: issues found",
+  "chat.autoReview.issuesLabel": "Issues",
+  "chat.autoReview.autoFixing": "_Attempting an auto-fix pass…_",
+  "chat.autoReview.failed": "Auto-review failed: {{message}}",
+  "chat.autoReview.fixPrompt": "The automated review found the following high-severity issues. Read each affected file back with read_drive_file, fix the issue, and re-save the corrected file with save-file. Do NOT propose a new plan — just fix and save.\n\n{{issues}}",
 
   // Welcome hints
   "chat.welcomeTitle": "Start a conversation with AI",
@@ -1561,6 +1577,14 @@ const ja: TranslationStrings = {
   "chat.compacted": "会話を圧縮しました: {{before}}メッセージ → {{after}}",
   "chat.compactFailed": "会話の圧縮に失敗しました",
   "chat.compactedContext": "圧縮された会話コンテキスト",
+
+  // Webpage-builder auto-review
+  "chat.autoReview.pass": "✅ 自動レビュー: 問題なし",
+  "chat.autoReview.fail": "⚠️ 自動レビュー: 修正が必要",
+  "chat.autoReview.issuesLabel": "検出された問題",
+  "chat.autoReview.autoFixing": "_自動で修正を試みます…_",
+  "chat.autoReview.failed": "自動レビューに失敗しました: {{message}}",
+  "chat.autoReview.fixPrompt": "自動レビューで以下の重大な問題が見つかりました。各ファイルを read_drive_file で読み直し、問題を修正してから save-file で上書き保存してください。新たなプラン提示は不要です。\n\n{{issues}}",
 
   // Welcome hints
   "chat.welcomeTitle": "AIとの会話を始めましょう",

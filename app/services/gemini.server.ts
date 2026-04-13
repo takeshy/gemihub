@@ -9,7 +9,7 @@ import type { ModelType } from "~/types/settings";
 import { getThinkingConfig } from "~/services/gemini-chat-core";
 
 // Default safety settings per Gemini best practices
-const DEFAULT_SAFETY_SETTINGS: SafetySetting[] = [
+export const DEFAULT_SAFETY_SETTINGS: SafetySetting[] = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },

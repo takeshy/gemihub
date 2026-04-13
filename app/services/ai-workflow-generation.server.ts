@@ -7,12 +7,12 @@ import type { ReviewResult } from "./ai-workflow-generation";
 export { parseReviewResponse } from "./ai-workflow-generation";
 export type { ReviewIssue, ReviewResult, GenerationContext } from "./ai-workflow-generation";
 
-const LOCALE_NAMES: Record<Language, string> = {
+export const LOCALE_NAMES: Record<Language, string> = {
   en: "English",
   ja: "Japanese (日本語)",
 };
 
-function languageName(locale?: Language | null): string {
+export function languageName(locale?: Language | null): string {
   return LOCALE_NAMES[locale ?? "en"] ?? "English";
 }
 
