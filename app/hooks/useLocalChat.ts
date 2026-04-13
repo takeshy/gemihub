@@ -26,7 +26,6 @@ import {
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
 import type { DriveEvent } from "~/engine/local-executor";
 import type { ExecutionLog } from "~/engine/types";
-import { buildWorkflowToolId } from "~/services/skill-loader";
 import {
   executeSkillWorkflowTool,
   type SkillWorkflowCallbacks,
@@ -129,23 +128,17 @@ export async function* executeLocalChat(
 
   // Skill workflow tool
   if (skillWorkflows && skillWorkflows.length > 0) {
-    const workflowIds = skillWorkflows.map((sw) =>
-      buildWorkflowToolId(sw.skillId, sw.workflow),
-    );
     tools.push({
       name: "run_skill_workflow",
       description:
-        "Execute a workflow provided by an active agent skill. Available workflows: " +
-        workflowIds.join(", ") +
-        ". If the workflow fails, do NOT retry automatically — report the error to the user instead.",
+        "Execute a workflow provided by an active agent skill. The available workflow IDs and their required input variables are defined in each skill's SKILL.md — load it with `read_drive_file` before calling this tool. If the workflow fails, do NOT retry automatically — report the error to the user instead.",
       parameters: {
         type: "object",
         properties: {
           workflowId: {
             type: "string",
             description:
-              "Workflow ID in the format skillId/workflowName. Available: " +
-              workflowIds.join(", "),
+              "Workflow ID in the format skillId/workflowName. Discover valid IDs by reading the active skill's SKILL.md.",
           },
           variables: {
             type: "string",

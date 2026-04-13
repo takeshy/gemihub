@@ -18,7 +18,6 @@ import {
   type DriveToolMode,
 } from "~/types/settings";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/chat";
-import { buildWorkflowToolId } from "~/services/skill-loader";
 import { isDriveToolMediaResult } from "~/services/gemini-chat-core";
 import type { LocalChatCallbacks } from "./useLocalChat";
 import { executeSkillWorkflowTool, type SkillWorkflowEntry } from "./skillWorkflowTool";
@@ -315,21 +314,17 @@ export async function* executeInteractionsChat(
   const extraToolDefinitions: ToolDefinition[] = [];
   extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
   if (skillWorkflows && skillWorkflows.length > 0) {
-    const workflowIds = skillWorkflows.map((sw) => buildWorkflowToolId(sw.skillId, sw.workflow));
     extraToolDefinitions.push({
       name: "run_skill_workflow",
       description:
-        "Execute a workflow provided by an active agent skill. Available workflows: " +
-        workflowIds.join(", ") +
-        ". If the workflow fails, do NOT retry automatically — report the error to the user instead.",
+        "Execute a workflow provided by an active agent skill. The available workflow IDs and their required input variables are defined in each skill's SKILL.md — load it with `read_drive_file` before calling this tool. If the workflow fails, do NOT retry automatically — report the error to the user instead.",
       parameters: {
         type: "object",
         properties: {
           workflowId: {
             type: "string",
             description:
-              "Workflow ID in the format skillId/workflowName. Available: " +
-              workflowIds.join(", "),
+              "Workflow ID in the format skillId/workflowName. Discover valid IDs by reading the active skill's SKILL.md.",
           },
           variables: {
             type: "string",

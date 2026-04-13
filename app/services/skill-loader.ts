@@ -300,11 +300,9 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], hubworkAccounts?: 
   const sections: string[] = [
     "# Active Agent Skills",
     "",
-    "The following agent skills are active. Proactively use the skill's instructions and workflows to fulfill the user's request.",
-    "When a workflow lists \"Input variables\", pass them via the variables parameter as a JSON object. Infer values from the user's message when possible. If a required variable cannot be inferred, ask the user before calling the workflow.",
+    "The following agent skills are active. Each skill's detailed instructions, reference materials, and available workflows are documented in its SKILL.md file.",
+    "Before answering the user or calling any skill workflow, call `read_drive_file({fileId: \"<SKILL.md fileId>\"})` for every relevant active skill to load its full instructions. Workflow IDs and their input variables are defined inside SKILL.md — you cannot invoke `run_skill_workflow` correctly without reading it first.",
   ];
-
-  // Plan → Create → Verify process is enforced via run_skill_workflow tool description
 
   for (const skill of skills) {
     sections.push("");
@@ -312,42 +310,14 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], hubworkAccounts?: 
     if (skill.description) {
       sections.push(skill.description);
     }
-    sections.push("");
-    sections.push("### Instructions");
-    sections.push(skill.instructions);
+    sections.push(`SKILL.md fileId: \`${skill.skillMdFileId}\` — call \`read_drive_file({fileId: "${skill.skillMdFileId}"})\` to load the full instructions and workflow details.`);
 
-    // Inject account type info directly after webpage-builder instructions
     if (skill.id === "webpage-builder" && hubworkAccounts && Object.keys(hubworkAccounts).length > 0) {
       const types = Object.keys(hubworkAccounts);
       sections.push("");
       sections.push("### Configured Account Types (use exact spelling)");
       for (const t of types) {
         sections.push(`- accountType = \`"${t}"\` → auth.require("${t}"), auth.login("${t}"), auth.logout("${t}"), login page: /login/${t}, requireAuth: ${t}`);
-      }
-    }
-
-    if (skill.references.length > 0) {
-      sections.push("");
-      sections.push("### Reference Materials");
-      for (const ref of skill.references) {
-        sections.push("---");
-        sections.push(ref);
-      }
-    }
-
-    if (skill.workflows.length > 0) {
-      sections.push("");
-      sections.push("### Available Workflows");
-      sections.push(
-        "You can execute these workflows using the `run_skill_workflow` tool.",
-      );
-      for (const wf of skill.workflows) {
-        const wfId = buildWorkflowToolId(skill.id, wf);
-        let line = `- **${wfId}**: ${wf.description}`;
-        if (wf.inputVariables && wf.inputVariables.length > 0) {
-          line += `\n  Input variables: ${wf.inputVariables.join(", ")}`;
-        }
-        sections.push(line);
       }
     }
   }
