@@ -107,6 +107,7 @@ interface RunAutoReviewArgs {
   baseMessages: Message[];
   originalDescription: string;
   effectiveModel: ModelType;
+  reviewerModel: ModelType;
   abortSignal: AbortSignal;
   t: T;
   saveResult: (msgs: Message[]) => Promise<void>;
@@ -117,24 +118,9 @@ interface RunAutoReviewArgs {
 
 async function runWebpageAutoReview(args: RunAutoReviewArgs): Promise<void> {
   const {
-    savedWebFiles, baseMessages, originalDescription, effectiveModel,
+    savedWebFiles, baseMessages, originalDescription, effectiveModel, reviewerModel,
     abortSignal, t, saveResult, iterationCount, onScheduleAutoFix, onPass,
   } = args;
-
-  const reads = await Promise.all(
-    [...savedWebFiles.entries()].map(async ([fileId, { path, action }]) => {
-      try {
-        const content = await readFileLocal(fileId);
-        return { path, content, action };
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const reviewFiles = reads.filter(
-    (f): f is { path: string; content: string; action: "created" | "updated" } => f !== null,
-  );
-  if (reviewFiles.length === 0 || abortSignal.aborted) return;
 
   const appendError = async (message: string) => {
     await saveResult([
@@ -148,12 +134,37 @@ async function runWebpageAutoReview(args: RunAutoReviewArgs): Promise<void> {
     ]);
   };
 
+  const reads = await Promise.all(
+    [...savedWebFiles.entries()].map(async ([fileId, { path, action }]) => {
+      try {
+        const content = await readFileLocal(fileId);
+        return { ok: true as const, path, content, action };
+      } catch (err) {
+        return { ok: false as const, path, error: err instanceof Error ? err.message : String(err) };
+      }
+    }),
+  );
+  if (abortSignal.aborted) return;
+  const failed = reads.filter((r): r is { ok: false; path: string; error: string } => !r.ok);
+  if (failed.length > 0) {
+    // Fail loud rather than reviewing a partial set — a missing file would
+    // otherwise read as a false pass.
+    await appendError(
+      failed.map((f) => `${f.path}: ${f.error}`).join("; "),
+    );
+    return;
+  }
+  const reviewFiles = reads
+    .filter((r): r is { ok: true; path: string; content: string; action: "created" | "updated" } => r.ok)
+    .map(({ path, content, action }) => ({ path, content, action }));
+  if (reviewFiles.length === 0) return;
+
   let review: ReviewResult;
   try {
     const res = await fetch("/api/hubwork/webpage-review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: originalDescription, files: reviewFiles, model: effectiveModel }),
+      body: JSON.stringify({ description: originalDescription, files: reviewFiles, model: reviewerModel }),
       signal: abortSignal,
     });
     if (!res.ok) {
@@ -852,6 +863,7 @@ export function ChatPanel({
                 functionCallWarningThreshold: 10,
                 ragTopK: settings.ragTopK,
                 abortSignal: abortController.signal,
+                requirePlanApproval: needsPlanApproval,
               },
               chatCallbacks,
             );
@@ -960,6 +972,12 @@ export function ChatPanel({
           finalMessagesForReview &&
           !abortController.signal.aborted
         ) {
+          // Reviewer LLM must not be an image model — fall back when the turn
+          // auto-switched to one, or when the user explicitly selected one.
+          const baseModel = overrides?.model || selectedModel;
+          const reviewerModel: ModelType = !isImageGenerationModel(baseModel)
+            ? baseModel
+            : getDefaultModelForPlan(settings.apiPlan);
           await runWebpageAutoReview({
             savedWebFiles,
             baseMessages: finalMessagesForReview,
@@ -967,6 +985,7 @@ export function ChatPanel({
               autoReviewEntry?.originalDescription
               ?? findOriginalUserDescription(finalMessagesForReview),
             effectiveModel,
+            reviewerModel,
             abortSignal: abortController.signal,
             t,
             saveResult,

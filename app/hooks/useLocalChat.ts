@@ -48,6 +48,7 @@ export interface LocalChatOptions {
   ragTopK?: number;
   abortSignal?: AbortSignal;
   skillWorkflows?: SkillWorkflowEntry[];
+  requirePlanApproval?: boolean;
 }
 
 export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
@@ -75,6 +76,7 @@ export async function* executeLocalChat(
     ragTopK,
     abortSignal,
     skillWorkflows,
+    requirePlanApproval,
   } = options;
 
   // Image generation model
@@ -232,6 +234,9 @@ export async function* executeLocalChat(
 
     // Skill workflow tool
     if (name === "run_skill_workflow" && skillWorkflows && skillWorkflows.length > 0) {
+      if (requirePlanApproval) {
+        return { error: "BLOCKED: You must present a plan to the user FIRST and wait for their confirmation before calling this tool. List ALL files you will create with full web/ paths, then STOP. Do NOT call any more tools in this turn." };
+      }
       try {
         return await executeSkillWorkflowTool(
           args.workflowId as string,
