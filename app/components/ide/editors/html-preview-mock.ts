@@ -6,6 +6,7 @@ export function buildMockGemihubScript(mockData: Record<string, string>): string
     "(function(){",
     "var _m=" + escaped + ";",
     "function _r(p,path,e){",
+    "path=path.split('?')[0].split('#')[0];",
     "var x=_m[p+path+e];if(x)return JSON.parse(x);",
     "var i=path.lastIndexOf('/'),d=i>=0?path.slice(0,i):'',pr=d?d+'/':'';",
     "for(var k in _m){if(k.indexOf(p+pr)!==0)continue;",
