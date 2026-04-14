@@ -29,20 +29,23 @@ export function getWorkflowSpecification(context?: WorkflowSpecContext): string 
   if (context?.includeSkillGeneration) {
     formatSection = `## Format
 Output a single continuous text with a \`===WORKFLOW===\` separator line.
-The first part is the SKILL.md content (YAML frontmatter + markdown instructions) as raw text.
+The first part is the SKILL.md content (YAML frontmatter + \`\`\`skill-capabilities fenced YAML block + markdown instructions) as raw text.
 The second part (after the separator) is the workflow YAML wrapped in a \`\`\`yaml code fence.
 
 Example structure:
 ---
 name: Skill Display Name
 description: Short description of what this skill does
+---
+
+\`\`\`skill-capabilities
 workflows:
   - path: workflows/<workflow-filename>.yaml
     description: What the workflow does
----
+\`\`\`
 
 Instructions for the AI agent when this skill is active.
-Describe the agent's role, behavior rules, and how to use the workflows.
+Describe the agent's role, behavior rules, and how to use the workflows. Reference input variables by their exact name so the chat LLM knows what to pass.
 
 ===WORKFLOW===
 \`\`\`yaml
@@ -53,7 +56,10 @@ nodes:
     ...
 \`\`\`
 
-IMPORTANT: The workflow YAML MUST be inside a \`\`\`yaml code fence to preserve indentation.`;
+IMPORTANT:
+- Frontmatter holds only user-facing metadata (name, description). Do NOT put \`workflows:\` in the frontmatter.
+- Workflow / script IDs live in the \`\`\`skill-capabilities fenced YAML block. The runtime auto-fills \`inputVariables\` from the workflow YAML's \`{{var}}\` usage, so keep that clean and unambiguous.
+- The workflow YAML after the separator MUST be inside a \`\`\`yaml code fence to preserve indentation.`;
   } else if (context?.outputAsMarkdown) {
     formatSection = `## Format
 Workflows are defined in YAML format inside a \`\`\`yaml code block within a Markdown document.
@@ -930,7 +936,7 @@ export function buildWorkflowUserPrompt({
     const instructionsSection = existingInstructions
       ? `Here is the current SKILL.md instructions body:\n\n${existingInstructions}\n\n`
       : "";
-    return `Here is the current workflow YAML:\n\n\`\`\`yaml\n${currentYaml}\n\`\`\`\n\n${instructionsSection}${executionContext}\nPlease modify this skill according to the following request:\n${description}\n\nOutput the updated SKILL.md instructions body first as raw markdown text, then a line containing only "===WORKFLOW===", then the COMPLETE modified workflow YAML inside a \`\`\`yaml code block.\nPreserve the workflow reference to "${workflowRefPath}" in the SKILL.md frontmatter conceptually; only output the instructions body, not the frontmatter.`;
+    return `Here is the current workflow YAML:\n\n\`\`\`yaml\n${currentYaml}\n\`\`\`\n\n${instructionsSection}${executionContext}\nPlease modify this skill according to the following request:\n${description}\n\nOutput the updated SKILL.md instructions body first as raw markdown text, then a line containing only "===WORKFLOW===", then the COMPLETE modified workflow YAML inside a \`\`\`yaml code block.\nThe workflow file reference is "${workflowRefPath}". Output only the instructions body; the runtime handles frontmatter and the \`\`\`skill-capabilities fenced block for you.`;
   }
   if (mode === "modify" && currentYaml) {
     let executionContext = "";

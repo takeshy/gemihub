@@ -17,7 +17,6 @@ import type {
   LoadedSkill,
 } from "~/types/skill";
 import { SKILLS_FOLDER_NAME } from "~/types/settings";
-import { parseWorkflowContentByName } from "~/engine/parser";
 import { fixMarkdownBullets } from "~/utils/yaml-helpers";
 
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
@@ -29,6 +28,7 @@ interface SkillFrontmatter {
     path: string;
     name?: string;
     description?: string;
+    inputVariables?: string[];
   }>;
 }
 
@@ -61,13 +61,92 @@ function findChildByName(
   );
 }
 
+const SKILL_CAPABILITIES_FENCE_TAG = "skill-capabilities";
+// Match `\n` and `\r\n` so SKILL.md files authored on Windows resolve their
+// capabilities block (parseFrontmatter already tolerates CRLF; this matches).
+const CAPABILITIES_FENCE_RE = new RegExp(
+  `^\`\`\`${SKILL_CAPABILITIES_FENCE_TAG}[ \\t]*\\r?\\n([\\s\\S]*?)\\r?\\n\`\`\`[ \\t]*$`,
+  "m",
+);
+
+/**
+ * Extract the embedded `skill-capabilities` YAML fence from SKILL.md's body.
+ * The fence is the single source of truth for a skill's workflow definitions;
+ * frontmatter holds only user-facing metadata (name, description). Returns
+ * null when the block is absent or not valid YAML.
+ */
+export function extractCapabilitiesBlock(body: string): Record<string, unknown> | null {
+  const match = body.match(CAPABILITIES_FENCE_RE);
+  if (!match) return null;
+  try {
+    const parsed = yaml.load(fixMarkdownBullets(match[1]));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+/**
+ * Replace (or insert) the ```skill-capabilities fenced YAML block inside a
+ * SKILL.md body, preserving any prose around it. When no existing block is
+ * found the new one is prepended so the LLM sees capabilities before the
+ * instructions prose.
+ */
+export function upsertCapabilitiesBlock(body: string, capabilities: Record<string, unknown>): string {
+  const yamlContent = yaml.dump(capabilities, { lineWidth: -1, noRefs: true }).trimEnd();
+  const newBlock = `\`\`\`${SKILL_CAPABILITIES_FENCE_TAG}\n${yamlContent}\n\`\`\``;
+  if (CAPABILITIES_FENCE_RE.test(body)) {
+    return body.replace(CAPABILITIES_FENCE_RE, newBlock);
+  }
+  const trimmed = body.replace(/^\s+/, "");
+  return trimmed ? `${newBlock}\n\n${trimmed}` : `${newBlock}\n`;
+}
+
+/** Serialize a SKILL.md file from frontmatter + body. */
+export function writeSkillMd(frontmatter: Record<string, unknown>, body: string): string {
+  const frontmatterYaml = yaml.dump(frontmatter, { lineWidth: -1, noRefs: true }).trimEnd();
+  return `---\n${frontmatterYaml}\n---\n\n${body.replace(/^\s+/, "")}`;
+}
+
+// Per-session dedup so legacy-format warnings don't spam on every discovery.
+const WARNED_SKILL_IDS = new Set<string>();
+function warnOnce(key: string, message: string): void {
+  if (WARNED_SKILL_IDS.has(key)) return;
+  WARNED_SKILL_IDS.add(key);
+  console.warn(message);
+}
+
 /**
  * Discover skills from the cached file tree.
- * Looks for SKILLS_FOLDER_NAME / * / SKILL.md under the root.
+ *
+ * For each skill the single source of truth is the `skill-capabilities`
+ * fenced YAML block inside SKILL.md. Frontmatter carries only user-facing
+ * metadata (name, description). If a skill still declares `workflows:` in
+ * frontmatter (legacy format), it is accepted for backward compatibility
+ * with a one-time console warning suggesting migration.
+ *
+ * Expected layout:
+ * ```markdown
+ * ---
+ * name: my-skill
+ * description: ...
+ * ---
+ *
+ * ```skill-capabilities
+ * workflows:
+ *   - path: workflows/do-x.yaml
+ *     description: ...
+ *     inputVariables: [filePath, mode]
+ * ```
+ *
+ * <prose body>
+ * ```
  */
 export async function discoverSkills(): Promise<SkillMetadata[]> {
   let tree = await getCachedFileTree();
-  // Fallback: build tree from CachedRemoteMeta if file tree cache is missing
   if (!tree) {
     const remoteMeta = await getCachedRemoteMeta();
     if (!remoteMeta) return [];
@@ -89,60 +168,40 @@ export async function discoverSkills(): Promise<SkillMetadata[]> {
     const cached = await getCachedFile(skillMdNode.id);
     if (!cached) continue;
 
-    const { frontmatter } = parseFrontmatter(cached.content);
+    const { frontmatter, body } = parseFrontmatter(cached.content);
+    const skillLabel = frontmatter.name || subFolder.name;
 
-    // Build workflow refs from frontmatter
+    let capabilities = extractCapabilitiesBlock(body);
+    if (!capabilities && Array.isArray(frontmatter.workflows)) {
+      warnOnce(skillMdNode.id, `[skills] ${skillLabel}: declares workflows in frontmatter — please migrate to a \`\`\`skill-capabilities fenced block in SKILL.md body. Falling back to the frontmatter declaration for now.`);
+      capabilities = { workflows: frontmatter.workflows };
+    }
+
     const workflows: SkillWorkflowRef[] = [];
-    if (Array.isArray(frontmatter.workflows)) {
-      for (const wf of frontmatter.workflows) {
-        if (wf.path) {
-          workflows.push({
-            path: wf.path,
-            name: wf.name,
-            description: wf.description || "",
-          });
+    const rawWorkflows = (capabilities?.workflows ?? []) as Array<Record<string, unknown>>;
+    if (Array.isArray(rawWorkflows)) {
+      for (const wf of rawWorkflows) {
+        if (!wf || typeof wf.path !== "string") {
+          console.warn(`[skills] ${skillLabel}: workflow entry missing "path" — skipped.`);
+          continue;
         }
-      }
-    }
-
-    // Auto-discover workflows/ subfolder for undeclared workflows
-    const workflowsFolder = findChildByName(
-      subFolder.children,
-      "workflows",
-    );
-    if (workflowsFolder?.isFolder && workflowsFolder.children) {
-      const declaredPaths = new Set(workflows.map((w) => w.path));
-      for (const wfFile of workflowsFolder.children) {
-        if (wfFile.isFolder) continue;
-        const relPath = `workflows/${wfFile.name}`;
-        if (!declaredPaths.has(relPath)) {
-          const baseName = wfFile.name.replace(/\.(yaml|yml)$/, "");
-          workflows.push({
-            path: relPath,
-            name: baseName,
-            description: `Run ${baseName}`,
-            fileId: wfFile.id,
-          });
+        const fileId = resolveWorkflowFileId(subFolder.children, wf.path);
+        if (!fileId) {
+          console.warn(`[skills] ${skillLabel}: workflow file not found at "${wf.path}".`);
         }
-      }
-    }
-
-    // Resolve fileIds for frontmatter-declared workflows
-    if (workflowsFolder?.isFolder && workflowsFolder.children) {
-      for (const wf of workflows) {
-        if (wf.fileId) continue;
-        // path is relative, e.g. "workflows/build.yaml"
-        const parts = wf.path.split("/");
-        let node: CachedTreeNode | undefined;
-        let searchChildren = subFolder.children;
-        for (const part of parts) {
-          node = findChildByName(searchChildren, part);
-          if (!node) break;
-          searchChildren = node.children || [];
+        const inputVariables = Array.isArray(wf.inputVariables)
+          ? (wf.inputVariables as unknown[]).filter((v): v is string => typeof v === "string")
+          : undefined;
+        if (inputVariables === undefined) {
+          console.warn(`[skills] ${skillLabel}: workflow "${wf.path}" has no "inputVariables" declared — the LLM will not know what to pass.`);
         }
-        if (node && !node.isFolder) {
-          wf.fileId = node.id;
-        }
+        workflows.push({
+          path: wf.path,
+          name: typeof wf.name === "string" ? wf.name : undefined,
+          description: typeof wf.description === "string" ? wf.description : "",
+          fileId,
+          inputVariables,
+        });
       }
     }
 
@@ -150,7 +209,7 @@ export async function discoverSkills(): Promise<SkillMetadata[]> {
       id: subFolder.name,
       folderId: subFolder.id,
       skillMdFileId: skillMdNode.id,
-      name: frontmatter.name || subFolder.name,
+      name: skillLabel,
       description: frontmatter.description || "",
       workflows,
     });
@@ -159,19 +218,34 @@ export async function discoverSkills(): Promise<SkillMetadata[]> {
   return results;
 }
 
+function resolveWorkflowFileId(
+  skillFolderChildren: CachedTreeNode[],
+  relPath: string,
+): string | undefined {
+  const parts = relPath.split("/");
+  let node: CachedTreeNode | undefined;
+  let searchChildren = skillFolderChildren;
+  for (const part of parts) {
+    node = findChildByName(searchChildren, part);
+    if (!node) return undefined;
+    searchChildren = node.children || [];
+  }
+  return node && !node.isFolder ? node.id : undefined;
+}
+
 /**
- * Load full skill content (instructions + references).
+ * Load full skill content (instructions + references). `inputVariables` on
+ * each workflow ref already come from frontmatter via `discoverSkills`, so
+ * there's no per-workflow content read here.
  */
 export async function loadSkill(
   metadata: SkillMetadata,
 ): Promise<LoadedSkill> {
-  // Load SKILL.md body
   const cached = await getCachedFile(metadata.skillMdFileId);
   const { body } = cached
     ? parseFrontmatter(cached.content)
     : { body: "" };
 
-  // Load references
   const tree = await getCachedFileTree();
   const references: string[] = [];
   if (tree) {
@@ -190,91 +264,11 @@ export async function loadSkill(
     }
   }
 
-  // Extract input variables from workflow files (parallel reads)
-  const workflowsWithVars = await Promise.all(
-    metadata.workflows.map(async (wf) => {
-      if (!wf.fileId) return wf;
-      try {
-        const wfCached = await getCachedFile(wf.fileId);
-        if (wfCached) {
-          return { ...wf, inputVariables: extractInputVariables(wfCached.content, wf.name) };
-        }
-      } catch {
-        // Skip unreadable workflow files
-      }
-      return wf;
-    })
-  );
-
   return {
     ...metadata,
-    workflows: workflowsWithVars,
     instructions: body,
     references,
   };
-}
-
-// Constants for extractInputVariables
-const SAVE_PROPERTIES = [
-  "saveTo", "saveFileTo", "savePathTo", "saveStatus",
-  "saveImageTo", "saveUiTo",
-];
-
-const SYSTEM_VARS = new Set([
-  "__workflowName__", "__lastModel__", "__date__", "__time__", "__datetime__",
-  "_clipboard",
-]);
-
-const VAR_PATTERN = /\{\{(\w[\w.[\]]*?)(?::json)?\}\}/g;
-
-/**
- * Extract input variables from a workflow file.
- * Input variables are {{variables}} used in node properties but not initialized
- * by any node (via saveTo, variable/set name, etc.) and not system variables.
- */
-function extractInputVariables(workflowContent: string, workflowName?: string): string[] {
-  let workflow;
-  try {
-    workflow = parseWorkflowContentByName(workflowContent, workflowName);
-  } catch {
-    return [];
-  }
-
-  const usedVars = new Set<string>();
-  const initializedVars = new Set<string>();
-
-  for (const [, node] of workflow.nodes) {
-    // variable/set nodes initialize the variable named in 'name'
-    if ((node.type === "variable" || node.type === "set") && node.properties.name) {
-      initializedVars.add(node.properties.name);
-    }
-
-    // Save properties initialize variables
-    for (const prop of SAVE_PROPERTIES) {
-      if (node.properties[prop]) {
-        initializedVars.add(node.properties[prop]);
-      }
-    }
-
-    // Scan all property values for {{variable}} references
-    for (const value of Object.values(node.properties)) {
-      let match;
-      VAR_PATTERN.lastIndex = 0;
-      while ((match = VAR_PATTERN.exec(String(value))) !== null) {
-        const rootVar = match[1].split(/[.[\]]/)[0];
-        if (rootVar) usedVars.add(rootVar);
-      }
-    }
-  }
-
-  const inputVars: string[] = [];
-  for (const v of usedVars) {
-    if (!initializedVars.has(v) && !SYSTEM_VARS.has(v)) {
-      inputVars.push(v);
-    }
-  }
-
-  return inputVars.sort();
 }
 
 function findNodeById(

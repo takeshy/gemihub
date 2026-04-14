@@ -1,8 +1,8 @@
 import { useState, useCallback } from "react";
-import yaml from "js-yaml";
 import { getCachedFile, getCachedFileTree, setCachedFile } from "~/services/indexeddb-cache";
 import type { CachedTreeNode } from "~/services/indexeddb-cache";
-import { parseFrontmatter } from "~/services/skill-loader";
+import { parseFrontmatter, extractCapabilitiesBlock, upsertCapabilitiesBlock, writeSkillMd } from "~/services/skill-loader";
+import { extractInputVariables } from "~/engine/inputVariables";
 import type { AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
 
 export interface AIDialogState {
@@ -29,9 +29,55 @@ export interface AIDialogState {
     frontmatter: Record<string, unknown>;
     workflowFileId: string;
     workflowFilePath: string;
-    declaredWorkflows: Array<{ path: string; name?: string; description?: string }>;
+    declaredWorkflows: Array<{ path: string; name?: string; description?: string; inputVariables?: string[] }>;
+    /** Existing skill-capabilities block contents (or empty). Spread on save
+     *  so sibling fields like `scripts` survive a workflow-only rewrite. */
+    existingCapabilities: Record<string, unknown>;
     instructions: string;
   };
+}
+
+/**
+ * For a newly-created skill, normalize the LLM-produced SKILL.md so that
+ * capabilities live in a ```skill-capabilities fenced block (not frontmatter)
+ * and the first workflow entry's `inputVariables` matches what the workflow
+ * YAML actually reads. Returns the original content if no workflows can be
+ * located in either the block or the frontmatter.
+ */
+function injectInputVariablesIntoSkillMd(
+  skillMdContent: string,
+  workflowYaml: string,
+): string {
+  // Skill workflow files are always single-workflow YAML — do not pass a
+  // name (see comment at the modify-skill call site for rationale).
+  const derived = extractInputVariables(workflowYaml);
+
+  const { frontmatter, body } = parseFrontmatter(skillMdContent);
+  const fm = frontmatter as Record<string, unknown>;
+
+  const fromBlock = extractCapabilitiesBlock(body);
+  const rawWorkflows: Record<string, unknown>[] = Array.isArray(fromBlock?.workflows)
+    ? (fromBlock.workflows as Record<string, unknown>[])
+    : Array.isArray(fm.workflows)
+      ? (fm.workflows as Record<string, unknown>[])
+      : [];
+  if (rawWorkflows.length === 0) return skillMdContent;
+
+  const nextWorkflows = rawWorkflows.map((w, i) => {
+    if (i !== 0) return w;
+    const next: Record<string, unknown> = { ...w };
+    if (derived.length > 0) {
+      next.inputVariables = derived;
+    } else {
+      delete next.inputVariables;
+    }
+    return next;
+  });
+  const nextCapabilities: Record<string, unknown> = { ...(fromBlock ?? {}), workflows: nextWorkflows };
+  const nextFrontmatter: Record<string, unknown> = { ...fm };
+  delete nextFrontmatter.workflows;
+  const nextBody = upsertCapabilitiesBlock(body, nextCapabilities);
+  return writeSkillMd(nextFrontmatter, nextBody);
 }
 
 /**
@@ -79,15 +125,26 @@ export function useAIWorkflowDialog({
       const { frontmatter, body } = parseFrontmatter(cached.content);
       const skillName = (frontmatter.name as string | undefined) || "skill";
       const skillDescription = (frontmatter.description as string | undefined) || "";
-      const declaredWorkflows = Array.isArray(frontmatter.workflows)
-        ? (frontmatter.workflows as Array<{ path?: string; name?: string; description?: string }>)
-            .filter((w): w is { path: string } & typeof w => typeof w?.path === "string" && w.path.length > 0)
-            .map((w) => ({
-              path: w.path,
-              name: typeof w.name === "string" ? w.name : undefined,
-              description: typeof w.description === "string" ? w.description : undefined,
-            }))
-        : [];
+
+      // Capabilities live in the embedded fenced block; fall back to
+      // frontmatter for legacy skills (the write path re-emits them into the
+      // block).
+      const capabilitiesBlock = extractCapabilitiesBlock(body);
+      const rawDeclaredWorkflows: Array<{ path?: string; name?: string; description?: string; inputVariables?: unknown }> = Array.isArray(capabilitiesBlock?.workflows)
+        ? (capabilitiesBlock.workflows as Array<{ path?: string; name?: string; description?: string; inputVariables?: unknown }>)
+        : Array.isArray(frontmatter.workflows)
+          ? (frontmatter.workflows as Array<{ path?: string; name?: string; description?: string; inputVariables?: unknown }>)
+          : [];
+      const declaredWorkflows = rawDeclaredWorkflows
+        .filter((w): w is { path: string } & typeof w => typeof w?.path === "string" && w.path.length > 0)
+        .map((w) => ({
+          path: w.path,
+          name: typeof w.name === "string" ? w.name : undefined,
+          description: typeof w.description === "string" ? w.description : undefined,
+          inputVariables: Array.isArray(w.inputVariables)
+            ? (w.inputVariables as unknown[]).filter((v): v is string => typeof v === "string")
+            : undefined,
+        }));
 
       // Locate the skill folder and its workflow file via the cached tree.
       const tree = await getCachedFileTree();
@@ -168,6 +225,7 @@ export function useAIWorkflowDialog({
           workflowFileId,
           workflowFilePath,
           declaredWorkflows,
+          existingCapabilities: capabilitiesBlock ?? {},
           instructions: body.trim(),
         },
       });
@@ -195,19 +253,43 @@ export function useAIWorkflowDialog({
           const newInstructions = (meta.skillMdContent ?? ctx.instructions).trim();
           const newName = workflowName || ctx.skillName;
           const effectiveDescription = ctx.skillDescription.trim() || newName;
+          // Skill workflow files are always single-workflow YAML, so pass no
+          // name — `parseWorkflowContentByName` then parses the root workflow.
+          // Passing the skill name here would throw on multi-workflow files
+          // and silently wipe existing inputVariables.
+          const derivedInputs = extractInputVariables(yamlContent);
+          const preservedWorkflows: Array<Record<string, unknown>> = ctx.declaredWorkflows.length > 0
+            ? ctx.declaredWorkflows.map((w, i) => {
+              if (i !== 0) return w;
+              const next: Record<string, unknown> = { ...w };
+              if (derivedInputs.length > 0) {
+                next.inputVariables = derivedInputs;
+              } else {
+                delete next.inputVariables;
+              }
+              return next;
+            })
+            : [{
+              path: ctx.workflowFilePath,
+              description: newName,
+              ...(derivedInputs.length > 0 ? { inputVariables: derivedInputs } : {}),
+            }];
+          // Spread existing capabilities so sibling fields (e.g. `scripts`)
+          // aren't dropped when only the workflow list is rewritten.
+          const capabilities: Record<string, unknown> = {
+            ...ctx.existingCapabilities,
+            workflows: preservedWorkflows,
+          };
           const nextFrontmatter: Record<string, unknown> = {
             ...ctx.frontmatter,
             name: newName,
             description: effectiveDescription,
-            workflows: ctx.declaredWorkflows.length > 0
-              ? ctx.declaredWorkflows
-              : [{ path: ctx.workflowFilePath, description: newName }],
           };
-          const frontmatterYaml = yaml.dump(nextFrontmatter, {
-            lineWidth: -1,
-            noRefs: true,
-          }).trimEnd();
-          const newSkillMd = `---\n${frontmatterYaml}\n---\n\n${newInstructions}\n`;
+          // Strip legacy workflows from frontmatter; they live in the
+          // embedded skill-capabilities fenced block now.
+          delete nextFrontmatter.workflows;
+          const nextBody = upsertCapabilitiesBlock(newInstructions, capabilities);
+          const newSkillMd = writeSkillMd(nextFrontmatter, nextBody);
 
           // Capture the original workflow YAML so we can roll back on failure.
           const originalWorkflowYaml = dialogState.currentYaml ?? "";
@@ -402,7 +484,10 @@ export function useAIWorkflowDialog({
             }
             // Create SKILL.md alongside the workflow if in skill mode
             if (meta.skillMdContent && meta.newSkillId && meta.skillFolderPath) {
-              const skillMdContent = meta.skillMdContent;
+              const skillMdContent = injectInputVariablesIntoSkillMd(
+                meta.skillMdContent,
+                yamlContent,
+              );
               const skillMdPath = meta.skillFolderPath.replace(/\/workflows$/, "/SKILL.md");
               fetch("/api/drive/files", {
                 method: "POST",

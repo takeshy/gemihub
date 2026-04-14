@@ -24,16 +24,20 @@ gemihub/
 
 ## SKILL.md Format
 
-Each `SKILL.md` file has YAML frontmatter for metadata and a markdown body for instructions:
+Each `SKILL.md` file has three parts: YAML frontmatter for user-facing metadata, a ```skill-capabilities fenced YAML block declaring which workflows the skill exposes, and a markdown body for instructions:
 
-```markdown
+````markdown
 ---
 name: Code Review
 description: Reviews code blocks for quality and best practices
+---
+
+```skill-capabilities
 workflows:
   - path: workflows/run-lint.yaml
     description: Run linting on the current file
----
+    inputVariables: [filePath]
+```
 
 You are a code review assistant. When reviewing code:
 
@@ -41,7 +45,9 @@ You are a code review assistant. When reviewing code:
 2. Suggest improvements for readability
 3. Verify error handling is adequate
 4. Reference the style guide for formatting rules
-```
+````
+
+Frontmatter holds only Obsidian-standard metadata. Workflow / script definitions live in the `skill-capabilities` fenced block — this is the single source of truth for what the runtime exposes to the LLM. Skills that still declare `workflows:` in frontmatter keep working for backward compatibility (with a one-time migration warning), and any edit via "Modify Skill with AI" rewrites them into the new layout.
 
 ### Frontmatter Fields
 
@@ -49,20 +55,22 @@ You are a code review assistant. When reviewing code:
 |-------|----------|-------------|
 | `name` | No | Display name for the skill. Defaults to folder name |
 | `description` | No | Short description shown in the skill selector |
-| `workflows` | No | List of workflow references (see below) |
 
 ### Workflow References
 
-Workflows declared in frontmatter are registered as function calling tools that the AI can invoke:
+Workflows declared in the `skill-capabilities` block are registered as function-calling tools that the AI can invoke:
 
-```yaml
+````markdown
+```skill-capabilities
 workflows:
   - path: workflows/run-lint.yaml
-    name: lint              # Optional custom name (defaults to file basename)
+    name: lint                      # Optional custom name (defaults to file basename)
     description: Run linting on the current file
+    inputVariables: [filePath]      # Variables the LLM must supply when invoking
 ```
+````
 
-Workflows in the `workflows/` subdirectory are also auto-discovered even without frontmatter declarations. Auto-discovered workflows use the file basename as the description.
+Every workflow the LLM may invoke must be declared here — the `workflows/` subdirectory is **not** auto-scanned. Files without a `skill-capabilities` entry are invisible to the AI. `inputVariables` lists the variable names the workflow reads but does not initialize; it is overwritten whenever the skill is edited via "Modify Skill with AI", based on the actual workflow YAML.
 
 ## References
 
