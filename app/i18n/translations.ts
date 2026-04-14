@@ -666,6 +666,11 @@ export interface TranslationStrings {
   "settings.hubwork.domainStatusPendingDns": string;
   "settings.hubwork.domainStatusProvisioningCert": string;
   "settings.hubwork.domainStatusFailed": string;
+  "settings.hubwork.domainDnsHeader": string;
+  "settings.hubwork.domainDnsTypeLabel": string;
+  "settings.hubwork.domainDnsNameLabel": string;
+  "settings.hubwork.domainDnsValueLabel": string;
+  "settings.hubwork.domainDnsPropagation": string;
   "settings.hubwork.schedules": string;
   "settings.hubwork.schedulesEmpty": string;
   "settings.hubwork.scheduleAdd": string;
@@ -1423,6 +1428,11 @@ const en: TranslationStrings = {
   "settings.hubwork.domainStatusPendingDns": "Pending DNS verification",
   "settings.hubwork.domainStatusProvisioningCert": "Provisioning certificate...",
   "settings.hubwork.domainStatusFailed": "Domain provisioning failed",
+  "settings.hubwork.domainDnsHeader": "Add the following DNS records at your registrar:",
+  "settings.hubwork.domainDnsTypeLabel": "Type",
+  "settings.hubwork.domainDnsNameLabel": "Name",
+  "settings.hubwork.domainDnsValueLabel": "Value",
+  "settings.hubwork.domainDnsPropagation": "DNS propagation and SSL provisioning may take several minutes to a few hours. Click \"Status\" to check progress.",
   "settings.hubwork.schedules": "Scheduled Workflows",
   "settings.hubwork.schedulesEmpty": "No scheduled workflows configured.",
   "settings.hubwork.scheduleAdd": "Add Schedule",
@@ -2180,6 +2190,11 @@ const ja: TranslationStrings = {
   "settings.hubwork.domainStatusPendingDns": "DNS検証待ち",
   "settings.hubwork.domainStatusProvisioningCert": "証明書を発行中...",
   "settings.hubwork.domainStatusFailed": "ドメイン設定に失敗しました",
+  "settings.hubwork.domainDnsHeader": "DNSレジストラで以下のレコードを設定してください:",
+  "settings.hubwork.domainDnsTypeLabel": "種別",
+  "settings.hubwork.domainDnsNameLabel": "名前",
+  "settings.hubwork.domainDnsValueLabel": "値",
+  "settings.hubwork.domainDnsPropagation": "DNSの反映とSSL証明書の発行には数分〜数時間かかります。「ステータス」ボタンで進捗を確認できます。",
   "settings.hubwork.schedules": "スケジュール実行",
   "settings.hubwork.schedulesEmpty": "スケジュールが設定されていません。",
   "settings.hubwork.scheduleAdd": "スケジュール追加",

@@ -449,11 +449,61 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
               </domainFetcher.Form>
             )}
 
-            {domainFetcher.data && (domainFetcher.data as { message?: string }).message && (
-              <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-                {(domainFetcher.data as { message: string }).message}
-              </p>
-            )}
+            {(() => {
+              const data = domainFetcher.data as
+                | { dnsRecords?: Array<{ type: string; name: string; value: string }>; message?: string; error?: string }
+                | undefined;
+              if (!data) return null;
+              if (data.error) {
+                return (
+                  <p className="mt-3 text-sm text-red-600 dark:text-red-400">{data.error}</p>
+                );
+              }
+              if (data.dnsRecords && data.dnsRecords.length > 0) {
+                return (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {t("settings.hubwork.domainDnsHeader")}
+                    </p>
+                    <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-700">
+                      <table className="w-full text-xs font-mono">
+                        <thead className="bg-gray-50 dark:bg-gray-800">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400">
+                              {t("settings.hubwork.domainDnsTypeLabel")}
+                            </th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400">
+                              {t("settings.hubwork.domainDnsNameLabel")}
+                            </th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400">
+                              {t("settings.hubwork.domainDnsValueLabel")}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.dnsRecords.map((r, i) => (
+                            <tr key={i} className="border-t border-gray-200 dark:border-gray-700">
+                              <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{r.type}</td>
+                              <td className="px-3 py-2 text-gray-900 dark:text-gray-100 break-all">{r.name}</td>
+                              <td className="px-3 py-2 text-gray-900 dark:text-gray-100 break-all">{r.value}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {t("settings.hubwork.domainDnsPropagation")}
+                    </p>
+                  </div>
+                );
+              }
+              if (data.message) {
+                return (
+                  <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{data.message}</p>
+                );
+              }
+              return null;
+            })()}
           </SectionCard>
 
           {/* Schedules */}

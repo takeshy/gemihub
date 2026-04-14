@@ -6,7 +6,7 @@ import { readRemoteSyncMeta } from "~/services/sync-meta.server";
 import { readFileBytes } from "~/services/google-drive.server";
 import type { SyncMeta } from "~/services/sync-diff";
 
-const SECURITY_HEADERS: HeadersInit = {
+const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
 };
@@ -67,13 +67,24 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw new Response("Not Found", { status: 404 });
   }
 
-  return new Response(new Uint8Array(result.content), {
-    headers: {
-      "Content-Type": result.contentType,
-      "Cache-Control": "public, max-age=300, s-maxage=600",
-      ...SECURITY_HEADERS,
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": result.contentType,
+    "Cache-Control": "public, max-age=300, s-maxage=600",
+    ...SECURITY_HEADERS,
+  };
+
+  // When a custom domain is active, exclude the gemihub.online URL from Google
+  // to avoid duplicate-content dilution. Relies on Cloud CDN keying by host.
+  const requestHost = request.headers.get("host")?.split(":")[0] || "";
+  if (
+    account.customDomain &&
+    account.domainStatus === "active" &&
+    requestHost !== account.customDomain
+  ) {
+    headers["X-Robots-Tag"] = "noindex, nofollow";
+  }
+
+  return new Response(new Uint8Array(result.content), { headers });
 }
 
 /** Map relative path (e.g. "about.html") → fileId from _sync-meta.json */

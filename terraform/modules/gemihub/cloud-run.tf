@@ -76,6 +76,11 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
+        name  = "HUBWORK_LB_IP"
+        value = google_compute_global_address.default.address
+      }
+
+      env {
         name = "STRIPE_SECRET_KEY"
         value_source {
           secret_key_ref {

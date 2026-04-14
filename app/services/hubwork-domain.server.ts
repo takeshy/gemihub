@@ -8,6 +8,13 @@ import type { HubworkDomainStatus } from "~/types/hubwork";
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
 const CERT_MAP_NAME = process.env.HUBWORK_CERT_MAP_NAME || "gemihub-map";
 const URL_MAP_NAME = process.env.HUBWORK_URL_MAP_NAME || "gemini-hub-https";
+const LB_IP = process.env.HUBWORK_LB_IP || "";
+
+export interface DnsRecord {
+  type: "A" | "CNAME";
+  name: string;
+  value: string;
+}
 
 function getAuthClient() {
   return new google.auth.GoogleAuth({
@@ -31,7 +38,7 @@ function resourceSuffix(accountId: string): string {
 export async function provisionDomain(
   accountId: string,
   domain: string
-): Promise<{ domainStatus: HubworkDomainStatus; message: string }> {
+): Promise<{ domainStatus: HubworkDomainStatus; dnsRecords: DnsRecord[]; message?: string }> {
   if (!PROJECT_ID) {
     throw new Error("GCP_PROJECT_ID environment variable is required for domain provisioning");
   }
@@ -112,11 +119,19 @@ export async function provisionDomain(
   });
 
   const dnsRecord = dnsAuth.data.dnsResourceRecord;
-  const message = dnsRecord
-    ? `Add a CNAME record: ${dnsRecord.name} → ${dnsRecord.data}`
-    : "DNS authorization created. Check the Google Cloud Console for the required DNS record.";
+  const dnsRecords: DnsRecord[] = [];
+  if (LB_IP) {
+    dnsRecords.push({ type: "A", name: domain, value: LB_IP });
+  }
+  if (dnsRecord?.name && dnsRecord?.data) {
+    dnsRecords.push({ type: "CNAME", name: dnsRecord.name, value: dnsRecord.data });
+  }
 
-  return { domainStatus: "pending_dns", message };
+  const message = dnsRecords.length === 0
+    ? "DNS authorization created. Check the Google Cloud Console for the required DNS record."
+    : undefined;
+
+  return { domainStatus: "pending_dns", dnsRecords, message };
 }
 
 /**
