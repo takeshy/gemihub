@@ -102,8 +102,8 @@ nodes:
     comment: "カレンダーから指定期間内の予定リストを取得する"
     type: calendar-list
     calendarId: primary
-    timeMin: "{{query.start}}"
-    timeMax: "{{query.end}}"
+    timeMin: "{{request.query.start}}"
+    timeMax: "{{request.query.end}}"
     saveTo: events
 
   - id: respond
@@ -126,15 +126,15 @@ nodes:
     comment: "Googleカレンダーに事前面談の予定を登録する"
     type: calendar-create
     calendarId: primary
-    summary: "{{body.name}} 事前予約"
-    start: "{{body.start}}"
-    end: "{{body.end}}"
+    summary: "{{request.body.name}} 事前予約"
+    start: "{{request.body.start}}"
+    end: "{{request.body.end}}"
 
   - id: write_sheet
     comment: "スプレッドシート(meetingsシート)に予約情報を記録する"
     type: sheet-write
     sheet: meetings
-    data: '[{"account_email": "{{auth.email}}", "subject": "{{body.name}} 事前予約", "start_at": "{{body.start}}"}]'
+    data: '[{"account_email": "{{auth.email}}", "subject": "{{request.body.name}} 事前予約", "start_at": "{{request.body.start}}"}]'
 
   - id: send_mail
     comment: "予約者へ予約完了の通知メールを送信する"
@@ -142,11 +142,11 @@ nodes:
     to: "{{auth.email}}"
     subject: "事前面談の予約完了のお知らせ"
     body: |
-      {{body.name}} 様
+      {{request.body.name}} 様
 
       事前面談の予約を承りました。
 
-      ■ 予約日時: {{body.datetime}}
+      ■ 予約日時: {{request.body.datetime}}
 
       当日はよろしくお願いいたします。
 

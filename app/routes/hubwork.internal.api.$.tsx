@@ -122,15 +122,15 @@ async function handleApiRequest(request: Request, apiPath: string) {
   // Build input variables
   const variables = new Map<string, string | number>();
 
-  // query.*
+  // request.query.*
   const url = new URL(request.url);
   for (const [key, value] of url.searchParams) {
-    variables.set(`query.${key}`, value);
+    variables.set(`request.query.${key}`, value);
   }
 
-  // params.*
+  // request.params.*
   for (const [key, value] of Object.entries(resolved.params)) {
-    variables.set(`params.${key}`, value);
+    variables.set(`request.params.${key}`, value);
   }
 
   // request.method
@@ -143,7 +143,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
         const jsonBody = await request.json();
         if (jsonBody && typeof jsonBody === "object") {
           for (const [key, value] of Object.entries(jsonBody)) {
-            variables.set(`body.${key}`, typeof value === "number" ? value : String(value ?? ""));
+            variables.set(`request.body.${key}`, typeof value === "number" ? value : String(value ?? ""));
           }
         }
       } catch {
@@ -168,12 +168,12 @@ async function handleApiRequest(request: Request, apiPath: string) {
             return Response.json({ error: "Total upload size exceeds 10MB limit" }, { status: 413 });
           }
           const buffer = await value.arrayBuffer();
-          variables.set(`body.${key}`, Buffer.from(buffer).toString("base64"));
-          variables.set(`body.${key}_name`, value.name);
-          variables.set(`body.${key}_type`, value.type);
-          variables.set(`body.${key}_size`, value.size);
+          variables.set(`request.body.${key}`, Buffer.from(buffer).toString("base64"));
+          variables.set(`request.body.${key}_name`, value.name);
+          variables.set(`request.body.${key}_type`, value.type);
+          variables.set(`request.body.${key}_size`, value.size);
         } else {
-          variables.set(`body.${key}`, value);
+          variables.set(`request.body.${key}`, value);
         }
       }
     }
@@ -193,7 +193,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
     // Honeypot check
     const honeypotField = trigger.honeypotField as string | undefined;
     if (honeypotField) {
-      const honeypotValue = variables.get(`body.${honeypotField}`);
+      const honeypotValue = variables.get(`request.body.${honeypotField}`);
       if (honeypotValue && String(honeypotValue).length > 0) {
         const fallback = (trigger.successRedirect as string) || "/";
         return redirect(validateRedirectUrl(fallback, "/"));
@@ -203,7 +203,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
     // Idempotency check
     const idempotencyKeyField = trigger.idempotencyKeyField as string | undefined;
     if (idempotencyKeyField) {
-      const key = variables.get(`body.${idempotencyKeyField}`);
+      const key = variables.get(`request.body.${idempotencyKeyField}`);
       if (key) {
         const isDuplicate = await checkFormIdempotency(account.id, String(key));
         if (isDuplicate) {
@@ -259,6 +259,23 @@ async function handleApiRequest(request: Request, apiPath: string) {
 
     clearTimeout(timeoutId);
 
+    if (result.historyRecord?.status === "error") {
+      const failingStep = result.historyRecord.steps.find((s) => s.status === "error");
+      const stepError = failingStep?.error || "Workflow execution failed";
+      console.error(`[api] Workflow error for ${apiPath} at node ${failingStep?.nodeId}:`, stepError);
+      if (isJsonResponse) {
+        return Response.json(
+          { error: stepError, nodeId: failingStep?.nodeId },
+          { status: 500, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      const errorRedirect = trigger.errorRedirect as string | undefined;
+      if (errorRedirect) {
+        return redirect(validateRedirectUrl(errorRedirect, "/"));
+      }
+      return redirect("/");
+    }
+
     if (isJsonResponse) {
       // JSON response mode
       const responseVar = result.context.variables.get("__response");
@@ -293,7 +310,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
       if (redirectUrl) {
         return redirect(validateRedirectUrl(String(redirectUrl), "/"));
       }
-      const bodyRedirect = variables.get("body.__redirect");
+      const bodyRedirect = variables.get("request.body.__redirect");
       if (bodyRedirect) {
         return redirect(validateRedirectUrl(String(bodyRedirect), "/"));
       }

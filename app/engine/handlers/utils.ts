@@ -68,7 +68,9 @@ export function replaceVariables(
       if (firstSpecialIndex === Infinity) {
         const value = context.variables.get(fullPath);
         if (value !== undefined) {
-          const strValue = String(value);
+          const strValue = typeof value === "object" && value !== null
+            ? JSON.stringify(value)
+            : String(value);
           return shouldJsonEscape ? jsonEscapeString(strValue) : strValue;
         }
         return match;
@@ -77,7 +79,9 @@ export function replaceVariables(
       // Try full path as a literal variable name first (e.g., "auth.email" stored with dot in key)
       const fullPathValue = context.variables.get(fullPath);
       if (fullPathValue !== undefined) {
-        const strValue = String(fullPathValue);
+        const strValue = typeof fullPathValue === "object" && fullPathValue !== null
+          ? JSON.stringify(fullPathValue)
+          : String(fullPathValue);
         return shouldJsonEscape ? jsonEscapeString(strValue) : strValue;
       }
 

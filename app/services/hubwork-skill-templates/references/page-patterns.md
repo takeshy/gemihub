@@ -137,7 +137,7 @@ nodes:
   - id: write_data
     type: sheet-write
     sheet: SheetName
-    data: '[{"email": "{{auth.email}}", "title": "{{body.title}}", "content": "{{body.content}}"}]'
+    data: '[{"email": "{{auth.email}}", "title": "{{request.body.title}}", "content": "{{request.body.content}}"}]'
 
   - id: respond
     type: set

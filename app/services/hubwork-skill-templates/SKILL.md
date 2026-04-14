@@ -191,6 +191,8 @@ Before saving AND after reading back each file, check ALL applicable items:
 11. **Wrong workflow YAML syntax** — Hubwork workflows use `trigger:` + `nodes:` with `type:` (e.g., `sheet-read`, `set`). NEVER use `steps:`, `action:`, `params:`, `readSheet`, or other invented syntax. Always copy from the API Workflow Template in `references/page-patterns.md`.
 12. **Using JS frameworks** — NEVER use Alpine.js, Vue, React, or other JS frameworks. Use plain JavaScript with the `gemihub.*` client API (`gemihub.get()`, `gemihub.post()`, `gemihub.auth.*`).
 13. **Using form actions for auth** — NEVER use `<form action="/auth/login">` or `fetch("/auth/...")`. Always use `gemihub.auth.login()`, `gemihub.auth.require()`, `gemihub.auth.logout()` from `/__gemihub/api.js`.
+14. **Asking the user for their email on protected pages** — NEVER add an email input field to forms on pages guarded by `gemihub.auth.require()`. The user is already authenticated; their email is available as `(await gemihub.auth.me("TYPE")).email` in client JS and as `{{auth.email}}` in the workflow. Pass it through `gemihub.post()` body if the workflow needs it, or just read `auth.email` server-side.
+15. **Mixing up `request.query.*` and `request.body.*`** — `request.query.*` is for URL query parameters (GET endpoints called as `gemihub.get("path?key=value")` or `gemihub.get("path", { key: "value" })`). `request.body.*` is for POST JSON body (called as `gemihub.post("path", { key: "value" })`). A GET workflow that reads `{{request.body.X}}` will silently get an empty string and break downstream calls. Match the namespace to the HTTP method.
 
 ## Rules
 

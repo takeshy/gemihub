@@ -55,19 +55,19 @@ web/api/users/[id].yaml  → /__gemihub/api/users/123
 YAML files in `web/api/` are executed as workflows. The response depends on the request Content-Type:
 
 - JSON or GET → returns `__response` variable as JSON
-- Form POST → redirects to `__redirectUrl` / `body.__redirect` / Referer
+- Form POST → redirects to `__redirectUrl` / `request.body.__redirect` / Referer
 
 ### Input Variables
 
 | Variable | Source |
 |----------|--------|
-| `query.*` | URL query parameters |
-| `params.*` | `[param]` captures from URL pattern |
-| `body.*` | POST JSON body or form fields |
+| `request.method` | `"GET"` or `"POST"` |
+| `request.query.*` | URL query parameters |
+| `request.params.*` | `[param]` captures from URL pattern |
+| `request.body.*` | POST JSON body or form fields |
 | `auth.type` | Account type (only if `requireAuth` is set) |
 | `auth.email` | Authenticated email (only if `requireAuth` is set) |
 | `currentUser` | JSON string of user profile data |
-| `request.method` | `"GET"` or `"POST"` |
 
 ### Trigger Options
 
