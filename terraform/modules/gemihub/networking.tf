@@ -37,7 +37,8 @@ resource "google_compute_backend_service" "default" {
 }
 
 # HTTPS URL map
-# Custom domain host rules are added dynamically by the app via Compute API.
+# All Host headers fall through to the default service; SNI-based cert
+# selection in the HTTPS proxy's certificate map handles per-domain certs.
 resource "google_compute_url_map" "https" {
   name            = "gemini-hub-https"
   default_service = google_compute_backend_service.default.id

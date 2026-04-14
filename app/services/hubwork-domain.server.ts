@@ -7,7 +7,6 @@ import type { HubworkDomainStatus } from "~/types/hubwork";
  */
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
 const CERT_MAP_NAME = process.env.HUBWORK_CERT_MAP_NAME || "gemihub-map";
-const URL_MAP_NAME = process.env.HUBWORK_URL_MAP_NAME || "gemini-hub-https";
 const LB_IP = process.env.HUBWORK_LB_IP || "";
 
 export interface DnsRecord {
@@ -30,9 +29,9 @@ function resourceSuffix(accountId: string): string {
 
 /**
  * Provision a custom domain for a Hubwork account.
- * 1. Create a Certificate Manager certificate (DNS authorization)
- * 2. Create a Certificate Map entry
- * 3. Add a host rule to the LB URL map pointing to the shared Cloud Run backend
+ * 1. Create a DNS authorization
+ * 2. Create a Certificate Manager certificate
+ * 3. Create a Certificate Map entry
  * 4. Update account status in Firestore
  */
 export async function provisionDomain(
@@ -100,14 +99,11 @@ export async function provisionDomain(
     if (status !== 409) throw e;
   }
 
-  // 4. Add host rule to URL map (pointing to same Cloud Run backend)
-  try {
-    await addHostRuleToUrlMap(domain);
-  } catch (e) {
-    console.warn(`[hubwork-domain] Failed to update URL map for ${domain}:`, e);
-  }
+  // The URL map has `default_service` routing any Host header to the Cloud
+  // Run backend. SNI-based cert selection happens in the HTTPS proxy's
+  // certificate map, so no URL-map host rule is needed per domain.
 
-  // 5. Update Firestore
+  // 4. Update Firestore
   await updateAccount(accountId, {
     customDomain: domain,
     domainStatus: "pending_dns",
@@ -218,49 +214,4 @@ export async function removeDomain(accountId: string): Promise<void> {
   } catch { /* ignore */ }
 
   await updateAccount(accountId, { customDomain: "", domainStatus: "none" });
-}
-
-/**
- * Add a host rule to the HTTPS URL map pointing to the default backend service.
- * All custom domains share the same Cloud Run backend.
- */
-async function addHostRuleToUrlMap(domain: string): Promise<void> {
-  const auth = getAuthClient();
-  const compute = google.compute({ version: "v1", auth });
-
-  const urlMap = await compute.urlMaps.get({
-    project: PROJECT_ID,
-    urlMap: URL_MAP_NAME,
-  });
-
-  const data = urlMap.data;
-  if (!data) throw new Error("URL map not found");
-
-  // Check if host rule already exists
-  const hostRules = data.hostRules || [];
-  const exists = hostRules.some((r) => r.hosts?.includes(domain));
-  if (exists) return;
-
-  // The default path matcher (if any) or create a simple one
-  const pathMatcherName = `hw-${domain.replace(/\./g, "-")}`;
-  const pathMatchers = data.pathMatchers || [];
-
-  pathMatchers.push({
-    name: pathMatcherName,
-    defaultService: data.defaultService,
-  });
-
-  hostRules.push({
-    hosts: [domain],
-    pathMatcher: pathMatcherName,
-  });
-
-  await compute.urlMaps.patch({
-    project: PROJECT_ID,
-    urlMap: URL_MAP_NAME,
-    requestBody: {
-      hostRules,
-      pathMatchers,
-    },
-  });
 }

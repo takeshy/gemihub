@@ -38,13 +38,6 @@ resource "google_project_iam_member" "cloud_run_cert_manager" {
   member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-# Grant Cloud Run SA access to update URL maps (for custom domain routing)
-resource "google_project_iam_member" "cloud_run_compute_url_map" {
-  project = var.project_id
-  role    = "roles/compute.loadBalancerAdmin"
-  member  = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
 resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_secret_key" {
   secret_id = data.google_secret_manager_secret.stripe_secret_key.id
   role      = "roles/secretmanager.secretAccessor"
