@@ -774,7 +774,7 @@ nodes:
   - id: respond
     type: set
     name: __response
-    value: "{{events:json}}"
+    value: "{{events}}"
 \`\`\`
 
 ### Request Input Variables (paid plan only, populated by the HTTP trigger)
@@ -791,7 +791,7 @@ These variables are auto-populated for workflows reached via HTTP. **The \`reque
 ### Response Variables (paid plan only)
 
 Set these at the end of the workflow to control the HTTP response. Both are optional.
-- \`__response\` — Response body. For JSON output, set to a JSON string (use \`{{var:json}}\` or build the string explicitly). If unset, the endpoint returns \`{}\`.
+- \`__response\` — Response body. Set to \`"{{var}}"\` (no \`:json\` modifier) — \`{{var}}\` already serializes objects/arrays to a JSON string, which the handler parses and returns. If unset, the endpoint returns \`{}\`.
 - \`__statusCode\` — HTTP status code (default 200). Set to a number string like \`"404"\`.
 - \`__redirect\` (POST body field, not workflow variable) — overrides \`successRedirect\` per-request.
 
@@ -799,6 +799,7 @@ Set these at the end of the workflow to control the HTTP response. Both are opti
 1. **Missing \`request.\` prefix** — \`{{query.X}}\` is wrong; use \`{{request.query.X}}\`. Same for \`request.body.*\`, \`request.params.*\`.
 2. **Wrong method namespace** — GET endpoints must read \`request.query.*\`; POST endpoints must read \`request.body.*\`. Reading the wrong one returns empty.
 3. **Forgetting \`__response\`** — If you don't set \`__response\`, the endpoint returns \`{}\` regardless of what the workflow computed.
+4. **Using \`{{var:json}}\` for \`__response\`** — Always \`value: "{{var}}"\`, never \`"{{var:json}}"\`. \`{{var}}\` already produces a JSON string from an object/array, and the handler calls \`JSON.parse\` on it. \`:json\` escapes that string a second time, yielding invalid JSON — the parse fails, the raw escaped string is returned, and the client sees a double-stringified value. \`:json\` is only for embedding inside a JSON string literal (e.g. \`value: '{"msg": "{{text:json}}"}'\`).
 
 ### Hubwork (Sheets/Gmail/Calendar — paid plan only)
 

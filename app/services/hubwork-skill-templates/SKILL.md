@@ -39,10 +39,12 @@ nodes:
   - id: respond
     type: set
     name: __response
-    value: "{{result:json}}"
+    value: "{{result}}"
 ```
 Valid node types: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete`, `gmail-send`, `calendar-list`, `calendar-create`, `set`, `variable`, `if`, `json`, `http`.
 NEVER use `steps:`, `action:`, `params:`, `readSheet`, or other invented syntax.
+
+**`__response` must use `{{var}}` — NEVER `{{var:json}}`:** `{{var}}` already serializes the value to a JSON string. The `:json` modifier adds a *second* layer of escaping, producing invalid JSON that the API handler returns verbatim — the client sees an escaped string instead of the data. `:json` is only for embedding a value *inside* a JSON string literal (e.g. `value: '{"msg": "{{text:json}}"}'`).
 
 **Caller input is read through `request.*` variables — NEVER bare `{{query.X}}` / `{{body.X}}`:**
 - GET (`gemihub.get("path?key=v")`) → `{{request.query.key}}`
@@ -205,7 +207,8 @@ Before saving AND after reading back each file, check ALL applicable items:
 12. **Using JS frameworks** — NEVER use Alpine.js, Vue, React, or other JS frameworks. Use plain JavaScript with the `gemihub.*` client API (`gemihub.get()`, `gemihub.post()`, `gemihub.auth.*`).
 13. **Using form actions for auth** — NEVER use `<form action="/auth/login">` or `fetch("/auth/...")`. Always use `gemihub.auth.login()`, `gemihub.auth.require()`, `gemihub.auth.logout()` from `/__gemihub/api.js`.
 14. **Asking the user for their email on protected pages** — NEVER add an email input field to forms on pages guarded by `gemihub.auth.require()`. The user is already authenticated; their email is available as `(await gemihub.auth.me("TYPE")).email` in client JS and as `{{auth.email}}` in the workflow. Pass it through `gemihub.post()` body if the workflow needs it, or just read `auth.email` server-side.
-15. **Mixing up `request.query.*` and `request.body.*`** — `request.query.*` is for URL query parameters (GET endpoints called as `gemihub.get("path?key=value")` or `gemihub.get("path", { key: "value" })`). `request.body.*` is for POST JSON body (called as `gemihub.post("path", { key: "value" })`). A GET workflow that reads `{{request.body.X}}` will silently get an empty string and break downstream calls. Match the namespace to the HTTP method.
+15. **Using `{{var:json}}` for `__response`** — `value: "{{result:json}}"` silently breaks the endpoint. `{{var}}` alone already serializes objects to a JSON string, which the handler parses and returns. `:json` adds a second layer of escaping, making the output invalid JSON — the handler falls back to returning the raw escaped string, so the client receives a double-stringified value instead of the data. Always use `value: "{{result}}"` for the response body. Reserve `:json` for embedding inside JSON string literals (e.g. `value: '{"msg": "{{text:json}}"}'`).
+16. **Mixing up `request.query.*` and `request.body.*`** — `request.query.*` is for URL query parameters (GET endpoints called as `gemihub.get("path?key=value")` or `gemihub.get("path", { key: "value" })`). `request.body.*` is for POST JSON body (called as `gemihub.post("path", { key: "value" })`). A GET workflow that reads `{{request.body.X}}` will silently get an empty string and break downstream calls. Match the namespace to the HTTP method.
 
 ## Rules
 
