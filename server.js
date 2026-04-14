@@ -67,13 +67,16 @@ app.use("/hubwork/admin", (req, res, next) => {
 
 // Hubwork domains (slug subdomains + custom domains): rewrite "/" to
 // "/__gemihub_root" so the catch-all route handles it instead of _index.tsx
-// (which redirects to /lp).
+// (which redirects to /lp). @react-router/express builds its Request from
+// req.originalUrl, so we must rewrite that too — modifying req.url alone is
+// silently ignored downstream.
 app.get("/", (req, res, next) => {
   const host = req.headers.host;
   if (!host) return next();
   const domain = host.split(":")[0];
   if (!isHubworkHost(domain)) return next();
   req.url = "/__gemihub_root";
+  req.originalUrl = "/__gemihub_root";
   next();
 });
 
