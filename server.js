@@ -8,8 +8,14 @@ import path from "node:path";
 const build = await import("./build/server/index.js");
 const app = express();
 
-function isSlugHost(domain) {
-  return domain.endsWith(".gemihub.online") || domain.endsWith(".localhost");
+const MAIN_APP_DOMAIN = process.env.GEMIHUB_MAIN_DOMAIN || "gemihub.online";
+
+function isHubworkHost(domain) {
+  // Dev: bare localhost is the main app; *.localhost is a hubwork slug.
+  if (domain === "localhost" || domain.startsWith("localhost:")) return false;
+  if (domain === MAIN_APP_DOMAIN) return false;
+  // Slug subdomains + any registered custom domain fall through to here.
+  return true;
 }
 
 app.use(compression());
@@ -59,13 +65,14 @@ app.use("/hubwork/admin", (req, res, next) => {
   res.status(401).set("WWW-Authenticate", 'Basic realm="Hubwork Admin"').end("Unauthorized");
 });
 
-// Hubwork custom domains: rewrite "/" to "/__gemihub_root" so the catch-all
-// route handles it instead of _index.tsx (which redirects to /lp).
+// Hubwork domains (slug subdomains + custom domains): rewrite "/" to
+// "/__gemihub_root" so the catch-all route handles it instead of _index.tsx
+// (which redirects to /lp).
 app.get("/", (req, res, next) => {
   const host = req.headers.host;
   if (!host) return next();
   const domain = host.split(":")[0];
-  if (!isSlugHost(domain)) return next();
+  if (!isHubworkHost(domain)) return next();
   req.url = "/__gemihub_root";
   next();
 });
