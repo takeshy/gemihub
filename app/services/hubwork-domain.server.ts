@@ -15,6 +15,12 @@ function getAuthClient() {
   });
 }
 
+// GCP resource IDs allow only lower-case letters, digits, and hyphens.
+// Firestore auto-IDs are mixed-case, so normalize before embedding.
+function resourceSuffix(accountId: string): string {
+  return accountId.toLowerCase();
+}
+
 /**
  * Provision a custom domain for a Hubwork account.
  * 1. Create a Certificate Manager certificate (DNS authorization)
@@ -34,7 +40,8 @@ export async function provisionDomain(
   const certManager = google.certificatemanager({ version: "v1", auth });
 
   // 1. Create DNS authorization
-  const authId = `hw-auth-${accountId}`;
+  const suffix = resourceSuffix(accountId);
+  const authId = `hw-auth-${suffix}`;
   try {
     await certManager.projects.locations.dnsAuthorizations.create({
       parent: `projects/${PROJECT_ID}/locations/global`,
@@ -49,7 +56,7 @@ export async function provisionDomain(
   }
 
   // 2. Create certificate
-  const certId = `hw-cert-${accountId}`;
+  const certId = `hw-cert-${suffix}`;
   try {
     await certManager.projects.locations.certificates.create({
       parent: `projects/${PROJECT_ID}/locations/global`,
@@ -69,7 +76,7 @@ export async function provisionDomain(
   }
 
   // 3. Create certificate map entry
-  const entryId = `hw-entry-${accountId}`;
+  const entryId = `hw-entry-${suffix}`;
   try {
     await certManager.projects.locations.certificateMaps.certificateMapEntries.create({
       parent: `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}`,
@@ -124,7 +131,7 @@ export async function getDomainStatus(
 
   const auth = getAuthClient();
   const certManager = google.certificatemanager({ version: "v1", auth });
-  const certId = `hw-cert-${accountId}`;
+  const certId = `hw-cert-${resourceSuffix(accountId)}`;
 
   try {
     const cert = await certManager.projects.locations.certificates.get({
@@ -171,9 +178,10 @@ export async function removeDomain(accountId: string): Promise<void> {
   const auth = getAuthClient();
   const certManager = google.certificatemanager({ version: "v1", auth });
 
-  const entryId = `hw-entry-${accountId}`;
-  const certId = `hw-cert-${accountId}`;
-  const authId = `hw-auth-${accountId}`;
+  const suffix = resourceSuffix(accountId);
+  const entryId = `hw-entry-${suffix}`;
+  const certId = `hw-cert-${suffix}`;
+  const authId = `hw-auth-${suffix}`;
 
   // Remove in reverse order: entry → cert → auth
   try {
