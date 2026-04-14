@@ -671,6 +671,17 @@ export interface TranslationStrings {
   "settings.hubwork.domainDnsNameLabel": string;
   "settings.hubwork.domainDnsValueLabel": string;
   "settings.hubwork.domainDnsPropagation": string;
+  "settings.hubwork.domainCheckSsl": string;
+  "settings.hubwork.domainCheckDns": string;
+  "settings.hubwork.domainCheckRefresh": string;
+  "settings.hubwork.domainDnsOk": string;
+  "settings.hubwork.domainDnsMismatch": string;
+  "settings.hubwork.domainDnsMissing": string;
+  "settings.hubwork.domainDnsExpected": string;
+  "settings.hubwork.domainDnsActual": string;
+  "settings.hubwork.domainReady": string;
+  "settings.hubwork.domainNotReady": string;
+  "settings.hubwork.domainChecking": string;
   "settings.hubwork.schedules": string;
   "settings.hubwork.schedulesEmpty": string;
   "settings.hubwork.scheduleAdd": string;
@@ -1433,6 +1444,17 @@ const en: TranslationStrings = {
   "settings.hubwork.domainDnsNameLabel": "Name",
   "settings.hubwork.domainDnsValueLabel": "Value",
   "settings.hubwork.domainDnsPropagation": "DNS propagation and SSL provisioning may take several minutes to a few hours. Click \"Status\" to check progress.",
+  "settings.hubwork.domainCheckSsl": "SSL certificate",
+  "settings.hubwork.domainCheckDns": "A record",
+  "settings.hubwork.domainCheckRefresh": "Refresh status",
+  "settings.hubwork.domainDnsOk": "Configured correctly",
+  "settings.hubwork.domainDnsMismatch": "Points to wrong IP",
+  "settings.hubwork.domainDnsMissing": "Not found",
+  "settings.hubwork.domainDnsExpected": "Expected",
+  "settings.hubwork.domainDnsActual": "Actual",
+  "settings.hubwork.domainReady": "Custom domain is live",
+  "settings.hubwork.domainNotReady": "Custom domain is not yet reachable",
+  "settings.hubwork.domainChecking": "Checking...",
   "settings.hubwork.schedules": "Scheduled Workflows",
   "settings.hubwork.schedulesEmpty": "No scheduled workflows configured.",
   "settings.hubwork.scheduleAdd": "Add Schedule",
@@ -2195,6 +2217,17 @@ const ja: TranslationStrings = {
   "settings.hubwork.domainDnsNameLabel": "名前",
   "settings.hubwork.domainDnsValueLabel": "値",
   "settings.hubwork.domainDnsPropagation": "DNSの反映とSSL証明書の発行には数分〜数時間かかります。「ステータス」ボタンで進捗を確認できます。",
+  "settings.hubwork.domainCheckSsl": "SSL証明書",
+  "settings.hubwork.domainCheckDns": "Aレコード",
+  "settings.hubwork.domainCheckRefresh": "ステータスを更新",
+  "settings.hubwork.domainDnsOk": "正しく設定済み",
+  "settings.hubwork.domainDnsMismatch": "別のIPに向いています",
+  "settings.hubwork.domainDnsMissing": "未設定",
+  "settings.hubwork.domainDnsExpected": "期待値",
+  "settings.hubwork.domainDnsActual": "実測値",
+  "settings.hubwork.domainReady": "カスタムドメインは利用可能です",
+  "settings.hubwork.domainNotReady": "カスタムドメインはまだ利用できません",
+  "settings.hubwork.domainChecking": "確認中...",
   "settings.hubwork.schedules": "スケジュール実行",
   "settings.hubwork.schedulesEmpty": "スケジュールが設定されていません。",
   "settings.hubwork.scheduleAdd": "スケジュール追加",

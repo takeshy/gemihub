@@ -1,3 +1,4 @@
+import { promises as dns } from "node:dns";
 import { google } from "googleapis";
 import { updateAccount } from "./hubwork-accounts.server";
 import type { HubworkDomainStatus } from "~/types/hubwork";
@@ -15,6 +16,13 @@ export interface DnsRecord {
   value: string;
 }
 
+export interface DnsACheck {
+  expected: string;        // LB IP we need users to point to
+  actual: string[];        // IPs returned by public DNS, if any
+  matches: boolean;        // expected ∈ actual
+  error?: string;          // NXDOMAIN / NODATA / ETIMEOUT etc.
+}
+
 function getAuthClient() {
   return new google.auth.GoogleAuth({
     scopes: ["https://www.googleapis.com/auth/cloud-platform"],
@@ -25,6 +33,17 @@ function getAuthClient() {
 // Firestore auto-IDs are mixed-case, so normalize before embedding.
 function resourceSuffix(accountId: string): string {
   return accountId.toLowerCase();
+}
+
+async function checkDnsARecord(domain: string): Promise<DnsACheck | undefined> {
+  if (!LB_IP) return undefined;
+  try {
+    const actual = await dns.resolve4(domain);
+    return { expected: LB_IP, actual, matches: actual.includes(LB_IP) };
+  } catch (e: unknown) {
+    const code = (e as { code?: string })?.code || "UNKNOWN";
+    return { expected: LB_IP, actual: [], matches: false, error: code };
+  }
 }
 
 /**
@@ -132,10 +151,19 @@ export async function provisionDomain(
 
 /**
  * Check the provisioning status of a custom domain.
+ * Returns both the SSL certificate state (from Certificate Manager) and
+ * the DNS A record state (from a live DNS lookup), since the domain only
+ * routes end-to-end when BOTH are correctly configured.
  */
 export async function getDomainStatus(
-  accountId: string
-): Promise<{ domainStatus: HubworkDomainStatus; certState?: string; message?: string }> {
+  accountId: string,
+  domain?: string
+): Promise<{
+  domainStatus: HubworkDomainStatus;
+  certState?: string;
+  dnsACheck?: DnsACheck;
+  message?: string;
+}> {
   if (!PROJECT_ID) {
     return { domainStatus: "active", message: "Domain provisioning not available (no GCP_PROJECT_ID)" };
   }
@@ -143,6 +171,7 @@ export async function getDomainStatus(
   const auth = getAuthClient();
   const certManager = google.certificatemanager({ version: "v1", auth });
   const certId = `hw-cert-${resourceSuffix(accountId)}`;
+  const dnsACheck = domain ? await checkDnsARecord(domain) : undefined;
 
   try {
     const cert = await certManager.projects.locations.certificates.get({
@@ -153,28 +182,29 @@ export async function getDomainStatus(
 
     if (state === "ACTIVE") {
       await updateAccount(accountId, { domainStatus: "active" });
-      return { domainStatus: "active", certState: state };
+      return { domainStatus: "active", certState: state, dnsACheck };
     }
 
     if (state === "PROVISIONING") {
       await updateAccount(accountId, { domainStatus: "provisioning_cert" });
-      return { domainStatus: "provisioning_cert", certState: state, message: "Certificate is being provisioned. This may take a few minutes." };
+      return { domainStatus: "provisioning_cert", certState: state, dnsACheck, message: "Certificate is being provisioned. This may take a few minutes." };
     }
 
     if (state === "FAILED") {
       await updateAccount(accountId, { domainStatus: "failed" });
-      return { domainStatus: "failed", certState: state, message: "Certificate provisioning failed." };
+      return { domainStatus: "failed", certState: state, dnsACheck, message: "Certificate provisioning failed." };
     }
 
     return {
       domainStatus: "pending_dns",
       certState: state,
+      dnsACheck,
       message: `Certificate state: ${state}. Please verify your DNS records are correct.`,
     };
   } catch (e: unknown) {
     const errCode = (e as { code?: number })?.code;
     if (errCode === 404) {
-      return { domainStatus: "pending_dns", message: "Certificate not found. Run domain provisioning first." };
+      return { domainStatus: "pending_dns", dnsACheck, message: "Certificate not found. Run domain provisioning first." };
     }
     throw e;
   }

@@ -20,7 +20,7 @@ async function requireOwnedHubworkAccount(request: Request) {
  */
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await requireOwnedHubworkAccount(request);
-  const status = await getDomainStatus(account.id);
+  const status = await getDomainStatus(account.id, account.customDomain);
   return data(status);
 }
 
@@ -64,7 +64,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "status": {
-      const status = await getDomainStatus(account.id);
+      const status = await getDomainStatus(account.id, account.customDomain);
       return data(status);
     }
 

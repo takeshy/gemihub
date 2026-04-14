@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
-import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCard, RefreshCw, Upload, Sparkles, X } from "lucide-react";
+import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCard, RefreshCw, Upload, Sparkles, X, XCircle } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { SectionCard } from "~/components/settings/shared";
 import type { UserSettings, HubworkSchedule } from "~/types/settings";
@@ -393,36 +393,12 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             </h3>
 
             {hubwork?.customDomain ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
-                    {hubwork.customDomain}
-                  </span>
-                  <DomainStatusBadge status={hubwork.domainStatus} />
-                </div>
-                <div className="flex gap-2">
-                  <domainFetcher.Form method="post" action="/hubwork/api/domain">
-                    <input type="hidden" name="intent" value="status" />
-                    <input type="hidden" name="accountId" value={hubwork.accountId || ""} />
-                    <button
-                      type="submit"
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      {t("settings.hubwork.domainStatus")}
-                    </button>
-                  </domainFetcher.Form>
-                  <domainFetcher.Form method="post" action="/hubwork/api/domain">
-                    <input type="hidden" name="intent" value="remove" />
-                    <input type="hidden" name="accountId" value={hubwork.accountId || ""} />
-                    <button
-                      type="submit"
-                      className="text-sm text-red-600 dark:text-red-400 hover:underline"
-                    >
-                      {t("settings.hubwork.domainRemove")}
-                    </button>
-                  </domainFetcher.Form>
-                </div>
-              </div>
+              <CustomDomainStatus
+                domain={hubwork.customDomain}
+                persistedStatus={hubwork.domainStatus}
+                accountId={hubwork.accountId || ""}
+                domainFetcher={domainFetcher}
+              />
             ) : (
               <domainFetcher.Form method="post" action="/hubwork/api/domain" className="flex gap-2">
                 <input type="hidden" name="intent" value="provision" />
@@ -820,40 +796,169 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   );
 }
 
-function DomainStatusBadge({ status }: { status?: string }) {
-  const { t } = useI18n();
-  if (!status || status === "none") return null;
-
-  switch (status) {
-    case "active":
-      return (
-        <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-          <CheckCircle size={12} />
-          {t("settings.hubwork.domainStatusActive")}
-        </span>
-      );
-    case "pending_dns":
-      return (
-        <span className="flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400">
-          <AlertCircle size={12} />
-          {t("settings.hubwork.domainStatusPendingDns")}
-        </span>
-      );
-    case "provisioning_cert":
-      return (
-        <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-          <Loader2 size={12} className="animate-spin" />
-          {t("settings.hubwork.domainStatusProvisioningCert")}
-        </span>
-      );
-    case "failed":
-      return (
-        <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-          <AlertCircle size={12} />
-          {t("settings.hubwork.domainStatusFailed")}
-        </span>
-      );
-    default:
-      return <span className="text-xs text-gray-500">{status}</span>;
-  }
+interface DnsACheck {
+  expected: string;
+  actual: string[];
+  matches: boolean;
+  error?: string;
 }
+
+interface DomainStatusResponse {
+  domainStatus?: string;
+  certState?: string;
+  dnsACheck?: DnsACheck;
+  message?: string;
+  error?: string;
+}
+
+function CustomDomainStatus({
+  domain,
+  persistedStatus,
+  accountId,
+  domainFetcher,
+}: {
+  domain: string;
+  persistedStatus?: string;
+  accountId: string;
+  domainFetcher: ReturnType<typeof useFetcher>;
+}) {
+  const { t } = useI18n();
+
+  // Auto-fetch live status on mount.
+  useEffect(() => {
+    if (domainFetcher.state === "idle" && !domainFetcher.data) {
+      domainFetcher.load("/hubwork/api/domain");
+    }
+  }, [domainFetcher]);
+
+  const data = domainFetcher.data as DomainStatusResponse | undefined;
+  const loading = domainFetcher.state !== "idle";
+  // Status response overrides the persisted Firestore status once available.
+  const certStatus = data?.domainStatus ?? persistedStatus;
+  const dnsCheck = data?.dnsACheck;
+  const sslReady = certStatus === "active";
+  const dnsReady = dnsCheck?.matches === true;
+  const overallReady = sslReady && dnsReady;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-sm font-mono text-gray-700 dark:text-gray-300">{domain}</span>
+        {overallReady ? (
+          <span className="flex items-center gap-1 rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-300">
+            <CheckCircle size={12} />
+            {t("settings.hubwork.domainReady")}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 rounded-full bg-yellow-100 dark:bg-yellow-900/40 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:text-yellow-300">
+            <AlertCircle size={12} />
+            {t("settings.hubwork.domainNotReady")}
+          </span>
+        )}
+      </div>
+
+      <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded-md border border-gray-200 dark:border-gray-700">
+        <StatusRow
+          label={t("settings.hubwork.domainCheckSsl")}
+          state={loading && !data ? "loading" : sslStateFromStatus(certStatus)}
+          detail={sslDetail(certStatus, data?.certState, t, loading && !data)}
+        />
+        <StatusRow
+          label={t("settings.hubwork.domainCheckDns")}
+          state={loading && !data ? "loading" : dnsStateFromCheck(dnsCheck)}
+          detail={dnsDetail(dnsCheck, t, loading && !data)}
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <domainFetcher.Form method="post" action="/hubwork/api/domain">
+          <input type="hidden" name="intent" value="status" />
+          <input type="hidden" name="accountId" value={accountId} />
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+            {t("settings.hubwork.domainCheckRefresh")}
+          </button>
+        </domainFetcher.Form>
+        <domainFetcher.Form method="post" action="/hubwork/api/domain">
+          <input type="hidden" name="intent" value="remove" />
+          <input type="hidden" name="accountId" value={accountId} />
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1.5 rounded-md border border-red-300 dark:border-red-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+          >
+            <Trash2 size={12} />
+            {t("settings.hubwork.domainRemove")}
+          </button>
+        </domainFetcher.Form>
+      </div>
+    </div>
+  );
+}
+
+type CheckState = "ok" | "pending" | "error" | "loading";
+
+function StatusRow({ label, state, detail }: { label: string; state: CheckState; detail: React.ReactNode }) {
+  const iconProps = { size: 14 };
+  const icon =
+    state === "ok" ? <CheckCircle {...iconProps} className="text-green-600 dark:text-green-400" /> :
+    state === "pending" ? <AlertCircle {...iconProps} className="text-yellow-600 dark:text-yellow-400" /> :
+    state === "error" ? <XCircle {...iconProps} className="text-red-600 dark:text-red-400" /> :
+    <Loader2 {...iconProps} className="animate-spin text-gray-400" />;
+  return (
+    <div className="flex items-start gap-3 px-3 py-2">
+      <div className="mt-0.5">{icon}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium text-gray-700 dark:text-gray-300">{label}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 break-all">{detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function sslStateFromStatus(status?: string): CheckState {
+  if (status === "active") return "ok";
+  if (status === "failed") return "error";
+  return "pending";
+}
+
+function dnsStateFromCheck(check?: DnsACheck): CheckState {
+  if (!check) return "pending";
+  if (check.matches) return "ok";
+  return "error";
+}
+
+function sslDetail(
+  status: string | undefined,
+  certState: string | undefined,
+  t: (k: "settings.hubwork.domainStatusActive" | "settings.hubwork.domainStatusProvisioningCert" | "settings.hubwork.domainStatusPendingDns" | "settings.hubwork.domainStatusFailed" | "settings.hubwork.domainChecking") => string,
+  isLoading: boolean,
+): string {
+  if (isLoading) return t("settings.hubwork.domainChecking");
+  if (status === "active") return t("settings.hubwork.domainStatusActive");
+  if (status === "provisioning_cert") return t("settings.hubwork.domainStatusProvisioningCert");
+  if (status === "failed") return t("settings.hubwork.domainStatusFailed");
+  if (status === "pending_dns") return t("settings.hubwork.domainStatusPendingDns");
+  return certState || "";
+}
+
+function dnsDetail(
+  check: DnsACheck | undefined,
+  t: (k: "settings.hubwork.domainDnsOk" | "settings.hubwork.domainDnsMismatch" | "settings.hubwork.domainDnsMissing" | "settings.hubwork.domainDnsExpected" | "settings.hubwork.domainDnsActual" | "settings.hubwork.domainChecking") => string,
+  isLoading: boolean,
+): React.ReactNode {
+  if (isLoading) return t("settings.hubwork.domainChecking");
+  if (!check) return "";
+  if (check.matches) return `${t("settings.hubwork.domainDnsOk")} (${check.expected})`;
+  const expected = `${t("settings.hubwork.domainDnsExpected")}: ${check.expected}`;
+  if (check.actual.length === 0) {
+    const suffix = check.error ? ` (${check.error})` : "";
+    return `${t("settings.hubwork.domainDnsMissing")}${suffix} — ${expected}`;
+  }
+  const actual = `${t("settings.hubwork.domainDnsActual")}: ${check.actual.join(", ")}`;
+  return `${t("settings.hubwork.domainDnsMismatch")} — ${expected} / ${actual}`;
+}
+
