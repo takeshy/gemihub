@@ -74,11 +74,11 @@ export function useSync() {
             }
           : null;
       const localMeta = await getLocalSyncMeta();
-      const keepIds = new Set<string>([
-        ...Object.keys(localMeta?.files ?? {}),
-        ...Object.keys(remoteMeta?.files ?? {}),
-      ]);
-      await pruneOrphanedEditHistory(keepIds);
+      // Pass cachedRemote (unfiltered), not remoteMeta — pending-migration
+      // `new:` entries would otherwise look orphaned and get pruned.
+      await pruneOrphanedEditHistory(
+        collectTrackedIds(localMeta?.files, cachedRemote?.files),
+      );
       const ids = await getLocallyModifiedFileIds();
       const diff = computeSyncDiff(
         localMeta ?? null,

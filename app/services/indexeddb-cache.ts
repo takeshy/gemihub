@@ -395,24 +395,28 @@ export async function getLocallyModifiedFileIds(): Promise<Set<string>> {
  * Delete editHistory entries whose fileId is not in `keepIds`.
  * Used to prune orphaned entries left behind when a file was deleted from
  * both localMeta and remoteMeta but its editHistory entry survived.
+ * `new:`-prefixed entries are always kept — they belong to files awaiting
+ * Drive migration and may not yet appear in either meta.
  * Returns the list of pruned fileIds.
  */
 export async function pruneOrphanedEditHistory(keepIds: Set<string>): Promise<string[]> {
   if (typeof indexedDB === "undefined") return [];
   try {
     const db = await getDB();
+    const allKeys = await new Promise<string[]>((resolve, reject) => {
+      const tx = db.transaction("editHistory", "readonly");
+      const req = tx.objectStore("editHistory").getAllKeys();
+      req.onsuccess = () => resolve(req.result.map(String));
+      req.onerror = () => reject(req.error);
+    });
+    const toDelete = allKeys.filter((k) => !keepIds.has(k) && !k.startsWith("new:"));
+    if (toDelete.length === 0) return [];
     return await new Promise<string[]>((resolve, reject) => {
       const tx = db.transaction("editHistory", "readwrite");
       const store = tx.objectStore("editHistory");
-      const keysReq = store.getAllKeys();
-      keysReq.onsuccess = () => {
-        const allKeys = keysReq.result.map(String);
-        const toDelete = allKeys.filter((k) => !keepIds.has(k));
-        for (const k of toDelete) store.delete(k);
-        tx.oncomplete = () => resolve(toDelete);
-        tx.onerror = () => reject(tx.error);
-      };
-      keysReq.onerror = () => reject(keysReq.error);
+      for (const k of toDelete) store.delete(k);
+      tx.oncomplete = () => resolve(toDelete);
+      tx.onerror = () => reject(tx.error);
     });
   } catch {
     return [];

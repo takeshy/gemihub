@@ -12,6 +12,7 @@ import {
 } from "~/services/indexeddb-cache";
 import { hasNetContentChange } from "~/services/edit-history-local";
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
+import { collectTrackedIds } from "~/hooks/sync-utils";
 import { computeSyncDiff } from "~/services/sync-diff";
 import { SyncDiffDialog } from "./SyncDiffDialog";
 import type { FileListItem } from "./SyncDiffDialog";
@@ -71,11 +72,11 @@ export function SyncStatusBar({
           }
         : null;
       const localMeta = await getLocalSyncMeta();
-      const keepIds = new Set<string>([
-        ...Object.keys(localMeta?.files ?? {}),
-        ...Object.keys(remoteMeta?.files ?? {}),
-      ]);
-      await pruneOrphanedEditHistory(keepIds);
+      // Pass cachedRemoteMeta (unfiltered), not remoteMeta — pending-migration
+      // `new:` entries would otherwise look orphaned and get pruned.
+      await pruneOrphanedEditHistory(
+        collectTrackedIds(localMeta?.files, cachedRemoteMeta?.files),
+      );
       const modifiedIds = await getLocallyModifiedFileIds();
       const diff = computeSyncDiff(localMeta ?? null, remoteMeta, modifiedIds);
 
