@@ -14,6 +14,10 @@ function isHubworkHost(domain) {
   // Dev: bare localhost is the main app; *.localhost is a hubwork slug.
   if (domain === "localhost" || domain.startsWith("localhost:")) return false;
   if (domain === MAIN_APP_DOMAIN) return false;
+  // Internal probes and direct Cloud Run URLs never carry a hubwork hostname.
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(domain)) return false; // IPv4 literal
+  if (domain === "::1" || domain.startsWith("[")) return false; // IPv6 literal
+  if (domain.endsWith(".run.app")) return false;
   // Slug subdomains + any registered custom domain fall through to here.
   return true;
 }
