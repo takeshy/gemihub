@@ -71,6 +71,11 @@ app.use("/hubwork/admin", (req, res, next) => {
 // req.originalUrl, so we must rewrite that too — modifying req.url alone is
 // silently ignored downstream.
 app.get("/", (req, res, next) => {
+  // Cloud Run startup/liveness probes use User-Agent "GoogleHC/1.0" and do
+  // not carry a real hubwork hostname — leave their request alone so the
+  // _index.tsx loader can respond with its usual 302.
+  const ua = req.headers["user-agent"] || "";
+  if (ua.startsWith("GoogleHC/")) return next();
   const host = req.headers.host;
   if (!host) return next();
   const domain = host.split(":")[0];
