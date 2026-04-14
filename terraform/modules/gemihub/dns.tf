@@ -18,6 +18,18 @@ resource "google_dns_record_set" "a" {
   rrdatas      = [google_compute_global_address.default.address]
 }
 
+# Wildcard A record so slug subdomains (e.g. takeshy.gemihub.online) resolve
+# to the same LB IP. Cloud Run identifies the account from the Host header.
+resource "google_dns_record_set" "wildcard_a" {
+  count = var.manage_dns ? 1 : 0
+
+  name         = "*.${var.domain}."
+  type         = "A"
+  ttl          = 300
+  managed_zone = google_dns_managed_zone.default[0].name
+  rrdatas      = [google_compute_global_address.default.address]
+}
+
 # CNAME record for Certificate Manager DNS authorization
 resource "google_dns_record_set" "cert_validation" {
   count = var.manage_dns ? 1 : 0

@@ -80,6 +80,27 @@ resource "google_certificate_manager_certificate_map_entry" "main" {
   certificates = [google_certificate_manager_certificate.main.id]
 }
 
+# Wildcard certificate for slug subdomains (*.gemihub.online).
+# The DNS authorization for the apex covers the wildcard without needing a
+# separate authorization record.
+resource "google_certificate_manager_certificate" "wildcard" {
+  name = "gemihub-wildcard-cert"
+
+  managed {
+    domains            = ["*.${var.domain}"]
+    dns_authorizations = [google_certificate_manager_dns_authorization.main.id]
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_certificate_manager_certificate_map_entry" "wildcard" {
+  name         = "gemihub-wildcard-entry"
+  map          = google_certificate_manager_certificate_map.default.name
+  hostname     = "*.${var.domain}"
+  certificates = [google_certificate_manager_certificate.wildcard.id]
+}
+
 # HTTPS proxy (uses Certificate Map for dynamic custom domain certs)
 resource "google_compute_target_https_proxy" "default" {
   name            = "gemini-hub-https-proxy"
