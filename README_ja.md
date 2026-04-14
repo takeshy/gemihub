@@ -124,7 +124,7 @@ GemiHub は Obsidian プラグイン [Obsidian Gemini Helper](https://github.com
 
 ### 前提条件
 
-- Node.js 22 以上
+- Node.js 24 以上
 - Google Cloud プロジェクト（下記手順で設定）
 - Gemini API キー
 

@@ -46,7 +46,7 @@
     "@types/diff": "^7.0.2",
     "@types/js-yaml": "^4.0.9",
     "@types/mime-types": "^3.0.1",
-    "@types/node": "^22",
+    "@types/node": "^24",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.2",
@@ -57,5 +57,11 @@
     "typescript-eslint": "^8.54.0",
     "vite": "^7.1.7",
     "vite-tsconfig-paths": "^5.1.4"
+  },
+  "overrides": {
+    "@google-cloud/storage": {
+      "retry-request": "^8.0.2",
+      "teeny-request": "^10.1.2"
+    }
   }
 }

@@ -43,7 +43,7 @@ Terraform で管理する Google Cloud デプロイ構成。
                                  ┌──────────▼─────────┐
                                  │  Cloud Run          │
                                  │  (gemini-hub)       │
-                                 │  Node.js 22 / SSR   │
+                                 │  Node.js 24 / SSR   │
                                  │  port 8080          │
                                  └─────────────────────┘
 ```
@@ -170,7 +170,7 @@ Google Cloud DNS で管理。ゾーンには以下を含む：
 
 ## Docker
 
-マルチステージ Dockerfile（`node:22-slim`）：
+マルチステージ Dockerfile（`node:24-slim`）：
 
 1. 全依存関係をインストール（`npm ci`）
 2. 本番依存関係のみインストール（`npm ci --omit=dev`）

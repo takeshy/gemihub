@@ -43,7 +43,7 @@ Google Cloud deployment managed by Terraform.
                                  ┌──────────▼─────────┐
                                  │  Cloud Run          │
                                  │  (gemini-hub)       │
-                                 │  Node.js 22 / SSR   │
+                                 │  Node.js 24 / SSR   │
                                  │  port 8080          │
                                  └─────────────────────┘
 ```
@@ -177,7 +177,7 @@ The trigger runs automatically on push to the `main` branch (including PR merges
 
 ## Docker
 
-Multi-stage Dockerfile (`node:22-slim`):
+Multi-stage Dockerfile (`node:24-slim`):
 
 1. Install all dependencies (`npm ci`)
 2. Install production dependencies only (`npm ci --omit=dev`)

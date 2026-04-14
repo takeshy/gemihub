@@ -126,7 +126,7 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 
 ### Prerequisites
 
-- Node.js 22+
+- Node.js 24+
 - Google Cloud project (see setup below)
 - Gemini API key
 

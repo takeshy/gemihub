@@ -44,7 +44,7 @@ Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test` for a
 
 ## Environment
 
-Requires Node.js 22+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and `SESSION_SECRET`. The dev server port (8132) is set in `vite.config.ts`.
+Requires Node.js 24+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and `SESSION_SECRET`. The dev server port (8132) is set in `vite.config.ts`.
 
 ## Architecture
 

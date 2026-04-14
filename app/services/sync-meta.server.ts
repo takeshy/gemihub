@@ -143,19 +143,35 @@ export async function upsertFileInMeta(
   file: DriveFile,
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
+  return upsertFilesInMeta(accessToken, rootFolderId, [file], options);
+}
+
+/**
+ * Batch version of upsertFileInMeta: read meta once, apply all upserts, write once.
+ * Callers that upload files concurrently MUST use this instead of racing
+ * per-file upsertFileInMeta calls (last-writer-wins would clobber entries).
+ */
+export async function upsertFilesInMeta(
+  accessToken: string,
+  rootFolderId: string,
+  files: DriveFile[],
+  options: SyncMetaOperationOptions = {}
+): Promise<SyncMeta> {
   const meta =
     (await readRemoteSyncMeta(accessToken, rootFolderId, options)) ?? {
       lastUpdatedAt: new Date().toISOString(),
       files: {},
     };
-  meta.files[file.id] = {
-    name: file.name,
-    mimeType: file.mimeType,
-    md5Checksum: file.md5Checksum ?? "",
-    modifiedTime: file.modifiedTime ?? "",
-    createdTime: file.createdTime,
-    size: file.size,
-  };
+  for (const file of files) {
+    meta.files[file.id] = {
+      name: file.name,
+      mimeType: file.mimeType,
+      md5Checksum: file.md5Checksum ?? "",
+      modifiedTime: file.modifiedTime ?? "",
+      createdTime: file.createdTime,
+      size: file.size,
+    };
+  }
   meta.lastUpdatedAt = new Date().toISOString();
   await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
   return meta;

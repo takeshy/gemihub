@@ -1,5 +1,5 @@
-import { findFileByExactName, createFile, updateFile, readFile } from "~/services/google-drive.server";
-import { upsertFileInMeta } from "~/services/sync-meta.server";
+import { findFileByExactName, createFile, updateFile, readFile, type DriveFile } from "~/services/google-drive.server";
+import { upsertFilesInMeta } from "~/services/sync-meta.server";
 
 export interface SkillFile {
   path: string;
@@ -37,8 +37,8 @@ export async function provisionHubworkSkillFiles(
     return { files: await collectExistingFiles(accessToken, rootFolderId, skillFiles), isFirstProvision: false };
   }
 
-  const result = await Promise.all(skillFiles.map(async (file) => {
-    let driveFile;
+  const uploaded = await Promise.all(skillFiles.map(async (file) => {
+    let driveFile: DriveFile;
     const existingFile = await findFileByExactName(accessToken, file.path, rootFolderId);
     if (existingFile) {
       driveFile = force
@@ -47,20 +47,24 @@ export async function provisionHubworkSkillFiles(
     } else {
       driveFile = await createFile(accessToken, file.path, file.content, rootFolderId, file.mimeType);
     }
-    await upsertFileInMeta(accessToken, rootFolderId, driveFile);
 
     return {
-      id: driveFile.id,
-      name: driveFile.name,
-      path: file.path,
-      mimeType: file.mimeType,
-      content: file.content,
-      md5Checksum: driveFile.md5Checksum,
-      modifiedTime: driveFile.modifiedTime,
+      driveFile,
+      provisioned: {
+        id: driveFile.id,
+        name: driveFile.name,
+        path: file.path,
+        mimeType: file.mimeType,
+        content: file.content,
+        md5Checksum: driveFile.md5Checksum,
+        modifiedTime: driveFile.modifiedTime,
+      },
     };
   }));
 
-  return { files: result, isFirstProvision: !force };
+  await upsertFilesInMeta(accessToken, rootFolderId, uploaded.map((u) => u.driveFile));
+
+  return { files: uploaded.map((u) => u.provisioned), isFirstProvision: !force };
 }
 
 async function collectExistingFiles(
@@ -72,21 +76,25 @@ async function collectExistingFiles(
     const driveFile = await findFileByExactName(accessToken, file.path, rootFolderId);
     if (!driveFile) return null;
 
-    const [content] = await Promise.all([
-      readFile(accessToken, driveFile.id),
-      upsertFileInMeta(accessToken, rootFolderId, driveFile),
-    ]);
+    const content = await readFile(accessToken, driveFile.id);
 
     return {
-      id: driveFile.id,
-      name: driveFile.name,
-      path: file.path,
-      mimeType: file.mimeType,
-      content,
-      md5Checksum: driveFile.md5Checksum,
-      modifiedTime: driveFile.modifiedTime,
+      driveFile,
+      provisioned: {
+        id: driveFile.id,
+        name: driveFile.name,
+        path: file.path,
+        mimeType: file.mimeType,
+        content,
+        md5Checksum: driveFile.md5Checksum,
+        modifiedTime: driveFile.modifiedTime,
+      },
     };
   }));
 
-  return results.filter((r) => r !== null) as ProvisionedFile[];
+  const found = results.filter((r): r is NonNullable<typeof r> => r !== null);
+  if (found.length > 0) {
+    await upsertFilesInMeta(accessToken, rootFolderId, found.map((r) => r.driveFile));
+  }
+  return found.map((r) => r.provisioned);
 }
