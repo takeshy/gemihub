@@ -31,6 +31,7 @@ import {
   type SkillWorkflowCallbacks,
   type SkillWorkflowEntry,
 } from "./skillWorkflowTool";
+import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
 
 export interface LocalChatOptions {
   apiKey: string;
@@ -152,6 +153,23 @@ export async function* executeLocalChat(
 
   tools.push(EXECUTE_JAVASCRIPT_TOOL);
 
+  tools.push({
+    name: "get_workflow_spec",
+    description:
+      "Return the authoritative GemiHub workflow specification (variable syntax, condition syntax, all node types, trigger block, request.* / __response variables, etc.). Call this WHENEVER you touch a workflow YAML file — creating, modifying, reviewing, or DEBUGGING. When investigating why a workflow does not work, ALWAYS call this FIRST before guessing at the cause: most workflow bugs are wrong parameter names, missing `request.` prefix on input variables, or missing `__response`. Call with no arguments to get the full spec; pass `nodeTypes` only if you already know exactly which sections you need.",
+    parameters: {
+      type: "object",
+      properties: {
+        nodeTypes: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional. Filter to specific sections (node type names like 'command', 'drive-file', 'calendar-list', or the special name 'trigger'). Omit to receive the entire spec — recommended when debugging an unfamiliar workflow.",
+        },
+      },
+    },
+  });
+
   // Build tool dispatcher
   const driveToolNames = new Set(DRIVE_TOOL_DEFINITIONS.map((t) => t.name));
   const mcpToolNames = new Set(mcpToolDefs.map((t) => t.name));
@@ -208,6 +226,12 @@ export async function* executeLocalChat(
           error: err instanceof Error ? err.message : "MCP tool call failed",
         };
       }
+    }
+
+    // Workflow spec lookup (full spec when nodeTypes omitted)
+    if (name === "get_workflow_spec") {
+      const nodeTypes = Array.isArray(args.nodeTypes) ? (args.nodeTypes as string[]) : undefined;
+      return { spec: getWorkflowNodeSpec(nodeTypes) };
     }
 
     // JavaScript sandbox tool

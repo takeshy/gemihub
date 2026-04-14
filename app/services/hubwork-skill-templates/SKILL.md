@@ -34,15 +34,28 @@ nodes:
   - id: read
     type: sheet-read
     sheet: SheetName
-    filter: '{"account_email": "{{auth.email}}"}'
+    filter: '{"account_email": "{{auth.email}}", "status": "{{request.query.status}}"}'
     saveTo: result
   - id: respond
     type: set
     name: __response
-    value: "{{result}}"
+    value: "{{result:json}}"
 ```
 Valid node types: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete`, `gmail-send`, `calendar-list`, `calendar-create`, `set`, `variable`, `if`, `json`, `http`.
 NEVER use `steps:`, `action:`, `params:`, `readSheet`, or other invented syntax.
+
+**Caller input is read through `request.*` variables — NEVER bare `{{query.X}}` / `{{body.X}}`:**
+- GET (`gemihub.get("path?key=v")`) → `{{request.query.key}}`
+- POST (`gemihub.post("path", {key: "v"})`) → `{{request.body.key}}`
+- HTTP method itself: `{{request.method}}`
+- When `requireAuth` is set: `{{auth.email}}`, `{{auth.type}}`, `{{currentUser}}`
+A workflow that reads `{{query.X}}` (no `request.` prefix) silently resolves to "" and the downstream node breaks.
+
+**MANDATORY: Before writing OR debugging any `web/api/*.yaml` workflow, call:**
+```
+get_workflow_spec()
+```
+With no arguments it returns the full authoritative spec — `trigger:` (requireAuth, request.*, __response), every valid node type and its parameters, variable / condition syntax, common mistakes. Do NOT rely on memory — the example above is a starting shape, not the full spec.
 
 ## First: Read Existing Spec
 

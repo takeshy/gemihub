@@ -23,6 +23,7 @@ export function getWorkflowSpecification(context?: WorkflowSpecContext): string 
   const mcpServerList = buildMcpServerList(context?.mcpServers);
   const commandRagSection = buildCommandRagSection(context?.ragSettingNames);
   const ragSyncSection = buildRagSyncSection(context?.ragSettingNames);
+  const hubworkSection = buildHubworkSection(context?.apiPlan ?? "paid");
 
   let formatSection: string;
   if (context?.includeSkillGeneration) {
@@ -446,41 +447,7 @@ Command results:
 - convert-to-html → HTML file name (saved to temporaries/)
 - rename → new file name
 
-### Hubwork (Sheets/Gmail — paid feature)
-
-#### sheet-read
-Read rows from a Google Sheets sheet.
-- **sheet** (required): Sheet name (tab name)
-- **filter** (optional): JSON filter like \`{"status": "active"}\` or simple \`column == value\`
-- **limit** (optional): Max rows to return
-- **saveTo** (required): Variable for result (JSON array of objects)
-
-#### sheet-write
-Append rows to a Google Sheets sheet.
-- **sheet** (required): Sheet name
-- **data** (required): JSON object or array of objects matching sheet headers
-
-#### sheet-update
-Update rows matching a filter.
-- **sheet** (required): Sheet name
-- **filter** (required): JSON filter to match rows
-- **data** (required): JSON object with columns to update
-- **saveTo** (optional): Variable for updated row count
-
-#### sheet-delete
-Delete rows matching a filter.
-- **sheet** (required): Sheet name
-- **filter** (required): JSON filter to match rows
-- **saveTo** (optional): Variable for deleted row count
-
-#### gmail-send
-Send an email via Gmail API.
-- **to** (required): Recipient email address
-- **subject** (required): Email subject
-- **body** (optional): HTML email body
-- **saveTo** (optional): Variable for message ID
-
-### Integration
+${hubworkSection}### Integration
 
 #### workflow
 Execute sub-workflow.
@@ -724,6 +691,181 @@ function buildRagSyncSection(ragSettingNames?: string[]): string {
   if (!ragSettingNames || ragSettingNames.length === 0) return "";
   const names = ragSettingNames.map((n) => `\`${n}\``).join(", ");
   return `\n  Available: ${names}`;
+}
+
+/**
+ * Return workflow spec content. If `nodeTypes` is empty/undefined, returns the
+ * full spec. Otherwise extracts just the `#### nodeType` sections requested.
+ */
+export function getWorkflowNodeSpec(
+  nodeTypes: string[] | undefined,
+  context?: WorkflowSpecContext,
+): string {
+  const fullSpec = getWorkflowSpecification(context);
+  if (!nodeTypes || nodeTypes.length === 0) return fullSpec;
+  // Split spec into sections keyed by `#### nodeName` heading.
+  const sectionMap = new Map<string, string>();
+  const headerRe = /^#### (\S+)[^\n]*$/gm;
+  const headers: { name: string; start: number; bodyStart: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = headerRe.exec(fullSpec)) !== null) {
+    headers.push({ name: m[1], start: m.index, bodyStart: m.index + m[0].length });
+  }
+  // Boundary: next `^#### ` OR next `^### ` / `^## ` (a higher-level heading) OR end.
+  const boundaryRe = /^#{2,4} /gm;
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i];
+    boundaryRe.lastIndex = h.bodyStart;
+    let end = fullSpec.length;
+    let bm: RegExpExecArray | null;
+    while ((bm = boundaryRe.exec(fullSpec)) !== null) {
+      if (bm.index > h.bodyStart) {
+        end = bm.index;
+        break;
+      }
+    }
+    sectionMap.set(h.name, fullSpec.slice(h.start, end).replace(/\s+$/, ""));
+  }
+
+  const sections: string[] = [];
+  for (const raw of nodeTypes) {
+    const nodeType = raw.trim();
+    if (!nodeType) continue;
+    const found = sectionMap.get(nodeType);
+    if (found) {
+      sections.push(found);
+    } else {
+      sections.push(`#### ${nodeType}\n(unknown node type — verify the name in the workflow spec)`);
+    }
+  }
+  return sections.join("\n\n");
+}
+
+function buildHubworkSection(apiPlan: ApiPlan): string {
+  if (apiPlan !== "paid") return "";
+  return `### HTTP Workflow Trigger (paid plan only)
+
+Workflows under \`web/api/*.yaml\` are exposed as HTTP endpoints. They use a top-level \`trigger:\` block and receive caller input through \`request.*\` variables.
+
+#### trigger
+Top-level workflow block declaring the HTTP endpoint behavior. NOT a node — appears at the workflow root, not under \`nodes:\`.
+- **requireAuth** (optional): Account type the caller must be authenticated as (e.g. \`accounts\`, \`members\`). Caller invokes \`gemihub.auth.require("<type>")\` first. When set, \`auth.email\`, \`auth.type\`, and \`currentUser.*\` become available.
+- **idempotencyKeyField** (optional, POST only): Body field used to dedup repeat submissions.
+- **honeypotField** (optional, POST only): Body field that should always be empty; non-empty submissions are silently treated as success.
+- **successRedirect** (optional, POST only): URL to 302 to after success (form submissions).
+- **errorRedirect** (optional, POST only): URL to 302 to after failure.
+
+Example:
+\`\`\`yaml
+trigger:
+  requireAuth: accounts
+nodes:
+  - id: get-cal
+    type: calendar-list
+    timeMin: "{{request.query.timeMin}}"
+    timeMax: "{{request.query.timeMax}}"
+    saveTo: events
+  - id: respond
+    type: set
+    name: __response
+    value: "{{events:json}}"
+\`\`\`
+
+### Request Input Variables (paid plan only, populated by the HTTP trigger)
+
+These variables are auto-populated for workflows reached via HTTP. **The \`request.\` prefix is mandatory** — bare \`{{query.X}}\` or \`{{body.X}}\` will silently resolve to empty string and break downstream nodes.
+
+- \`{{request.method}}\` — "GET", "POST", etc.
+- \`{{request.query.<name>}}\` — URL query parameter (use this for **GET** endpoints called via \`gemihub.get("path?key=v")\` or \`gemihub.get("path", {key: "v"})\`)
+- \`{{request.body.<name>}}\` — JSON body field or form field (use this for **POST** endpoints called via \`gemihub.post("path", {key: "v"})\`)
+- \`{{request.params.<name>}}\` — URL path parameter (rare)
+- For file uploads, additionally: \`{{request.body.<name>_name}}\`, \`{{request.body.<name>_type}}\`, \`{{request.body.<name>_size}}\` (the value itself is base64)
+- \`{{auth.email}}\`, \`{{auth.type}}\`, \`{{currentUser}}\` — only when \`requireAuth\` is set and the caller is authenticated. \`currentUser\` is a JSON string; access fields like \`{{currentUser}}\` then parse, or rely on the unwrapped variable if the workflow already \`set\`s it.
+
+### Response Variables (paid plan only)
+
+Set these at the end of the workflow to control the HTTP response. Both are optional.
+- \`__response\` — Response body. For JSON output, set to a JSON string (use \`{{var:json}}\` or build the string explicitly). If unset, the endpoint returns \`{}\`.
+- \`__statusCode\` — HTTP status code (default 200). Set to a number string like \`"404"\`.
+- \`__redirect\` (POST body field, not workflow variable) — overrides \`successRedirect\` per-request.
+
+### Common HTTP Workflow Mistakes
+1. **Missing \`request.\` prefix** — \`{{query.X}}\` is wrong; use \`{{request.query.X}}\`. Same for \`request.body.*\`, \`request.params.*\`.
+2. **Wrong method namespace** — GET endpoints must read \`request.query.*\`; POST endpoints must read \`request.body.*\`. Reading the wrong one returns empty.
+3. **Forgetting \`__response\`** — If you don't set \`__response\`, the endpoint returns \`{}\` regardless of what the workflow computed.
+
+### Hubwork (Sheets/Gmail/Calendar — paid plan only)
+
+The nodes below require the paid plan with Hubwork enabled and the corresponding Google API permissions granted. They will fail at runtime on the free plan.
+
+#### sheet-read
+Read rows from a Google Sheets sheet.
+- **sheet** (required): Sheet name (tab name)
+- **filter** (optional): JSON filter like \`{"status": "active"}\` or simple \`column == value\`
+- **limit** (optional): Max rows to return
+- **saveTo** (required): Variable for result (JSON array of objects)
+
+#### sheet-write
+Append rows to a Google Sheets sheet.
+- **sheet** (required): Sheet name
+- **data** (required): JSON object or array of objects matching sheet headers
+
+#### sheet-update
+Update rows matching a filter.
+- **sheet** (required): Sheet name
+- **filter** (required): JSON filter to match rows
+- **data** (required): JSON object with columns to update
+- **saveTo** (optional): Variable for updated row count
+
+#### sheet-delete
+Delete rows matching a filter.
+- **sheet** (required): Sheet name
+- **filter** (required): JSON filter to match rows
+- **saveTo** (optional): Variable for deleted row count
+
+#### gmail-send
+Send an email via Gmail API.
+- **to** (required): Recipient email address
+- **subject** (required): Email subject
+- **body** (optional): HTML email body
+- **saveTo** (optional): Variable for message ID
+
+#### calendar-list
+List events from Google Calendar.
+- **calendarId** (optional): Calendar ID (default: "primary")
+- **timeMin** (optional): RFC3339 lower bound (e.g. "2026-04-14T00:00:00Z")
+- **timeMax** (optional): RFC3339 upper bound
+- **maxResults** (optional): Max events to return (default: 50, capped at 250)
+- **query** (optional): Free-text search query
+- **saveTo** (required): Variable for result (JSON array of \`{id, summary, description, start, end, location, status, htmlLink}\`)
+
+#### calendar-create
+Create a new event on Google Calendar.
+- **calendarId** (optional): Calendar ID (default: "primary")
+- **summary** (required): Event title
+- **start** (required): Start time — RFC3339 dateTime, or \`YYYY-MM-DD\` for an all-day event
+- **end** (required): End time — same format as start
+- **description** (optional): Event description
+- **location** (optional): Event location
+- **saveTo** (optional): Variable for the created event ID
+
+#### calendar-update
+Update an existing event. Only fields you provide are patched.
+- **calendarId** (optional): Calendar ID (default: "primary")
+- **eventId** (required): Event ID to update
+- **summary** (optional): New title
+- **description** (optional): New description
+- **start** (optional): New start (RFC3339 or \`YYYY-MM-DD\` for all-day)
+- **end** (optional): New end (same format as start)
+- **location** (optional): New location
+- **saveTo** (optional): Variable for the updated event ID
+
+#### calendar-delete
+Delete an event from Google Calendar.
+- **calendarId** (optional): Calendar ID (default: "primary")
+- **eventId** (required): Event ID to delete
+
+`;
 }
 
 /**

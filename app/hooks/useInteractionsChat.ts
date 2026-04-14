@@ -21,6 +21,7 @@ import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/c
 import { isDriveToolMediaResult } from "~/services/gemini-chat-core";
 import type { LocalChatCallbacks } from "./useLocalChat";
 import { executeSkillWorkflowTool, type SkillWorkflowEntry } from "./skillWorkflowTool";
+import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
 
 export interface InteractionsChatOptions {
   model: ModelType;
@@ -136,6 +137,12 @@ function buildToolDispatcher(
         return rest;
       }
       return result;
+    }
+
+    // Workflow spec lookup (full spec when nodeTypes omitted)
+    if (name === "get_workflow_spec") {
+      const nodeTypes = Array.isArray(args.nodeTypes) ? (args.nodeTypes as string[]) : undefined;
+      return { spec: getWorkflowNodeSpec(nodeTypes) };
     }
 
     // JavaScript sandbox
@@ -313,6 +320,22 @@ export async function* executeInteractionsChat(
   // Build extra tool definitions (client-only tools) to send to server
   const extraToolDefinitions: ToolDefinition[] = [];
   extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
+  extraToolDefinitions.push({
+    name: "get_workflow_spec",
+    description:
+      "Return the authoritative GemiHub workflow specification (variable syntax, condition syntax, all node types, trigger block, request.* / __response variables, etc.). Call this WHENEVER you touch a workflow YAML file — creating, modifying, reviewing, or DEBUGGING. When investigating why a workflow does not work, ALWAYS call this FIRST before guessing at the cause: most workflow bugs are wrong parameter names, missing `request.` prefix on input variables, or missing `__response`. Call with no arguments to get the full spec; pass `nodeTypes` only if you already know exactly which sections you need.",
+    parameters: {
+      type: "object",
+      properties: {
+        nodeTypes: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional. Filter to specific sections (node type names like 'command', 'drive-file', 'calendar-list', or the special name 'trigger'). Omit to receive the entire spec — recommended when debugging an unfamiliar workflow.",
+        },
+      },
+    },
+  });
   if (skillWorkflows && skillWorkflows.length > 0) {
     extraToolDefinitions.push({
       name: "run_skill_workflow",
