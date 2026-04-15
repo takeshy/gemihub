@@ -3,6 +3,8 @@
  * Blocks private/internal IPs and enforces HTTPS in production.
  */
 
+import { lookup } from "node:dns/promises";
+import type { LookupAddress } from "node:dns";
 import { isIP } from "node:net";
 
 const PRIVATE_IPV4_RANGES = [
@@ -12,6 +14,8 @@ const PRIVATE_IPV4_RANGES = [
   /^192\.168\./,
   /^0\./,
   /^169\.254\./,
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,           // CGNAT 100.64.0.0/10
+  /^(22[4-9]|23\d|2[4-5]\d)\./,                          // multicast + reserved 224-255
 ];
 
 const BLOCKED_HOSTNAMES = new Set([
@@ -66,7 +70,7 @@ function parseIpv4MappedIpv6(hostname: string): string | null {
   return `${a}.${b}.${c}.${d}`;
 }
 
-function isPrivateHost(hostname: string): boolean {
+export function isPrivateHost(hostname: string): boolean {
   const normalized = normalizeHostname(hostname);
 
   if (BLOCKED_HOSTNAMES.has(normalized)) return true;
@@ -82,7 +86,7 @@ function isPrivateHost(hostname: string): boolean {
       return PRIVATE_IPV4_RANGES.some((re) => re.test(mappedIpv4));
     }
 
-    // Loopback, unique-local (fc00::/7), link-local (fe80::/10)
+    // Loopback, unique-local (fc00::/7), link-local (fe80::/10), multicast (ff00::/8)
     return (
       normalized === "::1" ||
       normalized === "::" ||
@@ -92,11 +96,54 @@ function isPrivateHost(hostname: string): boolean {
       normalized.startsWith("fe8") ||
       normalized.startsWith("fe9") ||
       normalized.startsWith("fea") ||
-      normalized.startsWith("feb")
+      normalized.startsWith("feb") ||
+      normalized.startsWith("ff")
     );
   }
 
   return false;
+}
+
+/**
+ * Signals that DNS resolution failed (ENOTFOUND / EAI_AGAIN / etc.).
+ * Distinct from SSRF block errors so callers can return an upstream-style
+ * 502 rather than misreporting resolve failures as policy rejections.
+ */
+export class DnsLookupError extends Error {
+  readonly code: string;
+  constructor(hostname: string, code: string) {
+    super(`DNS lookup failed for ${hostname}: ${code}`);
+    this.name = "DnsLookupError";
+    this.code = code;
+  }
+}
+
+/**
+ * Resolve a hostname and throw if it is an IP literal in a blocked range,
+ * a known blocked name, or resolves to a blocked IP via A/AAAA lookup.
+ * A DNS-rebinding window remains because fetch() re-resolves.
+ * Throws `DnsLookupError` on resolve failure (not a policy violation).
+ */
+export async function assertSafeFetchHost(hostname: string): Promise<void> {
+  if (isIP(hostname)) {
+    if (isPrivateHost(hostname)) throw new Error(`blocked IP literal ${hostname}`);
+    return;
+  }
+  if (isPrivateHost(hostname)) throw new Error(`blocked hostname ${hostname}`);
+  let addresses: LookupAddress[];
+  try {
+    addresses = await lookup(hostname, { all: true });
+  } catch (err) {
+    if (err && typeof err === "object" && "code" in err && typeof err.code === "string") {
+      throw new DnsLookupError(hostname, err.code);
+    }
+    throw err;
+  }
+  for (const { address } of addresses) {
+    if (isPrivateHost(address)) {
+      throw new Error(`host ${hostname} resolves to blocked IP ${address}`);
+    }
+  }
 }
 
 /**

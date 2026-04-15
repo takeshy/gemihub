@@ -190,6 +190,7 @@ export function useLocalWorkflowExecution(workflowId: string) {
           initialVariables: options?.initialVariables,
           geminiApiKey,
           settings,
+          canUseProxy: Boolean(settings?.hubwork?.plan),
         },
       );
 

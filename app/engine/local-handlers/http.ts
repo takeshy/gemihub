@@ -52,6 +52,7 @@ export async function handleHttpNodeLocal(
   node: WorkflowNode,
   context: ExecutionContext,
   abortSignal?: AbortSignal,
+  canUseProxy?: boolean,
 ): Promise<void> {
   const url = replaceVariables(node.properties["url"] || "", context);
   const method = replaceVariables(node.properties["method"] || "GET", context).toUpperCase();
@@ -193,10 +194,15 @@ export async function handleHttpNodeLocal(
     // fetches (common in skill workflows like OGP scraping), route through
     // the server proxy so the request actually succeeds. Same-origin
     // requests go direct to keep local/auth-cookie flows unchanged.
+    //
+    // Non-Premium users skip the proxy entirely — the server rejects the
+    // call with 403, so attempting it wastes a round-trip. Cross-origin
+    // targets without CORS headers will fail, which is the intended
+    // behavior outside the Premium plan.
     const targetOrigin = (() => {
       try { return new URL(url).origin; } catch { return ""; }
     })();
-    const needsProxy = targetOrigin !== "" && targetOrigin !== window.location.origin;
+    const needsProxy = canUseProxy === true && targetOrigin !== "" && targetOrigin !== window.location.origin;
 
     if (needsProxy) {
       // body can be FormData/Blob for multipart uploads; the proxy only

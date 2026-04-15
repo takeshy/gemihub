@@ -35,6 +35,7 @@ import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
 
 export interface LocalChatOptions {
   apiKey: string;
+  canUseProxy: boolean;
   model: ModelType;
   messages: Message[];
   systemPrompt?: string;
@@ -63,6 +64,7 @@ export async function* executeLocalChat(
 ): AsyncGenerator<StreamChunk> {
   const {
     apiKey,
+    canUseProxy,
     model,
     messages,
     systemPrompt,
@@ -260,6 +262,7 @@ export async function* executeLocalChat(
           (args.variables as string) || "{}",
           skillWorkflows,
           callbacks,
+          canUseProxy,
         );
       } catch (err) {
         return {

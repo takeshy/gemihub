@@ -70,6 +70,13 @@ export interface LocalExecuteOptions {
   initialVariables?: Record<string, string | number>;
   geminiApiKey?: string;
   settings?: UserSettings;
+  /**
+   * Whether the caller is allowed to route cross-origin HTTP node
+   * requests through `/api/workflow/http-fetch`. Derived from the
+   * Premium plan status; optional because non-chat code paths may
+   * leave this unset (no proxy access by default).
+   */
+  canUseProxy?: boolean;
   subWorkflowDepth?: number;
   /** When "server", delegate entire workflow to /api/workflow/execute-full (paid feature). */
   executionMode?: "local" | "server";
@@ -574,7 +581,7 @@ export async function executeWorkflowLocally(
           const url = replaceVariables(node.properties["url"] || "", context);
           const method = node.properties["method"] || "GET";
           log(node.id, node.type, `HTTP ${method} ${url}`, "info");
-          await handleHttpNodeLocal(node, context, options.abortSignal);
+          await handleHttpNodeLocal(node, context, options.abortSignal, options.canUseProxy);
           const httpSaveTo = node.properties["saveTo"];
           const httpOutput = httpSaveTo ? context.variables.get(httpSaveTo) : undefined;
           log(node.id, node.type, `HTTP completed`, "success", { url, method }, httpOutput);

@@ -27,6 +27,7 @@ export async function executeSkillWorkflowTool(
   variablesJson: string,
   skillWorkflows: SkillWorkflowEntry[],
   callbacks?: SkillWorkflowCallbacks,
+  canUseProxy?: boolean,
 ): Promise<Record<string, unknown>> {
   const match = skillWorkflows.find(
     (sw) => buildWorkflowToolId(sw.skillId, sw.workflow) === workflowId,
@@ -71,6 +72,7 @@ export async function executeSkillWorkflowTool(
     const result = await executeWorkflowLocally(workflow, executionCallbacks, {
       initialVariables,
       workflowId: fileId,
+      canUseProxy,
     });
 
     const resultVars: Record<string, string | number> = {};

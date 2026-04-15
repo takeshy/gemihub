@@ -25,6 +25,7 @@ import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
 
 export interface InteractionsChatOptions {
   model: ModelType;
+  canUseProxy: boolean;
   messages: Message[];
   systemPrompt?: string;
   previousInteractionId?: string;
@@ -94,7 +95,7 @@ function buildToolDispatcher(
   skillWorkflows: InteractionsChatOptions["skillWorkflows"],
   callbacks?: LocalChatCallbacks,
   abortSignal?: AbortSignal,
-  options?: { requirePlanApproval?: boolean },
+  options?: { requirePlanApproval?: boolean; canUseProxy?: boolean },
 ): {
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>;
   driveToolNames: Set<string>;
@@ -169,6 +170,7 @@ function buildToolDispatcher(
           (args.variables as string) || "{}",
           skillWorkflows,
           callbacks,
+          options?.canUseProxy,
         );
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Skill workflow execution failed" };
@@ -285,6 +287,7 @@ export async function* executeInteractionsChat(
 ): AsyncGenerator<StreamChunk> {
   const {
     model,
+    canUseProxy,
     messages,
     systemPrompt,
     previousInteractionId,
@@ -314,7 +317,7 @@ export async function* executeInteractionsChat(
     skillWorkflows,
     callbacks,
     abortSignal,
-    { requirePlanApproval },
+    { requirePlanApproval, canUseProxy },
   );
 
   // Build extra tool definitions (client-only tools) to send to server

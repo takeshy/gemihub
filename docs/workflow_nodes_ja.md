@@ -244,6 +244,14 @@ HTTP リクエストを実行します。
   saveTo: body
 ```
 
+**クロスオリジン（CORS）:** ブラウザの `fetch()` で実行します。同一オリジンおよび CORS 対応のクロスオリジンエンドポイントは全ユーザーで動作します。それ以外のクロスオリジン URL（ニュースサイト、OGP 取得、CORS ヘッダーを返さない旧来の API 等）は、**Premium プラン**のみサーバプロキシ（`/api/workflow/http-fetch`）経由で透過的にルーティングされ成功します。Premium 契約なしのユーザーはそのような URL で CORS エラーになり、CORS 対応 API を直接叩く必要があります。
+
+**プロキシ制限（Premium のみ）:** サーバプロキシは以下の制限を強制します:
+- **60 リクエスト/分/ユーザー** — 超過時は 429 + `Retry-After: 60`。
+- **20 MB レスポンスサイズ上限** — 超過ボディは 413（`Content-Length` チェックと読み取り時の二段階で強制）。
+- **30 秒 upstream タイムアウト** — 応答が詰まった upstream は 502。
+- **SSRF ガード** — private / loopback / metadata IP レンジに解決されるホスト名は 400 で拒否。DNS 解決失敗は SSRF ではなく 502 として区別して返すため、再試行ロジックが正しく動作します。
+
 **レスポンスタイプ判定:** デフォルト（`auto`）では Content-Type ヘッダーからバイナリ/テキストを自動判定します。`responseType: text` でテキスト処理を強制（例: サーバーが JSON を `application/octet-stream` で返す場合）、`responseType: binary` でバイナリ処理を強制できます。
 
 **バイナリレスポンス**は自動検出され、FileExplorerData JSON（Base64 エンコード）として保存されます。

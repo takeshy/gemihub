@@ -165,35 +165,149 @@ ExecutionRecord {
 
 ---
 
-## SSE ストリーミング
+## ローカル実行（クライアントサイド）
 
-実行はブラウザ内でローカルに行われる（21/24 ノードタイプ）。サーバーが必要なノード（mcp, rag-sync, gemihub-command）のみ API 呼出。
+デフォルトではワークフロー実行はブラウザ内で行われる。実行ループはクライアントサイドで回り、サーバーが必要なノードのみサーバー API を呼び出す。
 
-### エンドポイント
+### アーキテクチャ
+
+```
+ブラウザ（クライアント）:
+├── ワークフロー YAML をローカルでパース (parser.ts)
+├── エグゼキューターループをローカル実行 (local-executor.ts)
+│   ├── ローカルノード（21 種類）→ ブラウザ内で直接実行
+│   │   ├── variable, set, if, while, sleep, json
+│   │   ├── dialog, prompt-value, prompt-selection（UI を直接表示）
+│   │   ├── command（gemini-chat-core.ts 経由で Gemini API をブラウザから直接呼出）
+│   │   │   ├── Drive ツール → drive-tools-local.ts（IndexedDB）
+│   │   │   └── MCP ツール → /api/workflow/mcp-proxy（サーバープロキシ）
+│   │   ├── http（ブラウザから fetch。Premium ユーザーはクロスオリジンを /api/workflow/http-fetch 経由で CORS 回避）
+│   │   ├── drive-file, drive-read, drive-search, drive-list, drive-folder-list,
+│   │   │   drive-save, drive-delete（drive-local.ts 経由 IndexedDB）
+│   │   ├── drive-file-picker, prompt-file（UI をローカル表示、ファイルは IndexedDB から読込）
+│   │   └── workflow（IndexedDB からサブワークフロー読込、再帰実行）
+│   └── サーバー必須ノード（3 種類）→ POST /api/workflow/execute-node
+│       ├── mcp（MCP サーバー呼出）
+│       ├── rag-sync（Gemini RAG API）
+│       └── gemihub-command（暗号化、公開、PDF/HTML エクスポート）
+```
+
+### ローカルノード
+
+以下 21 種類のノードはサーバー呼出なしでブラウザ内で完結する:
+
+| ノードタイプ | 説明 |
+|-----------|------|
+| `variable` | 変数の設定/初期化 |
+| `set` | 算術式の評価 |
+| `if` | 条件分岐 |
+| `while` | 条件付きループ |
+| `sleep` | 実行の遅延 |
+| `json` | JSON 文字列のパース |
+| `dialog` | ダイアログ UI を直接表示 |
+| `prompt-value` | テキスト入力 UI を直接表示 |
+| `prompt-selection` | 複数行入力 UI を直接表示 |
+| `command` | Gemini API をブラウザから直接呼出。Drive ツールは IndexedDB、MCP ツールは `/api/workflow/mcp-proxy` を使用 |
+| `http` | ブラウザの fetch で HTTP リクエスト。同一オリジンと CORS 対応クロスオリジンは直接成功。Premium プランはそれ以外のクロスオリジン URL も `/api/workflow/http-fetch` サーバープロキシ経由でルーティング（非 Premium は CORS 非対応先で失敗） |
+| `drive-file` | IndexedDB 内のファイル作成/更新 |
+| `drive-read` | IndexedDB からファイル読込 |
+| `drive-search` | IndexedDB キャッシュ内のファイル検索 |
+| `drive-list` | IndexedDB キャッシュからファイル一覧取得 |
+| `drive-folder-list` | IndexedDB キャッシュからフォルダ一覧取得 |
+| `drive-file-picker` | キャッシュされたファイルツリーを使うインタラクティブピッカー |
+| `drive-save` | バイナリ/テキストを IndexedDB に保存 |
+| `drive-delete` | IndexedDB 内ファイルのソフト削除 |
+| `prompt-file` | Drive ファイルピッカー + IndexedDB からの読込 |
+| `workflow` | IndexedDB からサブワークフロー読込、再帰実行 |
+
+### サーバー必須ノード
+
+以下 3 種類のノードは実行ごとに `POST /api/workflow/execute-node` を呼び出す:
+
+| ノードタイプ | 理由 |
+|-----------|------|
+| `mcp` | MCP サーバー呼出がサーバーサイド HTTP を必要とする |
+| `rag-sync` | Gemini RAG API がサーバーサイドアクセスを必要とする |
+| `gemihub-command` | Drive 操作（暗号化、公開、PDF/HTML エクスポート）がサーバーサイドアクセスを必要とする |
+
+### ノード実行 API
 
 | メソッド | エンドポイント | 説明 |
-|---------|--------------|------|
-| POST | `/api/workflow/execute-node` | サーバー必須ノードの単体実行 |
-| POST | `/api/workflow/mcp-proxy` | MCP ツール定義取得・実行プロキシ |
-| GET/POST | `/api/workflow/history` | 実行履歴の一覧/読込/保存/削除 |
-| `error` | 致命的エラーメッセージ |
-| `prompt-request` | ユーザー入力待ちのプロンプト（type, title, options 等） |
-| `drive-file-updated` | ワークフローが Drive ファイルを更新 |
-| `drive-file-created` | ワークフローが Drive ファイルを作成 |
+|---------|-------------|------|
+| POST | `/api/workflow/execute-node` | サーバー必須ノード単体を実行 |
 
-### クライアントサイドフック
-
-`useLocalWorkflowExecution` が実行状態を管理:
-
-```typescript
+**リクエストボディ:**
+```json
 {
-  logs: LogEntry[]
-  status: "idle" | "running" | "completed" | "cancelled" | "error" | "waiting-prompt"
-  promptData: Record<string, unknown> | null
+  "nodeType": "drive-read",
+  "nodeId": "read-file",
+  "properties": { "path": "example.md", "saveTo": "content" },
+  "variables": { "content": "" },
+  "workflowId": "abc123",
+  "promptResponse": null
 }
 ```
 
-メソッド: `executeWorkflow(yaml, options?)`, `stop()`, `handlePromptResponse(value)`
+**レスポンス（非ストリーミング）:**
+```json
+{
+  "variables": { "content": "file content here" },
+  "logs": [],
+  "driveEvents": []
+}
+```
+
+**レスポンス（プロンプト必要時）:**
+```json
+{
+  "needsPrompt": true,
+  "promptType": "diff",
+  "promptData": { "title": "Confirm Write", "fileName": "example.md", "diff": "..." }
+}
+```
+
+サーバーが `needsPrompt: true` を返した場合、クライアントはプロンプト UI を表示してユーザー応答を収集し、`promptResponse` を設定して API を再呼出する。
+
+`command` ノードの場合、レスポンスは `log`、`complete`、`error` イベントを持つ SSE ストリーム。
+
+### クライアントサイドフック
+
+`useLocalWorkflowExecution(workflowId)` がローカル実行状態を管理:
+
+```typescript
+{
+  status: "idle" | "running" | "completed" | "cancelled" | "error" | "waiting-prompt"
+  logs: LogEntry[]
+  promptData: Record<string, unknown> | null
+  executeWorkflow(yamlContent, options?): Promise<LocalExecuteResult | null>
+  stop(): void
+  handlePromptResponse(value: string | null): void
+}
+```
+
+### プロンプトハンドリング
+
+ローカル実行のプロンプトは SSE ラウンドトリップなしでブラウザ内で直接処理:
+1. ローカルエグゼキューターがプロンプトノード（dialog, prompt-value, prompt-selection）に到達
+2. フックが `promptData` を設定し Promise で実行を一時停止
+3. PromptModal が表示され、ユーザーが応答
+4. フックが Promise を解決し実行再開
+
+プロンプトを必要とするサーバーノード（確認付き drive-file、暗号化ファイル等）:
+1. サーバーが `{needsPrompt: true, promptType, promptData}` を返す
+2. クライアントがプロンプト UI を表示
+3. クライアントが `promptResponse` 付きで API を再呼出
+
+---
+
+## サーバー API エンドポイント
+
+| メソッド | エンドポイント | 説明 |
+|---------|-------------|------|
+| POST | `/api/workflow/execute-node` | サーバー必須ノード（mcp, rag-sync, gemihub-command）の単体実行 |
+| POST | `/api/workflow/mcp-proxy` | MCP ツール定義と実行のプロキシ（ローカル command ノードが使用） |
+| POST | `/api/workflow/http-fetch` | Premium プラン限定の HTTP CORS プロキシ（ローカル http ノードが使用） |
+| GET/POST | `/api/workflow/history` | 実行履歴の一覧/読込/保存/削除 |
 
 ---
 

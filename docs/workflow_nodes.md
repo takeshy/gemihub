@@ -246,6 +246,14 @@ Make HTTP requests.
   saveTo: body
 ```
 
+**Cross-origin requests (CORS):** Requests run as browser `fetch()`. Same-origin and CORS-enabled cross-origin endpoints work for every user. For other cross-origin URLs (news sites, OGP scraping, legacy APIs without CORS headers), the **Premium plan** transparently routes through a server proxy (`/api/workflow/http-fetch`) so the request succeeds. Users without a Premium subscription hit CORS errors for such URLs and must target CORS-enabled APIs directly.
+
+**Proxy limits (Premium only):** The server proxy enforces:
+- **60 requests/min per user** — 429 with `Retry-After: 60` when exceeded.
+- **20 MB response size cap** — over-limit bodies return 413 (via `Content-Length` check and read-time enforcement).
+- **30 s upstream timeout** — stuck upstreams return 502.
+- **SSRF guard** — hostnames resolving to private / loopback / metadata IP ranges are rejected with 400. DNS resolve failures are reported as 502 (not SSRF) so retry logic behaves correctly.
+
 **Response type detection:** By default (`auto`), binary vs text is auto-detected from the Content-Type header. Use `responseType: text` to force text processing (e.g., when a server returns `application/octet-stream` for JSON), or `responseType: binary` to force binary handling.
 
 **Binary responses** are automatically detected and stored as FileExplorerData JSON (Base64 encoded).
