@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { data, useLoaderData, useNavigate } from "react-router";
+import { data, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
@@ -699,28 +699,43 @@ export default function Settings() {
   useApplySettings(currentLang, settings.fontSize, settings.theme);
 
   const [hubworkCallback, setHubworkCallback] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Detect redirect return params
+  // Detect redirect return params. Use useSearchParams (router-aware) so that
+  // client-side navigations (e.g. review-slug Pro activation, which redirects
+  // same-route via fetcher.Form without remounting Settings) also trigger the
+  // callback handling. Cleanup goes through setSearchParams — not
+  // window.history.replaceState — so the Router's location stays in sync with
+  // the real URL; otherwise a second same-query redirect would look like "no
+  // change" to the Router and this effect would never re-fire.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("mcp-oauth-return")) {
+    if (searchParams.has("mcp-oauth-return")) {
       setActiveTab("mcp");
     }
-    if (params.has("hubwork_subscribed") || params.has("hubwork_upgraded")) {
+    if (searchParams.has("hubwork_subscribed") || searchParams.has("hubwork_upgraded")) {
       setActiveTab("hubwork");
     }
-    if (params.has("hubwork_subscribed")) {
-      setHubworkCallback(true);
+    // Mirror the URL, so hubworkCallback clears on non-callback visits instead
+    // of latching to true forever after the first callback.
+    setHubworkCallback(searchParams.has("hubwork_subscribed"));
+
+    const needsCleanup =
+      searchParams.has("mcp-oauth-return") ||
+      searchParams.has("hubwork_subscribed") ||
+      searchParams.has("hubwork_upgraded");
+    if (needsCleanup) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("mcp-oauth-return");
+          next.delete("hubwork_subscribed");
+          next.delete("hubwork_upgraded");
+          return next;
+        },
+        { replace: true },
+      );
     }
-    // Clean up the URL without triggering a navigation
-    if (params.toString()) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("mcp-oauth-return");
-      url.searchParams.delete("hubwork_subscribed");
-      url.searchParams.delete("hubwork_upgraded");
-      window.history.replaceState({}, "", url.pathname + (url.search || ""));
-    }
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   return (
     <I18nProvider language={currentLang}>
