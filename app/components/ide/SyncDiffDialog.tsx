@@ -221,8 +221,9 @@ export function SyncDiffDialog({
                         )}
                       </span>
 
-                      {/* Open button */}
-                      {onSelectFile && (
+                      {/* Open button (hidden in pull dialog: previewing an unpulled
+                          file would let the user edit without a sync baseline) */}
+                      {onSelectFile && type === "push" && (
                         <button
                           onClick={() => {
                             onClose();

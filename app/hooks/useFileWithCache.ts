@@ -3,8 +3,6 @@ import {
   getCachedFile,
   setCachedFile,
   deleteCachedFile,
-  getLocalSyncMeta,
-  setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
 import { isBinaryMimeType, isLargeFile } from "~/services/sync-client-utils";
@@ -132,21 +130,10 @@ export function useFileWithCache(
           // 6. Initialize edit history snapshot
           addCommitBoundary(id).catch(() => {});
         }
-
-        // 7. Update local sync meta (metadata always tracked)
-        if (md5) {
-          const syncMeta = (await getLocalSyncMeta()) ?? {
-            id: "current" as const,
-            lastUpdatedAt: new Date().toISOString(),
-            files: {},
-          };
-          syncMeta.files[id] = {
-            md5Checksum: md5,
-            modifiedTime: modTime,
-            size: meta.size,
-          };
-          await setLocalSyncMeta(syncMeta);
-        }
+        // NOTE: do NOT register into localSyncMeta here. Registration is owned
+        // by explicit pull/push. On-demand view must not implicitly mark a file
+        // as synced — otherwise the local-first tree filter would show files
+        // that were only previewed, not pulled.
       } catch (err) {
         if (currentFileId.current === id) {
           if (contentShown) return;

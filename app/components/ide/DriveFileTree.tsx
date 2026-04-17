@@ -198,7 +198,8 @@ export function DriveFileTree({
       files: mergedFiles,
       cachedAt: Date.now(),
     };
-    const items = buildTreeFromMeta(cachedMeta);
+    const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
+    const items = buildTreeFromMeta(cachedMeta, trackedIds);
     setTreeItems(items);
     setRemoteMeta(mergedFiles);
     // Update localSyncMeta names so that rename/move operations are reflected
@@ -235,7 +236,7 @@ export function DriveFileTree({
 
       if (data.meta) {
         // Merge local-only "new:" entries from existing CachedRemoteMeta
-        const existingMeta = await getCachedRemoteMeta();
+        const [existingMeta, localMeta] = await Promise.all([getCachedRemoteMeta(), getLocalSyncMeta()]);
         const mergedFiles = { ...data.meta.files };
         if (existingMeta) {
           for (const [id, entry] of Object.entries(existingMeta.files)) {
@@ -254,7 +255,8 @@ export function DriveFileTree({
         };
 
         // Use buildTreeFromMeta which filters system files (isSyncExcludedPath)
-        const items = buildTreeFromMeta(cachedMeta);
+        const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
+        const items = buildTreeFromMeta(cachedMeta, trackedIds);
         setTreeItems(items);
         setRemoteMeta(mergedFiles);
         await Promise.all([
@@ -389,9 +391,10 @@ export function DriveFileTree({
         updateTreeFromMeta(detail.meta);
         return;
       }
-      const current = await getCachedRemoteMeta();
+      const [current, localMeta] = await Promise.all([getCachedRemoteMeta(), getLocalSyncMeta()]);
       if (current) {
-        setTreeItems(buildTreeFromMeta(current));
+        const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
+        setTreeItems(buildTreeFromMeta(current, trackedIds));
         setRemoteMeta(current.files);
       }
     };
@@ -452,24 +455,31 @@ export function DriveFileTree({
     let cancelled = false;
 
     (async () => {
-      const cached = await getCachedFileTree();
+      // Prefer rebuilding from cachedRemoteMeta + current localSyncMeta so the
+      // local-first filter reflects the latest tracked set (the persisted tree
+      // may have been written by code paths that don't apply the filter).
+      const [cached, cachedMeta, localMeta] = await Promise.all([
+        getCachedFileTree(),
+        getCachedRemoteMeta(),
+        getLocalSyncMeta(),
+      ]);
+
+      const canRebuildFromMeta = cachedMeta && cachedMeta.rootFolderId === rootFolderId;
       const hasUsableCachedTree =
         cached &&
         cached.rootFolderId === rootFolderId &&
         cached.items.length > 0;
 
-      if (!cancelled && hasUsableCachedTree) {
+      if (!cancelled && canRebuildFromMeta) {
+        const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
+        setTreeItems(buildTreeFromMeta(cachedMeta, trackedIds));
+        setRemoteMeta(cachedMeta.files);
+      } else if (!cancelled && hasUsableCachedTree) {
         setTreeItems(cached.items);
       }
 
-      // Restore remoteMeta for status icons (shared, cached/modified dots)
-      const cachedMeta = await getCachedRemoteMeta();
-      if (!cancelled && cachedMeta && cachedMeta.rootFolderId === rootFolderId) {
-        setRemoteMeta(cachedMeta.files);
-      }
-
       if (!cancelled) {
-        if (!hasUsableCachedTree) {
+        if (!canRebuildFromMeta && !hasUsableCachedTree) {
           // No usable cache available (new device or empty cached tree) — fetch tree from server
           fetchAndCacheTree();
         } else {

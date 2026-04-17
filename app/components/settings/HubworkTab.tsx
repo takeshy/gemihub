@@ -59,7 +59,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
       localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
     }
     await setLocalSyncMeta(localMeta);
-    const items = buildTreeFromMeta(meta);
+    const items = buildTreeFromMeta(meta, new Set(Object.keys(localMeta.files)));
     await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items, cachedAt: Date.now() });
   }, []);
 
@@ -628,7 +628,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                                 localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
                               }
                               await setLocalSyncMeta(localMeta);
-                              const treeItems = buildTreeFromMeta(meta);
+                              const treeItems = buildTreeFromMeta(meta, new Set(Object.keys(localMeta.files)));
                               await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items: treeItems, cachedAt: Date.now() });
                               // Activate the skill in localStorage
                               try {
@@ -711,7 +711,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                               localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
                             }
                             await setLocalSyncMeta(localMeta);
-                            const treeItems = buildTreeFromMeta(meta);
+                            const treeItems = buildTreeFromMeta(meta, new Set(Object.keys(localMeta.files)));
                             await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items: treeItems, cachedAt: Date.now() });
                           }
                           setSkillUpdateResult(res.ok ? "success" : "error");

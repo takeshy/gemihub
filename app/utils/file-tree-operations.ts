@@ -53,7 +53,7 @@ export function removeNodeFromTree(
     );
 }
 
-export function buildTreeFromMeta(meta: CachedRemoteMeta): CachedTreeNode[] {
+export function buildTreeFromMeta(meta: CachedRemoteMeta, trackedIds?: Set<string>): CachedTreeNode[] {
   const root: CachedTreeNode[] = [];
   const folderMap = new Map<string, CachedTreeNode>();
 
@@ -79,6 +79,9 @@ export function buildTreeFromMeta(meta: CachedRemoteMeta): CachedTreeNode[] {
   for (const [fileId, f] of Object.entries(meta.files)) {
     // Skip system files (settings.json, _sync-meta.json, _encrypted-auth.json, etc.)
     if (isSyncExcludedPath(f.name)) continue;
+    // Local-first tree: hide files that have never been pulled to this device.
+    // `new:` entries are local-only creations not yet pushed, so always keep them.
+    if (trackedIds && !trackedIds.has(fileId) && !fileId.startsWith("new:")) continue;
     const parts = f.name.split("/");
     const fileName = parts.pop()!;
     const parentChildren = ensureFolder(parts);
