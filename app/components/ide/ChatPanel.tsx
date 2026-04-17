@@ -782,10 +782,17 @@ export function ChatPanel({
             ].join("\n");
         }
 
+        // Place langInstruction LAST so the model sees it right before generating — the
+        // skill prompt is long and English-heavy, which otherwise biases the response
+        // back toward English despite a leading language directive.
         const langInstruction = settings.language === "ja"
-          ? "You MUST respond in Japanese (日本語で応答してください)."
+          ? [
+              "## 応答言語",
+              "",
+              "**重要: すべての自然言語の出力は日本語で書いてください。** プラン、確認、質問、検証結果、エラー／ステータスメッセージ、およびスキルが管理するファイル（`web/__gemihub/spec.md`、`web/__gemihub/history.md`）を含む、毎ターンのすべての応答に適用されます。コード、ファイルパス、URL パス、識別子、シート名、カラム名などの技術トークンはそのまま維持し、散文のみを翻訳してください。",
+            ].join("\n")
           : undefined;
-        const fullSystemPrompt = [settings.systemPrompt, langInstruction, planInstruction, skillPrompt]
+        const fullSystemPrompt = [settings.systemPrompt, planInstruction, skillPrompt, langInstruction]
           .filter(Boolean)
           .join("\n\n") || undefined;
         const skillWorkflows = getActiveSkillWorkflows(extraSkillIds);
