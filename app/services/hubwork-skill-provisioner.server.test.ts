@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { provisionHubworkSkillFiles } from "./hubwork-skill-provisioner-core.ts";
-import { pickOldestSpreadsheet } from "./hubwork-skill-provisioner-core.ts";
+import { pickOldestSpreadsheet, pickSkillFileToKeep } from "./hubwork-skill-provisioner-core.ts";
 
 test("provisionHubworkSkillFiles with force overwrites existing skill files", async () => {
   const originalFetch = globalThis.fetch;
@@ -209,5 +209,37 @@ test("pickOldestSpreadsheet returns the sole file untouched", () => {
   const { keep, discard } = pickOldestSpreadsheet([a]);
   assert.equal(keep.id, "only");
   assert.equal(discard.length, 0);
+});
+
+test("pickSkillFileToKeep returns deterministic winner for tied modifiedTime", () => {
+  // Two concurrent consolidators must pick the same keep — otherwise one
+  // deletes the file the other wanted to keep, leaving zero copies and
+  // triggering re-creation on the next provision (escalating duplicates).
+  const a = { id: "id-b", name: "skill", mimeType: "text/markdown", modifiedTime: "2026-04-17T08:00:00.000Z" };
+  const b = { id: "id-c", name: "skill", mimeType: "text/markdown", modifiedTime: "2026-04-17T08:00:00.000Z" };
+  const c = { id: "id-a", name: "skill", mimeType: "text/markdown", modifiedTime: "2026-04-17T08:00:00.000Z" };
+
+  const { keep: keep1 } = pickSkillFileToKeep([a, b, c]);
+  const { keep: keep2 } = pickSkillFileToKeep([c, b, a]);
+  const { keep: keep3 } = pickSkillFileToKeep([b, a, c]);
+  assert.equal(keep1?.id, "id-c");
+  assert.equal(keep2?.id, "id-c");
+  assert.equal(keep3?.id, "id-c");
+});
+
+test("pickSkillFileToKeep picks newest modifiedTime over id tie-break", () => {
+  const older = { id: "zzz", name: "skill", mimeType: "text/markdown", modifiedTime: "2026-04-17T08:00:00.000Z" };
+  const newer = { id: "aaa", name: "skill", mimeType: "text/markdown", modifiedTime: "2026-04-17T08:00:01.000Z" };
+  const { keep, discard } = pickSkillFileToKeep([older, newer]);
+  assert.equal(keep?.id, "aaa");
+  assert.deepEqual(discard.map((d) => d.id), ["zzz"]);
+});
+
+test("pickSkillFileToKeep handles empty and single inputs", () => {
+  assert.equal(pickSkillFileToKeep([]).keep, null);
+  const solo = { id: "only", name: "skill", mimeType: "text/markdown", modifiedTime: "2026-04-17T08:00:00.000Z" };
+  const single = pickSkillFileToKeep([solo]);
+  assert.equal(single.keep?.id, "only");
+  assert.equal(single.discard.length, 0);
 });
 

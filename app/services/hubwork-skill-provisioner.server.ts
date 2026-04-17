@@ -26,6 +26,18 @@ const SKILL_FILES: SkillFile[] = [
 const AUTO_SHEETS = ["accounts"];
 
 /**
+ * Module-level in-flight cache: concurrent callers for the same
+ * rootFolderId + force share the same Promise instead of each running
+ * their own findFilesByExactName + createFile sequence. Drive has no
+ * atomic create-if-absent, and its list API is eventually consistent, so
+ * even with post-create reconciliation two racers can briefly produce
+ * extra copies. Within a single process this cache eliminates the race;
+ * across instances the reconciliation pass in provisionHubworkSkillFiles
+ * still self-heals on the next call.
+ */
+const inFlight = new Map<string, Promise<ProvisionHubworkSkillFilesResult>>();
+
+/**
  * Ensure the webpage-builder skill exists in the user's Drive.
  * Files are stored flat in rootFolderId with full path as filename.
  * Idempotent — skips creation if SKILL.md already exists (unless force=true).
@@ -41,6 +53,22 @@ export async function provisionHubworkSkill(
   accessToken: string,
   rootFolderId: string,
   force = false,
+): Promise<ProvisionHubworkSkillFilesResult> {
+  const key = `${rootFolderId}:${force ? "force" : "ensure"}`;
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const promise = runProvision(accessToken, rootFolderId, force).finally(() => {
+    if (inFlight.get(key) === promise) inFlight.delete(key);
+  });
+  inFlight.set(key, promise);
+  return promise;
+}
+
+async function runProvision(
+  accessToken: string,
+  rootFolderId: string,
+  force: boolean,
 ): Promise<ProvisionHubworkSkillFilesResult> {
   // Run skill file provisioning and spreadsheet ensure in parallel.
   // Both paths are internally idempotent: findOrCreateSpreadsheet looks up

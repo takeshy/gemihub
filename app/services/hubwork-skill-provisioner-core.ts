@@ -48,24 +48,28 @@ export interface ProvisionHubworkSkillFilesResult {
 }
 
 /**
- * Drive doesn't enforce unique filenames, so concurrent provision calls
- * (e.g. IndexedDB-bootstrap effect racing the Stripe-callback effect)
- * could have both find no existing file and then both createFile, leaving
- * the root folder with two copies of every skill file. Resolve on access:
- * keep the latest modifiedTime match and permanently delete the rest.
+ * Deterministic duplicate selection for skill files: newest modifiedTime wins,
+ * ties broken by lexicographic id. Determinism matters because two concurrent
+ * consolidation callers must agree on which duplicate to keep — otherwise one
+ * can delete the file the other picked as winner, and subsequent provision
+ * calls then find zero matches and re-create, causing duplicates to escalate
+ * across successive races rather than collapse.
  */
-async function findSingleSkillFile(
-  accessToken: string,
-  name: string,
-  parentId: string,
-): Promise<{ keep: DriveFile | null; discardedIds: string[] }> {
-  const matches = await findFilesByExactName(accessToken, name, parentId);
-  if (matches.length === 0) return { keep: null, discardedIds: [] };
-  if (matches.length === 1) return { keep: matches[0], discardedIds: [] };
-  const sorted = [...matches].sort((a, b) =>
-    (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? "")
-  );
-  const [keep, ...discard] = sorted;
+export function pickSkillFileToKeep(matches: DriveFile[]): {
+  keep: DriveFile | null;
+  discard: DriveFile[];
+} {
+  if (matches.length === 0) return { keep: null, discard: [] };
+  if (matches.length === 1) return { keep: matches[0], discard: [] };
+  const sorted = [...matches].sort((a, b) => {
+    const cmp = (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? "");
+    if (cmp !== 0) return cmp;
+    return b.id.localeCompare(a.id);
+  });
+  return { keep: sorted[0], discard: sorted.slice(1) };
+}
+
+async function deleteDiscardedFiles(accessToken: string, discard: DriveFile[]): Promise<string[]> {
   await Promise.all(
     discard.map(async (f) => {
       try {
@@ -76,7 +80,25 @@ async function findSingleSkillFile(
       }
     })
   );
-  return { keep, discardedIds: discard.map((f) => f.id) };
+  return discard.map((f) => f.id);
+}
+
+/**
+ * Drive doesn't enforce unique filenames, so concurrent provision calls
+ * (e.g. IndexedDB-bootstrap effect racing the Stripe-callback effect)
+ * could have both find no existing file and then both createFile, leaving
+ * the root folder with two copies of every skill file. Resolve on access:
+ * keep the deterministic winner and permanently delete the rest.
+ */
+async function findSingleSkillFile(
+  accessToken: string,
+  name: string,
+  parentId: string,
+): Promise<{ keep: DriveFile | null; discardedIds: string[] }> {
+  const matches = await findFilesByExactName(accessToken, name, parentId);
+  const { keep, discard } = pickSkillFileToKeep(matches);
+  const discardedIds = discard.length > 0 ? await deleteDiscardedFiles(accessToken, discard) : [];
+  return { keep, discardedIds };
 }
 
 export async function provisionHubworkSkillFiles(
@@ -144,14 +166,61 @@ export async function provisionHubworkSkillFiles(
     };
   }));
 
+  // Final safety net: Drive's list API is eventually consistent, so our
+  // pre-create findFilesByExactName may have returned empty even though a
+  // concurrent racer (or an earlier failed consolidation) had just created
+  // a copy we couldn't see. Re-scan each path now that our own creates are
+  // visible and apply the same deterministic winner as findSingleSkillFile
+  // (newest modifiedTime, id tie-break). Both racers converge to the same
+  // kept file — rewrite our returned provisioned entries if the winner is
+  // not the file we just created, so callers see IDs that still exist.
+  const reconciled = await reconcileFinal(
+    accessToken,
+    rootFolderId,
+    uploaded.map((u) => u.driveFile.name),
+  );
+  const postScanDiscarded: string[] = [];
+  for (const entry of uploaded) {
+    const final = reconciled.get(entry.driveFile.name);
+    if (!final) continue;
+    postScanDiscarded.push(...final.discardedIds);
+    if (final.keptFile.id !== entry.driveFile.id) {
+      entry.driveFile = final.keptFile;
+      entry.provisioned.id = final.keptFile.id;
+      entry.provisioned.md5Checksum = final.keptFile.md5Checksum;
+      entry.provisioned.modifiedTime = final.keptFile.modifiedTime;
+    }
+  }
+
   await upsertFilesInMeta(accessToken, rootFolderId, uploaded.map((u) => u.driveFile));
 
-  const allDiscarded = [...skillMdDiscarded, ...uploaded.flatMap((u) => u.discardedIds)];
+  const allDiscarded = [
+    ...skillMdDiscarded,
+    ...uploaded.flatMap((u) => u.discardedIds),
+    ...postScanDiscarded,
+  ];
   if (allDiscarded.length > 0) {
     await removeFileIdsFromMeta(accessToken, rootFolderId, allDiscarded);
   }
 
   return { files: uploaded.map((u) => u.provisioned), isFirstProvision: !force };
+}
+
+async function reconcileFinal(
+  accessToken: string,
+  rootFolderId: string,
+  paths: string[],
+): Promise<Map<string, { keptFile: DriveFile; discardedIds: string[] }>> {
+  const entries = await Promise.all(
+    paths.map(async (path) => {
+      const matches = await findFilesByExactName(accessToken, path, rootFolderId);
+      const { keep, discard } = pickSkillFileToKeep(matches);
+      if (!keep) return null;
+      const discardedIds = discard.length > 0 ? await deleteDiscardedFiles(accessToken, discard) : [];
+      return [path, { keptFile: keep, discardedIds }] as const;
+    })
+  );
+  return new Map(entries.filter((e): e is [string, { keptFile: DriveFile; discardedIds: string[] }] => e !== null));
 }
 
 interface CollectedSkillFile {
