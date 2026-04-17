@@ -222,7 +222,8 @@ Before saving AND after reading back each file, check ALL applicable items:
 8. Respond to the user in the same language they use.
 9. When creating authenticated pages, follow the "Checklist: Creating Authenticated Pages" section below. Always create login page, protected page, API workflow, AND mock files together.
 10. ALWAYS copy templates from `references/page-patterns.md` as the starting point. Do NOT generate HTML from scratch. Modify only the parts specific to the user's request.
-11. ALWAYS update `web/__gemihub/spec.md` to document the site's pages, APIs, data sources, and account types. First read the existing file with `read_drive_file` — if it exists, MERGE new entries into the existing content rather than overwriting. If it does not exist, create it from the Spec File Template in `references/page-patterns.md`. Save using the `save-file` workflow.
+11. ALWAYS update `web/__gemihub/spec.md` to document the site's pages, APIs, data sources, and account types. First read the existing file with `read_drive_file` — if it exists, MERGE new entries into the existing content rather than overwriting. If it does not exist, create it from the Spec File Template in `references/page-patterns.md`. Write the content (section headings, descriptions, overview text) in the **same language the user is conversing in** — just like the Plan step. Save using the `save-file` workflow.
+12. WHENEVER you update or create `web/__gemihub/spec.md`, also update or create `web/__gemihub/history.md` with a dated entry summarizing what changed in this iteration (new pages, new APIs, schema changes, etc.). Read the existing file first with `read_drive_file` — if it exists, PREPEND a new entry at the top (newest first); if not, create it from the History File Template in `references/page-patterns.md`. Use the same language as `spec.md`. Save using the `save-file` workflow.
 
 ## Checklist: Creating Authenticated Pages
 

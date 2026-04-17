@@ -195,6 +195,23 @@ nodes:
 
 Fill in the placeholders based on the actual pages and APIs created. Remove sections that don't apply (e.g., remove "Account Types" if no auth is used).
 
+**Language**: Translate section headings, column headers, and descriptive text to match the language the user is conversing in (same rule as the Plan step). Keep path strings, account type identifiers, sheet names, and other code-like tokens as-is. For example, a Japanese conversation should produce `## 概要` / `## ページ` / `| パス | 説明 | 認証 |` while keeping `/login/{type}` literal.
+
+## History File Template (`web/__gemihub/history.md`)
+
+````markdown
+# {Site Name} — History
+
+## YYYY-MM-DD
+- {short summary of what was added/changed/removed in this iteration}
+- {another change}
+
+## YYYY-MM-DD
+- {previous iteration's changes}
+````
+
+Entries are reverse-chronological (newest first). When updating, PREPEND a new dated section above the existing entries — never overwrite previous history. Use the same language as `spec.md`. Use today's date in `YYYY-MM-DD` format.
+
 ## IDE Preview Mock Data
 
 When creating pages with auth or API calls, also create mock data files for IDE preview.
