@@ -454,6 +454,28 @@ export async function findFileByExactName(
   return data.files.length > 0 ? data.files[0] : null;
 }
 
+// Find ALL files with an exact name (not folder). Optionally restrict to a parent folder.
+// Unlike findFileByExactName (which returns only the first match), this is used by
+// system-file callers that need to detect and consolidate duplicates.
+export async function findFilesByExactName(
+  accessToken: string,
+  name: string,
+  parentId?: string,
+  options: DriveOperationOptions = {}
+): Promise<DriveFile[]> {
+  let query = `name='${escapeDriveQuery(name)}' and mimeType!='application/vnd.google-apps.folder' and trashed=false`;
+  if (parentId) {
+    query += ` and '${parentId}' in parents`;
+  }
+  const res = await driveRequest(
+    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,modifiedTime,md5Checksum)&pageSize=100`,
+    accessToken,
+    { signal: options.signal }
+  );
+  const data: DriveListResponse = await res.json();
+  return data.files;
+}
+
 // Find a folder by name, searching recursively through all subfolders
 export async function findFolderByNameRecursive(
   accessToken: string,

@@ -34,6 +34,7 @@ import {
   removeFileFromMeta,
   setFileSharedInMeta,
   readRemoteSyncMeta,
+  findOrConsolidateSyncMetaFile,
 } from "~/services/sync-meta.server";
 import { SYNC_META_FILE_NAME, type SyncMeta } from "~/services/sync-diff";
 import { parallelProcess } from "~/utils/parallel";
@@ -402,11 +403,18 @@ export async function action({ request }: Route.ActionArgs) {
       const files = body.files as Array<{ fileId: string; name: string }> | undefined;
       if (!files || files.length === 0) return logAndReturn({ error: "Missing files" }, { status: 400 });
 
-      // Read meta once — cache metaFileId to skip redundant findFileByExactName on write
-      const metaFile = await findFileByExactName(validTokens.accessToken, SYNC_META_FILE_NAME, validTokens.rootFolderId);
+      // Read meta once — cache metaFileId to skip redundant lookup on write.
+      // Use the consolidation helper so duplicate _sync-meta.json files (from
+      // past races) are collapsed to a single authoritative one.
+      const { file: metaFile, meta: consolidatedMeta } = await findOrConsolidateSyncMetaFile(
+        validTokens.accessToken,
+        validTokens.rootFolderId
+      );
       let bulkMeta: SyncMeta = { lastUpdatedAt: new Date().toISOString(), files: {} };
       const metaFileId: string | null = metaFile?.id ?? null;
-      if (metaFile) {
+      if (consolidatedMeta) {
+        bulkMeta = consolidatedMeta;
+      } else if (metaFile) {
         try {
           const raw = await readFile(validTokens.accessToken, metaFile.id);
           bulkMeta = JSON.parse(raw) as SyncMeta;
@@ -537,11 +545,16 @@ export async function action({ request }: Route.ActionArgs) {
       const permanent = body.permanent === true;
       if (!fileIds || fileIds.length === 0) return logAndReturn({ error: "Missing fileIds" }, { status: 400 });
 
-      // Read meta once
-      const metaFile = await findFileByExactName(validTokens.accessToken, SYNC_META_FILE_NAME, validTokens.rootFolderId);
+      // Read meta once — consolidate any duplicate _sync-meta.json files here.
+      const { file: metaFile, meta: consolidatedMeta } = await findOrConsolidateSyncMetaFile(
+        validTokens.accessToken,
+        validTokens.rootFolderId
+      );
       let bulkMeta: SyncMeta = { lastUpdatedAt: new Date().toISOString(), files: {} };
       const metaFileId: string | null = metaFile?.id ?? null;
-      if (metaFile) {
+      if (consolidatedMeta) {
+        bulkMeta = consolidatedMeta;
+      } else if (metaFile) {
         try {
           const raw = await readFile(validTokens.accessToken, metaFile.id);
           bulkMeta = JSON.parse(raw) as SyncMeta;

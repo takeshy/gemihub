@@ -6,7 +6,8 @@ import {
   readFile,
   createFile,
   updateFile,
-  findFileByExactName,
+  findFilesByExactName,
+  deleteFile,
   ensureSubFolder,
   type DriveFile,
 } from "./google-drive.server";
@@ -21,6 +22,145 @@ interface SyncMetaOperationOptions {
   signal?: AbortSignal;
 }
 
+interface ConsolidatedSyncMetaFile {
+  file: DriveFile | null;
+  meta: SyncMeta | null;
+}
+
+/**
+ * Pure helper: given a list of _sync-meta.json matches, pick which to keep
+ * (latest modifiedTime) and which to discard. Extracted for unit testing;
+ * consolidation happens via findOrConsolidateSyncMetaFile which also performs
+ * the async delete.
+ */
+export function pickSyncMetaToKeep(matches: DriveFile[]): {
+  keep: DriveFile | null;
+  discard: DriveFile[];
+} {
+  if (matches.length === 0) return { keep: null, discard: [] };
+  if (matches.length === 1) return { keep: matches[0], discard: [] };
+  // modifiedTime is ISO 8601 so lexicographic compare is equivalent to chronological
+  const sorted = [...matches].sort((a, b) =>
+    (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? "")
+  );
+  return { keep: sorted[0], discard: sorted.slice(1) };
+}
+
+function mergeFileSyncMeta(
+  current: SyncMeta["files"][string] | undefined,
+  incoming: SyncMeta["files"][string]
+): SyncMeta["files"][string] {
+  if (!current) return { ...incoming };
+
+  const currentModified = current.modifiedTime ?? "";
+  const incomingModified = incoming.modifiedTime ?? "";
+  const base =
+    incomingModified >= currentModified
+      ? { ...current, ...incoming }
+      : { ...incoming, ...current };
+
+  const merged: SyncMeta["files"][string] = {
+    ...base,
+  };
+
+  const shared = incoming.shared ?? current.shared;
+  const webViewLink = incoming.webViewLink ?? current.webViewLink;
+  const createdTime = incoming.createdTime ?? current.createdTime;
+  const size = incoming.size ?? current.size;
+
+  if (shared !== undefined) merged.shared = shared;
+  if (webViewLink !== undefined) merged.webViewLink = webViewLink;
+  if (createdTime !== undefined) merged.createdTime = createdTime;
+  if (size !== undefined) merged.size = size;
+
+  return merged;
+}
+
+export function mergeSyncMetaSnapshots(metas: SyncMeta[]): SyncMeta {
+  const merged: SyncMeta = {
+    lastUpdatedAt: "",
+    files: {},
+  };
+
+  for (const meta of metas) {
+    if (meta.lastUpdatedAt > merged.lastUpdatedAt) {
+      merged.lastUpdatedAt = meta.lastUpdatedAt;
+    }
+    for (const [fileId, fileMeta] of Object.entries(meta.files)) {
+      merged.files[fileId] = mergeFileSyncMeta(merged.files[fileId], fileMeta);
+    }
+  }
+
+  if (!merged.lastUpdatedAt) {
+    merged.lastUpdatedAt = new Date().toISOString();
+  }
+
+  return merged;
+}
+
+async function deleteDuplicateSyncMetaFile(accessToken: string, fileId: string): Promise<void> {
+  try {
+    await deleteFile(accessToken, fileId);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("404")) return;
+    throw error;
+  }
+}
+
+/**
+ * Find the single _sync-meta.json file in rootFolderId.
+ * Drive doesn't enforce unique filenames; concurrent pushes or bulk ops can
+ * create duplicates (findFileByExactName + createFile race). When duplicates
+ * are detected, merge their contents into a single authoritative file before
+ * permanently deleting the extras.
+ */
+export async function findOrConsolidateSyncMetaFile(
+  accessToken: string,
+  rootFolderId: string,
+  options: SyncMetaOperationOptions = {}
+): Promise<ConsolidatedSyncMetaFile> {
+  const matches = await findFilesByExactName(
+    accessToken,
+    SYNC_META_FILE_NAME,
+    rootFolderId,
+    options
+  );
+  const { keep, discard } = pickSyncMetaToKeep(matches);
+  if (!keep) {
+    return { file: null, meta: null };
+  }
+
+  if (discard.length === 0) {
+    return { file: keep, meta: null };
+  }
+
+  const parsedMetas = await Promise.all(
+    matches.map(async (match) => {
+      try {
+        const content = await readFile(accessToken, match.id, options);
+        return JSON.parse(content) as SyncMeta;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const validMetas = parsedMetas.filter((meta): meta is SyncMeta => meta != null);
+  const mergedMeta = validMetas.length > 0 ? mergeSyncMetaSnapshots(validMetas) : null;
+
+  if (mergedMeta) {
+    await updateFile(
+      accessToken,
+      keep.id,
+      JSON.stringify(mergedMeta, null, 2),
+      "application/json",
+      options
+    );
+  }
+
+  await Promise.all(discard.map((file) => deleteDuplicateSyncMetaFile(accessToken, file.id)));
+  return { file: keep, meta: mergedMeta };
+}
+
 /**
  * Read the remote sync meta file from the root folder
  */
@@ -29,13 +169,13 @@ export async function readRemoteSyncMeta(
   rootFolderId: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta | null> {
-  const metaFile = await findFileByExactName(
+  const { file: metaFile, meta: consolidatedMeta } = await findOrConsolidateSyncMetaFile(
     accessToken,
-    SYNC_META_FILE_NAME,
     rootFolderId,
     options
   );
   if (!metaFile) return null;
+  if (consolidatedMeta) return consolidatedMeta;
 
   try {
     const content = await readFile(accessToken, metaFile.id, options);
@@ -54,9 +194,8 @@ export async function writeRemoteSyncMeta(
   meta: SyncMeta,
   options: SyncMetaOperationOptions = {}
 ): Promise<void> {
-  const metaFile = await findFileByExactName(
+  const { file: metaFile } = await findOrConsolidateSyncMetaFile(
     accessToken,
-    SYNC_META_FILE_NAME,
     rootFolderId,
     options
   );
@@ -244,4 +383,3 @@ export async function setFileSharedInMeta(
   await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
   return meta;
 }
-
