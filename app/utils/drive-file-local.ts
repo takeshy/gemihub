@@ -13,7 +13,6 @@
  * CachedRemoteMeta (preserving local-only entries).
  */
 import type { DriveEvent } from "~/engine/local-executor";
-import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
 
 export async function processDriveEvent(event: DriveEvent): Promise<void> {
   switch (event.type) {
@@ -27,7 +26,7 @@ export async function processDriveEvent(event: DriveEvent): Promise<void> {
           new CustomEvent("file-restored", { detail: { fileId, content } })
         );
       } else {
-        await dispatchTreeRefreshFromLocalMeta();
+        dispatchTreeRefreshFromLocalMeta();
       }
       break;
     }
@@ -35,7 +34,7 @@ export async function processDriveEvent(event: DriveEvent): Promise<void> {
     case "deleted":
       // Rebuild tree from local CachedRemoteMeta (not server) so local-only
       // files appear immediately.
-      await dispatchTreeRefreshFromLocalMeta();
+      dispatchTreeRefreshFromLocalMeta();
       // Notify sync counter so push count updates
       window.dispatchEvent(
         new CustomEvent("file-modified", { detail: { fileId: event.fileId } })
@@ -44,13 +43,13 @@ export async function processDriveEvent(event: DriveEvent): Promise<void> {
   }
 }
 
-async function dispatchTreeRefreshFromLocalMeta(): Promise<void> {
-  const meta = await getCachedRemoteMeta();
-  if (meta) {
-    window.dispatchEvent(
-      new CustomEvent("tree-meta-updated", {
-        detail: { meta: { lastUpdatedAt: meta.lastUpdatedAt, files: meta.files } },
-      })
-    );
-  }
+// Fire the event with NO payload — the handler re-reads CachedRemoteMeta fresh.
+// Passing a meta snapshot here would race with concurrent writers (especially
+// usePendingFileMigration, which deletes the `new:` entry after creating the
+// real Drive file): a queued handler carrying a pre-migration snapshot could
+// clobber the post-migration meta and resurrect the stale `new:` entry, which
+// a subsequent fetchAndCacheTree then preserves alongside the real ID —
+// producing two tree nodes with the same filename.
+function dispatchTreeRefreshFromLocalMeta(): void {
+  window.dispatchEvent(new CustomEvent("tree-meta-updated"));
 }

@@ -374,11 +374,25 @@ export function DriveFileTree({
         fetchAndCacheTree();
       }
     };
-    // When a binary file is uploaded directly to Drive (images), update tree from meta without network call
-    const handleTreeMetaUpdated = (e: Event) => {
-      const { meta } = (e as CustomEvent).detail;
-      if (meta) {
-        updateTreeFromMeta(meta);
+    // Two flavors:
+    //  - event.detail.meta present (e.g., from a Drive API response that returned fresh meta):
+    //    treat as authoritative and write through `updateTreeFromMeta` (merges `new:` entries).
+    //  - no payload (e.g., local writeFileLocal finished): re-read the CURRENT
+    //    CachedRemoteMeta fresh and rebuild the tree in-memory only — do NOT write
+    //    meta back, because the writer has already persisted it. A stale snapshot
+    //    write here would race with usePendingFileMigration and resurrect a deleted
+    //    `new:` entry, which a subsequent fetchAndCacheTree would then keep alongside
+    //    the real Drive ID, producing duplicate tree nodes.
+    const handleTreeMetaUpdated = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.meta) {
+        updateTreeFromMeta(detail.meta);
+        return;
+      }
+      const current = await getCachedRemoteMeta();
+      if (current) {
+        setTreeItems(buildTreeFromMeta(current));
+        setRemoteMeta(current.files);
       }
     };
     window.addEventListener("file-modified", handleModified);
