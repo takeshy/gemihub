@@ -127,6 +127,7 @@ export async function provisionHubworkSkillFiles(
   const uploaded = await Promise.all(skillFiles.map(async (file) => {
     let driveFile: DriveFile;
     let discardedIds: string[] = [];
+    let wasCreated = false;
     if (file.path === skillMdPath) {
       if (existing) {
         driveFile = force
@@ -134,6 +135,7 @@ export async function provisionHubworkSkillFiles(
           : existing;
       } else {
         driveFile = await createFile(accessToken, file.path, file.content, rootFolderId, file.mimeType);
+        wasCreated = true;
       }
     } else {
       const { keep: existingFile, discardedIds: duplicates } = await findSingleSkillFile(
@@ -148,12 +150,14 @@ export async function provisionHubworkSkillFiles(
           : existingFile;
       } else {
         driveFile = await createFile(accessToken, file.path, file.content, rootFolderId, file.mimeType);
+        wasCreated = true;
       }
     }
 
     return {
       driveFile,
       discardedIds,
+      wasCreated,
       provisioned: {
         id: driveFile.id,
         name: driveFile.name,
@@ -166,29 +170,30 @@ export async function provisionHubworkSkillFiles(
     };
   }));
 
-  // Final safety net: Drive's list API is eventually consistent, so our
-  // pre-create findFilesByExactName may have returned empty even though a
-  // concurrent racer (or an earlier failed consolidation) had just created
-  // a copy we couldn't see. Re-scan each path now that our own creates are
-  // visible and apply the same deterministic winner as findSingleSkillFile
-  // (newest modifiedTime, id tie-break). Both racers converge to the same
-  // kept file — rewrite our returned provisioned entries if the winner is
-  // not the file we just created, so callers see IDs that still exist.
-  const reconciled = await reconcileFinal(
-    accessToken,
-    rootFolderId,
-    uploaded.map((u) => u.driveFile.name),
-  );
+  // Post-create reconciliation: Drive's list API is eventually consistent,
+  // so our pre-create findFilesByExactName may have returned empty even
+  // though a concurrent racer (or an earlier failed consolidation) had
+  // just created a copy we couldn't see. Only run for paths we actually
+  // created in this call — updateFile never produces new duplicates, so
+  // skipping the force-update steady state saves 6 list calls per run.
+  // When we did create, re-scan and apply the deterministic winner;
+  // rewrite our returned provisioned entries if the winner isn't the
+  // file we just wrote so callers see IDs that still exist on Drive.
+  const createdPaths = uploaded.filter((u) => u.wasCreated).map((u) => u.driveFile.name);
   const postScanDiscarded: string[] = [];
-  for (const entry of uploaded) {
-    const final = reconciled.get(entry.driveFile.name);
-    if (!final) continue;
-    postScanDiscarded.push(...final.discardedIds);
-    if (final.keptFile.id !== entry.driveFile.id) {
-      entry.driveFile = final.keptFile;
-      entry.provisioned.id = final.keptFile.id;
-      entry.provisioned.md5Checksum = final.keptFile.md5Checksum;
-      entry.provisioned.modifiedTime = final.keptFile.modifiedTime;
+  if (createdPaths.length > 0) {
+    const reconciled = await reconcileFinal(accessToken, rootFolderId, createdPaths);
+    for (const entry of uploaded) {
+      if (!entry.wasCreated) continue;
+      const final = reconciled.get(entry.driveFile.name);
+      if (!final) continue;
+      postScanDiscarded.push(...final.discardedIds);
+      if (final.keptFile.id !== entry.driveFile.id) {
+        entry.driveFile = final.keptFile;
+        entry.provisioned.id = final.keptFile.id;
+        entry.provisioned.md5Checksum = final.keptFile.md5Checksum;
+        entry.provisioned.modifiedTime = final.keptFile.modifiedTime;
+      }
     }
   }
 
