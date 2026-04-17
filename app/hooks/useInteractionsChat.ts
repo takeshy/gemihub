@@ -120,6 +120,10 @@ function buildToolDispatcher(
   ): Promise<unknown> => {
     if (abortSignal?.aborted) throw new Error("Aborted");
 
+    if (planApprovalPending && (name === "create_drive_file" || name === "update_drive_file")) {
+      return { error: "BLOCKED: You must present a plan to the user FIRST and wait for their confirmation before writing any file. List ALL files you will create with full web/ paths, then STOP. Do NOT call any file-writing tools in this turn." };
+    }
+
     // Drive tools — execute locally (IndexedDB)
     if (driveToolNames.has(name)) {
       const result = await executeLocalDriveTool(

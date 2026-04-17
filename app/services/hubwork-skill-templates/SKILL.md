@@ -63,15 +63,25 @@ With no arguments it returns the full authoritative spec — `trigger:` (require
 
 At the START of every conversation, read `web/__gemihub/spec.md` with `read_drive_file` to understand what has already been built. Use this context when answering questions, planning new work, and updating the spec. If the file does not exist, skip this step.
 
-## Ask Before You Assume
+## Required Flow: Clarify → Plan → Approval → Implement
 
-If the user's request has any ambiguity, ask clarifying questions BEFORE planning. Do NOT guess. Examples of things to ask about:
-- What data fields to show or collect (if not specified)
-- Which sheet to read from or write to (if not obvious from context)
-- Page layout preferences (if the request is vague)
-- Whether the page needs authentication or is public
+Every build request MUST follow these steps in order. Do NOT skip ahead to implementation, even when the request seems clear.
 
-Keep questions concise — a short bulleted list is fine. Once clarified, proceed with the plan.
+1. **Clarify** — If the request has any ambiguity, ask clarifying questions FIRST. Do NOT guess. Examples:
+   - What data fields to show or collect (if not specified)
+   - Which sheet to read from or write to (if not obvious from context)
+   - Page layout preferences (if the request is vague)
+   - Whether the page needs authentication or is public
+
+   Keep questions concise — a short bulleted list is fine.
+
+2. **Present the Plan** — After clarification (or immediately if no ambiguity), POST the Plan in the chat following the format in "Planning Guidelines" below. The Plan must list every file to create/modify with full `web/` paths. Do NOT call `save-file` or any file-writing tool at this stage.
+
+3. **Wait for user approval** — STOP after posting the Plan. Do not call tools. Wait for the user to reply with approval (e.g. "OK", "進めて", "go ahead") or revisions. If they request changes, revise the Plan and wait again.
+
+4. **Implement** — Only after explicit approval, start creating files per the Plan.
+
+**NEVER jump from clarification answers straight to `save-file`.** The Plan step is mandatory and must be visible to the user before any file is written.
 
 ## Spreadsheet & Schema
 
@@ -111,7 +121,7 @@ See `references/sample-interview.md` for a complete real-world example — a par
 
 ## Planning Guidelines
 
-During the Plan step, include ALL required files with full `web/` paths:
+The Plan is posted as chat text (not executed as tool calls). After posting it, STOP and wait for user approval — see "Required Flow" above. Include ALL required files with full `web/` paths:
 - HTML pages (`web/...`)
 - API workflows (`web/api/...`)
 - Auth mock (`web/__gemihub/auth/me.json`) — required if ANY page uses auth
@@ -199,7 +209,7 @@ Before saving AND after reading back each file, check ALL applicable items:
 4. **Missing loading state** — Protected pages MUST show "Loading..." until auth resolves.
 5. **Missing auth filter** — API workflows MUST filter by `{{auth.email}}` for user-specific data.
 6. **Missing web/ prefix** — All paths must start with `web/` (e.g., `web/about.html`, not `about.html`).
-7. **Skipping plan or verification** — ALWAYS plan first, ALWAYS verify after.
+7. **Skipping plan or verification** — ALWAYS post a Plan and wait for user approval BEFORE writing files; ALWAYS verify after. Jumping from clarifying-question answers directly to `save-file` is forbidden — the user must see and approve the file list first.
 8. **Guessing column names** — NEVER guess spreadsheet column names. ALWAYS call `get_spreadsheet_schema` first to get exact column names, then use those names in `sheet-read` filter and `sheet-write` data. Column names are case-sensitive and may use formats like `contact-email` instead of `email`.
 9. **Wrong calendar event format** — `calendar-list` returns events with **flat** `start`/`end` strings (e.g., `evt.start` = `"2025-04-01T10:00:00+09:00"`). NEVER use `evt.start.dateTime` — that is the raw Google Calendar API format, not what our API returns. Always use `new Date(evt.start)` and `new Date(evt.end)` directly.
 10. **Missing spec file** — ALWAYS create or update `web/__gemihub/spec.md` with the site overview. Use the Spec File Template from `references/page-patterns.md`.

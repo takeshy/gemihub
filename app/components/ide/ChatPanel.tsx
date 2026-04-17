@@ -778,7 +778,7 @@ export function ChatPanel({
               "2. **Create** — Only after the user approves, save files one by one using `run_skill_workflow`.",
               "3. **Verify** — After all saves, read back every file with `read_drive_file` and check against the skill's checklist. Fix any issues.",
               "",
-              "Do NOT call `run_skill_workflow` or `migrate_spreadsheet_schema` until the user explicitly approves the plan. If you call these tools before approval, they will be BLOCKED.",
+              "Do NOT call `run_skill_workflow`, `migrate_spreadsheet_schema`, `create_drive_file`, or `update_drive_file` until the user explicitly approves the plan. If you call any of these tools before approval, they will be BLOCKED.",
             ].join("\n");
         }
 
