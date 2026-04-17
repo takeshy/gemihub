@@ -8,7 +8,8 @@ import type { Message, Attachment, GeneratedImage, ToolCall, ToolResult, StreamC
 import { useI18n } from "~/i18n/context";
 import { useSkills } from "~/contexts/SkillContext";
 import { McpAppRenderer } from "./McpAppRenderer";
-import { setCachedFile, getLocalSyncMeta, setLocalSyncMeta } from "~/services/indexeddb-cache";
+import { setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { guessMimeType } from "~/utils/media-utils";
 
 interface MessageBubbleProps {
   message: Message;
@@ -116,6 +117,64 @@ function getInvokedSkills(
 }
 
 
+// On error, return null so the click falls through to the details panel and the user can
+// inspect what went wrong instead of opening a bogus file.
+function getDriveToolOpenTarget(
+  tc: ToolCall,
+  toolResults?: ToolResult[],
+): { fileId: string; fileName?: string } | null {
+  if (tc.name.startsWith("mcp_")) return null;
+  if (tc.name === "run_skill_workflow") return null;
+
+  const result = toolResults?.find((r) => r.toolCallId === tc.id)?.result;
+  const resultObj = result && typeof result === "object"
+    ? (result as Record<string, unknown>)
+    : undefined;
+  if (resultObj && typeof resultObj.error === "string") return null;
+  const resultId = typeof resultObj?.id === "string" && resultObj.id ? resultObj.id : undefined;
+  const resultName = typeof resultObj?.name === "string" && resultObj.name ? resultObj.name : undefined;
+
+  switch (tc.name) {
+    case "read_drive_file":
+    case "update_drive_file":
+    case "rename_drive_file": {
+      const argId = typeof tc.args.fileId === "string" ? tc.args.fileId : undefined;
+      const id = argId || resultId;
+      if (!id) return null;
+      return { fileId: id, fileName: resultName };
+    }
+    case "create_drive_file": {
+      if (!resultId) return null;
+      const argName = typeof tc.args.name === "string" ? tc.args.name : undefined;
+      return { fileId: resultId, fileName: resultName || argName };
+    }
+    default:
+      return null;
+  }
+}
+
+// Mirrors the failed-workflow "Open workflow" button: dispatch plugin-select-file, and
+// additionally switch the right panel to the workflow tab for .yaml/.yml files.
+async function openDriveFileById(fileId: string, fallbackName?: string): Promise<boolean> {
+  try {
+    const meta = await getCachedRemoteMeta();
+    const m = meta?.files[fileId];
+    const fileName = m?.name || fallbackName || fileId;
+    const mimeType = m?.mimeType || guessMimeType(fileName);
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId, fileName, mimeType },
+      }),
+    );
+    if (/\.ya?ml$/i.test(fileName)) {
+      window.dispatchEvent(new CustomEvent("gemihub:open-workflow-tab"));
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Returns the workflow file id for a failed run_skill_workflow call.
  *
@@ -194,12 +253,22 @@ function ToolCallBadges({
       <div className="flex flex-wrap gap-1">
         {toolCalls.map((tc) => {
           const failedFileId = getFailedSkillWorkflowFileId(tc, toolResults);
+          const openTarget = getDriveToolOpenTarget(tc, toolResults);
+          const titleText = openTarget
+            ? t("chat.clickToOpen").replace("{{source}}", openTarget.fileName || openTarget.fileId)
+            : JSON.stringify(tc.args, null, 2);
           return (
             <span key={tc.id} className="inline-flex items-center gap-1">
               <button
-                onClick={() => setExpandedId(expandedId === tc.id ? null : tc.id)}
+                onClick={() => {
+                  if (openTarget) {
+                    void openDriveFileById(openTarget.fileId, openTarget.fileName);
+                  } else {
+                    setExpandedId(expandedId === tc.id ? null : tc.id);
+                  }
+                }}
                 className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
-                title={JSON.stringify(tc.args, null, 2)}
+                title={titleText}
               >
                 {getToolIcon(tc.name)}
                 {getMcpToolLabel(tc.name, mcpServerIds)}
