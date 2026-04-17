@@ -476,6 +476,25 @@ export async function findFilesByExactName(
   return data.files;
 }
 
+// Find ALL files with an exact name AND specific mimeType. Used for singleton
+// resources like the webpage_builder spreadsheet where concurrent provision
+// calls can race create and we need createdTime for deterministic consolidation.
+export async function findFilesByExactNameAndMimeType(
+  accessToken: string,
+  name: string,
+  mimeType: string,
+  options: DriveOperationOptions = {}
+): Promise<DriveFile[]> {
+  const query = `name='${escapeDriveQuery(name)}' and mimeType='${mimeType}' and trashed=false`;
+  const res = await driveRequest(
+    `${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,modifiedTime,createdTime,md5Checksum)&pageSize=100`,
+    accessToken,
+    { signal: options.signal }
+  );
+  const data: DriveListResponse = await res.json();
+  return data.files;
+}
+
 // Find a folder by name, searching recursively through all subfolders
 export async function findFolderByNameRecursive(
   accessToken: string,

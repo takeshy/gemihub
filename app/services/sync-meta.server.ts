@@ -337,6 +337,32 @@ export async function removeFileFromMeta(
 }
 
 /**
+ * Batch-remove multiple file IDs from meta in a single read/write cycle.
+ * Skips the write entirely when none of the ids are present.
+ */
+export async function removeFileIdsFromMeta(
+  accessToken: string,
+  rootFolderId: string,
+  fileIds: string[],
+  options: SyncMetaOperationOptions = {}
+): Promise<SyncMeta | null> {
+  if (fileIds.length === 0) return null;
+  const meta = await readRemoteSyncMeta(accessToken, rootFolderId, options);
+  if (!meta) return null;
+  let changed = false;
+  for (const id of fileIds) {
+    if (meta.files[id]) {
+      delete meta.files[id];
+      changed = true;
+    }
+  }
+  if (!changed) return meta;
+  meta.lastUpdatedAt = new Date().toISOString();
+  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
+  return meta;
+}
+
+/**
  * Save a conflict backup copy to the conflict folder.
  */
 export async function saveConflictBackup(

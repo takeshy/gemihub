@@ -1,5 +1,9 @@
-import { provisionHubworkSkillFiles, type ProvisionHubworkSkillFilesResult, type SkillFile } from "./hubwork-skill-provisioner-core";
+import { provisionHubworkSkillFiles, pickOldestSpreadsheet, type ProvisionHubworkSkillFilesResult, type SkillFile } from "./hubwork-skill-provisioner-core";
+import { findFilesByExactNameAndMimeType, deleteFile, type DriveFile } from "./google-drive.server";
 import { google } from "googleapis";
+
+const SPREADSHEET_TITLE = "webpage_builder";
+const SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
 
 // Skill template files embedded as strings
 import SKILL_MD from "./hubwork-skill-templates/SKILL.md?raw";
@@ -38,23 +42,89 @@ export async function provisionHubworkSkill(
   rootFolderId: string,
   force = false,
 ): Promise<ProvisionHubworkSkillFilesResult> {
-  // Check upfront whether this is a first provision so we can parallelise
-  const { findFileByExactName: findFile } = await import("~/services/google-drive.server");
-  const skillMdPath = SKILL_FILES[0]?.path;
-  const existingSkillMd = skillMdPath ? await findFile(accessToken, skillMdPath, rootFolderId) : null;
-  const isFirstProvision = !existingSkillMd && !force;
-
-  // Run skill file provisioning and spreadsheet creation in parallel
-  const [result, spreadsheetId] = await Promise.all([
+  // Run skill file provisioning and spreadsheet ensure in parallel.
+  // Both paths are internally idempotent: findOrCreateSpreadsheet looks up
+  // existing webpage_builder spreadsheets before creating, so concurrent
+  // first-provision calls can't each create their own copy.
+  const [result, spreadsheetInfo] = await Promise.all([
     provisionHubworkSkillFiles(accessToken, rootFolderId, SKILL_FILES, force),
-    isFirstProvision ? createSpreadsheet(accessToken) : Promise.resolve(undefined),
+    findOrCreateSpreadsheet(accessToken, force),
   ]);
 
-  if (spreadsheetId) {
-    result.spreadsheetId = spreadsheetId;
+  if (spreadsheetInfo) {
+    result.spreadsheetKeptId = spreadsheetInfo.id;
+    if (spreadsheetInfo.discardedIds.length > 0) {
+      result.discardedSpreadsheetIds = spreadsheetInfo.discardedIds;
+    }
+    if (spreadsheetInfo.isNew) {
+      result.spreadsheetId = spreadsheetInfo.id;
+    }
   }
 
   return result;
+}
+
+export { pickOldestSpreadsheet } from "./hubwork-skill-provisioner-core";
+
+async function deleteDuplicateSpreadsheets(accessToken: string, discard: DriveFile[]): Promise<void> {
+  await Promise.all(
+    discard.map(async (f) => {
+      try {
+        await deleteFile(accessToken, f.id);
+      } catch (err) {
+        if (err instanceof Error && err.message.includes("404")) return;
+        console.error("[hubwork-skill-provisioner] Failed to delete duplicate spreadsheet:", err);
+      }
+    })
+  );
+}
+
+/**
+ * Return the singleton webpage_builder spreadsheet ID, creating it only if
+ * no existing one is found. Because Sheets has no atomic create-if-absent,
+ * concurrent first-provision calls can both pass the pre-check and both
+ * create a spreadsheet; after creating we therefore re-check and, if
+ * duplicates exist, keep the oldest createdTime and delete the rest. Both
+ * racers converge to the same kept ID, so subsequent writes to user
+ * settings are idempotent rather than racing last-writer-wins.
+ *
+ * `isNew` tells the caller whether settings should be updated (only the
+ * first-ever provision writes the spreadsheet reference; subsequent self-
+ * healing runs must not clobber the user's saved configuration).
+ */
+async function findOrCreateSpreadsheet(
+  accessToken: string,
+  force: boolean,
+): Promise<{ id: string; isNew: boolean; discardedIds: string[] } | undefined> {
+  try {
+    const existing = await findFilesByExactNameAndMimeType(accessToken, SPREADSHEET_TITLE, SPREADSHEET_MIME);
+    if (existing.length > 0) {
+      const { keep, discard } = pickOldestSpreadsheet(existing);
+      if (discard.length > 0) {
+        await deleteDuplicateSpreadsheets(accessToken, discard);
+      }
+      return { id: keep.id, isNew: false, discardedIds: discard.map((d) => d.id) };
+    }
+
+    if (force) return undefined;
+
+    const createdId = await createSpreadsheet(accessToken);
+    if (!createdId) return undefined;
+
+    // Re-check to self-heal duplicates produced by a concurrent racer.
+    const after = await findFilesByExactNameAndMimeType(accessToken, SPREADSHEET_TITLE, SPREADSHEET_MIME);
+    if (after.length > 1) {
+      const { keep, discard } = pickOldestSpreadsheet(after);
+      await deleteDuplicateSpreadsheets(accessToken, discard);
+      // Only the racer whose spreadsheet survived returns isNew=true so
+      // exactly one caller writes the settings entry.
+      return { id: keep.id, isNew: keep.id === createdId, discardedIds: discard.map((d) => d.id) };
+    }
+    return { id: createdId, isNew: true, discardedIds: [] };
+  } catch (e) {
+    console.error("[hubwork-skill-provisioner] findOrCreateSpreadsheet failed:", e instanceof Error ? e.message : e);
+    return undefined;
+  }
 }
 
 async function createSpreadsheet(accessToken: string): Promise<string | undefined> {
@@ -65,7 +135,7 @@ async function createSpreadsheet(accessToken: string): Promise<string | undefine
 
     const res = await sheets.spreadsheets.create({
       requestBody: {
-        properties: { title: "webpage_builder" },
+        properties: { title: SPREADSHEET_TITLE },
         sheets: AUTO_SHEETS.map((name, index) => ({
           properties: { title: name, index },
         })),

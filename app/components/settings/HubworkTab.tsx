@@ -36,7 +36,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   const cacheSkillFiles = useCallback(async (
     files: Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }>,
   ) => {
-    const { setCachedFile, getCachedRemoteMeta, setCachedRemoteMeta, getLocalSyncMeta, setLocalSyncMeta, setCachedFileTree } = await import("~/services/indexeddb-cache");
+    const { setCachedFile, deleteCachedFile, getCachedRemoteMeta, setCachedRemoteMeta, getLocalSyncMeta, setLocalSyncMeta, setCachedFileTree } = await import("~/services/indexeddb-cache");
     const { buildTreeFromMeta } = await import("~/utils/file-tree-operations");
     const now = new Date().toISOString();
     for (const f of files) {
@@ -49,12 +49,30 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         fileName: f.path,
       });
     }
+    // Prune any stale cache entries for the same paths (left over from a
+    // previous race where the server has since consolidated duplicates).
+    // Without this, buildTreeFromMeta below would surface ghost tree items
+    // pointing at Drive IDs that no longer exist.
+    const keepIdsByPath = new Map(files.map((f) => [f.path, f.id] as const));
     const meta = await getCachedRemoteMeta() ?? { id: "current" as const, rootFolderId: "", lastUpdatedAt: now, files: {}, cachedAt: Date.now() };
+    for (const [id, entry] of Object.entries(meta.files)) {
+      const keepId = entry.name ? keepIdsByPath.get(entry.name) : undefined;
+      if (keepId && id !== keepId) {
+        delete meta.files[id];
+        await deleteCachedFile(id);
+      }
+    }
     for (const f of files) {
       meta.files[f.id] = { name: f.path, mimeType: f.mimeType, md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now };
     }
     await setCachedRemoteMeta(meta);
     const localMeta = await getLocalSyncMeta() ?? { id: "current" as const, lastUpdatedAt: now, files: {} };
+    for (const [id, entry] of Object.entries(localMeta.files)) {
+      const keepId = entry.name ? keepIdsByPath.get(entry.name) : undefined;
+      if (keepId && id !== keepId) {
+        delete localMeta.files[id];
+      }
+    }
     for (const f of files) {
       localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
     }
@@ -69,6 +87,10 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   useEffect(() => {
     const isPro = hubwork?.plan === "pro" || hubwork?.plan === "granted";
     if (!isPro) return;
+    // On Stripe-callback redirects the effect below already provisions; running
+    // both concurrently raced findFileByExactName + createFile and produced two
+    // of every skill file in Drive.
+    if (isCallback) return;
     (async () => {
       try {
         const { getCachedRemoteMeta } = await import("~/services/indexeddb-cache");
@@ -96,7 +118,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         setSkillMissing(false);
       } catch { /* ignore */ }
     })();
-  }, [hubwork?.plan, cacheSkillFiles]);
+  }, [hubwork?.plan, cacheSkillFiles, isCallback]);
 
   // Provision skill files only on Stripe callback redirect
   const provisionedRef = useRef(false);
@@ -605,31 +627,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                             const data = await res.json();
                             const files = data.files as Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }> | undefined;
                             if (files && files.length > 0) {
-                              const { setCachedFile, getCachedRemoteMeta, setCachedRemoteMeta, getLocalSyncMeta, setLocalSyncMeta, setCachedFileTree } = await import("~/services/indexeddb-cache");
-                              const { buildTreeFromMeta } = await import("~/utils/file-tree-operations");
-                              const now = new Date().toISOString();
-                              for (const f of files) {
-                                await setCachedFile({
-                                  fileId: f.id,
-                                  content: f.content,
-                                  md5Checksum: f.md5Checksum || "",
-                                  modifiedTime: f.modifiedTime || now,
-                                  cachedAt: Date.now(),
-                                  fileName: f.path,
-                                });
-                              }
-                              const meta = await getCachedRemoteMeta() ?? { id: "current", rootFolderId: "", lastUpdatedAt: now, files: {}, cachedAt: Date.now() };
-                              for (const f of files) {
-                                meta.files[f.id] = { name: f.path, mimeType: f.mimeType, md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now };
-                              }
-                              await setCachedRemoteMeta(meta);
-                              const localMeta = await getLocalSyncMeta() ?? { id: "current" as const, lastUpdatedAt: now, files: {} };
-                              for (const f of files) {
-                                localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
-                              }
-                              await setLocalSyncMeta(localMeta);
-                              const treeItems = buildTreeFromMeta(meta, new Set(Object.keys(localMeta.files)));
-                              await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items: treeItems, cachedAt: Date.now() });
+                              await cacheSkillFiles(files);
                               // Activate the skill in localStorage
                               try {
                                 const stored = localStorage.getItem("gemihub:activeSkills");
@@ -688,31 +686,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                           const data = await res.json();
                           const files = data.files as Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }> | undefined;
                           if (files && files.length > 0) {
-                            const { setCachedFile, getCachedRemoteMeta, setCachedRemoteMeta, getLocalSyncMeta, setLocalSyncMeta, setCachedFileTree } = await import("~/services/indexeddb-cache");
-                            const { buildTreeFromMeta } = await import("~/utils/file-tree-operations");
-                            const now = new Date().toISOString();
-                            for (const f of files) {
-                              await setCachedFile({
-                                fileId: f.id,
-                                content: f.content,
-                                md5Checksum: f.md5Checksum || "",
-                                modifiedTime: f.modifiedTime || now,
-                                cachedAt: Date.now(),
-                                fileName: f.path,
-                              });
-                            }
-                            const meta = await getCachedRemoteMeta() ?? { id: "current", rootFolderId: "", lastUpdatedAt: now, files: {}, cachedAt: Date.now() };
-                            for (const f of files) {
-                              meta.files[f.id] = { name: f.path, mimeType: f.mimeType, md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now };
-                            }
-                            await setCachedRemoteMeta(meta);
-                            const localMeta = await getLocalSyncMeta() ?? { id: "current" as const, lastUpdatedAt: now, files: {} };
-                            for (const f of files) {
-                              localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
-                            }
-                            await setLocalSyncMeta(localMeta);
-                            const treeItems = buildTreeFromMeta(meta, new Set(Object.keys(localMeta.files)));
-                            await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items: treeItems, cachedAt: Date.now() });
+                            await cacheSkillFiles(files);
                           }
                           setSkillUpdateResult(res.ok ? "success" : "error");
                         } catch {
