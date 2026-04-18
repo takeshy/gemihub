@@ -20,11 +20,16 @@ import {
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "./indexeddb-cache";
+import { mimeTypeFromFileName } from "./drive-local";
 
 let inFlight: Promise<void> | null = null;
 let pendingRetrigger = false;
 
 async function runOnce(): Promise<void> {
+  // Every create call hits Drive; skip entirely when offline so per-file
+  // fetches don't fail and spam retries on every "pending-files-created" event.
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
   const pendingFiles = await getPendingNewFiles();
   if (pendingFiles.length === 0) return;
 
@@ -32,13 +37,8 @@ async function runOnce(): Promise<void> {
 
   for (const pf of pendingFiles) {
     try {
-      // pf.fileId is "new:<fullPath>" e.g. "new:workflows/test.yaml"
       const fullName = pf.fileId.slice("new:".length);
-      const baseName = fullName.split("/").pop() || fullName;
-      const mimeType =
-        baseName.endsWith(".yaml") || baseName.endsWith(".yml")
-          ? "text/yaml"
-          : "text/plain";
+      const mimeType = mimeTypeFromFileName(fullName);
 
       // Create file on Drive (empty — content uploaded separately below).
       // dedup: true handles the case where a prior session's create succeeded
@@ -67,7 +67,6 @@ async function runOnce(): Promise<void> {
       const emptyMd5 = file.md5Checksum ?? "";
       const emptyModifiedTime = file.modifiedTime ?? "";
 
-      // Migrate editHistory from new: ID to real Drive ID
       const editHistory = await getEditHistoryForFile(pf.fileId);
       if (editHistory) {
         await deleteEditHistoryEntry(pf.fileId);
@@ -134,17 +133,7 @@ async function runOnce(): Promise<void> {
   }
 }
 
-/**
- * Migrate all pending `new:` files to Drive. Callers can await this before
- * starting a push so that no pending files are silently dropped.
- * Concurrent calls share the same in-flight Promise; if new pending files
- * are created mid-run, the migration loops again before resolving.
- */
-export function migratePendingFiles(): Promise<void> {
-  if (inFlight) {
-    pendingRetrigger = true;
-    return inFlight;
-  }
+function startRun(): Promise<void> {
   inFlight = (async () => {
     try {
       do {
@@ -156,4 +145,36 @@ export function migratePendingFiles(): Promise<void> {
     }
   })();
   return inFlight;
+}
+
+/**
+ * Trigger a migration run. Callers that just created new pending work (e.g.
+ * the `pending-files-created` event) use this — if a run is already in
+ * flight, sets the retrigger flag so the loop re-scans after the current
+ * iteration completes.
+ */
+export function migratePendingFiles(): Promise<void> {
+  if (inFlight) {
+    pendingRetrigger = true;
+    return inFlight;
+  }
+  return startRun();
+}
+
+/**
+ * Wait until no `new:` files remain. Callers that haven't added work
+ * themselves (push flushing before diff) use this — it joins the current
+ * run without forcing a retrigger, then re-checks and starts another run
+ * if late arrivals slipped in.
+ */
+export async function awaitPendingMigrations(): Promise<void> {
+  while (true) {
+    if (inFlight) {
+      await inFlight;
+      continue;
+    }
+    const pending = await getPendingNewFiles();
+    if (pending.length === 0) return;
+    await startRun();
+  }
 }
