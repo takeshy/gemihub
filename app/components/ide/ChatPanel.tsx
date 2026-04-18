@@ -791,6 +791,12 @@ export function ChatPanel({
               "",
               "**重要: すべての自然言語の出力は日本語で書いてください。** プラン、確認、質問、検証結果、エラー／ステータスメッセージ、およびスキルが管理するファイル（`web/__gemihub/spec.md`、`web/__gemihub/history.md`）を含む、毎ターンのすべての応答に適用されます。コード、ファイルパス、URL パス、識別子、シート名、カラム名などの技術トークンはそのまま維持し、散文のみを翻訳してください。",
             ].join("\n")
+          : settings.language === "en"
+          ? [
+              "## Response Language",
+              "",
+              "**IMPORTANT: Write all natural-language output in English.** This applies to every turn's output — plans, confirmations, questions, verification results, error/status messages, and skill-managed files (`web/__gemihub/spec.md`, `web/__gemihub/history.md`). Preserve technical tokens such as code, file paths, URL paths, identifiers, sheet names, and column names as-is; translate only the prose. Even if the user writes in another language or the surrounding context (sheet contents, prior files) is in another language, continue responding in English.",
+            ].join("\n")
           : undefined;
         const fullSystemPrompt = [settings.systemPrompt, planInstruction, skillPrompt, langInstruction]
           .filter(Boolean)
