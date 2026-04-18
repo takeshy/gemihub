@@ -17,6 +17,7 @@ import {
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
+import { migratePendingFiles } from "~/services/pending-file-migration";
 import { ragRegisterInBackground } from "~/services/rag-sync";
 import {
   isSyncExcludedPath,
@@ -221,6 +222,12 @@ export function useSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
+      // 0. Flush any in-flight `new:` file migrations before diff.
+      // Push filters out `new:` IDs (they have no real Drive file yet), so
+      // files still mid-migration would be silently dropped. Awaiting here
+      // also serializes against concurrent _sync-meta.json writes.
+      await migratePendingFiles();
+
       // 1. Fetch fresh remoteMeta (push always uses latest)
       const syncRes = await fetch("/api/sync");
       if (!syncRes.ok) throw new Error("Failed to fetch remote meta");
