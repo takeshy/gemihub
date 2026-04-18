@@ -260,6 +260,14 @@ export function ChatPanel({
   const MAX_BACKGROUND_STREAMS = 3;
   // AbortControllers for background (detached) streams, capped at MAX_BACKGROUND_STREAMS.
   const backgroundAbortControllersRef = useRef<AbortController[]>([]);
+  // Serialize chat-history Drive writes per-chat so consecutive saves for
+  // the same chat (e.g. the main stream's "done" commit followed quickly by
+  // an auto-review appendError) can't race each other — but saves for
+  // UNRELATED chats stay independent, so a stuck background save on one
+  // chat can't stall the current chat's history / fileId updates. Map
+  // entries are GC'd in-place once a chat's chain settles with no newer
+  // enqueue behind it (see enqueueChatSave below).
+  const saveQueuesRef = useRef<Map<string, Promise<void>>>(new Map());
   // Chat IDs that have been deleted — background streams check this to avoid
   // resurrecting a deleted chat when they complete.
   const deletedChatIdsRef = useRef<Set<string>>(new Set());
@@ -563,26 +571,105 @@ export function ChatPanel({
     const myCreatedAt = activeChatCreatedAt ?? Date.now();
     const isActive = () => mySessionId === activeSessionIdRef.current;
 
-    const saveResult = async (msgs: Message[]) => {
-      if (isActive()) {
-        setMessages(msgs);
-        await saveChatToDisk(msgs, myChatId, myCreatedAt, { foreground: true });
-      } else {
-        await saveChatToDisk(msgs, myChatId, myCreatedAt);
-      }
+    // Clear the incremental streaming buffers — called as soon as the final
+    // assistant message is committed to `messages`, so the in-flight
+    // streaming bubble doesn't double-render alongside it. Does NOT flip
+    // isStreaming, because auto-review may still be running after the main
+    // stream finishes and we want the spinner to keep indicating work.
+    const clearStreamingBuffers = () => {
+      if (!isActive()) return;
+      setStreamingContent("");
+      setStreamingThinking("");
+      setStreamingToolCalls([]);
+      setStreamingRagSources([]);
+      setStreamingRagUsed(false);
+      setStreamingWebSearchUsed(false);
     };
 
-    // Called in `finally` — cleans up UI state if still foreground.
+    // Fully release foreground UI — clear streaming buffers AND flip
+    // isStreaming to false. Called from the outer `finally` block, which
+    // runs after any auto-review has completed, so the spinner stays on
+    // through the whole turn (main stream + review) and disappears only
+    // when the turn is truly done.
+    const releaseStreamingUi = () => {
+      if (!isActive()) return;
+      clearStreamingBuffers();
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+    };
+
+    // Commit the final messages to the UI and enqueue a Drive save.
+    //
+    // UI commit is always synchronous — the final message (with usage /
+    // token count) renders the instant this is called. The spinner stays
+    // on through the whole turn: it's only released by the outer `finally`
+    // → cleanup() path, so if auto-review follows this commit, the user
+    // keeps seeing a spinner and won't push/commit/navigate away thinking
+    // the turn is done.
+    //
+    // The returned promise resolves AFTER the Drive persist completes. The
+    // main chat loop discards that promise (fire-and-forget) so the
+    // handleSend flow doesn't block on Drive for normal chats. The auto-
+    // review flow `await`s it so each review iteration's history is
+    // durable before the next iteration queues more saves.
+    const saveResult = async (msgs: Message[]): Promise<void> => {
+      if (isActive()) {
+        setMessages(msgs);
+        // Pin the active chat to this session's id synchronously so a fast
+        // follow-up send reuses the same chat instead of allocating a new
+        // one. Old behavior relied on saveChatToDisk awaited inside this
+        // function to do the same thing; with backgrounded saves we can't
+        // wait for the server response to bind the id.
+        setActiveChatId(myChatId);
+        setActiveChatCreatedAt(myCreatedAt);
+      }
+      // Clear streaming buffers so the committed message fully replaces the
+      // in-flight bubble. DO NOT release isStreaming here — that waits for
+      // the whole turn (including any auto-review) to finish, via cleanup().
+      clearStreamingBuffers();
+
+      // Capture `foreground` NOW (enqueue time) rather than at save
+      // execution. Otherwise a fast follow-up send in the same chat (which
+      // bumps activeSessionIdRef) would make this save's isActive() return
+      // false at execution time — and saveChatToDisk would skip the
+      // setActiveChatFileId update, leaving the current chat without a
+      // fileId even though its history was just saved.
+      const shouldPersistAsForeground = isActive();
+
+      const prev = saveQueuesRef.current.get(myChatId) ?? Promise.resolve();
+      const persist = prev
+        .catch(() => undefined)
+        .then(() =>
+          saveChatToDisk(msgs, myChatId, myCreatedAt, {
+            foreground: shouldPersistAsForeground,
+          }),
+        )
+        .catch((err) => {
+          // saveChatToDisk already swallows network errors internally;
+          // anything surfacing here is unexpected. Log so we don't lose it
+          // silently, but don't propagate — that would poison the queue
+          // (handled by the leading .catch on the next enqueue, but
+          // clearing here is clearer intent).
+          console.error("chat save failed", err);
+        });
+      saveQueuesRef.current.set(myChatId, persist);
+      // GC: once this chain settles, drop the map entry — but only if no
+      // newer enqueue has replaced us behind the scenes. Prevents the map
+      // from growing unbounded for users who cycle through many chats.
+      persist.finally(() => {
+        if (saveQueuesRef.current.get(myChatId) === persist) {
+          saveQueuesRef.current.delete(myChatId);
+        }
+      });
+      return persist;
+    };
+
+    // Called in `finally` — idempotent safety net for paths that never hit
+    // a "done" chunk (network failure, abort with no partial content).
+    // On the happy path, saveResult has already released the UI.
     const cleanup = (myAbortController?: AbortController | null) => {
       if (isActive()) {
-        setStreamingContent("");
-        setStreamingThinking("");
-        setStreamingToolCalls([]);
-        setStreamingRagSources([]);
-        setStreamingRagUsed(false);
-        setStreamingWebSearchUsed(false);
-        setIsStreaming(false);
-        abortControllerRef.current = null;
+        releaseStreamingUi();
       } else if (myAbortController) {
         backgroundAbortControllersRef.current =
           backgroundAbortControllersRef.current.filter(ac => ac !== myAbortController);
@@ -981,7 +1068,13 @@ export function ChatPanel({
                 assistantMessage,
               ];
               finalMessagesForReview = finalMessages;
-              await saveResult(finalMessages);
+              // Fire-and-forget: UI commits synchronously inside saveResult,
+              // Drive persist runs on the background queue. `void` discards
+              // the returned persist promise so we don't block the auto-
+              // review branch below — that branch awaits its OWN saveResult
+              // calls, and the queue preserves ordering between our enqueue
+              // here and the review's enqueues.
+              void saveResult(finalMessages);
               break;
             }
           }
@@ -1054,7 +1147,7 @@ export function ChatPanel({
               elapsedMs: Date.now() - sendStartTime,
             };
             const finalMessages = [...updatedMessages, partialMessage];
-            await saveResult(finalMessages);
+            void saveResult(finalMessages);
           }
         } else {
           const errorMessage: Message = {
@@ -1063,7 +1156,7 @@ export function ChatPanel({
             timestamp: Date.now(),
           };
           const finalMessages = [...updatedMessages, errorMessage];
-          await saveResult(finalMessages);
+          void saveResult(finalMessages);
         }
       } finally {
         cleanupStream(abortController);
