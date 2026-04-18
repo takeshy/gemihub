@@ -49,6 +49,13 @@ Check each file against the skill's Pre-Save & Verification Checklist. Evaluate 
 - Sets a \`__response\` variable for the output
 - Uses \`new Date(evt.start)\` / \`new Date(evt.end)\` for calendar events (never \`evt.start.dateTime\`)
 
+**Template interpolation (\`{{var}}\` vs \`{{var:json}}\`) — how the engine actually resolves these:**
+- \`{{var}}\` outputs the raw value (primitives via \`String(v)\`, objects via \`JSON.stringify(v)\`) with NO surrounding quotes added.
+- \`{{var:json}}\` outputs the value with JSON special characters escaped (\`"\`, \`\\\`, newlines, etc.), also with NO surrounding quotes added. It is meant for embedding INSIDE a JSON / JS string literal.
+- Inside a \`script\` node's \`code:\`, the CORRECT and safe pattern is to put the placeholder INSIDE surrounding quotes: \`const name = "{{request.body.name:json}}";\`. The surrounding \`"..."\` are the string literal's own quotes; \`:json\` only escapes special chars inside them. Resolving with \`name = "John"\` yields \`const name = "John";\` (valid JS).
+- Do NOT flag \`"{{var:json}}"\` (surrounding quotes + \`:json\`) inside script code as a bug — it is intentional and safer than \`"{{var}}"\` (which breaks if the value contains \`"\` or newlines). The claim that \`:json\` "adds its own quotes" is FALSE for this engine.
+- DO flag: (1) \`value: "{{result:json}}"\` inside \`__response\` (double-escaped JSON → endpoint returns invalid JSON); (2) missing surrounding quotes around a placeholder that is used as a JS string literal (\`const name = {{request.body.name}};\` resolves to \`const name = John;\` which is a ReferenceError); (3) any raw placeholder used as a JSON string value without \`:json\` when the value can contain quotes/newlines.
+
 **Mock files**
 - \`web/__gemihub/auth/me.json\` exists if ANY page uses auth
 - \`web/__gemihub/api/{path}.json\` exists for each API endpoint

@@ -185,8 +185,8 @@ The template engine has no date-format / UUID / locale helpers. Use a `script` n
   type: script
   saveTo: prepared
   code: |
-    const start = "{{request.body.start}}";
-    const end = "{{request.body.end}}";
+    const start = "{{request.body.start:json}}";
+    const end = "{{request.body.end:json}}";
     return {
       id: crypto.randomUUID(),
       now: new Date().toISOString(),
@@ -212,7 +212,7 @@ The template engine has no date-format / UUID / locale helpers. Use a `script` n
 
 Rules for `script`:
 - Always use `saveTo` and return an object; downstream nodes access fields via dot notation (`{{prepared.id}}`).
-- Interpolate request/auth values INTO the code with `{{...}}` (resolved before execution). Wrap in quotes to make them valid JS string literals: `const start = "{{request.body.start}}";` — not `const start = {{request.body.start}};`.
+- **Interpolate request/auth values INTO the code with `"{{var:json}}"` — always the `:json` modifier, always inside surrounding quotes.** The `:json` modifier escapes special characters (`"`, `\`, newlines) so the value is safe inside a JS string literal; it does NOT add its own quotes, so the surrounding `"..."` ARE required (drop them and you get `const name = John;` → ReferenceError). Using `"{{var}}"` without `:json` silently breaks the script the moment the value contains a quote or newline.
 - `crypto.randomUUID()`, `Intl.DateTimeFormat`, `toLocaleString`, and all standard `Date` / string APIs are available.
 - No `fetch`, no `setTimeout` / `setInterval` beyond node completion, no DOM — pure computation only.
 

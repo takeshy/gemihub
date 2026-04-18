@@ -128,12 +128,12 @@ trigger:
 
 nodes:
   - id: prepare
-    comment: "UUID・現在時刻・ユーザー向け表示用日時文字列を生成する。UUID/タイムスタンプ/ロケール整形はテンプレートエンジンにヘルパーがないので、必ず script ノードで計算する"
+    comment: "UUID・現在時刻・ユーザー向け表示用日時文字列を生成する。UUID/タイムスタンプ/ロケール整形はテンプレートエンジンにヘルパーがないので、必ず script ノードで計算する。リクエスト値は :json 修飾子 + 囲み引用符(\"{{...:json}}\")で安全に文字列リテラルへ埋め込む"
     type: script
     saveTo: prepared
     code: |
-      const start = "{{request.body.start}}";
-      const end = "{{request.body.end}}";
+      const start = "{{request.body.start:json}}";
+      const end = "{{request.body.end:json}}";
       return {
         id: crypto.randomUUID(),
         now: new Date().toISOString(),
