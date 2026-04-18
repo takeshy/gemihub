@@ -246,10 +246,10 @@ Make HTTP requests.
   saveTo: body
 ```
 
-**Cross-origin requests (CORS):** Requests run as browser `fetch()`. Same-origin and CORS-enabled cross-origin endpoints work for every user. For other cross-origin URLs (news sites, OGP scraping, legacy APIs without CORS headers), the **Premium plan** transparently routes through a server proxy (`/api/workflow/http-fetch`) so the request succeeds. Users without a Premium subscription hit CORS errors for such URLs and must target CORS-enabled APIs directly.
+**Cross-origin requests (CORS):** Requests run as browser `fetch()`. Same-origin and CORS-enabled cross-origin endpoints work directly. For other cross-origin URLs (news sites, OGP scraping, legacy APIs without CORS headers), both plans transparently route through a server proxy (`/api/workflow/http-fetch`) so the request succeeds. Free accounts are rate-limited to 2 req/min; Premium gets 60 req/min.
 
-**Proxy limits (Premium only):** The server proxy enforces:
-- **60 requests/min per user** — 429 with `Retry-After: 60` when exceeded.
+**Proxy limits:** The server proxy enforces:
+- **Per-user rate limit** — 60 req/min on Premium, 2 req/min on the free plan. 429 with `Retry-After: 60` when exceeded.
 - **20 MB response size cap** — over-limit bodies return 413 (via `Content-Length` check and read-time enforcement).
 - **30 s upstream timeout** — stuck upstreams return 502.
 - **SSRF guard** — hostnames resolving to private / loopback / metadata IP ranges are rejected with 400. DNS resolve failures are reported as 502 (not SSRF) so retry logic behaves correctly.

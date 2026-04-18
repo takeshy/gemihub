@@ -44,7 +44,7 @@ Cloud Scheduler (single job)
 |---------|:----:|:--------------:|:---------------:|
 | Upload limit | 20MB | 5GB | 5GB |
 | Gmail Send node | - | Yes | Yes |
-| HTTP node CORS proxy (cross-origin fetch) | - | Yes | Yes |
+| HTTP node CORS proxy (cross-origin fetch) | 2 req/min | 60 req/min | 60 req/min |
 | PDF Generation | - | Yes | Yes |
 | Migration Token / Temp Edit URL | - | Yes | Yes |
 | Google Sheets CRUD nodes | - | - | Yes |

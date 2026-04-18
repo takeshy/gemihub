@@ -72,9 +72,11 @@ export interface LocalExecuteOptions {
   settings?: UserSettings;
   /**
    * Whether the caller is allowed to route cross-origin HTTP node
-   * requests through `/api/workflow/http-fetch`. Derived from the
-   * Premium plan status; optional because non-chat code paths may
-   * leave this unset (no proxy access by default).
+   * requests through `/api/workflow/http-fetch`. Both plans can use
+   * the proxy (free is throttled to 2 req/min, Premium 60 req/min);
+   * this flag exists so callers can opt out to force direct fetch.
+   * Optional because non-chat code paths may leave this unset (no
+   * proxy access by default).
    */
   canUseProxy?: boolean;
   subWorkflowDepth?: number;

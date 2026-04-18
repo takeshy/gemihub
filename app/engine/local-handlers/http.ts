@@ -195,10 +195,10 @@ export async function handleHttpNodeLocal(
     // the server proxy so the request actually succeeds. Same-origin
     // requests go direct to keep local/auth-cookie flows unchanged.
     //
-    // Non-Premium users skip the proxy entirely — the server rejects the
-    // call with 403, so attempting it wastes a round-trip. Cross-origin
-    // targets without CORS headers will fail, which is the intended
-    // behavior outside the Premium plan.
+    // The server proxy enforces per-account rate limits (60/min Premium,
+    // 2/min free), so free-plan callers will get 429s beyond the free
+    // cap. Leaving canUseProxy=false still disables proxy routing for
+    // callers that want to force direct fetch.
     const targetOrigin = (() => {
       try { return new URL(url).origin; } catch { return ""; }
     })();

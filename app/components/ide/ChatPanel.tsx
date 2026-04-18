@@ -931,7 +931,7 @@ export function ChatPanel({
         const needsPlanApproval =
           !!planInstruction && !isPlanApprovalMessage(content);
 
-        const canUseProxy = Boolean(settings.hubwork?.plan);
+        const canUseProxy = true;
         const generator = useInteractions
           ? executeInteractionsChat(
               {
@@ -1317,7 +1317,7 @@ export function ChatPanel({
       } else if (settings.apiPlan === "paid") {
         const compactGenerator = executeInteractionsChat({
           model: selectedModel,
-          canUseProxy: Boolean(settings.hubwork?.plan),
+          canUseProxy: true,
           messages: summaryMessages,
           systemPrompt: "You are a conversation summarizer. Output only the summary without any preamble.",
           driveToolMode: "none",
@@ -1394,7 +1394,7 @@ export function ChatPanel({
     } finally {
       setIsCompacting(false);
     }
-  }, [messages, isStreaming, isCompacting, saveChat, selectedModel, settings.apiPlan, settings.hubwork?.plan, t]);
+  }, [messages, isStreaming, isCompacting, saveChat, selectedModel, settings.apiPlan, t]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

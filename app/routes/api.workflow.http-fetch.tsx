@@ -6,7 +6,7 @@ import { checkRateLimit } from "~/services/hubwork-rate-limiter.server";
 import { getSettings } from "~/services/user-settings.server";
 
 /**
- * Server-side HTTP fetch proxy for workflow `http` nodes (Premium only).
+ * Server-side HTTP fetch proxy for workflow `http` nodes.
  *
  * The browser blocks cross-origin `fetch()` unless the target sends CORS
  * headers, so a client-side workflow can't directly retrieve most public
@@ -15,13 +15,15 @@ import { getSettings } from "~/services/user-settings.server";
  * status, Content-Type, and body are preserved so the client-side http
  * handler sees the same thing it would see from a direct fetch.
  *
- * Access is gated on Premium plan subscription (`settings.hubwork.plan`
- * is one of lite/pro/granted), not on `apiPlan`: the proxy is a server
- * resource paid for by the Premium subscription.
+ * Rate limits differ by plan: Premium (`settings.hubwork.plan` set) gets
+ * 60 req/min; free accounts get 2 req/min so the proxy stays usable for
+ * occasional OGP/scraping without free traffic eating the Premium-funded
+ * capacity.
  */
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_MAX_PREMIUM = 60;
+const RATE_LIMIT_MAX_FREE = 2;
 
 // 2Gi memory / 80 concurrent slots on Cloud Run leaves ~25MB/slot; 20MB
 // cap keeps headroom and blocks payloads that would never be useful for
@@ -36,22 +38,14 @@ export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const logCtx = createLogContext(request, "/api/workflow/http-fetch", tokens.rootFolderId);
 
-  // Gate on Premium subscription (any `settings.hubwork.plan`). Users
-  // without Premium can still `fetch()` same-origin and CORS-enabled
-  // cross-origin endpoints directly from the browser.
   const settings = await getSettings(tokens.accessToken, tokens.rootFolderId);
-  if (!settings.hubwork?.plan) {
-    emitLog(logCtx, 403, { error: "Proxy requires Premium plan" });
-    return Response.json(
-      { error: "HTTP proxy is available on the Premium plan only. Target CORS-enabled endpoints directly from the browser, or subscribe to Premium." },
-      { status: 403 },
-    );
-  }
+  const isPremium = !!settings.hubwork?.plan;
+  const rateLimitMax = isPremium ? RATE_LIMIT_MAX_PREMIUM : RATE_LIMIT_MAX_FREE;
 
-  if (!checkRateLimit(`http-fetch:${tokens.rootFolderId}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
+  if (!checkRateLimit(`http-fetch:${tokens.rootFolderId}`, rateLimitMax, RATE_LIMIT_WINDOW_MS)) {
     emitLog(logCtx, 429, { error: "Rate limit exceeded" });
     return Response.json(
-      { error: `Rate limit exceeded (${RATE_LIMIT_MAX} req/min).` },
+      { error: `Rate limit exceeded (${rateLimitMax} req/min).` },
       { status: 429, headers: { "Retry-After": String(Math.ceil(RATE_LIMIT_WINDOW_MS / 1000)) } },
     );
   }

@@ -182,7 +182,7 @@ Browser (client):
 │   │   ├── command (Gemini API called directly from browser via gemini-chat-core.ts)
 │   │   │   ├── Drive tools → drive-tools-local.ts (IndexedDB)
 │   │   │   └── MCP tools → /api/workflow/mcp-proxy (server proxy)
-│   │   ├── http (fetch from browser; Premium users route cross-origin through /api/workflow/http-fetch for CORS bypass)
+│   │   ├── http (fetch from browser; cross-origin routes through /api/workflow/http-fetch for CORS bypass — 60 req/min Premium, 2 req/min free)
 │   │   ├── drive-file, drive-read, drive-search, drive-list, drive-folder-list,
 │   │   │   drive-save, drive-delete (IndexedDB via drive-local.ts)
 │   │   ├── drive-file-picker, prompt-file (UI shown locally, file read from IndexedDB)
@@ -209,7 +209,7 @@ These 21 node types run entirely in the browser with no server call:
 | `prompt-value` | Show text input UI directly |
 | `prompt-selection` | Show multiline input UI directly |
 | `command` | Gemini API called directly from browser; Drive tools use IndexedDB, MCP tools use `/api/workflow/mcp-proxy` |
-| `http` | HTTP request via browser fetch. Same-origin and CORS-enabled cross-origin succeed directly; Premium plan additionally routes other cross-origin URLs through the `/api/workflow/http-fetch` server proxy (non-Premium does not — cross-origin without CORS will fail) |
+| `http` | HTTP request via browser fetch. Same-origin and CORS-enabled cross-origin succeed directly; other cross-origin URLs route through the `/api/workflow/http-fetch` server proxy (60 req/min on Premium, 2 req/min on free) |
 | `drive-file` | Create/update file in IndexedDB |
 | `drive-read` | Read file from IndexedDB |
 | `drive-search` | Search files in IndexedDB cache |

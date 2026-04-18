@@ -678,6 +678,7 @@ function IDEContent({
             abortSignal: abortController.signal,
             geminiApiKey: getCachedApiKey() || undefined,
             settings: silentSettings,
+            canUseProxy: true,
           },
         );
         if (abortController.signal.aborted) return;

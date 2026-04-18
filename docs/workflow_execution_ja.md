@@ -181,7 +181,7 @@ ExecutionRecord {
 │   │   ├── command（gemini-chat-core.ts 経由で Gemini API をブラウザから直接呼出）
 │   │   │   ├── Drive ツール → drive-tools-local.ts（IndexedDB）
 │   │   │   └── MCP ツール → /api/workflow/mcp-proxy（サーバープロキシ）
-│   │   ├── http（ブラウザから fetch。Premium ユーザーはクロスオリジンを /api/workflow/http-fetch 経由で CORS 回避）
+│   │   ├── http（ブラウザから fetch。クロスオリジンは /api/workflow/http-fetch 経由で CORS 回避 — Premium 60 req/分、無料 2 req/分）
 │   │   ├── drive-file, drive-read, drive-search, drive-list, drive-folder-list,
 │   │   │   drive-save, drive-delete（drive-local.ts 経由 IndexedDB）
 │   │   ├── drive-file-picker, prompt-file（UI をローカル表示、ファイルは IndexedDB から読込）
@@ -208,7 +208,7 @@ ExecutionRecord {
 | `prompt-value` | テキスト入力 UI を直接表示 |
 | `prompt-selection` | 複数行入力 UI を直接表示 |
 | `command` | Gemini API をブラウザから直接呼出。Drive ツールは IndexedDB、MCP ツールは `/api/workflow/mcp-proxy` を使用 |
-| `http` | ブラウザの fetch で HTTP リクエスト。同一オリジンと CORS 対応クロスオリジンは直接成功。Premium プランはそれ以外のクロスオリジン URL も `/api/workflow/http-fetch` サーバープロキシ経由でルーティング（非 Premium は CORS 非対応先で失敗） |
+| `http` | ブラウザの fetch で HTTP リクエスト。同一オリジンと CORS 対応クロスオリジンは直接成功。それ以外のクロスオリジン URL は `/api/workflow/http-fetch` サーバープロキシ経由でルーティング（Premium: 60 req/分、無料: 2 req/分） |
 | `drive-file` | IndexedDB 内のファイル作成/更新 |
 | `drive-read` | IndexedDB からファイル読込 |
 | `drive-search` | IndexedDB キャッシュ内のファイル検索 |
@@ -306,7 +306,7 @@ ExecutionRecord {
 |---------|-------------|------|
 | POST | `/api/workflow/execute-node` | サーバー必須ノード（mcp, rag-sync, gemihub-command）の単体実行 |
 | POST | `/api/workflow/mcp-proxy` | MCP ツール定義と実行のプロキシ（ローカル command ノードが使用） |
-| POST | `/api/workflow/http-fetch` | Premium プラン限定の HTTP CORS プロキシ（ローカル http ノードが使用） |
+| POST | `/api/workflow/http-fetch` | HTTP CORS プロキシ（ローカル http ノードが使用）。プラン別レートリミット: Premium 60 req/分、無料 2 req/分 |
 | GET/POST | `/api/workflow/history` | 実行履歴の一覧/読込/保存/削除 |
 
 ---
