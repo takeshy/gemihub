@@ -145,6 +145,62 @@ nodes:
     value: '{"ok": true}'
 ```
 
+## API Workflow Template (Write + Email Confirmation)
+
+Use this pattern for any POST endpoint that records a dated event (bookings, orders, reservations) and sends a user-facing confirmation email. The `script` node generates the ID, storage timestamp, and a locale-formatted display string in one place; the `gmail-send` body reads the formatted string so the recipient sees `2025年4月15日 14:00` instead of `2025-04-15T14:00:00Z`.
+
+```yaml
+trigger:
+  requireAuth: ACCOUNT_TYPE
+
+nodes:
+  - id: prepare
+    comment: "Generate id, now (for storage), and a human-readable date (for email)"
+    type: script
+    saveTo: prepared
+    code: |
+      const start = "{{request.body.start:json}}";
+      const end = "{{request.body.end:json}}";
+      return {
+        id: crypto.randomUUID(),
+        now: new Date().toISOString(),
+        displayRange:
+          new Date(start).toLocaleString("ja-JP", {
+            dateStyle: "long", timeStyle: "short", timeZone: "Asia/Tokyo",
+          }) + " – " +
+          new Date(end).toLocaleString("ja-JP", {
+            timeStyle: "short", timeZone: "Asia/Tokyo",
+          }),
+      };
+
+  - id: write_sheet
+    comment: "Storage columns use raw ISO; id/created_at come from the script node"
+    type: sheet-write
+    sheet: SheetName
+    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email}}", "scheduled_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+
+  - id: send_mail
+    comment: "Body uses prepared.displayRange — NEVER raw {{request.body.start}}"
+    type: gmail-send
+    to: "{{auth.email}}"
+    subject: "Booking confirmed"
+    body: |
+      Your booking is scheduled for {{prepared.displayRange}}.
+
+      Thank you.
+
+  - id: respond
+    type: set
+    name: __response
+    value: '{"ok": true}'
+```
+
+Rules when adapting this template:
+- `data:` stays a **single-quoted JSON string** (not a YAML mapping) — the runtime `JSON.parse`s it.
+- The `script` node's `saveTo` object is accessed via dot notation (`{{prepared.id}}`). The template engine auto-parses JSON strings, so no `json` node is needed.
+- Keep raw ISO in sheet columns (so filters/sorts work) and only use the formatted field in user-facing fields (`gmail-send body`, `dialog message`, any `__response` shown directly).
+- For calendar integration, add a `calendar-create` node between `prepare` and `write_sheet` (see `references/sample-interview.md`).
+
 ## Form Submission (No JS Required)
 
 ```html

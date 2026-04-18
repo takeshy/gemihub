@@ -815,26 +815,35 @@ Read rows from a Google Sheets sheet.
 #### sheet-write
 Append rows to a Google Sheets sheet.
 - **sheet** (required): Sheet name
-- **data** (required): JSON object or array of objects matching sheet headers
+- **data** (required): **Single-quoted JSON string** that parses to an array of objects (or a single object) matching sheet headers. The handler runs \`JSON.parse\` on the raw value — a YAML mapping crashes at runtime.
+  \`\`\`yaml
+  # ✅ Correct: JSON string inside single quotes
+  data: '[{"id": "{{prepared.id}}", "email": "{{auth.email}}", "created_at": "{{prepared.now}}"}]'
+
+  # ❌ Wrong: YAML mapping (template engine can't interpolate into a non-string value)
+  data:
+    id: "{{prepared.id}}"
+    email: "{{auth.email}}"
+  \`\`\`
 
 #### sheet-update
 Update rows matching a filter.
 - **sheet** (required): Sheet name
-- **filter** (required): JSON filter to match rows
-- **data** (required): JSON object with columns to update
+- **filter** (required): Single-quoted JSON string to match rows (e.g. \`filter: '{"id": "{{id}}"}'\`)
+- **data** (required): Single-quoted JSON string with columns to update (e.g. \`data: '{"status": "done"}'\`). Same YAML-mapping caveat as \`sheet-write\`.
 - **saveTo** (optional): Variable for updated row count
 
 #### sheet-delete
 Delete rows matching a filter.
 - **sheet** (required): Sheet name
-- **filter** (required): JSON filter to match rows
+- **filter** (required): Single-quoted JSON string to match rows (e.g. \`filter: '{"id": "{{id}}"}'\`)
 - **saveTo** (optional): Variable for deleted row count
 
 #### gmail-send
 Send an email via Gmail API.
 - **to** (required): Recipient email address
 - **subject** (required): Email subject
-- **body** (optional): HTML email body
+- **body** (optional): HTML email body. Format dates/timestamps in a \`script\` node first and reference \`{{<saveTo>.displayField}}\` — NEVER embed raw \`{{request.body.start}}\` ISO values (\`2025-04-02T10:30:00.000Z\`) directly, because the recipient sees a machine timestamp.
 - **saveTo** (optional): Variable for message ID
 
 #### calendar-list
