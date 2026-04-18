@@ -26,9 +26,11 @@ This sample uses a `meetings` sheet. Before building, update `web/__gemihub/sche
 - logined_at: datetime (e.g. "2025-04-10T09:30:00+09:00")
 
 ## meetings
+- id: string (e.g. "550e8400-e29b-41d4-a716-446655440000")
 - account_email: string (e.g. "taro@example.com")
 - subject: string (e.g. "事前面談予約")
 - start_at: datetime (e.g. "2025-04-15T14:00:00+09:00")
+- created_at: datetime (e.g. "2025-04-01T10:00:00+09:00")
 ```
 
 Then call `migrate_spreadsheet_schema` with the schema content to create the sheet in the spreadsheet.
@@ -71,6 +73,10 @@ Auth guard, data loading, form submission, and logout — the structural pattern
     // Check conflicts: compare with new Date(evt.start) and new Date(evt.end)
 
     // 6. Submit via POST API
+    // Only send raw ISO values. Ids, timestamps, and locale-formatted display
+    // strings are generated server-side in the workflow's script node — don't
+    // pre-compute them here (client clocks are untrusted; duplicating the
+    // logic drifts between HTML and YAML).
     document.getElementById("booking-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       try {
@@ -78,7 +84,6 @@ Auth guard, data loading, form submission, and logout — the structural pattern
           name: "山田 太郎",
           start: "2025-04-01T10:00:00Z",
           end: "2025-04-01T10:30:00Z",
-          datetime: "2025-04-01 10:00"
         });
         window.location.href = "/partner/interview-complete";
       } catch (err) {
@@ -122,6 +127,25 @@ trigger:
   requireAuth: partner
 
 nodes:
+  - id: prepare
+    comment: "UUID・現在時刻・ユーザー向け表示用日時文字列を生成する。UUID/タイムスタンプ/ロケール整形はテンプレートエンジンにヘルパーがないので、必ず script ノードで計算する"
+    type: script
+    saveTo: prepared
+    code: |
+      const start = "{{request.body.start}}";
+      const end = "{{request.body.end}}";
+      return {
+        id: crypto.randomUUID(),
+        now: new Date().toISOString(),
+        displayRange:
+          new Date(start).toLocaleString("ja-JP", {
+            dateStyle: "long", timeStyle: "short", timeZone: "Asia/Tokyo",
+          }) + " – " +
+          new Date(end).toLocaleString("ja-JP", {
+            timeStyle: "short", timeZone: "Asia/Tokyo",
+          }),
+      };
+
   - id: create_event
     comment: "Googleカレンダーに事前面談の予定を登録する"
     type: calendar-create
@@ -131,13 +155,13 @@ nodes:
     end: "{{request.body.end}}"
 
   - id: write_sheet
-    comment: "スプレッドシート(meetingsシート)に予約情報を記録する"
+    comment: "スプレッドシート(meetingsシート)に予約情報を記録する。id/created_at は script ノードで生成した値を参照する"
     type: sheet-write
     sheet: meetings
-    data: '[{"account_email": "{{auth.email}}", "subject": "{{request.body.name}} 事前予約", "start_at": "{{request.body.start}}"}]'
+    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email}}", "subject": "{{request.body.name}} 事前予約", "start_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
 
   - id: send_mail
-    comment: "予約者へ予約完了の通知メールを送信する"
+    comment: "予約者へ予約完了の通知メールを送信する。日時は ISO 文字列ではなく prepared.displayRange(ロケール整形済み)を使う"
     type: gmail-send
     to: "{{auth.email}}"
     subject: "事前面談の予約完了のお知らせ"
@@ -146,7 +170,7 @@ nodes:
 
       事前面談の予約を承りました。
 
-      ■ 予約日時: {{request.body.datetime}}
+      ■ 予約日時: {{prepared.displayRange}}
 
       当日はよろしくお願いいたします。
 

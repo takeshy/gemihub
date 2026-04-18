@@ -41,8 +41,10 @@ nodes:
     name: __response
     value: "{{result}}"
 ```
-Valid node types: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete`, `gmail-send`, `calendar-list`, `calendar-create`, `set`, `variable`, `if`, `json`, `http`.
+Valid node types: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete`, `gmail-send`, `calendar-list`, `calendar-create`, `set`, `variable`, `if`, `json`, `http`, `script`.
 NEVER use `steps:`, `action:`, `params:`, `readSheet`, or other invented syntax.
+
+**For UUIDs, timestamps, and human-readable date formatting, use a `script` node — NOT invented placeholders like `{{sys.uuid}}`, `{{sys.now}}`, `{{now}}`, or `{{request.body.datetime}}`:** The template engine has no built-in date formatters, UUID generator, or `sys.*` helpers. Unknown placeholders resolve to literal text and end up written to sheets / emails verbatim (this has been a recurring class of bug). Generate these values in a `script` node and reference the result via `{{saveTo.field}}` from later nodes. See `references/api-reference.md` → "script Node — Dynamic Values & Display Formatting" for the canonical pattern.
 
 **`__response` must use `{{var}}` — NEVER `{{var:json}}`:** `{{var}}` already serializes the value to a JSON string. The `:json` modifier adds a *second* layer of escaping, producing invalid JSON that the API handler returns verbatim — the client sees an escaped string instead of the data. `:json` is only for embedding a value *inside* a JSON string literal (e.g. `value: '{"msg": "{{text:json}}"}'`).
 

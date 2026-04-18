@@ -174,6 +174,47 @@ For API workflows, commonly used nodes:
 | `json` | Parse/build JSON |
 | `http` | HTTP request |
 | `variable` | Declare a variable with default value |
+| `script` | Run sandboxed JavaScript (code, saveTo, timeout?) — use for UUIDs, timestamps, and display formatting |
+
+### `script` Node — Dynamic Values & Display Formatting
+
+The template engine has no date-format / UUID / locale helpers. Use a `script` node to generate these values, then reference them from later nodes via `{{saveTo.*}}`. The code runs server-side in an isolated VM with full standard JS (`crypto.randomUUID()`, `new Date()`, `Intl.DateTimeFormat`, etc.) but NO network / DOM / storage.
+
+```yaml
+- id: prepare
+  type: script
+  saveTo: prepared
+  code: |
+    const start = "{{request.body.start}}";
+    const end = "{{request.body.end}}";
+    return {
+      id: crypto.randomUUID(),
+      now: new Date().toISOString(),
+      displayRange: new Date(start).toLocaleString("ja-JP", {
+        dateStyle: "long", timeStyle: "short", timeZone: "Asia/Tokyo",
+      }) + " – " + new Date(end).toLocaleString("ja-JP", {
+        timeStyle: "short", timeZone: "Asia/Tokyo",
+      }),
+    };
+
+- id: write_sheet
+  type: sheet-write
+  sheet: meetings
+  data: '[{"id": "{{prepared.id}}", "user_email": "{{auth.email}}", "scheduled_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+
+- id: send_mail
+  type: gmail-send
+  to: "{{auth.email}}"
+  subject: "Booking Confirmation"
+  body: |
+    Your interview is scheduled for {{prepared.displayRange}}.
+```
+
+Rules for `script`:
+- Always use `saveTo` and return an object; downstream nodes access fields via dot notation (`{{prepared.id}}`).
+- Interpolate request/auth values INTO the code with `{{...}}` (resolved before execution). Wrap in quotes to make them valid JS string literals: `const start = "{{request.body.start}}";` — not `const start = {{request.body.start}};`.
+- `crypto.randomUUID()`, `Intl.DateTimeFormat`, `toLocaleString`, and all standard `Date` / string APIs are available.
+- No `fetch`, no `setTimeout` / `setInterval` beyond node completion, no DOM — pure computation only.
 
 ### `calendar-list` Response Format
 
