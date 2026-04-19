@@ -147,7 +147,7 @@ nodes:
 
 ## API Workflow Template (Write + Email Confirmation)
 
-Use this pattern for any POST endpoint that records a dated event (bookings, orders, reservations) and sends a user-facing confirmation email. The `script` node generates the ID, storage timestamp, and a locale-formatted display string in one place; the `gmail-send` body reads the formatted string so the recipient sees `2025年4月15日 14:00` instead of `2025-04-15T14:00:00Z`.
+Use this pattern for any POST endpoint that records a dated event (bookings, orders, reservations) and sends a user-facing confirmation email. The `script` node generates the ID, storage timestamp, and a locale-formatted display string in one place; the `gmail-send` body reads the formatted string so the recipient sees `April 15, 2025 at 2:00 PM` instead of `2025-04-15T14:00:00Z`.
 
 ```yaml
 trigger:
@@ -165,11 +165,11 @@ nodes:
         id: crypto.randomUUID(),
         now: new Date().toISOString(),
         displayRange:
-          new Date(start).toLocaleString("ja-JP", {
-            dateStyle: "long", timeStyle: "short", timeZone: "Asia/Tokyo",
+          new Date(start).toLocaleString("en-US", {
+            dateStyle: "long", timeStyle: "short", timeZone: "UTC",
           }) + " – " +
-          new Date(end).toLocaleString("ja-JP", {
-            timeStyle: "short", timeZone: "Asia/Tokyo",
+          new Date(end).toLocaleString("en-US", {
+            timeStyle: "short", timeZone: "UTC",
           }),
       };
 
@@ -251,7 +251,7 @@ Rules when adapting this template:
 
 Fill in the placeholders based on the actual pages and APIs created. Remove sections that don't apply (e.g., remove "Account Types" if no auth is used).
 
-**Language**: Translate section headings, column headers, and descriptive text to match the language the user is conversing in (same rule as the Plan step). Keep path strings, account type identifiers, sheet names, and other code-like tokens as-is. For example, a Japanese conversation should produce `## 概要` / `## ページ` / `| パス | 説明 | 認証 |` while keeping `/login/{type}` literal.
+**Language**: Translate section headings, column headers, and descriptive text to match the language the user is conversing in (same rule as the Plan step). Keep path strings, account type identifiers, sheet names, and other code-like tokens as-is.
 
 ## History File Template (`web/__gemihub/history.md`)
 
@@ -282,8 +282,8 @@ Flat structure. The fields match what `auth.me()` returns (i.e., the `data` fiel
   "email": "test@example.com",
   "profile": {
     "email": "test@example.com",
-    "company_name": "テスト株式会社",
-    "contact_name": "テスト太郎"
+    "company_name": "Example Corp",
+    "contact_name": "Test User"
   }
 }
 ```
@@ -298,13 +298,13 @@ For an API endpoint at `web/api/tickets/list.yaml`, create `web/__gemihub/api/ti
 
 ```json
 [
-  {"id": "1", "title": "テストチケット", "status": "open", "email": "test@example.com"},
-  {"id": "2", "title": "サンプルチケット", "status": "closed", "email": "test@example.com"}
+  {"id": "1", "title": "Sample Ticket", "status": "open", "email": "test@example.com"},
+  {"id": "2", "title": "Example Ticket", "status": "closed", "email": "test@example.com"}
 ]
 ```
 
 For parameterized endpoints like `web/api/tickets/[id].yaml`, create `web/__gemihub/api/tickets/[id].json`:
 
 ```json
-{"id": "1", "title": "テストチケット", "status": "open", "email": "test@example.com"}
+{"id": "1", "title": "Sample Ticket", "status": "open", "email": "test@example.com"}
 ```

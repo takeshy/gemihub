@@ -20,17 +20,17 @@ This sample uses a `meetings` sheet. Before building, update `web/__gemihub/sche
 
 ```markdown
 ## accounts
-- email: string (e.g. "taro@example.com")
-- name: string (e.g. "山田 太郎")
-- created_at: datetime (e.g. "2025-04-01T10:00:00+09:00")
-- logined_at: datetime (e.g. "2025-04-10T09:30:00+09:00")
+- email: string (e.g. "jane@example.com")
+- name: string (e.g. "Jane Doe")
+- created_at: datetime (e.g. "2025-04-01T10:00:00Z")
+- logined_at: datetime (e.g. "2025-04-10T09:30:00Z")
 
 ## meetings
 - id: string (e.g. "550e8400-e29b-41d4-a716-446655440000")
-- account_email: string (e.g. "taro@example.com")
-- subject: string (e.g. "事前面談予約")
-- start_at: datetime (e.g. "2025-04-15T14:00:00+09:00")
-- created_at: datetime (e.g. "2025-04-01T10:00:00+09:00")
+- account_email: string (e.g. "jane@example.com")
+- subject: string (e.g. "Pre-interview booking")
+- start_at: datetime (e.g. "2025-04-15T14:00:00Z")
+- created_at: datetime (e.g. "2025-04-01T10:00:00Z")
 ```
 
 Then call `migrate_spreadsheet_schema` with the schema content to create the sheet in the spreadsheet.
@@ -66,8 +66,8 @@ Auth guard, data loading, form submission, and logout — the structural pattern
     // 5. Fetch data from GET API
     // calendar-list returns flat start/end strings — use evt.start directly, NOT evt.start.dateTime
     const events = await gemihub.get("interview/events", {
-      start: "2025-04-01T00:00:00+09:00",
-      end: "2025-04-01T23:59:59+09:00"
+      start: "2025-04-01T00:00:00Z",
+      end: "2025-04-01T23:59:59Z"
     });
     // Each event: { id, summary, start: "ISO string", end: "ISO string", ... }
     // Check conflicts: compare with new Date(evt.start) and new Date(evt.end)
@@ -81,7 +81,7 @@ Auth guard, data loading, form submission, and logout — the structural pattern
       e.preventDefault();
       try {
         await gemihub.post("interview/book", {
-          name: "山田 太郎",
+          name: "Jane Doe",
           start: "2025-04-01T10:00:00Z",
           end: "2025-04-01T10:30:00Z",
         });
@@ -104,7 +104,7 @@ trigger:
 
 nodes:
   - id: get_events
-    comment: "カレンダーから指定期間内の予定リストを取得する"
+    comment: "Fetch events in the requested window from Google Calendar"
     type: calendar-list
     calendarId: primary
     timeMin: "{{request.query.start}}"
@@ -112,7 +112,7 @@ nodes:
     saveTo: events
 
   - id: respond
-    comment: "取得した予定リストをAPIのレスポンスとして返す"
+    comment: "Return the event list as the API response"
     type: set
     name: __response
     value: "{{events}}"
@@ -122,13 +122,15 @@ nodes:
 
 Common "pick an open 30-minute slot" pattern: read calendar, subtract busy windows, return the free slots formatted for display. The critical interpolation rule is `{{events}}` **without `:json` and without surrounding quotes** — GemiHub stores every variable as a JSON-serialized string, and JSON is a valid JS literal, so the array drops straight into the script as a bare `[{...}]` literal. Using `{{events:json}}` unquoted escapes the quotes into `\"` and crashes the script at parse time.
 
+Locale parameters (`"en-US"`, `"UTC"`) in the example are placeholders — pick the locale and timeZone that match the user's request when building a real workflow.
+
 ```yaml
 trigger:
   requireAuth: partner
 
 nodes:
   - id: prep_window
-    comment: "翌日 09:00 から 7 日間のウィンドウを生成する"
+    comment: "Build a 7-day window starting at 09:00 tomorrow"
     type: script
     saveTo: window
     code: |
@@ -138,7 +140,7 @@ nodes:
       return { timeMin: start.toISOString(), timeMax: end.toISOString() };
 
   - id: get_events
-    comment: "ウィンドウ内の既存予定を取得（この予定が空きを塞ぐ）"
+    comment: "Fetch existing events in the window (they block slots)"
     type: calendar-list
     calendarId: primary
     timeMin: "{{window.timeMin}}"
@@ -146,11 +148,11 @@ nodes:
     saveTo: events
 
   - id: generate_slots
-    comment: "30 分刻みのスロットを events と突き合わせて空き分だけ返す"
+    comment: "Walk 30-minute slots, drop ones that overlap existing events"
     type: script
     saveTo: slots
     code: |
-      # {{events}} は :json なし・引用符なしで貼る（JSON 文字列がそのまま JS 配列リテラルになる）
+      # {{events}} is pasted bare (no :json, no surrounding quotes) — the stored JSON string doubles as a valid JS array literal
       const events = {{events}} || [];
       const windowStart = new Date("{{window.timeMin:json}}");
       const out = [];
@@ -170,11 +172,11 @@ nodes:
               out.push({
                 start: slotStart.toISOString(),
                 end: slotEnd.toISOString(),
-                displayDate: slotStart.toLocaleDateString("ja-JP", {
-                  weekday: "short", month: "short", day: "numeric", timeZone: "Asia/Tokyo",
+                displayDate: slotStart.toLocaleDateString("en-US", {
+                  weekday: "short", month: "short", day: "numeric",
                 }),
-                displayTime: slotStart.toLocaleTimeString("ja-JP", {
-                  hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo",
+                displayTime: slotStart.toLocaleTimeString("en-US", {
+                  hour: "2-digit", minute: "2-digit",
                 }),
               });
             }
@@ -198,13 +200,15 @@ Interpolation rules used above:
 
 Creates a calendar event, records in a sheet, and sends confirmation email. Side effects (write, email) use POST. The `meetings` sheet is created automatically on the first `sheet-write` — no manual setup needed.
 
+Locale parameters (`"en-US"`, `"UTC"`) in the example are placeholders — swap them for the locale and timeZone that match the user's request. The email subject and body text should also be written in the user's conversation language, not verbatim English.
+
 ```yaml
 trigger:
   requireAuth: partner
 
 nodes:
   - id: prepare
-    comment: "UUID・現在時刻・ユーザー向け表示用日時文字列を生成する。UUID/タイムスタンプ/ロケール整形はテンプレートエンジンにヘルパーがないので、必ず script ノードで計算する。リクエスト値は :json 修飾子 + 囲み引用符(\"{{...:json}}\")で安全に文字列リテラルへ埋め込む"
+    comment: "Generate the UUID, storage timestamp, and a human-readable date string. The template engine has no UUID / date-format helpers, so these always come from a script node. Request values are embedded safely inside JS string literals with :json + surrounding \"...\"."
     type: script
     saveTo: prepared
     code: |
@@ -214,44 +218,44 @@ nodes:
         id: crypto.randomUUID(),
         now: new Date().toISOString(),
         displayRange:
-          new Date(start).toLocaleString("ja-JP", {
-            dateStyle: "long", timeStyle: "short", timeZone: "Asia/Tokyo",
+          new Date(start).toLocaleString("en-US", {
+            dateStyle: "long", timeStyle: "short", timeZone: "UTC",
           }) + " – " +
-          new Date(end).toLocaleString("ja-JP", {
-            timeStyle: "short", timeZone: "Asia/Tokyo",
+          new Date(end).toLocaleString("en-US", {
+            timeStyle: "short", timeZone: "UTC",
           }),
       };
 
   - id: create_event
-    comment: "Googleカレンダーに事前面談の予定を登録する"
+    comment: "Create the booking on Google Calendar"
     type: calendar-create
     calendarId: primary
-    summary: "{{request.body.name}} 事前予約"
+    summary: "{{request.body.name}} - Pre-interview booking"
     start: "{{request.body.start}}"
     end: "{{request.body.end}}"
 
   - id: write_sheet
-    comment: "スプレッドシート(meetingsシート)に予約情報を記録する。id/created_at は script ノードで生成した値を参照する"
+    comment: "Append the booking to the meetings sheet; id/created_at reuse the values the script node already produced"
     type: sheet-write
     sheet: meetings
-    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email}}", "subject": "{{request.body.name}} 事前予約", "start_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email}}", "subject": "{{request.body.name}} - Pre-interview booking", "start_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
 
   - id: send_mail
-    comment: "予約者へ予約完了の通知メールを送信する。日時は ISO 文字列ではなく prepared.displayRange(ロケール整形済み)を使う"
+    comment: "Send the booking confirmation. Use prepared.displayRange (locale-formatted) in the body — never the raw ISO string from request.body."
     type: gmail-send
     to: "{{auth.email}}"
-    subject: "事前面談の予約完了のお知らせ"
+    subject: "Pre-interview booking confirmed"
     body: |
-      {{request.body.name}} 様
+      Hi {{request.body.name}},
 
-      事前面談の予約を承りました。
+      Your pre-interview booking has been confirmed.
 
-      ■ 予約日時: {{prepared.displayRange}}
+      Date & time: {{prepared.displayRange}}
 
-      当日はよろしくお願いいたします。
+      Thank you — talk soon.
 
   - id: respond
-    comment: "成功したことを示すレスポンスを返す"
+    comment: "Return a success payload"
     type: set
     name: __response
     value: '{"ok": true}'
@@ -263,10 +267,10 @@ nodes:
 {
   "accountType": "partner",
   "email": "test-partner@example.com",
-  "name": "山田 パートナー",
+  "name": "Sample Partner",
   "profile": {
-    "contact_name": "山田 太郎",
-    "company_name": "株式会社パートナーズ"
+    "contact_name": "Jane Doe",
+    "company_name": "Example Partners Inc."
   }
 }
 ```

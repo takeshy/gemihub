@@ -194,7 +194,7 @@ Before saving AND after reading back each file, check ALL applicable items:
 ## Common Mistakes (subtle bugs not captured by the checklist)
 
 1. **Using JS frameworks** — NEVER use Alpine.js, Vue, React, or other JS frameworks. Use plain JavaScript with the `gemihub.*` client API.
-2. **Wrong calendar event format** — `calendar-list` returns events with **flat** `start`/`end` strings (e.g., `evt.start` = `"2025-04-01T10:00:00+09:00"`). NEVER use `evt.start.dateTime` — that is the raw Google Calendar API format, not what our API returns. Always use `new Date(evt.start)` and `new Date(evt.end)` directly.
+2. **Wrong calendar event format** — `calendar-list` returns events with **flat** `start`/`end` strings (e.g., `evt.start` = `"2025-04-01T10:00:00Z"`). NEVER use `evt.start.dateTime` — that is the raw Google Calendar API format, not what our API returns. Always use `new Date(evt.start)` and `new Date(evt.end)` directly.
 3. **Asking the user for their email on protected pages** — NEVER add an email input field to forms on pages guarded by `gemihub.auth.require()`. The user is already authenticated; their email is available as `(await gemihub.auth.me("TYPE")).email` in client JS and as `{{auth.email}}` in the workflow. Pass it through `gemihub.post()` body if the workflow needs it.
 
 ## Living Docs: spec.md and history.md

@@ -133,8 +133,8 @@ Flat structure containing the user data normally returned by `auth.me()`. The op
   "email": "test@example.com",
   "profile": {
     "email": "test@example.com",
-    "company_name": "テスト株式会社",
-    "contact_name": "テスト太郎"
+    "company_name": "Example Corp",
+    "contact_name": "Test User"
   }
 }
 ```
@@ -190,10 +190,10 @@ The template engine has no date-format / UUID / locale helpers. Use a `script` n
     return {
       id: crypto.randomUUID(),
       now: new Date().toISOString(),
-      displayRange: new Date(start).toLocaleString("ja-JP", {
-        dateStyle: "long", timeStyle: "short", timeZone: "Asia/Tokyo",
-      }) + " – " + new Date(end).toLocaleString("ja-JP", {
-        timeStyle: "short", timeZone: "Asia/Tokyo",
+      displayRange: new Date(start).toLocaleString("en-US", {
+        dateStyle: "long", timeStyle: "short", timeZone: "UTC",
+      }) + " – " + new Date(end).toLocaleString("en-US", {
+        timeStyle: "short", timeZone: "UTC",
       }),
     };
 
@@ -234,8 +234,8 @@ Rules for `script`:
     "id": "abc123",
     "summary": "Meeting",
     "description": "...",
-    "start": "2025-04-01T10:00:00+09:00",
-    "end": "2025-04-01T11:00:00+09:00",
+    "start": "2025-04-01T10:00:00Z",
+    "end": "2025-04-01T11:00:00Z",
     "location": "...",
     "status": "confirmed",
     "htmlLink": "https://calendar.google.com/..."
