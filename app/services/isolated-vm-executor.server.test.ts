@@ -96,3 +96,48 @@ test("infinite loop is killed by the timeout", async () => {
     /Script execution timed out/,
   );
 });
+
+// Script nodes routinely `return { foo, bar }` — isolated-vm can't transfer
+// non-primitives across the boundary so the executor must stringify inside
+// the isolate. Regression guard for the 500 that hit the "availability
+// slots" workflow, where a plain-object return collapsed to "" on the host
+// side and broke downstream placeholder interpolation.
+
+test("plain object return is JSON-stringified on the way out", async () => {
+  const result = await executeIsolatedJS(`
+    return { timeMin: "2026-01-01T00:00:00Z", timeMax: "2026-01-08T00:00:00Z", startMs: 1, endMs: 2 };
+  `);
+  assert.equal(typeof result, "string");
+  const parsed = JSON.parse(result);
+  assert.equal(parsed.timeMin, "2026-01-01T00:00:00Z");
+  assert.equal(parsed.startMs, 1);
+  assert.equal(parsed.endMs, 2);
+});
+
+test("array return is JSON-stringified on the way out", async () => {
+  const result = await executeIsolatedJS(`
+    return [{ start: "2026-01-01T09:00:00Z", end: "2026-01-01T09:30:00Z" }];
+  `);
+  const parsed = JSON.parse(result);
+  assert.ok(Array.isArray(parsed));
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].start, "2026-01-01T09:00:00Z");
+});
+
+test("primitive returns pass through without extra quoting", async () => {
+  assert.equal(await executeIsolatedJS("return 'hello';"), "hello");
+  assert.equal(await executeIsolatedJS("return 42;"), "42");
+  assert.equal(await executeIsolatedJS("return true;"), "true");
+  assert.equal(await executeIsolatedJS("return null;"), "");
+  assert.equal(await executeIsolatedJS("return undefined;"), "");
+  assert.equal(await executeIsolatedJS("return;"), "");
+  assert.equal(await executeIsolatedJS(""), "");
+});
+
+test("non-serializable return (function) degrades to empty string, not a crash", async () => {
+  // JSON.stringify of a function is undefined; we don't want the isolate to
+  // reject or throw — the workflow should get "" and let downstream logic
+  // decide what to do.
+  const result = await executeIsolatedJS("return function() { return 1; };");
+  assert.equal(result, "");
+});

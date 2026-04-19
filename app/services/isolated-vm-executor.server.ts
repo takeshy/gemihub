@@ -42,16 +42,28 @@ export async function executeIsolatedJS(
     // the wrapped code below when introducing a new helper.
     await jail.set("__hostUtilsRandomUUID", new ivm.Callback(() => randomUUID()));
 
-    // Wrap code to install the `utils` namespace and capture the result of
-    // the last expression. `Object.freeze` prevents user code from replacing
-    // the helpers (the isolate is fresh per call, but freezing avoids subtle
-    // inter-node bugs if shared-state sandboxes ever land).
+    // Wrap code to install the `utils` namespace and normalize the return
+    // value. isolated-vm's `script.run()` can only transfer primitives across
+    // the isolate boundary — returning a plain object drops silently to
+    // `undefined` on the host side, which previously turned every script
+    // that did `return { foo: ... }` into an empty-string variable and broke
+    // downstream nodes. Serialize inside the isolate so the value the host
+    // receives is always a string, matching the client-side iframe sandbox
+    // in sandbox-executor.ts where `JSON.stringify` runs on non-strings.
+    // `Object.freeze` prevents user code from replacing the helpers (the
+    // isolate is fresh per call, but freezing avoids subtle inter-node bugs
+    // if shared-state sandboxes ever land).
     const wrappedCode = `
       const utils = Object.freeze({
         randomUUID: function() { return __hostUtilsRandomUUID(); },
       });
       (function() {
-        ${code}
+        const __out = (function() {
+          ${code}
+        })();
+        if (typeof __out === 'string') return __out;
+        if (__out === undefined || __out === null) return '';
+        try { return JSON.stringify(__out); } catch (_) { return ''; }
       })()
     `;
 
