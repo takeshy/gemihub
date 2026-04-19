@@ -118,7 +118,7 @@ nodes:
   - id: read_data
     type: sheet-read
     sheet: SheetName
-    filter: '{"email": "{{auth.email}}"}'
+    filter: '{"email": "{{auth.email:json}}"}'
     saveTo: result
 
   - id: respond
@@ -137,7 +137,7 @@ nodes:
   - id: write_data
     type: sheet-write
     sheet: SheetName
-    data: '[{"email": "{{auth.email}}", "title": "{{request.body.title}}", "content": "{{request.body.content}}"}]'
+    data: '[{"email": "{{auth.email:json}}", "title": "{{request.body.title:json}}", "content": "{{request.body.content:json}}"}]'
 
   - id: respond
     type: set
@@ -177,7 +177,7 @@ nodes:
     comment: "Storage columns use raw ISO; id/created_at come from the script node"
     type: sheet-write
     sheet: SheetName
-    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email}}", "scheduled_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email:json}}", "scheduled_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
 
   - id: send_mail
     comment: "Body uses prepared.displayRange — NEVER raw {{request.body.start}}"

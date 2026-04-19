@@ -200,7 +200,7 @@ The template engine has no date-format / UUID / locale helpers. Use a `script` n
 - id: write_sheet
   type: sheet-write
   sheet: meetings
-  data: '[{"id": "{{prepared.id}}", "user_email": "{{auth.email}}", "scheduled_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+  data: '[{"id": "{{prepared.id}}", "user_email": "{{auth.email:json}}", "scheduled_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
 
 - id: send_mail
   type: gmail-send
