@@ -1,6 +1,7 @@
 import { provisionHubworkSkillFiles, pickOldestSpreadsheet, type ProvisionHubworkSkillFilesResult, type SkillFile } from "./hubwork-skill-provisioner-core";
 import { findFilesByExactNameAndMimeType, deleteFile, type DriveFile } from "./google-drive.server";
 import { google } from "googleapis";
+import type { Language } from "~/types/settings";
 
 const SPREADSHEET_TITLE = "webpage_builder";
 const SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
@@ -12,13 +13,45 @@ import REF_PATTERNS from "./hubwork-skill-templates/references/page-patterns.md?
 import REF_SAMPLE_INTERVIEW from "./hubwork-skill-templates/references/sample-interview.md?raw";
 import INITIAL_SCHEMA from "./hubwork-skill-templates/initial-schema.md?raw";
 
-const SKILL_FILES: SkillFile[] = [
-  { path: "skills/webpage-builder/SKILL.md", content: SKILL_MD, mimeType: "text/markdown" },
-  { path: "skills/webpage-builder/references/api-reference.md", content: REF_API, mimeType: "text/markdown" },
-  { path: "skills/webpage-builder/references/page-patterns.md", content: REF_PATTERNS, mimeType: "text/markdown" },
-  { path: "skills/webpage-builder/references/sample-interview.md", content: REF_SAMPLE_INTERVIEW, mimeType: "text/markdown" },
-  { path: "web/__gemihub/schema.md", content: INITIAL_SCHEMA, mimeType: "text/markdown" },
-];
+const RESPONSE_LANGUAGE_PLACEHOLDER = "{{RESPONSE_LANGUAGE_INSTRUCTION}}";
+
+/**
+ * Build the response-language directive that is baked into SKILL.md at
+ * provision time. The skill ships with English-heavy prose and reference
+ * files; without a locale-matched directive at the TOP of SKILL.md, the
+ * LLM drifts toward whichever language the reference samples happen to be
+ * in. Placing the directive inside the skill file itself (rather than only
+ * in the chat system prompt) keeps it adjacent to the references the LLM
+ * loads via `read_drive_file`, which is where drift occurs.
+ */
+function buildResponseLanguageInstruction(language: Language | null | undefined): string {
+  if (language === "ja") {
+    return [
+      "## 応答言語",
+      "",
+      "**重要: すべての自然言語の出力は日本語で書いてください。** プラン、確認、質問、検証結果、エラー／ステータスメッセージ、およびスキルが管理するファイル（`web/__gemihub/spec.md`、`web/__gemihub/history.md`）を含む、毎ターンのすべての応答に適用されます。コード、ファイルパス、URL パス、識別子、シート名、カラム名などの技術トークンはそのまま維持し、散文のみを翻訳してください。",
+    ].join("\n");
+  }
+  return [
+    "## Response Language",
+    "",
+    "**IMPORTANT: Write all natural-language output in English.** This applies to every turn's output — plans, confirmations, questions, verification results, error/status messages, and skill-managed files (`web/__gemihub/spec.md`, `web/__gemihub/history.md`). Preserve technical tokens such as code, file paths, URL paths, identifiers, sheet names, and column names as-is; translate only the prose. Even if the user writes in another language or the surrounding context (sheet contents, prior files) is in another language, continue responding in English.",
+  ].join("\n");
+}
+
+function renderSkillMd(template: string, language: Language | null | undefined): string {
+  return template.replace(RESPONSE_LANGUAGE_PLACEHOLDER, buildResponseLanguageInstruction(language));
+}
+
+function buildSkillFiles(language: Language | null | undefined): SkillFile[] {
+  return [
+    { path: "skills/webpage-builder/SKILL.md", content: renderSkillMd(SKILL_MD, language), mimeType: "text/markdown" },
+    { path: "skills/webpage-builder/references/api-reference.md", content: REF_API, mimeType: "text/markdown" },
+    { path: "skills/webpage-builder/references/page-patterns.md", content: REF_PATTERNS, mimeType: "text/markdown" },
+    { path: "skills/webpage-builder/references/sample-interview.md", content: REF_SAMPLE_INTERVIEW, mimeType: "text/markdown" },
+    { path: "web/__gemihub/schema.md", content: INITIAL_SCHEMA, mimeType: "text/markdown" },
+  ];
+}
 
 /** Sheets to auto-create on first provision */
 const AUTO_SHEETS = ["accounts"];
@@ -46,17 +79,22 @@ const inFlight = new Map<string, Promise<ProvisionHubworkSkillFilesResult>>();
  * accounts / tickets / meetings sheets and an "email" header in accounts.
  *
  * @param force — When true, overwrite existing files with the latest templates.
+ * @param language — UI language at provision time, used to bake the response-
+ *   language directive into SKILL.md so the activated skill responds in the
+ *   user's language instead of drifting with reference-sample locale.
  */
 export async function provisionHubworkSkill(
   accessToken: string,
   rootFolderId: string,
   force = false,
+  language: Language | null | undefined = "en",
 ): Promise<ProvisionHubworkSkillFilesResult> {
-  const key = `${rootFolderId}:${force ? "force" : "ensure"}`;
+  const langKey = language ?? "en";
+  const key = `${rootFolderId}:${force ? "force" : "ensure"}:${langKey}`;
   const existing = inFlight.get(key);
   if (existing) return existing;
 
-  const promise = runProvision(accessToken, rootFolderId, force).finally(() => {
+  const promise = runProvision(accessToken, rootFolderId, force, language).finally(() => {
     if (inFlight.get(key) === promise) inFlight.delete(key);
   });
   inFlight.set(key, promise);
@@ -67,13 +105,14 @@ async function runProvision(
   accessToken: string,
   rootFolderId: string,
   force: boolean,
+  language: Language | null | undefined,
 ): Promise<ProvisionHubworkSkillFilesResult> {
   // Run skill file provisioning and spreadsheet ensure in parallel.
   // Both paths are internally idempotent: findOrCreateSpreadsheet looks up
   // existing webpage_builder spreadsheets before creating, so concurrent
   // first-provision calls can't each create their own copy.
   const [result, spreadsheetInfo] = await Promise.all([
-    provisionHubworkSkillFiles(accessToken, rootFolderId, SKILL_FILES, force),
+    provisionHubworkSkillFiles(accessToken, rootFolderId, buildSkillFiles(language), force),
     findOrCreateSpreadsheet(accessToken, force),
   ]);
 

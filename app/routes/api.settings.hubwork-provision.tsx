@@ -4,6 +4,7 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { provisionHubworkSkill } from "~/services/hubwork-skill-provisioner.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { rewriteHubworkSpreadsheetRefs } from "~/services/hubwork-settings-rewriter";
+import { resolveLanguage } from "~/i18n/resolve-language";
 
 /**
  * POST /api/settings/hubwork-provision
@@ -25,7 +26,19 @@ export async function action({ request }: Route.ActionArgs) {
       ? await request.json()
       : {};
     const force = body?.force === true;
-    const result = await provisionHubworkSkill(validTokens.accessToken, validTokens.rootFolderId, force);
+
+    // Resolve the UI language the user is currently on so the baked-in
+    // response-language directive in SKILL.md matches. Use the shared
+    // resolveLanguage() helper so the fallback parsing of Accept-Language
+    // (quality values, multiple tags, subtag splitting) stays consistent
+    // with how root.tsx / _index.tsx / settings.tsx pick the UI locale.
+    const currentSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+    const language = resolveLanguage(
+      currentSettings.language,
+      request.headers.get("accept-language"),
+    );
+
+    const result = await provisionHubworkSkill(validTokens.accessToken, validTokens.rootFolderId, force, language);
 
     if (result.spreadsheetId) {
       // First provision: write the initial hubwork config block
