@@ -402,17 +402,20 @@ code: |
   var data = JSON.parse("{{jsonStr:json}}");  # becomes: JSON.parse("[{\\"url\\":\\"...\\"}]")
 \`\`\`
 
-- If the variable already holds a **parsed object/array** (e.g., from a previous \`json\` node), use it directly without quotes:
+- If the variable is a **JSON string that should land as a bare JS literal** (array / object from \`calendar-list\`, \`sheet-read\`, a prior \`script\`, etc.) use \`{{var}}\` — NO \`:json\`, NO surrounding quotes. GemiHub stores every variable as a JSON-serialized string, and JSON is a valid JS literal, so raw interpolation works:
 \`\`\`yaml
 code: |
-  var arr = {{parsedArray:json}};       # becomes: var arr = [{"url":"..."}];  (valid JS literal)
+  const events = {{events}} || [];      # becomes: const events = [{"id":"abc","start":"..."}] || [];
+  events.forEach(e => { /* ... */ });
 \`\`\`
+This is the idiomatic pattern for iterating arrays returned by \`calendar-list\`, \`sheet-read\`, etc. \`{{events:json}}\` without surrounding quotes escapes the double-quotes into \`\\"\` and produces invalid JS — always pair \`:json\` with \`"..."\`.
 
 ❌ Common mistakes:
 \`\`\`yaml
 code: |
   var text = {{userInput:json}};        # WRONG — missing quotes, invalid JS
   JSON.parse({{jsonStr:json}});         # WRONG — JSON.parse needs a string, you removed the quotes
+  const events = {{events:json}} || []; # WRONG — :json escapes " to \\"; use {{events}} bare, or JSON.parse("{{events:json}}")
   var html = '{{content}}';             # RISKY — breaks if content contains a single quote or newline; prefer "{{content:json}}"
 \`\`\`
 

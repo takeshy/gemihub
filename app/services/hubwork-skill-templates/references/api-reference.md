@@ -212,7 +212,15 @@ The template engine has no date-format / UUID / locale helpers. Use a `script` n
 
 Rules for `script`:
 - Always use `saveTo` and return an object; downstream nodes access fields via dot notation (`{{prepared.id}}`).
-- **Interpolate request/auth values INTO the code with `"{{var:json}}"` — always the `:json` modifier, always inside surrounding quotes.** The `:json` modifier escapes special characters (`"`, `\`, newlines) so the value is safe inside a JS string literal; it does NOT add its own quotes, so the surrounding `"..."` ARE required (drop them and you get `const name = John;` → ReferenceError). Using `"{{var}}"` without `:json` silently breaks the script the moment the value contains a quote or newline.
+- **Single-value strings → `"{{var:json}}"` (quoted + `:json`).** The `:json` modifier escapes special characters (`"`, `\`, newlines) so the value is safe inside a JS string literal; it does NOT add its own quotes, so the surrounding `"..."` ARE required (drop them and you get `const name = John;` → ReferenceError). Using `"{{var}}"` without `:json` silently breaks the script the moment the value contains a quote or newline.
+- **JSON arrays / objects (e.g., `calendar-list` events, `sheet-read` rows, a prior `script`'s return) → `{{var}}` (bare, NO `:json`, NO surrounding quotes).** GemiHub stores every variable as a JSON-serialized string, so raw interpolation drops `[{"id":"abc",...}]` straight into the JS as a valid array literal. Using `{{events:json}}` without surrounding quotes escapes the `"` into `\"` and the script fails at parse time with `Unexpected token`. If you prefer the explicit form, use `JSON.parse("{{events:json}}")` (note the required `"..."`).
+  ```yaml
+  code: |
+    const events = {{events}} || [];          # ✅ bare → valid JS array literal
+    const names = "{{userName:json}}";        # ✅ quoted + :json → safe JS string literal
+    # const events = {{events:json}} || [];   # ❌ escapes " to \" outside quotes — parse error
+    # const names = {{userName:json}};        # ❌ missing quotes — bare identifier, ReferenceError
+  ```
 - `crypto.randomUUID()`, `Intl.DateTimeFormat`, `toLocaleString`, and all standard `Date` / string APIs are available.
 - No `fetch`, no `setTimeout` / `setInterval` beyond node completion, no DOM — pure computation only.
 

@@ -118,6 +118,82 @@ nodes:
     value: "{{events}}"
 ```
 
+## GET API Endpoint (`web/api/interview/slots.yaml`) — Available Slots from Calendar
+
+Common "pick an open 30-minute slot" pattern: read calendar, subtract busy windows, return the free slots formatted for display. The critical interpolation rule is `{{events}}` **without `:json` and without surrounding quotes** — GemiHub stores every variable as a JSON-serialized string, and JSON is a valid JS literal, so the array drops straight into the script as a bare `[{...}]` literal. Using `{{events:json}}` unquoted escapes the quotes into `\"` and crashes the script at parse time.
+
+```yaml
+trigger:
+  requireAuth: partner
+
+nodes:
+  - id: prep_window
+    comment: "翌日 09:00 から 7 日間のウィンドウを生成する"
+    type: script
+    saveTo: window
+    code: |
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0, 0);
+      const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+
+  - id: get_events
+    comment: "ウィンドウ内の既存予定を取得（この予定が空きを塞ぐ）"
+    type: calendar-list
+    calendarId: primary
+    timeMin: "{{window.timeMin}}"
+    timeMax: "{{window.timeMax}}"
+    saveTo: events
+
+  - id: generate_slots
+    comment: "30 分刻みのスロットを events と突き合わせて空き分だけ返す"
+    type: script
+    saveTo: slots
+    code: |
+      # {{events}} は :json なし・引用符なしで貼る（JSON 文字列がそのまま JS 配列リテラルになる）
+      const events = {{events}} || [];
+      const windowStart = new Date("{{window.timeMin:json}}");
+      const out = [];
+      for (let d = 0; d < 7; d++) {
+        const day = new Date(windowStart.getTime() + d * 24 * 60 * 60 * 1000);
+        for (let h = 9; h < 18; h++) {
+          for (let m = 0; m < 60; m += 30) {
+            const slotStart = new Date(day);
+            slotStart.setHours(h, m, 0, 0);
+            const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
+            const conflict = events.some(evt => {
+              const evStart = new Date(evt.start);
+              const evEnd = new Date(evt.end);
+              return slotStart < evEnd && slotEnd > evStart;
+            });
+            if (!conflict) {
+              out.push({
+                start: slotStart.toISOString(),
+                end: slotEnd.toISOString(),
+                displayDate: slotStart.toLocaleDateString("ja-JP", {
+                  weekday: "short", month: "short", day: "numeric", timeZone: "Asia/Tokyo",
+                }),
+                displayTime: slotStart.toLocaleTimeString("ja-JP", {
+                  hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo",
+                }),
+              });
+            }
+          }
+        }
+      }
+      return out;
+
+  - id: respond
+    type: set
+    name: __response
+    value: "{{slots}}"
+```
+
+Interpolation rules used above:
+- `{{events}}` — bare, no `:json`, no quotes. Correct for iterating a JSON array/object stored by `calendar-list`, `sheet-read`, or a prior `script` node.
+- `"{{window.timeMin:json}}"` — surrounding `"..."` + `:json`. Correct for embedding a single string value inside a JS string literal (`new Date("...")`, `console.log("...")`, etc.).
+- NEVER `{{events:json}}` without surrounding quotes — escapes the JSON's `"` into `\"` and the script fails with a parse error.
+
 ## POST API Endpoint (`web/api/interview/book.yaml`)
 
 Creates a calendar event, records in a sheet, and sends confirmation email. Side effects (write, email) use POST. The `meetings` sheet is created automatically on the first `sheet-write` — no manual setup needed.
