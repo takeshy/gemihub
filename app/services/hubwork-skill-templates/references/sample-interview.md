@@ -263,6 +263,59 @@ nodes:
     value: '{"ok": true}'
 ```
 
+## Optional: Expose Own Meetings as `{{auth.meetings}}` (via `data:` config)
+
+A common follow-up endpoint is "show the logged-in partner their own bookings." The straightforward way is a `sheet-read` filtered by `{{auth.email:json}}`, but there's a less error-prone alternative: configure a `data:` source on the account type so the runtime exposes the user's meetings as `{{auth.meetings}}` automatically.
+
+Hand-edit the `partner` account type in `settings.json` under `hubwork.accounts`:
+
+```json
+{
+  "identity": { "sheet": "accounts", "emailColumn": "email" },
+  "data": {
+    "meetings": {
+      "sheet": "meetings",
+      "matchBy": "user_email",
+      "fields": ["id", "title", "scheduled_at", "status", "created_at"],
+      "shape": "array",
+      "sort": "-scheduled_at",
+      "limit": 100
+    }
+  }
+}
+```
+
+With that in place, a list endpoint is one node — the framework already filtered by the authenticated user's email so there is no way to accidentally leak another partner's rows:
+
+```yaml
+# web/api/interview/my-bookings.yaml
+trigger:
+  requireAuth: partner
+
+nodes:
+  - id: respond
+    type: set
+    name: __response
+    value: "{{auth.meetings}}"
+```
+
+Contrast with the explicit `sheet-read` form, which still works and is needed for admin-style endpoints where the filter isn't "records for me":
+
+```yaml
+# Equivalent, but requires the author to remember the filter every time
+- id: read_meetings
+  type: sheet-read
+  sheet: meetings
+  filter: '{"user_email": "{{auth.email:json}}"}'
+  saveTo: meetings
+- id: respond
+  type: set
+  name: __response
+  value: "{{meetings}}"
+```
+
+Use the `data:` form when "records for the authenticated user" is the full filter; reach for `sheet-read` when you need query-time filtering by other columns (status, date range), joins, or admin / cross-user access.
+
 ## IDE Preview Mock Data (`web/__gemihub/auth/me.json`)
 
 ```json

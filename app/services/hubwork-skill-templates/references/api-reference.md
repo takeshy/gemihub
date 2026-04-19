@@ -67,7 +67,8 @@ YAML files in `web/api/` are executed as workflows. The response depends on the 
 | `request.body.*` | POST JSON body or form fields |
 | `auth.type` | Account type (only if `requireAuth` is set) |
 | `auth.email` | Authenticated email (only if `requireAuth` is set) |
-| `currentUser` | JSON string of user profile data |
+| `auth.<column>` | Any non-email column on the identity sheet row for this user (e.g. `auth.name`, `auth.created_at` for the default `accounts` sheet). Blank cells resolve to `""`. |
+| `auth.<dataKey>` | Advanced: one variable per key in the account's `data:` config. Stored as a JSON string; use dot access (`auth.profile.name`) to pull a nested field. |
 
 ### Trigger Options
 

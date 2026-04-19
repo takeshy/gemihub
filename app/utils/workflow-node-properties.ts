@@ -213,7 +213,7 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
     case "sheet-update":
       return [
         { key: "sheet", label: "Sheet Name", required: true, placeholder: "contacts" },
-        { key: "filter", label: "Filter", required: true, placeholder: '{"email": "{{currentUser.email}}"}' },
+        { key: "filter", label: "Filter", required: true, placeholder: '{"email": "{{auth.email:json}}"}' },
         { key: "data", label: "Data (JSON)", required: true, multiline: true, placeholder: '{"status": "updated"}' },
         { key: "saveTo", label: "Save Updated Count To", required: false, placeholder: "count" },
       ];

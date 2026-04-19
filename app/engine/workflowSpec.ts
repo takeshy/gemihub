@@ -788,7 +788,7 @@ Workflows under \`web/api/*.yaml\` are exposed as HTTP endpoints. They use a top
 
 #### trigger
 Top-level workflow block declaring the HTTP endpoint behavior. NOT a node — appears at the workflow root, not under \`nodes:\`.
-- **requireAuth** (optional): Account type the caller must be authenticated as (e.g. \`accounts\`, \`members\`). Caller invokes \`gemihub.auth.require("<type>")\` first. When set, \`auth.email\`, \`auth.type\`, and \`currentUser.*\` become available.
+- **requireAuth** (optional): Account type the caller must be authenticated as (e.g. \`accounts\`, \`members\`). Caller invokes \`gemihub.auth.require("<type>")\` first. When set, every authenticated-user variable is under the \`auth.*\` namespace (\`auth.email\`, \`auth.type\`, plus one entry per non-email column of the identity sheet row such as \`auth.name\`).
 - **idempotencyKeyField** (optional, POST only): Body field used to dedup repeat submissions.
 - **honeypotField** (optional, POST only): Body field that should always be empty; non-empty submissions are silently treated as success.
 - **successRedirect** (optional, POST only): URL to 302 to after success (form submissions).
@@ -819,7 +819,11 @@ These variables are auto-populated for workflows reached via HTTP. **The \`reque
 - \`{{request.body.<name>}}\` — JSON body field or form field (use this for **POST** endpoints called via \`gemihub.post("path", {key: "v"})\`)
 - \`{{request.params.<name>}}\` — URL path parameter (rare)
 - For file uploads, additionally: \`{{request.body.<name>_name}}\`, \`{{request.body.<name>_type}}\`, \`{{request.body.<name>_size}}\` (the value itself is base64)
-- \`{{auth.email}}\`, \`{{auth.type}}\`, \`{{currentUser}}\` — only when \`requireAuth\` is set and the caller is authenticated. \`currentUser\` is a JSON string; access fields like \`{{currentUser}}\` then parse, or rely on the unwrapped variable if the workflow already \`set\`s it.
+- Authenticated user — only when \`requireAuth\` is set and the caller is authenticated. Everything is under \`auth.*\`:
+  - \`{{auth.email}}\` — caller's email
+  - \`{{auth.type}}\` — account type string
+  - \`{{auth.<column>}}\` — every non-email column on the identity sheet's row for this user, populated automatically (e.g. \`{{auth.name}}\` / \`{{auth.created_at}}\` when the sheet has those columns). A blank cell resolves to \`""\`; a nonexistent column name leaves the placeholder literal as \`{{auth.foo}}\` which exposes the typo.
+  - \`{{auth.<dataKey>}}\` — advanced: one per key in the account's \`data:\` config; each is a JSON string, dot-access like \`{{auth.profile.name}}\` works via lazy parse.
 
 ### Response Variables (paid plan only)
 

@@ -1,5 +1,88 @@
-import type { HubworkDataSource } from "~/types/settings";
+import type { HubworkAccountIdentity, HubworkDataSource } from "~/types/settings";
 import { google } from "googleapis";
+
+// Same normalization as hubwork-magic-link.server.ts / auth.login route so a
+// mid-width space or trailing whitespace in a sheet row still matches the
+// email the user authenticated with.
+function normalizeEmail(email: string): string {
+  return email.toLowerCase().trim().replace(/\u3000/g, "").replace(/\s+/g, "");
+}
+
+// Reserved `auth.*` variables populated unconditionally by the router.
+// Identity-sheet columns with these names are skipped when exposing the
+// row so a stray `type` / `email` column can't shadow the canonical vars.
+const RESERVED_AUTH_KEYS = new Set(["type", "email"]);
+
+/**
+ * Pure row-matching half of {@link buildAuthProfile}. Given raw values from
+ * Google Sheets (`rows[0]` headers, rest data), locate the row whose
+ * `emailColumn` cell matches `email` (after normalization) and return the
+ * other columns as a map. Exported for testing — the production caller
+ * always routes through `buildAuthProfile` which adds the Sheets fetch.
+ */
+export function extractAuthProfileFromRows(
+  rows: string[][],
+  emailColumn: string,
+  email: string,
+): Record<string, string> {
+  if (rows.length < 2) return {};
+  const headers = rows[0];
+  const emailIdx = headers.indexOf(emailColumn);
+  if (emailIdx === -1) return {};
+
+  const normalizedEmail = normalizeEmail(email);
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (normalizeEmail(row?.[emailIdx] || "") !== normalizedEmail) continue;
+    const profile: Record<string, string> = {};
+    for (let j = 0; j < headers.length; j++) {
+      if (j === emailIdx) continue;
+      const col = headers[j];
+      if (!col) continue;
+      if (RESERVED_AUTH_KEYS.has(col)) continue;
+      profile[col] = row?.[j] || "";
+    }
+    return profile;
+  }
+  return {};
+}
+
+/**
+ * Read the authenticated user's row from the identity sheet and return the
+ * non-email columns as a flat map. The router turns each entry into an
+ * `auth.<column>` workflow variable, so a typical accounts sheet with
+ * `email`, `name`, `created_at`, `logined_at` yields `auth.name`,
+ * `auth.created_at`, `auth.logined_at`.
+ *
+ * Returns `{}` on any failure (sheet missing, row missing, API error) so
+ * the caller can unconditionally continue without a fallback branch.
+ */
+export async function buildAuthProfile(
+  accessToken: string,
+  defaultSpreadsheetId: string,
+  identity: HubworkAccountIdentity,
+  email: string,
+): Promise<Record<string, string>> {
+  try {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const sheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+    const spreadsheetId = identity.spreadsheetId || defaultSpreadsheetId;
+    if (!spreadsheetId) return {};
+
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${identity.sheet.replace(/'/g, "''")}'`,
+    });
+    return extractAuthProfileFromRows(
+      (res.data.values || []) as string[][],
+      identity.emailColumn,
+      email,
+    );
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Build field-filtered currentUser data from Sheets.

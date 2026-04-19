@@ -6,7 +6,7 @@ import { getDriveContext, readFile } from "~/services/google-drive.server";
 import { readRemoteSyncMeta } from "~/services/sync-meta.server";
 import { buildApiIndex, resolveApiWorkflow } from "~/services/hubwork-api-resolver.server";
 import { getContactEmail } from "~/services/hubwork-session.server";
-import { buildCurrentUser } from "~/services/hubwork-page-renderer.server";
+import { buildAuthProfile, buildCurrentUser } from "~/services/hubwork-page-renderer.server";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflow } from "~/engine/executor";
 import type { WorkflowInput, ServiceContext } from "~/engine/types";
@@ -84,7 +84,12 @@ async function handleApiRequest(request: Request, apiPath: string) {
   const requireAuth = trigger.requireAuth as string | undefined;
   let authEmail: string | null = null;
   let authType: string | null = null;
-  let currentUserData: Record<string, unknown> | null = null;
+  // Non-reserved identity-sheet columns (e.g. name, created_at, logined_at).
+  let authProfile: Record<string, string> = {};
+  // Configured `data` sources — each entry is exposed as its own
+  // `auth.<key>` variable, stored as a JSON string so workflow dot-access
+  // (`{{auth.profile.name}}`) works via the template resolver's lazy parse.
+  let authDataSources: Record<string, unknown> = {};
 
   if (requireAuth) {
     if (!ACCOUNT_TYPE_PATTERN.test(requireAuth)) {
@@ -105,16 +110,24 @@ async function handleApiRequest(request: Request, apiPath: string) {
     const resolvedAccount = resolveAccountType(settings?.hubwork?.accounts, requireAuth);
     const accountType = resolvedAccount?.accountType;
     const authSpreadsheetId = accountType?.identity?.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id;
+    if (accountType?.identity && authSpreadsheetId) {
+      authProfile = await buildAuthProfile(
+        accessToken,
+        authSpreadsheetId,
+        accountType.identity,
+        authEmail,
+      );
+    }
     if (accountType?.data && authSpreadsheetId) {
       try {
-        currentUserData = await buildCurrentUser(
+        authDataSources = await buildCurrentUser(
           accessToken,
           authSpreadsheetId,
           authEmail,
           accountType.data,
         );
       } catch {
-        // continue without currentUser
+        // continue without data sources
       }
     }
   }
@@ -179,13 +192,32 @@ async function handleApiRequest(request: Request, apiPath: string) {
     }
   }
 
-  // auth.* and currentUser (only if requireAuth is set and authenticated)
+  // auth.* — single canonical namespace for authenticated-user data.
+  //
+  // Two views of the same data are registered so both exact-key lookups
+  // (`{{auth.email}}`, `{{auth.name}}`) AND deep dot access into data
+  // sources (`{{auth.profile.name}}`) resolve correctly:
+  //
+  //   (1) flat `auth.<key>` entries — one per top-level field. The template
+  //       resolver tries full-path lookup first, so these are O(1).
+  //   (2) a single `auth` JSON blob — the resolver's fallback splits the
+  //       placeholder at the first dot, finds `auth`, JSON-parses it, and
+  //       walks the rest of the path. This is how `{{auth.profile.name}}`
+  //       drills into a nested data source object.
+  //
+  // Spread order keeps explicit `data:` config wins over auto-exposed
+  // identity columns, and `type`/`email` always win over both.
   if (authType && authEmail) {
-    variables.set("auth.type", authType);
-    variables.set("auth.email", authEmail);
-    if (currentUserData) {
-      variables.set("currentUser", JSON.stringify(currentUserData));
+    const combined: Record<string, unknown> = {
+      ...authProfile,
+      ...authDataSources,
+      type: authType,
+      email: authEmail,
+    };
+    for (const [key, value] of Object.entries(combined)) {
+      variables.set(`auth.${key}`, typeof value === "string" ? value : JSON.stringify(value));
     }
+    variables.set("auth", JSON.stringify(combined));
   }
 
   // Form-specific pre-processing

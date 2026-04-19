@@ -201,6 +201,47 @@ Rules when adapting this template:
 - Keep raw ISO in sheet columns (so filters/sorts work) and only use the formatted field in user-facing fields (`gmail-send body`, `dialog message`, any `__response` shown directly).
 - For calendar integration, add a `calendar-create` node between `prepare` and `write_sheet` (see `references/sample-interview.md`).
 
+## API Workflow Template (Read Own Records via `auth.<key>` — no `sheet-read` needed)
+
+When a logged-in user should only see their own rows in a sheet, configure a `data:` source on the account type in `settings.json` and the runtime exposes the pre-filtered rows as `{{auth.<key>}}` on every authenticated request. No `sheet-read` node, no forgettable `"{{auth.email}}"` filter, no way for an author to accidentally leak another user's data.
+
+**Configure once** (hand-edit `settings.json` under `hubwork.accounts.<TYPE>`):
+
+```json
+{
+  "identity": { "sheet": "accounts", "emailColumn": "email" },
+  "data": {
+    "meetings": {
+      "sheet": "meetings",
+      "matchBy": "user_email",
+      "fields": ["id", "title", "scheduled_at", "status", "created_at"],
+      "shape": "array",
+      "sort": "-scheduled_at",
+      "limit": 100
+    }
+  }
+}
+```
+
+Each key under `data:` becomes one `{{auth.<key>}}` variable scoped to the authenticated user. `sheet` / `matchBy` select the sheet and the column that must equal the user's email; `fields` limits what's exposed; `shape: "array"` returns a list, `"object"` returns the first match only; `sort` takes a column name, prefix `-` for descending; `limit` caps the result.
+
+**Use in the workflow** — list endpoint shrinks to a single `set` node:
+
+```yaml
+trigger:
+  requireAuth: ACCOUNT_TYPE
+
+nodes:
+  - id: respond
+    type: set
+    name: __response
+    value: "{{auth.meetings}}"
+```
+
+Deep dot access works too (e.g. `{{auth.meetings[0].title}}` for the latest row's title) because the runtime stores the combined `auth` object as a JSON blob that the template resolver lazily parses. Use `"object"` shape when you only want one row (`{{auth.profile.company}}`), `"array"` when you want every matching row.
+
+Use this instead of a `sheet-read` whenever the only filter is "records for the authenticated user". Drop back to `sheet-read` for admin views (no per-user filter) or when you need query-time filtering by other columns.
+
 ## Form Submission (No JS Required)
 
 ```html

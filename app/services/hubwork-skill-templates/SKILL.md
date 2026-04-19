@@ -51,7 +51,11 @@ NEVER use `steps:`, `action:`, `params:`, `readSheet`, or other invented syntax.
 - GET (`gemihub.get("path?key=v")`) → `{{request.query.key}}`
 - POST (`gemihub.post("path", {key: "v"})`) → `{{request.body.key}}`
 - HTTP method itself: `{{request.method}}`
-- When `requireAuth` is set: `{{auth.email}}`, `{{auth.type}}`, `{{currentUser}}`
+- When `requireAuth` is set, every authenticated-user variable is under the `auth.*` namespace:
+  - `{{auth.email}}` — caller's email (always set)
+  - `{{auth.type}}` — account type name, matches the `requireAuth` value (always set)
+  - `{{auth.<column>}}` — any NON-email column on the identity sheet row for this user (e.g. `{{auth.name}}`, `{{auth.created_at}}`, `{{auth.logined_at}}` for the default `accounts` sheet). The column header must exist on the sheet; if a value is blank the variable resolves to an empty string.
+  - `{{auth.<dataKey>}}` — only when the account config declares a `data:` source (advanced). Each data source key is exposed as a JSON string; access nested fields with dot notation (`{{auth.profile.name}}`).
 
 A workflow that reads `{{query.X}}` (no `request.` prefix) silently resolves to "" and the downstream node breaks.
 

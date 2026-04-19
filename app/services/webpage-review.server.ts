@@ -54,6 +54,10 @@ Check each file against the skill's Pre-Save & Verification Checklist. Evaluate 
 - \`crypto\` is NOT defined in the script sandbox (neither Web Crypto nor Node crypto). Flag any use of \`crypto.randomUUID()\`, \`crypto.getRandomValues(...)\`, \`crypto.subtle.*\`, or \`require('crypto')\` as high severity with the fix "use \`utils.randomUUID()\`" — at runtime these throw \`ReferenceError: crypto is not defined\` and the API returns 500.
 - Also flag \`fetch\`, \`XMLHttpRequest\`, \`setTimeout\` longer than the node, \`window.*\`, \`document.*\`, \`require(...)\`, \`process.*\` — none are available inside a script node. \`Date\`, \`Intl\`, \`JSON\`, \`Math\`, \`RegExp\`, \`Map\`, \`Set\`, \`Promise\` and the rest of the ECMAScript standard library ARE available.
 
+**Authenticated-user variables** (\`auth.*\` only)
+- The router populates \`auth.email\`, \`auth.type\`, plus one \`auth.<column>\` per non-email column on the identity sheet row (e.g. \`auth.name\`, \`auth.created_at\`). Advanced setups also get \`auth.<dataKey>\` for each configured \`data:\` source.
+- Verify any \`auth.<column>\` reference matches an actual column on the identity sheet (the default \`accounts\` sheet has \`email\`, \`name\`, \`created_at\`, \`logined_at\`). An unknown column like \`auth.firstName\` / \`auth.id\` / \`auth.userId\` leaves the placeholder literal — flag it as high severity with the fix "remove, or add the column to the identity sheet first". \`auth.email\` and \`auth.type\` are always safe regardless of sheet shape.
+
 **Template interpolation (\`{{var}}\` vs \`{{var:json}}\`) — how the engine actually resolves these:**
 - \`{{var}}\` outputs the raw value (primitives via \`String(v)\`, objects via \`JSON.stringify(v)\`) with NO surrounding quotes added.
 - \`{{var:json}}\` outputs the value with JSON special characters escaped (\`"\`, \`\\\`, newlines, etc.), also with NO surrounding quotes added. It is meant for embedding INSIDE a JSON / JS string literal.
