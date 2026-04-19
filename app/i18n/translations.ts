@@ -845,7 +845,7 @@ const en: TranslationStrings = {
   "chat.autoReview.issuesLabel": "Issues",
   "chat.autoReview.autoFixing": "_Attempting an auto-fix pass…_",
   "chat.autoReview.failed": "Auto-review failed: {{message}}",
-  "chat.autoReview.fixPrompt": "The automated review found the following high-severity issues. Read each affected file back with read_drive_file, fix the issue, and re-save the corrected file with save-file. Do NOT propose a new plan — just fix and save.\n\n{{issues}}",
+  "chat.autoReview.fixPrompt": "The automated review found the following high-severity issues. Read each affected file back with read_drive_file, fix the issue, and re-save the corrected file with update_drive_file. Do NOT propose a new plan — just fix and save.\n\n{{issues}}",
 
   // Welcome hints
   "chat.welcomeTitle": "Start a conversation with AI",
@@ -1618,7 +1618,7 @@ const ja: TranslationStrings = {
   "chat.autoReview.issuesLabel": "検出された問題",
   "chat.autoReview.autoFixing": "_自動で修正を試みます…_",
   "chat.autoReview.failed": "自動レビューに失敗しました: {{message}}",
-  "chat.autoReview.fixPrompt": "自動レビューで以下の重大な問題が見つかりました。各ファイルを read_drive_file で読み直し、問題を修正してから save-file で上書き保存してください。新たなプラン提示は不要です。\n\n{{issues}}",
+  "chat.autoReview.fixPrompt": "自動レビューで以下の重大な問題が見つかりました。各ファイルを read_drive_file で読み直し、問題を修正してから update_drive_file で上書き保存してください。新たなプラン提示は不要です。\n\n{{issues}}",
 
   // Welcome hints
   "chat.welcomeTitle": "AIとの会話を始めましょう",

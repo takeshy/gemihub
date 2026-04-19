@@ -10,7 +10,6 @@ import SKILL_MD from "./hubwork-skill-templates/SKILL.md?raw";
 import REF_API from "./hubwork-skill-templates/references/api-reference.md?raw";
 import REF_PATTERNS from "./hubwork-skill-templates/references/page-patterns.md?raw";
 import REF_SAMPLE_INTERVIEW from "./hubwork-skill-templates/references/sample-interview.md?raw";
-import WF_SAVE_FILE from "./hubwork-skill-templates/workflows/save-file.yaml?raw";
 import INITIAL_SCHEMA from "./hubwork-skill-templates/initial-schema.md?raw";
 
 const SKILL_FILES: SkillFile[] = [
@@ -18,7 +17,6 @@ const SKILL_FILES: SkillFile[] = [
   { path: "skills/webpage-builder/references/api-reference.md", content: REF_API, mimeType: "text/markdown" },
   { path: "skills/webpage-builder/references/page-patterns.md", content: REF_PATTERNS, mimeType: "text/markdown" },
   { path: "skills/webpage-builder/references/sample-interview.md", content: REF_SAMPLE_INTERVIEW, mimeType: "text/markdown" },
-  { path: "skills/webpage-builder/workflows/save-file.yaml", content: WF_SAVE_FILE, mimeType: "text/plain" },
   { path: "web/__gemihub/schema.md", content: INITIAL_SCHEMA, mimeType: "text/markdown" },
 ];
 
