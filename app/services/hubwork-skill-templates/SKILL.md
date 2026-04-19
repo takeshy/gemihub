@@ -182,6 +182,7 @@ Before saving AND after reading back each file, check ALL applicable items:
 - [ ] POST endpoints for data changes
 - [ ] Sets `__response` variable for output using `value: "{{var}}"` — NOT `"{{var:json}}"`
 - [ ] `sheet-write`/`sheet-update`/`sheet-delete` `data:` is a single-quoted JSON string (e.g. `data: '[{"id": "{{prepared.id}}"}]'`) — NEVER a YAML mapping (`data:\n  id: "..."`). The handler `JSON.parse`s the value; a YAML mapping crashes at runtime.
+- [ ] **Any placeholder embedded inside a JSON string literal** (inside `"..."` in `sheet-write` / `sheet-update` / `sheet-delete` `data:`, `sheet-read` / `sheet-update` / `sheet-delete` `filter:`, or `http` `body:`) **uses `:json` when the value can contain `"`, `\`, or newlines.** User-derived values — `{{request.body.*}}`, `{{auth.email}}`, and any `{{prepared.*}}` computed from them (e.g. a title built from a user name) — MUST be `"{{var:json}}"`. Bare `"{{var}}"` is only safe for values you know are alphanumeric: UUIDs, ISO-8601 timestamps from `new Date().toISOString()`, and similar engine-generated primitives. A single `"` in the value otherwise breaks `JSON.parse` at runtime and the API returns a 500.
 - [ ] UUIDs, timestamps, and any user-facing date are produced by a `script` node and referenced via `{{<saveTo>.field}}` — `gmail-send` body and `dialog` messages must use the script-formatted value (e.g. `{{prepared.displayRange}}`), NEVER the raw `{{request.body.start}}` ISO timestamp.
 
 ### Mock files

@@ -208,15 +208,17 @@ trigger:
 
 nodes:
   - id: prepare
-    comment: "Generate the UUID, storage timestamp, and a human-readable date string. The template engine has no UUID / date-format helpers, so these always come from a script node. Request values are embedded safely inside JS string literals with :json + surrounding \"...\"."
+    comment: "Generate the UUID, storage timestamp, a human-readable date string, and any values that mix user input with fixed text. The template engine has no UUID / date-format helpers, so these always come from a script node. Request values are embedded safely inside JS string literals with :json + surrounding \"...\"."
     type: script
     saveTo: prepared
     code: |
       const start = "{{request.body.start:json}}";
       const end = "{{request.body.end:json}}";
+      const name = "{{request.body.name:json}}";
       return {
         id: crypto.randomUUID(),
         now: new Date().toISOString(),
+        subject: name + " - Pre-interview booking",
         displayRange:
           new Date(start).toLocaleString("en-US", {
             dateStyle: "long", timeStyle: "short", timeZone: "UTC",
@@ -227,10 +229,10 @@ nodes:
       };
 
   - id: create_event
-    comment: "Create the booking on Google Calendar"
+    comment: "Create the booking on Google Calendar. Reuse prepared.subject so the calendar summary and the sheet subject stay in sync."
     type: calendar-create
     calendarId: primary
-    summary: "{{request.body.name}} - Pre-interview booking"
+    summary: "{{prepared.subject}}"
     start: "{{request.body.start}}"
     end: "{{request.body.end}}"
 
@@ -238,7 +240,7 @@ nodes:
     comment: "Append the booking to the meetings sheet; id/created_at reuse the values the script node already produced"
     type: sheet-write
     sheet: meetings
-    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email}}", "subject": "{{request.body.name}} - Pre-interview booking", "start_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email:json}}", "subject": "{{prepared.subject:json}}", "start_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
 
   - id: send_mail
     comment: "Send the booking confirmation. Use prepared.displayRange (locale-formatted) in the body — never the raw ISO string from request.body."

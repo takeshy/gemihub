@@ -224,6 +224,46 @@ Rules for `script`:
 - `crypto.randomUUID()`, `Intl.DateTimeFormat`, `toLocaleString`, and all standard `Date` / string APIs are available.
 - No `fetch`, no `setTimeout` / `setInterval` beyond node completion, no DOM — pure computation only.
 
+### `:json` Modifier — Applies to Every JSON String Literal, Not Just Script Code
+
+The same `{{var}}` vs `"{{var:json}}"` rule from the `script` node governs **any placeholder embedded inside a JSON string literal anywhere in the workflow**. The template engine resolves `{{var}}` to `String(v)` (primitives) or `JSON.stringify(v)` (objects) with NO surrounding quotes; `{{var:json}}` escapes `"`, `\`, and newlines so the value is safe inside a string literal. Fields that parse their resolved value as JSON at runtime include:
+
+- `sheet-write` / `sheet-update` / `sheet-delete` `data:` — `JSON.parse`d to get the row(s) to write
+- `sheet-read` / `sheet-update` / `sheet-delete` `filter:` — `JSON.parse`d to get the filter object
+- `http` `body:` when you hand-build a JSON payload as a string
+
+**Rule for these fields:** inside every `"..."` JSON string value, use `"{{var:json}}"` for anything the user can influence and `"{{var}}"` only for values you know are alphanumeric.
+
+| Source                                     | Safe as `"{{var}}"`? |
+| ------------------------------------------ | -------------------- |
+| UUID from `crypto.randomUUID()` / `Math.random().toString(36)` | ✅ |
+| ISO-8601 timestamp from `new Date().toISOString()` or `{{request.body.start}}` if front-end sent an ISO string | ✅ |
+| Email address (`{{auth.email}}`) — emails *can* technically contain `"` per RFC 5321 | ⚠️ use `:json` defensively |
+| Free-text user input (`{{request.body.name}}`, `{{request.body.message}}`, `{{request.body.description}}`) | ❌ MUST use `:json` |
+| Any `{{prepared.*}}` field whose script computes from user input (e.g. `title = userName + " - ..."`) | ❌ MUST use `:json` |
+
+```yaml
+# ✅ CORRECT — user-derived fields use :json, engine-derived fields bare
+- id: write_sheet
+  type: sheet-write
+  sheet: meetings
+  data: '[{"id": "{{prepared.id}}", "user_email": "{{auth.email:json}}", "title": "{{prepared.title:json}}", "scheduled_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+
+# ✅ CORRECT — filter with user-controlled query param
+- id: read_tickets
+  type: sheet-read
+  sheet: Tickets
+  filter: '{"status": "{{request.query.status:json}}", "email": "{{auth.email:json}}"}'
+  saveTo: tickets
+
+# ❌ WRONG — title contains user's name, a single " breaks JSON.parse and the API 500s
+- id: write_sheet
+  type: sheet-write
+  data: '[{"title": "{{prepared.title}}"}]'
+```
+
+The only exception is `__response` `value: "{{var}}"`, which must NOT use `:json` — see the top-level SKILL.md rule. There, the engine's `JSON.stringify` of `var` is the final response body, so `:json` would double-escape.
+
 ### `calendar-list` Response Format
 
 `calendar-list` returns a JSON array of event objects. **`start` and `end` are flat ISO 8601 strings, NOT nested objects.** Use `evt.start` directly — never `evt.start.dateTime`.
