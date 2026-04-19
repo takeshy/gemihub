@@ -405,7 +405,7 @@ export function MarkdownFileEditor({
             value={content.replace(/^\u00A0$/gm, "")}
             onChange={(e) => updateContent(e.target.value)}
             onSelect={handleSelect}
-            className="w-full h-full font-mono text-xs leading-none bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            className="w-full h-full font-mono text-sm leading-relaxed bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
           />
         </div>
