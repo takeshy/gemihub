@@ -386,6 +386,36 @@ Execute JavaScript code in a sandboxed environment (no DOM, network, or storage 
 - **saveTo** (optional): Variable for the result
 - **timeout** (optional): Timeout in milliseconds (default: 10000)
 
+##### Runtime — what's available inside \`code\`
+
+The script runs in one of two sandboxes depending on context: an \`isolated-vm\` V8 isolate on the server (hubwork web/api workflows, scheduled workflows) and a sandboxed iframe on the client (chat-invoked workflows, in-IDE execution). Both sandboxes expose the **same minimal API surface** so a script written for one runs unchanged in the other.
+
+**Available (use freely):**
+- Full ECMAScript standard library — \`Date\`, \`JSON\`, \`Math\`, \`RegExp\`, \`Map\`, \`Set\`, \`Promise\`, \`Array\`, \`String\`, \`Number\`, etc.
+- \`Intl.DateTimeFormat\`, \`Intl.NumberFormat\`, \`Intl.Collator\`, \`Date.prototype.toLocaleString\` — locale-aware formatting.
+- \`utils\` — GemiHub helper namespace injected into both runtimes. Use these instead of runtime-specific globals (\`crypto.*\`, Node \`require\`, etc.) so the same script works everywhere.
+  - \`utils.randomUUID()\` — returns an RFC 4122 v4 UUID string. Use for row IDs, event IDs, idempotency keys. **Prefer this over \`Math.random()\`-based IDs** — it's collision-safe and identical on client/server.
+
+**NOT available** — referencing any of these throws \`ReferenceError\`: \`crypto\` (use \`utils.randomUUID()\` instead), \`fetch\` / \`XMLHttpRequest\` (use an \`http\` node), \`setTimeout\` / \`setInterval\` beyond node completion, \`window\` / \`document\` / DOM, \`localStorage\` / \`IndexedDB\`, \`process\` / \`require\` / \`import()\`.
+
+Typical pattern (the skill-generated \`prepare\` script):
+\`\`\`yaml
+- id: prepare
+  type: script
+  saveTo: prepared
+  code: |
+    const name = "{{request.body.name:json}}";
+    const start = "{{request.body.start:json}}";
+    return {
+      id: utils.randomUUID(),
+      now: new Date().toISOString(),
+      title: name + " - Meeting",
+      displayRange: new Date(start).toLocaleString("en-US", {
+        dateStyle: "long", timeStyle: "short", timeZone: "UTC",
+      }),
+    };
+\`\`\`
+
 ### Variable interpolation in script code — READ CAREFULLY
 
 The substitution is a plain text replace. Pay attention to what makes valid JavaScript AFTER substitution.

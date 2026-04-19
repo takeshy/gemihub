@@ -49,6 +49,11 @@ Check each file against the skill's Pre-Save & Verification Checklist. Evaluate 
 - Sets a \`__response\` variable for the output
 - Uses \`new Date(evt.start)\` / \`new Date(evt.end)\` for calendar events (never \`evt.start.dateTime\`)
 
+**Script node runtime** (inside \`type: script\` \`code:\` blocks)
+- \`utils.randomUUID()\` is the canonical way to generate a UUID — it is the single GemiHub-provided helper, injected into both the server isolate and the client sandbox.
+- \`crypto\` is NOT defined in the script sandbox (neither Web Crypto nor Node crypto). Flag any use of \`crypto.randomUUID()\`, \`crypto.getRandomValues(...)\`, \`crypto.subtle.*\`, or \`require('crypto')\` as high severity with the fix "use \`utils.randomUUID()\`" — at runtime these throw \`ReferenceError: crypto is not defined\` and the API returns 500.
+- Also flag \`fetch\`, \`XMLHttpRequest\`, \`setTimeout\` longer than the node, \`window.*\`, \`document.*\`, \`require(...)\`, \`process.*\` — none are available inside a script node. \`Date\`, \`Intl\`, \`JSON\`, \`Math\`, \`RegExp\`, \`Map\`, \`Set\`, \`Promise\` and the rest of the ECMAScript standard library ARE available.
+
 **Template interpolation (\`{{var}}\` vs \`{{var:json}}\`) — how the engine actually resolves these:**
 - \`{{var}}\` outputs the raw value (primitives via \`String(v)\`, objects via \`JSON.stringify(v)\`) with NO surrounding quotes added.
 - \`{{var:json}}\` outputs the value with JSON special characters escaped (\`"\`, \`\\\`, newlines, etc.), also with NO surrounding quotes added. It is meant for embedding INSIDE a JSON / JS string literal.

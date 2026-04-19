@@ -162,7 +162,7 @@ nodes:
       const start = "{{request.body.start:json}}";
       const end = "{{request.body.end:json}}";
       return {
-        id: crypto.randomUUID(),
+        id: utils.randomUUID(),
         now: new Date().toISOString(),
         displayRange:
           new Date(start).toLocaleString("en-US", {

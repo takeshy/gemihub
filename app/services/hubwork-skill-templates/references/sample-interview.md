@@ -216,7 +216,7 @@ nodes:
       const end = "{{request.body.end:json}}";
       const name = "{{request.body.name:json}}";
       return {
-        id: crypto.randomUUID(),
+        id: utils.randomUUID(),
         now: new Date().toISOString(),
         subject: name + " - Pre-interview booking",
         displayRange:

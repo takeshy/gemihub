@@ -178,7 +178,7 @@ For API workflows, commonly used nodes:
 
 ### `script` Node — Dynamic Values & Display Formatting
 
-The template engine has no date-format / UUID / locale helpers. Use a `script` node to generate these values, then reference them from later nodes via `{{saveTo.*}}`. The code runs server-side in an isolated VM with full standard JS (`crypto.randomUUID()`, `new Date()`, `Intl.DateTimeFormat`, etc.) but NO network / DOM / storage.
+The template engine has no date-format / UUID / locale helpers. Use a `script` node to generate these values, then reference them from later nodes via `{{saveTo.*}}`. The code runs in a sandboxed V8 (server: `isolated-vm`, client: sandboxed iframe); see the Rules section below for what's available.
 
 ```yaml
 - id: prepare
@@ -188,7 +188,7 @@ The template engine has no date-format / UUID / locale helpers. Use a `script` n
     const start = "{{request.body.start:json}}";
     const end = "{{request.body.end:json}}";
     return {
-      id: crypto.randomUUID(),
+      id: utils.randomUUID(),
       now: new Date().toISOString(),
       displayRange: new Date(start).toLocaleString("en-US", {
         dateStyle: "long", timeStyle: "short", timeZone: "UTC",
@@ -221,8 +221,9 @@ Rules for `script`:
     # const events = {{events:json}} || [];   # ❌ escapes " to \" outside quotes — parse error
     # const names = {{userName:json}};        # ❌ missing quotes — bare identifier, ReferenceError
   ```
-- `crypto.randomUUID()`, `Intl.DateTimeFormat`, `toLocaleString`, and all standard `Date` / string APIs are available.
-- No `fetch`, no `setTimeout` / `setInterval` beyond node completion, no DOM — pure computation only.
+- `Date`, `Intl.*`, `JSON.*`, `Math.*`, and the rest of the ECMAScript standard library are available.
+- `utils.randomUUID()` — RFC 4122 v4 UUID string. Use for row IDs, event IDs, idempotency keys. `utils` is the only injected helper namespace (same API on server and client script sandboxes).
+- NOT available (throws `ReferenceError`): `crypto` (use `utils.randomUUID()`), `fetch`, `setTimeout`/`setInterval` beyond node completion, DOM, `process`, `require`, `import`.
 
 ### `:json` Modifier — Applies to Every JSON String Literal, Not Just Script Code
 
@@ -236,7 +237,7 @@ The same `{{var}}` vs `"{{var:json}}"` rule from the `script` node governs **any
 
 | Source                                     | Safe as `"{{var}}"`? |
 | ------------------------------------------ | -------------------- |
-| UUID from `crypto.randomUUID()` / `Math.random().toString(36)` | ✅ |
+| UUID from `utils.randomUUID()` | ✅ |
 | ISO-8601 timestamp from `new Date().toISOString()` or `{{request.body.start}}` if front-end sent an ISO string | ✅ |
 | Email address (`{{auth.email}}`) — emails *can* technically contain `"` per RFC 5321 | ⚠️ use `:json` defensively |
 | Free-text user input (`{{request.body.name}}`, `{{request.body.message}}`, `{{request.body.description}}`) | ❌ MUST use `:json` |
