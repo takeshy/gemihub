@@ -35,9 +35,24 @@ Right-click a file or folder in the file tree (or tap the `⋯` button on mobile
 
 | Menu Item | Description |
 |-----------|-------------|
+| Cache folder (N) | Download and cache every uncached file under the folder (excluding local-only `new:` placeholders). The `(N)` suffix shows how many files will be fetched. Shown only when uncached files exist in the subtree. See [Sync → Lazy-Fetch](./sync.md#lazy-fetch-uncached-files) |
+| Download as ZIP | Bundle every file in the folder into a ZIP and download |
 | Clear Cache | Bulk-delete cache for all files in the folder. If any files have unsaved changes, a confirmation dialog warns that changes will be lost; confirming deletes all cached files including modified ones. Shown only when cached files exist in the folder |
 | Rename | Rename the folder |
 | Trash | Move all files in the folder to `trash/` |
+
+### FILES Header Actions
+
+Icons on the right side of the FILES sidebar header:
+
+| Icon | Action |
+|------|--------|
+| 🗑 Trash | Delete all selected files (shown only when files are selected) |
+| 🔍 Search | Open the Quick Open / Drive search panel |
+| ＋ File | Create a new file at the current location |
+| ＋ Folder | Create a new folder at the current location |
+| ⬆ Upload | Upload local files to Drive |
+| 🗄 Cache all | Bulk-download every uncached file in the workspace. Disabled when all files are already cached or a bulk cache is in progress; the tooltip shows the pending count or live progress |
 
 ### Visibility Conditions
 

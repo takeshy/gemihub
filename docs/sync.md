@@ -23,9 +23,8 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 
 Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes.
 - **Push Badge**: Count of locally modified files, excluding system/history files and files whose content was reverted to the synced state (no net change).
-- **Pull Badge**: Count of remote changes, including new files, updates, and files deleted on remote (`localOnly`).
+- **Pull Badge**: Count of pending remote work — updates to already-cached files (`toPull`), conflicts, and files deleted on remote (`localOnly`). Brand-new remote files are **not** counted here; they are auto-registered as uncached entries during background polling and surface directly in the file tree.
 - **Nature of Change**: Clicking a badge shows a file list with icons indicating the change type:
-  - <kbd>+</kbd> (Green): New file
   - <kbd>✎</kbd> (Blue): Modified file
   - <kbd>🗑</kbd> (Red): Deleted on remote
 
@@ -47,7 +46,12 @@ File contents are cached in the IndexedDB `files` store. All edits update this c
 
 ### Background Polling
 
-The client polls for remote changes every 5 minutes while the app is active and idle. If remote changes are detected by comparing `_sync-meta.json` with local metadata, the Pull badge is updated automatically.
+The client polls for remote changes every 5 minutes while the app is active and idle. When a fresh `_sync-meta.json` is fetched:
+
+1. **Cached remote meta is refreshed** (preserving any local-only `new:` entries).
+2. **New remote files are auto-registered** into local sync meta as metadata-only (uncached) entries. The tree picks them up on the next `tree-meta-updated` event; content is fetched lazily the first time the user opens the file. This is what keeps the Pull badge from inflating just because another device added files.
+3. **`tree-meta-updated` is dispatched** when either the remote meta's `lastUpdatedAt` changed or new entries were registered, so remote-side renames/deletions/additions appear without requiring a manual Pull.
+4. **Pull / Push counts are recomputed.**
 
 ### Sync Diff
 
@@ -90,7 +94,7 @@ Uploads locally-changed files to remote.
    ├─ GET /api/sync → { remoteMeta, syncMetaFileId }
    │   └─ Server: find + read _sync-meta.json, return meta and its file ID
    ├─ Compute diff client-side (localMeta vs remoteMeta + locallyModifiedFileIds)
-   └─ Remote has any pending changes (conflicts, toPull, or remoteOnly) → error "Pull first"
+   └─ Remote has blocking changes (conflicts, edit-delete conflicts, toPull, or remote-deleted entries still in local meta) → error "Pull first". Pure new remote files (`remoteOnly`) do not block push.
 
 2. BATCH UPLOAD: Update all files via single API call
    ├─ Get modified file IDs from IndexedDB editHistory
@@ -144,7 +148,7 @@ Uploads locally-changed files to remote.
 
 ## Pull Changes (Incremental)
 
-Downloads only remotely-changed files to local cache.
+Downloads remotely-changed files to local cache. Brand-new remote files are registered as metadata-only (uncached) entries and are fetched lazily when opened.
 
 ### Flow
 
@@ -152,8 +156,8 @@ Downloads only remotely-changed files to local cache.
 2. **Check conflicts** — if any, stop and show conflict UI
 3. **Clean up `localOnly` files** — files that exist locally but were deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta
 4. **Combine** `toPull` + `remoteOnly` arrays
-5. **Mobile Optimization**: On mobile devices, binary file contents (images, PDF, etc.) are NOT downloaded to save storage. Metadata is updated so they appear in the file tree, but content is fetched only when opened.
-6. **Download file contents** in parallel (max 5 concurrent)
+5. **Skip download for uncached-by-design entries**: `remoteOnly` (new remote files), binary files on mobile, and files larger than 100 MB. Their metadata is still written to local sync meta so the tree displays them.
+6. **Download remaining files** in parallel (max 5 concurrent)
 7. **Update IndexedDB cache** with downloaded files (for text files, `addCommitBoundary` is called before updating to preserve edit history session boundaries)
 8. **Update local sync meta** with new checksums
 9. **Fire "sync-complete" and "files-pulled" events** and update localModifiedCount
@@ -179,7 +183,30 @@ Downloads only remotely-changed files to local cache.
 
 | Local Meta | Remote Meta | Action |
 |:----------:|:-----------:|--------|
-| - | A | **remoteOnly** → Download |
+| - | A | **remoteOnly** → Register metadata only (uncached); content fetched on first open |
+
+---
+
+## Lazy-Fetch (Uncached Files)
+
+A file is **uncached** when its metadata is tracked in local sync meta but no entry exists in the IndexedDB `files` store. Three paths produce uncached entries:
+
+| Source | Reason |
+|--------|--------|
+| Background polling auto-register | New remote files discovered between syncs |
+| Incremental Pull | `remoteOnly` entries from the diff |
+| Mobile / large-file skip | Binary files on mobile, files over 100 MB |
+
+When the user opens an uncached file, `useFileWithCache` fetches the content from Drive, writes it into the cache, and dispatches a `file-cached` event that the file tree uses to update its indicator. No additional sync work is required.
+
+### Bulk Caching
+
+Uncached files can be downloaded on demand without waiting for first-open:
+
+- **Folder right-click → "Cache folder (N)"**: Caches every uncached file under the selected folder (`new:` placeholders excluded). Only shown when uncached files exist in that subtree.
+- **FILES header → Cache icon**: Caches every uncached file in the workspace. Disabled when all files are already cached or a bulk cache is in progress; the tooltip shows the pending count or current progress.
+
+Both paths route through `useSync.cacheFilesByIds`, which chunks the IDs (200 per request), calls the `pullDirect` API, and writes each response into the cache. `cachingProgress` is exposed on the hook for UI feedback and the shared sync lock prevents concurrent bulk operations.
 
 ---
 
