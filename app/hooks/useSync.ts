@@ -24,6 +24,7 @@ import {
   isBinaryMimeType,
   isLargeFile,
   getSyncCompletionStatus,
+  SYNC_EXCLUDED_FILE_NAMES,
 } from "~/services/sync-client-utils";
 import { computeSyncDiff, type SyncMeta } from "~/services/sync-diff";
 import {
@@ -51,6 +52,7 @@ export function useSync() {
   const [error, setError] = useState<string | null>(null);
   const [localModifiedCount, setLocalModifiedCount] = useState(0);
   const [remoteModifiedCount, setRemoteModifiedCount] = useState(0);
+  const [cachingProgress, setCachingProgress] = useState<{ total: number; done: number } | null>(null);
 
   // Mutex to prevent concurrent sync operations (push/pull/resolve/fullPull)
   const syncLockRef = useRef(false);
@@ -184,6 +186,7 @@ export function useSync() {
       // Cache remoteMeta in IndexedDB for pull dialog to use
       if (remoteMeta) {
         const existingCached = await getCachedRemoteMeta();
+        const remoteChanged = existingCached?.lastUpdatedAt !== remoteMeta.lastUpdatedAt;
         // Preserve local-only "new:" entries that haven't been migrated to Drive yet
         const mergedFiles = { ...remoteMeta.files };
         if (existingCached) {
@@ -200,6 +203,36 @@ export function useSync() {
           files: mergedFiles,
           cachedAt: Date.now(),
         });
+
+        // Auto-register new remote files into localSyncMeta as uncached entries.
+        // Without this, newly-created files on Drive would inflate the pull badge.
+        // Tree is always visible; content is lazy-fetched by useFileWithCache.
+        const localMeta = await getLocalSyncMeta();
+        const localFiles = localMeta?.files ?? {};
+        const newEntries: Record<string, LocalSyncMeta["files"][string]> = {};
+        for (const [id, f] of Object.entries(remoteMeta.files)) {
+          if (localFiles[id]) continue;
+          if (SYNC_EXCLUDED_FILE_NAMES.has(f.name)) continue;
+          newEntries[id] = {
+            md5Checksum: f.md5Checksum,
+            modifiedTime: f.modifiedTime,
+            name: f.name,
+            size: f.size,
+          };
+        }
+        if (Object.keys(newEntries).length > 0) {
+          await setLocalSyncMeta({
+            id: "current",
+            lastUpdatedAt: new Date().toISOString(),
+            files: { ...localFiles, ...newEntries },
+          });
+        }
+
+        // Rebuild tree when the remote meta changed or we auto-registered new entries.
+        // No detail → handler re-reads CachedRemoteMeta + localMeta itself.
+        if (remoteChanged || Object.keys(newEntries).length > 0) {
+          window.dispatchEvent(new Event("tree-meta-updated"));
+        }
       }
 
       // Recompute both push and pull counts from the fresh remoteMeta
@@ -446,9 +479,11 @@ export function useSync() {
       }
 
       // 6. Download non-conflict files via pullDirect
-      // remoteOnly files (new files from other devices) are also downloaded.
+      // remoteOnly files (new files from other devices) are registered as metadata-only
+      // (uncached) — content is lazy-fetched when the user opens the file.
       const allFilesToPull = [...diff.toPull, ...diff.remoteOnly];
       const remoteFiles = remoteMeta?.files ?? {};
+      const remoteOnlySet = new Set(diff.remoteOnly);
 
       // Separate ignored modified files — metadata only, no download
       const ignoredModifiedIds = new Set(
@@ -465,8 +500,9 @@ export function useSync() {
       if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
         const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-        // Skip downloading: binary on mobile, large files (>100MB) everywhere
+        // Skip downloading: new remote files (uncached by design), binary on mobile, large files
         const filesToDownload = filesToPull.filter((id) => {
+          if (remoteOnlySet.has(id)) return false;
           if (isMobile && isBinaryMimeType(remoteFiles[id]?.mimeType)) return false;
           if (isLargeFile(remoteFiles[id]?.size)) return false;
           return true;
@@ -478,12 +514,13 @@ export function useSync() {
           if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
         }
 
-        // Track skipped files (mobile binary / large files) in localSyncMeta without caching content
+        // Track metadata-only entries (new remote files, mobile binary, large files) in localSyncMeta
         for (const id of filesToPull) {
           const rm = remoteFiles[id];
+          const isNewRemote = remoteOnlySet.has(id);
           const skippedMobile = isMobile && isBinaryMimeType(rm?.mimeType);
           const skippedLarge = isLargeFile(rm?.size);
-          if (skippedMobile || skippedLarge) {
+          if (isNewRemote || skippedMobile || skippedLarge) {
             updatedMeta.files[id] = {
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
@@ -841,6 +878,68 @@ export function useSync() {
     setSyncStatus((prev) => (prev === "error" ? "idle" : prev));
   }, []);
 
+  const cacheFilesByIds = useCallback(async (fileIds: string[]) => {
+    if (fileIds.length === 0) return;
+    if (syncLockRef.current) { console.warn("[useSync] cacheFilesByIds skipped: sync already in progress"); return; }
+
+    const remote = await getCachedRemoteMeta();
+    const remoteFiles = remote?.files ?? {};
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+
+    const targets = fileIds.filter((id) => {
+      if (isMobile && isBinaryMimeType(remoteFiles[id]?.mimeType)) return false;
+      if (isLargeFile(remoteFiles[id]?.size)) return false;
+      return true;
+    });
+    if (targets.length === 0) return;
+
+    syncLockRef.current = true;
+    setSyncStatus("pulling");
+    setError(null);
+    setCachingProgress({ total: targets.length, done: 0 });
+
+    const CHUNK_SIZE = 200;
+    try {
+      for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
+        const chunk = targets.slice(i, i + CHUNK_SIZE);
+        const mimeTypes: Record<string, string> = {};
+        for (const id of chunk) {
+          if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
+        }
+        const res = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "pullDirect", fileIds: chunk, mimeTypes }),
+        });
+        if (!res.ok) throw new Error("Failed to cache files");
+        const data = await res.json();
+
+        for (const file of data.files as Array<{ fileId: string; content: string; encoding?: "base64" }>) {
+          const rm = remoteFiles[file.fileId];
+          if (!file.encoding) await addCommitBoundary(file.fileId);
+          await setCachedFile({
+            fileId: file.fileId,
+            content: file.content,
+            md5Checksum: rm?.md5Checksum ?? "",
+            modifiedTime: rm?.modifiedTime ?? "",
+            cachedAt: Date.now(),
+            fileName: rm?.name,
+            ...(file.encoding ? { encoding: file.encoding } : {}),
+          });
+          window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: file.fileId } }));
+        }
+        setCachingProgress({ total: targets.length, done: Math.min(i + chunk.length, targets.length) });
+      }
+      setSyncStatus("idle");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Cache failed");
+      setSyncStatus("error");
+    } finally {
+      syncLockRef.current = false;
+      setCachingProgress(null);
+    }
+  }, []);
+
   return {
     syncStatus,
     lastSyncTime,
@@ -848,11 +947,13 @@ export function useSync() {
     error,
     localModifiedCount,
     remoteModifiedCount,
+    cachingProgress,
     push,
     pull,
     resolveConflict,
     fullPull,
     clearError,
     checkRemoteChanges,
+    cacheFilesByIds,
   };
 }

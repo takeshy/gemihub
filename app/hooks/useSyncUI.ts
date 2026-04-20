@@ -22,6 +22,8 @@ export function useSyncUI() {
     fullPull,
     clearError,
     checkRemoteChanges,
+    cacheFilesByIds,
+    cachingProgress,
   } = useSync();
 
   const [showConflictDialog, setShowConflictDialog] = useState(false);
@@ -57,6 +59,8 @@ export function useSyncUI() {
     fullPull,
     clearError,
     checkRemoteChanges,
+    cacheFilesByIds,
+    cachingProgress,
 
     // Dialog state
     showConflictDialog,

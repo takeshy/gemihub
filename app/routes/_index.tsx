@@ -299,6 +299,8 @@ function IDELayout({
     resolveConflict,
     clearError,
     checkRemoteChanges,
+    cacheFilesByIds,
+    cachingProgress,
     showConflictDialog,
     setShowConflictDialog,
     showPasswordPrompt,
@@ -366,6 +368,8 @@ function IDELayout({
         clearSyncError={clearError}
         pullDialogTrigger={pullDialogTrigger}
         setPullDialogTrigger={setPullDialogTrigger}
+        cacheFilesByIds={cacheFilesByIds}
+        cachingProgress={cachingProgress}
       />
       </SkillProvider>
       </PluginProvider>
@@ -423,6 +427,8 @@ function IDEContent({
   clearSyncError,
   pullDialogTrigger,
   setPullDialogTrigger,
+  cacheFilesByIds,
+  cachingProgress,
 }: {
   settings: UserSettings;
   hasGeminiApiKey: boolean;
@@ -465,6 +471,8 @@ function IDEContent({
   clearSyncError: () => void;
   pullDialogTrigger: number;
   setPullDialogTrigger: (v: number | ((prev: number) => number)) => void;
+  cacheFilesByIds: (ids: string[]) => Promise<void>;
+  cachingProgress: { total: number; done: number } | null;
 }) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -1007,6 +1015,8 @@ function IDEContent({
       encryptionEnabled={settings.encryption.enabled}
       onSearchOpen={() => setShowSearch(true)}
       showManagementFolders={settings.showManagementFolders}
+      cacheFilesByIds={cacheFilesByIds}
+      cachingProgress={cachingProgress}
     />
   );
 
@@ -1481,6 +1491,8 @@ function DriveFileTreeWithContext(props: {
   encryptionEnabled: boolean;
   onSearchOpen?: () => void;
   showManagementFolders?: boolean;
+  cacheFilesByIds: (ids: string[]) => Promise<void>;
+  cachingProgress: { total: number; done: number } | null;
 }) {
   const { setFileList } = useEditorContext();
   return (

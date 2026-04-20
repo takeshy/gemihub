@@ -250,6 +250,8 @@ export interface TranslationStrings {
   "contextMenu.clearCache": string;
   "contextMenu.clearCacheModified": string;
   "contextMenu.clearCacheSkipModified": string;
+  "contextMenu.cacheFolder": string;
+  "fileTree.cacheAll": string;
   "contextMenu.publish": string;
   "contextMenu.unpublish": string;
   "contextMenu.copyLink": string;
@@ -1023,6 +1025,8 @@ const en: TranslationStrings = {
   "contextMenu.clearCache": "Clear Cache",
   "contextMenu.clearCacheModified": "This file has unsaved changes that will be lost. Continue?",
   "contextMenu.clearCacheSkipModified": "Some files have unsaved changes that will be lost. Continue?",
+  "contextMenu.cacheFolder": "Cache folder",
+  "fileTree.cacheAll": "Cache all files",
   "contextMenu.publish": "Publish to Web",
   "contextMenu.unpublish": "Unpublish",
   "contextMenu.copyLink": "Copy Share Link",
@@ -1796,6 +1800,8 @@ const ja: TranslationStrings = {
   "contextMenu.clearCache": "キャッシュクリア",
   "contextMenu.clearCacheModified": "未保存の変更がありますが、変更は失われます。続行しますか？",
   "contextMenu.clearCacheSkipModified": "未保存の変更があるファイルがありますが、変更は失われます。続行しますか？",
+  "contextMenu.cacheFolder": "フォルダをキャッシュ",
+  "fileTree.cacheAll": "すべてキャッシュ",
   "contextMenu.publish": "ウェブに公開",
   "contextMenu.unpublish": "公開を解除",
   "contextMenu.copyLink": "共有リンクをコピー",

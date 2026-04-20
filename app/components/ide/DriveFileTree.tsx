@@ -29,6 +29,7 @@ import {
   Link2,
   Search,
   MoreHorizontal,
+  Database,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useIsMobile } from "~/hooks/useIsMobile";
@@ -83,6 +84,8 @@ interface DriveFileTreeProps {
   onFileListChange?: (items: FileListItem[]) => void;
   onSearchOpen?: () => void;
   showManagementFolders?: boolean;
+  cacheFilesByIds: (ids: string[]) => Promise<void>;
+  cachingProgress: { total: number; done: number } | null;
 }
 
 function getFileIcon(name: string, _mimeType: string) {
@@ -106,6 +109,8 @@ export function DriveFileTree({
   onFileListChange,
   onSearchOpen,
   showManagementFolders,
+  cacheFilesByIds,
+  cachingProgress,
 }: DriveFileTreeProps) {
   const [treeItems, setTreeItems] = useState<CachedTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -745,6 +750,16 @@ export function DriveFileTree({
       }
 
       if (item.isFolder) {
+        const uncachedIds = collectFileIds(item).filter((id) => !cachedFiles.has(id) && !id.startsWith("new:"));
+        if (uncachedIds.length > 0) {
+          items.push({
+            label: `${t("contextMenu.cacheFolder")} (${uncachedIds.length})`,
+            icon: <Database size={ICON.MD} />,
+            onClick: () => {
+              cacheFilesByIds(uncachedIds).catch(() => {});
+            },
+          });
+        }
         items.push({
           label: t("contextMenu.downloadZip"),
           icon: <Download size={ICON.MD} />,
@@ -841,7 +856,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, t, treeItems]
+    [handleDelete, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, t, treeItems, cacheFilesByIds]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -1099,6 +1114,30 @@ export function DriveFileTree({
           >
             <Upload size={ICON.MD} />
           </button>
+          {(() => {
+            const allIds = filteredTreeItems.flatMap((node) => collectFileIds(node));
+            const uncachedIds = allIds.filter((id) => !cachedFiles.has(id) && !id.startsWith("new:"));
+            const disabled = uncachedIds.length === 0 || cachingProgress !== null;
+            return (
+              <button
+                onClick={() => {
+                  if (disabled) return;
+                  cacheFilesByIds(uncachedIds).catch(() => {});
+                }}
+                disabled={disabled}
+                className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400 dark:disabled:hover:bg-transparent"
+                title={
+                  cachingProgress
+                    ? `${t("fileTree.cacheAll")} (${cachingProgress.done}/${cachingProgress.total})`
+                    : uncachedIds.length > 0
+                      ? `${t("fileTree.cacheAll")} (${uncachedIds.length})`
+                      : t("fileTree.cacheAll")
+                }
+              >
+                <Database size={ICON.MD} />
+              </button>
+            );
+          })()}
         </div>
       </div>
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto py-1">
