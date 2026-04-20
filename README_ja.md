@@ -40,7 +40,7 @@ GemiHub はオフラインファーストです。すべてのファイルはブ
 
 ### Obsidian 連携
 
-GemiHub は Obsidian プラグイン [Obsidian Gemini Helper](https://github.com/takeshy/obsidian-gemini-helper) と連携できます。Obsidian で書いたノートを GemiHub の Web インターフェースからアクセスしたり、その逆も可能。両者は同じ `_sync-meta.json` 形式を共有し、シームレスな双方向同期を実現します。
+GemiHub は Obsidian プラグイン [GemiHub - Drive Sync](https://github.com/takeshy/obsidian-gemihub) と連携できます。Obsidian で書いたノートを GemiHub の Web インターフェースからアクセスしたり、その逆も可能。両者は同じ `_sync-meta.json` 形式を共有し、シームレスな双方向同期を実現します。
 
 **GemiHub でしか使えない機能**（Obsidian プラグイン単体では再現できない機能）:
 - **自動 RAG** — GemiHub に同期されたファイルは自動的にセマンティック検索にインデックスされる

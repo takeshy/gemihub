@@ -40,7 +40,7 @@ GemiHub is offline-first. All your files are cached in the browser's IndexedDB, 
 
 ### Obsidian Integration
 
-GemiHub works with [Obsidian Gemini Helper](https://github.com/takeshy/obsidian-gemini-helper), an Obsidian plugin that syncs your vault with Google Drive. Edit notes in Obsidian and access them from GemiHub's web interface, or vice versa — both sides share the same `_sync-meta.json` format for seamless bidirectional sync.
+GemiHub works with [GemiHub - Drive Sync](https://github.com/takeshy/obsidian-gemihub), an Obsidian plugin that syncs your vault with Google Drive. Edit notes in Obsidian and access them from GemiHub's web interface, or vice versa — both sides share the same `_sync-meta.json` format for seamless bidirectional sync.
 
 **GemiHub-exclusive features** that the Obsidian plugin alone cannot replicate:
 - **Automatic RAG** — Files synced to GemiHub are automatically indexed for semantic search
