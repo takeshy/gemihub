@@ -231,8 +231,17 @@ export function useSync() {
           // entire workspace as "new", which is noise. existingCached being present
           // is the best signal that the user has synced this workspace before.
           if (existingCached) {
+            const names = Object.values(newEntries)
+              .map((e) => e.name)
+              .filter((n): n is string => !!n)
+              .sort();
             window.dispatchEvent(new CustomEvent("show-toast", {
-              detail: { key: "sync.newFilesDetected", params: { count: newCount } },
+              detail: {
+                key: "sync.newFilesDetected",
+                params: { count: newCount, names: names.join("\n") },
+                // Persistent: require a manual close so the full list stays readable.
+                durationMs: 0,
+              },
             }));
           }
         }

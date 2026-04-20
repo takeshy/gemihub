@@ -16,6 +16,7 @@ interface ShowToastDetail {
   key?: string;
   params?: Record<string, string | number>;
   variant?: ToastVariant;
+  /** Milliseconds until auto-dismiss. Omit or pass 0 to require a manual close. */
   durationMs?: number;
 }
 
@@ -42,11 +43,13 @@ export function ToastContainer() {
       if (!message) return;
       const id = Date.now() + Math.random();
       const variant = detail.variant ?? "info";
-      const duration = detail.durationMs ?? DEFAULT_DURATION_MS;
       setToasts((prev) => [...prev, { id, message, variant }]);
-      window.setTimeout(() => {
-        setToasts((prev) => prev.filter((toast) => toast.id !== id));
-      }, duration);
+      const duration = detail.durationMs ?? DEFAULT_DURATION_MS;
+      if (duration > 0) {
+        window.setTimeout(() => {
+          setToasts((prev) => prev.filter((toast) => toast.id !== id));
+        }, duration);
+      }
     };
     window.addEventListener("show-toast", handler);
     return () => window.removeEventListener("show-toast", handler);
@@ -57,7 +60,7 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return createPortal(
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex max-w-sm flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex max-w-md flex-col gap-2">
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -69,7 +72,7 @@ export function ToastContainer() {
                 : "border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100"
           }`}
         >
-          <span className="flex-1 whitespace-pre-wrap break-words">{toast.message}</span>
+          <span className="max-h-[50vh] flex-1 overflow-y-auto whitespace-pre-wrap break-words">{toast.message}</span>
           <button
             type="button"
             onClick={() => dismiss(toast.id)}

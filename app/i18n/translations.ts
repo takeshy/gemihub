@@ -1104,7 +1104,7 @@ const en: TranslationStrings = {
   "settings.sync.pruneFailed": "Prune failed.",
   "settings.sync.pruneError": "Prune error.",
   "settings.sync.failedToLoadStats": "Failed to load stats.",
-  "sync.newFilesDetected": "{count} new file(s) on Drive",
+  "sync.newFilesDetected": "{count} new file(s) on Drive:\n{names}",
 
   // Temp diff modal
   "tempDiff.title": "Temp File Comparison",
@@ -1880,7 +1880,7 @@ const ja: TranslationStrings = {
   "settings.sync.pruneFailed": "整理に失敗しました。",
   "settings.sync.pruneError": "整理中にエラーが発生しました。",
   "settings.sync.failedToLoadStats": "統計の読み込みに失敗しました。",
-  "sync.newFilesDetected": "Drive に新しいファイルが {count} 件あります",
+  "sync.newFilesDetected": "Drive に新しいファイルが {count} 件あります:\n{names}",
 
   // Temp diff modal
   "tempDiff.title": "一時ファイルの比較",

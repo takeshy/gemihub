@@ -50,7 +50,7 @@ The client polls for remote changes every 5 minutes while the app is active and 
 
 1. **Cached remote meta is refreshed** (preserving any local-only `new:` entries).
 2. **New remote files are auto-registered** into local sync meta as metadata-only (uncached) entries. The tree picks them up on the next `tree-meta-updated` event; content is fetched lazily the first time the user opens the file. This is what keeps the Pull badge from inflating just because another device added files.
-3. **A toast is shown** ("N new file(s) on Drive") whenever new entries are auto-registered and a prior sync exists. This surfaces additions that would otherwise be hidden deep in the tree. First-ever fetches skip the toast since every file would otherwise qualify as "new".
+3. **A persistent toast is shown** whenever new entries are auto-registered and a prior sync exists. It lists every new file path (sorted) and stays until the user manually dismisses it, so additions buried deep in the tree are not missed. First-ever fetches skip the toast since every file would otherwise qualify as "new".
 4. **`tree-meta-updated` is dispatched** when either the remote meta's `lastUpdatedAt` changed or new entries were registered, so remote-side renames/deletions/additions appear without requiring a manual Pull.
 5. **Pull / Push counts are recomputed.**
 
