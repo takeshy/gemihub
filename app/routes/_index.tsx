@@ -31,6 +31,7 @@ import { PasswordPromptDialog } from "~/components/ide/PasswordPromptDialog";
 import { WorkflowPropsPanel } from "~/components/ide/WorkflowPropsPanel";
 import { ConflictDialog } from "~/components/ide/ConflictDialog";
 import { AIWorkflowDialog, type AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
+import { ToastContainer } from "~/components/ide/ToastContainer";
 import { SearchPanel } from "~/components/ide/SearchPanel";
 import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
@@ -371,6 +372,7 @@ function IDELayout({
         cacheFilesByIds={cacheFilesByIds}
         cachingProgress={cachingProgress}
       />
+      <ToastContainer />
       </SkillProvider>
       </PluginProvider>
       </EditorContextProvider>

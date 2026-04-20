@@ -220,17 +220,26 @@ export function useSync() {
             size: f.size,
           };
         }
-        if (Object.keys(newEntries).length > 0) {
+        const newCount = Object.keys(newEntries).length;
+        if (newCount > 0) {
           await setLocalSyncMeta({
             id: "current",
             lastUpdatedAt: new Date().toISOString(),
             files: { ...localFiles, ...newEntries },
           });
+          // Toast when a previous sync exists — the first ever fetch would flag the
+          // entire workspace as "new", which is noise. existingCached being present
+          // is the best signal that the user has synced this workspace before.
+          if (existingCached) {
+            window.dispatchEvent(new CustomEvent("show-toast", {
+              detail: { key: "sync.newFilesDetected", params: { count: newCount } },
+            }));
+          }
         }
 
         // Rebuild tree when the remote meta changed or we auto-registered new entries.
         // No detail → handler re-reads CachedRemoteMeta + localMeta itself.
-        if (remoteChanged || Object.keys(newEntries).length > 0) {
+        if (remoteChanged || newCount > 0) {
           window.dispatchEvent(new Event("tree-meta-updated"));
         }
       }
