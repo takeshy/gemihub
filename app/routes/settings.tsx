@@ -364,15 +364,19 @@ export async function action({ request }: Route.ActionArgs) {
           const keySession = await setGeminiApiKey(request, effectiveApiKey);
           baseSession.set("geminiApiKey", keySession.get("geminiApiKey"));
 
-          // Store encrypted API key in Hubwork account for Scheduler access
-          try {
-            const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
-            let hwAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
-            if (!hwAccount && validTokens.email) hwAccount = await getAccountByEmail(validTokens.email);
-            if (hwAccount) {
-              await updateAccount(hwAccount.id, { encryptedGeminiApiKey: encryptGeminiApiKey(effectiveApiKey) });
-            }
-          } catch { /* best-effort */ }
+          // Refresh the encrypted API key in Hubwork Firestore only if the user
+          // already has scheduled workflows (Scheduler needs it). When no
+          // schedules exist, no copy is kept in Firestore.
+          if ((currentSettings.hubwork?.schedules?.length ?? 0) > 0) {
+            try {
+              const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
+              let hwAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+              if (!hwAccount && validTokens.email) hwAccount = await getAccountByEmail(validTokens.email);
+              if (hwAccount && (hwAccount.plan === "pro" || hwAccount.plan === "granted")) {
+                await updateAccount(hwAccount.id, { encryptedGeminiApiKey: encryptGeminiApiKey(effectiveApiKey) });
+              }
+            } catch { /* best-effort */ }
+          }
         }
         baseSession.set("apiPlan", apiPlan);
         baseSession.set("selectedModel", updatedSettings.selectedModel);
@@ -637,26 +641,43 @@ export async function action({ request }: Route.ActionArgs) {
           ...schedule,
           concurrencyPolicy: schedule.concurrencyPolicy === "forbid" ? "forbid" : "allow",
         }));
+
+        // When schedules are present, the Scheduler needs a server-side copy of
+        // the Gemini API key. Require the key to be unlocked in this session so
+        // that we can encrypt and persist it alongside the schedules.
+        if (schedules.length > 0 && !validTokens.geminiApiKey) {
+          return jsonWithCookie({ success: false, message: "scheduleApiKeyRequired" });
+        }
+
         const updatedSettings = {
           ...currentSettings,
           hubwork: { ...currentSettings.hubwork, schedules } as typeof currentSettings.hubwork,
         };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
 
-        // Rebuild Firestore schedule index
-        // accountId is not reliably in Drive settings (it's injected by the loader),
-        // so resolve from Firestore directly via rootFolderId or email.
+        // Rebuild Firestore schedule index and synchronize the encrypted API
+        // key with the new schedule count: write when schedules exist, delete
+        // when none remain. accountId is not reliably in Drive settings (it's
+        // injected by the loader), so resolve from Firestore directly via
+        // rootFolderId or email.
         try {
-          const { getAccountByRootFolderId, getAccountByEmail, rebuildScheduleIndex } = await import("~/services/hubwork-accounts.server");
+          const { getAccountByRootFolderId, getAccountByEmail, rebuildScheduleIndex, updateAccount, encryptGeminiApiKey, clearEncryptedGeminiApiKey } = await import("~/services/hubwork-accounts.server");
           let hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
           if (!hubworkAccount && validTokens.email) {
             hubworkAccount = await getAccountByEmail(validTokens.email);
           }
-          if (hubworkAccount) {
+          if (hubworkAccount && (hubworkAccount.plan === "pro" || hubworkAccount.plan === "granted")) {
             await rebuildScheduleIndex(hubworkAccount.id, schedules);
+            if (schedules.length > 0 && validTokens.geminiApiKey) {
+              await updateAccount(hubworkAccount.id, {
+                encryptedGeminiApiKey: encryptGeminiApiKey(validTokens.geminiApiKey),
+              });
+            } else if (schedules.length === 0) {
+              await clearEncryptedGeminiApiKey(hubworkAccount.id);
+            }
           }
         } catch (e) {
-          console.warn("[settings] Failed to rebuild schedule index:", e);
+          console.warn("[settings] Schedules saved to Drive, but failed to sync Firestore schedule index or encrypted API key:", e);
         }
         return jsonWithCookie({ success: true, message: "Schedules saved" });
       }

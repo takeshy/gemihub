@@ -506,10 +506,13 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
 
           {/* Schedules */}
           <SectionCard>
-            <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-2">
               <Clock size={16} />
               {t("settings.hubwork.schedules")}
             </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {t("settings.hubwork.scheduleApiKeyNote")}
+            </p>
 
             {schedules.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -594,6 +597,24 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                 )}
               </button>
             </scheduleFetcher.Form>
+            {(() => {
+              const data = scheduleFetcher.data as { success?: boolean; message?: string } | undefined;
+              if (!data || scheduleFetcher.state !== "idle") return null;
+              if (data.success === false) {
+                const msg = data.message === "scheduleApiKeyRequired"
+                  ? t("settings.hubwork.scheduleApiKeyRequired")
+                  : data.message;
+                return (
+                  <p className="mt-3 text-sm text-red-600 dark:text-red-400">{msg}</p>
+                );
+              }
+              if (data.success === true) {
+                return (
+                  <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{data.message}</p>
+                );
+              }
+              return null;
+            })()}
           </SectionCard>
 
               {/* Skill Update */}

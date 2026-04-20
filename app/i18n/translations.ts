@@ -692,6 +692,8 @@ export interface TranslationStrings {
   "settings.hubwork.scheduleCron": string;
   "settings.hubwork.scheduleEnabled": string;
   "settings.hubwork.scheduleRemove": string;
+  "settings.hubwork.scheduleApiKeyNote": string;
+  "settings.hubwork.scheduleApiKeyRequired": string;
   "settings.hubwork.subscription": string;
   "settings.hubwork.subscribeButton": string;
   "settings.hubwork.slugLabel": string;
@@ -1468,6 +1470,8 @@ const en: TranslationStrings = {
   "settings.hubwork.scheduleCron": "Cron expression",
   "settings.hubwork.scheduleEnabled": "Enabled",
   "settings.hubwork.scheduleRemove": "Remove",
+  "settings.hubwork.scheduleApiKeyNote": "When scheduled workflows are registered, your Gemini API key is encrypted (AES-256-GCM) and stored server-side so that workflows can run while you are offline. The key is automatically deleted when all schedules are removed.",
+  "settings.hubwork.scheduleApiKeyRequired": "Please unlock your Gemini API key before enabling scheduled workflows.",
   "settings.hubwork.subscription": "Subscription",
   "settings.hubwork.subscribeButton": "Subscribe — ¥2,000/month",
   "settings.hubwork.slugLabel": "Your subdomain",
@@ -2244,6 +2248,8 @@ const ja: TranslationStrings = {
   "settings.hubwork.scheduleCron": "Cron式",
   "settings.hubwork.scheduleEnabled": "有効",
   "settings.hubwork.scheduleRemove": "削除",
+  "settings.hubwork.scheduleApiKeyNote": "スケジュール実行を登録すると、Gemini APIキーがAES-256-GCMで暗号化されサーバー側のデータベースに保存されます（オフライン中でもワークフローを実行するため）。すべてのスケジュールを削除すると、保存されたキーも自動的に削除されます。",
+  "settings.hubwork.scheduleApiKeyRequired": "定期実行を有効にするには Gemini APIキーをアンロックしてください。",
   "settings.hubwork.subscription": "サブスクリプション",
   "settings.hubwork.subscribeButton": "登録する — ¥2,000/月",
   "settings.hubwork.slugLabel": "サブドメイン",

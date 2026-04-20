@@ -22,15 +22,19 @@ export async function action({ request }: Route.ActionArgs) {
     const apiKey = await decryptPrivateKey(settings.encryptedApiKey, settings.apiKeySalt, password);
     const session = await setTokens(request, { ...validTokens, geminiApiKey: apiKey });
 
-    // Store encrypted API key in Hubwork account for Scheduler access
-    try {
-      const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
-      let account = await getAccountByRootFolderId(validTokens.rootFolderId);
-      if (!account && validTokens.email) account = await getAccountByEmail(validTokens.email);
-      if (account) {
-        await updateAccount(account.id, { encryptedGeminiApiKey: encryptGeminiApiKey(apiKey) });
-      }
-    } catch { /* best-effort */ }
+    // Refresh the server-side encrypted API key in Firestore only if the user
+    // has scheduled workflows registered (the Scheduler needs it). Otherwise,
+    // no server-side copy is kept.
+    if ((settings.hubwork?.schedules?.length ?? 0) > 0) {
+      try {
+        const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
+        let account = await getAccountByRootFolderId(validTokens.rootFolderId);
+        if (!account && validTokens.email) account = await getAccountByEmail(validTokens.email);
+        if (account && (account.plan === "pro" || account.plan === "granted")) {
+          await updateAccount(account.id, { encryptedGeminiApiKey: encryptGeminiApiKey(apiKey) });
+        }
+      } catch { /* best-effort */ }
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: {

@@ -291,6 +291,14 @@ export async function updateRefreshToken(
   tokenCache.delete(accountId);
 }
 
+/** Remove the server-side encrypted Gemini API key from an account. */
+export async function clearEncryptedGeminiApiKey(accountId: string): Promise<void> {
+  const db = getFirestore();
+  await db.collection(HUBWORK_ACCOUNTS).doc(accountId).update({
+    encryptedGeminiApiKey: FieldValue.delete(),
+  });
+}
+
 export async function deleteAccount(accountId: string): Promise<void> {
   const db = getFirestore();
   await db.collection(HUBWORK_ACCOUNTS).doc(accountId).delete();

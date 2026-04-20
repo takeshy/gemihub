@@ -68,7 +68,8 @@ function TermsEn() {
 
         <h2>Article 4 (Data Storage and Management)</h2>
         <ol>
-          <li>Data created and managed through the Service is stored in the User&apos;s own Google Drive. The Company does not store User data on its servers.</li>
+          <li>Data created and managed through the Service is stored in the User&apos;s own Google Drive. The Company does not store User data on its servers, except as described in the following paragraphs.</li>
+          <li>When a Pro plan User registers scheduled workflows, the Company stores the following items in server-side encrypted form (AES-256-GCM) to enable scheduled execution while the User is offline: the User&apos;s Gemini API key, the Google account refresh token, and the schedule configuration. These are automatically removed when all scheduled workflows are deleted. Details are described in the Privacy Policy.</li>
           <li>Users shall also comply with the terms of service of Google Drive and Google APIs.</li>
           <li>Users shall manage any Gemini API keys they configure under their own responsibility.</li>
         </ol>
@@ -177,7 +178,8 @@ function TermsJa() {
 
         <h2>第4条（データの保存と管理）</h2>
         <ol>
-          <li>本サービスで作成・管理されるデータは、ユーザー自身のGoogle Driveに保存されます。当社はユーザーのデータを当社のサーバーに保存しません。</li>
+          <li>本サービスで作成・管理されるデータは、ユーザー自身のGoogle Driveに保存されます。ただし、次項に定める場合を除き、当社はユーザーのデータを当社のサーバーに保存しません。</li>
+          <li>Proプランのユーザーがスケジュール実行を登録した場合、ユーザー不在時のワークフロー実行を可能とするため、以下の情報をサーバー側で暗号化（AES-256-GCM）のうえ保存します：ユーザーのGemini APIキー、Googleアカウントのリフレッシュトークン、スケジュール設定。これらは全てのスケジュールが削除された時点で自動的に削除されます。詳細はプライバシーポリシーに記載します。</li>
           <li>ユーザーは、Google DriveおよびGoogle APIの利用規約にも従うものとします。</li>
           <li>ユーザーが設定するGemini APIキーは、ユーザー自身の責任で管理するものとします。</li>
         </ol>

@@ -58,6 +58,17 @@ function PolicyEn() {
         <p>
           All data created and managed through the Service (chat history, workflows, settings, etc.) is stored in the User&apos;s own Google Drive. User content data is not permanently stored on the Company&apos;s servers. Session information is temporarily managed through cookies.
         </p>
+        <p>
+          <strong>Exception — Scheduled Workflows (Pro plan only):</strong> When a User registers scheduled workflows, the following information is stored on the Company&apos;s server-side database (Google Firestore) to enable the scheduler to execute workflows while the User is offline:
+        </p>
+        <ul>
+          <li>The User&apos;s Gemini API key, encrypted with AES-256-GCM using a server-managed key</li>
+          <li>The User&apos;s Google account refresh token, encrypted with AES-256-GCM</li>
+          <li>Schedule configuration (cron expression, workflow path, execution state)</li>
+        </ul>
+        <p>
+          These items are stored only while scheduled workflows are registered. When the User removes all scheduled workflows, the encrypted API key is automatically deleted. When the User cancels their subscription, the associated account record is also removed.
+        </p>
 
         <h2>4. Purpose of Use of Personal Information</h2>
         <p>The Company uses collected personal information for the following purposes:</p>
@@ -139,6 +150,17 @@ function PolicyJa() {
         <h2>3. データの保存場所</h2>
         <p>
           本サービスで作成・管理されるデータ（チャット履歴、ワークフロー、設定情報等）は、すべてユーザー自身のGoogle Driveに保存されます。当社のサーバーにユーザーのコンテンツデータが永続的に保存されることはありません。セッション情報はCookieを通じて一時的に管理されます。
+        </p>
+        <p>
+          <strong>例外 — スケジュール実行機能（Proプランのみ）：</strong> ユーザーがスケジュール実行を登録した場合、オフライン時でもワークフローを実行するために、以下の情報を当社のサーバー側データベース（Google Firestore）に保存します：
+        </p>
+        <ul>
+          <li>ユーザーの Gemini APIキー（AES-256-GCM によりサーバー管理鍵で暗号化）</li>
+          <li>ユーザーの Google アカウント リフレッシュトークン（AES-256-GCM で暗号化）</li>
+          <li>スケジュール設定（cron式、ワークフローパス、実行状態）</li>
+        </ul>
+        <p>
+          これらはスケジュール実行が登録されている間のみ保持され、ユーザーがすべてのスケジュールを削除した時点で暗号化APIキーは自動的に削除されます。サブスクリプション解約時には、関連するアカウントレコード自体も削除されます。
         </p>
 
         <h2>4. 個人情報の利用目的</h2>
