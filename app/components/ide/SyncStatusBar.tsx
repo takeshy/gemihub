@@ -130,7 +130,9 @@ export function SyncStatusBar({
         for (const id of diff.localOnly) {
           if (!(id in localFiles)) continue;
           const cached = await getCachedFile(id);
-          const name = cached?.fileName || localFiles[id]?.name;
+          // No cached content — already deleted locally, nothing to act on
+          if (!cached) continue;
+          const name = cached.fileName || localFiles[id]?.name;
           // Skip orphaned entries with no resolvable name (stale migration artifacts)
           if (!name) continue;
           if (isSyncExcludedPath(name)) continue;

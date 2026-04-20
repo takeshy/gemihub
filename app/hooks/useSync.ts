@@ -117,13 +117,17 @@ export function useSync() {
         // Exclude localOnly files only in editHistory (new local files — shown in push badge).
         // Include conflicts and editDeleteConflicts — shown in pull dialog with conflict badge.
         // Include remoteOnly files — new files from other devices that need explicit pull.
-        const pullLocalOnly = diff.localOnly.filter(id => {
-          if (!(id in localFiles)) return false;
+        const pullLocalOnly: string[] = [];
+        for (const id of diff.localOnly) {
+          if (!(id in localFiles)) continue;
           // Skip orphaned entries with no resolvable name (stale migration artifacts)
           const name = remoteFiles[id]?.name || localFiles[id]?.name;
-          if (!name) return false;
-          return true;
-        });
+          if (!name) continue;
+          // Skip locally-deleted files with no cached content (stale metadata)
+          const cached = await getCachedFile(id);
+          if (!cached) continue;
+          pullLocalOnly.push(id);
+        }
         const isExcluded = (id: string) => {
           const name = remoteFiles[id]?.name || localFiles[id]?.name;
           return name ? isSyncExcludedPath(name) : false;
@@ -220,39 +224,58 @@ export function useSync() {
             size: f.size,
           };
         }
+
+        // Auto-clean stale entries: in localMeta but not in remoteMeta,
+        // with no cached content. These are locally-deleted files whose
+        // metadata is stale — no user action needed.
+        const staleIds: string[] = [];
+        for (const id of Object.keys(localFiles)) {
+          if (id.startsWith("new:")) continue;
+          if (remoteMeta.files[id]) continue;
+          const cached = await getCachedFile(id);
+          if (!cached) staleIds.push(id);
+        }
+
         const newCount = Object.keys(newEntries).length;
-        if (newCount > 0) {
+        const metaChanged = newCount > 0 || staleIds.length > 0;
+        if (metaChanged) {
+          const updatedFiles = { ...localFiles, ...newEntries };
+          for (const id of staleIds) {
+            delete updatedFiles[id];
+            await deleteEditHistoryEntry(id);
+          }
           await setLocalSyncMeta({
             id: "current",
             lastUpdatedAt: new Date().toISOString(),
-            files: { ...localFiles, ...newEntries },
+            files: updatedFiles,
           });
-          // Toast when a previous sync exists — the first ever fetch would flag the
-          // entire workspace as "new", which is noise. existingCached being present
-          // is the best signal that the user has synced this workspace before.
-          // Filter out excluded prefixes (history/, plugins/, sync_conflicts/ ...)
-          // so internal churn does not surface as user-facing notifications.
-          if (existingCached) {
-            const visibleNames = Object.values(newEntries)
-              .map((e) => e.name)
-              .filter((n): n is string => !!n && !isSyncExcludedPath(n))
-              .sort();
-            if (visibleNames.length > 0) {
-              window.dispatchEvent(new CustomEvent("show-toast", {
-                detail: {
-                  key: "sync.newFilesDetected",
-                  params: { count: visibleNames.length, names: visibleNames.join("\n") },
-                  // Persistent: require a manual close so the full list stays readable.
-                  durationMs: 0,
-                },
-              }));
-            }
+        }
+
+        // Toast when a previous sync exists — the first ever fetch would flag the
+        // entire workspace as "new", which is noise. existingCached being present
+        // is the best signal that the user has synced this workspace before.
+        // Filter out excluded prefixes (history/, plugins/, sync_conflicts/ ...)
+        // so internal churn does not surface as user-facing notifications.
+        if (newCount > 0 && existingCached) {
+          const visibleNames = Object.values(newEntries)
+            .map((e) => e.name)
+            .filter((n): n is string => !!n && !isSyncExcludedPath(n))
+            .sort();
+          if (visibleNames.length > 0) {
+            window.dispatchEvent(new CustomEvent("show-toast", {
+              detail: {
+                key: "sync.newFilesDetected",
+                params: { count: visibleNames.length, names: visibleNames.join("\n") },
+                // Persistent: require a manual close so the full list stays readable.
+                durationMs: 0,
+              },
+            }));
           }
         }
 
-        // Rebuild tree when the remote meta changed or we auto-registered new entries.
+        // Rebuild tree when the remote meta changed or we auto-registered/cleaned entries.
         // No detail → handler re-reads CachedRemoteMeta + localMeta itself.
-        if (remoteChanged || newCount > 0) {
+        if (remoteChanged || metaChanged) {
           window.dispatchEvent(new Event("tree-meta-updated"));
         }
       }
