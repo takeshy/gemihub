@@ -88,6 +88,7 @@ interface LpStrings {
   ctaReady: string;
   footerTerms: string;
   footerPolicy: string;
+  footerTokushoho: string;
   footerManual: string;
   footerContact: string;
   premiumTitle: string;
@@ -214,6 +215,7 @@ const en: LpStrings = {
   ctaReady: "Ready to get started?",
   footerTerms: "Terms of Service",
   footerPolicy: "Privacy Policy",
+  footerTokushoho: "Commercial Disclosure",
   footerManual: "Manual",
   footerContact: "Contact",
   premiumTitle: "Premium Plans",
@@ -221,8 +223,8 @@ const en: LpStrings = {
   premiumFree: "Free",
   premiumLite: "Lite",
   premiumPro: "Pro",
-  premiumLitePrice: "¥300/mo",
-  premiumProPrice: "¥2,000/mo",
+  premiumLitePrice: "¥300/mo (tax incl.)",
+  premiumProPrice: "¥2,000/mo (tax incl.)",
   premiumFreeTag: "¥0",
   premiumFeatureUpload: "Max File Size",
   premiumFeatureUploadFree: "20 MB",
@@ -340,6 +342,7 @@ const ja: LpStrings = {
   ctaReady: "さあ、始めましょう",
   footerTerms: "利用規約",
   footerPolicy: "プライバシーポリシー",
+  footerTokushoho: "特定商取引法に基づく表記",
   footerManual: "マニュアル",
   footerContact: "お問い合わせ",
   premiumTitle: "有料プラン",
@@ -347,8 +350,8 @@ const ja: LpStrings = {
   premiumFree: "Free",
   premiumLite: "Lite",
   premiumPro: "Pro",
-  premiumLitePrice: "¥300/月",
-  premiumProPrice: "¥2,000/月",
+  premiumLitePrice: "¥300/月（税込）",
+  premiumProPrice: "¥2,000/月（税込）",
   premiumFreeTag: "¥0",
   premiumFeatureUpload: "1ファイル最大サイズ",
   premiumFeatureUploadFree: "20 MB",
@@ -900,6 +903,9 @@ export default function LandingPage() {
             </a>
             <a href={`/policy${jaPrefix}`} className="transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               {s.footerPolicy}
+            </a>
+            <a href={`/tokushoho${jaPrefix}`} className="transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+              {s.footerTokushoho}
             </a>
             <a href="https://github.com/takeshy/gemihub" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               <Github size={14} />

@@ -8,6 +8,8 @@ export default [
   route("terms/ja", "routes/terms.tsx", { id: "terms-ja" }),
   route("policy", "routes/policy.tsx"),
   route("policy/ja", "routes/policy.tsx", { id: "policy-ja" }),
+  route("tokushoho", "routes/tokushoho.tsx"),
+  route("tokushoho/ja", "routes/tokushoho.tsx", { id: "tokushoho-ja" }),
   route("manual/:chapter?", "routes/manual.tsx"),
   route("manual/ja/:chapter?", "routes/manual.tsx", { id: "manual-ja" }),
   route("auth/google", "routes/auth.google.tsx"),

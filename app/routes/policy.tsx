@@ -97,7 +97,19 @@ function PolicyEn() {
           The Company may change this Privacy Policy as necessary. The changed Privacy Policy shall take effect upon being posted on the Service.
         </p>
 
-        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">Last updated: March 16, 2025</p>
+        <h2>10. Operator Information &amp; Contact</h2>
+        <p>
+          For inquiries regarding this Privacy Policy, or to request disclosure, correction, or deletion of personal information, please contact us at:
+        </p>
+        <ul>
+          <li>Business name: takeshy.work (trade name)</li>
+          <li>Operator: Takeshi Morita</li>
+          <li>Address: Fente Okurayama 101, 964-1 Mamedo-cho, Kohoku-ku, Yokohama-shi, Kanagawa 222-0032, Japan</li>
+          <li>Phone: +81-50-1792-0976 (Weekdays 10:00–18:00 JST)</li>
+          <li>Email: <a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work@gmail.com</a></li>
+        </ul>
+
+        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">Last updated: April 20, 2026</p>
       </div>
     </>
   );
@@ -109,7 +121,7 @@ function PolicyJa() {
       <h1 className="mb-8 text-3xl font-bold text-gray-900 dark:text-gray-50">プライバシーポリシー</h1>
       <div className="prose prose-gray max-w-none dark:prose-invert text-gray-700 dark:text-gray-300 [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:dark:text-gray-100 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1 [&_p]:mb-4 [&_p]:leading-relaxed">
         <p>
-          株式会社<a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a>（以下、「当社」といいます。）は、GemiHub（以下、「本サービス」といいます。）におけるお客様の個人情報保護の重要性を認識し、適切な個人情報の取り扱いと保護に努めます。
+          <a href="https://takeshy.work" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work</a>（屋号、運営者：森田 剛志。以下、「当社」といいます。）は、GemiHub（以下、「本サービス」といいます。）におけるお客様の個人情報保護の重要性を認識し、適切な個人情報の取り扱いと保護に努めます。
         </p>
 
         <h2>1. 個人情報の定義</h2>
@@ -167,7 +179,19 @@ function PolicyJa() {
           当社は、必要に応じて本プライバシーポリシーを変更することがあります。変更後のプライバシーポリシーは、本サービス上に掲載された時点から効力を生じるものとします。
         </p>
 
-        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">最終更新日：2025年3月16日</p>
+        <h2>10. 事業者情報・お問い合わせ窓口</h2>
+        <p>
+          本プライバシーポリシーに関するお問い合わせ、および個人情報の開示・訂正・削除等のご請求は、下記の窓口までご連絡ください。
+        </p>
+        <ul>
+          <li>事業者名：takeshy.work（屋号）</li>
+          <li>運営者：森田 剛志</li>
+          <li>所在地：〒222-0032 神奈川県横浜市港北区大豆戸町964-1 フェンテ大倉山101</li>
+          <li>電話番号：050-1792-0976（平日10:00〜18:00）</li>
+          <li>メールアドレス：<a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work@gmail.com</a></li>
+        </ul>
+
+        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">最終更新日：2026年4月20日</p>
       </div>
     </>
   );
