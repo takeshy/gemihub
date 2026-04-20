@@ -230,19 +230,23 @@ export function useSync() {
           // Toast when a previous sync exists — the first ever fetch would flag the
           // entire workspace as "new", which is noise. existingCached being present
           // is the best signal that the user has synced this workspace before.
+          // Filter out excluded prefixes (history/, plugins/, sync_conflicts/ ...)
+          // so internal churn does not surface as user-facing notifications.
           if (existingCached) {
-            const names = Object.values(newEntries)
+            const visibleNames = Object.values(newEntries)
               .map((e) => e.name)
-              .filter((n): n is string => !!n)
+              .filter((n): n is string => !!n && !isSyncExcludedPath(n))
               .sort();
-            window.dispatchEvent(new CustomEvent("show-toast", {
-              detail: {
-                key: "sync.newFilesDetected",
-                params: { count: newCount, names: names.join("\n") },
-                // Persistent: require a manual close so the full list stays readable.
-                durationMs: 0,
-              },
-            }));
+            if (visibleNames.length > 0) {
+              window.dispatchEvent(new CustomEvent("show-toast", {
+                detail: {
+                  key: "sync.newFilesDetected",
+                  params: { count: visibleNames.length, names: visibleNames.join("\n") },
+                  // Persistent: require a manual close so the full list stays readable.
+                  durationMs: 0,
+                },
+              }));
+            }
           }
         }
 
