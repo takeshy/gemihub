@@ -185,7 +185,10 @@ export function DriveFileTree({
     [filteredTreeItems, modifiedFiles]
   );
 
-  const updateTreeFromMeta = useCallback(async (metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] }) => {
+  const updateTreeFromMeta = useCallback(async (
+    metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] },
+    fullySyncedFileIds?: string[] | Set<string>,
+  ) => {
     // Merge local-only "new:" entries from existing CachedRemoteMeta
     const [existingMeta, localMeta] = await Promise.all([getCachedRemoteMeta(), getLocalSyncMeta()]);
     const mergedFiles = { ...metaData.files };
@@ -209,15 +212,46 @@ export function DriveFileTree({
     setRemoteMeta(mergedFiles);
     // Update localSyncMeta names so that rename/move operations are reflected
     // — otherwise the stale local name causes computeSyncDiff to classify
-    // the file as "toPull".  Only update the name field; md5 and modifiedTime
-    // must stay untouched so that real content changes pushed by other devices
-    // are still correctly detected as toPull.
+    // the file as "toPull".  Only update the name field by default; md5 and
+    // modifiedTime must stay untouched so that real content changes pushed by
+    // other devices are still correctly detected as toPull.
+    //
+    // `fullySyncedFileIds` opts in specific IDs (e.g. encrypt/decrypt, where the
+    // server rewrites content on behalf of the client) to fully sync md5/
+    // modifiedTime/size as well, so the file isn't mis-classified as toPull.
+    const fullySyncedSet = fullySyncedFileIds
+      ? (fullySyncedFileIds instanceof Set ? fullySyncedFileIds : new Set(fullySyncedFileIds))
+      : null;
     const syncMetaPromise = localMeta
       ? (async () => {
           let changed = false;
           for (const [id, remote] of Object.entries(metaData.files)) {
             const local = localMeta.files[id];
-            if (local && local.name !== remote.name) {
+            if (fullySyncedSet?.has(id)) {
+              // Server-initiated content change on behalf of this client
+              // (encrypt/decrypt). Either update the existing entry or insert
+              // a new one so the file isn't mis-classified as toPull / remoteOnly.
+              if (!local) {
+                localMeta.files[id] = {
+                  md5Checksum: remote.md5Checksum,
+                  modifiedTime: remote.modifiedTime,
+                  name: remote.name,
+                  size: remote.size,
+                };
+                changed = true;
+              } else if (
+                local.md5Checksum !== remote.md5Checksum
+                || local.modifiedTime !== remote.modifiedTime
+                || local.name !== remote.name
+                || local.size !== remote.size
+              ) {
+                local.md5Checksum = remote.md5Checksum;
+                local.modifiedTime = remote.modifiedTime;
+                local.name = remote.name;
+                local.size = remote.size;
+                changed = true;
+              }
+            } else if (local && local.name !== remote.name) {
               local.name = remote.name;
               changed = true;
             }
@@ -374,9 +408,9 @@ export function DriveFileTree({
     };
     // When a file is decrypted (from EncryptedFileViewer), refresh tree
     const handleDecrypted = (e: Event) => {
-      const { meta } = (e as CustomEvent).detail;
+      const { meta, fileId } = (e as CustomEvent).detail;
       if (meta) {
-        updateTreeFromMeta(meta);
+        updateTreeFromMeta(meta, fileId ? [fileId] : undefined);
       } else {
         fetchAndCacheTree();
       }

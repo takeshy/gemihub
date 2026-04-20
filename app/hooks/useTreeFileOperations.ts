@@ -95,7 +95,10 @@ interface UseTreeFileOperationsParams {
   setBusy: (ids: string[]) => void;
   clearBusy: (ids: string[]) => void;
   fetchAndCacheTree: (refresh?: boolean) => Promise<void>;
-  updateTreeFromMeta: (metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] }) => Promise<void>;
+  updateTreeFromMeta: (
+    metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] },
+    fullySyncedFileIds?: string[] | Set<string>,
+  ) => Promise<void>;
   t: (key: keyof TranslationStrings) => string;
   tempDiffData: { fileName: string; fileId: string; currentContent: string; tempContent: string; tempSavedAt: string; currentModifiedTime: string; isBinary: boolean } | null;
   setTempDiffData: Dispatch<SetStateAction<UseTreeFileOperationsParams["tempDiffData"]>>;
@@ -436,7 +439,7 @@ export function useTreeFileOperations({
           const data = await res.json();
           await deleteCachedFile(item.id);
           if (data.meta) {
-            await updateTreeFromMeta(data.meta);
+            await updateTreeFromMeta(data.meta, [item.id]);
           } else {
             await fetchAndCacheTree();
           }
@@ -500,7 +503,7 @@ export function useTreeFileOperations({
         await deleteCachedFile(item.id);
 
         if (data.meta) {
-          await updateTreeFromMeta(data.meta);
+          await updateTreeFromMeta(data.meta, [item.id]);
         } else {
           await fetchAndCacheTree();
         }
