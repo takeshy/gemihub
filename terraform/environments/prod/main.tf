@@ -43,6 +43,12 @@ variable "google_site_verification_token" {
   default     = ""
 }
 
+variable "hubwork_review_slugs" {
+  description = "Account slugs that bypass Stripe and receive a granted Pro account."
+  type        = list(string)
+  default     = []
+}
+
 # --------------- Module ---------------
 
 module "gemihub" {
@@ -54,7 +60,7 @@ module "gemihub" {
   domain                         = var.domain
   google_site_verification_token = var.google_site_verification_token
   cpu_idle                       = false
-  hubwork_review_slugs           = ["googletest1", "googletest2", "googletest3"]
+  hubwork_review_slugs           = var.hubwork_review_slugs
   hubwork_stripe_allowed_slugs   = ["takeshy"]
 }
 
