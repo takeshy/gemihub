@@ -37,6 +37,46 @@ function resourceSuffix(accountId: string): string {
 
 type CertManagerClient = ReturnType<typeof google.certificatemanager>;
 
+/**
+ * Extract the HTTP status from a googleapis/gaxios error. In recent gaxios
+ * versions `.code` is a string like "ERR_BAD_REQUEST", so the old
+ * `err.code === 409` check no longer fires. The reliable source is
+ * `err.response?.status` (also available as `err.status`).
+ */
+function httpStatus(e: unknown): number | undefined {
+  const err = e as {
+    code?: number | string;
+    status?: number;
+    response?: { status?: number };
+  };
+  if (typeof err.status === "number") return err.status;
+  if (typeof err.response?.status === "number") return err.response.status;
+  if (typeof err.code === "number") return err.code;
+  if (typeof err.code === "string") {
+    const n = Number.parseInt(err.code, 10);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+async function findDnsAuthorizationByDomain(
+  certManager: CertManagerClient,
+  parent: string,
+  domain: string
+) {
+  let pageToken: string | undefined;
+  do {
+    const resp = await certManager.projects.locations.dnsAuthorizations.list({
+      parent,
+      pageToken,
+    });
+    const match = resp.data.dnsAuthorizations?.find((a) => a.domain === domain);
+    if (match) return match;
+    pageToken = resp.data.nextPageToken || undefined;
+  } while (pageToken);
+  return undefined;
+}
+
 async function findCertMapEntryByHostname(
   certManager: CertManagerClient,
   parentMap: string,
@@ -84,40 +124,45 @@ export async function provisionDomain(
   const auth = getAuthClient();
   const certManager = google.certificatemanager({ version: "v1", auth });
 
-  // 1. Create DNS authorization
+  const parent = `projects/${PROJECT_ID}/locations/global`;
   const suffix = resourceSuffix(accountId);
+
+  // 1. Reuse or create DNS authorization.
+  // A domain can only have one DNS authorization per project (unique tuple:
+  // project+domain+type), so if one already exists from a prior account
+  // lifecycle we must reuse it — creating a new one fails with 409 regardless
+  // of the requested resource ID.
   const authId = `hw-auth-${suffix}`;
-  try {
-    await certManager.projects.locations.dnsAuthorizations.create({
-      parent: `projects/${PROJECT_ID}/locations/global`,
-      dnsAuthorizationId: authId,
-      requestBody: {
-        domain,
-      },
-    });
-  } catch (e: unknown) {
-    const status = (e as { code?: number })?.code;
-    if (status !== 409) throw e; // 409 = already exists, ok
+  const existingAuth = await findDnsAuthorizationByDomain(certManager, parent, domain);
+  const authName = existingAuth?.name
+    ?? `${parent}/dnsAuthorizations/${authId}`;
+  if (!existingAuth) {
+    try {
+      await certManager.projects.locations.dnsAuthorizations.create({
+        parent,
+        dnsAuthorizationId: authId,
+        requestBody: { domain },
+      });
+    } catch (e: unknown) {
+      if (httpStatus(e) !== 409) throw e; // 409 = raced with another create, ok
+    }
   }
 
   // 2. Create certificate
   const certId = `hw-cert-${suffix}`;
   try {
     await certManager.projects.locations.certificates.create({
-      parent: `projects/${PROJECT_ID}/locations/global`,
+      parent,
       certificateId: certId,
       requestBody: {
         managed: {
           domains: [domain],
-          dnsAuthorizations: [
-            `projects/${PROJECT_ID}/locations/global/dnsAuthorizations/${authId}`,
-          ],
+          dnsAuthorizations: [authName],
         },
       },
     });
   } catch (e: unknown) {
-    const status = (e as { code?: number })?.code;
-    if (status !== 409) throw e;
+    if (httpStatus(e) !== 409) throw e;
   }
 
   // 3. Create or reuse certificate map entry
@@ -125,8 +170,8 @@ export async function provisionDomain(
   // account lifecycle (different entry ID but same hostname) would make
   // create return a non-409 error. Reuse it by patching its certificates.
   const entryId = `hw-entry-${suffix}`;
-  const parentMap = `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}`;
-  const certRef = `projects/${PROJECT_ID}/locations/global/certificates/${certId}`;
+  const parentMap = `${parent}/certificateMaps/${CERT_MAP_NAME}`;
+  const certRef = `${parent}/certificates/${certId}`;
 
   const existingEntry = await findCertMapEntryByHostname(certManager, parentMap, domain);
   if (existingEntry?.name) {
@@ -146,8 +191,7 @@ export async function provisionDomain(
         },
       });
     } catch (e: unknown) {
-      const status = (e as { code?: number })?.code;
-      if (status !== 409) throw e;
+      if (httpStatus(e) !== 409) throw e;
     }
   }
 
@@ -163,7 +207,7 @@ export async function provisionDomain(
 
   // Get DNS authorization record for the user
   const dnsAuth = await certManager.projects.locations.dnsAuthorizations.get({
-    name: `projects/${PROJECT_ID}/locations/global/dnsAuthorizations/${authId}`,
+    name: authName,
   });
 
   const dnsRecord = dnsAuth.data.dnsResourceRecord;
@@ -256,13 +300,16 @@ export async function removeDomain(accountId: string, domain?: string): Promise<
   const auth = getAuthClient();
   const certManager = google.certificatemanager({ version: "v1", auth });
 
+  const parent = `projects/${PROJECT_ID}/locations/global`;
   const suffix = resourceSuffix(accountId);
   const entryId = `hw-entry-${suffix}`;
   const certId = `hw-cert-${suffix}`;
   const authId = `hw-auth-${suffix}`;
-  const parentMap = `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}`;
+  const parentMap = `${parent}/certificateMaps/${CERT_MAP_NAME}`;
 
-  // Remove in reverse order: entry → cert → auth
+  // Remove in reverse order: entry → cert → auth. Cert deletion returns an
+  // LRO; auth delete may race with the cert still referencing it. Any
+  // leftover auth is picked up by the cleanup script.
   try {
     await certManager.projects.locations.certificateMaps.certificateMapEntries.delete({
       name: `${parentMap}/certificateMapEntries/${entryId}`,
@@ -270,11 +317,11 @@ export async function removeDomain(accountId: string, domain?: string): Promise<
   } catch { /* ignore */ }
 
   if (domain) {
-    const orphan = await findCertMapEntryByHostname(certManager, parentMap, domain);
-    if (orphan?.name && !orphan.name.endsWith(`/${entryId}`)) {
+    const orphanEntry = await findCertMapEntryByHostname(certManager, parentMap, domain);
+    if (orphanEntry?.name && !orphanEntry.name.endsWith(`/${entryId}`)) {
       try {
         await certManager.projects.locations.certificateMaps.certificateMapEntries.delete({
-          name: orphan.name,
+          name: orphanEntry.name,
         });
       } catch { /* ignore */ }
     }
@@ -282,15 +329,26 @@ export async function removeDomain(accountId: string, domain?: string): Promise<
 
   try {
     await certManager.projects.locations.certificates.delete({
-      name: `projects/${PROJECT_ID}/locations/global/certificates/${certId}`,
+      name: `${parent}/certificates/${certId}`,
     });
   } catch { /* ignore */ }
 
   try {
     await certManager.projects.locations.dnsAuthorizations.delete({
-      name: `projects/${PROJECT_ID}/locations/global/dnsAuthorizations/${authId}`,
+      name: `${parent}/dnsAuthorizations/${authId}`,
     });
   } catch { /* ignore */ }
+
+  if (domain) {
+    const orphanAuth = await findDnsAuthorizationByDomain(certManager, parent, domain);
+    if (orphanAuth?.name && !orphanAuth.name.endsWith(`/${authId}`)) {
+      try {
+        await certManager.projects.locations.dnsAuthorizations.delete({
+          name: orphanAuth.name,
+        });
+      } catch { /* ignore */ }
+    }
+  }
 
   await updateAccount(accountId, { customDomain: "", domainStatus: "none" });
 }

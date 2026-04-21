@@ -33,6 +33,20 @@ const shouldDelete = process.argv.includes("--delete");
 
 type CertManager = ReturnType<typeof google.certificatemanager>;
 
+async function waitOperation(certManager: CertManager, name: string | undefined | null, timeoutMs = 120_000) {
+  if (!name) return;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const op = await certManager.projects.locations.operations.get({ name });
+    if (op.data.done) {
+      if (op.data.error) throw new Error(op.data.error.message || "Operation failed");
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error(`Operation ${name} did not complete within ${timeoutMs}ms`);
+}
+
 async function listAll<T>(
   fetchPage: (pageToken: string | undefined) => Promise<{ items: T[]; nextPageToken?: string }>
 ): Promise<T[]> {
@@ -144,7 +158,8 @@ async function main() {
   }
   for (const c of orphanCerts) {
     try {
-      await certManager.projects.locations.certificates.delete({ name: c.name });
+      const op = await certManager.projects.locations.certificates.delete({ name: c.name });
+      await waitOperation(certManager, op.data.name);
       console.log(`  deleted cert ${resourceId(c.name)}`);
     } catch (err) {
       console.warn(`  FAILED cert ${resourceId(c.name)}:`, err instanceof Error ? err.message : err);
@@ -152,7 +167,8 @@ async function main() {
   }
   for (const a of orphanAuths) {
     try {
-      await certManager.projects.locations.dnsAuthorizations.delete({ name: a.name });
+      const op = await certManager.projects.locations.dnsAuthorizations.delete({ name: a.name });
+      await waitOperation(certManager, op.data.name);
       console.log(`  deleted auth ${resourceId(a.name)}`);
     } catch (err) {
       console.warn(`  FAILED auth ${resourceId(a.name)}:`, err instanceof Error ? err.message : err);
