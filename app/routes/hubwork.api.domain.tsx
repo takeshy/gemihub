@@ -59,7 +59,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "remove": {
-      await removeDomain(account.id);
+      await removeDomain(account.id, account.customDomain);
       return data({ ok: true });
     }
 

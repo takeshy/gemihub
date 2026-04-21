@@ -35,6 +35,26 @@ function resourceSuffix(accountId: string): string {
   return accountId.toLowerCase();
 }
 
+type CertManagerClient = ReturnType<typeof google.certificatemanager>;
+
+async function findCertMapEntryByHostname(
+  certManager: CertManagerClient,
+  parentMap: string,
+  hostname: string
+) {
+  let pageToken: string | undefined;
+  do {
+    const resp = await certManager.projects.locations.certificateMaps.certificateMapEntries.list({
+      parent: parentMap,
+      pageToken,
+    });
+    const match = resp.data.certificateMapEntries?.find((e) => e.hostname === hostname);
+    if (match) return match;
+    pageToken = resp.data.nextPageToken || undefined;
+  } while (pageToken);
+  return undefined;
+}
+
 async function checkDnsARecord(domain: string): Promise<DnsACheck | undefined> {
   if (!LB_IP) return undefined;
   try {
@@ -100,22 +120,35 @@ export async function provisionDomain(
     if (status !== 409) throw e;
   }
 
-  // 3. Create certificate map entry
+  // 3. Create or reuse certificate map entry
+  // Hostnames are unique within a cert map, so a stale entry from a prior
+  // account lifecycle (different entry ID but same hostname) would make
+  // create return a non-409 error. Reuse it by patching its certificates.
   const entryId = `hw-entry-${suffix}`;
-  try {
-    await certManager.projects.locations.certificateMaps.certificateMapEntries.create({
-      parent: `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}`,
-      certificateMapEntryId: entryId,
-      requestBody: {
-        hostname: domain,
-        certificates: [
-          `projects/${PROJECT_ID}/locations/global/certificates/${certId}`,
-        ],
-      },
+  const parentMap = `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}`;
+  const certRef = `projects/${PROJECT_ID}/locations/global/certificates/${certId}`;
+
+  const existingEntry = await findCertMapEntryByHostname(certManager, parentMap, domain);
+  if (existingEntry?.name) {
+    await certManager.projects.locations.certificateMaps.certificateMapEntries.patch({
+      name: existingEntry.name,
+      updateMask: "certificates",
+      requestBody: { certificates: [certRef] },
     });
-  } catch (e: unknown) {
-    const status = (e as { code?: number })?.code;
-    if (status !== 409) throw e;
+  } else {
+    try {
+      await certManager.projects.locations.certificateMaps.certificateMapEntries.create({
+        parent: parentMap,
+        certificateMapEntryId: entryId,
+        requestBody: {
+          hostname: domain,
+          certificates: [certRef],
+        },
+      });
+    } catch (e: unknown) {
+      const status = (e as { code?: number })?.code;
+      if (status !== 409) throw e;
+    }
   }
 
   // The URL map has `default_service` routing any Host header to the Cloud
@@ -212,8 +245,12 @@ export async function getDomainStatus(
 
 /**
  * Remove a custom domain from a Hubwork account.
+ *
+ * Deletes both the standard resources (named by the account suffix) and any
+ * cert map entry matching the hostname, since a previously "reused" orphan
+ * may live under an entry ID that does not match this account's suffix.
  */
-export async function removeDomain(accountId: string): Promise<void> {
+export async function removeDomain(accountId: string, domain?: string): Promise<void> {
   if (!PROJECT_ID) return;
 
   const auth = getAuthClient();
@@ -223,13 +260,25 @@ export async function removeDomain(accountId: string): Promise<void> {
   const entryId = `hw-entry-${suffix}`;
   const certId = `hw-cert-${suffix}`;
   const authId = `hw-auth-${suffix}`;
+  const parentMap = `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}`;
 
   // Remove in reverse order: entry → cert → auth
   try {
     await certManager.projects.locations.certificateMaps.certificateMapEntries.delete({
-      name: `projects/${PROJECT_ID}/locations/global/certificateMaps/${CERT_MAP_NAME}/certificateMapEntries/${entryId}`,
+      name: `${parentMap}/certificateMapEntries/${entryId}`,
     });
   } catch { /* ignore */ }
+
+  if (domain) {
+    const orphan = await findCertMapEntryByHostname(certManager, parentMap, domain);
+    if (orphan?.name && !orphan.name.endsWith(`/${entryId}`)) {
+      try {
+        await certManager.projects.locations.certificateMaps.certificateMapEntries.delete({
+          name: orphan.name,
+        });
+      } catch { /* ignore */ }
+    }
+  }
 
   try {
     await certManager.projects.locations.certificates.delete({

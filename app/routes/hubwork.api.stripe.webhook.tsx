@@ -7,6 +7,7 @@ import {
   createAccount,
   updateAccount,
 } from "~/services/hubwork-accounts.server";
+import { removeDomain } from "~/services/hubwork-domain.server";
 
 export async function action({ request }: Route.ActionArgs) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -78,6 +79,13 @@ export async function action({ request }: Route.ActionArgs) {
       if (customerId) {
         const account = await getAccountByStripeCustomerId(customerId);
         if (account) {
+          if (account.customDomain) {
+            try {
+              await removeDomain(account.id, account.customDomain);
+            } catch (e) {
+              console.warn(`[stripe-webhook] Failed to remove custom domain for ${account.id}:`, e);
+            }
+          }
           await updateAccount(account.id, { billingStatus: "canceled", accountStatus: "disabled" });
         }
       }
@@ -96,6 +104,20 @@ export async function action({ request }: Route.ActionArgs) {
             : subscription.status === "past_due"
               ? "past_due" as const
               : "canceled" as const;
+          // Free GCP resources when transitioning to canceled (e.g. end of
+          // cancel_at_period_end window). subscription.deleted handles the
+          // immediate-delete path; this handles the scheduled-cancel path.
+          if (
+            billingStatus === "canceled" &&
+            account.billingStatus !== "canceled" &&
+            account.customDomain
+          ) {
+            try {
+              await removeDomain(account.id, account.customDomain);
+            } catch (e) {
+              console.warn(`[stripe-webhook] Failed to remove custom domain for ${account.id}:`, e);
+            }
+          }
           await updateAccount(account.id, {
             billingStatus,
             ...(billingStatus === "canceled" ? { accountStatus: "disabled" as const } : {}),

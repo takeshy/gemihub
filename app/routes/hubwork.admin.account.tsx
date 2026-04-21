@@ -2,6 +2,7 @@ import { redirect } from "react-router";
 import type { Route } from "./+types/hubwork.admin.account";
 import { requireAdminAuth } from "~/services/hubwork-admin-auth.server";
 import { getAccountById, updateAccount, deleteAccount } from "~/services/hubwork-accounts.server";
+import { removeDomain } from "~/services/hubwork-domain.server";
 import type { HubworkAccountPlan, HubworkAccountStatus, HubworkBillingStatus, HubworkDomainStatus } from "~/types/hubwork";
 import { validateOrigin } from "~/utils/security";
 
@@ -43,6 +44,14 @@ export async function action({ request, params }: Route.ActionArgs) {
       return redirect(`/hubwork/admin/accounts/${params.accountId}`);
     }
     case "delete": {
+      const account = await getAccountById(params.accountId);
+      if (account?.customDomain) {
+        try {
+          await removeDomain(account.id, account.customDomain);
+        } catch (e) {
+          console.warn(`[hubwork-admin] Failed to remove custom domain for ${account.id}:`, e);
+        }
+      }
       await deleteAccount(params.accountId);
       return redirect("/hubwork/admin");
     }
