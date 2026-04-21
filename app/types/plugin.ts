@@ -82,7 +82,17 @@ export interface PluginAPI {
   // Gemini API (via host /api/chat) — requires "gemini" permission
   gemini?: {
     chat(
-      messages: Array<{ role: string; content: string }>,
+      messages: Array<{
+        role: string;
+        content: string;
+        attachments?: Array<{
+          name: string;
+          type: "image" | "pdf" | "text" | "audio" | "video";
+          mimeType: string;
+          /** Base64-encoded binary data (no data: URI prefix). */
+          data: string;
+        }>;
+      }>,
       options?: { model?: string; systemPrompt?: string }
     ): Promise<string>;
   };

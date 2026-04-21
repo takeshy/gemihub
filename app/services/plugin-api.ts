@@ -101,6 +101,9 @@ export function createPluginAPI(
               role: m.role === "user" ? "user" : "assistant",
               content: m.content,
               timestamp: Date.now(),
+              ...(m.attachments && m.attachments.length > 0
+                ? { attachments: m.attachments }
+                : {}),
             })),
             model: chatOpts?.model || "gemini-2.5-flash",
             systemPrompt: chatOpts?.systemPrompt,
