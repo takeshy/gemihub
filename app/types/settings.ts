@@ -344,7 +344,7 @@ export function isImageGenerationModel(modelName: ModelType): boolean {
 }
 
 // Default models by plan
-export const DEFAULT_MODEL_FREE: ModelType = "gemini-2.5-flash";
+export const DEFAULT_MODEL_FREE: ModelType = "gemma-4-31b-it";
 export const DEFAULT_MODEL_PAID: ModelType = "gemini-3.1-pro-preview";
 
 export function getDefaultModelForPlan(plan: ApiPlan): ModelType {
