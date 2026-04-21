@@ -9,6 +9,7 @@ import {
   deleteEditHistoryEntry,
   type CachedTreeNode,
   type CachedRemoteMeta,
+  type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
 import type { FileListItem } from "~/contexts/EditorContext";
@@ -53,7 +54,10 @@ export function removeNodeFromTree(
     );
 }
 
-export function buildTreeFromMeta(meta: CachedRemoteMeta, trackedIds?: Set<string>): CachedTreeNode[] {
+export function buildTreeFromMeta(
+  meta: CachedRemoteMeta,
+  localFiles?: LocalSyncMeta["files"],
+): CachedTreeNode[] {
   const root: CachedTreeNode[] = [];
   const folderMap = new Map<string, CachedTreeNode>();
 
@@ -76,21 +80,49 @@ export function buildTreeFromMeta(meta: CachedRemoteMeta, trackedIds?: Set<strin
     return folderNode.children!;
   }
 
-  for (const [fileId, f] of Object.entries(meta.files)) {
-    // Skip system files (settings.json, _sync-meta.json, _encrypted-auth.json, etc.)
-    if (isSyncExcludedPath(f.name)) continue;
-    // Local-first tree: hide files that have never been pulled to this device.
-    // `new:` entries are local-only creations not yet pushed, so always keep them.
-    if (trackedIds && !trackedIds.has(fileId) && !fileId.startsWith("new:")) continue;
-    const parts = f.name.split("/");
+  type RenderEntry = { id: string; name: string; mimeType: string; modifiedTime: string };
+  const entries: RenderEntry[] = [];
+
+  if (localFiles) {
+    // Local-first tree: render what this device has tracked, using remote meta
+    // as the source of truth when available. If a file was removed on remote
+    // but is still tracked locally, it stays visible until the user pulls.
+    const seen = new Set<string>();
+    for (const [id, local] of Object.entries(localFiles)) {
+      seen.add(id);
+      const remote = meta.files[id];
+      const name = remote?.name ?? local.name;
+      if (!name) continue;
+      entries.push({
+        id,
+        name,
+        mimeType: remote?.mimeType ?? inferMimeTypeFromName(name),
+        modifiedTime: remote?.modifiedTime ?? local.modifiedTime,
+      });
+    }
+    // `new:` entries are local-only drafts not yet pushed; always keep them.
+    for (const [id, remote] of Object.entries(meta.files)) {
+      if (seen.has(id)) continue;
+      if (!id.startsWith("new:")) continue;
+      entries.push({ id, name: remote.name, mimeType: remote.mimeType, modifiedTime: remote.modifiedTime });
+    }
+  } else {
+    for (const [id, remote] of Object.entries(meta.files)) {
+      entries.push({ id, name: remote.name, mimeType: remote.mimeType, modifiedTime: remote.modifiedTime });
+    }
+  }
+
+  for (const entry of entries) {
+    if (isSyncExcludedPath(entry.name)) continue;
+    const parts = entry.name.split("/");
     const fileName = parts.pop()!;
     const parentChildren = ensureFolder(parts);
     parentChildren.push({
-      id: fileId,
+      id: entry.id,
       name: fileName,
-      mimeType: f.mimeType,
+      mimeType: entry.mimeType,
       isFolder: false,
-      modifiedTime: f.modifiedTime,
+      modifiedTime: entry.modifiedTime,
     });
   }
 
@@ -106,6 +138,35 @@ export function buildTreeFromMeta(meta: CachedRemoteMeta, trackedIds?: Set<strin
 
   sortChildren(root);
   return root;
+}
+
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+  md: "text/markdown",
+  markdown: "text/markdown",
+  html: "text/html",
+  htm: "text/html",
+  txt: "text/plain",
+  json: "application/json",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  csv: "text/csv",
+  xml: "text/xml",
+  js: "text/javascript",
+  mjs: "text/javascript",
+  ts: "application/typescript",
+  css: "text/css",
+};
+
+function inferMimeTypeFromName(name: string): string {
+  const ext = name.toLowerCase().split(".").pop() || "";
+  return EXTENSION_MIME_TYPES[ext] || "application/octet-stream";
 }
 
 export function flattenTree(nodes: CachedTreeNode[], parentPath: string, modifiedIds?: Set<string>): FileListItem[] {
