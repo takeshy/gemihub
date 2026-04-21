@@ -9,8 +9,6 @@ import {
   deleteCachedFile,
   renameCachedFile,
   deleteEditHistoryEntry,
-  getLocalSyncMeta,
-  setLocalSyncMeta,
   bulkRemoveLocalSyncMetaEntries,
   type CachedTreeNode,
   type CachedRemoteMeta,
@@ -552,12 +550,12 @@ export function useTreeFileOperations({
           }
           await deleteCachedFile(item.id);
           await deleteEditHistoryEntry(item.id);
-          const meta = await getLocalSyncMeta();
-          if (meta) {
-            delete meta.files[item.id];
-            meta.lastUpdatedAt = new Date().toISOString();
-            await setLocalSyncMeta(meta);
-          }
+          // Keep localMeta entry: it represents the last-synced baseline, not
+          // whether content is cached. Removing it would reclassify the file
+          // as `remoteOnly` on next diff, surfacing it in Pull to Local even
+          // after the user re-caches by clicking — because useFileWithCache
+          // deliberately does not re-register into localMeta on preview.
+          // Stale entries (remotely deleted) are auto-cleaned in checkRemoteChanges.
           setCachedFiles((prev) => {
             const next = new Set(prev);
             next.delete(item.id);
@@ -584,15 +582,10 @@ export function useTreeFileOperations({
 
           if (toDelete.length === 0) return;
 
-          const meta = await getLocalSyncMeta();
+          // Keep localMeta entries: see comment on file-level clear above.
           for (const id of toDelete) {
             await deleteCachedFile(id);
             await deleteEditHistoryEntry(id);
-            if (meta) delete meta.files[id];
-          }
-          if (meta) {
-            meta.lastUpdatedAt = new Date().toISOString();
-            await setLocalSyncMeta(meta);
           }
           setCachedFiles((prev) => {
             const next = new Set(prev);
