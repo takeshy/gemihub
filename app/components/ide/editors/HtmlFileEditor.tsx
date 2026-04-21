@@ -10,7 +10,14 @@ import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { TempDiffModal } from "../TempDiffModal";
 import { useIsMobile } from "~/hooks/useIsMobile";
-import { buildHtmlPreviewSrcDoc, buildMockGemihubScript } from "./html-preview-mock";
+import {
+  buildHtmlPreviewSrcDoc,
+  buildMockGemihubScript,
+  collectRelativeRefs,
+  resolveSiblingPath,
+  IMAGE_MIME_BY_EXT,
+  type SiblingAssetMap,
+} from "./html-preview-mock";
 
 type HtmlEditMode = "preview" | "raw";
 
@@ -155,19 +162,27 @@ export function HtmlFileEditor({
 
   const isMobile = useIsMobile();
 
-  // Load mock data from IndexedDB for IDE preview of Hubwork pages.
-  // Sandboxed iframes (origin: null) cannot fetch from the server, so we
-  // inject an inline mock api.js that returns cached mock data directly.
+  // Sandboxed iframes (sandbox="allow-scripts" without allow-same-origin) run
+  // with an opaque origin and cannot fetch from the network. Two consequences:
+  //  (a) Hubwork pages that load `/__gemihub/api.js` get an inline mock that
+  //      returns cached JSON directly.
+  //  (b) Plain HTML files that reference sibling .js/.css/image files by
+  //      relative path (e.g. public/deck/index.html → deck-stage.js) get
+  //      their siblings inlined from the IndexedDB cache.
   const needsMock = content.includes("/__gemihub/api.js");
-  const [mockReady, setMockReady] = useState(!needsMock);
+  const [previewReady, setPreviewReady] = useState(true);
   const [mockScript, setMockScript] = useState("");
+  const [siblings, setSiblings] = useState<SiblingAssetMap>({});
   useEffect(() => {
-    if (!needsMock) {
+    const relRefs = collectRelativeRefs(content);
+    const needsSiblings = relRefs.length > 0;
+    if (!needsMock && !needsSiblings) {
       setMockScript("");
-      setMockReady(true);
+      setSiblings({});
+      setPreviewReady(true);
       return;
     }
-    setMockReady(false);
+    setPreviewReady(false);
     let cancelled = false;
     (async () => {
       try {
@@ -175,33 +190,74 @@ export function HtmlFileEditor({
         const meta = await getCachedRemoteMeta();
         if (cancelled) return;
 
-        const mockData: Record<string, string> = {};
-        for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
-          if (fmeta.name?.startsWith("web/__gemihub/") && fmeta.name.endsWith(".json")) {
-            const cached = await getCachedFile(fid);
-            if (cached?.content) {
-              mockData[fmeta.name] = cached.content;
+        let newMockScript = "";
+        if (needsMock) {
+          const mockData: Record<string, string> = {};
+          for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
+            if (fmeta.name?.startsWith("web/__gemihub/") && fmeta.name.endsWith(".json")) {
+              const cached = await getCachedFile(fid);
+              if (cached?.content) {
+                mockData[fmeta.name] = cached.content;
+              }
+            }
+          }
+          newMockScript = buildMockGemihubScript(mockData);
+        }
+
+        const newSiblings: SiblingAssetMap = {};
+        if (needsSiblings && meta) {
+          const currentName = meta.files?.[fileId]?.name;
+          if (currentName) {
+            const currentDir = currentName.includes("/")
+              ? currentName.slice(0, currentName.lastIndexOf("/"))
+              : "";
+            const idByPath: Record<string, string> = {};
+            for (const [fid, fmeta] of Object.entries(meta.files)) {
+              if (fmeta.name) idByPath[fmeta.name] = fid;
+            }
+            for (const { kind, ref } of relRefs) {
+              const resolved = resolveSiblingPath(currentDir, ref);
+              if (!resolved) continue;
+              const fid = idByPath[resolved];
+              if (!fid) continue;
+              const cached = await getCachedFile(fid);
+              if (cancelled) return;
+              if (!cached?.content) continue;
+              if (kind === "script" || kind === "style") {
+                newSiblings[ref] = { kind, content: cached.content };
+              } else if (kind === "image") {
+                const dot = resolved.lastIndexOf(".");
+                const ext = dot >= 0 ? resolved.slice(dot + 1).toLowerCase() : "";
+                const mime = IMAGE_MIME_BY_EXT[ext];
+                if (!mime) continue;
+                newSiblings[ref] = {
+                  kind,
+                  content: cached.content,
+                  mime,
+                  base64: cached.encoding === "base64",
+                };
+              }
             }
           }
         }
+
         if (cancelled) return;
-        setMockScript(buildMockGemihubScript(mockData));
-        setMockReady(true);
+        setMockScript(newMockScript);
+        setSiblings(newSiblings);
+        setPreviewReady(true);
       } catch {
+        if (cancelled) return;
         setMockScript("");
-        setMockReady(true);
+        setSiblings({});
+        setPreviewReady(true);
       }
     })();
     return () => { cancelled = true; };
-  }, [content, needsMock]);
+  }, [content, fileId, needsMock]);
 
-  // Inject touch tracking + mock api.js into srcDoc.
-  // sandbox="allow-scripts" (without allow-same-origin) keeps the iframe in
-  // an opaque origin — safe, but fetch() is blocked by CORS. So we always
-  // strip the api.js src tag (it can never work) and inject our mock instead.
   const srcDocWithScripts = useMemo(() => {
-    return buildHtmlPreviewSrcDoc(content, mockScript);
-  }, [content, mockScript]);
+    return buildHtmlPreviewSrcDoc(content, mockScript, siblings);
+  }, [content, mockScript, siblings]);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -259,7 +315,7 @@ export function HtmlFileEditor({
       </div>
 
       {/* Content area */}
-      {mode === "preview" && mockReady && (
+      {mode === "preview" && previewReady && (
         <iframe
           srcDoc={srcDocWithScripts}
           className="flex-1 w-full border-0 bg-white"
@@ -267,7 +323,7 @@ export function HtmlFileEditor({
           sandbox="allow-scripts"
         />
       )}
-      {mode === "preview" && !mockReady && (
+      {mode === "preview" && !previewReady && (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading...</div>
       )}
 
