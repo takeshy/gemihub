@@ -23,6 +23,7 @@ export async function loader({ params }: Route.LoaderArgs) {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=300",
+        "X-Robots-Tag": "noindex, nofollow",
       },
     });
   } catch {
