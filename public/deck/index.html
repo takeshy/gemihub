@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>GemiHub — AIネイティブなGoogle Driveデータ基盤</title>
+<script src="deck-stage.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script type="application/json" id="speaker-notes">
+[
+  "こんにちは、GemiHubを開発している takeshy と申します。今日は、自分がGoogle Cloudの Agentic AI Hackathon に出したこのアプリを通じて、AIネイティブなGoogle Driveデータ基盤をどう設計したか、そしてその背景にある「個人情報はゼロ預かり・ロックインなし」という思想を10分弱でお話しします。目指しているのは、AI時代のExcelです。今すぐ gemihub.online で触っていただけます。",
+
+  "まず、今回のハッカソンで気づいたことから始めさせてください。GemiHubをAgentic AI Hackathonに応募したところ、AIに事前評価させた時は絶賛されたのに、本番ではノミネートすらされませんでした。AIの指摘は、自律性が足りない、効果が定量化されていない、ターゲットがぼやけている、の3つ。ハッカソンで勝つアドバイスとしては全部正しいです。でも、この評価を見て、むしろ自分が作りたいものが明確になりました。目指すのは全自動の魔法じゃなくて、使い手のスキルに合わせて育つ道具です。この確信のもと、ドメインを取り、商標を申請し、GoogleにOAuthの公開アプリ申請を出し、Stripeの審査も通しました。5万円ちょっとかかりましたが、本気でやる覚悟の表明です。",
+
+  "目指しているのは、AI時代のExcelです。なぜExcelがこれほど長く愛されるのか。答えはLow Floor, High Ceiling。敷居は低く、天井は高い。初心者にはセル入力、慣れた人には関数、達人にはマクロとVBA。同じアプリが使い手のレベルで姿を変えます。GemiHubも同じ構造です。レベル1はメモ帳、リッチテキストとMarkdownで書ける。レベル2はRAG、過去のノートをAIが横断検索して「あの件どうなってたっけ」に答える。レベル3はワークフロー、MCP、プラグイン。自然言語でAIに自動化を組ませる。初心者にはノート、達人には開発環境。使いこなすほどできることが広がる、これが道具の本質です。",
+
+  "さて、今日一番伝えたいのはこのスライドです。設計思想は「個人情報ゼロ預かり、ロックインなし」。普通のSaaSはユーザーデータを自社DBに抱え込みます。GemiHubはその真逆です。DBを持ちません。データ実体はすべてユーザー自身のGoogle Drive上にあります。OAuthスコープも drive.files だけ、つまりGemiHubが作ったファイルしかアプリから見えない。ユーザーの他のドライブ資産には一切触れません。さらにRSAとAESのハイブリッド暗号化で、AIにすら中身を見せない選択ができます。オフラインはIndexedDBとServiceWorkerで動いて、再接続時にPush/Pullで同期。有料プランの課金情報だけは改ざん防止のためにFirebaseに置きますが、それ以外は本当に何も預かっていません。サービスが将来消えても、ユーザーのファイルはGoogle Driveにそのまま残ります。これが最大のセキュリティ対策であり、ユーザーへの約束です。",
+
+  "では実際にどう使えるか、3段階でお見せします。レベル1、メモ帳としての使い方。オンラインでもオフラインでも書けて、PCを買い替えてもブラウザでログインすればメモが戻ってきます。レベル2、RAGとして。自動登録されたノートから文脈を拾って答える。「先週のMTGでなに決まったっけ」に答えられます。レベル3、マクロとして。自然言語で依頼するだけでVisual Workflow、Plugin、SkillをAIが生成します。たとえば「メールの下書きを作って、承認したら送信、そのままカレンダーに予定を入れる」。これが一文で組めます。既存プラグインも会計の複式簿記、タスク管理、楽譜起こし、AI同士の議論などいろいろ揃っています。ここで実際のデモをお見せします。",
+
+  "同じGemiHubが、使い手によって全く違う姿になります。ひとり目、私のパートナー。幼児保育の専門家で非エンジニアです。Debateプラグインで複数のAIと保育論を議論して、自分の専門知識を言語化・深化させています。ふたり目、知人の研究者。大量の論文をRAGに取り込み、分野横断の文献調査に使っています。そして私自身。海外記事を日本語インフォグラフィックに変換するワークフロー、父から来るスペイン語LINEの翻訳補助、日報の自動生成。データが一箇所に集約されたプラットフォームで、使い手が道具の意味を決める。これが私の考えるAI時代のExcelです。",
+
+  "最後にまとめさせてください。AIが優秀になるほど、データ自体の価値が上がります。だから秘匿情報も含めて一箇所に集約して管理を楽にしたい。でも秘匿情報をAIに見られるのは抵抗がある。だから暗号化で守って、必要な場面だけユーザーがパスワードで復号する。プログラマは今、レビューでコードをほとんど見ずにAIに聞いて動かして確認しています。同じように、処理内容をビジュアルで見えれば、非エンジニアでもバイブコーディングでタスク自動化が組めるはずです。Skill生成はハイエンドモデルでPlan・Generate・Reviewを回し、実行は安くて速いモデルを使う、というコスト最適化もできます。ProプランではカスタムドメインでAIがWebページとAPIごと実装する、つまりWebサービス丸ごと構築できます。面接予約ポータルのような例です。Googleさんからクーポンをいただいたおかげで様々なチャレンジを試すことができました。この機会を与えてくださり本当にありがとうございました。ぜひ gemihub.online で触ってみてください。"
+]
+</script>
+
+<style>
+:root {
+  --blue: #4285F4;
+  --red:  #EA4335;
+  --yellow: #FBBC04;
+  --yellow-ink: #B77D00;
+  --green: #34A853;
+  --ink: #202124;
+  --ink-2: #5F6368;
+  --ink-3: #80868B;
+  --line: #E8EAED;
+  --line-2: #DADCE0;
+  --bg: #FFFFFF;
+  --bg-2: #F8F9FA;
+  --bg-3: #F1F3F4;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; background: #111;
+  font-family: 'Noto Sans JP', 'DM Sans', sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+deck-stage { display: block; }
+
+.slide {
+  width: 1920px; height: 1080px;
+  background: var(--bg);
+  padding: 110px 140px;
+  display: flex; flex-direction: column;
+  position: relative; overflow: hidden;
+}
+
+.eyebrow {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 26px; font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 28px;
+}
+.eyebrow .num {
+  display: inline-block; margin-right: 16px;
+  color: var(--ink); font-weight: 700;
+}
+
+.title-xl {
+  font-family: 'DM Sans', 'Noto Sans JP', sans-serif;
+  font-weight: 700;
+  font-size: 84px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0;
+  text-wrap: pretty;
+}
+.title-l {
+  font-family: 'DM Sans', 'Noto Sans JP', sans-serif;
+  font-weight: 700;
+  font-size: 64px;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0;
+  text-wrap: pretty;
+}
+.title-m {
+  font-size: 44px; font-weight: 600; line-height: 1.3;
+  letter-spacing: -0.005em; color: var(--ink); margin: 0;
+}
+
+.footer-ribbon {
+  position: absolute; left: 140px; right: 140px; bottom: 56px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 22px; color: var(--ink-3); letter-spacing: 0.08em;
+}
+.footer-ribbon .r { display: flex; gap: 40px; }
+.footer-ribbon .r b { color: var(--ink-2); font-weight: 600; }
+.footer-ribbon { display: none !important; }
+.logo {
+  display: inline-flex; align-items: center; gap: 14px;
+  font-family: 'DM Sans', sans-serif; font-weight: 700;
+  font-size: 28px; color: var(--ink); letter-spacing: -0.01em;
+}
+.logo .mark {
+  width: 36px; height: 36px; border-radius: 8px; position: relative;
+  background:
+    conic-gradient(from 210deg at 50% 50%,
+      var(--blue) 0 25%,
+      var(--red) 25% 50%,
+      var(--yellow) 50% 75%,
+      var(--green) 75% 100%);
+}
+.logo .mark::after {
+  content: ""; position: absolute; inset: 9px;
+  background: #fff; border-radius: 4px;
+}
+
+/* ========== 01 COVER ========== */
+.s-cover { padding: 140px 140px !important; justify-content: space-between; }
+.s-cover .top { display: flex; justify-content: space-between; align-items: center; }
+.s-cover .tag {
+  font-family: 'DM Sans', sans-serif; font-size: 24px; color: var(--ink-3);
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+.s-cover .hero { display: flex; flex-direction: column; gap: 40px; max-width: 1700px; }
+.s-cover .headline {
+  font-family: 'DM Sans', 'Noto Sans JP', sans-serif;
+  font-weight: 700; font-size: 108px; line-height: 1.1;
+  letter-spacing: -0.025em; color: var(--ink); margin: 0;
+  text-wrap: balance;
+}
+.s-cover .headline .blue   { color: var(--blue);   }
+.s-cover .headline .red    { color: var(--red);    }
+.s-cover .headline .yellow { color: #E6A700;       }
+.s-cover .headline .green  { color: var(--green);  }
+.s-cover .sub {
+  font-size: 38px; line-height: 1.5; color: var(--ink-2); font-weight: 500;
+  max-width: 1550px; letter-spacing: -0.005em;
+}
+.s-cover .sub b { color: var(--ink); font-weight: 700; }
+.s-cover .bottom {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  font-family: 'DM Sans', sans-serif;
+}
+.s-cover .url {
+  font-size: 36px; color: var(--ink); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 16px;
+}
+.s-cover .url .arrow { color: var(--blue); }
+.s-cover .by { font-size: 22px; color: var(--ink-3); letter-spacing: 0.08em; text-align: right; }
+.s-cover .by b { display: block; color: var(--ink-2); font-size: 26px; letter-spacing: -0.005em; margin-top: 6px; }
+
+/* bg dots */
+.dots {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle at 88% 18%, rgba(66,133,244,0.08) 0 180px, transparent 181px),
+    radial-gradient(circle at 92% 68%, rgba(52,168,83,0.06) 0 140px, transparent 141px),
+    radial-gradient(circle at 78% 92%, rgba(251,188,4,0.07) 0 100px, transparent 101px);
+}
+
+/* ========== 02 HACKATHON ========== */
+.s-hack { background: var(--bg-2); }
+.s-hack .grid {
+  margin-top: 28px;
+  display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 80px;
+  flex: 1; align-items: stretch;
+}
+.hack-story { display: flex; flex-direction: column; gap: 24px; justify-content: center;}
+.hack-story p {
+  margin: 0; font-size: 30px; line-height: 1.65; color: var(--ink-2);
+}
+.hack-story p b { color: var(--ink); font-weight: 600; }
+.hack-story .turn {
+  margin-top: 16px; padding: 28px 32px;
+  background: linear-gradient(90deg, rgba(66,133,244,0.08), rgba(52,168,83,0.06));
+  border-left: 6px solid var(--blue); border-radius: 4px 14px 14px 4px;
+  font-size: 32px; line-height: 1.55; color: var(--ink); font-weight: 500;
+}
+.hack-story .turn b { background: linear-gradient(transparent 60%, rgba(251,188,4,0.4) 60%); }
+
+.hack-eval {
+  background: #fff; border-radius: 24px; border: 1px solid var(--line);
+  padding: 48px 44px; display: flex; flex-direction: column; gap: 24px;
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,0.08);
+}
+.hack-eval .h {
+  font-family: 'DM Sans', sans-serif; font-size: 24px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+  display: flex; align-items: center; gap: 14px;
+}
+.hack-eval .h .chip {
+  background: rgba(234,67,53,0.12); color: var(--red);
+  padding: 6px 14px; border-radius: 999px; font-size: 22px; letter-spacing: 0.05em;
+}
+.hack-eval .h .t { color: var(--ink); font-weight: 700; letter-spacing: -0.005em; text-transform: none; font-size: 32px;}
+.eval-list { display: flex; flex-direction: column; gap: 20px; }
+.eval-list .item {
+  display: flex; gap: 20px; padding: 20px 22px;
+  background: var(--bg-2); border-radius: 14px;
+}
+.eval-list .n {
+  flex: 0 0 44px; height: 44px; border-radius: 12px;
+  display: grid; place-items: center;
+  font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 24px;
+  background: #fff; color: var(--red); border: 1px solid var(--line);
+}
+.eval-list .t { font-size: 26px; font-weight: 600; color: var(--ink); line-height: 1.4;}
+.eval-list .d { font-size: 24px; line-height: 1.6; color: var(--ink-2); margin-top: 4px; }
+.eval-list .item .txt { display: flex; flex-direction: column; gap: 2px; }
+
+.commit-strip {
+  display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px;
+}
+.commit-strip .badge {
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px;
+  padding: 12px 20px; font-size: 24px; color: var(--ink-2);
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: 'DM Sans','Noto Sans JP', sans-serif; font-weight: 500;
+}
+.commit-strip .badge b { color: var(--ink); font-weight: 600; }
+.commit-strip .badge .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.commit-strip .badge.b .dot { background: var(--blue); }
+.commit-strip .badge.r .dot { background: var(--red); }
+.commit-strip .badge.y .dot { background: var(--yellow); }
+.commit-strip .badge.g .dot { background: var(--green); }
+
+/* ========== 03 EXCEL ========== */
+.s-excel .grid {
+  display: grid; grid-template-columns: 1fr; gap: 20px;
+  margin-top: 20px; flex: 1;
+}
+.excel-note {
+  font-size: 24px; line-height: 1.5; color: var(--ink-2);
+  max-width: 1550px;
+}
+.excel-note b { color: var(--ink); font-weight: 600; }
+
+.ladder-table {
+  background: #fff; border-radius: 20px; border: 1px solid var(--line);
+  overflow: hidden;
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,0.08);
+}
+.ladder-table .head, .ladder-table .row {
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr;
+  align-items: center;
+}
+.ladder-table .head {
+  background: var(--bg-2); padding: 18px 28px;
+  font-family: 'DM Sans', sans-serif; font-size: 24px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line);
+}
+.ladder-table .head .l-excel { color: var(--ink-2); }
+.ladder-table .head .l-gem { color: var(--blue); }
+.ladder-table .row { padding: 22px 28px; border-bottom: 1px solid var(--line); }
+.ladder-table .row:last-child { border-bottom: 0; }
+.ladder-table .row .lv {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 40px; font-weight: 700; letter-spacing: -0.02em;
+}
+.ladder-table .row.l1 .lv { color: var(--blue); }
+.ladder-table .row.l2 .lv { color: var(--yellow-ink); }
+.ladder-table .row.l3 .lv { color: var(--green); }
+.ladder-table .cell {
+  display: flex; flex-direction: column; gap: 6px; padding-right: 24px;
+}
+.ladder-table .cell .n { font-size: 26px; font-weight: 700; color: var(--ink); }
+.ladder-table .cell .s { font-size: 22px; color: var(--ink-2); line-height: 1.45; }
+.ladder-table .cell .k {
+  font-family: 'JetBrains Mono', monospace; font-size: 20px; color: var(--ink-3); margin-top: 2px;
+}
+.ladder-table .cell.gem .n { color: var(--ink); }
+.ladder-table .row.l1 .cell.gem { background: linear-gradient(90deg, rgba(66,133,244,0.06), transparent 70%); }
+.ladder-table .row.l2 .cell.gem { background: linear-gradient(90deg, rgba(251,188,4,0.10), transparent 70%); }
+.ladder-table .row.l3 .cell.gem { background: linear-gradient(90deg, rgba(52,168,83,0.07), transparent 70%); }
+.ladder-table .cell.gem { padding-left: 20px; border-left: 2px solid var(--line); }
+
+.excel-quote {
+  display: flex; gap: 40px; align-items: center; justify-content: space-between;
+  padding: 22px 36px; background: var(--bg-2); border-radius: 18px; border: 1px solid var(--line);
+}
+.excel-quote .q {
+  font-size: 26px; line-height: 1.5; color: var(--ink); font-weight: 500;
+  max-width: 1200px;
+}
+.excel-quote .q b { background: linear-gradient(transparent 60%, rgba(52,168,83,0.3) 60%); font-weight: 700;}
+.excel-quote .rhs {
+  font-family: 'DM Sans', sans-serif; font-size: 22px; color: var(--ink-3);
+  letter-spacing: 0.05em; text-align: right; line-height: 1.4; flex-shrink: 0;
+}
+.excel-quote .rhs b { display: block; color: var(--ink); font-weight: 700; font-size: 28px; margin-top: 4px; letter-spacing: -0.01em;}
+
+/* ========== 04 PRINCIPLES ========== */
+.s-principle { background: var(--ink); color: #fff; padding: 80px 140px !important;}
+.s-principle .eyebrow { color: rgba(255,255,255,0.5); margin-bottom: 18px;}
+.s-principle .eyebrow .num { color: #fff; }
+.s-principle .title-xl { color: #fff; font-size: 64px; }
+.s-principle .sub {
+  font-size: 26px; line-height: 1.5; color: rgba(255,255,255,0.75);
+  max-width: 1500px; margin-top: 18px; font-weight: 400;
+}
+.s-principle .sub b { color: #fff; font-weight: 600; }
+
+.pr-grid {
+  margin-top: 32px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; flex: 1;
+}
+.pr-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px; padding: 22px 24px 22px;
+  display: flex; flex-direction: column; gap: 10px;
+  backdrop-filter: blur(10px);
+  position: relative; overflow: hidden;
+}
+.pr-card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+}
+.pr-card.c1::before { background: var(--blue); }
+.pr-card.c2::before { background: var(--green); }
+.pr-card.c3::before { background: var(--yellow); }
+.pr-card.c4::before { background: var(--red); }
+.pr-card.c5::before { background: var(--blue); }
+.pr-card.c6::before { background: var(--green); }
+.pr-card .ic {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: rgba(255,255,255,0.08);
+  display: grid; place-items: center;
+  color: #fff; font-size: 22px;
+  font-family: 'DM Sans', sans-serif; font-weight: 700;
+}
+.pr-card.c1 .ic { background: rgba(66,133,244,0.25); color: #8AB4F8; }
+.pr-card.c2 .ic { background: rgba(52,168,83,0.25); color: #81C995; }
+.pr-card.c3 .ic { background: rgba(251,188,4,0.25); color: #FDD663; }
+.pr-card.c4 .ic { background: rgba(234,67,53,0.25); color: #F28B82; }
+.pr-card.c5 .ic { background: rgba(66,133,244,0.25); color: #8AB4F8; }
+.pr-card.c6 .ic { background: rgba(52,168,83,0.25); color: #81C995; }
+.pr-card .t { font-size: 23px; font-weight: 700; color: #fff; line-height: 1.25; letter-spacing: -0.005em;}
+.pr-card .d { font-size: 19px; color: rgba(255,255,255,0.72); line-height: 1.5; }
+.pr-card .d b { color: #fff; font-weight: 600; }
+.pr-card .tag {
+  margin-top: auto; font-family: 'JetBrains Mono', monospace;
+  font-size: 17px; color: rgba(255,255,255,0.5); padding-top: 8px;
+  border-top: 1px dashed rgba(255,255,255,0.15);
+}
+
+.pr-closing {
+  margin-top: 24px; padding: 22px 32px;
+  background: rgba(255,255,255,0.06); border-radius: 14px;
+  font-size: 24px; color: #fff; line-height: 1.5; font-weight: 500; letter-spacing: -0.005em;
+  display: flex; gap: 18px; align-items: center;
+}
+.pr-closing .q {
+  font-family: 'DM Sans', sans-serif; font-weight: 700;
+  font-size: 36px; color: var(--yellow); flex-shrink: 0;
+}
+
+/* ========== 05 DEMO / 3 ways ========== */
+.s-demo .grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px;
+  margin-top: 40px;
+}
+.demo-card {
+  border-radius: 22px; padding: 40px 36px 36px;
+  border: 1px solid var(--line); background: #fff;
+  display: flex; flex-direction: column; gap: 18px; min-height: 540px;
+  position: relative; overflow: hidden;
+}
+.demo-card::after {
+  content: ""; position: absolute; inset: 0; top: 0; height: 6px;
+}
+.demo-card.l1 { background: linear-gradient(180deg, rgba(66,133,244,0.05), #fff 40%);}
+.demo-card.l1::after { background: var(--blue); }
+.demo-card.l2 { background: linear-gradient(180deg, rgba(251,188,4,0.08), #fff 40%);}
+.demo-card.l2::after { background: var(--yellow); }
+.demo-card.l3 { background: linear-gradient(180deg, rgba(52,168,83,0.06), #fff 40%);}
+.demo-card.l3::after { background: var(--green); }
+.demo-card .head {
+  display: flex; align-items: baseline; gap: 18px;
+}
+.demo-card .lv {
+  font-family: 'DM Sans', sans-serif; font-weight: 700;
+  font-size: 32px; letter-spacing: -0.01em;
+}
+.demo-card.l1 .lv { color: var(--blue); }
+.demo-card.l2 .lv { color: var(--yellow-ink); }
+.demo-card.l3 .lv { color: var(--green); }
+.demo-card .role {
+  font-size: 20px; color: var(--ink-3); font-family: 'DM Sans', sans-serif;
+  font-weight: 500; white-space: nowrap;
+}
+.demo-card .what {
+  font-size: 36px; font-weight: 700; color: var(--ink); line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.demo-card .desc {
+  font-size: 25px; line-height: 1.6; color: var(--ink-2);
+}
+.demo-card .desc b { color: var(--ink); font-weight: 600; }
+.demo-card .eg {
+  margin-top: auto; padding: 20px 22px; background: var(--bg-2); border-radius: 14px;
+  border: 1px solid var(--line);
+  font-family: 'JetBrains Mono', monospace; font-size: 22px; line-height: 1.55; color: var(--ink-2);
+}
+.demo-card .eg .pmt { color: var(--ink-3); display: block; margin-bottom: 4px; font-size: 20px; letter-spacing: 0.05em;}
+
+.plugin-row {
+  margin-top: 32px; padding: 28px 36px;
+  background: var(--bg-2); border-radius: 18px; border: 1px solid var(--line);
+  display: flex; align-items: center; gap: 28px;
+}
+.plugin-row .lb {
+  font-family: 'DM Sans', sans-serif; font-size: 22px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-3); flex-shrink: 0;
+}
+.plugin-row .items {
+  display: flex; gap: 10px; flex-wrap: wrap; flex: 1;
+}
+.plugin-row .chip {
+  padding: 12px 22px; border-radius: 999px; background: #fff; border: 1px solid var(--line);
+  font-size: 24px; font-weight: 500; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.plugin-row .chip .d { width: 10px; height: 10px; border-radius: 50%;}
+.plugin-row .chip.a .d { background: var(--blue);}
+.plugin-row .chip.b .d { background: var(--yellow);}
+.plugin-row .chip.c .d { background: var(--red);}
+.plugin-row .chip.d .d { background: var(--green);}
+.plugin-row .chip.e .d { background: var(--blue);}
+
+/* ========== 06 USERS ========== */
+.s-users { background: var(--bg-2); }
+.s-users .u-grid {
+  margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px;
+  flex: 1;
+}
+.u-card {
+  background: #fff; border-radius: 22px; padding: 44px 36px 36px;
+  border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 20px;
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,0.06);
+}
+.u-card .who {
+  display: flex; align-items: center; gap: 16px;
+}
+.u-card .av {
+  width: 68px; height: 68px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 30px; color: #fff;
+}
+.u-card.a .av { background: linear-gradient(135deg, var(--red), #F28B82);}
+.u-card.b .av { background: linear-gradient(135deg, var(--blue), #8AB4F8);}
+.u-card.c .av { background: linear-gradient(135deg, var(--green), #81C995);}
+.u-card .who .role {
+  font-family: 'DM Sans', sans-serif; font-size: 24px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+}
+.u-card .who .role b { display: block; color: var(--ink); font-size: 28px; letter-spacing: -0.005em; text-transform: none; margin-top: 4px; font-weight: 700; }
+.u-card .t { font-size: 32px; font-weight: 700; color: var(--ink); line-height: 1.3; letter-spacing: -0.005em;}
+.u-card .d { font-size: 25px; line-height: 1.65; color: var(--ink-2); }
+.u-card .tools {
+  margin-top: auto; display: flex; flex-wrap: wrap; gap: 8px;
+  padding-top: 18px; border-top: 1px dashed var(--line-2);
+}
+.u-card .tools .chip {
+  background: var(--bg-2); border: 1px solid var(--line);
+  padding: 8px 16px; border-radius: 999px; font-size: 22px;
+  font-family: 'JetBrains Mono', monospace; color: var(--ink-2);
+}
+
+.u-sum {
+  margin-top: 44px; text-align: center;
+  font-size: 36px; line-height: 1.5; color: var(--ink); font-weight: 500; letter-spacing: -0.005em;
+}
+.u-sum em {
+  font-style: normal;
+  background: linear-gradient(transparent 60%, rgba(251,188,4,0.35) 60%);
+  padding: 0 6px;
+}
+
+/* ========== 07 CLOSING ========== */
+.s-close {
+  background:
+    radial-gradient(55% 45% at 12% 18%, rgba(66,133,244,0.12), transparent 60%),
+    radial-gradient(50% 45% at 88% 82%, rgba(52,168,83,0.10), transparent 60%),
+    radial-gradient(40% 40% at 88% 18%, rgba(234,67,53,0.08), transparent 60%),
+    radial-gradient(40% 40% at 12% 82%, rgba(251,188,4,0.10), transparent 60%),
+    #fff;
+  padding: 80px 140px !important;
+}
+.s-close .close-grid {
+  display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 50px;
+  margin-top: 16px; flex: 1;
+}
+.close-points { display: flex; flex-direction: column; gap: 12px; }
+.cp {
+  display: flex; gap: 18px; padding: 16px 22px;
+  background: rgba(255,255,255,0.6); border-radius: 14px;
+  border: 1px solid var(--line);
+  backdrop-filter: blur(4px);
+}
+.cp .n {
+  flex: 0 0 40px; height: 40px; border-radius: 10px;
+  display: grid; place-items: center;
+  font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 20px; color: #fff;
+}
+.cp.a .n { background: var(--blue); }
+.cp.b .n { background: var(--red); }
+.cp.c .n { background: var(--yellow); color: var(--ink); }
+.cp.d .n { background: var(--green); }
+.cp.e .n { background: var(--blue); }
+.cp.f .n { background: var(--red); }
+.cp .txt {
+  font-size: 21px; line-height: 1.5; color: var(--ink-2);
+}
+.cp .txt b { color: var(--ink); font-weight: 600; }
+
+.thank-col {
+  display: flex; flex-direction: column; gap: 20px;
+}
+.thank-hero {
+  background: var(--ink); color: #fff;
+  border-radius: 22px; padding: 32px 36px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.thank-hero .h {
+  font-family: 'DM Sans', sans-serif; font-size: 20px;
+  letter-spacing: 0.15em; text-transform: uppercase; color: rgba(255,255,255,0.5);
+}
+.thank-hero .t {
+  font-size: 30px; font-weight: 700; line-height: 1.35; letter-spacing: -0.005em;
+}
+.thank-hero .t .google {
+  font-family: 'DM Sans', sans-serif; font-weight: 700; letter-spacing: -0.01em;
+}
+.thank-hero .t .google .b { color: var(--blue);}
+.thank-hero .t .google .r { color: var(--red);}
+.thank-hero .t .google .y { color: var(--yellow);}
+.thank-hero .t .google .g { color: var(--green);}
+.thank-hero .d {
+  font-size: 21px; line-height: 1.6; color: rgba(255,255,255,0.75);
+}
+.thank-hero .sig {
+  margin-top: 4px; font-size: 22px; color: #fff; font-weight: 600;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.thank-hero .sig em { font-style: normal; color: rgba(255,255,255,0.5); font-weight: 400; font-size: 20px;}
+
+.cta-card {
+  background: #fff; border: 1px solid var(--line);
+  border-radius: 18px; padding: 26px 32px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cta-card .l {
+  font-family: 'DM Sans', sans-serif; font-size: 20px;
+  letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-3);
+}
+.cta-card .url {
+  font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 38px;
+  color: var(--ink); letter-spacing: -0.01em;
+  display: inline-flex; align-items: center; gap: 14px;
+}
+.cta-card .url .dot { color: var(--blue); }
+.cta-card .d {
+  font-size: 20px; line-height: 1.55; color: var(--ink-2);
+}
+
+</style>
+
+</head>
+<body>
+
+<deck-stage width="1920" height="1080">
+
+<!-- 01 COVER -->
+<section class="slide s-cover" data-label="Cover">
+  <div class="dots"></div>
+  <div class="top">
+    <div class="logo"><div class="mark"></div>GemiHub</div>
+    <div class="tag">Agentic AI Hackathon — Revenge Pitch</div>
+  </div>
+
+  <div class="hero">
+    <h1 class="headline">
+      AIネイティブな<br>
+      <span class="blue">G</span><span class="red">o</span><span class="yellow">o</span><span class="blue">g</span><span class="green">l</span><span class="red">e</span> Drive<br>
+      データ基盤のつくりかた。
+    </h1>
+    <div class="sub">
+      <b>個人情報ゼロ預かり・ロックインなし</b>の設計思想。<br>
+      AI時代の Excel を目指す、<b>GemiHub</b> の話。
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="url"><span class="arrow">→</span> gemihub.online</div>
+    <div class="by">Presented by <b>takeshy</b></div>
+  </div>
+</section>
+
+<!-- 02 HACKATHON LEARNINGS -->
+<section class="slide s-hack" data-label="Hackathon">
+  <div class="eyebrow"><span class="num">01</span>はじめに — ハッカソンで気づいたこと</div>
+  <h2 class="title-l">AIに絶賛されて、<br>本番ではノミネートすらされなかった。</h2>
+
+  <div class="grid">
+    <div class="hack-story">
+      <p>Google Cloud <b>Agentic AI Hackathon</b> に、自作アプリ <b>GemiHub</b> を応募。<br>提出前、AIに評価させたら「完成度が高い」と絶賛された。</p>
+      <p>けれど、本番ではノミネートすらされなかった。</p>
+      <div class="turn">
+        でも AI の指摘を読んで、むしろ <b>自分の本当にやりたいこと</b> が明確になった。
+      </div>
+      <div class="commit-strip">
+        <div class="badge b"><span class="dot"></span>Domain 取得</div>
+        <div class="badge r"><span class="dot"></span>商標申請</div>
+        <div class="badge y"><span class="dot"></span>OAuth 公開申請</div>
+        <div class="badge g"><span class="dot"></span>Stripe 審査</div>
+      </div>
+    </div>
+
+    <div class="hack-eval">
+      <div class="h">
+        <span class="chip">AI Evaluation</span>
+        <div class="t">ハッカソン向けの3つの指摘</div>
+      </div>
+      <div class="eval-list">
+        <div class="item">
+          <div class="n">1</div>
+          <div class="txt">
+            <div class="t">自律性 (Agentic) が足りない</div>
+            <div class="d">AIが自分で判断・行動する要素が薄い。人間が定義する構造になっている。</div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="n">2</div>
+          <div class="txt">
+            <div class="t">効果が定量化されていない</div>
+            <div class="d">「作業時間を◯%削減」のような定量メッセージがない。</div>
+          </div>
+        </div>
+        <div class="item">
+          <div class="n">3</div>
+          <div class="txt">
+            <div class="t">ターゲットがぼやけている</div>
+            <div class="d">メモアプリか、業務自動化か、立ち位置が一言で説明できない。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-ribbon">
+    <div>GemiHub — AI Revenge Pitch</div>
+    <div class="r"><span><b>01</b> / 07</span></div>
+  </div>
+</section>
+
+<!-- 03 AI時代のExcel -->
+<section class="slide s-excel" data-label="Excel Ladder">
+  <div class="eyebrow"><span class="num">02</span>目指すのは「AI時代のExcel」</div>
+  <h2 class="title-l">Low Floor, High Ceiling.<br>敷居は低く、天井は高く。</h2>
+  <div class="excel-note">Excelが長く愛される理由は、<b>同じアプリが使い手のレベルで姿を変える</b>こと。<br>GemiHubもこの構造をそのまま継承する。</div>
+
+  <div class="grid">
+    <div class="ladder-table">
+      <div class="head">
+        <div>Level</div>
+        <div class="l-excel">Excel</div>
+        <div class="l-gem">GemiHub</div>
+      </div>
+      <div class="row l1">
+        <div class="lv">1</div>
+        <div class="cell">
+          <div class="n">セル入力</div>
+          <div class="s">誰でもただの表として書ける</div>
+          <div class="k">A1: "hello"</div>
+        </div>
+        <div class="cell gem">
+          <div class="n">メモ帳</div>
+          <div class="s">リッチテキスト / Markdown</div>
+          <div class="k">/gemihub/pitch/ideas.md</div>
+        </div>
+      </div>
+      <div class="row l2">
+        <div class="lv">2</div>
+        <div class="cell">
+          <div class="n">関数</div>
+          <div class="s">SUM / VLOOKUP で計算・集計</div>
+          <div class="k">=VLOOKUP(A2, ...)</div>
+        </div>
+        <div class="cell gem">
+          <div class="n">RAG</div>
+          <div class="s">過去ノートをAIが横断検索</div>
+          <div class="k">「あの件どうなってたっけ?」</div>
+        </div>
+      </div>
+      <div class="row l3">
+        <div class="lv">3</div>
+        <div class="cell">
+          <div class="n">マクロ / VBA</div>
+          <div class="s">業務システムそのものを組む</div>
+          <div class="k">Sub Main() ... End Sub</div>
+        </div>
+        <div class="cell gem">
+          <div class="n">Workflow / MCP / Plugin</div>
+          <div class="s">自然言語でAIが自動化を生成</div>
+          <div class="k">「メール下書き → 承認 → 送信」</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="excel-quote">
+      <div class="q">初心者には <b>ノート</b>、達人には <b>開発環境</b>。<br>使いこなすほど、できることが広がる。</div>
+      <div class="rhs">それが道具の本質<b>Tool-first AI</b></div>
+    </div>
+  </div>
+
+  <div class="footer-ribbon">
+    <div>GemiHub — AI Revenge Pitch</div>
+    <div class="r"><span><b>02</b> / 07</span></div>
+  </div>
+</section>
+
+<!-- 04 PRINCIPLES (KEY SLIDE) -->
+<section class="slide s-principle" data-label="Design Principles">
+  <div class="eyebrow"><span class="num">03</span>設計思想 — 個人情報ゼロ預かり・ロックインなし</div>
+  <h2 class="title-xl">「預からない」が、<br>最大のセキュリティ対策。</h2>
+  <div class="sub">データ実体はすべて <b>ユーザー自身のGoogle Drive</b> に置く。GemiHubはDBを持たない。<br>サービスが消えても、ユーザーのファイルはそのまま残る。それがロックインなしという意味。</div>
+
+  <div class="pr-grid">
+    <div class="pr-card c1">
+      <div class="ic">DB</div>
+      <div class="t">DBを持たない</div>
+      <div class="d">データ実体はすべて <b>ユーザーのGoogle Drive上</b>。サービス側に蓄積しない。</div>
+      <div class="tag">// no-backend-db</div>
+    </div>
+    <div class="pr-card c2">
+      <div class="ic">◴</div>
+      <div class="t">スコープは <span style="font-family:'JetBrains Mono',monospace;">drive.files</span> のみ</div>
+      <div class="d">アプリが作ったファイル以外は<b>見えない / 触れない</b>。ユーザーの他のDrive資産に一切干渉しない。</div>
+      <div class="tag">// OAuth: drive.files</div>
+    </div>
+    <div class="pr-card c3">
+      <div class="ic">⎋</div>
+      <div class="t">サービスが消えても残る</div>
+      <div class="d">ファイルは <b>Google Driveの.mdや.json</b>。GemiHubが閉じても、あなたのデータはあなたの手元に。</div>
+      <div class="tag">// lock-in: none</div>
+    </div>
+    <div class="pr-card c4">
+      <div class="ic">🔒</div>
+      <div class="t">RSA + AES ハイブリッド暗号化</div>
+      <div class="d">秘匿データは <b>AIにすら中身を見せない</b>。必要な場面だけユーザーがパスワードで復号する。</div>
+      <div class="tag">// E2E encrypted at rest</div>
+    </div>
+    <div class="pr-card c5">
+      <div class="ic">⇄</div>
+      <div class="t">IndexedDB + Service Worker</div>
+      <div class="d">オフラインで編集 → <b>Push / Pull</b> で同期。ネットがなくても書き続けられる。</div>
+      <div class="tag">// offline-first</div>
+    </div>
+    <div class="pr-card c6">
+      <div class="ic">$</div>
+      <div class="t">課金情報だけは Firebase に</div>
+      <div class="d">有料プランの <b>改ざん防止のため</b> のみ。それ以外のユーザーデータは、本当に何も預からない。</div>
+      <div class="tag">// billing-only</div>
+    </div>
+  </div>
+
+  <div class="pr-closing" style="display:none">
+    <div class="q">“</div>
+    <div>AIが賢くなるほど、<b style="color:#FDD663;">データ自体の価値</b>が高まる。だからこそ、データを <b style="color:#8AB4F8;">ユーザーの手元</b> に置く。</div>
+  </div>
+</section>
+
+<!-- 05 DEMO / 3 WAYS -->
+<section class="slide s-demo" data-label="3 Ways to Use">
+  <div class="eyebrow"><span class="num">04</span>3段階で広がる使い方 (Demo)</div>
+  <h2 class="title-l">メモ帳 → RAG → ワークフロー。<br>同じアプリが、3つの顔を持つ。</h2>
+
+  <div class="grid">
+    <div class="demo-card l1">
+      <div class="head">
+        <div class="lv">Lv.1</div>
+        <div class="role">for everyone</div>
+      </div>
+      <div class="what">メモ帳として</div>
+      <div class="desc">オンライン/オフライン両対応。<br>PCを買い替えてもログインすれば<b>メモが戻ってくる</b>。</div>
+      <div class="eg"><span class="pmt">// usage</span>meeting-notes.md<br>→ 右クリックで PDF/HTML 変換<br>→ ワンクリックでWeb公開</div>
+    </div>
+    <div class="demo-card l2">
+      <div class="head">
+        <div class="lv">Lv.2</div>
+        <div class="role">for frequent users</div>
+      </div>
+      <div class="what">RAGとして</div>
+      <div class="desc">自動登録された過去ノートから、<br>AIが <b>文脈で</b> 答える。</div>
+      <div class="eg"><span class="pmt">// query</span>「先週のMTGでなに<br>決まったっけ?」<br>→ 関連ノート3件を引用して回答</div>
+    </div>
+    <div class="demo-card l3">
+      <div class="head">
+        <div class="lv">Lv.3</div>
+        <div class="role">for power users</div>
+      </div>
+      <div class="what">マクロとして</div>
+      <div class="desc">自然言語で頼むだけで、<br>AIが <b>Workflow / Plugin / Skill</b> を生成する。</div>
+      <div class="eg"><span class="pmt">// prompt</span>「メール下書きを作って、<br>承認したら送信、<br>カレンダーに予定を追加」</div>
+    </div>
+  </div>
+
+  <div class="plugin-row">
+    <div class="lb">Plugins</div>
+    <div class="items">
+      <div class="chip a"><span class="d"></span>会計 (複式簿記)</div>
+      <div class="chip b"><span class="d"></span>タスク管理</div>
+      <div class="chip c"><span class="d"></span>楽譜おこし</div>
+      <div class="chip d"><span class="d"></span>Debate (AI議論)</div>
+      <div class="chip e"><span class="d"></span>…自作もできる</div>
+    </div>
+  </div>
+
+  <div class="footer-ribbon">
+    <div>GemiHub — AI Revenge Pitch</div>
+    <div class="r"><span><b>04</b> / 07</span></div>
+  </div>
+</section>
+
+<!-- 06 USERS -->
+<section class="slide s-users" data-label="Users">
+  <div class="eyebrow"><span class="num">05</span>十人十色の「育てる道具箱」</div>
+  <h2 class="title-l">同じGemiHubが、<br>使い手によって全く違う姿になる。</h2>
+
+  <div class="u-grid">
+    <div class="u-card a">
+      <div class="who">
+        <div class="av">保</div>
+        <div class="role">User A<b>幼児保育の専門家</b></div>
+      </div>
+      <div class="t">AIたちと「議論」する<br>非エンジニアの先生</div>
+      <div class="d">Debate プラグインで複数のAIと保育論を議論。<br>AIから褒められるのを楽しみながら、<b>自分の専門知識を言語化・深化</b>させていく。</div>
+      <div class="tools">
+        <div class="chip">Debate</div>
+        <div class="chip">MCP (GCal)</div>
+      </div>
+    </div>
+    <div class="u-card b">
+      <div class="who">
+        <div class="av">研</div>
+        <div class="role">User B<b>知人の研究者</b></div>
+      </div>
+      <div class="t">論文の山を、<br>分野横断で串刺しに。</div>
+      <div class="d">大量の論文をRAGに取り込み、分野横断で文献調査。<br><b>「この仮説を支持するエビデンスは?」</b>に、自分の知識ベース全体が答える。</div>
+      <div class="tools">
+        <div class="chip">RAG</div>
+        <div class="chip">.pdf collection</div>
+      </div>
+    </div>
+    <div class="u-card c">
+      <div class="who">
+        <div class="av">T</div>
+        <div class="role">User C<b>作者自身 / takeshy</b></div>
+      </div>
+      <div class="t">海外記事を要約、<br>父のLINEを翻訳。</div>
+      <div class="d">海外記事を<b>日本語インフォグラフィック</b>に変換するワークフロー。<br>父から届くスペイン語LINEの翻訳補助。日報の自動生成。</div>
+      <div class="tools">
+        <div class="chip">Workflow</div>
+        <div class="chip">es→ja</div>
+        <div class="chip">Skill</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="u-sum">
+    データが集約されたプラットフォームで、<em>使い手が道具の意味を決める</em> — これが「AI時代のExcel」。
+  </div>
+
+  <div class="footer-ribbon">
+    <div>GemiHub — AI Revenge Pitch</div>
+    <div class="r"><span><b>05</b> / 07</span></div>
+  </div>
+</section>
+
+<!-- 07 CLOSING -->
+<section class="slide s-close" data-label="Closing">
+  <div class="eyebrow"><span class="num">06</span>まとめ / Closing</div>
+  <h2 class="title-l" style="font-size: 52px;">集約して、暗号化して、ビジュアルで組む。</h2>
+
+  <div class="close-grid">
+    <div class="close-points">
+      <div class="cp a">
+        <div class="n">1</div>
+        <div class="txt"><b>AIが賢くなるほど、データ自体の価値が高まる。</b><br>秘匿情報も含めて一箇所に集約することで、管理を楽にしたい。</div>
+      </div>
+      <div class="cp b">
+        <div class="n">2</div>
+        <div class="txt"><b>でも秘匿情報をAIに見られるのは抵抗がある。</b><br>暗号化で守り、必要な場面だけユーザーがパスワードで復号する。</div>
+      </div>
+      <div class="cp c">
+        <div class="n">3</div>
+        <div class="txt"><b>処理をビジュアルで見えれば、非エンジニアもバイブコーディングできる。</b><br>プログラマでさえコードより挙動でレビューする時代。</div>
+      </div>
+      <div class="cp d">
+        <div class="n">4</div>
+        <div class="txt"><b>Plan / Generate / Review は高品質モデル、実行は安いモデル。</b><br>SkillとWorkflowの設計思想が、そのままコスト最適化になる。</div>
+      </div>
+      <div class="cp e">
+        <div class="n">5</div>
+        <div class="txt"><b>Proプランでは、Webサービスごと構築できる。</b><br>カスタムドメインでAIがWebページとAPIを実装 (例: 面接予約ポータル)。</div>
+      </div>
+    </div>
+
+    <div class="thank-col">
+      <div class="thank-hero">
+        <div class="h">Thank you</div>
+        <div class="t">
+          <span class="google"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span></span> さんから<br>クーポンを配布いただいたおかげで、<br>様々なチャレンジを試せました。
+        </div>
+        <div class="d">この機会を与えてくださり、本当にありがとうございました。<br>GemiHubは今日も開発を続けています。</div>
+        <div class="sig">— takeshy <em>/ builder of GemiHub</em></div>
+      </div>
+      <div class="cta-card">
+        <div class="l">Try it now</div>
+        <div class="url"><span class="dot">→</span>gemihub.online</div>
+        <div class="d">メモ帳として使うだけでも、目指す世界観を感じていただけます。<br>Sign in with Google — それだけで始まります。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</deck-stage>
+
+</body>
+</html>
