@@ -54,8 +54,21 @@ export async function action({ request }: Route.ActionArgs) {
         return data({ error: "Domain is already in use by another account" }, { status: 409 });
       }
 
-      const result = await provisionDomain(account.id, domain);
-      return data(result);
+      try {
+        const result = await provisionDomain(account.id, domain);
+        return data(result);
+      } catch (e: unknown) {
+        const err = e as { message?: string; code?: number; errors?: unknown; response?: { data?: unknown } };
+        console.error("[hubwork] provisionDomain failed:", err.message, err.code, err.response?.data ?? err.errors);
+        return data(
+          {
+            error: err.message || "Domain provisioning failed",
+            code: err.code,
+            details: err.response?.data ?? err.errors,
+          },
+          { status: 500 }
+        );
+      }
     }
 
     case "remove": {
