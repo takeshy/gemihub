@@ -173,12 +173,14 @@ export function HtmlFileEditor({
   const [previewReady, setPreviewReady] = useState(true);
   const [mockScript, setMockScript] = useState("");
   const [siblings, setSiblings] = useState<SiblingAssetMap>({});
+  const [unresolvedRefs, setUnresolvedRefs] = useState<string[]>([]);
   useEffect(() => {
     const relRefs = collectRelativeRefs(content);
     const needsSiblings = relRefs.length > 0;
     if (!needsMock && !needsSiblings) {
       setMockScript("");
       setSiblings({});
+      setUnresolvedRefs([]);
       setPreviewReady(true);
       return;
     }
@@ -205,38 +207,37 @@ export function HtmlFileEditor({
         }
 
         const newSiblings: SiblingAssetMap = {};
-        if (needsSiblings && meta) {
-          const currentName = meta.files?.[fileId]?.name;
-          if (currentName) {
-            const currentDir = currentName.includes("/")
-              ? currentName.slice(0, currentName.lastIndexOf("/"))
-              : "";
-            const idByPath: Record<string, string> = {};
-            for (const [fid, fmeta] of Object.entries(meta.files)) {
-              if (fmeta.name) idByPath[fmeta.name] = fid;
-            }
-            for (const { kind, ref } of relRefs) {
-              const resolved = resolveSiblingPath(currentDir, ref);
-              if (!resolved) continue;
-              const fid = idByPath[resolved];
-              if (!fid) continue;
-              const cached = await getCachedFile(fid);
-              if (cancelled) return;
-              if (!cached?.content) continue;
-              if (kind === "script" || kind === "style") {
-                newSiblings[ref] = { kind, content: cached.content };
-              } else if (kind === "image") {
-                const dot = resolved.lastIndexOf(".");
-                const ext = dot >= 0 ? resolved.slice(dot + 1).toLowerCase() : "";
-                const mime = IMAGE_MIME_BY_EXT[ext];
-                if (!mime) continue;
-                newSiblings[ref] = {
-                  kind,
-                  content: cached.content,
-                  mime,
-                  base64: cached.encoding === "base64",
-                };
-              }
+        const unresolved: string[] = [];
+        if (needsSiblings) {
+          const currentName = meta?.files?.[fileId]?.name;
+          const currentDir = currentName && currentName.includes("/")
+            ? currentName.slice(0, currentName.lastIndexOf("/"))
+            : "";
+          const idByPath: Record<string, string> = {};
+          for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
+            if (fmeta.name) idByPath[fmeta.name] = fid;
+          }
+          for (const { kind, ref } of relRefs) {
+            const resolved = resolveSiblingPath(currentDir, ref);
+            if (!resolved) { unresolved.push(ref); continue; }
+            const fid = idByPath[resolved];
+            if (!fid) { unresolved.push(ref); continue; }
+            const cached = await getCachedFile(fid);
+            if (cancelled) return;
+            if (!cached?.content) { unresolved.push(ref); continue; }
+            if (kind === "script" || kind === "style") {
+              newSiblings[ref] = { kind, content: cached.content };
+            } else if (kind === "image") {
+              const dot = resolved.lastIndexOf(".");
+              const ext = dot >= 0 ? resolved.slice(dot + 1).toLowerCase() : "";
+              const mime = IMAGE_MIME_BY_EXT[ext];
+              if (!mime) { unresolved.push(ref); continue; }
+              newSiblings[ref] = {
+                kind,
+                content: cached.content,
+                mime,
+                base64: cached.encoding === "base64",
+              };
             }
           }
         }
@@ -244,11 +245,13 @@ export function HtmlFileEditor({
         if (cancelled) return;
         setMockScript(newMockScript);
         setSiblings(newSiblings);
+        setUnresolvedRefs(unresolved);
         setPreviewReady(true);
       } catch {
         if (cancelled) return;
         setMockScript("");
         setSiblings({});
+        setUnresolvedRefs([]);
         setPreviewReady(true);
       }
     })();
@@ -314,14 +317,28 @@ export function HtmlFileEditor({
         />
       </div>
 
-      {/* Content area */}
+      {/* Content area. The iframe is pinned to a relative wrapper so its size
+          is driven by the flex layout, not by its default intrinsic size
+          (300x150) or by inner content. Without this, scripts that read
+          window.innerWidth/innerHeight (e.g. deck-stage's auto-scaler) can
+          see a stale/oversized viewport and overflow the MainViewer. */}
       {mode === "preview" && previewReady && (
-        <iframe
-          srcDoc={srcDocWithScripts}
-          className="flex-1 w-full border-0 bg-white"
-          title={fileName}
-          sandbox="allow-scripts"
-        />
+        <div className="relative flex-1 overflow-hidden">
+          {unresolvedRefs.length > 0 && (
+            <div className="absolute inset-x-0 top-0 z-10 bg-amber-100 text-amber-900 text-xs px-3 py-1.5 border-b border-amber-300 dark:bg-amber-900/40 dark:text-amber-100 dark:border-amber-700">
+              <span className="font-semibold">Missing in FileTree:</span>{" "}
+              {unresolvedRefs.join(", ")}
+              {" — "}
+              <span className="opacity-75">preview cannot fetch external resources in a sandboxed iframe. Add these files to the FileTree next to the HTML.</span>
+            </div>
+          )}
+          <iframe
+            srcDoc={srcDocWithScripts}
+            className="absolute inset-0 h-full w-full border-0 bg-white"
+            title={fileName}
+            sandbox="allow-scripts"
+          />
+        </div>
       )}
       {mode === "preview" && !previewReady && (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading...</div>
