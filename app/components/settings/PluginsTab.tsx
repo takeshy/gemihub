@@ -25,6 +25,13 @@ import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 const inputClass =
   "w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
 
+function formatVersion(v: string): string {
+  // Strip a leading "v" before re-adding one — GitHub release tag_name often
+  // starts with "v" (e.g. "v0.1.13"), and naively prepending "v" would yield "vv0.1.13".
+  const stripped = v.startsWith("v") || v.startsWith("V") ? v.slice(1) : v;
+  return `v${stripped}`;
+}
+
 const PERMISSION_I18N_KEYS: Record<PluginPermission, keyof TranslationStrings> = {
   gemini: "plugins.permissionGemini",
   drive: "plugins.permissionDrive",
@@ -328,7 +335,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           <div className="flex items-center gap-2 mb-3">
             <Shield size={18} className="text-blue-600 dark:text-blue-400" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {preview.manifest.name} <span className="font-normal text-gray-500 dark:text-gray-400">v{preview.version}</span>
+              {preview.manifest.name} <span className="font-normal text-gray-500 dark:text-gray-400">{formatVersion(preview.version)}</span>
             </h3>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
@@ -398,7 +405,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           <div className="flex items-center gap-2 mb-3">
             <Shield size={18} className="text-amber-600 dark:text-amber-400" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {updateApproval.manifest.name} <span className="font-normal text-gray-500 dark:text-gray-400">v{updateApproval.version}</span>
+              {updateApproval.manifest.name} <span className="font-normal text-gray-500 dark:text-gray-400">{formatVersion(updateApproval.version)}</span>
             </h3>
           </div>
 
@@ -483,7 +490,7 @@ export function PluginsTab({ settings }: PluginsTabProps) {
                           {plugin.id}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {plugin.version}
+                          {formatVersion(plugin.version)}
                         </span>
                         {plugin.source === "local" && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">
