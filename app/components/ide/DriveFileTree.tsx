@@ -206,8 +206,7 @@ export function DriveFileTree({
       files: mergedFiles,
       cachedAt: Date.now(),
     };
-    const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
-    const items = buildTreeFromMeta(cachedMeta, trackedIds);
+    const items = buildTreeFromMeta(cachedMeta, localMeta?.files);
     setTreeItems(items);
     setRemoteMeta(mergedFiles);
     // Update localSyncMeta names so that rename/move operations are reflected
@@ -294,8 +293,7 @@ export function DriveFileTree({
         };
 
         // Use buildTreeFromMeta which filters system files (isSyncExcludedPath)
-        const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
-        const items = buildTreeFromMeta(cachedMeta, trackedIds);
+        const items = buildTreeFromMeta(cachedMeta, localMeta?.files);
         setTreeItems(items);
         setRemoteMeta(mergedFiles);
         await Promise.all([
@@ -432,8 +430,7 @@ export function DriveFileTree({
       }
       const [current, localMeta] = await Promise.all([getCachedRemoteMeta(), getLocalSyncMeta()]);
       if (current) {
-        const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
-        setTreeItems(buildTreeFromMeta(current, trackedIds));
+        setTreeItems(buildTreeFromMeta(current, localMeta?.files));
         setRemoteMeta(current.files);
       }
     };
@@ -510,8 +507,7 @@ export function DriveFileTree({
         cached.items.length > 0;
 
       if (!cancelled && canRebuildFromMeta) {
-        const trackedIds = localMeta ? new Set(Object.keys(localMeta.files)) : undefined;
-        setTreeItems(buildTreeFromMeta(cachedMeta, trackedIds));
+        setTreeItems(buildTreeFromMeta(cachedMeta, localMeta?.files));
         setRemoteMeta(cachedMeta.files);
       } else if (!cancelled && hasUsableCachedTree) {
         setTreeItems(cached.items);

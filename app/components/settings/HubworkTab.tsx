@@ -77,7 +77,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
       localMeta.files[f.id] = { md5Checksum: f.md5Checksum || "", modifiedTime: f.modifiedTime || now, name: f.path };
     }
     await setLocalSyncMeta(localMeta);
-    const items = buildTreeFromMeta(meta, new Set(Object.keys(localMeta.files)));
+    const items = buildTreeFromMeta(meta, localMeta.files);
     await setCachedFileTree({ id: "current", rootFolderId: meta.rootFolderId, items, cachedAt: Date.now() });
   }, []);
 
