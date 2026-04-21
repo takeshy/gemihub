@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Wrench, Cloud, Sparkles, Code, AlertTriangle, ExternalLink, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, Bot, Cloud, Sparkles, Code, AlertTriangle, ExternalLink, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, ListTodo, Music } from "lucide-react";
 import type { ComponentType } from "react";
 import { useLocation } from "react-router";
 import type { Language } from "~/types/settings";
@@ -28,17 +28,18 @@ interface DataCard {
   description: string;
 }
 
-interface AgenticPoint {
+interface PluginShowcase {
   icon: ComponentType<{ size?: number; className?: string }>;
-  title: string;
+  name: string;
+  repo: string;
   description: string;
+  image: string;
 }
 
 interface LpStrings {
   tagline: string;
   description: string;
   signIn: string;
-  agenticPoints: AgenticPoint[];
   features: Feature[];
   screenshotsTitle: string;
   screenshots: Screenshot[];
@@ -50,7 +51,7 @@ interface LpStrings {
   dataUsageIntro: string;
   dataCards: DataCard[];
   pluginShowcaseTitle: string;
-  pluginShowcaseDescription: string;
+  pluginShowcases: PluginShowcase[];
   pluginShowcaseInstall: string;
   pluginShowcaseLink: string;
   aiProTitle: string;
@@ -132,12 +133,6 @@ const en: LpStrings = {
   tagline: "AI That Acts, Not Just Answers",
   description: "GemiHub is an AI assistant that reads your files, finds what you need, and gets things done on its own. Connect external tools, search across your documents by meaning, and automate repetitive tasks — all while keeping your data in your own Google Drive.",
   signIn: "Sign in with Google",
-  agenticPoints: [
-    { icon: Wrench, title: "Picks Its Own Tools", description: "Ask a question and the AI figures out what to do: read a file, search your Drive, look things up on the web, or call an external service. You just ask — it handles the rest." },
-    { icon: Search, title: "Searches by Meaning", description: "Your files are indexed so the AI can find relevant information even when the exact words don't match. Ask \"when was the budget meeting?\" and it finds your \"Q3 finance review\" notes." },
-    { icon: Bot, title: "Connects to Outside Tools", description: "Hook up web search, databases, or any compatible service. The AI automatically discovers what's available and uses it during your conversation." },
-    { icon: GitBranch, title: "Runs Multi-Step Tasks", description: "String together AI prompts, file edits, web requests, and more into automated workflows. Or just tell the AI what you want and it builds the workflow for you." },
-  ],
   features: [
     { icon: MessageSquare, title: "AI Chat", description: "Have a conversation with AI that can read your files, search the web, generate images, and use external tools — all on its own." },
     { icon: Search, title: "Ask Your Files", description: "Search your Drive files by meaning, not just keywords. Search for \"meeting\" and get results mentioning \"conference\" too." },
@@ -146,7 +141,7 @@ const en: LpStrings = {
     { icon: Puzzle, title: "Plugins", description: "Add new features from GitHub. Plugins can use AI and Drive, so you can build custom tools and advanced automation." },
     { icon: Globe, title: "One-Click Publishing", description: "Turn any Drive file into a public web page. Share via URL with no hosting required." },
     { icon: Zap, title: "Works Offline", description: "All files cached in your browser for instant access — even without internet. Edit offline, then push changes to Drive with one click. Conflicts are detected automatically." },
-    { icon: RefreshCw, title: "Obsidian Sync", description: "Sync with Obsidian via the Gemini Helper plugin. Edit in Obsidian or GemiHub — changes sync both ways through Google Drive with conflict resolution." },
+    { icon: RefreshCw, title: "Obsidian Sync", description: "Sync with Obsidian via the GemiHub - Drive Sync plugin. Edit in Obsidian or GemiHub — changes sync both ways through Google Drive with conflict resolution." },
     { icon: Shield, title: "Your Data, Your Control", description: "No external database. Everything stored in your Google Drive. Supports encryption and self-hosting." },
   ],
   screenshotsTitle: "See It in Action",
@@ -172,7 +167,36 @@ const en: LpStrings = {
     { icon: ServerCog, title: "Fully Portable", description: "No database — all data lives in your Drive. If this service shuts down, just run your own instance and everything is right where you left it." },
   ],
   pluginShowcaseTitle: "Plugin Showcase",
-  pluginShowcaseDescription: "A debate plugin where multiple AIs discuss a topic from different perspectives. You can also participate as a debater.",
+  pluginShowcases: [
+    {
+      icon: MessagesSquare,
+      name: "Ronginus",
+      repo: "takeshy/hub-ronginus",
+      description: "A debate plugin where multiple AIs discuss a topic from different perspectives. You can also join as a debater.",
+      image: "/images/ronginus.png",
+    },
+    {
+      icon: Calculator,
+      name: "Accounting",
+      repo: "takeshy/hub-accounting",
+      description: "Beancount-format double-entry bookkeeping. Manage accounts, record transactions, and generate balance sheets and income statements — all in plain text on Drive.",
+      image: "/images/accounting.png",
+    },
+    {
+      icon: ListTodo,
+      name: "TaskNotes",
+      repo: "takeshy/hub-tasknotes",
+      description: "Task management where every task is a Markdown note. List, Kanban, Calendar, and Agenda views. Create tasks from natural language with AI.",
+      image: "/images/task_notes.png",
+    },
+    {
+      icon: Music,
+      name: "Audio Score",
+      repo: "takeshy/hub-audio-score",
+      description: "Convert audio files into sheet music with ML-based pitch detection. Source separation, MIDI export, score playback, and AI chord analysis.",
+      image: "/images/audio-score.png",
+    },
+  ],
   pluginShowcaseInstall: "Install from Settings > Plugins with:",
   pluginShowcaseLink: "View on GitHub",
   aiProTitle: "Google AI Pro: More Value for Gemini Users",
@@ -259,12 +283,6 @@ const ja: LpStrings = {
   tagline: "答えるだけじゃない、動く AI",
   description: "GemiHub は、ファイルを読んで、必要な情報を探して、作業までこなしてくれる AI アシスタントです。外部ツールとの連携、ドキュメント横断の意味検索、繰り返し作業の自動化まで。データはすべてあなたの Google Drive に保存されます。",
   signIn: "Googleでサインイン",
-  agenticPoints: [
-    { icon: Wrench, title: "必要な道具を自分で選ぶ", description: "質問すると、AI が自分で判断してファイルを読んだり、Drive を検索したり、Web で調べたり、外部サービスに問い合わせたり。あなたは聞くだけ。" },
-    { icon: Search, title: "「意味」で探してくれる", description: "ファイルの中身を意味で検索できます。「予算の会議いつだっけ？」と聞けば、「Q3 財務レビュー」のメモを見つけてきます。" },
-    { icon: Bot, title: "外部ツールも自動で使う", description: "Web 検索やデータベースなどの外部サービスをつなぐだけ。AI が会話の中で必要なツールを見つけて、勝手に使ってくれます。" },
-    { icon: GitBranch, title: "複数ステップの作業を自動化", description: "AI への指示、ファイル編集、Web リクエストなどをつなげて自動化。「こういうことがしたい」と伝えれば、AI がワークフローを組み立てます。" },
-  ],
   features: [
     { icon: MessageSquare, title: "AIチャット", description: "AI がファイルを読み、Web を調べ、画像を作り、外部ツールまで使って回答。全部おまかせで動きます。" },
     { icon: Search, title: "ファイルに質問", description: "Drive の資料をキーワードではなく「意味」で検索。「打ち合わせ」で調べれば「ミーティング」の内容もヒット。" },
@@ -273,7 +291,7 @@ const ja: LpStrings = {
     { icon: Puzzle, title: "プラグイン", description: "GitHubから機能を追加。AI や Drive と連携できるので、自分だけのツールや高度な自動化も構築できます。" },
     { icon: Globe, title: "ワンクリック公開", description: "DriveのファイルをそのままWebページに。ホスティング不要でURLを共有できます。" },
     { icon: Zap, title: "オフラインでも快適", description: "すべてのファイルがブラウザにキャッシュされ、ネットがなくても即座にアクセス。オフラインで編集して、ワンクリックでDriveに同期。コンフリクトも自動検出。" },
-    { icon: RefreshCw, title: "Obsidian 連携", description: "Gemini Helper プラグインで Obsidian と同期。Obsidian でも GemiHub でも編集可能 — Google Drive 経由でコンフリクト解決付きの双方向同期。" },
+    { icon: RefreshCw, title: "Obsidian 連携", description: "GemiHub - Drive Sync プラグインで Obsidian と同期。Obsidian でも GemiHub でも編集可能 — Google Drive 経由でコンフリクト解決付きの双方向同期。" },
     { icon: Shield, title: "データは自分の手に", description: "外部データベースなし。すべてあなたのGoogle Driveに保存。暗号化やセルフホストにも対応。" },
   ],
   screenshotsTitle: "動作イメージ",
@@ -299,7 +317,36 @@ const ja: LpStrings = {
     { icon: ServerCog, title: "完全なポータビリティ", description: "データベースなし。すべてDriveに保存されているので、サービスが停止しても自分でインスタンスを立ち上げればそのまま使えます。" },
   ],
   pluginShowcaseTitle: "プラグイン紹介",
-  pluginShowcaseDescription: "複数のAIがテーマについてそれぞれの視点で議論するディベートプラグイン。ユーザーも参加できます。",
+  pluginShowcases: [
+    {
+      icon: MessagesSquare,
+      name: "Ronginus",
+      repo: "takeshy/hub-ronginus",
+      description: "複数のAIがテーマについてそれぞれの視点で議論するディベートプラグイン。ユーザーも参加できます。",
+      image: "/images/ronginus.png",
+    },
+    {
+      icon: Calculator,
+      name: "Accounting",
+      repo: "takeshy/hub-accounting",
+      description: "Beancount形式の複式簿記プラグイン。勘定科目の管理、仕訳の記録、貸借対照表・損益計算書の生成までプレーンテキストでDriveに保存。",
+      image: "/images/accounting.png",
+    },
+    {
+      icon: ListTodo,
+      name: "TaskNotes",
+      repo: "takeshy/hub-tasknotes",
+      description: "タスクをMarkdownノートで管理。リスト・カンバン・カレンダー・アジェンダの4ビュー。自然言語からAIでタスクを自動生成。",
+      image: "/images/task_notes.png",
+    },
+    {
+      icon: Music,
+      name: "Audio Score",
+      repo: "takeshy/hub-audio-score",
+      description: "音声ファイルをML音程検出で楽譜化。ソース分離、MIDI書き出し、スコア再生、Geminiによる自動コード解析に対応。",
+      image: "/images/audio-score.png",
+    },
+  ],
   pluginShowcaseInstall: "Settings > Plugins からインストール:",
   pluginShowcaseLink: "GitHubで見る",
   aiProTitle: "Google AI Pro：Gemini ユーザーにお得なプラン",
@@ -417,27 +464,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Agentic AI */}
+      {/* Hero CTAs */}
       <section className="mx-auto max-w-5xl px-4 pb-20 pt-4">
-        <div className="grid gap-6 sm:grid-cols-2">
-          {s.agenticPoints.map(({ icon: Icon, title, description }) => (
-            <div
-              key={title}
-              className="rounded-xl border border-purple-200 bg-purple-50 p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-purple-200/50 dark:border-purple-900 dark:bg-purple-950/40 dark:hover:shadow-purple-900/30"
-            >
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/60">
-                <Icon size={22} className="text-purple-600 dark:text-purple-400" />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {title}
-              </h3>
-              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                {description}
-              </p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-10 flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4">
           <a
             href="/auth/google"
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3.5 text-lg font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-lg"
@@ -800,49 +829,52 @@ export default function LandingPage() {
 
       {/* Plugin Showcase */}
       <section className="px-4 py-20">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-5xl">
           <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
             {s.pluginShowcaseTitle}
           </h2>
-          <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-lg dark:border-gray-800 sm:flex">
-            <div className="shrink-0 sm:w-64">
-              <img
-                src="/images/ronginus.png"
-                alt="Ronginus"
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
-            </div>
-            <div className="flex flex-1 items-center gap-4 bg-white p-6 dark:bg-gray-900">
-              <div className="hidden shrink-0 sm:block">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-900/40">
-                  <MessagesSquare size={28} className="text-purple-600 dark:text-purple-400" />
+          <div className="grid gap-6 sm:grid-cols-2">
+            {s.pluginShowcases.map(({ icon: Icon, name, repo, description, image }) => (
+              <div
+                key={repo}
+                className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
+              >
+                <img
+                  src={image}
+                  alt={name}
+                  className="aspect-video w-full object-cover"
+                  loading="lazy"
+                />
+                <div className="flex flex-1 flex-col p-6">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-900/40">
+                      <Icon size={24} className="text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {name}
+                    </h3>
+                  </div>
+                  <p className="mb-3 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                    {description}
+                  </p>
+                  <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                    {s.pluginShowcaseInstall}{" "}
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                      {repo}
+                    </code>
+                  </p>
+                  <a
+                    href={`https://github.com/${repo}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 transition-colors hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                  >
+                    <Github size={16} />
+                    {s.pluginShowcaseLink}
+                  </a>
                 </div>
               </div>
-              <div className="flex-1">
-                <h3 className="mb-1.5 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Ronginus
-                </h3>
-                <p className="mb-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                  {s.pluginShowcaseDescription}
-                </p>
-                <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
-                  {s.pluginShowcaseInstall}{" "}
-                  <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-800 dark:bg-gray-700 dark:text-gray-200">
-                    takeshy/hub-ronginus
-                  </code>
-                </p>
-                <a
-                  href="https://github.com/takeshy/hub-ronginus"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 transition-colors hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
-                >
-                  <Github size={16} />
-                  {s.pluginShowcaseLink}
-                </a>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
@@ -911,7 +943,7 @@ export default function LandingPage() {
               <Github size={14} />
               GitHub
             </a>
-            <a href="https://github.com/takeshy/obsidian-gemini-helper" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
+            <a href="https://github.com/takeshy/obsidian-gemihub" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 transition-colors hover:text-gray-700 hover:underline dark:hover:text-gray-200">
               <RefreshCw size={14} />
               Obsidian Plugin
             </a>
