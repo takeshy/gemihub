@@ -69,7 +69,11 @@ export async function action({ request }: Route.ActionArgs) {
         model,
         contents: [{ role: "user", parts: [{ text: query }] }],
         config: {
-          systemInstruction: "Search files and answer the query concisely in the query's language.",
+          systemInstruction:
+            "You MUST call the file_search tool for every query. " +
+            "Answer ONLY from the matched chunks — do NOT use prior knowledge, do NOT speculate, do NOT add external information. " +
+            "If file_search returns zero matches, respond in the query's language with a short message stating that no matching files were found, and stop. " +
+            "Otherwise, summarize concisely in the query's language using only information present in the chunks.",
           tools,
         },
       });

@@ -2,6 +2,7 @@
 .env
 .codex
 /node_modules/
+.claude
 
 # React Router
 /.react-router/
