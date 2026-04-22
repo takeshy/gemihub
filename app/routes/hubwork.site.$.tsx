@@ -69,7 +69,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   const headers: Record<string, string> = {
     "Content-Type": result.contentType,
-    "Cache-Control": "public, max-age=300, s-maxage=600",
+    "Cache-Control": "public, max-age=300, s-maxage=180",
     ...SECURITY_HEADERS,
   };
 

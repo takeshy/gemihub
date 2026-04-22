@@ -51,7 +51,7 @@ export async function serveHubworkRootPage(
   return new Response(new Uint8Array(result.content), {
     headers: {
       "Content-Type": result.contentType,
-      "Cache-Control": "public, max-age=300, s-maxage=600",
+      "Cache-Control": "public, max-age=300, s-maxage=180",
       ...SECURITY_HEADERS,
     },
   });
