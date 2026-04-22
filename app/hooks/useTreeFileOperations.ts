@@ -100,6 +100,7 @@ interface UseTreeFileOperationsParams {
   t: (key: keyof TranslationStrings) => string;
   tempDiffData: { fileName: string; fileId: string; currentContent: string; tempContent: string; tempSavedAt: string; currentModifiedTime: string; isBinary: boolean } | null;
   setTempDiffData: Dispatch<SetStateAction<UseTreeFileOperationsParams["tempDiffData"]>>;
+  onPush?: () => Promise<void>;
 }
 
 export function useTreeFileOperations({
@@ -120,6 +121,7 @@ export function useTreeFileOperations({
   t,
   tempDiffData,
   setTempDiffData,
+  onPush,
 }: UseTreeFileOperationsParams) {
   const [deleteConfirmRequest, setDeleteConfirmRequest] = useState<DeleteConfirmRequest | null>(null);
   const pendingResolveRef = useRef<((result: { confirmed: boolean; permanent: boolean }) => void) | null>(null);
@@ -688,6 +690,17 @@ export function useTreeFileOperations({
     async (item: CachedTreeNode) => {
       setBusy([item.id]);
       try {
+        // Auto-push local changes first: publishing before Drive has the
+        // latest content leaves CDN caching the stale/blank response for
+        // max-age=300. Push is idempotent when nothing is modified.
+        if (modifiedFiles.has(item.id) && onPush) {
+          try {
+            await onPush();
+          } catch {
+            alert(t("contextMenu.publishFailed"));
+            return;
+          }
+        }
         const res = await fetch("/api/drive/files", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -710,7 +723,7 @@ export function useTreeFileOperations({
         clearBusy([item.id]);
       }
     },
-    [updateTreeFromMeta, t, setBusy, clearBusy]
+    [updateTreeFromMeta, t, setBusy, clearBusy, modifiedFiles, onPush]
   );
 
   const handleUnpublish = useCallback(

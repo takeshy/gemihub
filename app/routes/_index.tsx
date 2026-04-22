@@ -450,8 +450,8 @@ function IDEContent({
   conflicts: import("~/hooks/useSync").ConflictInfo[];
   localModifiedCount: number;
   remoteModifiedCount: number;
-  push: () => void;
-  pull: () => void;
+  push: () => Promise<void>;
+  pull: () => Promise<void>;
   checkRemoteChanges: () => Promise<void>;
   resolveConflict: (fileId: string, resolution: "local" | "remote") => Promise<void>;
   showConflictDialog: boolean;
@@ -1019,6 +1019,7 @@ function IDEContent({
       showManagementFolders={settings.showManagementFolders}
       cacheFilesByIds={cacheFilesByIds}
       cachingProgress={cachingProgress}
+      onPush={push}
     />
   );
 
@@ -1495,6 +1496,7 @@ function DriveFileTreeWithContext(props: {
   showManagementFolders?: boolean;
   cacheFilesByIds: (ids: string[]) => Promise<void>;
   cachingProgress: { total: number; done: number } | null;
+  onPush?: () => Promise<void>;
 }) {
   const { setFileList } = useEditorContext();
   return (

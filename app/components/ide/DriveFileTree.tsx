@@ -86,6 +86,7 @@ interface DriveFileTreeProps {
   showManagementFolders?: boolean;
   cacheFilesByIds: (ids: string[]) => Promise<void>;
   cachingProgress: { total: number; done: number } | null;
+  onPush?: () => Promise<void>;
 }
 
 function getFileIcon(name: string, _mimeType: string) {
@@ -111,6 +112,7 @@ export function DriveFileTree({
   showManagementFolders,
   cacheFilesByIds,
   cachingProgress,
+  onPush,
 }: DriveFileTreeProps) {
   const [treeItems, setTreeItems] = useState<CachedTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -654,6 +656,7 @@ export function DriveFileTree({
     t,
     tempDiffData,
     setTempDiffData,
+    onPush,
   });
 
   const getContextMenuItems = useCallback(
