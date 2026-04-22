@@ -16,6 +16,7 @@ import {
   type ToolDefinition,
   type ModelType,
   type DriveToolMode,
+  type UserSettings,
 } from "~/types/settings";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/chat";
 import { isDriveToolMediaResult } from "~/services/gemini-chat-core";
@@ -40,6 +41,8 @@ export interface InteractionsChatOptions {
   abortSignal?: AbortSignal;
   skillWorkflows?: SkillWorkflowEntry[];
   requirePlanApproval?: boolean;
+  geminiApiKey?: string;
+  settings?: UserSettings;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +98,12 @@ function buildToolDispatcher(
   skillWorkflows: InteractionsChatOptions["skillWorkflows"],
   callbacks?: LocalChatCallbacks,
   abortSignal?: AbortSignal,
-  options?: { requirePlanApproval?: boolean; canUseProxy?: boolean },
+  options?: {
+    requirePlanApproval?: boolean;
+    canUseProxy?: boolean;
+    geminiApiKey?: string;
+    settings?: UserSettings;
+  },
 ): {
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>;
   driveToolNames: Set<string>;
@@ -174,7 +182,11 @@ function buildToolDispatcher(
           (args.variables as string) || "{}",
           skillWorkflows,
           callbacks,
-          options?.canUseProxy,
+          {
+            canUseProxy: options?.canUseProxy,
+            geminiApiKey: options?.geminiApiKey,
+            settings: options?.settings,
+          },
         );
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Skill workflow execution failed" };
@@ -306,6 +318,8 @@ export async function* executeInteractionsChat(
     abortSignal,
     skillWorkflows,
     requirePlanApproval,
+    geminiApiKey,
+    settings,
   } = options;
 
   // Image generation models should not use Interactions API
@@ -321,7 +335,7 @@ export async function* executeInteractionsChat(
     skillWorkflows,
     callbacks,
     abortSignal,
-    { requirePlanApproval, canUseProxy },
+    { requirePlanApproval, canUseProxy, geminiApiKey, settings },
   );
 
   // Build extra tool definitions (client-only tools) to send to server

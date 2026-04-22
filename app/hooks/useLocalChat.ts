@@ -22,6 +22,7 @@ import {
   type ToolDefinition,
   type ModelType,
   type DriveToolMode,
+  type UserSettings,
 } from "~/types/settings";
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
 import type { DriveEvent } from "~/engine/local-executor";
@@ -50,6 +51,7 @@ export interface LocalChatOptions {
   abortSignal?: AbortSignal;
   skillWorkflows?: SkillWorkflowEntry[];
   requirePlanApproval?: boolean;
+  settings?: UserSettings;
 }
 
 export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
@@ -79,6 +81,7 @@ export async function* executeLocalChat(
     abortSignal,
     skillWorkflows,
     requirePlanApproval,
+    settings,
   } = options;
 
   // Image generation model
@@ -266,7 +269,7 @@ export async function* executeLocalChat(
           (args.variables as string) || "{}",
           skillWorkflows,
           callbacks,
-          canUseProxy,
+          { canUseProxy, geminiApiKey: apiKey, settings },
         );
       } catch (err) {
         return {

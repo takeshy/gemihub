@@ -1,5 +1,6 @@
 import type { McpAppInfo } from "~/types/chat";
 import type { SkillWorkflowRef } from "~/types/skill";
+import type { UserSettings } from "~/types/settings";
 import type { DriveEvent, LocalExecuteCallbacks } from "~/engine/local-executor";
 import type { ExecutionLog } from "~/engine/types";
 import { executeWorkflowLocally } from "~/engine/local-executor";
@@ -22,12 +23,18 @@ export type SkillWorkflowEntry = {
   folderId: string;
 };
 
+export interface SkillWorkflowExecOptions {
+  canUseProxy?: boolean;
+  geminiApiKey?: string;
+  settings?: UserSettings;
+}
+
 export async function executeSkillWorkflowTool(
   workflowId: string,
   variablesJson: string,
   skillWorkflows: SkillWorkflowEntry[],
   callbacks?: SkillWorkflowCallbacks,
-  canUseProxy?: boolean,
+  execOptions?: SkillWorkflowExecOptions,
 ): Promise<Record<string, unknown>> {
   const match = skillWorkflows.find(
     (sw) => buildWorkflowToolId(sw.skillId, sw.workflow) === workflowId,
@@ -72,7 +79,9 @@ export async function executeSkillWorkflowTool(
     const result = await executeWorkflowLocally(workflow, executionCallbacks, {
       initialVariables,
       workflowId: fileId,
-      canUseProxy,
+      canUseProxy: execOptions?.canUseProxy,
+      geminiApiKey: execOptions?.geminiApiKey,
+      settings: execOptions?.settings,
     });
 
     const resultVars: Record<string, string | number> = {};

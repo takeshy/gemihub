@@ -955,6 +955,8 @@ export function ChatPanel({
                 ragTopK: settings.ragTopK,
                 abortSignal: abortController.signal,
                 requirePlanApproval: needsPlanApproval,
+                geminiApiKey: localApiKey ?? undefined,
+                settings,
               },
               chatCallbacks,
             )
@@ -976,6 +978,7 @@ export function ChatPanel({
                 ragTopK: settings.ragTopK,
                 abortSignal: abortController.signal,
                 requirePlanApproval: needsPlanApproval,
+                settings,
               },
               chatCallbacks,
             );
