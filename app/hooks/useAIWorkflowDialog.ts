@@ -1,9 +1,59 @@
 import { useState, useCallback } from "react";
-import { getCachedFile, getCachedFileTree, setCachedFile } from "~/services/indexeddb-cache";
+import {
+  getCachedFile,
+  getCachedFileTree,
+  setCachedFile,
+  getLocalSyncMeta,
+  setLocalSyncMeta,
+  getCachedRemoteMeta,
+  setCachedRemoteMeta,
+} from "~/services/indexeddb-cache";
 import type { CachedTreeNode } from "~/services/indexeddb-cache";
 import { parseFrontmatter, extractCapabilitiesBlock, upsertCapabilitiesBlock, writeSkillMd } from "~/services/skill-loader";
 import { extractInputVariables } from "~/engine/inputVariables";
 import type { AIWorkflowMeta } from "~/components/ide/AIWorkflowDialog";
+
+/**
+ * Record a Drive-side file write in both localSyncMeta and cachedRemoteMeta.
+ * Without this, AI-created files are invisible in the tree (buildTreeFromMeta
+ * only renders files tracked in localSyncMeta) and AI-updated files show up
+ * as "needs pull" because the md5 stored in localSyncMeta is stale.
+ */
+async function recordSyncedFile(file: {
+  id: string;
+  name: string;
+  mimeType: string;
+  md5Checksum?: string;
+  modifiedTime?: string;
+  createdTime?: string;
+}): Promise<void> {
+  const md5 = file.md5Checksum ?? "";
+  const modifiedTime = file.modifiedTime ?? "";
+  const now = new Date().toISOString();
+  try {
+    const localMeta = await getLocalSyncMeta();
+    if (localMeta) {
+      localMeta.files[file.id] = { md5Checksum: md5, modifiedTime };
+      localMeta.lastUpdatedAt = now;
+      await setLocalSyncMeta(localMeta);
+    }
+  } catch { /* non-critical */ }
+  try {
+    const remoteMeta = await getCachedRemoteMeta();
+    if (remoteMeta) {
+      remoteMeta.files[file.id] = {
+        name: file.name,
+        mimeType: file.mimeType,
+        md5Checksum: md5,
+        modifiedTime,
+        createdTime: file.createdTime ?? "",
+      };
+      remoteMeta.lastUpdatedAt = now;
+      remoteMeta.cachedAt = Date.now();
+      await setCachedRemoteMeta(remoteMeta);
+    }
+  } catch { /* non-critical */ }
+}
 
 export interface AIDialogState {
   mode: "create" | "modify";
@@ -321,6 +371,7 @@ export function useAIWorkflowDialog({
           } catch {
             // IndexedDB write failed — Drive update already succeeded
           }
+          if (resData.file) await recordSyncedFile(resData.file);
           window.dispatchEvent(
             new CustomEvent("file-restored", {
               detail: { fileId: ctx.workflowFileId, content: yamlContent },
@@ -371,6 +422,7 @@ export function useAIWorkflowDialog({
                     fileName: rbData.file?.name,
                   });
                 } catch { /* IndexedDB write failed */ }
+                if (rbData.file) await recordSyncedFile(rbData.file);
                 window.dispatchEvent(
                   new CustomEvent("file-restored", {
                     detail: { fileId: ctx.workflowFileId, content: originalWorkflowYaml },
@@ -398,6 +450,7 @@ export function useAIWorkflowDialog({
           } catch {
             // IndexedDB write failed — Drive update already succeeded
           }
+          if (skillResData.file) await recordSyncedFile(skillResData.file);
           window.dispatchEvent(
             new CustomEvent("file-restored", {
               detail: { fileId: ctx.skillFileId, content: newSkillMd },
@@ -438,6 +491,7 @@ export function useAIWorkflowDialog({
             } catch {
               // IndexedDB write failed — Drive update already succeeded
             }
+            if (resData.file) await recordSyncedFile(resData.file);
             // Notify all useFileWithCache hooks so they pick up the new content
             window.dispatchEvent(
               new CustomEvent("file-restored", {
@@ -482,6 +536,7 @@ export function useAIWorkflowDialog({
             } catch {
               // IndexedDB write failed — Drive create already succeeded
             }
+            await recordSyncedFile(data.file);
             // Create SKILL.md alongside the workflow if in skill mode
             if (meta.skillMdContent && meta.newSkillId && meta.skillFolderPath) {
               const skillMdContent = injectInputVariablesIntoSkillMd(
@@ -511,6 +566,7 @@ export function useAIWorkflowDialog({
                         fileName: d.file.name,
                       });
                     } catch { /* IndexedDB write failed */ }
+                    await recordSyncedFile(d.file);
                   }
                   window.dispatchEvent(new Event("sync-complete"));
                 })
