@@ -9,7 +9,7 @@ const BASE_SCOPES = [
 
 const HUBWORK_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
-  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.events.owned",
 ];
 
 function getOAuth2Client(request?: Request) {
