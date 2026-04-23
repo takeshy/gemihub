@@ -222,7 +222,10 @@ export function useTreeFileCreate({
       if (newFiles.length > 0) {
         const result = await upload(newFiles, rootFolderId, namePrefix);
         if (result.ok) {
-          await fetchAndCacheTree();
+          // Register every uploaded file in localSyncMeta BEFORE fetchAndCacheTree.
+          // buildTreeFromMeta's local-first filter hides remote entries that
+          // aren't tracked locally, so skipping this leaves newly uploaded
+          // files invisible until the next sync.
           const localMeta = await getLocalSyncMeta();
           for (const file of newFiles) {
             const uploaded = result.fileMap.get(file.name);
@@ -268,6 +271,7 @@ export function useTreeFileCreate({
             localMeta.lastUpdatedAt = new Date().toISOString();
             await setLocalSyncMeta(localMeta);
           }
+          await fetchAndCacheTree();
         }
       }
 
