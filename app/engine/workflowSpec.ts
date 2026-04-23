@@ -32,24 +32,54 @@ Output a single continuous text with a \`===WORKFLOW===\` separator line.
 The first part is the SKILL.md content (YAML frontmatter + \`\`\`skill-capabilities fenced YAML block + markdown instructions) as raw text.
 The second part (after the separator) is the workflow YAML wrapped in a \`\`\`yaml code fence.
 
-Example structure:
+### SKILL.md Authoring Conventions
+
+Follow these conventions — based on the obra/superpowers writing-skills research — so future AI agents reliably load and obey the skill.
+
+**Frontmatter**:
+- \`name\`: lowercase-hyphenated only (letters, digits, hyphens). No spaces, no capitalisation, no other special characters. Example: \`weekly-newsletter\` — NOT "Weekly Newsletter".
+- \`description\`: describe ONLY **when to use** the skill — triggering conditions, symptoms, user-phrased keywords. Start with "Use when...". NEVER summarise what the skill does or its workflow steps. Research finding: when the description summarises the workflow, the LLM follows the description and skips the skill body entirely.
+  - ❌ BAD: \`description: Generates a weekly newsletter by pulling metrics and emailing the team\` — summarises the workflow
+  - ✅ GOOD: \`description: Use when the user asks for a weekly summary, digest, newsletter, metrics roundup, team update, or says "週次レポート送信"\` — triggering conditions + keywords
+
+**Body structure** — include only the sections that apply, in this order:
+1. \`## Overview\` — 1–2 sentences: what this skill is and its core principle.
+2. \`## When to Use\` / \`## When NOT to Use\` — short bullets with concrete triggers.
+3. \`## ⛔ The Iron Law\` — ONE absolute-rule sentence (e.g. "NO send UNTIL user approves the preview") when the skill enforces a hard pre-condition. Skip if no such rule exists.
+4. \`## Core Pattern: Before / After\` — two-column table (❌ wrong approach | ✅ correct approach) when the skill replaces a common wrong pattern.
+5. \`## Quick Reference\` — compact tables for APIs, commands, or variables the agent will reach for often.
+6. \`## Required Flow\` — numbered steps (e.g. Clarify → Plan → Approve → Implement → Verify) when the skill enforces a multi-step discipline.
+7. \`## ⚠️ Red Flags / Rationalisations\` — two-column table "Tempting thought → Counter-rule". Preempts rationalisations the LLM is likely to make (e.g. "The plan is obvious, I'll skip approval"). Include only for discipline-enforcing skills.
+8. Domain-specific sections (checklists, data schemas, examples) last.
+
+**Prefer tables to prose.** Reference input variables by their exact name so the chat LLM knows what to pass. Keep instructions concise — every extra sentence is loaded into every future conversation that activates the skill.
+
+### Example output structure
+
 ---
-name: Skill Display Name
-description: Short description of what this skill does
+name: weekly-newsletter
+description: Use when the user asks for a weekly summary, digest, newsletter, metrics roundup, team update, or says "週次レポート送信"
 ---
 
 \`\`\`skill-capabilities
 workflows:
-  - path: workflows/<workflow-filename>.yaml
-    description: What the workflow does
+  - path: workflows/send-weekly-newsletter.yaml
+    description: Pull this week's metrics, compose the HTML newsletter, send via Gmail
 \`\`\`
 
-Instructions for the AI agent when this skill is active.
-Describe the agent's role, behavior rules, and how to use the workflows. Reference input variables by their exact name so the chat LLM knows what to pass.
+## Overview
+
+Compiles the week's KPIs into a branded HTML newsletter and mails it to the configured list via Gmail.
+
+## ⛔ The Iron Law
+
+**NO \`gmail-send\` UNTIL the user has approved the rendered HTML preview in chat.**
+
+(... other sections as needed ...)
 
 ===WORKFLOW===
 \`\`\`yaml
-name: workflow-name
+name: send-weekly-newsletter
 nodes:
   - id: first-node
     type: variable
@@ -57,7 +87,7 @@ nodes:
 \`\`\`
 
 IMPORTANT:
-- Frontmatter holds only user-facing metadata (name, description). Do NOT put \`workflows:\` in the frontmatter.
+- Frontmatter holds only user-facing metadata (\`name\`, \`description\`). Do NOT put \`workflows:\` in the frontmatter.
 - Workflow / script IDs live in the \`\`\`skill-capabilities fenced YAML block. The runtime auto-fills \`inputVariables\` from the workflow YAML's \`{{var}}\` usage, so keep that clean and unambiguous.
 - The workflow YAML after the separator MUST be inside a \`\`\`yaml code fence to preserve indentation.`;
   } else if (context?.outputAsMarkdown) {
