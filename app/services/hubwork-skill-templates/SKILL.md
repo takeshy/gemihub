@@ -1,6 +1,6 @@
 ---
-name: Webpage Builder
-description: Build web pages and API endpoints for Hubwork sites
+name: webpage-builder
+description: Use when building or editing a Hubwork site — static HTML pages, magic-link login pages, protected pages, workflow-based JSON APIs (web/api/*.yaml), publishing blog posts or announcements, or wiring sheet/calendar/gmail data into pages. Use when the user mentions web/, gemihub.*, requireAuth, sheet-read/sheet-write, or asks to "公開する" / "サイトに追加".
 ---
 
 ```skill-capabilities
@@ -13,87 +13,107 @@ workflows:
 
 {{RESPONSE_LANGUAGE_INSTRUCTION}}
 
-You are a web page builder for the Hubwork platform. You create static HTML pages and workflow-based API endpoints that are served on the user's Hubwork domain.
+## Overview
 
-## ⚠️ MANDATORY: Hubwork Platform API
+You build static HTML pages and YAML workflow APIs that are served on the user's Hubwork domain. Hubwork has its own client-side helper (`/__gemihub/api.js`) and workflow runtime — standard web patterns (raw `fetch`, form `action`, JS frameworks like Alpine/Vue/React) DO NOT WORK on this platform.
 
-Hubwork has its OWN client-side JavaScript API (`/__gemihub/api.js`). You MUST use it. Standard web patterns (raw fetch, form actions, JS frameworks) DO NOT WORK on this platform.
+## ⛔ The Iron Law
 
-**Every HTML page that uses data or auth MUST include:**
-```html
-<script src="/__gemihub/api.js"></script>
-```
+**NO FILE-WRITING TOOL CALL — `create_drive_file`, `update_drive_file`, `migrate_spreadsheet_schema`, `run_skill_workflow` — UNTIL THE USER HAS APPROVED A PLAN POSTED IN CHAT.**
 
-**Authentication — use ONLY these methods:**
-- `gemihub.auth.login("accounts", email, redirectPath)` — send magic link (NO form action, NO fetch)
-- `const user = await gemihub.auth.require("accounts", "/login/accounts")` — check auth, redirect if not logged in
-- `await gemihub.auth.logout("accounts")` — logout (NO fetch)
+Even when the request seems trivial. Even when you "just want to confirm the layout works". The Plan goes in the chat as text. Then you wait. Then the user says OK / 進めて / go ahead. Then you write.
 
-**Data access — use ONLY these methods:**
-- `await gemihub.get("path")` — GET request to `/__gemihub/api/path` (NO raw fetch)
-- `await gemihub.post("path", body)` — POST request (NO raw fetch)
+## When to Use / NOT to Use
 
-**API workflows — use ONLY this YAML format:**
-```yaml
-trigger:
-  requireAuth: accounts
-nodes:
-  - id: read
-    type: sheet-read
-    sheet: SheetName
-    filter: '{"account_email": "{{auth.email}}", "status": "{{request.query.status}}"}'
-    saveTo: result
-  - id: respond
-    type: set
-    name: __response
-    value: "{{result}}"
-```
-Valid node types: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete`, `gmail-send`, `calendar-list`, `calendar-create`, `set`, `variable`, `if`, `json`, `http`, `script`.
-NEVER use `steps:`, `action:`, `params:`, `readSheet`, or other invented syntax.
+**Use when:** the user wants to add or edit anything under `web/`, build a login or protected page, expose a sheet/calendar/gmail data source as a JSON endpoint, publish a blog post or announcement, or generate Hubwork API mocks.
 
-**For UUIDs, timestamps, and human-readable date formatting, use a `script` node — NOT invented placeholders like `{{sys.uuid}}`, `{{sys.now}}`, `{{now}}`, or `{{request.body.datetime}}`:** The template engine has no built-in date formatters, UUID generator, or `sys.*` helpers. Unknown placeholders resolve to literal text and end up written to sheets / emails verbatim (this has been a recurring class of bug). Generate these values in a `script` node and reference the result via `{{saveTo.field}}` from later nodes. See `references/api-reference.md` → "script Node — Dynamic Values & Display Formatting" for the canonical pattern.
+**Do NOT use when:** the user is editing a Drive-level workflow under `workflows/` (those run via `run_skill_workflow`, not served as HTTP), asking about the GemiHub IDE itself, or working with files outside `web/`.
 
-**`__response` must use `{{var}}` — NEVER `{{var:json}}`:** `{{var}}` already serializes the value to a JSON string. The `:json` modifier adds a *second* layer of escaping, producing invalid JSON that the API handler returns verbatim — the client sees an escaped string instead of the data. `:json` is only for embedding a value *inside* a JSON string literal (e.g. `value: '{"msg": "{{text:json}}"}'`).
+## First Step Every Conversation
 
-**Caller input is read through `request.*` variables — NEVER bare `{{query.X}}` / `{{body.X}}`:**
-- GET (`gemihub.get("path?key=v")`) → `{{request.query.key}}`
-- POST (`gemihub.post("path", {key: "v"})`) → `{{request.body.key}}`
-- HTTP method itself: `{{request.method}}`
-- When `requireAuth` is set, every authenticated-user variable is under the `auth.*` namespace:
-  - `{{auth.email}}` — caller's email (always set)
-  - `{{auth.type}}` — account type name, matches the `requireAuth` value (always set)
-  - `{{auth.<column>}}` — any NON-email column on the identity sheet row for this user (e.g. `{{auth.name}}`, `{{auth.created_at}}`, `{{auth.logined_at}}` for the default `accounts` sheet). The column header must exist on the sheet; if a value is blank the variable resolves to an empty string.
-  - `{{auth.<dataKey>}}` — only when the account config declares a `data:` source (advanced). Each data source key is exposed as a JSON string; access nested fields with dot notation (`{{auth.profile.name}}`).
+Read `web/__gemihub/spec.md` with `read_drive_file` to learn what already exists. Skip if absent.
 
-A workflow that reads `{{query.X}}` (no `request.` prefix) silently resolves to "" and the downstream node breaks.
+## Core Pattern: Before / After
 
-**MANDATORY: Before writing OR debugging any `web/api/*.yaml` workflow, call:**
-```
-get_workflow_spec()
-```
-With no arguments it returns the full authoritative spec — `trigger:` (requireAuth, request.*, __response), every valid node type and its parameters, variable / condition syntax, common mistakes. Do NOT rely on memory — the example above is a starting shape, not the full spec.
+| ❌ DOES NOT WORK on Hubwork | ✅ Hubwork pattern |
+|---|---|
+| `<form action="/api/login" method="post">` | `gemihub.auth.login("accounts", email)` in JS |
+| `await fetch("/api/tickets")` | `await gemihub.get("tickets/list")` |
+| `await fetch("/api/save", { method: "POST", body: ... })` | `await gemihub.post("tickets/save", body)` |
+| Alpine.js / Vue / React for reactivity | Plain JS with `gemihub.*` |
+| Reading session cookies in JS | `await gemihub.auth.me("accounts")` |
+| `<input type="password">` on login | Magic-link only — email input + "Send Login Link" |
 
-## First: Read Existing Spec
+Every HTML page that touches data or auth MUST include `<script src="/__gemihub/api.js"></script>`.
 
-At the START of every conversation, read `web/__gemihub/spec.md` with `read_drive_file` to understand what has already been built. Use this context when answering questions, planning new work, and updating the spec. If the file does not exist, skip this step.
+## Quick Reference
 
-## Required Flow: Clarify → Plan → Approval → Implement → Verify
+**Auth (`accounts` is the default account type):**
 
-Every build request MUST follow these steps in order. Do NOT skip ahead to implementation, even when the request seems clear.
+| Call | Purpose |
+|---|---|
+| `gemihub.auth.login(type, email, redirect?)` | Send magic link. NO form action, NO fetch. |
+| `await gemihub.auth.require(type, "/login/...")` | Guard a page. Returns user or redirects. |
+| `await gemihub.auth.me(type)` | Get user, returns `null` if not logged in. |
+| `await gemihub.auth.logout(type)` | Destroy session. NO fetch. |
 
-1. **Clarify** — If the request has any ambiguity, ask clarifying questions FIRST (data fields, which sheet, auth or public, layout). Do NOT guess. Keep questions to a short bulleted list.
-2. **Present the Plan** — POST the Plan in the chat (see "Planning Guidelines" below). Do NOT call `create_drive_file` / `update_drive_file` or any file-writing tool at this stage.
-3. **Wait for user approval** — STOP after posting the Plan. Wait for the user's reply (e.g. "OK", "進めて", "go ahead") or revisions before calling any tool.
-4. **Implement** — Create/update files per the Plan, one by one.
-5. **Verify** — Read back EVERY saved file with `read_drive_file` and check against the Pre-Save & Verification Checklist. Fix and re-save anything that fails.
+**Data:**
+
+| Call | Maps to |
+|---|---|
+| `await gemihub.get("path", { qkey: v })` | `GET /__gemihub/api/path?qkey=v` |
+| `await gemihub.post("path", { ... })` | `POST /__gemihub/api/path` (JSON body) |
+
+**Workflow caller-input variables (NEVER use bare `{{query.x}}` / `{{body.x}}`):**
+
+| Variable | Source |
+|---|---|
+| `{{request.method}}` | `"GET"` or `"POST"` |
+| `{{request.query.X}}` | URL query parameter |
+| `{{request.body.X}}` | POST JSON body field |
+| `{{request.params.X}}` | `[X]` URL pattern capture |
+| `{{auth.email}}` | Authenticated email (when `requireAuth` set) |
+| `{{auth.<column>}}` | Any non-email column on the identity sheet row (blank cells → `""`) |
+| `{{auth.<dataKey>}}` | Advanced: account `data:` source key (JSON string, dot access) |
+
+**Valid workflow node types:** `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete`, `gmail-send`, `calendar-list`, `calendar-create`, `set`, `variable`, `if`, `json`, `http`, `script`. NEVER `steps:`, `action:`, `params:`, `readSheet`, or any other invented syntax.
+
+**For full API surface, request shape, account-type config, and node-type details:** read `references/api-reference.md`.
+
+**Before writing OR debugging any `web/api/*.yaml`, call `get_workflow_spec()` with no arguments** for the authoritative spec. Do NOT rely on memory.
+
+## Required Flow
+
+For every build request, in order — do NOT skip ahead even when the request seems clear:
+
+1. **Clarify** — ambiguous fields, sheet name, auth vs public, layout? Ask in a short bulleted list. Don't guess.
+2. **Plan** — post the Plan in chat (see "Planning Guidelines"). NO tool calls yet.
+3. **Wait for approval** — STOP after posting. Wait for "OK" / "進めて" / "go ahead" / revisions.
+4. **Implement** — copy the matching template from `references/page-patterns.md` VERBATIM, replace only the placeholders, save with `create_drive_file` / `update_drive_file`. One file at a time.
+5. **Verify** — `read_drive_file` EVERY saved file and check against the Pre-Save & Verification Checklist below. Re-save anything that fails.
+
+## ⚠️ Red Flags / Rationalisations
+
+If you catch yourself thinking any of these, STOP — the counter-rule is load-bearing.
+
+| Tempting thought | Counter-rule |
+|---|---|
+| "The plan is obvious, I'll skip approval and just write." | Iron Law. STOP. |
+| "Bare `{{query.x}}` / `{{body.x}}` should work." | Resolves to `""` and the next node breaks. Always `request.query.x` / `request.body.x`. |
+| "I'll add `:json` to `__response` to be safe." | `{{var}}` already JSON-serialises. `:json` doubles the escaping → invalid JSON. `__response` is always `{{var}}`. |
+| "I'll use `{{sys.uuid}}` / `{{now}}` / `{{request.body.datetime}}` directly in `gmail-send`." | No `sys.*` helpers exist. UUIDs, timestamps, and human-readable dates are produced by a `script` node and referenced via `{{<saveTo>.field}}`. Unknown placeholders end up in sheets/emails verbatim. |
+| "`data:` as a YAML map is cleaner than the JSON string." | The handler `JSON.parse`s the value. A YAML map crashes at runtime. `data:` is always a single-quoted JSON string literal: `data: '[{"id":"{{prepared.id}}"}]'`. |
+| "User-derived `{{...}}` inside a JSON literal is fine without `:json`." | A single `"` in the value breaks `JSON.parse`. ALL user-derived values inside JSON string literals (`sheet-write` / `sheet-update` / `sheet-delete` `data:`, `sheet-read` filters, `http` body) MUST be `"{{var:json}}"`. Bare `"{{var}}"` is only safe for engine-generated primitives (UUIDs, ISO timestamps from `new Date().toISOString()`). |
+| "I'll use Alpine.js / Vue / React for reactivity." | Plain JS with the `gemihub.*` API. Frameworks break on Hubwork. |
+| "I'll add an email field to the protected form." | The user is already authenticated. Use `(await gemihub.auth.me(type)).email` in JS or `{{auth.email}}` in workflows. |
+| "Calendar event has `evt.start.dateTime`." | That's the raw Google Calendar shape. Our API flattens it. Use `new Date(evt.start)` directly. |
+| "`requireAuth` will limit which rows the user sees." | It only checks login. ALWAYS filter `sheet-read` by `{{auth.email}}` for user-specific data. |
 
 ## Spreadsheet & Schema
 
-A spreadsheet named **webpage_builder** is automatically created with an **accounts** sheet (columns: `email`, `name`, `created_at`, `logined_at`). The account type is fixed to **accounts** with `email` as the identity column.
+A spreadsheet **webpage_builder** is auto-created with an **accounts** sheet (`email`, `name`, `created_at`, `logined_at`). Account type is fixed to **accounts**, identity column `email`.
 
-### Schema Management
-
-The file `web/__gemihub/schema.md` defines which sheets and columns exist. Each column includes its type and a sample value:
+`web/__gemihub/schema.md` is the source of truth for sheets and columns. Format:
 
 ```markdown
 ## sheet_name
@@ -103,132 +123,78 @@ The file `web/__gemihub/schema.md` defines which sheets and columns exist. Each 
 
 `migrate_spreadsheet_schema` extracts only the column name (before `:`) when creating sheets.
 
-**When you need a new sheet or new columns:**
-1. Update `web/__gemihub/schema.md` (read it first with `read_drive_file`, add the new sheet/columns, save with `update_drive_file`)
-2. Read the updated schema.md with `read_drive_file`
-3. Call `migrate_spreadsheet_schema` with the schema content — this creates missing sheets and appends missing columns
+**Adding a new sheet or column:**
+1. `read_drive_file` `web/__gemihub/schema.md`, edit, save with `update_drive_file`.
+2. Re-read it.
+3. Call `migrate_spreadsheet_schema` with the schema content. **Always do this BEFORE any `sheet-write` to a new sheet** — `sheet-write` requires the headers to exist.
 
-**Important:** Always update and migrate the schema BEFORE using `sheet-write` on a new sheet. `sheet-write` requires the sheet and headers to already exist.
+**NEVER guess column names.** Call `get_spreadsheet_schema` first to read the exact case-sensitive names (formats like `contact-email` are common).
 
-**NEVER guess column names.** Call `get_spreadsheet_schema` FIRST to read the exact names before writing any `sheet-read` filter or `sheet-write` data. Column names are case-sensitive and may use formats like `contact-email` instead of `email`.
+## Article Publishing
 
-## Sample Reference
+The skill ships one workflow `create-article` that turns a Drive note into a styled HTML page.
 
-See `references/sample-interview.md` for a complete real-world example — a partner interview booking system with login page, protected page, GET/POST APIs (calendar + sheet + email), and IDE preview mock data. Refer to this sample when building similar features.
-
-## What You Build
-
-- **HTML pages** — `web/` on Drive, served as static pages (`web/about.html` → `/about`)
-- **Workflow API endpoints** — `web/api/` YAML files, served as JSON APIs (`web/api/users/list.yaml` → `/__gemihub/api/users/list`)
-- **Login pages** — magic-link auth (email-only, NO password) via `gemihub.auth.login(type, email)`
-- **Protected pages** — guarded by `gemihub.auth.require(type)`
-- **Mock files** — IDE preview of auth / API (`web/__gemihub/auth/me.json`, `web/__gemihub/api/{path}.json`)
-- **Living docs** — `web/__gemihub/spec.md` (site overview) and `web/__gemihub/history.md` (change log)
-- **Skill change log** — `history.md` in this skill folder records released versions, dates, and notable changes
-- **Articles (blog posts & announcements)** — created via the `create-article` skill workflow (see below)
-
-## Article Publishing (Blog & Announcements)
-
-The skill ships a single unified workflow `create-article` that turns a Drive note into a styled HTML page. The article's **category** is captured by the `folder` input, which also controls the URL path and archive location:
-
-| folder | File saved to | URL | Archive page |
-|--------|---------------|-----|--------------|
+| `folder` input | File path | URL | Archive |
+|---|---|---|---|
 | `blogs` | `web/blogs/<pubDate>-<noteSlug>.html` | `/blogs/<pubDate>-<noteSlug>` | `/blogs/index` |
 | `announcements` | `web/announcements/<pubDate>-<noteSlug>.html` | `/announcements/<pubDate>-<noteSlug>` | `/announcements/index` |
 
-On every run, the workflow:
+On every run the workflow also regenerates `web/<folder>/index.html` and refreshes the homepage's `<!-- recent-articles:start -->` … `<!-- recent-articles:end -->` block (5 newest aggregated across `blogs` + `announcements` only).
 
-1. Saves the article HTML to `web/<folder>/<pubDate>-<noteSlug>.html` using the source note's basename (sanitized for path safety)
-2. Regenerates `web/<folder>/index.html` (the archive page for that folder)
-3. Refreshes the homepage's `recent-articles` marker block, which lists the 5 newest articles aggregated across **both** `blogs` and `announcements`
+**When to invoke:** "ブログ" / "blog" → `folder: "blogs"`. "お知らせ" / "announcement" → `folder: "announcements"`.
 
-### When to invoke
+**Inputs (all four MUST be collected BEFORE calling the workflow — interactive prompts are skipped in headless mode):**
+- `folder` — typically `blogs` or `announcements`. Other folder names work but will not appear on the homepage.
+- `notePath` — full Drive path (e.g. `notes/2026-q2-release.md`). Default to active file if open, else ask.
+- `pubDate` — `YYYY-MM-DD`, default today.
+- `postTitle` — default to note basename, ask to confirm.
 
-When the user asks to 作成 / 公開 a **ブログ (blog post)**, invoke with `folder: "blogs"`. When they ask for an **お知らせ (announcement)**, invoke with `folder: "announcements"`. Do NOT hand-write the HTML — the workflow produces consistent meta tags that the index regeneration relies on.
+The standard Plan → Approval flow still applies. After collecting inputs, post a short plan listing target paths (e.g. "Create `web/blogs/2026-04-23-release-notes.html`, update `web/blogs/index.html` and the homepage's recent-articles block") and wait for approval. `run_skill_workflow` is BLOCKED until the user approves. Do NOT hand-write article HTML — the workflow's meta tags drive index regeneration.
 
-### Collecting inputs BEFORE invoking
+**Prerequisite:** `web/index.html` must already exist. The workflow only touches the `recent-articles` marker block — it leaves your nav and the rest of the page alone. For new sites that will use articles, pre-place the marker pair to control layout, and include nav links only for the archives the site actually uses.
 
-Interactive prompt nodes are skipped in headless mode, so the AI must gather all four inputs FIRST, then call the workflow with them explicitly:
+**Updating an article:** edit the HTML directly OR re-run `create-article` with the same `folder` + `pubDate` (and the updated title) — the workflow regenerates the matching path and refreshes every listing.
 
-- `folder` — archive folder name (typically `"blogs"` or `"announcements"`; infer from the user's wording — "blog" → `blogs`, "お知らせ" / "announcement" → `announcements`).
-- `notePath` — full path of the source note on Drive (e.g. `notes/2026-q2-release.md`). If the user has an active file open, offer that as the default; otherwise ask.
-- `pubDate` — publish date as `YYYY-MM-DD`. Default to today's date unless the user specifies otherwise.
-- `postTitle` — article title as shown on the page and archive. Default to the source note's basename (without extension); ask the user to confirm or override.
+## What You Build
 
-Ask any missing values in a single short question before calling `run_skill_workflow`.
-
-The standard Plan → Approval → Implement flow still applies: after collecting the inputs, present a brief plan listing the target paths (e.g. "Create `web/blogs/2026-04-23-release-notes.html`, update `web/blogs/index.html` and the homepage's recent-articles block") and wait for the user's approval before invoking the workflow. `run_skill_workflow` is BLOCKED until the user approves.
-
-### Homepage markers and nav menu
-
-The `create-article` workflow updates `web/index.html` between these exact markers:
-
-```html
-<!-- recent-articles:start -->
-...replaced content (list of up to 5 recent articles across all categories)...
-<!-- recent-articles:end -->
-```
-
-When you build a **new** `web/index.html` for a site that uses articles, include:
-
-- The marker pair in an appropriate spot (with a heading like "最近の記事" / "Recent Articles") so the first `create-article` run has a target. If the markers are absent, the workflow will insert them itself, but pre-placing them lets you control the layout.
-- A top nav with a link for **each archive the site actually uses** — typically both `/blogs/index` (ブログ一覧 / Blog) and `/announcements/index` (お知らせ一覧 / Announcements). If the site uses only one category (e.g. announcements only), link only to that one; do NOT add a link to an archive that will never have content.
-
-`create-article` itself does not touch the homepage's main nav — it only updates the `recent-articles` marker block and leaves the rest of the page (including your menu links) alone. So you are free to adjust the nav later as the site grows.
-
-**Prerequisite:** `web/index.html` must already exist before running `create-article` — the workflow reads it to update only the marker block. If the homepage hasn't been created yet, build it (even a minimal placeholder with the marker pair) before asking the user to publish articles.
-
-### Categories
-
-`folder` is both the URL path segment and the category identifier. The workflow supports any folder name, but the homepage `recent-articles` block aggregates only `blogs` and `announcements` — articles published under other folders will appear at their own archive path (e.g. `/news/index`) but **not** on the homepage. If the user asks for a third category, let them know this limitation before proceeding.
-
-Generated article / archive pages use minimal in-page navigation (a home link and, on article pages, a link back to the article's own archive). They do NOT link across categories, so a site that uses only `blogs` or only `announcements` works cleanly.
-
-### Updating an existing article
-
-Article updates are handled **outside** this workflow — either by editing the target HTML file directly, or by asking the AI to change specific content. The archive pages (`web/<folder>/index.html`) and the homepage `recent-articles` block only re-read article meta tags when `create-article` runs. After a manual edit that changes a title or date, re-run `create-article` with the same `folder` + `pubDate` (and the updated title) so the workflow regenerates the matching `web/<folder>/<pubDate>-<noteSlug>.html` path and refreshes every listing.
+- **HTML pages** — `web/about.html` → `/about`
+- **Workflow APIs** — `web/api/users/list.yaml` → `/__gemihub/api/users/list`
+- **Login pages** — magic-link only (email input + `gemihub.auth.login`)
+- **Protected pages** — `gemihub.auth.require` guard
+- **Mock files** — `web/__gemihub/auth/me.json` (auth) and `web/__gemihub/api/{path}.json` (one per endpoint) for IDE preview
+- **Living docs** — `web/__gemihub/spec.md` (overview) and `web/__gemihub/history.md` (change log)
+- **Articles** — via the `create-article` workflow above
 
 ## Planning Guidelines
 
-The Plan is chat text (not tool calls). List every file to create/modify with full `web/` paths:
+The Plan is chat text (NOT tool calls). List every file with full `web/...` paths. Use the account type name(s) from the "Configured Account Types" section; if none are listed, ask the user which account type to use before proceeding.
 
-- HTML pages (`web/...`)
-- API workflows (`web/api/...`)
-- Auth mock (`web/__gemihub/auth/me.json`) — required if ANY page uses auth
-- API mocks (`web/__gemihub/api/{path}.json`) — one per API endpoint
-- Schema update (`web/__gemihub/schema.md`) — if new sheets or columns are needed
-- Spec file (`web/__gemihub/spec.md`) and history (`web/__gemihub/history.md`)
+For any auth-enabled feature the Plan MUST cover ALL of: login page → protected page → API workflow → auth mock → API mock → spec + history update. Missing one silently breaks the flow.
 
-If new sheets/columns are needed: update schema.md and run `migrate_spreadsheet_schema` BEFORE creating API workflows that use `sheet-write`/`sheet-read`.
+If new sheets/columns are needed: include the schema.md update + `migrate_spreadsheet_schema` call BEFORE any API workflow that uses `sheet-write` / `sheet-read`.
 
-**For any auth-enabled feature, the Plan MUST cover ALL of:** login page → protected page → API workflow → auth mock → API mock → spec + history update. Missing one silently breaks the flow.
-
-Example plan:
+Example:
 ```
 1. web/login/customer.html — Login page (magic link, no password)
-2. web/dashboard.html — Protected dashboard page
-3. web/api/tickets/list.yaml — GET API: list tickets filtered by auth.email
+2. web/dashboard.html — Protected dashboard
+3. web/api/tickets/list.yaml — GET API filtered by auth.email
 4. web/__gemihub/auth/me.json — Auth mock for IDE preview
-5. web/__gemihub/api/tickets/list.json — API mock for IDE preview
-6. web/__gemihub/spec.md — Site specification
+5. web/__gemihub/api/tickets/list.json — API mock
+6. web/__gemihub/spec.md — Site spec update
 7. web/__gemihub/history.md — Change log entry
 ```
 
-Use the account type name(s) from the "Configured Account Types" section. If none are listed, ask the user which account type to use before proceeding.
-
-## CRITICAL: Creating Files
-
-You MUST use the templates in `references/page-patterns.md` as the EXACT starting point. Do NOT generate HTML or YAML from your own knowledge — the Hubwork platform has a specific API (`gemihub.*`) and workflow syntax that differs from standard patterns. Code generated without using the templates WILL NOT WORK.
+## Creating Files
 
 For EACH file in the plan:
-1. **Copy the matching template** from `references/page-patterns.md` VERBATIM — start with the exact template code
-2. **Replace only the placeholders** (`ACCOUNT_TYPE`, `SheetName`, page-specific content) — do NOT restructure
-3. **Pre-save check** — verify against the checklist below
-4. **Save** with `create_drive_file` (new file) or `update_drive_file` (existing file — located via `read_drive_file`). Path the file with a full `web/...` prefix (e.g. `web/index.html`, `web/api/users/list.yaml`). Both tools auto-detect mimeType from the extension and upsert by path, so calling `create_drive_file` on an existing path does NOT duplicate — but prefer `update_drive_file` with the known fileId when editing a known file.
+1. **Copy the matching template from `references/page-patterns.md` VERBATIM** — do NOT generate from your own knowledge. The Hubwork API surface differs from generic web patterns; ad-hoc code WILL NOT WORK.
+2. Replace only the placeholders (`ACCOUNT_TYPE`, `SheetName`, page-specific content).
+3. Pre-save check against the checklist below.
+4. Save with `create_drive_file` (new) or `update_drive_file` (existing — prefer this with the known fileId when editing). Both upsert by path with auto-detected mimeType from the extension.
 
 ## Pre-Save & Verification Checklist
 
-Before saving AND after reading back each file, check ALL applicable items:
+Run before saving AND after `read_drive_file` of each saved file.
 
 ### All HTML pages
 - [ ] Has `<script src="https://cdn.tailwindcss.com"></script>`
@@ -256,9 +222,9 @@ Before saving AND after reading back each file, check ALL applicable items:
 - [ ] GET endpoints are read-only (no `sheet-write`, `gmail-send`)
 - [ ] POST endpoints for data changes
 - [ ] Sets `__response` variable for output using `value: "{{var}}"` — NOT `"{{var:json}}"`
-- [ ] `sheet-write`/`sheet-update`/`sheet-delete` `data:` is a single-quoted JSON string (e.g. `data: '[{"id": "{{prepared.id}}"}]'`) — NEVER a YAML mapping (`data:\n  id: "..."`). The handler `JSON.parse`s the value; a YAML mapping crashes at runtime.
-- [ ] **Any placeholder embedded inside a JSON string literal** (inside `"..."` in `sheet-write` / `sheet-update` / `sheet-delete` `data:`, `sheet-read` / `sheet-update` / `sheet-delete` `filter:`, or `http` `body:`) **uses `:json` when the value can contain `"`, `\`, or newlines.** User-derived values — `{{request.body.*}}`, `{{auth.email}}`, and any `{{prepared.*}}` computed from them (e.g. a title built from a user name) — MUST be `"{{var:json}}"`. Bare `"{{var}}"` is only safe for values you know are alphanumeric: UUIDs, ISO-8601 timestamps from `new Date().toISOString()`, and similar engine-generated primitives. A single `"` in the value otherwise breaks `JSON.parse` at runtime and the API returns a 500.
-- [ ] UUIDs, timestamps, and any user-facing date are produced by a `script` node and referenced via `{{<saveTo>.field}}` — `gmail-send` body and `dialog` messages must use the script-formatted value (e.g. `{{prepared.displayRange}}`), NEVER the raw `{{request.body.start}}` ISO timestamp.
+- [ ] `sheet-write`/`sheet-update`/`sheet-delete` `data:` is a single-quoted JSON string (e.g. `data: '[{"id": "{{prepared.id}}"}]'`) — NEVER a YAML mapping
+- [ ] Any user-derived placeholder embedded inside a JSON string literal uses `:json` (`"{{request.body.x:json}}"`, `"{{auth.email:json}}"`, `"{{prepared.derivedFromUser:json}}"`); bare `"{{var}}"` is only safe for engine-generated primitives (UUIDs, ISO timestamps)
+- [ ] UUIDs, timestamps, and any user-facing date are produced by a `script` node and referenced via `{{<saveTo>.field}}` — `gmail-send` body and `dialog` messages use the script-formatted value (e.g. `{{prepared.displayRange}}`), NEVER the raw `{{request.body.start}}` ISO timestamp
 
 ### Mock files
 - [ ] Auth mock at `web/__gemihub/auth/me.json` exists (if ANY page uses auth)
@@ -269,36 +235,33 @@ Before saving AND after reading back each file, check ALL applicable items:
 - [ ] `web/__gemihub/spec.md` lists all pages, API endpoints, and data sources
 - [ ] `web/__gemihub/history.md` has a dated entry describing this iteration's changes
 
-## Common Mistakes (subtle bugs not captured by the checklist)
-
-1. **Using JS frameworks** — NEVER use Alpine.js, Vue, React, or other JS frameworks. Use plain JavaScript with the `gemihub.*` client API.
-2. **Wrong calendar event format** — `calendar-list` returns events with **flat** `start`/`end` strings (e.g., `evt.start` = `"2025-04-01T10:00:00Z"`). NEVER use `evt.start.dateTime` — that is the raw Google Calendar API format, not what our API returns. Always use `new Date(evt.start)` and `new Date(evt.end)` directly.
-3. **Asking the user for their email on protected pages** — NEVER add an email input field to forms on pages guarded by `gemihub.auth.require()`. The user is already authenticated; their email is available as `(await gemihub.auth.me("TYPE")).email` in client JS and as `{{auth.email}}` in the workflow. Pass it through `gemihub.post()` body if the workflow needs it.
-
 ## Living Docs: spec.md and history.md
 
-`web/__gemihub/spec.md` is the site's source of truth (overview, pages, APIs, data sources, account types) and `web/__gemihub/history.md` is the change log. Both MUST be updated on every iteration.
+`web/__gemihub/spec.md` is the site's source of truth (overview, pages, APIs, data sources, account types). `web/__gemihub/history.md` is the change log. Both MUST be updated on every iteration.
 
-- Read each file first with `read_drive_file`. If it exists, **MERGE** new entries into `spec.md` and **PREPEND** (newest first) new dated entries to `history.md` — never overwrite previous content.
-- If either file does not exist, create it from the Spec / History File Template in `references/page-patterns.md`.
-- Write the content (section headings, descriptions, overview text) in the **same language the user is conversing in**. Keep path strings, account type identifiers, sheet / column names as-is.
-- Save with `update_drive_file` (existing) or `create_drive_file` (new).
+- `read_drive_file` first. **MERGE** new entries into `spec.md`. **PREPEND** dated entries (newest first) to `history.md`. Never overwrite.
+- Create from the Spec / History File Template in `references/page-patterns.md` if absent.
+- Write prose in the user's conversation language. Keep paths, account-type identifiers, sheet/column names as-is.
 
-## Authentication is NOT Authorization
+## Authentication ≠ Authorization
 
-`requireAuth` only checks that the user is logged in. It does NOT restrict data access. Workflow APIs MUST filter data by the authenticated user:
+`requireAuth` only checks login. Workflows MUST also filter by the authenticated user:
 
 ```yaml
-# CORRECT: Filter by authenticated user
+# CORRECT — filters by authenticated user
 - id: read
   type: sheet-read
   sheet: Tickets
   filter: '{"email": "{{auth.email}}"}'
   saveTo: result
 
-# WRONG: Returns ALL data regardless of who is logged in
+# WRONG — returns ALL data regardless of who is logged in
 - id: read
   type: sheet-read
   sheet: Tickets
   saveTo: result
 ```
+
+## Sample Reference
+
+For a complete real-world example (login + protected page + GET/POST APIs combining calendar + sheet + gmail + IDE mock data), see `references/sample-interview.md`.

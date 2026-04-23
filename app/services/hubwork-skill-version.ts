@@ -1,5 +1,5 @@
-export const WEBPAGE_BUILDER_SKILL_VERSION = "1.0.0";
-export const WEBPAGE_BUILDER_SKILL_RELEASE_DATE = "2026-04-23";
+export const WEBPAGE_BUILDER_SKILL_VERSION = "1.1.0";
+export const WEBPAGE_BUILDER_SKILL_RELEASE_DATE = "2026-04-24";
 
 export function compareSkillVersions(a: string | null | undefined, b: string | null | undefined): number {
   const normalize = (value: string | null | undefined): number[] => {
