@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partner Registration</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md px-4">
+    <div class="bg-white rounded-lg shadow-md p-8">
+      <h1 class="text-2xl font-bold text-gray-800 mb-2 text-center">Partner 登録</h1>
+      <p class="text-gray-500 text-sm text-center mb-6">登録後、確認リンクをメールでお送りします</p>
+
+      <form id="register-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">氏名</label>
+          <input name="name" type="text" required maxlength="80"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">会社名</label>
+          <input name="company" type="text" required maxlength="120"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+          <input name="email" type="email" required placeholder="partner@example.com"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <button type="submit" id="submit-btn"
+          class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-medium">
+          登録確認メールを送信
+        </button>
+      </form>
+
+      <p class="mt-4 text-xs text-gray-500 text-center">
+        登録済みの方は <a href="/login/partner" class="text-blue-600 underline">ログイン</a>
+      </p>
+
+      <div id="message" class="mt-4 text-center text-sm hidden"></div>
+    </div>
+  </div>
+
+  <script src="/__gemihub/api.js"></script>
+  <script>
+    const form = document.getElementById("register-form");
+    const message = document.getElementById("message");
+    const submitBtn = document.getElementById("submit-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      submitBtn.disabled = true;
+      submitBtn.textContent = "送信中...";
+      message.classList.add("hidden");
+
+      try {
+        const redirect = new URLSearchParams(location.search).get("redirect") || "/partner/";
+        await gemihub.auth.register("partner", data.email, {
+          name: data.name,
+          company: data.company,
+        }, redirect);
+        message.textContent = "確認メールを送信しました。メールをご確認ください。";
+        message.className = "mt-4 text-center text-sm text-green-600";
+      } catch (err) {
+        const detail = err.response && err.response.error;
+        message.textContent = detail || "エラーが発生しました。しばらく経ってからお試しください。";
+        message.className = "mt-4 text-center text-sm text-red-600";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "登録確認メールを送信";
+      }
+    });
+  </script>
+</body>
+</html>

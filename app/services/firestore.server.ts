@@ -14,3 +14,4 @@ export function getFirestore(): Firestore {
 export const HUBWORK_ACCOUNTS = "hubwork-accounts";
 export const HUBWORK_MAGIC_TOKENS = "hubwork-magic-tokens";
 export const HUBWORK_FORM_SUBMISSIONS = "hubwork-form-submissions";
+export const HUBWORK_PENDING_REGISTRATIONS = "hubwork-pending-registrations";

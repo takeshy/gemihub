@@ -102,6 +102,14 @@ hubwork-magic-tokens/{token}         — TTLポリシーで期限切れドキュ
   email: string
   expiresAt: Timestamp
   used: boolean
+
+hubwork-pending-registrations/{token} — 登録確認待ち（検証後にシート行追加）、TTLで自動削除
+  accountId: string
+  type: string
+  email: string
+  fields: Record<string, string>     — 登録フォームで収集した追加フィールド
+  expiresAt: Timestamp
+  used: boolean
 ```
 
 ### ステータス設計
@@ -273,20 +281,106 @@ catch-allルートは以下のヘッダーでレスポンスを返す:
 
 ### マジックリンクフロー
 
-1. ユーザーがログインページでメールを送信 → `POST /hubwork/auth/magic-link`
+1. ユーザーがログインページでメールを送信 → `POST /__gemihub/auth/login`
 2. サーバーがGoogle Sheetsのユーザーシートでメールを検証
 3. Firestoreにトークン作成（`hubwork-magic-tokens`コレクション、10分TTL）
-4. Gmail APIでログインリンクをメール送信
-5. ユーザーがリンクをクリック → `GET /hubwork/auth/verify/:token`
+4. Gmail APIでログインリンクをメール送信（`emails/{type}/login.md` テンプレート）
+5. ユーザーがリンクをクリック → `GET /__gemihub/auth/verify/:token`
 6. サーバーがFirestoreでトークンを検証（トランザクション、ワンタイム）
 7. セッションCookie（`__hubwork_contact`）設定、7日間有効
 8. ターゲットページへリダイレクト
 
+### 新規登録フロー
+
+`settings.json` の `hubwork.accounts[type].register` を定義すると、そのアカウントタイプで新規登録が有効化される。
+
+1. 訪問者が登録フォームでメール＋追加フィールド（氏名・会社名等）を送信 → `POST /__gemihub/auth/register`
+2. サーバーがフィールドを `register.fields` のスキーマで検証
+3. 重複チェック: identity シートに既にメールが存在する場合は `duplicatePolicy` に従う
+   - `"silent-login"`（デフォルト）: 登録済みであることを明示せず、代わりにログインマジックリンクを送信
+   - `"reject"`: 同様に `{ ok: true }` を返すが何もしない（情報漏えい防止）
+4. Firestore に `hubwork-pending-registrations/{token}` を保存（10分 TTL、検証前は identity シートに書かない）
+5. Gmail API で登録確認メール送信（`emails/{type}/register.md` テンプレート）
+6. ユーザーがリンクをクリック → `GET /__gemihub/auth/register/verify/:token`
+7. サーバーがFirestoreでトークン検証（トランザクション）→ identity シートに行追加 → コンタクトセッション発行
+8. ターゲットページへリダイレクト
+
+**settings.json 例:**
+
+```json
+{
+  "hubwork": {
+    "accounts": {
+      "partner": {
+        "identity": { "sheet": "Partners", "emailColumn": "email" },
+        "register": {
+          "duplicatePolicy": "silent-login",
+          "fields": [
+            { "name": "name", "label": "氏名", "type": "text", "required": true, "maxLength": 80 },
+            { "name": "company", "label": "会社名", "type": "text", "required": true }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+**対応フィールドタイプ**: `text`, `email`, `tel`, `textarea`, `select`（`options` 指定時のホワイトリスト検証）。`required`/`maxLength`/`pattern` でバリデーション制御。
+
+### メールテンプレート
+
+ログイン・登録メールは Drive の Markdown ファイルでカスタマイズ可能。
+
+**配置・フォールバック順**:
+
+```
+emails/{accountType}/{kind}.md   ← アカウントタイプ別
+emails/{kind}.md                 ← アカウント共通のフォールバック
+（組み込みデフォルト）             ← どちらも無い場合
+```
+
+`{kind}` は `login` または `register`。
+
+**フォーマット** — YAML frontmatter に `subject`、本文は Markdown:
+
+```markdown
+---
+subject: "【{{siteName}}】ログイン"
+---
+
+# ログイン
+
+[ログイン]({{magicLink}})
+
+このリンクは {{expiresInMinutes}} 分で失効します。
+```
+
+**組み込み変数**:
+
+| 変数 | 用途 | login | register |
+|------|------|:----:|:--------:|
+| `{{magicLink}}` | ログイン検証 URL | ✓ | - |
+| `{{registerLink}}` | 登録検証 URL | - | ✓ |
+| `{{email}}` | 送信先メール | ✓ | ✓ |
+| `{{accountType}}` | アカウントタイプキー | ✓ | ✓ |
+| `{{siteName}}` | リクエストホスト | ✓ | ✓ |
+| `{{expiresInMinutes}}` | リンク有効期限（分） | ✓ | ✓ |
+| `{{redirectPath}}` | ログイン後遷移先パス | ✓ | ✓ |
+| `{{<登録フィールド>}}` | `register.fields` の各値 | - | ✓ |
+
+**エスケープルール**: `{{var}}` は HTML エスケープ（XSS 対策）。ReactMarkdown が href のエンティティを正規化するため URL では `{{var}}`/`{{{var}}}` どちらでも同じ結果になるが、**URL には `{{{var}}}` を使う**のが Mustache 慣習で意図が明確。件名は常にプレーンテキスト。
+
+**推奨記法**: `[ログイン]({{{magicLink}}})`、`[登録完了]({{{registerLink}}})`。テキスト部分は `{{name}}` で OK。
+
+**MD→HTML**: `react-markdown` + `remark-gfm`（GFM テーブル対応）で変換後、Gmail/Outlook 互換性のためインライン CSS を付加。`<style>` ブロックは使わない。
+
 ### レート制限
 
 インメモリのスライディングウィンドウ（Cloud Runインスタンス単位）:
-- メール別マジックリンク: 3リクエスト / 10分
-- IP別マジックリンク: 10リクエスト / 10分
+- メール別マジックリンク（ログイン／登録）: 3リクエスト / 10分
+- IP別マジックリンク（ログイン／登録）: 10リクエスト / 10分
+- IP別登録検証: 10リクエスト / 10分
 - IP別フォームアクション: 30リクエスト / 60秒
 
 ## カスタムドメイン
@@ -552,8 +646,10 @@ Stripe Checkoutによる月額¥2,000のサブスクリプション。フロー:
 
 | メソッド | パス | 認証 | 説明 |
 |----------|------|------|------|
-| POST | `/hubwork/auth/magic-link` | なし | マジックリンクログインリクエスト |
-| GET | `/hubwork/auth/verify/:token` | なし | マジックリンクトークン検証 |
+| POST | `/__gemihub/auth/login` | なし | マジックリンクログインリクエスト |
+| GET | `/__gemihub/auth/verify/:token` | なし | ログイントークン検証 |
+| POST | `/__gemihub/auth/register` | なし | 登録確認メール送信リクエスト（`register.fields` 検証付き） |
+| GET | `/__gemihub/auth/register/verify/:token` | なし | 登録トークン検証 → シート行追加 → セッション発行 |
 | GET | `/*`（catch-all） | なし | ファイルベースページプロキシ（Drive → CDN、Hubworkドメインのみ） |
 | POST | `/hubwork/actions/:workflowId` | 任意 | フォーム送信 → ワークフロー |
 | GET | `/hubwork/api/me` | コンタクトセッション | フィールドフィルタされたcurrentUserデータ取得 |
@@ -614,6 +710,12 @@ Stripe Checkoutによる月額¥2,000のサブスクリプション。フロー:
     about.html
     styles.css
     users/[id].html    ← 動的ルート
+  emails/                ← ログイン／登録メールの Markdown テンプレート（任意）
+    {accountType}/
+      login.md
+      register.md
+    login.md           ← アカウント共通のフォールバック
+    register.md
   hubwork/
     history/
       {execId}.json    ← ワークフロー実行履歴
@@ -631,6 +733,9 @@ Stripe Checkoutによる月額¥2,000のサブスクリプション。フロー:
 | `app/services/hubwork-admin-auth.server.ts` | 管理パネル認証（Basic + OAuthメール確認） |
 | `app/services/stripe.server.ts` | Stripeクライアントシングルトン |
 | `app/services/hubwork-magic-link.server.ts` | Firestoreのマジックリンクトークン（トランザクション検証） |
+| `app/services/hubwork-registration.server.ts` | 登録保留・フィールド検証・シート行追加・重複チェック |
+| `app/services/hubwork-email-template.server.tsx` | Drive 上の .md テンプレートロード・変数置換・MD→HTML（インライン CSS 付き） |
+| `app/services/hubwork-mail-send.server.ts` | Gmail API への HTML メール送信ラッパー |
 | `app/services/hubwork-rate-limiter.server.ts` | インメモリのスライディングウィンドウレート制限 |
 | `app/services/hubwork-session.server.ts` | コンタクトセッションCookie管理 |
 | `app/services/hubwork-page-renderer.server.ts` | buildCurrentUser（/hubwork/api/me用のフィールドフィルタ済みSheetsデータ） |

@@ -1,0 +1,28 @@
+{
+  "hubwork": {
+    "spreadsheets": [{ "id": "YOUR_SPREADSHEET_ID", "label": "Partners" }],
+    "accounts": {
+      "partner": {
+        "identity": {
+          "sheet": "Partners",
+          "emailColumn": "email"
+        },
+        "data": {
+          "profile": {
+            "sheet": "Partners",
+            "matchBy": "email",
+            "fields": ["email", "name", "company"],
+            "shape": "object"
+          }
+        },
+        "register": {
+          "duplicatePolicy": "silent-login",
+          "fields": [
+            { "name": "name", "label": "氏名", "type": "text", "required": true, "maxLength": 80 },
+            { "name": "company", "label": "会社名", "type": "text", "required": true, "maxLength": 120 }
+          ]
+        }
+      }
+    }
+  }
+}

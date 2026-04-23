@@ -3,13 +3,60 @@ import { resolveAccountWithTokens } from "~/services/hubwork-account-resolver.se
 import { getSettings } from "~/services/user-settings.server";
 import { createMagicToken } from "~/services/hubwork-magic-link.server";
 import { checkRateLimit } from "~/services/hubwork-rate-limiter.server";
-import { validateRedirectUrl, validateEmailHeader, validateOrigin } from "~/utils/security";
-import { google } from "googleapis";
+import { validateRedirectUrl, validateOrigin } from "~/utils/security";
+import { loadEmailTemplate, renderEmailTemplate } from "~/services/hubwork-email-template.server";
+import { sendHtmlEmail } from "~/services/hubwork-mail-send.server";
+import { google, type gmail_v1 } from "googleapis";
+
+export const MAGIC_LINK_EXPIRES_MINUTES = 10;
 
 const ACCOUNT_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
 
 function normalizeEmail(email: string): string {
   return email.toLowerCase().trim().replace(/\u3000/g, "").replace(/\s+/g, "");
+}
+
+export function getBaseUrl(request: Request): string {
+  const url = new URL(request.url);
+  const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
+  return `${proto}://${url.host}`;
+}
+
+/**
+ * Core flow for sending a login magic link: mint a Firestore token, render the
+ * login email template, send through Gmail. Shared between the /auth/login
+ * action and the registration-duplicate silent-login fallback.
+ */
+export async function sendLoginMagicLink(params: {
+  accessToken: string;
+  rootFolderId: string;
+  gmailClient: gmail_v1.Gmail;
+  accountId: string;
+  accountType: string;
+  email: string;
+  baseUrl: string;
+  host: string;
+  redirectPath: string;
+}): Promise<void> {
+  const token = await createMagicToken(params.email, params.accountId, params.accountType);
+  const magicLink = `${params.baseUrl}/__gemihub/auth/verify/${token}?redirect=${encodeURIComponent(params.redirectPath)}`;
+
+  const template = await loadEmailTemplate(
+    params.accessToken,
+    params.rootFolderId,
+    params.accountType,
+    "login",
+  );
+  const { subject, html } = renderEmailTemplate(template, {
+    magicLink,
+    email: params.email,
+    accountType: params.accountType,
+    siteName: params.host,
+    expiresInMinutes: MAGIC_LINK_EXPIRES_MINUTES,
+    redirectPath: params.redirectPath,
+  });
+
+  await sendHtmlEmail(params.gmailClient, { to: params.email, subject, html });
 }
 
 export function getAuthLoginErrorResponse(error: unknown): Response {
@@ -116,44 +163,18 @@ export async function action({ request }: Route.ActionArgs) {
 
     console.log(`[auth-login] Email found, creating token and sending magic link`);
 
-    const token = await createMagicToken(email, account.id, type);
-
     const url = new URL(request.url);
-    const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
-    const baseUrl = `${proto}://${url.host}`;
-    const magicLink = `${baseUrl}/__gemihub/auth/verify/${token}?redirect=${encodeURIComponent(redirectPath)}`;
-
-    validateEmailHeader(email, "to");
-
     const gmailClient = google.gmail({ version: "v1", auth: oauth2Client });
-    const subject = "Login Link";
-    const bodyHtml = `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2>Login</h2>
-        <p>Click the link below to log in. This link expires in 10 minutes.</p>
-        <p><a href="${magicLink}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">Log In</a></p>
-        <p style="color: #666; font-size: 12px;">If you didn't request this, you can safely ignore this email.</p>
-      </div>
-    `;
-
-    const messageParts = [
-      `To: ${email}`,
-      `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-      "MIME-Version: 1.0",
-      'Content-Type: text/html; charset="UTF-8"',
-      "",
-      bodyHtml,
-    ];
-    const rawMessage = messageParts.join("\r\n");
-    const encodedMessage = Buffer.from(rawMessage)
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-
-    await gmailClient.users.messages.send({
-      userId: "me",
-      requestBody: { raw: encodedMessage },
+    await sendLoginMagicLink({
+      accessToken,
+      rootFolderId,
+      gmailClient,
+      accountId: account.id,
+      accountType: resolved.key,
+      email,
+      baseUrl: getBaseUrl(request),
+      host: url.host,
+      redirectPath,
     });
     console.log(`[auth-login] Magic link sent successfully`);
   } catch (e) {

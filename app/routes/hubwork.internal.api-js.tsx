@@ -56,6 +56,26 @@ const SCRIPT = `window.gemihub = {
       return res.json();
     },
 
+    async register(type, email, fields, redirect) {
+      const res = await fetch('/__gemihub/auth/register', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          email,
+          fields: fields || {},
+          redirect: redirect || window.location.pathname + window.location.search,
+        }),
+      });
+      if (!res.ok) {
+        const err = new Error(res.statusText);
+        err.status = res.status;
+        err.response = await res.json().catch(() => null);
+        throw err;
+      }
+      return res.json();
+    },
+
     async logout(type) {
       const res = await fetch('/__gemihub/auth/logout', {
         method: 'POST', credentials: 'include',

@@ -64,6 +64,8 @@ export default [
   // Hubwork internal endpoints (/__gemihub/ prefix)
   route("__gemihub/auth/login", "routes/hubwork.internal.auth.login.tsx"),
   route("__gemihub/auth/verify/:token", "routes/hubwork.internal.auth.verify.$token.tsx"),
+  route("__gemihub/auth/register", "routes/hubwork.internal.auth.register.tsx"),
+  route("__gemihub/auth/register/verify/:token", "routes/hubwork.internal.auth.register.verify.$token.tsx"),
   route("__gemihub/auth/logout", "routes/hubwork.internal.auth.logout.tsx"),
   route("__gemihub/auth/me", "routes/hubwork.internal.auth.me.tsx"),
   route("__gemihub/api.js", "routes/hubwork.internal.api-js.tsx"),

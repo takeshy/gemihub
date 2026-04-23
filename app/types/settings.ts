@@ -588,9 +588,27 @@ export interface HubworkDataSource {
   shape?: "object" | "array";
 }
 
+export type HubworkRegisterFieldType = "text" | "email" | "tel" | "textarea" | "select";
+
+export interface HubworkRegisterField {
+  name: string;
+  label: string;
+  type?: HubworkRegisterFieldType;
+  required?: boolean;
+  options?: string[];
+  maxLength?: number;
+  pattern?: string;
+}
+
+export interface HubworkRegisterConfig {
+  fields: HubworkRegisterField[];
+  duplicatePolicy?: "silent-login" | "reject";
+}
+
 export interface HubworkAccountType {
   identity: HubworkAccountIdentity;
   data?: Record<string, HubworkDataSource>;
+  register?: HubworkRegisterConfig;
 }
 
 /**
