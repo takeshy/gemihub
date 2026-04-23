@@ -297,26 +297,29 @@ export function useTreeFileCreate({
     localStorage.setItem("createFileOptions", JSON.stringify({ addDateTime, addLocation }));
     setCreateFileDialog((prev) => ({ ...prev, open: false }));
 
-    // Build initial content from optional metadata
+    // Build initial YAML frontmatter from optional metadata (markdown only)
     const isMd = fileName.endsWith(".md");
-    const bold = (s: string) => isMd ? `**${s}**` : s;
-    const contentParts: string[] = [];
-    if (addDateTime) {
+    const frontmatterLines: string[] = [];
+    if (isMd && addDateTime) {
       const now = new Date();
       const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-      contentParts.push(`${bold(t("fileContent.dateTime"))} ${ts}`);
+      frontmatterLines.push(`date: ${ts}`);
     }
-    if (addLocation) {
+    if (isMd && addLocation) {
       try {
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
         });
-        contentParts.push(`${bold(t("fileContent.location"))} ${t("fileContent.latitude")} ${pos.coords.latitude}, ${t("fileContent.longitude")} ${pos.coords.longitude}`);
+        frontmatterLines.push(`location:`);
+        frontmatterLines.push(`  latitude: ${pos.coords.latitude}`);
+        frontmatterLines.push(`  longitude: ${pos.coords.longitude}`);
       } catch {
         // Location unavailable — skip
       }
     }
-    const initialContent = contentParts.length > 0 ? contentParts.join("\n") + "\n\n" : "";
+    const initialContent = frontmatterLines.length > 0
+      ? `---\n${frontmatterLines.join("\n")}\n---\n\n`
+      : "";
 
     // Prepend selected folder path
     const folderPath = selectedFolderId?.startsWith("vfolder:")

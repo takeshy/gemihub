@@ -27,11 +27,11 @@ The file tree toolbar provides a **New File** button that opens a creation dialo
 
 | Option | Description |
 |--------|-------------|
-| **Add date/time** | Inserts the current date and time (`YYYY-MM-DD HH:MM:SS`) at the top of the file |
-| **Add location** | Requests browser geolocation and inserts latitude/longitude coordinates |
+| **Add date/time** | Inserts the current date and time (`YYYY-MM-DD HH:MM:SS`) into the file's YAML frontmatter as a `date` field |
+| **Add location** | Requests browser geolocation and inserts a `location` block (with `latitude` / `longitude`) into the YAML frontmatter |
 
+- Both options apply only to `.md` files; for other file types they are ignored and no metadata is inserted
 - Checkbox preferences are saved to `localStorage` and restored on the next file creation
-- For `.md` files, labels use bold formatting (`**Date:**`, `**Location:**`); other file types use plain text
 - Geolocation uses the Web Geolocation API with a 10-second timeout; silently skipped on failure
 - Default file name follows the format `YYYY/MM/DD_HH_MM_SS`
 

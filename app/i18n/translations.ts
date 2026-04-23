@@ -436,10 +436,6 @@ export interface TranslationStrings {
   "fileTree.addDateTime": string;
   "fileTree.addLocation": string;
   "fileTree.selectedCount": string;
-  "fileContent.dateTime": string;
-  "fileContent.location": string;
-  "fileContent.latitude": string;
-  "fileContent.longitude": string;
 
   // Search
   "search.title": string;
@@ -1214,10 +1210,6 @@ const en: TranslationStrings = {
   "fileTree.addDateTime": "Add date/time",
   "fileTree.addLocation": "Add location",
   "fileTree.selectedCount": "{count} selected",
-  "fileContent.dateTime": "Date:",
-  "fileContent.location": "Location:",
-  "fileContent.latitude": "Lat.",
-  "fileContent.longitude": "Lng.",
 
   // Search
   "search.title": "Search",
@@ -1992,10 +1984,6 @@ const ja: TranslationStrings = {
   "fileTree.addDateTime": "日時を追加",
   "fileTree.addLocation": "位置情報を追加",
   "fileTree.selectedCount": "{count}件選択中",
-  "fileContent.dateTime": "日時:",
-  "fileContent.location": "場所:",
-  "fileContent.latitude": "緯度",
-  "fileContent.longitude": "経度",
 
   // Search
   "search.title": "検索",
