@@ -1,0 +1,462 @@
+name: Create Article
+nodes:
+  # Declared inputs — preserved when the caller (AI via run_skill_workflow) sets
+  # them, or collected via interactive prompts when the workflow is run manually
+  # from the Workflow tab. In headless (AI-invoked) mode, prompt callbacks
+  # return null and the prompt nodes throw, so the AI must supply all four
+  # values per SKILL.md instructions.
+  #
+  # `folder` is the archive folder name ("blogs" for blog posts, "announcements"
+  # for announcements). It serves as both the URL path segment and the category
+  # identifier used for filtering / labeling.
+  - id: inFolder
+    type: variable
+    name: folder
+  - id: inNote
+    type: variable
+    name: notePath
+  - id: inDate
+    type: variable
+    name: pubDate
+  - id: inTitle
+    type: variable
+    name: postTitle
+
+  - id: checkFolder
+    type: if
+    condition: "{{folder}} == "
+    trueNext: askFolder
+    falseNext: checkNote
+  - id: askFolder
+    type: dialog
+    title: "{{UI_PICK_CATEGORY_TITLE}}"
+    options: "blogs, announcements"
+    multiSelect: "false"
+    saveTo: folderResult
+    next: extractFolder
+  - id: extractFolder
+    type: script
+    code: |
+      var r = {{folderResult}};
+      return (r && r.selected && r.selected[0]) || 'blogs';
+    saveTo: folder
+    next: checkNote
+
+  - id: checkNote
+    type: if
+    condition: "{{notePath}} == "
+    trueNext: askNote
+    falseNext: checkDate
+  - id: askNote
+    type: drive-file-picker
+    title: "{{UI_PICK_NOTE_TITLE}}"
+    extensions: "md,markdown,txt"
+    savePathTo: notePath
+    next: checkDate
+
+  - id: checkDate
+    type: if
+    condition: "{{pubDate}} == "
+    trueNext: askDate
+    falseNext: deriveTitle
+  - id: askDate
+    type: prompt-value
+    title: "{{UI_PUB_DATE_TITLE}}"
+    default: "{{__date__}}"
+    saveTo: pubDate
+    next: deriveTitle
+
+  - id: deriveTitle
+    type: script
+    code: |
+      var t = "{{postTitle:json}}";
+      if (t) return t;
+      var p = "{{notePath:json}}";
+      var base = p.split('/').pop() || p;
+      return base.replace(/\.(md|markdown|txt)$/i, '');
+    saveTo: defaultTitle
+    next: deriveFileSlug
+
+  - id: deriveFileSlug
+    type: script
+    code: |
+      var p = "{{notePath:json}}";
+      var base = (p.split('/').pop() || p).replace(/\.(md|markdown|txt)$/i, '');
+      var slug = base
+        .trim()
+        .replace(/[\\/:*?"<>|#%&{}]/g, ' ')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      return slug || 'article';
+    saveTo: fileSlug
+
+  - id: checkTitle
+    type: if
+    condition: "{{postTitle}} == "
+    trueNext: askTitle
+    falseNext: readNote
+  - id: askTitle
+    type: prompt-value
+    title: "{{UI_ARTICLE_TITLE_TITLE}}"
+    default: "{{defaultTitle}}"
+    saveTo: postTitle
+    next: readNote
+
+  - id: readNote
+    type: drive-read
+    path: "{{notePath}}"
+    saveTo: noteContent
+
+  # Generate the standalone article HTML. The page is a member of the archive
+  # named by `folder` — nav links back to the matching archive index.
+  - id: genPost
+    type: command
+    prompt: |
+      You are producing a standalone HTML article page for a Hubwork site.
+
+      Site language: {{LANG_NAME}} (use lang="{{LANG_CODE}}"). Write every
+      visible text element — nav labels, the publish-date line, section
+      headings — in {{LANG_NAME}}. Keep file paths and URL paths as-is.
+
+      Category folder: {{folder}}  (this article is archived under /{{folder}}/)
+      Title: {{postTitle}}
+      Publish date: {{pubDate}}
+
+      Source note (markdown):
+      ---
+      {{noteContent}}
+      ---
+
+      Requirements:
+      - Return a COMPLETE HTML document starting with <!DOCTYPE html> and lang="{{LANG_CODE}}".
+      - <head> MUST contain:
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>{{postTitle}}</title>
+          <meta name="gemihub-post-category" content="{{folder}}">
+          <meta name="gemihub-post-title" content="{{postTitle}}">
+          <meta name="gemihub-post-date" content="{{pubDate}}">
+          <script src="https://cdn.tailwindcss.com"></script>
+      - Page layout:
+          - Minimal top nav in {{LANG_NAME}}: a home link to "/" and a link
+            back to this article's own archive at "/{{folder}}/index".
+            Do NOT link to other categories — a site may use only one
+            category. The homepage's main menu is managed separately by
+            the site owner.
+          - <article class="max-w-3xl mx-auto px-4 py-8"> containing:
+              <h1> with the title
+              A muted publish-date line (e.g. <p class="text-sm text-gray-500">{{pubDate}}</p>)
+              The rendered markdown body (h2, h3, p, ul, ol, blockquote, code, img, a)
+          - Clean typography using Tailwind utility classes
+      - Do NOT wrap the output in markdown code fences. Return raw HTML only.
+    saveTo: postHtmlRaw
+
+  # Defensive: strip surrounding markdown code fences if the LLM ignored the
+  # "no code fences" instruction. Saving fenced text produces a broken page.
+  - id: stripPostFences
+    type: script
+    code: |
+      var s = "{{postHtmlRaw:json}}";
+      s = s.replace(/^\s*```[a-zA-Z]*\s*\n/, '').replace(/\n```\s*$/, '');
+      return s;
+    saveTo: postHtml
+
+  - id: savePost
+    type: drive-file
+    path: "web/{{folder}}/{{pubDate}}-{{fileSlug}}.html"
+    content: "{{postHtml}}"
+    mode: overwrite
+    confirm: "false"
+
+  # Regenerate the archive index for this folder: iterate files, pull meta tags
+  # via regex, then let one command node render the final HTML.
+  - id: listCategory
+    type: drive-list
+    folder: "web/{{folder}}"
+    limit: "500"
+    sortBy: name
+    sortOrder: desc
+    saveTo: categoryFiles
+
+  - id: parseCategory
+    type: json
+    source: categoryFiles
+    saveTo: posts
+
+  - id: initIdx
+    type: variable
+    name: idx
+    value: "0"
+  - id: initEntries
+    type: variable
+    name: entries
+    value: "[]"
+
+  - id: loopPosts
+    type: while
+    condition: "{{idx}} < {{posts.count}}"
+    trueNext: readPost
+    falseNext: renderIndex
+
+  - id: readPost
+    type: drive-read
+    path: "{{posts.notes[idx].id}}"
+    saveTo: postHtmlContent
+
+  - id: extractMeta
+    type: script
+    code: |
+      var html = "{{postHtmlContent:json}}";
+      var name = "{{posts.notes[idx].name:json}}";
+      var existing = JSON.parse("{{entries:json}}");
+      if (/(^|\/)index\.html$/i.test(name) || !/\.html$/i.test(name)) {
+        return JSON.stringify(existing);
+      }
+      var basename = (name.split('/').pop() || '').replace(/\.html$/i, '');
+      var titleMatch = html.match(/<meta\s+name=["']gemihub-post-title["']\s+content=["']([^"']*)["']/i);
+      var dateMatch = html.match(/<meta\s+name=["']gemihub-post-date["']\s+content=["']([^"']*)["']/i);
+      // Managed articles always have either our meta tags or a YYYY-MM-DD filename.
+      // Skip unrelated html files so they don't pollute the index.
+      if (!titleMatch && !dateMatch && !/^\d{4}-\d{2}-\d{2}(?:-.+)?$/.test(basename)) {
+        return JSON.stringify(existing);
+      }
+      var title = titleMatch ? titleMatch[1] : basename;
+      var dateVal = dateMatch ? dateMatch[1]
+        : (/^\d{4}-\d{2}-\d{2}/.test(basename) ? basename.substring(0, 10) : '');
+      existing.push({ date: dateVal, title: title, slug: basename });
+      return JSON.stringify(existing);
+    saveTo: entries
+
+  - id: increment
+    type: set
+    name: idx
+    value: "{{idx}} + 1"
+    next: loopPosts
+
+  - id: renderIndex
+    type: command
+    prompt: |
+      Produce the complete HTML document for the archive index page at
+      web/{{folder}}/index.html.
+
+      Site language: {{LANG_NAME}} (use lang="{{LANG_CODE}}"). Write every
+      visible text element — page heading, nav labels, and any section titles —
+      in {{LANG_NAME}}. Entry titles and dates come from the list below and
+      must be rendered verbatim.
+
+      Category folder: {{folder}}  (use a heading appropriate for this
+      category in {{LANG_NAME}} — e.g. "Blog" / "ブログ" for "blogs",
+      "Announcements" / "お知らせ" for "announcements".)
+
+      Entries (JSON array — each element has {date, title, slug}; may need resorting):
+      {{entries}}
+
+      Requirements:
+      - <!DOCTYPE html>, lang="{{LANG_CODE}}"
+      - <head>: charset, viewport, a <title> matching the page heading,
+        <script src="https://cdn.tailwindcss.com"></script>
+      - Minimal top nav in {{LANG_NAME}}: a home link to "/" only.
+        Do NOT link to other categories — a site may use only one category.
+      - <main class="max-w-3xl mx-auto px-4 py-8">
+          An <h1> whose text is the archive heading for this category in {{LANG_NAME}}.
+          Sort entries by date DESCENDING (newest first). For each entry:
+            <a href="/{{folder}}/{slug}" class="...">
+              <span class="text-gray-500 text-sm">{date}</span>
+              <span class="font-medium">{title}</span>
+            </a>
+          Wrap in <ul>/<li> with consistent Tailwind styling.
+        </main>
+      - Return ONLY raw HTML. No markdown code fences. No explanatory prose.
+    saveTo: indexHtmlRaw
+
+  - id: stripIndexFences
+    type: script
+    code: |
+      var s = "{{indexHtmlRaw:json}}";
+      s = s.replace(/^\s*```[a-zA-Z]*\s*\n/, '').replace(/\n```\s*$/, '');
+      return s;
+    saveTo: indexHtml
+
+  - id: saveIndex
+    type: drive-file
+    path: "web/{{folder}}/index.html"
+    content: "{{indexHtml}}"
+    mode: overwrite
+    confirm: "false"
+
+  # Homepage "recent articles" block — aggregate newest 5 across both managed
+  # folders (web/blogs/ and web/announcements/). Fails if web/index.html does
+  # not exist (documented prerequisite in SKILL.md).
+  - id: listAllBlogs
+    type: drive-list
+    folder: "web/blogs"
+    limit: "100"
+    sortBy: name
+    sortOrder: desc
+    saveTo: allBlogs
+
+  - id: parseAllBlogs
+    type: json
+    source: allBlogs
+    saveTo: allBlogsData
+
+  - id: listAllAnnouncements
+    type: drive-list
+    folder: "web/announcements"
+    limit: "100"
+    sortBy: name
+    sortOrder: desc
+    saveTo: allAnnouncements
+
+  - id: parseAllAnnouncements
+    type: json
+    source: allAnnouncements
+    saveTo: allAnnouncementsData
+
+  # Merge both lists, filter to managed YYYY-MM-DD.html files, sort desc, take top 5.
+  # Using {{var}} (no :json) embeds the stored JSON-stringified value directly as
+  # a JS object literal. {{var:json}} would escape for a string literal, which is
+  # wrong here — we want the raw object.
+  - id: mergeTop
+    type: script
+    code: |
+      var blogs = {{allBlogsData}};
+      var ann = {{allAnnouncementsData}};
+      var merged = [];
+      function push(list, folder) {
+        (list || []).forEach(function(f) {
+          var base = (f.name.split('/').pop() || '');
+          if (!/^\d{4}-\d{2}-\d{2}(?:-.+)?\.html$/i.test(base)) return;
+          merged.push({ id: f.id, name: f.name, folder: folder });
+        });
+      }
+      push(blogs.notes, 'blogs');
+      push(ann.notes, 'announcements');
+      merged.sort(function(a, b) {
+        var an = a.name.split('/').pop() || '';
+        var bn = b.name.split('/').pop() || '';
+        return bn.localeCompare(an);
+      });
+      return JSON.stringify(merged.slice(0, 5));
+    saveTo: top5Files
+
+  - id: parseTop5
+    type: json
+    source: top5Files
+    saveTo: top5
+
+  # Iterate the top 5, read each, extract title, build display entries.
+  - id: initTopIdx
+    type: variable
+    name: topIdx
+    value: "0"
+  - id: initTopEntries
+    type: variable
+    name: topEntries
+    value: "[]"
+
+  - id: topLoop
+    type: while
+    condition: "{{topIdx}} < {{top5.length}}"
+    trueNext: readTopPost
+    falseNext: readHome
+
+  - id: readTopPost
+    type: drive-read
+    path: "{{top5[topIdx].id}}"
+    saveTo: topPostHtml
+
+  - id: extractTopMeta
+    type: script
+    code: |
+      var html = "{{topPostHtml:json}}";
+      var entry = {{top5[topIdx]}};
+      var existing = JSON.parse("{{topEntries:json}}");
+      var basename = (entry.name.split('/').pop() || '').replace(/\.html$/i, '');
+      var titleMatch = html.match(/<meta\s+name=["']gemihub-post-title["']\s+content=["']([^"']*)["']/i);
+      var dateMatch = html.match(/<meta\s+name=["']gemihub-post-date["']\s+content=["']([^"']*)["']/i);
+      var title = titleMatch ? titleMatch[1] : basename;
+      var dateVal = dateMatch ? dateMatch[1] : basename.substring(0, 10);
+      existing.push({
+        date: dateVal,
+        title: title,
+        slug: basename,
+        folder: entry.folder,
+      });
+      return JSON.stringify(existing);
+    saveTo: topEntries
+
+  - id: topIncrement
+    type: set
+    name: topIdx
+    value: "{{topIdx}} + 1"
+    next: topLoop
+
+  - id: readHome
+    type: drive-read
+    path: "web/index.html"
+    saveTo: homeHtml
+
+  - id: renderHome
+    type: command
+    prompt: |
+      Update the site's homepage HTML so the "recent articles" block shows the
+      five items below.
+
+      Site language: {{LANG_NAME}}. Any section heading or category label you
+      introduce (including a new heading if the markers are missing) must be
+      written in {{LANG_NAME}}. Entry titles and dates come from the list
+      below and must be rendered verbatim.
+
+      Top 5 articles (JSON array, newest first; each has date, title, slug,
+      and folder — folder is either "blogs" or "announcements"):
+      {{topEntries}}
+
+      Current web/index.html:
+      ---
+      {{homeHtml}}
+      ---
+
+      Editing rules:
+      - If the page ALREADY contains the comment markers
+            <!-- recent-articles:start -->
+            ...
+            <!-- recent-articles:end -->
+        REPLACE only the content between those markers. Keep the markers
+        verbatim. Preserve every other character of the page exactly
+        (including the existing <html lang="..."> attribute — do not change it).
+      - If the markers are MISSING, insert a new section with the markers at a
+        sensible spot (after the hero/intro, before the footer). The section
+        should have a heading for "recent articles" in {{LANG_NAME}}, and use
+        styling consistent with the page.
+
+      The content between the markers should be a list (up to 5 items, newest
+      first). Each item shows:
+        - The date (muted)
+        - A small category label derived from the entry's `folder` — "blogs"
+          maps to the blog label in {{LANG_NAME}} (e.g. "ブログ" / "Blog");
+          "announcements" maps to the announcement label (e.g. "お知らせ" /
+          "Announcement"). Display as a small badge (e.g. inline-block,
+          rounded, text-xs, light background).
+        - The title (linked to "/{folder}/{slug}")
+      Use Tailwind utility classes that match the page.
+
+      Return the COMPLETE updated HTML document. No markdown code fences. No
+      explanatory prose.
+    saveTo: newHomeHtmlRaw
+
+  - id: stripHomeFences
+    type: script
+    code: |
+      var s = "{{newHomeHtmlRaw:json}}";
+      s = s.replace(/^\s*```[a-zA-Z]*\s*\n/, '').replace(/\n```\s*$/, '');
+      return s;
+    saveTo: newHomeHtml
+
+  - id: saveHome
+    type: drive-file
+    path: "web/index.html"
+    content: "{{newHomeHtml}}"
+    mode: overwrite
+    confirm: "false"

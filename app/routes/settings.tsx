@@ -82,6 +82,10 @@ const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof Settin
   { id: "hubwork", labelKey: "settings.tab.hubwork", icon: Globe },
 ];
 
+function isTabId(value: string | null): value is TabId {
+  return value !== null && TABS.some((tab) => tab.id === value);
+}
+
 // ---------------------------------------------------------------------------
 // Loader
 // ---------------------------------------------------------------------------
@@ -730,6 +734,10 @@ export default function Settings() {
   // the real URL; otherwise a second same-query redirect would look like "no
   // change" to the Router and this effect would never re-fire.
   useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (isTabId(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
     if (searchParams.has("mcp-oauth-return")) {
       setActiveTab("mcp");
     }

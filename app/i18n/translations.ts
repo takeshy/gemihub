@@ -25,6 +25,8 @@ export interface TranslationStrings {
   // Index - API key warning
   "index.apiKeyWarning": string;
   "index.apiKeyLocked": string;
+  "index.skillUpdateAvailable": string;
+  "index.openSettings": string;
 
   // MainViewer
   "mainViewer.welcome": string;
@@ -742,6 +744,9 @@ export interface TranslationStrings {
   "settings.hubwork.skillUpdateConfirm": string;
   "settings.hubwork.skillUpdateSuccess": string;
   "settings.hubwork.skillUpdateError": string;
+  "settings.hubwork.skillUpdateAvailableTitle": string;
+  "settings.hubwork.skillUpdateAvailableDescription": string;
+  "settings.hubwork.skillVersionStatus": string;
 
   // Offline
   "offline.indicator": string;
@@ -798,6 +803,8 @@ const en: TranslationStrings = {
   "index.signIn": "Sign in with Google",
   "index.apiKeyWarning": "Gemini API key is not set. AI features will not work.",
   "index.apiKeyLocked": "Gemini API key is locked. Enter your password to unlock.",
+  "index.skillUpdateAvailable": "A newer Webpage Builder skill is available. Open Settings > Premium Plan and click \"Update Skill to Latest\".",
+  "index.openSettings": "Open Settings",
 
   // MainViewer
   "mainViewer.welcome": "Welcome to GemiHub",
@@ -1516,6 +1523,9 @@ const en: TranslationStrings = {
   "settings.hubwork.skillUpdateConfirm": "This will overwrite the current \"Webpage Builder\" skill with the latest version. Your previous version is preserved in edit history. Continue?",
   "settings.hubwork.skillUpdateSuccess": "Skill updated successfully.",
   "settings.hubwork.skillUpdateError": "Failed to update skill.",
+  "settings.hubwork.skillUpdateAvailableTitle": "A newer Webpage Builder skill is available",
+  "settings.hubwork.skillUpdateAvailableDescription": "Open the update action below to refresh the installed skill before using newly added workflows or instructions.",
+  "settings.hubwork.skillVersionStatus": "Installed v{{installed}} / Latest v{{latest}}",
 
   // Offline
   "offline.indicator": "Offline",
@@ -1572,6 +1582,8 @@ const ja: TranslationStrings = {
   "index.signIn": "Googleでサインイン",
   "index.apiKeyWarning": "Gemini APIキーが設定されていません。AI機能は動作しません。",
   "index.apiKeyLocked": "Gemini APIキーはロックされています。パスワードを入力して解除してください。",
+  "index.skillUpdateAvailable": "新しい Webpage Builder スキルがあります。設定 > Premium Plan で「スキルを最新版に更新」を押してください。",
+  "index.openSettings": "設定を開く",
 
   // MainViewer
   "mainViewer.welcome": "GemiHubへようこそ",
@@ -2290,6 +2302,9 @@ const ja: TranslationStrings = {
   "settings.hubwork.skillUpdateConfirm": "「Webpage Builder」スキルを最新版で上書きします。以前の内容は編集履歴から確認できます。続行しますか？",
   "settings.hubwork.skillUpdateSuccess": "スキルを更新しました。",
   "settings.hubwork.skillUpdateError": "スキルの更新に失敗しました。",
+  "settings.hubwork.skillUpdateAvailableTitle": "新しい Webpage Builder スキルがあります",
+  "settings.hubwork.skillUpdateAvailableDescription": "新しい workflow や説明を使う前に、下の更新ボタンでインストール済みスキルを最新版にしてください。",
+  "settings.hubwork.skillVersionStatus": "現在 v{{installed}} / 最新 v{{latest}}",
 
   // Offline
   "offline.indicator": "オフライン",

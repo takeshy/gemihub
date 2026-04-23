@@ -9,6 +9,8 @@ interface ToastItem {
   id: number;
   message: string;
   variant: ToastVariant;
+  href?: string;
+  linkLabel?: string;
 }
 
 interface ShowToastDetail {
@@ -18,6 +20,8 @@ interface ShowToastDetail {
   variant?: ToastVariant;
   /** Milliseconds until auto-dismiss. Omit or pass 0 to require a manual close. */
   durationMs?: number;
+  href?: string;
+  linkLabel?: string;
 }
 
 const DEFAULT_DURATION_MS = 6000;
@@ -43,7 +47,13 @@ export function ToastContainer() {
       if (!message) return;
       const id = Date.now() + Math.random();
       const variant = detail.variant ?? "info";
-      setToasts((prev) => [...prev, { id, message, variant }]);
+      setToasts((prev) => [...prev, {
+        id,
+        message,
+        variant,
+        href: detail.href,
+        linkLabel: detail.linkLabel,
+      }]);
       const duration = detail.durationMs ?? DEFAULT_DURATION_MS;
       if (duration > 0) {
         window.setTimeout(() => {
@@ -72,7 +82,18 @@ export function ToastContainer() {
                 : "border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100"
           }`}
         >
-          <span className="max-h-[50vh] flex-1 overflow-y-auto whitespace-pre-wrap break-words">{toast.message}</span>
+          <div className="flex-1">
+            <span className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words block">{toast.message}</span>
+            {toast.href && toast.linkLabel && (
+              <a
+                href={toast.href}
+                onClick={() => dismiss(toast.id)}
+                className="mt-2 inline-block text-sm font-medium underline underline-offset-2 hover:opacity-80"
+              >
+                {toast.linkLabel}
+              </a>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => dismiss(toast.id)}

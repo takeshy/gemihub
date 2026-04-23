@@ -1,0 +1,6 @@
+{
+  "id": "webpage-builder",
+  "name": "Webpage Builder",
+  "version": "{{SKILL_TEMPLATE_VERSION}}",
+  "description": "Build web pages and API endpoints for Hubwork sites"
+}

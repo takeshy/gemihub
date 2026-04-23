@@ -4,6 +4,7 @@ import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCa
 import { useI18n } from "~/i18n/context";
 import { SectionCard } from "~/components/settings/shared";
 import type { UserSettings, HubworkSchedule } from "~/types/settings";
+import { compareSkillVersions, WEBPAGE_BUILDER_SKILL_VERSION } from "~/services/hubwork-skill-version";
 
 
 export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFolderId, isCallback }: { settings: UserSettings; hasHubworkScopes: boolean; rootFolderId: string; isCallback?: boolean }) {
@@ -162,6 +163,11 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   const isEnabled = !!plan;
   const isPro = plan === "pro" || plan === "granted";
   const isPaidApiKey = settings.apiPlan === "paid";
+  const installedSkillVersion = hubwork?.skillVersion;
+  const skillUpdateAvailable = !skillMissing && compareSkillVersions(installedSkillVersion, WEBPAGE_BUILDER_SKILL_VERSION) < 0;
+  const skillVersionStatus = t("settings.hubwork.skillVersionStatus")
+    .replace("{{installed}}", installedSkillVersion || "unknown")
+    .replace("{{latest}}", WEBPAGE_BUILDER_SKILL_VERSION);
 
 
   return (
@@ -679,8 +685,24 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                     </div>
                   </>
                 ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="space-y-3">
+                    {skillUpdateAvailable && (
+                      <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                              {t("settings.hubwork.skillUpdateAvailableTitle")}
+                            </p>
+                            <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+                              {t("settings.hubwork.skillUpdateAvailableDescription")}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
                       <Upload size={18} className="text-gray-400" />
                       <div>
                         <h3 className="font-medium text-gray-900 dark:text-gray-100">
@@ -689,42 +711,46 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                           skills/webpage-builder
                         </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {skillVersionStatus}
+                        </p>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={skillUpdating}
-                      onClick={async () => {
-                        if (!confirm(t("settings.hubwork.skillUpdateConfirm"))) return;
-                        setSkillUpdating(true);
-                        setSkillUpdateResult(null);
-                        try {
-                          const res = await fetch("/api/settings/hubwork-provision", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ force: true }),
-                          });
-                          const data = await res.json();
-                          const files = data.files as Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }> | undefined;
-                          if (files && files.length > 0) {
-                            await cacheSkillFiles(files);
+                      </div>
+                      <button
+                        type="button"
+                        disabled={skillUpdating}
+                        onClick={async () => {
+                          if (!confirm(t("settings.hubwork.skillUpdateConfirm"))) return;
+                          setSkillUpdating(true);
+                          setSkillUpdateResult(null);
+                          try {
+                            const res = await fetch("/api/settings/hubwork-provision", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ force: true }),
+                            });
+                            const data = await res.json();
+                            const files = data.files as Array<{ id: string; name: string; path: string; mimeType: string; content: string; md5Checksum?: string; modifiedTime?: string }> | undefined;
+                            if (files && files.length > 0) {
+                              await cacheSkillFiles(files);
+                            }
+                            setSkillUpdateResult(res.ok ? "success" : "error");
+                          } catch {
+                            setSkillUpdateResult("error");
+                          } finally {
+                            setSkillUpdating(false);
                           }
-                          setSkillUpdateResult(res.ok ? "success" : "error");
-                        } catch {
-                          setSkillUpdateResult("error");
-                        } finally {
-                          setSkillUpdating(false);
-                        }
-                      }}
-                      className="px-4 py-2 text-sm bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {skillUpdating ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <RefreshCw size={14} />
-                      )}
-                      {t("settings.hubwork.skillUpdate")}
-                    </button>
+                        }}
+                        className="px-4 py-2 text-sm bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {skillUpdating ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={14} />
+                        )}
+                        {t("settings.hubwork.skillUpdate")}
+                      </button>
+                    </div>
                   </div>
                 )}
                 {skillUpdateResult === "success" && (
@@ -956,4 +982,3 @@ function dnsDetail(
   const actual = `${t("settings.hubwork.domainDnsActual")}: ${check.actual.join(", ")}`;
   return `${t("settings.hubwork.domainDnsMismatch")} — ${expected} / ${actual}`;
 }
-

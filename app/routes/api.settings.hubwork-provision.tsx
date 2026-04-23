@@ -5,6 +5,7 @@ import { provisionHubworkSkill } from "~/services/hubwork-skill-provisioner.serv
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { rewriteHubworkSpreadsheetRefs } from "~/services/hubwork-settings-rewriter";
 import { resolveLanguage } from "~/i18n/resolve-language";
+import { WEBPAGE_BUILDER_SKILL_VERSION } from "~/services/hubwork-skill-version";
 
 /**
  * POST /api/settings/hubwork-provision
@@ -39,34 +40,61 @@ export async function action({ request }: Route.ActionArgs) {
     );
 
     const result = await provisionHubworkSkill(validTokens.accessToken, validTokens.rootFolderId, force, language);
+    const installedSkillVersion = result.skillVersion;
+    let nextSettings = currentSettings;
+    let shouldSaveSettings = false;
 
     if (result.spreadsheetId) {
       // First provision: write the initial hubwork config block
-      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-      const updatedSettings = {
-        ...settings,
+      nextSettings = {
+        ...nextSettings,
         hubwork: {
-          ...settings.hubwork,
+          ...nextSettings.hubwork,
           spreadsheets: [{ id: result.spreadsheetId, label: "webpage_builder" }],
           accounts: {
             accounts: { identity: { spreadsheetId: result.spreadsheetId, sheet: "accounts", emailColumn: "email" } },
           },
+          skillVersion: WEBPAGE_BUILDER_SKILL_VERSION,
         },
       };
-      await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+      shouldSaveSettings = true;
     } else if (result.spreadsheetKeptId && result.discardedSpreadsheetIds?.length) {
       // Consolidation path: if settings reference a spreadsheet we just deleted,
       // rewrite those references to the surviving ID so hubwork flows don't
       // blow up reading a non-existent spreadsheet.
-      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       const rewritten = rewriteHubworkSpreadsheetRefs(
-        settings,
+        nextSettings,
         new Set(result.discardedSpreadsheetIds),
         result.spreadsheetKeptId,
       );
       if (rewritten) {
-        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, rewritten);
+        nextSettings = rewritten;
+        shouldSaveSettings = true;
       }
+    }
+
+    if (force && nextSettings.hubwork?.skillVersion !== WEBPAGE_BUILDER_SKILL_VERSION) {
+      nextSettings = {
+        ...nextSettings,
+        hubwork: {
+          ...nextSettings.hubwork,
+          skillVersion: WEBPAGE_BUILDER_SKILL_VERSION,
+        },
+      };
+      shouldSaveSettings = true;
+    } else if (!force && installedSkillVersion && nextSettings.hubwork?.skillVersion !== installedSkillVersion) {
+      nextSettings = {
+        ...nextSettings,
+        hubwork: {
+          ...nextSettings.hubwork,
+          skillVersion: installedSkillVersion,
+        },
+      };
+      shouldSaveSettings = true;
+    }
+
+    if (shouldSaveSettings) {
+      await saveSettings(validTokens.accessToken, validTokens.rootFolderId, nextSettings);
     }
 
     return Response.json(result);
@@ -75,4 +103,3 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: message }, { status: 500 });
   }
 }
-

@@ -2,18 +2,24 @@ import { provisionHubworkSkillFiles, pickOldestSpreadsheet, type ProvisionHubwor
 import { findFilesByExactNameAndMimeType, deleteFile, type DriveFile } from "./google-drive.server";
 import { google } from "googleapis";
 import type { Language } from "~/types/settings";
+import { WEBPAGE_BUILDER_SKILL_RELEASE_DATE, WEBPAGE_BUILDER_SKILL_VERSION, extractSkillVersion } from "./hubwork-skill-version";
 
 const SPREADSHEET_TITLE = "webpage_builder";
 const SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
 
 // Skill template files embedded as strings
 import SKILL_MD from "./hubwork-skill-templates/SKILL.md?raw";
+import SKILL_MANIFEST from "./hubwork-skill-templates/manifest.json?raw";
+import SKILL_HISTORY from "./hubwork-skill-templates/history.md?raw";
 import REF_API from "./hubwork-skill-templates/references/api-reference.md?raw";
 import REF_PATTERNS from "./hubwork-skill-templates/references/page-patterns.md?raw";
 import REF_SAMPLE_INTERVIEW from "./hubwork-skill-templates/references/sample-interview.md?raw";
+import WORKFLOW_CREATE_ARTICLE from "./hubwork-skill-templates/workflows/create-article.yaml?raw";
 import INITIAL_SCHEMA from "./hubwork-skill-templates/initial-schema.md?raw";
 
 const RESPONSE_LANGUAGE_PLACEHOLDER = "{{RESPONSE_LANGUAGE_INSTRUCTION}}";
+const SKILL_VERSION_PLACEHOLDER = "{{SKILL_TEMPLATE_VERSION}}";
+const SKILL_DATE_PLACEHOLDER = "{{SKILL_TEMPLATE_DATE}}";
 
 /**
  * Build the response-language directive that is baked into SKILL.md at
@@ -43,12 +49,76 @@ function renderSkillMd(template: string, language: Language | null | undefined):
   return template.replace(RESPONSE_LANGUAGE_PLACEHOLDER, buildResponseLanguageInstruction(language));
 }
 
+function renderSkillManifest(template: string): string {
+  return template.replace(SKILL_VERSION_PLACEHOLDER, WEBPAGE_BUILDER_SKILL_VERSION);
+}
+
+function renderSkillHistory(template: string): string {
+  return template
+    .replaceAll(SKILL_VERSION_PLACEHOLDER, WEBPAGE_BUILDER_SKILL_VERSION)
+    .replaceAll(SKILL_DATE_PLACEHOLDER, WEBPAGE_BUILDER_SKILL_RELEASE_DATE);
+}
+
+/**
+ * Language-scoped tokens baked into the blog / announcement workflows at
+ * provision time. Workflow YAMLs are raw inputs to the client-side execution
+ * engine — unlike chat system prompts, they do not receive the active UI
+ * language at runtime. Rendering these placeholders per user locale is what
+ * keeps `lang=` attributes, manual-run dialog titles, and the LLM's choice of
+ * nav labels aligned with the site's language.
+ *
+ * Placeholder names are distinct enough that accidentally leaking one through
+ * to runtime is visually obvious (the workflow engine leaves unknown
+ * `{{...}}` tokens unchanged rather than failing).
+ */
+interface WorkflowLangTokens {
+  LANG_CODE: string;
+  LANG_NAME: string;
+  UI_PICK_CATEGORY_TITLE: string;
+  UI_PICK_NOTE_TITLE: string;
+  UI_PUB_DATE_TITLE: string;
+  UI_ARTICLE_TITLE_TITLE: string;
+}
+
+function buildWorkflowLangTokens(language: Language | null | undefined): WorkflowLangTokens {
+  if (language === "ja") {
+    return {
+      LANG_CODE: "ja",
+      LANG_NAME: "Japanese",
+      UI_PICK_CATEGORY_TITLE: "カテゴリ (blogs / announcements)",
+      UI_PICK_NOTE_TITLE: "公開するnoteを選択してください",
+      UI_PUB_DATE_TITLE: "公開日 (YYYY-MM-DD)",
+      UI_ARTICLE_TITLE_TITLE: "記事のタイトル",
+    };
+  }
+  return {
+    LANG_CODE: "en",
+    LANG_NAME: "English",
+    UI_PICK_CATEGORY_TITLE: "Category (blogs / announcements)",
+    UI_PICK_NOTE_TITLE: "Select a note to publish",
+    UI_PUB_DATE_TITLE: "Publish date (YYYY-MM-DD)",
+    UI_ARTICLE_TITLE_TITLE: "Article title",
+  };
+}
+
+function renderWorkflow(template: string, language: Language | null | undefined): string {
+  const tokens = buildWorkflowLangTokens(language);
+  let out = template;
+  for (const [key, value] of Object.entries(tokens)) {
+    out = out.split(`{{${key}}}`).join(value);
+  }
+  return out;
+}
+
 function buildSkillFiles(language: Language | null | undefined): SkillFile[] {
   return [
     { path: "skills/webpage-builder/SKILL.md", content: renderSkillMd(SKILL_MD, language), mimeType: "text/markdown" },
+    { path: "skills/webpage-builder/manifest.json", content: renderSkillManifest(SKILL_MANIFEST), mimeType: "application/json" },
+    { path: "skills/webpage-builder/history.md", content: renderSkillHistory(SKILL_HISTORY), mimeType: "text/markdown" },
     { path: "skills/webpage-builder/references/api-reference.md", content: REF_API, mimeType: "text/markdown" },
     { path: "skills/webpage-builder/references/page-patterns.md", content: REF_PATTERNS, mimeType: "text/markdown" },
     { path: "skills/webpage-builder/references/sample-interview.md", content: REF_SAMPLE_INTERVIEW, mimeType: "text/markdown" },
+    { path: "skills/webpage-builder/workflows/create-article.yaml", content: renderWorkflow(WORKFLOW_CREATE_ARTICLE, language), mimeType: "text/yaml" },
     { path: "web/__gemihub/schema.md", content: INITIAL_SCHEMA, mimeType: "text/markdown" },
   ];
 }
@@ -88,7 +158,7 @@ export async function provisionHubworkSkill(
   rootFolderId: string,
   force = false,
   language: Language | null | undefined = "en",
-): Promise<ProvisionHubworkSkillFilesResult> {
+): Promise<ProvisionHubworkSkillFilesResult & { skillVersion?: string }> {
   const langKey = language ?? "en";
   const key = `${rootFolderId}:${force ? "force" : "ensure"}:${langKey}`;
   const existing = inFlight.get(key);
@@ -106,7 +176,7 @@ async function runProvision(
   rootFolderId: string,
   force: boolean,
   language: Language | null | undefined,
-): Promise<ProvisionHubworkSkillFilesResult> {
+): Promise<ProvisionHubworkSkillFilesResult & { skillVersion?: string }> {
   // Run skill file provisioning and spreadsheet ensure in parallel.
   // Both paths are internally idempotent: findOrCreateSpreadsheet looks up
   // existing webpage_builder spreadsheets before creating, so concurrent
@@ -125,6 +195,9 @@ async function runProvision(
       result.spreadsheetId = spreadsheetInfo.id;
     }
   }
+
+  const manifest = result.files.find((file) => file.path === "skills/webpage-builder/manifest.json");
+  result.skillVersion = manifest ? extractSkillVersion(manifest.content) : undefined;
 
   return result;
 }

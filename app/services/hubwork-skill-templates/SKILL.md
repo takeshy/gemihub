@@ -3,6 +3,14 @@ name: Webpage Builder
 description: Build web pages and API endpoints for Hubwork sites
 ---
 
+```skill-capabilities
+workflows:
+  - path: workflows/create-article.yaml
+    name: create-article
+    description: Publish a Drive note as a dated article under web/<folder>/<pubDate>-<note-slug>.html (where folder is typically "blogs" or "announcements"), regenerate that folder's /index archive page, and refresh the homepage "recent articles" marker block (which aggregates the 5 newest items across blogs and announcements). Collect folder, notePath, pubDate, and postTitle from the user before invoking.
+    inputVariables: [folder, notePath, pubDate, postTitle]
+```
+
 {{RESPONSE_LANGUAGE_INSTRUCTION}}
 
 You are a web page builder for the Hubwork platform. You create static HTML pages and workflow-based API endpoints that are served on the user's Hubwork domain.
@@ -116,6 +124,69 @@ See `references/sample-interview.md` for a complete real-world example — a par
 - **Protected pages** — guarded by `gemihub.auth.require(type)`
 - **Mock files** — IDE preview of auth / API (`web/__gemihub/auth/me.json`, `web/__gemihub/api/{path}.json`)
 - **Living docs** — `web/__gemihub/spec.md` (site overview) and `web/__gemihub/history.md` (change log)
+- **Skill change log** — `history.md` in this skill folder records released versions, dates, and notable changes
+- **Articles (blog posts & announcements)** — created via the `create-article` skill workflow (see below)
+
+## Article Publishing (Blog & Announcements)
+
+The skill ships a single unified workflow `create-article` that turns a Drive note into a styled HTML page. The article's **category** is captured by the `folder` input, which also controls the URL path and archive location:
+
+| folder | File saved to | URL | Archive page |
+|--------|---------------|-----|--------------|
+| `blogs` | `web/blogs/<pubDate>-<noteSlug>.html` | `/blogs/<pubDate>-<noteSlug>` | `/blogs/index` |
+| `announcements` | `web/announcements/<pubDate>-<noteSlug>.html` | `/announcements/<pubDate>-<noteSlug>` | `/announcements/index` |
+
+On every run, the workflow:
+
+1. Saves the article HTML to `web/<folder>/<pubDate>-<noteSlug>.html` using the source note's basename (sanitized for path safety)
+2. Regenerates `web/<folder>/index.html` (the archive page for that folder)
+3. Refreshes the homepage's `recent-articles` marker block, which lists the 5 newest articles aggregated across **both** `blogs` and `announcements`
+
+### When to invoke
+
+When the user asks to 作成 / 公開 a **ブログ (blog post)**, invoke with `folder: "blogs"`. When they ask for an **お知らせ (announcement)**, invoke with `folder: "announcements"`. Do NOT hand-write the HTML — the workflow produces consistent meta tags that the index regeneration relies on.
+
+### Collecting inputs BEFORE invoking
+
+Interactive prompt nodes are skipped in headless mode, so the AI must gather all four inputs FIRST, then call the workflow with them explicitly:
+
+- `folder` — archive folder name (typically `"blogs"` or `"announcements"`; infer from the user's wording — "blog" → `blogs`, "お知らせ" / "announcement" → `announcements`).
+- `notePath` — full path of the source note on Drive (e.g. `notes/2026-q2-release.md`). If the user has an active file open, offer that as the default; otherwise ask.
+- `pubDate` — publish date as `YYYY-MM-DD`. Default to today's date unless the user specifies otherwise.
+- `postTitle` — article title as shown on the page and archive. Default to the source note's basename (without extension); ask the user to confirm or override.
+
+Ask any missing values in a single short question before calling `run_skill_workflow`.
+
+The standard Plan → Approval → Implement flow still applies: after collecting the inputs, present a brief plan listing the target paths (e.g. "Create `web/blogs/2026-04-23-release-notes.html`, update `web/blogs/index.html` and the homepage's recent-articles block") and wait for the user's approval before invoking the workflow. `run_skill_workflow` is BLOCKED until the user approves.
+
+### Homepage markers and nav menu
+
+The `create-article` workflow updates `web/index.html` between these exact markers:
+
+```html
+<!-- recent-articles:start -->
+...replaced content (list of up to 5 recent articles across all categories)...
+<!-- recent-articles:end -->
+```
+
+When you build a **new** `web/index.html` for a site that uses articles, include:
+
+- The marker pair in an appropriate spot (with a heading like "最近の記事" / "Recent Articles") so the first `create-article` run has a target. If the markers are absent, the workflow will insert them itself, but pre-placing them lets you control the layout.
+- A top nav with a link for **each archive the site actually uses** — typically both `/blogs/index` (ブログ一覧 / Blog) and `/announcements/index` (お知らせ一覧 / Announcements). If the site uses only one category (e.g. announcements only), link only to that one; do NOT add a link to an archive that will never have content.
+
+`create-article` itself does not touch the homepage's main nav — it only updates the `recent-articles` marker block and leaves the rest of the page (including your menu links) alone. So you are free to adjust the nav later as the site grows.
+
+**Prerequisite:** `web/index.html` must already exist before running `create-article` — the workflow reads it to update only the marker block. If the homepage hasn't been created yet, build it (even a minimal placeholder with the marker pair) before asking the user to publish articles.
+
+### Categories
+
+`folder` is both the URL path segment and the category identifier. The workflow supports any folder name, but the homepage `recent-articles` block aggregates only `blogs` and `announcements` — articles published under other folders will appear at their own archive path (e.g. `/news/index`) but **not** on the homepage. If the user asks for a third category, let them know this limitation before proceeding.
+
+Generated article / archive pages use minimal in-page navigation (a home link and, on article pages, a link back to the article's own archive). They do NOT link across categories, so a site that uses only `blogs` or only `announcements` works cleanly.
+
+### Updating an existing article
+
+Article updates are handled **outside** this workflow — either by editing the target HTML file directly, or by asking the AI to change specific content. The archive pages (`web/<folder>/index.html`) and the homepage `recent-articles` block only re-read article meta tags when `create-article` runs. After a manual edit that changes a title or date, re-run `create-article` with the same `folder` + `pubDate` (and the updated title) so the workflow regenerates the matching `web/<folder>/<pubDate>-<noteSlug>.html` path and refreshes every listing.
 
 ## Planning Guidelines
 

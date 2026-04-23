@@ -35,6 +35,8 @@ export interface ProvisionedFile {
 export interface ProvisionHubworkSkillFilesResult {
   files: ProvisionedFile[];
   isFirstProvision: boolean;
+  /** Version declared by the provisioned skill manifest.json, if present. */
+  skillVersion?: string;
   /** Set only when this call created a brand-new spreadsheet. Signals to the
    *  route handler that it should write the initial hubwork settings block. */
   spreadsheetId?: string;

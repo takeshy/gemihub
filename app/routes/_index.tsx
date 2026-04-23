@@ -20,6 +20,7 @@ import { executeWorkflowLocally } from "~/engine/local-executor";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { readFileLocal } from "~/services/drive-local";
 import { getCachedApiKey } from "~/services/api-key-cache";
+import { compareSkillVersions, WEBPAGE_BUILDER_SKILL_VERSION } from "~/services/hubwork-skill-version";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
 import { LeftSidebar } from "~/components/ide/LeftSidebar";
@@ -480,6 +481,28 @@ function IDEContent({
   const isMobile = useIsMobile();
   const { sidebarViews, mainViews, getPluginAPI } = usePlugins();
   const { fileList } = useEditorContext();
+  const shownSkillUpdateToastRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const installedSkillVersion = settings.hubwork?.skillVersion;
+    if (!installedSkillVersion) return;
+    if (compareSkillVersions(installedSkillVersion, WEBPAGE_BUILDER_SKILL_VERSION) >= 0) return;
+    const toastKey = `${installedSkillVersion}->${WEBPAGE_BUILDER_SKILL_VERSION}`;
+    if (shownSkillUpdateToastRef.current === toastKey) return;
+    const timer = window.setTimeout(() => {
+      shownSkillUpdateToastRef.current = toastKey;
+      window.dispatchEvent(new CustomEvent("show-toast", {
+        detail: {
+          message: t("index.skillUpdateAvailable"),
+          variant: "info",
+          durationMs: 0,
+          href: "/settings?tab=hubwork",
+          linkLabel: t("index.openSettings"),
+        },
+      }));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [settings.hubwork?.skillVersion, t]);
 
   // On iOS Safari the layout viewport (and 100dvh) does NOT shrink when the
   // virtual keyboard appears.  Override the root container height with the

@@ -633,6 +633,7 @@ export interface HubworkSettings {
   spreadsheets?: HubworkSpreadsheet[];
   accounts?: Record<string, HubworkAccountType>;
   schedules?: HubworkSchedule[];
+  skillVersion?: string;
   customDomain?: string;
   accountId?: string;
   plan?: "lite" | "pro" | "granted";
