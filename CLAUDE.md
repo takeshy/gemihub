@@ -35,10 +35,10 @@ npm run start        # Serve production build via server.js (port 8080)
 npm run typecheck    # Type generation + TypeScript check (react-router typegen && tsc)
 npm run lint         # ESLint check (eslint app/)
 npm run lint:fix     # ESLint auto-fix
-npm run precommit    # Run typecheck + lint (what the pre-commit git hook runs)
+npm run precommit    # Run typecheck + lint + build (what the pre-commit git hook runs)
 ```
 
-**Pre-commit hook**: a pre-commit hook at `.githooks/pre-commit` runs typecheck + lint and blocks the commit on failure. Enable once per clone with `git config core.hooksPath .githooks`.
+**Pre-commit hook**: a pre-commit hook at `.githooks/pre-commit` runs typecheck + lint + build and blocks the commit on failure. Enable once per clone with `git config core.hooksPath .githooks`. The build step is included because React Router's server/client code-splitting produces errors (e.g. ".server module referenced by client") that only surface during the vite bundle pass, not during tsc.
 
 Tests use Node's built-in `node:test` runner via `tsx`. Run `npm run test` for all tests, `npm run test:sync-diff` for sync diff tests, or `npm run test:parser` for parser tests. To run a single test file: `npx tsx --test path/to/file.test.ts`.
 
