@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getAuthLoginErrorResponse } from "./hubwork.internal.auth.login.tsx";
+import { getAuthLoginErrorResponse } from "~/services/hubwork-auth-login.server";
 
 test("getAuthLoginErrorResponse maps scope/auth failures to 403", async () => {
   const response = getAuthLoginErrorResponse(new Error("Request had insufficient authentication scopes."));

@@ -16,7 +16,7 @@ import {
   getBaseUrl,
   getAuthLoginErrorResponse,
   sendLoginMagicLink,
-} from "./hubwork.internal.auth.login";
+} from "~/services/hubwork-auth-login.server";
 import { google } from "googleapis";
 
 const ACCOUNT_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
