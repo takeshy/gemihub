@@ -367,6 +367,64 @@ nodes:
 </form>
 ```
 
+## 管理画面（IDE プレビュー）
+
+予約のキャンセル、無断キャンセル記録、問い合わせへの返信といった**運営者向け操作画面**は、公開サイト（`web/`）とは完全に分離して `admin/` 配下に置きます。Hubwork のサーブ層は `web/` のみを公開するため、`admin/` 配下はカスタムドメインからは自動的に 404 になります。Drive 所有者が GemiHub IDE のプレビューモードからのみ操作するため、他の入口は存在しません。
+
+### ファイルレイアウト
+
+```
+admin/
+  index.html                 → IDE プレビューで開く管理トップ
+  bookings.html              → 予約一覧（active / cancelled / no_show タブ）
+  inquiries.html             → 問い合わせ一覧 + 詳細/返信フォームをインライン展開
+  api/
+    bookings/list.yaml       → 全件取得（auth フィルタ無し）
+    bookings/status.yaml     → ステータス更新（cancel / no_show / restore）
+    inquiries/list.yaml      → 全件取得
+    inquiries/reply.yaml     → メール送信 → status: replied 更新
+```
+
+**単一ページ + インライン展開の慣習**: IDE プレビューは iframe `srcdoc` で HTML を描画しているため、iframe 内からは `location.search` / `location.pathname` の URL 状態や `[id]` パス引数が観測できません。よって admin 画面では「一覧と詳細を別ファイルに分けない」ことを原則とし、行クリック時にモーダルや行内展開で詳細 + 操作フォームを表示します（ID は JS の `selectedId` 変数で保持）。
+
+### 実行モデル
+
+公開ページの `gemihub.get/post` は Hubwork のページプロキシが配信する `/__gemihub/api/*` を叩きますが、管理画面の iframe では**親 IDE が `postMessage` を介して `/api/hubwork/admin/*` に橋渡し**します。実行は IDE にログインしている Drive 所有者の Google OAuth で行われ、公開側の `auth.*` 名前空間は使えず、代わりに IDE が `session.*` を注入します:
+
+| 変数 | 内容 |
+|------|------|
+| `{{session.email}}` | IDE にログイン中の Google アカウントのメール（= 操作者） |
+
+YAML 側のルール:
+
+- **`trigger.requireAuth` を書かない** — admin ワークフローは Hubwork の認証層を通りません。IDE セッション cookie + same-origin チェック（`validateOrigin`）が認証境界です。
+- **`{{auth.email}}` / `{{auth.<col>}}` を使わない** — admin ワークフローでは未定義です。操作者を記録する列（`cancelled_by`、`reply_by` 等）には `{{session.email:json}}` を使います。
+- **`data:` config を使わない** — `data:` は「ログイン中ユーザー自身の行だけを返す」公開機能です。admin は全行読むのが仕事なので `sheet-read` を直接叩きます。
+
+### Soft Delete 運用規約
+
+予約キャンセル・無断キャンセル・問い合わせのアーカイブには **`sheet-delete`（ハード削除）を使いません**。監査ログを残すため `sheet-update` で `status` 列を書き換え、`cancelled_at` / `cancelled_by` / `cancel_reason` を状態変更記録として残します。`active` への復帰時は逆にこれらの列を空文字でクリアします（列名と中身の不整合を防ぐため）。
+
+### 橋渡しのセキュリティ
+
+iframe ↔ 親 IDE の `postMessage` は両方向で送信元を検証します:
+
+- 親側（`HtmlFileEditor.tsx`）: `e.source === iframeRef.current.contentWindow` かつ `e.origin === "null"`（`sandbox="allow-scripts"` の opaque origin）が一致する場合のみリクエストを処理。
+- iframe 側（`html-preview-mock.ts` の admin スクリプト）: `e.source === parent` のレスポンスのみ受理。
+- パストラバーサル防御: `..` / 空 / 円記号 / `%2e` を含むセグメントを 400 で拒否（ブラウザ側 + サーバ側の二重チェック）。
+- CSRF: `loader` / `action` 両方で `validateOrigin(request)` を呼び、GET でも誤って状態変更を行う YAML を書かれた場合に備えます。
+
+### 関連エンドポイント
+
+| メソッド | パス | 認証 | 説明 |
+|----------|------|------|------|
+| GET/POST | `/api/hubwork/admin/*` | IDE セッション + same-origin | `admin/api/*.yaml` を IDE 所有者の OAuth で実行 |
+| GET | `/api/session/me` | IDE セッション | IDE プレビューの「signed in as」表示用に email を返却 |
+
+### スキルテンプレート
+
+具体的なテンプレ（`admin/index.html`、`admin/bookings.html`、`admin/inquiries.html` および対応する YAML）は [`app/services/hubwork-skill-templates/references/admin-patterns.md`](../app/services/hubwork-skill-templates/references/admin-patterns.md) にまとめてあり、Webpage Builder スキル経由で展開できます。
+
 ## 認証
 
 ### アカウントタイプセッション
@@ -766,6 +824,15 @@ Stripe Checkout 経由の月額サブスクリプション。フロー:
       users/list.yaml  ← GET/POST /__gemihub/api/users/list
       users/[id].yaml  ← GET/POST /__gemihub/api/users/:id
       contact.yaml     ← POST /__gemihub/api/contact
+  admin/                 ← IDE 専用の運営者ページ (カスタムドメインからは配信されない)
+    index.html         ← IDE プレビューから開く管理トップ
+    bookings.html
+    inquiries.html
+    api/                 ← admin ワークフロー (IDE 所有者の OAuth で実行)
+      bookings/list.yaml
+      bookings/status.yaml
+      inquiries/list.yaml
+      inquiries/reply.yaml
   hubwork/
     history/
       {execId}.json    ← ワークフロー実行履歴
@@ -787,6 +854,7 @@ Stripe Checkout 経由の月額サブスクリプション。フロー:
 | `app/services/hubwork-session.server.ts` | タイプ別セッション Cookie 管理 (`__hubwork_{type}`) |
 | `app/services/hubwork-page-renderer.server.ts` | buildCurrentUser (アカウントタイプ設定からフィールドフィルタされた Sheets データ) |
 | `app/services/hubwork-api-resolver.server.ts` | sync meta から `web/api/*.yaml` ワークフローファイルを解決 |
+| `app/services/admin-api-resolver.server.ts` | sync meta から `admin/api/*.yaml` ワークフローファイルを解決 (IDE 専用 admin パス) |
 | `app/services/hubwork-skill-provisioner.server.ts` | 「Webpage Builder」スキルを Drive に自動プロビジョニング |
 | `app/services/hubwork-skill-templates/` | 埋め込みスキルコンテンツ (SKILL.md, references, workflows) |
 | `app/services/hubwork-domain.server.ts` | Certificate Manager + URL マップ管理 |
@@ -801,6 +869,10 @@ Stripe Checkout 経由の月額サブスクリプション。フロー:
 | `app/routes/hubwork.internal.auth.me.tsx` | `GET /__gemihub/auth/me` — タイプ別の currentUser データ |
 | `app/routes/hubwork.internal.api.$.tsx` | `GET/POST /__gemihub/api/*` — ワークフロー API 実行 |
 | `app/routes/hubwork.internal.api-js.tsx` | `GET /__gemihub/api.js` — クライアントヘルパースクリプト |
+| `app/routes/api.hubwork.admin.$.tsx` | `GET/POST /api/hubwork/admin/*` — IDE 所有者の OAuth で admin ワークフローを実行 |
+| `app/routes/api.session.me.tsx` | `GET /api/session/me` — admin プレビューの「signed in as」表示用 IDE セッション email |
+| `app/components/ide/editors/HtmlFileEditor.tsx` | HTML エディタ + プレビュー iframe; admin postMessage ブリッジの親側を担う |
+| `app/components/ide/editors/html-preview-mock.ts` | プレビュー iframe に注入する `gemihub` shim を組み立てる (`web/` はモック、`admin/` はライブブリッジ) |
 | `app/routes/hubwork.site.$.tsx` | キャッチオールページプロキシ (Drive → CDN) |
 | `app/components/settings/HubworkTab.tsx` | 設定 UI (サブスクリプション、ドメイン、スケジュール) |
 | `app/routes/hubwork.admin.tsx` | 管理ダッシュボード (アカウント一覧 + 運用ツール) |

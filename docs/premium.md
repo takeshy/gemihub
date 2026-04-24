@@ -367,6 +367,64 @@ nodes:
 </form>
 ```
 
+## Admin Pages (IDE Preview)
+
+Operator-facing screens — cancelling a booking, marking a no-show, replying to an inquiry — are kept entirely separate from the public site (`web/`) and live under `admin/`. The Hubwork serving layer only exposes `web/`, so anything under `admin/` is automatically 404 from the custom domain. The Drive owner opens these pages from the GemiHub IDE preview mode; there is no other entry point.
+
+### File Layout
+
+```
+admin/
+  index.html                 → Admin home, opened in IDE preview
+  bookings.html              → Bookings list with active / cancelled / no_show tabs
+  inquiries.html             → Inquiries list + inline detail/reply form on the same page
+  api/
+    bookings/list.yaml       → Read all rows (no auth filter)
+    bookings/status.yaml     → Update status (cancel / no_show / restore)
+    inquiries/list.yaml      → Read all rows
+    inquiries/reply.yaml     → Send mail → mark status: replied
+```
+
+**Single-page-with-inline-detail convention**: the IDE preview renders HTML via an iframe `srcdoc`, which means `location.search` / `location.pathname` and `[id]` route params are not observable from inside the iframe. Admin screens therefore avoid splitting "list" and "detail" into separate files — instead, clicking a row opens the detail and action form inline (modal or split panel), with the selected id held in a JS `selectedId` variable.
+
+### Execution Model
+
+Public pages call `gemihub.get/post`, which is served by the Hubwork page proxy at `/__gemihub/api/*`. Admin iframes are different: the **parent IDE bridges every call via `postMessage` to `/api/hubwork/admin/*`**, which executes the workflow under the IDE-logged-in Drive owner's Google OAuth. The public `auth.*` namespace is unavailable; the IDE injects `session.*` instead:
+
+| Variable | Value |
+|----------|-------|
+| `{{session.email}}` | Email of the Google account currently signed in to the IDE (= the operator) |
+
+Workflow rules:
+
+- **Do not set `trigger.requireAuth`** — admin workflows do not flow through Hubwork's auth layer. The IDE session cookie + same-origin check (`validateOrigin`) is the auth boundary.
+- **Do not use `{{auth.email}}` / `{{auth.<col>}}`** — undefined in admin workflows. Use `{{session.email:json}}` for operator-identity columns (`cancelled_by`, `reply_by`, etc.).
+- **Do not use `data:` config** — `data:` is the public "return only the logged-in user's own rows" feature. Admin pages need every row, so call `sheet-read` directly.
+
+### Soft Delete Convention
+
+Cancellations, no-shows, and inquiry archives **never use `sheet-delete`**. To preserve the audit trail, `sheet-update` flips the `status` column and stamps `cancelled_at` / `cancelled_by` / `cancel_reason` as state-change records. Restoring to `active` clears those columns to empty strings (so column name and content stay consistent).
+
+### Bridge Security
+
+The iframe ↔ parent `postMessage` channel verifies sender identity in both directions:
+
+- Parent (`HtmlFileEditor.tsx`): only handles a request when `e.source === iframeRef.current.contentWindow` AND `e.origin === "null"` (the opaque origin produced by `sandbox="allow-scripts"`).
+- Iframe (`html-preview-mock.ts` admin script): only accepts a response when `e.source === parent`.
+- Path-traversal defense: segments containing `..` / empty / `\` / `%2e` are rejected with 400 (enforced on both bridge side and server side).
+- CSRF: both `loader` and `action` call `validateOrigin(request)` — covers cases where a YAML accidentally puts a state change on GET.
+
+### Related Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET/POST | `/api/hubwork/admin/*` | IDE session + same-origin | Executes `admin/api/*.yaml` under the IDE owner's OAuth |
+| GET | `/api/session/me` | IDE session | Returns the signed-in email; used by the IDE preview's "signed in as" indicator |
+
+### Skill Templates
+
+Concrete templates (`admin/index.html`, `admin/bookings.html`, `admin/inquiries.html` and the matching YAML workflows) live in [`app/services/hubwork-skill-templates/references/admin-patterns.md`](../app/services/hubwork-skill-templates/references/admin-patterns.md) and are scaffolded via the Webpage Builder skill.
+
 ## Authentication
 
 ### Account Type Sessions
@@ -766,6 +824,15 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
       users/list.yaml  ← GET/POST /__gemihub/api/users/list
       users/[id].yaml  ← GET/POST /__gemihub/api/users/:id
       contact.yaml     ← POST /__gemihub/api/contact
+  admin/                 ← IDE-only operator pages (NOT served on the custom domain)
+    index.html         ← admin home, opened from the IDE preview
+    bookings.html
+    inquiries.html
+    api/                 ← admin workflows (executed under the IDE owner's OAuth)
+      bookings/list.yaml
+      bookings/status.yaml
+      inquiries/list.yaml
+      inquiries/reply.yaml
   hubwork/
     history/
       {execId}.json    ← Workflow execution history
@@ -787,6 +854,7 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
 | `app/services/hubwork-session.server.ts` | Per-type session cookie management (`__hubwork_{type}`) |
 | `app/services/hubwork-page-renderer.server.ts` | buildCurrentUser (field-filtered Sheets data from account type config) |
 | `app/services/hubwork-api-resolver.server.ts` | Resolve `web/api/*.yaml` workflow files from sync meta |
+| `app/services/admin-api-resolver.server.ts` | Resolve `admin/api/*.yaml` workflow files from sync meta (IDE-only admin path) |
 | `app/services/hubwork-skill-provisioner.server.ts` | Auto-provision "Webpage Builder" skill to Drive |
 | `app/services/hubwork-skill-templates/` | Embedded skill content (SKILL.md, references, workflows) |
 | `app/services/hubwork-domain.server.ts` | Certificate Manager + URL map management |
@@ -801,6 +869,10 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
 | `app/routes/hubwork.internal.auth.me.tsx` | `GET /__gemihub/auth/me` — currentUser data by type |
 | `app/routes/hubwork.internal.api.$.tsx` | `GET/POST /__gemihub/api/*` — workflow API execution |
 | `app/routes/hubwork.internal.api-js.tsx` | `GET /__gemihub/api.js` — client helper script |
+| `app/routes/api.hubwork.admin.$.tsx` | `GET/POST /api/hubwork/admin/*` — admin workflow execution under the IDE owner's OAuth |
+| `app/routes/api.session.me.tsx` | `GET /api/session/me` — IDE session email for the admin preview "signed in as" indicator |
+| `app/components/ide/editors/HtmlFileEditor.tsx` | HTML editor + preview iframe; hosts the parent side of the admin postMessage bridge |
+| `app/components/ide/editors/html-preview-mock.ts` | Builds the inline `gemihub` shim injected into the preview iframe (mock mode for `web/`, live bridge for `admin/`) |
 | `app/routes/hubwork.site.$.tsx` | Catch-all page proxy (Drive → CDN) |
 | `app/components/settings/HubworkTab.tsx` | Settings UI (subscription, domain, schedules) |
 | `app/routes/hubwork.admin.tsx` | Admin dashboard (account list + operational tools) |

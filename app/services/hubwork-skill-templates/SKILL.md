@@ -108,6 +108,13 @@ If you catch yourself thinking any of these, STOP — the counter-rule is load-b
 | "Calendar event has `evt.start.dateTime`." | That's the raw Google Calendar shape. Our API flattens it. Use `new Date(evt.start)` directly. |
 | "`requireAuth` will limit which rows the user sees." | It only checks login. ALWAYS filter `sheet-read` by `{{auth.email}}` for user-specific data. |
 | "I'll guard the register page with `gemihub.auth.require()`." | Register pages are UNAUTHENTICATED — the user has no session yet. `require()` redirects to /login and blanks the page. Use plain form → `gemihub.post("register", body)`; copy the Register Page Template from `references/page-patterns.md`. |
+| "I'll put the admin page under `web/admin/` — one folder is simpler." | Puts the admin API on the public domain. The Hubwork server only exposes `web/`, so admin pages belong at `admin/*.html` + `admin/api/*.yaml`. |
+| "I'll add `trigger.requireAuth: admin` to the admin workflow." | No `admin` account type exists — admins are the Drive owner, authenticated by the IDE. Adding `requireAuth` breaks the workflow (no `admins` identity sheet to match against). Omit `requireAuth` entirely on `admin/api/*.yaml`. |
+| "I'll use `{{auth.email}}` to record who cancelled the booking." | Admin workflows don't have `auth.*`. Use `{{session.email}}` (injected by the IDE admin preview) for `cancelled_by`, `reply_by`, etc. |
+| "I'll `sheet-delete` the cancelled booking." | Soft-delete only — `sheet-update` sets `status: "cancelled"` and records `cancelled_at` / `cancelled_by`. Hard delete loses the audit trail and can't distinguish a cancellation from a no-show. |
+| "I'll expose customer bookings to admin via `{{auth.meetings}}` / `data:` config." | `data:` returns only the logged-in user's own rows — useless for admin (who needs every row). Use `sheet-read` with no filter in `admin/api/*.yaml`. |
+| "I'll add `trigger.requireAuth` to the contact form so only members can ask." | A contact form's whole point is accepting questions from people without an account. Leave it public (no `requireAuth`). |
+| "I'll add `trigger.honeypotField` / `trigger.idempotencyKeyField` to the contact form." | Those trigger options are checked only for `application/x-www-form-urlencoded` / `multipart/form-data` submissions. A contact form that posts via `gemihub.post()` sends JSON, so those checks never run. Implement bot-defense (honeypot) and dedup (submissionId) as workflow nodes instead — see the **API Workflow Template (Public Contact Form)** in `references/page-patterns.md`. |
 
 ## Spreadsheet & Schema
 
@@ -161,9 +168,23 @@ The standard Plan → Approval flow still applies. After collecting inputs, post
 - **Workflow APIs** — `web/api/users/list.yaml` → `/__gemihub/api/users/list`
 - **Login pages** — magic-link only (email input + `gemihub.auth.login`)
 - **Protected pages** — `gemihub.auth.require` guard
+- **Contact forms** — public `web/contact.html` + `web/api/contact.yaml` (writes to `inquiries`, notifies owner; replies are sent from the IDE admin preview, see below)
+- **Admin pages (IDE-only)** — `admin/*.html` + `admin/api/*.yaml` for the Drive owner to cancel bookings, mark no-shows, reply to inquiries. See `references/admin-patterns.md`.
 - **Mock files** — `web/__gemihub/auth/me.json` (auth) and `web/__gemihub/api/{path}.json` (one per endpoint) for IDE preview
 - **Living docs** — `web/__gemihub/spec.md` (overview) and `web/__gemihub/history.md` (change log)
 - **Articles** — via the `create-article` workflow above
+
+## Admin Pages (IDE-only)
+
+Operator-facing pages (cancel a booking, mark no-show, reply to an inquiry) are **not** published on the Hubwork custom domain. They live under `admin/` (not `web/admin/`) — the Hubwork serving layer only exposes `web/`, so `admin/` is automatically 404 from the public web. The Drive owner opens these pages in the GemiHub IDE "admin preview" mode, which injects `{{session.email}}` (the IDE-logged-in Google account) into the workflow context in place of Hubwork's `{{auth.*}}`.
+
+Key rules (full templates in `references/admin-patterns.md`):
+
+- Put admin HTML at `admin/*.html`, admin workflows at `admin/api/*.yaml`. **Never `web/admin/...`** — that publishes the admin API to the whole internet.
+- Admin workflows MUST NOT include `trigger.requireAuth` — no admin account type exists. The IDE preview is the authentication boundary.
+- Use `{{session.email}}` for operator identity (e.g. `cancelled_by`). `{{auth.email}}` is undefined in admin workflows.
+- Soft-delete only: cancel / no-show updates the `status` column via `sheet-update`. Never `sheet-delete` bookings or inquiries.
+- Admin pages read **all** rows (no user filter) — use `sheet-read` directly. Do not use `data:` config (that's per-logged-in-user).
 
 ## Planning Guidelines
 
@@ -182,6 +203,17 @@ Example:
 5. web/__gemihub/api/tickets/list.json — API mock
 6. web/__gemihub/spec.md — Site spec update
 7. web/__gemihub/history.md — Change log entry
+```
+
+For admin / operator features (cancel, no-show, reply), list `admin/...` paths (NOT `web/admin/...`) and omit login / auth mocks — the IDE is the authentication boundary:
+
+```
+1. admin/bookings.html — Admin bookings list (IDE-only)
+2. admin/api/bookings/list.yaml — Read all rows (no filter)
+3. admin/api/bookings/status.yaml — sheet-update (cancel / no_show) + gmail-send
+4. web/__gemihub/schema.md — Add status / cancelled_at / cancelled_by / cancel_reason to meetings
+5. web/__gemihub/spec.md — Admin pages documented
+6. web/__gemihub/history.md — Change log entry
 ```
 
 ## Creating Files
@@ -237,9 +269,36 @@ Run before saving AND after `read_drive_file` of each saved file.
 - [ ] Any user-derived placeholder embedded inside a JSON string literal uses `:json` (`"{{request.body.x:json}}"`, `"{{auth.email:json}}"`, `"{{prepared.derivedFromUser:json}}"`); bare `"{{var}}"` is only safe for engine-generated primitives (UUIDs, ISO timestamps)
 - [ ] UUIDs, timestamps, and any user-facing date are produced by a `script` node and referenced via `{{<saveTo>.field}}` — `gmail-send` body and `dialog` messages use the script-formatted value (e.g. `{{prepared.displayRange}}`), NEVER the raw `{{request.body.start}}` ISO timestamp
 
+### Contact form (public)
+- [ ] Page file is `web/contact.html` (or similar under `web/`) — publicly reachable
+- [ ] HTML does NOT call `gemihub.auth.require()` / `gemihub.auth.me()`
+- [ ] Workflow at `web/api/contact.yaml` has NO `trigger.requireAuth`
+- [ ] Honeypot + idempotency are implemented **as workflow nodes** (script checks `{{request.body._hp:json}}`; `sheet-read` + `if` rejects a duplicate `submissionId`). Do **NOT** declare `trigger.honeypotField` / `trigger.idempotencyKeyField` — those trigger options run only for form-POST requests and are silently ignored for `gemihub.post()` JSON requests.
+- [ ] HTML form has `<input name="_hp" class="hidden">` and a hidden `<input name="submissionId">` populated via JS on form init (`crypto.randomUUID()` with a `Math.random` fallback)
+- [ ] `inquiries` sheet schema (with `submissionId` + `reply_text` / `reply_at` / `reply_by` / `status` columns) is in `web/__gemihub/schema.md` and migrated before first write
+
+### Admin HTML pages (`admin/*.html`)
+- [ ] Path starts with `admin/`, **NOT** `web/admin/`
+- [ ] Does NOT call `gemihub.auth.require("admin", ...)` / `gemihub.auth.me("admin")` — admin account type does not exist
+- [ ] Does NOT reference `data:` sources (`auth.meetings` etc.)
+- [ ] Escapes user-derived values (`name`, `subject`, `message`) when rendering to the DOM (`innerHTML`)
+- [ ] Destructive actions (cancel, no-show, reply) go through `confirm()` before calling `gemihub.post(...)`
+
+### Admin API workflows (`admin/api/*.yaml`)
+- [ ] Path starts with `admin/api/`
+- [ ] NO `trigger.requireAuth` (the IDE session cookie + same-origin check is the auth boundary)
+- [ ] Operator-identity columns (`cancelled_by`, `reply_by`, etc.) use `{{session.email:json}}` — NOT `{{auth.email}}`
+- [ ] Cancellation / no-show / archive uses `sheet-update` with a `status` column (NOT `sheet-delete`)
+- [ ] `sheet-update` / `sheet-delete` `filter:` targets a unique key (`id`) to avoid mass-updates
+- [ ] `script` validates enum values (`status` ∈ `{active, cancelled, no_show}`) before writing — reject unknown values
+- [ ] **`gmail-send` runs BEFORE the `sheet-update` that records "done"**. If the email fails, the row should stay in its previous state so the operator can retry; the reverse order leaves the sheet marked "replied" / "notified" while the customer never received anything
+- [ ] When a single endpoint covers both "do X" and "undo X" (cancel vs. restore), branch with an `if` so the undo path clears state-change columns (`cancelled_at` / `cancelled_by` / `cancel_reason` etc.) — don't write the operator's email into a column whose name says the row is cancelled
+- [ ] Notification email bodies use `{{request.body.*}}` / `{{row[0].*}}` directly (bare `{{...}}`) — `:json` is only for JSON-string fields (`data:`, `filter:`)
+
 ### Mock files
 - [ ] Auth mock at `web/__gemihub/auth/me.json` exists (if ANY page uses auth)
 - [ ] API mock at `web/__gemihub/api/{path}.json` exists for each API endpoint
+- [ ] Admin page mocks go at `admin/__gemihub/api/{path}.json` (same `[param]` pattern rules) — only if the IDE preview for `admin/` is still using mocks; once live exec is enabled, mocks are optional
 - [ ] Mock data structure matches what the API/auth would return
 
 ### Spec / history

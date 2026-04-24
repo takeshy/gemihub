@@ -30,6 +30,78 @@ export function isRegisterPreviewPage(htmlContent?: string): boolean {
   return REGISTER_POST_PATTERN.test(htmlContent);
 }
 
+/**
+ * Admin preview pages live under `admin/` in Drive. They are NEVER served by
+ * the Hubwork public path (which only exposes `web/`), so their
+ * `gemihub.get/post` calls are bridged through the IDE to
+ * `/api/hubwork/admin/*` under the logged-in user's OAuth session.
+ *
+ * Detection is filename-based because unlike register pages, the admin flow
+ * has no single signature call to key off — admin pages hit a wide variety
+ * of endpoints (bookings/list, inquiries/reply, etc.). The `admin/` prefix
+ * is unambiguous.
+ */
+export function isAdminPreviewFile(fileName?: string): boolean {
+  if (!fileName) return false;
+  return fileName.startsWith("admin/");
+}
+
+/**
+ * Build an inline <script> that bridges `gemihub.get/post` from the admin
+ * iframe to the parent IDE, which forwards the request to
+ * `/api/hubwork/admin/*` under the logged-in user's OAuth session.
+ *
+ * Unlike `buildMockGemihubScript` (which bakes cached API responses straight
+ * into the page), the admin bridge makes live calls — cancelling a booking
+ * actually updates the sheet, sending a reply actually fires the email.
+ *
+ * `auth.me()` resolves to the session email so pages that (defensively) call
+ * `gemihub.auth.require()` still render instead of redirecting to /login.
+ */
+export function buildAdminGemihubScript(sessionEmail: string): string {
+  const emailLiteral = JSON.stringify(sessionEmail);
+  return [
+    "<script>",
+    "(function(){",
+    "var _pending={};",
+    "var _nextId=1;",
+    "function _call(method,p,body){",
+    "var id=String(_nextId++);",
+    "return new Promise(function(res,rej){",
+    "_pending[id]={res:res,rej:rej};",
+    "parent.postMessage({type:'gemihub-admin-request',id:id,method:method,path:String(p||''),body:body||null},'*');",
+    "});",
+    "}",
+    // Only accept responses from our parent (the IDE). Without this, a
+    // sibling iframe / popup / extension content script could spoof a
+    // gemihub-admin-response and resolve a pending promise with attacker
+    // data — the page would then act on that data (display, navigate,
+    // re-submit, etc.) believing it came from the admin API.
+    "window.addEventListener('message',function(e){",
+    "if(e.source!==parent)return;",
+    "var d=e.data;",
+    "if(!d||d.type!=='gemihub-admin-response')return;",
+    "var p=_pending[d.id];if(!p)return;delete _pending[d.id];",
+    "if(d.ok){p.res(d.data);}else{",
+    "var err=new Error(d.error||'Request failed');",
+    "err.status=d.status||500;err.response=d.response||null;",
+    "p.rej(err);}",
+    "});",
+    "var _me={type:'admin',email:" + emailLiteral + "};",
+    "window.gemihub={",
+    "get:function(p){return _call('GET',p,null);},",
+    "post:function(p,b){return _call('POST',p,b||{});},",
+    "auth:{",
+    "me:function(){return Promise.resolve(_me);},",
+    "login:function(){return Promise.resolve({ok:true});},",
+    "logout:function(){return Promise.resolve({ok:true});},",
+    "require:function(){return Promise.resolve(_me);}",
+    "}};",
+    "})();",
+    "</" + "script>",
+  ].join("");
+}
+
 /** Build an inline <script> that provides window.gemihub with mock data from IndexedDB cache. */
 export function buildMockGemihubScript(
   mockData: Record<string, string>,
@@ -104,15 +176,19 @@ export function resolveNavTarget(
   const candidates: string[] = [];
   if (clean.startsWith("/")) {
     const p = clean.slice(1);
+    // `/admin/...` navigates within the IDE-only admin tree (outside `web/`).
+    // Any other absolute path continues to resolve under `web/` like the
+    // public Hubwork serving layer.
+    const prefix = p === "admin" || p.startsWith("admin/") ? "" : "web/";
     if (p === "") {
       candidates.push("web/index.html");
     } else if (p.endsWith("/")) {
-      candidates.push(`web/${p}index.html`);
+      candidates.push(`${prefix}${p}index.html`);
     } else if (/\.html?$/i.test(p)) {
-      candidates.push(`web/${p}`);
+      candidates.push(`${prefix}${p}`);
     } else {
-      candidates.push(`web/${p}.html`);
-      candidates.push(`web/${p}/index.html`);
+      candidates.push(`${prefix}${p}.html`);
+      candidates.push(`${prefix}${p}/index.html`);
     }
   } else {
     const resolved = resolveSiblingPath(currentDir, clean);

@@ -381,6 +381,187 @@ Use this instead of a `sheet-read` whenever the only filter is "records for the 
 </form>
 ```
 
+## Public Contact Form Page Template (`web/contact.html`)
+
+問い合わせフォーム。公開ページで **未ログインのまま送信できる** (`gemihub.auth.require()` を使わない)。送信先の workflow は `web/api/contact.yaml` で、`inquiries` シートに行を追加 + 運営者に通知メール + 任意で自動返信メールを送る (下の **API Workflow Template (Public Contact Form)** 参照)。返信は **IDE の admin プレビュー** で `admin/inquiries.html` (一覧 + インライン詳細 + 返信フォームを 1 ページに統合) から行う (詳細は `references/admin-patterns.md`)。
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お問い合わせ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md px-4">
+    <div class="bg-white rounded-lg shadow-md p-8">
+      <h1 class="text-2xl font-bold text-center mb-6">お問い合わせ</h1>
+      <form id="contact-form" class="space-y-4">
+        <div>
+          <label for="name" class="block text-sm font-medium text-gray-700 mb-1">お名前</label>
+          <input id="name" name="name" type="text" required
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+          <input id="email" name="email" type="email" required placeholder="you@example.com"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="subject" class="block text-sm font-medium text-gray-700 mb-1">件名</label>
+          <input id="subject" name="subject" type="text" required
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="message" class="block text-sm font-medium text-gray-700 mb-1">本文</label>
+          <textarea id="message" name="message" rows="6" required
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+        <!-- honeypot: ボットは埋めがち、人間は見えない。workflow 側の script ノードで拒否 -->
+        <input type="text" name="_hp" tabindex="-1" autocomplete="off" class="hidden" aria-hidden="true">
+        <!-- idempotency key: フォーム初期化時に一意な値を入れる。同じフォームインスタンスから再送されても workflow 側の sheet-read で既存行が見つかって silent success する -->
+        <input type="hidden" name="submissionId" id="submissionId">
+        <button type="submit" id="submit-btn"
+          class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 font-medium">
+          送信
+        </button>
+      </form>
+      <div id="message-box" class="mt-4 text-center text-sm hidden"></div>
+    </div>
+  </div>
+  <script src="/__gemihub/api.js"></script>
+  <script>
+    // NO gemihub.auth.require() — 公開フォーム。訪問者はログインしていなくてよい。
+    // submissionId はフォーム初期化時に一意に採番する (crypto.randomUUID が使えない旧ブラウザは Math.random にフォールバック)。
+    // 同じフォームインスタンスで再送信されたら同じ id が送られるので workflow 側で重複判定される。
+    document.getElementById("submissionId").value =
+      (self.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    document.getElementById("contact-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("submit-btn");
+      const box = document.getElementById("message-box");
+      btn.disabled = true;
+      btn.textContent = "送信中...";
+      box.classList.add("hidden");
+      try {
+        await gemihub.post("contact", {
+          name:    document.getElementById("name").value,
+          email:   document.getElementById("email").value,
+          subject: document.getElementById("subject").value,
+          message: document.getElementById("message").value,
+          _hp:     "",
+          submissionId: document.getElementById("submissionId").value,
+        });
+        box.textContent = "お問い合わせを受け付けました。担当より返信いたします。";
+        box.className = "mt-4 text-center text-sm text-green-600";
+        document.getElementById("contact-form").classList.add("hidden");
+      } catch (err) {
+        box.textContent = err?.response?.error || "送信に失敗しました。時間をおいて再度お試しください。";
+        box.className = "mt-4 text-center text-sm text-red-600";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "送信";
+      }
+    });
+  </script>
+</body>
+</html>
+```
+
+## API Workflow Template (Public Contact Form)
+
+問い合わせフォームの受け口。public (no `trigger.requireAuth`)、honeypot でボット除け、`inquiries` シートに `status: "new"` で書き込み、運営者に通知メール + 問い合わせ者に自動返信を送る。運営者の返信は後から `admin/inquiries.html` (IDE プレビュー — 一覧 + インライン詳細 + 返信フォームを 1 ページに統合) で行う。
+
+`notify_owner` の `to:` は **サイト運営者の固定メールアドレス**。スキルを使ってこのテンプレを展開する際は、ユーザーに「運営者通知を受け取るメールアドレス」を聞いてから埋めること (デフォルトで他人のアドレスを書かない)。
+
+**重要:** ハニーポット / idempotency は workflow ノードで実装する。`trigger.honeypotField` / `trigger.idempotencyKeyField` オプションは **form POST (urlencoded / multipart)** でしか動かず、`gemihub.post()` が送る JSON リクエストには効かない。したがって JS 経由で叩く公開 API では `trigger:` にこの 2 つを書かず、下記のように `script` + `if` + `sheet-read` で同等の処理を手組みする。
+
+```yaml
+# web/api/contact.yaml — PUBLIC endpoint (no requireAuth)
+# JSON POST 用。honeypot と idempotency は workflow 側で判定する。
+nodes:
+  - id: prepare
+    comment: "honeypot チェック + UUID + 送信者が付けた submissionId を保持"
+    type: script
+    saveTo: prepared
+    code: |
+      const hp = "{{request.body._hp:json}}";
+      const sid = "{{request.body.submissionId:json}}";
+      return {
+        isBot: hp.length > 0,
+        id: utils.randomUUID(),
+        now: new Date().toISOString(),
+        submissionId: sid || utils.randomUUID(),
+      };
+
+  - id: check_bot
+    comment: "honeypot が埋まっていたら silent success で終了 (ボットに検知を悟らせない)"
+    type: if
+    condition: "{{prepared.isBot}} === true"
+    trueNext: respond
+    falseNext: dedup
+
+  - id: dedup
+    comment: "idempotency: 同じ submissionId が既にあれば再書込しない"
+    type: sheet-read
+    sheet: inquiries
+    filter: '{"submissionId": "{{prepared.submissionId:json}}"}'
+    saveTo: dupes
+
+  - id: check_dedup
+    type: if
+    condition: "{{dupes.length}} > 0"
+    trueNext: respond
+    falseNext: write
+
+  - id: write
+    type: sheet-write
+    sheet: inquiries
+    data: '[{"id": "{{prepared.id}}", "submissionId": "{{prepared.submissionId:json}}", "name": "{{request.body.name:json}}", "email": "{{request.body.email:json}}", "subject": "{{request.body.subject:json}}", "message": "{{request.body.message:json}}", "status": "new", "created_at": "{{prepared.now}}"}]'
+
+  - id: notify_owner
+    comment: "運営者への通知。to: はサイト運営者のアドレスをユーザーに聞いて埋める"
+    type: gmail-send
+    to: "owner@example.com"
+    subject: "新しいお問い合わせ: {{request.body.subject}}"
+    body: |
+      from: {{request.body.name}} <{{request.body.email}}>
+      subject: {{request.body.subject}}
+
+      {{request.body.message}}
+
+      ---
+      ID: {{prepared.id}}
+      受信: {{prepared.now}}
+
+  - id: auto_reply
+    comment: "自動返信 (不要なら削除)。スパム抑制や運用方針で省略してよい"
+    type: gmail-send
+    to: "{{request.body.email}}"
+    subject: "お問い合わせを受け付けました"
+    body: |
+      {{request.body.name}} 様
+
+      お問い合わせありがとうございます。
+      内容を確認のうえ担当よりご返信いたします。
+
+      --- お問い合わせ内容 ---
+      件名: {{request.body.subject}}
+
+      {{request.body.message}}
+
+  - id: respond
+    type: set
+    name: __response
+    value: '{"ok": true}'
+```
+
+`inquiries` シートには **`submissionId` 列が必要** (上記 `dedup` の `filter` で参照)。スキーマと運営者返信フローは `references/admin-patterns.md` にまとめてある。
+
 ## Spec File Template (`web/__gemihub/spec.md`)
 
 ````markdown

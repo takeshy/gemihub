@@ -1,6 +1,14 @@
 # Webpage Builder Skill History
 
-## v{{SKILL_TEMPLATE_VERSION}} - {{SKILL_TEMPLATE_DATE}}
+## v1.2.0 - 2026-04-24
+
+- Added **`references/admin-patterns.md`** covering operator-facing management pages kept under `admin/` (never `web/admin/`). The Hubwork serving layer only exposes `web/*`, so `admin/*` is automatically 404 from the public web; the Drive owner opens these pages via the GemiHub IDE "admin preview" mode. Templates: admin dashboard, bookings list with cancel / no-show / restore tabs, and a single inquiries page that folds the list, detail, and reply form together (admin pages must not be split into `[id].html` files because the IDE iframe preview drops URL params/paths, so the selected id is kept in JS state instead). Matching YAML workflows: `admin/api/bookings/{list,status}.yaml` and `admin/api/inquiries/{list,reply}.yaml`. Uses a new `{{session.email}}` injected variable for operator identity (distinct from `{{auth.email}}` which is Hubwork-only).
+- Added the **Soft Delete** convention: cancelling a booking or marking a no-show writes `sheet-update` with `status: "cancelled" | "no_show"` and records `cancelled_at` / `cancelled_by` / `cancel_reason`. `sheet-delete` is never used for bookings or inquiries — monitor audit trail preserved.
+- Added **`inquiries` sheet schema** (id, submissionId, name, email, subject, message, status, created_at, reply_text, reply_at, reply_by) — single-reply model. `submissionId` is the client-generated idempotency key used by the public contact workflow's dedup step. `inquiry_replies` as a multi-turn extension is called out in admin-patterns.md "Future Extensions".
+- Added **Public Contact Form** templates to `references/page-patterns.md`: `web/contact.html` + `web/api/contact.yaml`. Honeypot (`_hp`) and idempotency (`submissionId`) are implemented as in-workflow `script` + `if` + `sheet-read` nodes rather than `trigger.honeypotField` / `trigger.idempotencyKeyField`, because those trigger options only run for form-POST requests and are skipped when the page calls `gemihub.post()` (JSON).
+- SKILL.md updates: new "Admin Pages (IDE-only)" section, six new Red Flags (admin path under `web/`, admin `requireAuth`, admin `{{auth.email}}`, admin `sheet-delete`, admin `data:` config, contact-form `requireAuth`, and contact-form `trigger.honeypotField`/`idempotencyKeyField` being silently ignored for JSON posts), new Pre-Save Checklist sections for Contact Form, Admin HTML, and Admin API.
+
+## v1.1.3 - 2026-04-24
 
 - Added **API Workflow Template (Public Register)** to `references/page-patterns.md` — the workflow side of the self-registration flow. Public endpoint (no `trigger.requireAuth`), duplicate-email short-circuit via an `if` node with `trueNext: respond` (silent success prevents account enumeration), `sheet-write` with `:json`-escaped fields, `gmail-send` welcome email. The Register Page Template and Pre-Save Checklist both reference it.
 

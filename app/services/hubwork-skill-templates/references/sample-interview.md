@@ -31,7 +31,13 @@ This sample uses a `meetings` sheet. Before building, update `web/__gemihub/sche
 - subject: string (e.g. "Pre-interview booking")
 - start_at: datetime (e.g. "2025-04-15T14:00:00Z")
 - created_at: datetime (e.g. "2025-04-01T10:00:00Z")
+- status: string (e.g. "active" — values: active / cancelled / no_show)
+- cancelled_at: datetime (state-change timestamp; populated when an operator cancels or marks no-show)
+- cancelled_by: string (operator email, e.g. "owner@example.com")
+- cancel_reason: string (optional free-text reason)
 ```
+
+The `status` / `cancelled_*` / `cancel_reason` columns are written by the **admin side** (operator-facing pages under `admin/`), not by the partner-facing booking flow. They enable soft-delete cancellation and no-show tracking without losing the original row. See `references/admin-patterns.md` for the admin workflow templates and the rationale for keeping admin pages out of `web/`.
 
 Then call `migrate_spreadsheet_schema` with the schema content to create the sheet in the spreadsheet.
 
@@ -237,10 +243,10 @@ nodes:
     end: "{{request.body.end}}"
 
   - id: write_sheet
-    comment: "Append the booking to the meetings sheet; id/created_at reuse the values the script node already produced"
+    comment: "Append the booking to the meetings sheet. status: \"active\" is the default; admin pages flip it to cancelled / no_show via sheet-update."
     type: sheet-write
     sheet: meetings
-    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email:json}}", "subject": "{{prepared.subject:json}}", "start_at": "{{request.body.start}}", "created_at": "{{prepared.now}}"}]'
+    data: '[{"id": "{{prepared.id}}", "account_email": "{{auth.email:json}}", "subject": "{{prepared.subject:json}}", "start_at": "{{request.body.start}}", "created_at": "{{prepared.now}}", "status": "active"}]'
 
   - id: send_mail
     comment: "Send the booking confirmation. Use prepared.displayRange (locale-formatted) in the body — never the raw ISO string from request.body."

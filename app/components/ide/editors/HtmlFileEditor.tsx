@@ -13,7 +13,9 @@ import { useIsMobile } from "~/hooks/useIsMobile";
 import {
   buildHtmlPreviewSrcDoc,
   buildMockGemihubScript,
+  buildAdminGemihubScript,
   collectRelativeRefs,
+  isAdminPreviewFile,
   resolveNavTarget,
   resolveSiblingPath,
   IMAGE_MIME_BY_EXT,
@@ -55,6 +57,10 @@ export function HtmlFileEditor({
   const contentFromProps = useRef(true);
   const pendingContentRef = useRef<string | null>(null);
   const prevFileIdRef = useRef(fileId);
+  // Used to verify postMessage senders for the admin bridge. A handler that
+  // matched on data shape alone would let any window in the same tab trigger
+  // privileged admin requests through this editor.
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const updateContent = useCallback((newContent: string) => {
     contentFromProps.current = false;
@@ -170,11 +176,63 @@ export function HtmlFileEditor({
   //  (b) Plain HTML files that reference sibling .js/.css/image files by
   //      relative path (e.g. public/deck/index.html → deck-stage.js) get
   //      their siblings inlined from the IndexedDB cache.
+  // Admin pages (files under admin/) are a third case: instead of the cached
+  // mock they use a live bridge that postMessages through the parent IDE to
+  // /api/hubwork/admin/*, so cancelling a booking or sending a reply actually
+  // runs the workflow against the real sheet + Gmail under the logged-in
+  // user's OAuth.
+  const isAdmin = isAdminPreviewFile(fileName);
   const needsMock = content.includes("/__gemihub/api.js");
   const [previewReady, setPreviewReady] = useState(true);
   const [mockScript, setMockScript] = useState("");
   const [siblings, setSiblings] = useState<SiblingAssetMap>({});
   const [unresolvedRefs, setUnresolvedRefs] = useState<string[]>([]);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  // `null` = not yet fetched; `"missing"` = fetched and no session (401 or null email).
+  // Admin preview is gated on a confirmed-non-empty email to avoid serving a
+  // fake "logged in" UI. If the session is missing, we render a login-prompt
+  // overlay instead of the iframe.
+  type AdminAuthState = "loading" | "ready" | "missing";
+  const [adminAuthState, setAdminAuthState] = useState<AdminAuthState>("loading");
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setSessionEmail(null);
+      setAdminAuthState("loading");
+      return;
+    }
+    let cancelled = false;
+    setAdminAuthState("loading");
+    (async () => {
+      try {
+        const res = await fetch("/api/session/me");
+        if (cancelled) return;
+        if (!res.ok) {
+          setSessionEmail(null);
+          setAdminAuthState("missing");
+          return;
+        }
+        const data = await res.json();
+        const email = typeof data?.email === "string" && data.email.length > 0
+          ? data.email
+          : null;
+        if (email) {
+          setSessionEmail(email);
+          setAdminAuthState("ready");
+        } else {
+          setSessionEmail(null);
+          setAdminAuthState("missing");
+        }
+      } catch {
+        if (!cancelled) {
+          setSessionEmail(null);
+          setAdminAuthState("missing");
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAdmin]);
+
   useEffect(() => {
     const relRefs = collectRelativeRefs(content);
     const needsSiblings = relRefs.length > 0;
@@ -195,16 +253,28 @@ export function HtmlFileEditor({
 
         let newMockScript = "";
         if (needsMock) {
-          const mockData: Record<string, string> = {};
-          for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
-            if (fmeta.name?.startsWith("web/__gemihub/") && fmeta.name.endsWith(".json")) {
-              const cached = await getCachedFile(fid);
-              if (cached?.content) {
-                mockData[fmeta.name] = cached.content;
+          if (isAdmin) {
+            // Admin pages: only inject the live bridge after we've confirmed
+            // the IDE session is valid. If not ready yet, leave mockScript
+            // empty — the parent component renders a login prompt in place
+            // of the iframe until `adminAuthState === "ready"`.
+            if (adminAuthState === "ready" && sessionEmail) {
+              newMockScript = buildAdminGemihubScript(sessionEmail);
+            } else {
+              newMockScript = "";
+            }
+          } else {
+            const mockData: Record<string, string> = {};
+            for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
+              if (fmeta.name?.startsWith("web/__gemihub/") && fmeta.name.endsWith(".json")) {
+                const cached = await getCachedFile(fid);
+                if (cached?.content) {
+                  mockData[fmeta.name] = cached.content;
+                }
               }
             }
+            newMockScript = buildMockGemihubScript(mockData, content);
           }
-          newMockScript = buildMockGemihubScript(mockData, content);
         }
 
         const newSiblings: SiblingAssetMap = {};
@@ -257,7 +327,7 @@ export function HtmlFileEditor({
       }
     })();
     return () => { cancelled = true; };
-  }, [content, fileId, needsMock]);
+  }, [content, fileId, needsMock, isAdmin, sessionEmail, adminAuthState]);
 
   const srcDocWithScripts = useMemo(() => {
     return buildHtmlPreviewSrcDoc(content, mockScript, siblings);
@@ -313,10 +383,96 @@ export function HtmlFileEditor({
         }
         return;
       }
+      // Admin preview bridge: iframe's gemihub.get/post posts here and waits
+      // for a matching response. We forward to /api/hubwork/admin/* under the
+      // IDE session cookie, then post the parsed JSON (or error details) back.
+      if (e.data?.type === "gemihub-admin-request") {
+        if (!isAdmin) return; // defensive: only the admin iframe should emit this
+        // Verify the message actually came from our sandboxed admin iframe.
+        // Without this, any window in the same tab (sibling iframe, popup,
+        // browser extension content script) could fire a request and trigger
+        // sheet writes / Gmail sends under the IDE session.
+        // sandbox="allow-scripts" without allow-same-origin gives the iframe
+        // an opaque origin that serializes to "null".
+        const iframeWindow = iframeRef.current?.contentWindow;
+        if (!iframeWindow || e.source !== iframeWindow || e.origin !== "null") {
+          return;
+        }
+        const { id, method, path, body } = e.data as {
+          id?: string;
+          method?: string;
+          path?: string;
+          body?: unknown;
+        };
+        if (!id) return;
+
+        const reply = (payload: Record<string, unknown>) => {
+          try {
+            // e.source is verified above; sending back through it (with "*"
+            // targetOrigin since the iframe's opaque origin can't be named
+            // explicitly) only delivers to that one window.
+            iframeWindow.postMessage({ type: "gemihub-admin-response", id, ...payload }, "*");
+          } catch { /* iframe may have unmounted */ }
+        };
+
+        const cleanPath = String(path || "").replace(/^\/+/, "");
+        if (!cleanPath) {
+          reply({ ok: false, status: 400, error: "Empty path" });
+          return;
+        }
+        // Restrict to safe path segments. Browsers normalize `..` in fetch
+        // URLs before sending, so without this filter `../../session/me`
+        // would reach unrelated IDE endpoints under the session cookie.
+        // Percent-encoded `..` (`%2e%2e`) is also rejected in case a future
+        // browser preserves the encoding.
+        const pathSegments = cleanPath.split("/");
+        const isBadSegment = (seg: string) =>
+          seg === "" || seg === "." || seg === ".." ||
+          seg.includes("\\") || /%2e/i.test(seg);
+        if (pathSegments.some(isBadSegment)) {
+          reply({ ok: false, status: 400, error: "Invalid path" });
+          return;
+        }
+        const url = method === "GET" && body && typeof body === "object"
+          ? `/api/hubwork/admin/${cleanPath}?${new URLSearchParams(
+              Object.fromEntries(
+                Object.entries(body as Record<string, unknown>).map(([k, v]) => [k, String(v ?? "")]),
+              ),
+            ).toString()}`
+          : `/api/hubwork/admin/${cleanPath}`;
+
+        try {
+          const res = await fetch(url, {
+            method: method === "POST" ? "POST" : "GET",
+            headers: method === "POST" ? { "Content-Type": "application/json" } : undefined,
+            body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+          });
+          let data: unknown = null;
+          try { data = await res.json(); } catch { /* non-JSON body */ }
+          if (res.ok) {
+            reply({ ok: true, data });
+          } else {
+            const errObj = (data && typeof data === "object") ? (data as Record<string, unknown>) : {};
+            reply({
+              ok: false,
+              status: res.status,
+              error: typeof errObj.error === "string" ? errObj.error : `HTTP ${res.status}`,
+              response: data,
+            });
+          }
+        } catch (err) {
+          reply({
+            ok: false,
+            status: 0,
+            error: err instanceof Error ? err.message : "Network error",
+          });
+        }
+        return;
+      }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [isMobile, fileId]);
+  }, [isMobile, fileId, isAdmin]);
 
   const modes: { key: HtmlEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
@@ -360,7 +516,28 @@ export function HtmlFileEditor({
           (300x150) or by inner content. Without this, scripts that read
           window.innerWidth/innerHeight (e.g. deck-stage's auto-scaler) can
           see a stale/oversized viewport and overflow the MainViewer. */}
-      {mode === "preview" && previewReady && (
+      {mode === "preview" && isAdmin && adminAuthState === "missing" && (
+        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+          <div className="max-w-sm w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow p-6 text-center space-y-4">
+            <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">
+              ログインが必要です
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              admin プレビューは Google Drive 所有者のセッションで動きます。再ログインしてください。
+            </p>
+            <a
+              href="/auth/google"
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-md"
+            >
+              Google でログイン
+            </a>
+          </div>
+        </div>
+      )}
+      {mode === "preview" && isAdmin && adminAuthState === "loading" && (
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading...</div>
+      )}
+      {mode === "preview" && previewReady && (!isAdmin || adminAuthState === "ready") && (
         <div className="relative flex-1 overflow-hidden">
           {unresolvedRefs.length > 0 && (
             <div className="absolute inset-x-0 top-0 z-10 bg-amber-100 text-amber-900 text-xs px-3 py-1.5 border-b border-amber-300 dark:bg-amber-900/40 dark:text-amber-100 dark:border-amber-700">
@@ -371,6 +548,7 @@ export function HtmlFileEditor({
             </div>
           )}
           <iframe
+            ref={iframeRef}
             srcDoc={srcDocWithScripts}
             className="absolute inset-0 h-full w-full border-0 bg-white"
             title={fileName}
@@ -378,7 +556,12 @@ export function HtmlFileEditor({
           />
         </div>
       )}
-      {mode === "preview" && !previewReady && (
+      {/* Loading shown while siblings/mock script are being assembled. For
+          admin pages the upstream gates ("missing" / "loading" auth states)
+          render their own panels above, so we only need to cover the case
+          where admin auth resolved to "ready" but the bridge script isn't
+          built yet. */}
+      {mode === "preview" && !previewReady && (!isAdmin || adminAuthState === "ready") && (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading...</div>
       )}
 

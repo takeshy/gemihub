@@ -16,6 +16,7 @@ export default [
   route("auth/google/callback", "routes/auth.google.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
   route("api/auth/unlock", "routes/api.auth.unlock.tsx"),
+  route("api/session/me", "routes/api.session.me.tsx"),
   route("settings", "routes/settings.tsx"),
   // API routes
   route("api/drive/files", "routes/api.drive.files.tsx"),
@@ -43,6 +44,12 @@ export default [
   route("api/settings/hubwork-provision", "routes/api.settings.hubwork-provision.tsx"),
   route("api/settings/hubwork-migrate", "routes/api.settings.hubwork-migrate.tsx"),
   route("api/hubwork/webpage-review", "routes/api.hubwork.webpage-review.tsx"),
+  // Admin workflow endpoint — resolves admin/api/*.yaml under the IDE
+  // session's OAuth. The IDE session cookie + same-origin (validateOrigin)
+  // are the auth boundary; admin/ being outside the public Hubwork serving
+  // layer keeps these workflows off the custom domain but is not by itself
+  // an authorization check.
+  route("api/hubwork/admin/*", "routes/api.hubwork.admin.$.tsx"),
   route("api/calendar", "routes/api.calendar.tsx"),
   route("api/gmail", "routes/api.gmail.tsx"),
   route("api/sheets", "routes/api.sheets.tsx"),
