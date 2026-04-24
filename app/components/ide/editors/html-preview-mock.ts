@@ -31,16 +31,27 @@ export function buildMockGemihubScript(
   htmlContent?: string,
 ): string {
   const escaped = JSON.stringify(mockData).replace(/</g, "\\u003c");
-  const meImpl = isRegisterPreviewPage(htmlContent)
-    ? "me:function(){return Promise.resolve(null);},"
-    : "me:function(t){var f=_m['web/__gemihub/auth/me.json'];if(!f)return Promise.resolve(null);try{var d=JSON.parse(f);" +
-      "if(!d||typeof d!=='object')return Promise.resolve(null);" +
-      "if(d.accountType&&d.accountType!==t)return Promise.resolve(null);" +
-      "var u={};for(var k in d)if(k!=='accountType')u[k]=d[k];u.type=t;return Promise.resolve(u);}catch(e){return Promise.resolve(null);}},";
+  const isRegister = isRegisterPreviewPage(htmlContent);
+  // DEBUG: log detection context to the parent page console so a user can
+  // paste it back when the preview misbehaves. Remove once the heuristic is
+  // confirmed stable for user-generated register pages.
+  if (typeof console !== "undefined") {
+    const contentLen = htmlContent?.length ?? 0;
+    const postMatches = (htmlContent?.match(/gemihub\.(post|get|auth\.require)\s*\([^)]{0,120}/g) ?? []).slice(0, 8);
+    const meJsonPresent = !!mockData["web/__gemihub/auth/me.json"];
+    console.log("[preview-mock] detection", { isRegister, contentLen, meJsonPresent, postMatches });
+  }
+  const meImpl = isRegister
+    ? "me:function(){console.log('[preview-gemihub] me() → null (register page)');return Promise.resolve(null);},"
+    : "me:function(t){console.log('[preview-gemihub] me(',t,') entry');var f=_m['web/__gemihub/auth/me.json'];if(!f){console.log('[preview-gemihub] me → null (no me.json)');return Promise.resolve(null);}try{var d=JSON.parse(f);" +
+      "if(!d||typeof d!=='object'){console.log('[preview-gemihub] me → null (invalid me.json)');return Promise.resolve(null);}" +
+      "if(d.accountType&&d.accountType!==t){console.log('[preview-gemihub] me → null (accountType mismatch)',d.accountType,t);return Promise.resolve(null);}" +
+      "var u={};for(var k in d)if(k!=='accountType')u[k]=d[k];u.type=t;console.log('[preview-gemihub] me →',u);return Promise.resolve(u);}catch(e){console.log('[preview-gemihub] me → null (parse error)',e);return Promise.resolve(null);}},";
   return [
     "<script>",
     "(function(){",
     "var _m=" + escaped + ";",
+    "console.log('[preview-gemihub] mock installed; isRegister=" + (isRegister ? "true" : "false") + "; me.json=',_m['web/__gemihub/auth/me.json']);",
     "function _r(p,path,e){",
     "path=path.split('?')[0].split('#')[0];",
     "var x=_m[p+path+e];if(x)return JSON.parse(x);",
@@ -50,13 +61,13 @@ export function buildMockGemihubScript(
     "if(/^\\[[^\\]]+\\]\\.json$/.test(b)&&b.indexOf('/')<0)return JSON.parse(_m[k]);}",
     "return null;}",
     "window.gemihub={",
-    "get:function(p){var d=_r('web/__gemihub/api/',p,'.json');if(d!==null)return Promise.resolve(d);return Promise.reject(Object.assign(new Error('Not found'),{status:404}));},",
-    "post:function(p){var d=_r('web/__gemihub/api/',p,'.json');if(d!==null)return Promise.resolve(d);return Promise.reject(Object.assign(new Error('Not found'),{status:404}));},",
+    "get:function(p){console.log('[preview-gemihub] get(',p,')');var d=_r('web/__gemihub/api/',p,'.json');if(d!==null)return Promise.resolve(d);console.log('[preview-gemihub] get →',p,'404');return Promise.reject(Object.assign(new Error('Not found'),{status:404}));},",
+    "post:function(p,b){console.log('[preview-gemihub] post(',p,',',b,')');var d=_r('web/__gemihub/api/',p,'.json');if(d!==null)return Promise.resolve(d);console.log('[preview-gemihub] post →',p,'404');return Promise.reject(Object.assign(new Error('Not found'),{status:404}));},",
     "auth:{",
     meImpl,
-    "login:function(){return Promise.resolve({ok:true});},",
-    "logout:function(){return Promise.resolve({ok:true});},",
-    "require:function(t,lp){return this.me(t).then(function(u){if(!u){location.href=(lp||'/login')+'?redirect='+encodeURIComponent(location.pathname+location.search);return new Promise(function(){});}return u;});}",
+    "login:function(){console.log('[preview-gemihub] login()');return Promise.resolve({ok:true});},",
+    "logout:function(){console.log('[preview-gemihub] logout()');return Promise.resolve({ok:true});},",
+    "require:function(t,lp){console.log('[preview-gemihub] require(',t,',',lp,')');return this.me(t).then(function(u){if(!u){console.log('[preview-gemihub] require → redirect to',lp||'/login');location.href=(lp||'/login')+'?redirect='+encodeURIComponent(location.pathname+location.search);return new Promise(function(){});}return u;});}",
     "}};",
     "})();",
     "</" + "script>",

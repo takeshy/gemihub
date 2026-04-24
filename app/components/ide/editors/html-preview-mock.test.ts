@@ -59,11 +59,10 @@ test("buildMockGemihubScript returns null me() for register pages", () => {
   );
 
   // Register page → me() short-circuits to null regardless of the populated mock.
-  // The emitted impl is `me:function(){return Promise.resolve(null);}` (no `_m` read).
-  assert.match(script, /me:function\(\)\{return Promise\.resolve\(null\);\}/);
-  // The mock bundle still contains me.json in _m, but the me() impl doesn't read it.
-  const meFn = script.match(/me:function\([^)]*\)\{[^}]*\}/)?.[0] ?? "";
-  assert.doesNotMatch(meFn, /_m\[/);
+  assert.match(script, /me:function\(\)\{[^}]*return Promise\.resolve\(null\)/);
+  // The register-path impl never reads from the me.json mock entry.
+  const meFn = script.match(/me:function\(\)\{[^}]*\}/)?.[0] ?? "";
+  assert.doesNotMatch(meFn, /_m\['web\/__gemihub\/auth\/me\.json'\]/);
 });
 
 test("buildMockGemihubScript returns populated me() for non-register pages", () => {
@@ -74,5 +73,5 @@ test("buildMockGemihubScript returns populated me() for non-register pages", () 
   );
 
   // Non-register page → me() reads from the mock file.
-  assert.match(script, /me:function\(t\)\{var f=_m\['web\/__gemihub\/auth\/me\.json'\]/);
+  assert.match(script, /me:function\(t\)\{[^}]*_m\['web\/__gemihub\/auth\/me\.json'\]/);
 });
