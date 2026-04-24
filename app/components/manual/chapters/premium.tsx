@@ -1,12 +1,12 @@
 import type { Language } from "~/types/settings";
 import { prose } from "../prose";
 
-export function HubworkChapter({ lang }: { lang: Language }) {
-  if (lang === "ja") return <HubworkJa />;
-  return <HubworkEn />;
+export function PremiumChapter({ lang }: { lang: Language }) {
+  if (lang === "ja") return <PremiumJa />;
+  return <PremiumEn />;
 }
 
-function HubworkEn() {
+function PremiumEn() {
   return (
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Premium Plan</h1>
@@ -166,7 +166,7 @@ function HubworkEn() {
   );
 }
 
-function HubworkJa() {
+function PremiumJa() {
   return (
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">プレミアムプラン</h1>

@@ -83,7 +83,7 @@ function SettingsEn() {
           <li>Background execution option (no workflow panel needed).</li>
         </ul>
 
-        <h2>Hubwork</h2>
+        <h2>Premium Plan</h2>
         <ul>
           <li>Subscribe to Lite or Pro plan via Stripe.</li>
           <li>Configure Spreadsheet ID for Google Sheets nodes.</li>
@@ -185,7 +185,7 @@ function SettingsJa() {
           <li>バックグラウンド実行オプション（ワークフローパネル不要）。</li>
         </ul>
 
-        <h2>Hubwork</h2>
+        <h2>プレミアムプラン</h2>
         <ul>
           <li>StripeでLiteまたはProプランに登録。</li>
           <li>Google Sheetsノード用のスプレッドシートIDを設定。</li>
