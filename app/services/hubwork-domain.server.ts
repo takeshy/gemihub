@@ -97,8 +97,15 @@ async function findCertMapEntryByHostname(
 
 async function checkDnsARecord(domain: string): Promise<DnsACheck | undefined> {
   if (!LB_IP) return undefined;
+  // Use dns.lookup (getaddrinfo) rather than dns.resolve4 (c-ares). lookup
+  // follows CNAME chains and rides the OS NSS stack, which mirrors what a
+  // browser hitting the domain would see. resolve4 surfaces the configured
+  // recursor's view verbatim, so a SERVFAIL/ENODATA from that one resolver
+  // (DNSSEC validation hiccup, propagation gap) made us falsely report the
+  // record as unset even when the authoritative answer was correct.
   try {
-    const actual = await dns.resolve4(domain);
+    const lookups = await dns.lookup(domain, { family: 4, all: true });
+    const actual = lookups.map((l) => l.address);
     return { expected: LB_IP, actual, matches: actual.includes(LB_IP) };
   } catch (e: unknown) {
     const code = (e as { code?: string })?.code || "UNKNOWN";
