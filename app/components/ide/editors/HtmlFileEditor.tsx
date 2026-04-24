@@ -203,7 +203,7 @@ export function HtmlFileEditor({
               }
             }
           }
-          newMockScript = buildMockGemihubScript(mockData);
+          newMockScript = buildMockGemihubScript(mockData, content);
         }
 
         const newSiblings: SiblingAssetMap = {};

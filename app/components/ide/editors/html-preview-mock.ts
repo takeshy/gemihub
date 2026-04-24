@@ -1,6 +1,42 @@
+/**
+ * Register pages ask `gemihub.auth.me()` and redirect away when the user is
+ * already registered. In preview, `web/__gemihub/auth/me.json` is a single
+ * static mock, so it can only hold one state at a time: populate it and the
+ * register page redirects to blank; empty it and every protected page's
+ * `gemihub.auth.require()` kicks to /login and also blanks out.
+ *
+ * Break the tie by detecting register-page previews from the HTML content
+ * (any page that POSTs to a `register` API endpoint) and forcing
+ * `gemihub.auth.me()` to resolve to null regardless of the mock file. That
+ * way the same populated mock serves both states: register pages always see
+ * "not logged in"; protected pages see the populated user. Filename-based
+ * detection would miss arbitrary names (the template does not dictate
+ * `register.html`), so we key off the behaviour instead.
+ *
+ * Match convention: any `gemihub.post("register")` / `gemihub.post("register/...")`
+ * call, quoted with either " or '. A trailing non-path-separator char (e.g.
+ * `register-xyz`) is rejected so an unrelated endpoint that happens to start
+ * with "register" doesn't trip the heuristic.
+ */
+const REGISTER_POST_PATTERN = /gemihub\.post\s*\(\s*['"]register[/'"]/;
+
+export function isRegisterPreviewPage(htmlContent?: string): boolean {
+  if (!htmlContent) return false;
+  return REGISTER_POST_PATTERN.test(htmlContent);
+}
+
 /** Build an inline <script> that provides window.gemihub with mock data from IndexedDB cache. */
-export function buildMockGemihubScript(mockData: Record<string, string>): string {
+export function buildMockGemihubScript(
+  mockData: Record<string, string>,
+  htmlContent?: string,
+): string {
   const escaped = JSON.stringify(mockData).replace(/</g, "\\u003c");
+  const meImpl = isRegisterPreviewPage(htmlContent)
+    ? "me:function(){return Promise.resolve(null);},"
+    : "me:function(t){var f=_m['web/__gemihub/auth/me.json'];if(!f)return Promise.resolve(null);try{var d=JSON.parse(f);" +
+      "if(!d||typeof d!=='object')return Promise.resolve(null);" +
+      "if(d.accountType&&d.accountType!==t)return Promise.resolve(null);" +
+      "var u={};for(var k in d)if(k!=='accountType')u[k]=d[k];u.type=t;return Promise.resolve(u);}catch(e){return Promise.resolve(null);}},";
   return [
     "<script>",
     "(function(){",
@@ -17,10 +53,7 @@ export function buildMockGemihubScript(mockData: Record<string, string>): string
     "get:function(p){var d=_r('web/__gemihub/api/',p,'.json');if(d!==null)return Promise.resolve(d);return Promise.reject(Object.assign(new Error('Not found'),{status:404}));},",
     "post:function(p){var d=_r('web/__gemihub/api/',p,'.json');if(d!==null)return Promise.resolve(d);return Promise.reject(Object.assign(new Error('Not found'),{status:404}));},",
     "auth:{",
-    "me:function(t){var f=_m['web/__gemihub/auth/me.json'];if(!f)return Promise.resolve(null);try{var d=JSON.parse(f);",
-    "if(!d||typeof d!=='object')return Promise.resolve(null);",
-    "if(d.accountType&&d.accountType!==t)return Promise.resolve(null);",
-    "var u={};for(var k in d)if(k!=='accountType')u[k]=d[k];u.type=t;return Promise.resolve(u);}catch(e){return Promise.resolve(null);}},",
+    meImpl,
     "login:function(){return Promise.resolve({ok:true});},",
     "logout:function(){return Promise.resolve({ok:true});},",
     "require:function(t,lp){return this.me(t).then(function(u){if(!u){location.href=(lp||'/login')+'?redirect='+encodeURIComponent(location.pathname+location.search);return new Promise(function(){});}return u;});}",
