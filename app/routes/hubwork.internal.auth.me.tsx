@@ -2,7 +2,7 @@ import type { Route } from "./+types/hubwork.internal.auth.me";
 import { resolveAccountWithTokens } from "~/services/hubwork-account-resolver.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getContactEmail } from "~/services/hubwork-session.server";
-import { buildCurrentUser } from "~/services/hubwork-page-renderer.server";
+import { buildAuthProfile, buildCurrentUser } from "~/services/hubwork-page-renderer.server";
 import { readIdeMockFile } from "~/services/hubwork-ide-mock.server";
 
 const ACCOUNT_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
@@ -51,13 +51,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   const accountType = resolved.accountType;
 
   try {
-    const userData = await buildCurrentUser(
-      accessToken,
-      resolvedSpreadsheetId,
-      email,
-      accountType.data,
-    );
-    return Response.json({ type, email, ...userData });
+    const [profile, userData] = await Promise.all([
+      buildAuthProfile(accessToken, resolvedSpreadsheetId, accountType.identity, email),
+      buildCurrentUser(accessToken, resolvedSpreadsheetId, email, accountType.data),
+    ]);
+    return Response.json({ type, email, ...profile, ...userData });
   } catch (e) {
     console.error("[hubwork-auth-me] Failed to build currentUser:", e);
     return Response.json({ error: "Failed to load user data" }, { status: 500 });

@@ -277,6 +277,11 @@ HTML ページに含めることでプレミアム API にアクセス:
 - `gemihub.auth.logout(type)` — セッションを破棄
 - `gemihub.auth.require(type, loginPath?)` — ガード: 未認証時はログインページにリダイレクト
 
+`auth.me` / `auth.require` が返却するユーザーオブジェクトの内容:
+- `type`, `email` — 常に含まれる
+- 該当ユーザーの identity シート行の列（例: `name`, `created_at`）。ただし `type` / `email` 列は除外
+- アカウントタイプの `data` ソースで定義されたキー（identity 列と衝突した場合はこちらが優先）
+
 **保護されたページパターン** — ローディング状態で開始し、認証後にレンダリング:
 
 ```html
@@ -758,7 +763,7 @@ Stripe Checkout 経由の月額サブスクリプション。フロー:
 | POST | `/__gemihub/auth/login` | なし | マジックリンクを送信。ボディ: `{ type, email }` |
 | GET | `/__gemihub/auth/verify/:token` | なし | マジックリンクトークンを検証、Cookie を設定、リダイレクト |
 | POST | `/__gemihub/auth/logout` | なし | セッションを破棄。ボディ: `{ type }` |
-| GET | `/__gemihub/auth/me?type=` | コンタクトセッション | アカウントタイプの currentUser データを取得 |
+| GET | `/__gemihub/auth/me?type=` | コンタクトセッション | アカウントタイプのユーザーデータを取得（`type`, `email`, identity 列, `data` ソース） |
 | GET | `/__gemihub/api.js` | なし | クライアントヘルパースクリプト |
 | GET/POST | `/__gemihub/api/*` | オプション (`requireAuth`) | ワークフロー API (`web/api/*.yaml` を解決) |
 | GET | `/*` (キャッチオール) | なし | ファイルベースのページプロキシ (Drive → CDN、プレミアムドメインのみ) |

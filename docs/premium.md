@@ -277,6 +277,11 @@ Provides:
 - `gemihub.auth.logout(type)` — Destroy session
 - `gemihub.auth.require(type, loginPath?)` — Guard: redirects to login if not authenticated
 
+The user object returned by `auth.me` / `auth.require` contains:
+- `type`, `email` — always present
+- Identity sheet columns for the user's row (e.g. `name`, `created_at`), excluding `type` / `email`
+- Keys from the account type's `data` sources (override identity columns on conflict)
+
 **Protected page pattern** — start with loading state, render after auth:
 
 ```html
@@ -758,7 +763,7 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
 | POST | `/__gemihub/auth/login` | None | Send magic link. Body: `{ type, email }` |
 | GET | `/__gemihub/auth/verify/:token` | None | Verify magic link token, set cookie, redirect |
 | POST | `/__gemihub/auth/logout` | None | Destroy session. Body: `{ type }` |
-| GET | `/__gemihub/auth/me?type=` | Contact session | Get currentUser data for account type |
+| GET | `/__gemihub/auth/me?type=` | Contact session | Get user data for account type (`type`, `email`, identity columns, `data` sources) |
 | GET | `/__gemihub/api.js` | None | Client helper script |
 | GET/POST | `/__gemihub/api/*` | Optional (`requireAuth`) | Workflow API (resolves `web/api/*.yaml`) |
 | GET | `/*` (catch-all) | None | File-based page proxy (Drive → CDN, Hubwork domains only) |
