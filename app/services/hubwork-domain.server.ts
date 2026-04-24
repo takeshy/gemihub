@@ -95,22 +95,46 @@ async function findCertMapEntryByHostname(
   return undefined;
 }
 
+// Independent public recursors used as fallback when the system resolver
+// can't answer. Listed in order of how reliable they have been for this
+// kind of check. We have observed real cases where Google Public DNS
+// (8.8.8.8 — which Cloud Run defaults to) returns SERVFAIL/EAI_AGAIN for
+// a perfectly healthy record while Cloudflare and Quad9 serve it fine.
+const PUBLIC_DNS_FALLBACKS = ["1.1.1.1", "9.9.9.9", "8.8.8.8"];
+
 async function checkDnsARecord(domain: string): Promise<DnsACheck | undefined> {
   if (!LB_IP) return undefined;
-  // Use dns.lookup (getaddrinfo) rather than dns.resolve4 (c-ares). lookup
-  // follows CNAME chains and rides the OS NSS stack, which mirrors what a
-  // browser hitting the domain would see. resolve4 surfaces the configured
-  // recursor's view verbatim, so a SERVFAIL/ENODATA from that one resolver
-  // (DNSSEC validation hiccup, propagation gap) made us falsely report the
-  // record as unset even when the authoritative answer was correct.
+
+  // Step 1: system resolver (getaddrinfo). Fast, cached, follows CNAMEs,
+  // and matches what a browser would see on the same machine.
+  let firstError: string | undefined;
   try {
     const lookups = await dns.lookup(domain, { family: 4, all: true });
     const actual = lookups.map((l) => l.address);
-    return { expected: LB_IP, actual, matches: actual.includes(LB_IP) };
+    if (actual.length > 0) {
+      return { expected: LB_IP, actual, matches: actual.includes(LB_IP) };
+    }
   } catch (e: unknown) {
-    const code = (e as { code?: string })?.code || "UNKNOWN";
-    return { expected: LB_IP, actual: [], matches: false, error: code };
+    firstError = (e as { code?: string })?.code || "UNKNOWN";
   }
+
+  // Step 2: fan out to public recursors. Returns the first answer, so one
+  // unhealthy resolver no longer hides a correct record. Tight per-server
+  // budget so a totally-unreachable resolver doesn't block the Settings UI.
+  for (const server of PUBLIC_DNS_FALLBACKS) {
+    try {
+      const resolver = new dns.Resolver({ timeout: 1500, tries: 1 });
+      resolver.setServers([server]);
+      const actual = await resolver.resolve4(domain);
+      if (actual.length > 0) {
+        return { expected: LB_IP, actual, matches: actual.includes(LB_IP) };
+      }
+    } catch {
+      // Try the next server.
+    }
+  }
+
+  return { expected: LB_IP, actual: [], matches: false, error: firstError };
 }
 
 /**
