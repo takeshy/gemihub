@@ -212,7 +212,11 @@ Run before saving AND after `read_drive_file` of each saved file.
 - [ ] Has an email input AND every profile field stored in the identity sheet
 - [ ] Submits via `gemihub.post("register", body)` — path is literally `register` (or `register/<sub>`)
 - [ ] **NO `gemihub.auth.require()` / `gemihub.auth.me()`** — the user has no session yet; any auth check redirects to /login and blanks the page
-- [ ] Matching `web/api/register.yaml` workflow has NO `trigger.requireAuth` (endpoint is public)
+- [ ] Matching `web/api/register.yaml` workflow exists, copied from the **API Workflow Template (Public Register)** in `references/page-patterns.md`:
+  - No `trigger.requireAuth` (endpoint is public)
+  - Reads the identity sheet first and short-circuits on duplicate email (silent success — never reveal whether an email is registered)
+  - `sheet-write` with `:json`-escaped `{{request.body.*}}` values for every column
+  - `gmail-send` welcome email AFTER the successful write
 - [ ] Shows "check your inbox" success message after submission
 
 ### Protected pages

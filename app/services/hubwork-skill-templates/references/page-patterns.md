@@ -132,7 +132,7 @@ Self-registration flow: user lands on the page UNAUTHENTICATED, fills in their e
 </html>
 ```
 
-The endpoint path MUST be literally `register` (or `register/<sub-path>`) so the IDE preview can detect the page via its POST target and stub out `gemihub.auth.me()`. A workflow at `web/api/register.yaml` handles the submission: validate the row, write to the identity sheet, and (optionally) send a confirmation email via `gmail-send`. The workflow's `trigger` has NO `requireAuth` — the endpoint is public.
+The endpoint path MUST be literally `register` (or `register/<sub-path>`) so the IDE preview can detect the page via its POST target and stub out `gemihub.auth.me()`. A workflow at `web/api/register.yaml` handles the submission — see the **API Workflow Template (Public Register)** section below.
 
 ## Protected Page Template
 
@@ -201,6 +201,58 @@ nodes:
     name: __response
     value: "{{result}}"
 ```
+
+## API Workflow Template (Public Register)
+
+Paired with the Register Page Template. The trigger is **public** (no `requireAuth`) because the user has no session yet. Email duplicates short-circuit to a silent success response — this prevents account-enumeration (leaking whether an email is already registered). The welcome/confirmation email is sent AFTER the write so it can reference the just-created row.
+
+```yaml
+# web/api/register.yaml — PUBLIC endpoint (no requireAuth)
+nodes:
+  - id: existing
+    type: sheet-read
+    sheet: accounts
+    filter: '{"email": "{{request.body.email:json}}"}'
+    saveTo: existing
+
+  - id: check_dup
+    comment: "Silent success on duplicate — never reveal whether an email is already registered"
+    type: if
+    condition: "{{existing.length}} > 0"
+    trueNext: respond
+    falseNext: prepare
+
+  - id: prepare
+    type: script
+    saveTo: prepared
+    code: |
+      return {
+        created_at: new Date().toISOString(),
+      };
+
+  - id: write
+    type: sheet-write
+    sheet: accounts
+    data: '[{"email": "{{request.body.email:json}}", "name": "{{request.body.name:json}}", "created_at": "{{prepared.created_at}}"}]'
+
+  - id: welcome
+    type: gmail-send
+    to: "{{request.body.email}}"
+    subject: "Registration complete"
+    body: |
+      {{request.body.name}} さん、ご登録ありがとうございます。
+
+      このメールは自動送信されています。心当たりのない場合は破棄してください。
+
+  - id: respond
+    type: set
+    name: __response
+    value: '{"ok": true}'
+```
+
+Add one row per additional profile field the Register Page Template collects (match the column names exactly — use `get_spreadsheet_schema` to confirm). Every user-derived placeholder inside the JSON string literals is `:json`-escaped.
+
+**For verified registration** (user must click an email link BEFORE the row is written), use Hubwork's built-in platform flow instead — configure it via `accountType.register` on the settings side rather than a user-written workflow. User-written `register.yaml` workflows handle the immediate-registration case above.
 
 ## API Workflow Template (Write)
 

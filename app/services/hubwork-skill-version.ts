@@ -1,4 +1,4 @@
-export const WEBPAGE_BUILDER_SKILL_VERSION = "1.1.2";
+export const WEBPAGE_BUILDER_SKILL_VERSION = "1.1.3";
 export const WEBPAGE_BUILDER_SKILL_RELEASE_DATE = "2026-04-24";
 
 export function compareSkillVersions(a: string | null | undefined, b: string | null | undefined): number {

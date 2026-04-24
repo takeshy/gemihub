@@ -2,7 +2,11 @@
 
 ## v{{SKILL_TEMPLATE_VERSION}} - {{SKILL_TEMPLATE_DATE}}
 
-- Added a **Register Page Template** to `references/page-patterns.md` covering the self-registration flow: public page, user enters email + profile fields, submits via `gemihub.post("register", body)`. Page does NOT use `gemihub.auth.require()` / `gemihub.auth.me()` — the user has no session yet. Matching `web/api/register.yaml` has no `trigger.requireAuth`.
+- Added **API Workflow Template (Public Register)** to `references/page-patterns.md` — the workflow side of the self-registration flow. Public endpoint (no `trigger.requireAuth`), duplicate-email short-circuit via an `if` node with `trueNext: respond` (silent success prevents account enumeration), `sheet-write` with `:json`-escaped fields, `gmail-send` welcome email. The Register Page Template and Pre-Save Checklist both reference it.
+
+## v1.1.2 - 2026-04-24
+
+- Added a **Register Page Template** to `references/page-patterns.md` covering the self-registration flow: public page, user enters email + profile fields, submits via `gemihub.post("register", body)`. Page does NOT use `gemihub.auth.require()` / `gemihub.auth.me()` — the user has no session yet.
 - Added Red Flag in SKILL.md preempting the common "guard the register page with `gemihub.auth.require()`" mistake and a sibling Pre-Save Checklist section for register pages.
 - IDE HTML preview now detects register pages by their `gemihub.post("register", ...)` call and forces `gemihub.auth.me()` to resolve to null regardless of `web/__gemihub/auth/me.json`. The same populated mock now serves both states: register pages always see "not logged in"; protected pages see the populated user.
 
