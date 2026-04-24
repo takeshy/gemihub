@@ -61,11 +61,76 @@ export function buildMockGemihubScript(
     meImpl,
     "login:function(){return Promise.resolve({ok:true});},",
     "logout:function(){return Promise.resolve({ok:true});},",
-    "require:function(t,lp){return this.me(t).then(function(u){if(!u){location.href=(lp||'/login')+'?redirect='+encodeURIComponent(location.pathname+location.search);return new Promise(function(){});}return u;});}",
+    "require:function(t,lp){return this.me(t).then(function(u){if(!u){(window.__gemihubNav||function(p){location.href=p;})((lp||'/login')+'?redirect='+encodeURIComponent(location.pathname+location.search));return new Promise(function(){});}return u;});}",
     "}};",
     "})();",
     "</" + "script>",
   ].join("");
+}
+
+// --- Navigation target resolution ---
+//
+// Maps a URL path from the preview iframe to a candidate `web/...` filename
+// that the IDE can then resolve to a fileId. The resolution rules mirror the
+// production Hubwork routing convention (`web/about.html` serves `/about`,
+// `web/blogs/index.html` serves `/blogs/`, etc.).
+
+export type NavTarget =
+  | { type: "external"; url: string }
+  | { type: "internal"; fileName: string }
+  | { type: "ignore" }
+  | { type: "not-found" };
+
+/**
+ * Resolve a raw href from an iframe link/location to a NavTarget.
+ *
+ * @param rawPath        — the href as written by the page (e.g. "/about", "foo.html", "https://x.example")
+ * @param currentDir     — the directory of the file currently being previewed, e.g. "web/partner"
+ * @param idByPath       — map of `web/...` paths to fileId (used to pick between `web/foo.html` and `web/foo/index.html`)
+ */
+export function resolveNavTarget(
+  rawPath: string,
+  currentDir: string,
+  idByPath: Record<string, string>,
+): NavTarget {
+  if (!rawPath) return { type: "ignore" };
+  if (rawPath.startsWith("#")) return { type: "ignore" };
+  if (/^(?:javascript|data|blob):/i.test(rawPath)) return { type: "ignore" };
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(rawPath)) return { type: "external", url: rawPath };
+
+  const clean = rawPath.split("?")[0].split("#")[0];
+  if (!clean) return { type: "ignore" };
+
+  const candidates: string[] = [];
+  if (clean.startsWith("/")) {
+    const p = clean.slice(1);
+    if (p === "") {
+      candidates.push("web/index.html");
+    } else if (p.endsWith("/")) {
+      candidates.push(`web/${p}index.html`);
+    } else if (/\.html?$/i.test(p)) {
+      candidates.push(`web/${p}`);
+    } else {
+      candidates.push(`web/${p}.html`);
+      candidates.push(`web/${p}/index.html`);
+    }
+  } else {
+    const resolved = resolveSiblingPath(currentDir, clean);
+    if (!resolved) return { type: "not-found" };
+    if (/\.html?$/i.test(resolved)) {
+      candidates.push(resolved);
+    } else if (resolved.endsWith("/")) {
+      candidates.push(`${resolved}index.html`);
+    } else {
+      candidates.push(`${resolved}.html`);
+      candidates.push(`${resolved}/index.html`);
+    }
+  }
+
+  for (const c of candidates) {
+    if (idByPath[c]) return { type: "internal", fileName: c };
+  }
+  return { type: "not-found" };
 }
 
 // --- Sibling asset inlining ---
@@ -216,18 +281,63 @@ document.addEventListener('touchstart',function(e){var t=e.touches[0];_sx=t.clie
 document.addEventListener('touchend',function(e){var t=e.changedTouches[0];
 parent.postMessage({type:'gemihub-iframe-touch',sx:_sx,sy:_sy,st:_st,ex:t.clientX,ey:t.clientY,et:Date.now()},'*');});
 ${"<"}/script>`;
+  // Navigation interception script. Injected into <head> so it wraps user
+  // scripts — location overrides and document listeners are in place before
+  // the page's own JS runs. Handles:
+  //   - <a href="..."> clicks (capture phase, skip #hash, javascript:, data:,
+  //     and target="_blank")
+  //   - <form action="..."> submits
+  //   - location.assign / location.replace method reassignment
+  //   - Location.prototype.href setter override (best effort; browsers may
+  //     block it, in which case raw `location.href = X` still blanks the
+  //     iframe — same as the pre-nav baseline)
+  // Exposes window.__gemihubNav(path) so the mock API (auth.require) can
+  // route its redirects through the same channel without depending on the
+  // Location.prototype.href hook.
+  const navScript = `<script>
+(function(){
+function _nav(p){if(p==null)return;parent.postMessage({type:'gemihub-iframe-navigate',path:String(p)},'*');}
+window.__gemihubNav=_nav;
+document.addEventListener('click',function(e){
+var a=e.target&&e.target.closest&&e.target.closest('a');
+if(!a)return;
+var h=a.getAttribute('href');
+if(!h||h.charAt(0)==='#'||h.indexOf('javascript:')===0||h.indexOf('data:')===0)return;
+if(a.target==='_blank')return;
+e.preventDefault();
+_nav(h);
+},true);
+document.addEventListener('submit',function(e){
+var f=e.target;
+if(!f||f.tagName!=='FORM')return;
+var a=f.getAttribute('action');
+if(!a||a.charAt(0)==='#'||a.indexOf('javascript:')===0)return;
+e.preventDefault();
+_nav(a);
+},true);
+try{location.assign=_nav;location.replace=_nav;}catch(e){}
+try{
+var desc=Object.getOwnPropertyDescriptor(Location.prototype,'href');
+if(desc&&desc.configurable){
+Object.defineProperty(Location.prototype,'href',{configurable:true,get:desc.get,set:function(v){_nav(v);}});
+}
+}catch(e){}
+})();
+${"<"}/script>`;
   let html = content;
   const apiJsPattern = /<script[^>]*src\s*=\s*["'][^"']*\/__gemihub\/api\.js["'][^>]*>\s*<\/script>/i;
-  if (apiJsPattern.test(html)) {
+  const hasApiJs = apiJsPattern.test(html);
+  if (hasApiJs) {
     html = html.replace(apiJsPattern, "");
-    if (mockScript) {
-      const headPattern = /(<head[^>]*>)/i;
-      if (headPattern.test(html)) {
-        html = html.replace(headPattern, `$1${mockScript}`);
-      } else {
-        html = mockScript + html;
-      }
-    }
+  }
+  // navScript is always injected (plain HTML may still contain internal links);
+  // mockScript only when the page references /__gemihub/api.js.
+  const headInjection = navScript + (hasApiJs && mockScript ? mockScript : "");
+  const headPattern = /(<head[^>]*>)/i;
+  if (headPattern.test(html)) {
+    html = html.replace(headPattern, `$1${headInjection}`);
+  } else {
+    html = headInjection + html;
   }
   html = inlineSiblingAssets(html, siblings);
   return html + touchScript;

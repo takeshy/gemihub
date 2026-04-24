@@ -144,6 +144,21 @@ export function useActiveFile({
     [rightPanel, setRightPanel]
   );
 
+  // Listen for in-preview navigation (HTML preview iframe posts this event
+  // when the page does an internal link click, form submit, or location.href
+  // assignment — see HtmlFileEditor's message handler and html-preview-mock's
+  // injected navScript). Route through handleSelectFile so the URL query and
+  // right-panel switch stay consistent with regular file opens.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.fileId || !detail?.fileName) return;
+      handleSelectFile(detail.fileId, detail.fileName, detail.mimeType || "text/html");
+    };
+    window.addEventListener("gemihub-request-navigate", handler);
+    return () => window.removeEventListener("gemihub-request-navigate", handler);
+  }, [handleSelectFile]);
+
   const clearActiveFile = useCallback(() => {
     setActiveFileId(null);
     setActiveFileName(null);

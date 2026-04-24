@@ -14,6 +14,7 @@ import {
   buildHtmlPreviewSrcDoc,
   buildMockGemihubScript,
   collectRelativeRefs,
+  resolveNavTarget,
   resolveSiblingPath,
   IMAGE_MIME_BY_EXT,
   type SiblingAssetMap,
@@ -263,22 +264,59 @@ export function HtmlFileEditor({
   }, [content, mockScript, siblings]);
 
   useEffect(() => {
-    if (!isMobile) return;
-    const handler = (e: MessageEvent) => {
-      if (e.data?.type !== "gemihub-iframe-touch") return;
-      const { sx, sy, st, ex, ey, et } = e.data;
-      const dx = ex - sx;
-      const dy = ey - sy;
-      const elapsed = et - st;
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && elapsed < 300) {
-        window.dispatchEvent(
-          new CustomEvent("iframe-swipe", { detail: { direction: dx > 0 ? "right" : "left" } })
-        );
+    const handler = async (e: MessageEvent) => {
+      // Mobile swipe → left/right gesture event (existing behaviour).
+      if (e.data?.type === "gemihub-iframe-touch") {
+        if (!isMobile) return;
+        const { sx, sy, st, ex, ey, et } = e.data;
+        const dx = ex - sx;
+        const dy = ey - sy;
+        const elapsed = et - st;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) && elapsed < 300) {
+          window.dispatchEvent(
+            new CustomEvent("iframe-swipe", { detail: { direction: dx > 0 ? "right" : "left" } })
+          );
+        }
+        return;
+      }
+      // In-iframe navigation attempt (link click, form submit, location override,
+      // or mock gemihub.auth.require redirect). Resolve the path to a file in
+      // the cache and emit a gemihub-request-navigate event that useActiveFile
+      // turns into a full file-open (URL query update + right-panel switch).
+      if (e.data?.type === "gemihub-iframe-navigate") {
+        const rawPath = typeof e.data.path === "string" ? e.data.path : "";
+        if (!rawPath) return;
+        const { getCachedRemoteMeta } = await import("~/services/indexeddb-cache");
+        const meta = await getCachedRemoteMeta();
+        const idByPath: Record<string, string> = {};
+        for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
+          if (fmeta.name) idByPath[fmeta.name] = fid;
+        }
+        const currentName = meta?.files?.[fileId]?.name;
+        const currentDir = currentName && currentName.includes("/")
+          ? currentName.slice(0, currentName.lastIndexOf("/"))
+          : "";
+        const target = resolveNavTarget(rawPath, currentDir, idByPath);
+        if (target.type === "external") {
+          window.open(target.url, "_blank", "noopener");
+        } else if (target.type === "internal") {
+          const fid = idByPath[target.fileName];
+          if (!fid) return;
+          const mt = meta?.files?.[fid]?.mimeType || "text/html";
+          window.dispatchEvent(
+            new CustomEvent("gemihub-request-navigate", {
+              detail: { fileId: fid, fileName: target.fileName, mimeType: mt },
+            })
+          );
+        } else if (target.type === "not-found") {
+          console.warn("[gemihub-preview] no file for path", rawPath);
+        }
+        return;
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [isMobile]);
+  }, [isMobile, fileId]);
 
   const modes: { key: HtmlEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
