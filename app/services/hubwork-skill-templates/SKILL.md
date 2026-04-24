@@ -6,7 +6,6 @@ description: Use when building or editing a Hubwork site — static HTML pages, 
 ```skill-capabilities
 workflows:
   - path: workflows/create-article.yaml
-    name: create-article
     description: Publish a Drive note as a dated article under web/<folder>/<pubDate>-<note-slug>.html (where folder is typically "blogs" or "announcements"), regenerate that folder's /index archive page, and refresh the homepage "recent articles" marker block (which aggregates the 5 newest items across blogs and announcements). Collect folder, notePath, pubDate, and postTitle from the user before invoking.
     inputVariables: [folder, notePath, pubDate, postTitle]
 ```

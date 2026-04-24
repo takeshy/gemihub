@@ -42,8 +42,11 @@ Follow these conventions — based on the obra/superpowers writing-skills resear
   - ❌ BAD: \`description: Generates a weekly newsletter by pulling metrics and emailing the team\` — summarises the workflow
   - ✅ GOOD: \`description: Use when the user asks for a weekly summary, digest, newsletter, metrics roundup, team update, or says "週次レポート送信"\` — triggering conditions + keywords
 
+**\`skill-capabilities\` block**:
+- Each workflow entry needs \`path\` and \`description\` only. Do NOT add a \`name:\` field — the runtime derives the tool name from the filename (\`workflows/send-weekly-newsletter.yaml\` → \`send-weekly-newsletter\`). One file = one workflow. Duplicating the filename as \`name:\` only creates drift.
+
 **Body structure** — include only the sections that apply, in this order:
-1. \`## Overview\` — 1–2 sentences: what this skill is and its core principle.
+1. \`## Overview\` — 1–2 sentences: what this skill *is* and its core principle. (This is distinct from \`description\` in the frontmatter — \`description\` answers "when should the agent use this?", \`Overview\` answers "what is it?".)
 2. \`## When to Use\` / \`## When NOT to Use\` — short bullets with concrete triggers.
 3. \`## ⛔ The Iron Law\` — ONE absolute-rule sentence (e.g. "NO send UNTIL user approves the preview") when the skill enforces a hard pre-condition. Skip if no such rule exists.
 4. \`## Core Pattern: Before / After\` — two-column table (❌ wrong approach | ✅ correct approach) when the skill replaces a common wrong pattern.

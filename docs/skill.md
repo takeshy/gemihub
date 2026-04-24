@@ -64,10 +64,11 @@ Workflows declared in the `skill-capabilities` block are registered as function-
 ```skill-capabilities
 workflows:
   - path: workflows/run-lint.yaml
-    name: lint                      # Optional custom name (defaults to file basename)
     description: Run linting on the current file
     inputVariables: [filePath]      # Variables the LLM must supply when invoking
 ```
+
+The tool name exposed to the chat LLM is derived from the filename (`workflows/run-lint.yaml` → `run-lint`). Do not add a separate `name:` field — one file is one workflow, so duplicating the filename only creates drift.
 ````
 
 Every workflow the LLM may invoke must be declared here — the `workflows/` subdirectory is **not** auto-scanned. Files without a `skill-capabilities` entry are invisible to the AI. `inputVariables` lists the variable names the workflow reads but does not initialize; it is overwritten whenever the skill is edited via "Modify Skill with AI", based on the actual workflow YAML.

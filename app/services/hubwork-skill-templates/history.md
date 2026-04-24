@@ -2,6 +2,10 @@
 
 ## v{{SKILL_TEMPLATE_VERSION}} - {{SKILL_TEMPLATE_DATE}}
 
+- Removed the redundant `name: create-article` line from the `skill-capabilities` block. One file is one workflow, so the tool name is now derived from the filename at runtime (`workflows/create-article.yaml` → `create-article`). This keeps the declaration as the single source of truth and removes drift potential if the file is ever renamed.
+
+## v1.1.0 - 2026-04-24
+
 - Restructured `SKILL.md` to follow the [obra/superpowers](https://github.com/obra/superpowers) `writing-skills` conventions: trigger-condition `description` field (not workflow summary), lowercase-hyphenated `name`, an explicit "Iron Law" near the top, a Before/After Core Pattern table, a Quick Reference, and a Red Flags / Rationalisations table consolidating the prior "Common Mistakes" list.
 - No behavioural rule was removed — every existing guard (request.* prefix, `:json` modifier rules, script-node-for-UUIDs, no-frameworks, calendar event flat shape, auth-not-authorization) is preserved. The Pre-Save & Verification Checklist is unchanged so it remains in sync with `webpage-review.server.ts`.
 - Lowered the manifest `name` from "Webpage Builder" to "webpage-builder" to match the convention used by the folder ID and superpowers' naming rule.
