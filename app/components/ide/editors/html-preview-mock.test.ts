@@ -52,17 +52,18 @@ test("isRegisterPreviewPage rejects unrelated endpoints", () => {
 });
 
 test("buildMockGemihubScript returns null me() for register pages", () => {
+  // Self-registration pages are UNAUTHENTICATED. me() must return null in
+  // preview regardless of how the populated me.json looks, so the page
+  // renders in its unauthenticated state (email input + other fields).
   const registerHtml = `<script>await gemihub.post("register", { email })</script>`;
   const script = buildMockGemihubScript(
-    { "web/__gemihub/auth/me.json": '{"email":"alice@example.com"}' },
+    { "web/__gemihub/auth/me.json": '{"email":"alice@example.com","name":"Alice"}' },
     registerHtml,
   );
 
-  // Register page → me() short-circuits to null regardless of the populated mock.
-  assert.match(script, /me:function\(\)\{[^}]*return Promise\.resolve\(null\)/);
-  // The register-path impl never reads from the me.json mock entry.
+  assert.match(script, /me:function\(\)\{return Promise\.resolve\(null\);\}/);
   const meFn = script.match(/me:function\(\)\{[^}]*\}/)?.[0] ?? "";
-  assert.doesNotMatch(meFn, /_m\['web\/__gemihub\/auth\/me\.json'\]/);
+  assert.doesNotMatch(meFn, /_m\[/);
 });
 
 test("buildMockGemihubScript returns populated me() for non-register pages", () => {
@@ -73,5 +74,5 @@ test("buildMockGemihubScript returns populated me() for non-register pages", () 
   );
 
   // Non-register page → me() reads from the mock file.
-  assert.match(script, /me:function\(t\)\{[^}]*_m\['web\/__gemihub\/auth\/me\.json'\]/);
+  assert.match(script, /me:function\(t\)\{var f=_m\['web\/__gemihub\/auth\/me\.json'\]/);
 });

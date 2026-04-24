@@ -59,6 +59,81 @@
 
 Replace `ACCOUNT_TYPE` with the actual account type name (e.g., "partner", "talent").
 
+## Register Page Template
+
+Self-registration flow: user lands on the page UNAUTHENTICATED, fills in their email plus any profile fields the site requires (name, phone, etc.), and submits. `gemihub.post("register", body)` hands the submission to a workflow that writes the row and sends a confirmation email. Register pages MUST NOT call `gemihub.auth.require()` / `gemihub.auth.me()` — the user has no session yet; any auth check will redirect to /login and blank the page.
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md px-4">
+    <div class="bg-white rounded-lg shadow-md p-8">
+      <h1 class="text-2xl font-bold text-center mb-6">Create account</h1>
+      <form id="register-form" class="space-y-4">
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input id="email" name="email" type="email" required placeholder="you@example.com"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <input id="name" name="name" type="text" required
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <!-- Add additional profile fields here, matching the sheet columns -->
+        <button type="submit" id="submit-btn"
+          class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 font-medium">
+          Send confirmation email
+        </button>
+      </form>
+      <div id="message" class="mt-4 text-center text-sm hidden"></div>
+    </div>
+  </div>
+  <script src="/__gemihub/api.js"></script>
+  <script>
+    // NO gemihub.auth.require() / gemihub.auth.me() — this page is for
+    // brand-new visitors. An auth check here redirects to /login and blanks
+    // the page (IDE preview sets me() to null on register pages so this
+    // mistake shows up as an obvious /login redirect).
+    document.getElementById("register-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("submit-btn");
+      const msg = document.getElementById("message");
+      btn.disabled = true;
+      btn.textContent = "Sending...";
+      msg.classList.add("hidden");
+      try {
+        const body = {
+          email: document.getElementById("email").value,
+          name: document.getElementById("name").value,
+          // Add the other profile fields here
+        };
+        await gemihub.post("register", body);
+        msg.textContent = "Confirmation email sent. Please check your inbox to complete registration.";
+        msg.className = "mt-4 text-center text-sm text-green-600";
+        document.getElementById("register-form").classList.add("hidden");
+      } catch (err) {
+        msg.textContent = err?.response?.error || "An error occurred. Please try again.";
+        msg.className = "mt-4 text-center text-sm text-red-600";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Send confirmation email";
+      }
+    });
+  </script>
+</body>
+</html>
+```
+
+The endpoint path MUST be literally `register` (or `register/<sub-path>`) so the IDE preview can detect the page via its POST target and stub out `gemihub.auth.me()`. A workflow at `web/api/register.yaml` handles the submission: validate the row, write to the identity sheet, and (optionally) send a confirmation email via `gmail-send`. The workflow's `trigger` has NO `requireAuth` — the endpoint is public.
+
 ## Protected Page Template
 
 ```html

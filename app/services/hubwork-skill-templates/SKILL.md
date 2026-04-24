@@ -107,6 +107,7 @@ If you catch yourself thinking any of these, STOP — the counter-rule is load-b
 | "I'll add an email field to the protected form." | The user is already authenticated. Use `(await gemihub.auth.me(type)).email` in JS or `{{auth.email}}` in workflows. |
 | "Calendar event has `evt.start.dateTime`." | That's the raw Google Calendar shape. Our API flattens it. Use `new Date(evt.start)` directly. |
 | "`requireAuth` will limit which rows the user sees." | It only checks login. ALWAYS filter `sheet-read` by `{{auth.email}}` for user-specific data. |
+| "I'll guard the register page with `gemihub.auth.require()`." | Register pages are UNAUTHENTICATED — the user has no session yet. `require()` redirects to /login and blanks the page. Use plain form → `gemihub.post("register", body)`; copy the Register Page Template from `references/page-patterns.md`. |
 
 ## Spreadsheet & Schema
 
@@ -206,6 +207,13 @@ Run before saving AND after `read_drive_file` of each saved file.
 - [ ] Button text says "Send Login Link" or similar — NOT "Login" or "Sign In"
 - [ ] Shows success message about checking email after submission
 - [ ] NO form action or fetch — uses `gemihub.auth.login()` in JS
+
+### Register pages (self-registration)
+- [ ] Has an email input AND every profile field stored in the identity sheet
+- [ ] Submits via `gemihub.post("register", body)` — path is literally `register` (or `register/<sub>`)
+- [ ] **NO `gemihub.auth.require()` / `gemihub.auth.me()`** — the user has no session yet; any auth check redirects to /login and blanks the page
+- [ ] Matching `web/api/register.yaml` workflow has NO `trigger.requireAuth` (endpoint is public)
+- [ ] Shows "check your inbox" success message after submission
 
 ### Protected pages
 - [ ] Starts with loading state (`<div id="loading">Loading...</div>`)
