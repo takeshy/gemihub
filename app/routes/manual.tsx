@@ -15,6 +15,7 @@ import { McpChapter } from "~/components/manual/chapters/mcp";
 import { EncryptionChapter } from "~/components/manual/chapters/encryption";
 import { PluginsChapter } from "~/components/manual/chapters/plugins";
 import { PremiumChapter } from "~/components/manual/chapters/premium";
+import { WebpageBuilderChapter } from "~/components/manual/chapters/webpage-builder";
 import { SettingsOverviewChapter } from "~/components/manual/chapters/settings-overview";
 import { ShortcutsChapter } from "~/components/manual/chapters/shortcuts";
 import { FaqChapter } from "~/components/manual/chapters/faq";
@@ -43,9 +44,10 @@ const CHAPTERS: ChapterDef[] = [
   { slug: "encryption", num: 11, titleEn: "Encryption", titleJa: "暗号化", descEn: "Hybrid RSA+AES encryption for files, chat, and workflow history.", descJa: "ファイル、チャット、ワークフロー履歴のハイブリッドRSA+AES暗号化。", component: EncryptionChapter },
   { slug: "plugins", num: 12, titleEn: "Plugins", titleJa: "プラグイン", descEn: "Install, manage, and develop plugins from GitHub.", descJa: "GitHubからのプラグインのインストール、管理、開発。", component: PluginsChapter },
   { slug: "premium", num: 13, titleEn: "Premium Plan", titleJa: "プレミアムプラン", descEn: "Lite and Pro plans: Interactions API, Gmail, PDF, Sheets, hosting, scheduling, and more.", descJa: "LiteとProプラン：Interactions API、Gmail、PDF、Sheets、ホスティング、スケジュール実行など。", component: PremiumChapter },
-  { slug: "settings-overview", num: 14, titleEn: "Settings Overview", titleJa: "設定一覧", descEn: "All settings tabs: General, MCP, RAG, Plugins, Commands, Shortcuts.", descJa: "全設定タブの概要：一般、MCP、RAG、プラグイン、コマンド、ショートカット。", component: SettingsOverviewChapter },
-  { slug: "shortcuts", num: 15, titleEn: "Keyboard Shortcuts", titleJa: "キーボードショートカット", descEn: "Built-in shortcuts and custom workflow shortcuts.", descJa: "組み込みショートカットとカスタムワークフローショートカット。", component: ShortcutsChapter },
-  { slug: "faq", num: 16, titleEn: "FAQ", titleJa: "FAQ", descEn: "Frequently asked questions and troubleshooting.", descJa: "よくある質問とトラブルシューティング。", component: FaqChapter },
+  { slug: "webpage-builder", num: 14, titleEn: "AI Web Builder", titleJa: "AI Webビルダー", descEn: "Build Hubwork sites end-to-end through chat: pages, workflow APIs, schema, mocks, and admin screens.", descJa: "チャットでHubworkサイトを丸ごと構築：ページ、ワークフローAPI、スキーマ、モック、管理画面まで。", component: WebpageBuilderChapter },
+  { slug: "settings-overview", num: 15, titleEn: "Settings Overview", titleJa: "設定一覧", descEn: "All settings tabs: General, MCP, RAG, Plugins, Commands, Shortcuts.", descJa: "全設定タブの概要：一般、MCP、RAG、プラグイン、コマンド、ショートカット。", component: SettingsOverviewChapter },
+  { slug: "shortcuts", num: 16, titleEn: "Keyboard Shortcuts", titleJa: "キーボードショートカット", descEn: "Built-in shortcuts and custom workflow shortcuts.", descJa: "組み込みショートカットとカスタムワークフローショートカット。", component: ShortcutsChapter },
+  { slug: "faq", num: 17, titleEn: "FAQ", titleJa: "FAQ", descEn: "Frequently asked questions and troubleshooting.", descJa: "よくある質問とトラブルシューティング。", component: FaqChapter },
 ];
 
 const CHAPTER_MAP = new Map(CHAPTERS.map((ch) => [ch.slug, ch]));
