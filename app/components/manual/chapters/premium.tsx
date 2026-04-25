@@ -159,7 +159,7 @@ function PremiumEn() {
 
         <h3>AI Web Builder</h3>
         <p>
-          A built-in Agent Skill that builds entire Hubwork sites — pages, workflow APIs, schemas, mocks, even admin screens — from a chat conversation. See the <strong>AI Web Builder</strong> chapter for activation, the Plan → Approval flow, and the conventions the AI enforces.
+          A built-in Agent Skill that builds entire websites — pages, workflow APIs, schemas, mocks, even admin screens — from a chat conversation. See the <strong>AI Web Builder</strong> chapter for activation, the Plan → Approval flow, and the conventions the AI enforces.
         </p>
       </div>
     </>
@@ -319,7 +319,7 @@ function PremiumJa() {
 
         <h3>AI Webビルダー</h3>
         <p>
-          チャットだけで Hubwork サイト一式 — ページ、ワークフロー API、スキーマ、モック、管理画面まで — を生成する組み込み Agent Skill。有効化方法、Plan → Approval フロー、AI が守る規約の詳細は <strong>AI Webビルダー</strong>章を参照してください。
+          チャットだけでウェブサイト一式 — ページ、ワークフロー API、スキーマ、モック、管理画面まで — を生成する組み込み Agent Skill。有効化方法、Plan → Approval フロー、AI が守る規約の詳細は <strong>AI Webビルダー</strong>章を参照してください。
         </p>
       </div>
     </>

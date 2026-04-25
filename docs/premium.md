@@ -374,7 +374,7 @@ nodes:
 
 ## Admin Pages (IDE Preview)
 
-Operator-facing screens — cancelling a booking, marking a no-show, replying to an inquiry — are kept entirely separate from the public site (`web/`) and live under `admin/`. The Hubwork serving layer only exposes `web/`, so anything under `admin/` is automatically 404 from the custom domain. The Drive owner opens these pages from the GemiHub IDE preview mode; there is no other entry point.
+Operator-facing screens — cancelling a booking, marking a no-show, replying to an inquiry — are kept entirely separate from the public site (`web/`) and live under `admin/`. Only `web/` is exposed on the custom domain, so anything under `admin/` is automatically 404 from the public web. The Drive owner opens these pages from the GemiHub IDE preview mode; there is no other entry point.
 
 ### File Layout
 

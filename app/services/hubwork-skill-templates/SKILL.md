@@ -1,6 +1,6 @@
 ---
 name: webpage-builder
-description: Use when building or editing a Hubwork site — static HTML pages, magic-link login pages, protected pages, workflow-based JSON APIs (web/api/*.yaml), publishing blog posts or announcements, or wiring sheet/calendar/gmail data into pages. Use when the user mentions web/, gemihub.*, requireAuth, sheet-read/sheet-write, or asks to "公開する" / "サイトに追加".
+description: Use when building or editing the user's webpage / website — static HTML pages, magic-link login pages, protected pages, workflow-based JSON APIs (web/api/*.yaml), publishing blog posts or announcements, wiring sheet/calendar/gmail data into pages, setting up sign-in, building contact/booking forms, or operating the admin side of an existing site. Triggering keywords include web/, gemihub.*, requireAuth, sheet-read/sheet-write, "公開する" / "サイトに追加" / "Webページ作成". Lean toward using this skill whenever the user wants to put something on their site or expose data as a JSON endpoint — even if they don't name a file under web/.
 ---
 
 ```skill-capabilities
@@ -14,7 +14,7 @@ workflows:
 
 ## Overview
 
-You build static HTML pages and YAML workflow APIs that are served on the user's Hubwork domain. Hubwork has its own client-side helper (`/__gemihub/api.js`) and workflow runtime — standard web patterns (raw `fetch`, form `action`, JS frameworks like Alpine/Vue/React) DO NOT WORK on this platform.
+You build static HTML pages and YAML workflow APIs that are served on the user's custom domain. The platform has its own client-side helper (`/__gemihub/api.js`) and workflow runtime — standard web patterns (raw `fetch`, form `action`, JS frameworks like Alpine/Vue/React) DO NOT WORK here.
 
 ## ⛔ The Iron Law
 
@@ -24,7 +24,7 @@ Even when the request seems trivial. Even when you "just want to confirm the lay
 
 ## When to Use / NOT to Use
 
-**Use when:** the user wants to add or edit anything under `web/`, build a login or protected page, expose a sheet/calendar/gmail data source as a JSON endpoint, publish a blog post or announcement, or generate Hubwork API mocks.
+**Use when:** the user wants to add or edit anything under `web/`, build a login or protected page, expose a sheet/calendar/gmail data source as a JSON endpoint, publish a blog post or announcement, or generate API mocks for the IDE preview.
 
 **Do NOT use when:** the user is editing a Drive-level workflow under `workflows/` (those run via `run_skill_workflow`, not served as HTTP), asking about the GemiHub IDE itself, or working with files outside `web/`.
 
@@ -34,7 +34,7 @@ Read `web/__gemihub/spec.md` with `read_drive_file` to learn what already exists
 
 ## Core Pattern: Before / After
 
-| ❌ DOES NOT WORK on Hubwork | ✅ Hubwork pattern |
+| ❌ DOES NOT WORK on this platform | ✅ Correct pattern |
 |---|---|
 | `<form action="/api/login" method="post">` | `gemihub.auth.login("accounts", email)` in JS |
 | `await fetch("/api/tickets")` | `await gemihub.get("tickets/list")` |
@@ -103,12 +103,12 @@ If you catch yourself thinking any of these, STOP — the counter-rule is load-b
 | "I'll use `{{sys.uuid}}` / `{{now}}` / `{{request.body.datetime}}` directly in `gmail-send`." | No `sys.*` helpers exist. UUIDs, timestamps, and human-readable dates are produced by a `script` node and referenced via `{{<saveTo>.field}}`. Unknown placeholders end up in sheets/emails verbatim. |
 | "`data:` as a YAML map is cleaner than the JSON string." | The handler `JSON.parse`s the value. A YAML map crashes at runtime. `data:` is always a single-quoted JSON string literal: `data: '[{"id":"{{prepared.id}}"}]'`. |
 | "User-derived `{{...}}` inside a JSON literal is fine without `:json`." | A single `"` in the value breaks `JSON.parse`. ALL user-derived values inside JSON string literals (`sheet-write` / `sheet-update` / `sheet-delete` `data:`, `sheet-read` filters, `http` body) MUST be `"{{var:json}}"`. Bare `"{{var}}"` is only safe for engine-generated primitives (UUIDs, ISO timestamps from `new Date().toISOString()`). |
-| "I'll use Alpine.js / Vue / React for reactivity." | Plain JS with the `gemihub.*` API. Frameworks break on Hubwork. |
+| "I'll use Alpine.js / Vue / React for reactivity." | Plain JS with the `gemihub.*` API. Frameworks break on this platform. |
 | "I'll add an email field to the protected form." | The user is already authenticated. Use `(await gemihub.auth.me(type)).email` in JS or `{{auth.email}}` in workflows. |
 | "Calendar event has `evt.start.dateTime`." | That's the raw Google Calendar shape. Our API flattens it. Use `new Date(evt.start)` directly. |
 | "`requireAuth` will limit which rows the user sees." | It only checks login. ALWAYS filter `sheet-read` by `{{auth.email}}` for user-specific data. |
 | "I'll guard the register page with `gemihub.auth.require()`." | Register pages are UNAUTHENTICATED — the user has no session yet. `require()` redirects to /login and blanks the page. Use plain form → `gemihub.post("register", body)`; copy the Register Page Template from `references/page-patterns.md`. |
-| "I'll put the admin page under `web/admin/` — one folder is simpler." | Puts the admin API on the public domain. The Hubwork server only exposes `web/`, so admin pages belong at `admin/*.html` + `admin/api/*.yaml`. |
+| "I'll put the admin page under `web/admin/` — one folder is simpler." | Puts the admin API on the public domain. The serving layer only exposes `web/`, so admin pages belong at `admin/*.html` + `admin/api/*.yaml`. |
 | "I'll add `trigger.requireAuth: admin` to the admin workflow." | No `admin` account type exists — admins are the Drive owner, authenticated by the IDE. Adding `requireAuth` breaks the workflow (no `admins` identity sheet to match against). Omit `requireAuth` entirely on `admin/api/*.yaml`. |
 | "I'll use `{{auth.email}}` to record who cancelled the booking." | Admin workflows don't have `auth.*`. Use `{{session.email}}` (injected by the IDE admin preview) for `cancelled_by`, `reply_by`, etc. |
 | "I'll `sheet-delete` the cancelled booking." | Soft-delete only — `sheet-update` sets `status: "cancelled"` and records `cancelled_at` / `cancelled_by`. Hard delete loses the audit trail and can't distinguish a cancellation from a no-show. |
@@ -176,7 +176,7 @@ The standard Plan → Approval flow still applies. After collecting inputs, post
 
 ## Admin Pages (IDE-only)
 
-Operator-facing pages (cancel a booking, mark no-show, reply to an inquiry) are **not** published on the Hubwork custom domain. They live under `admin/` (not `web/admin/`) — the Hubwork serving layer only exposes `web/`, so `admin/` is automatically 404 from the public web. The Drive owner opens these pages in the GemiHub IDE "admin preview" mode, which injects `{{session.email}}` (the IDE-logged-in Google account) into the workflow context in place of Hubwork's `{{auth.*}}`.
+Operator-facing pages (cancel a booking, mark no-show, reply to an inquiry) are **not** published on the public custom domain. They live under `admin/` (not `web/admin/`) — the serving layer only exposes `web/`, so `admin/` is automatically 404 from the public web. The Drive owner opens these pages in the GemiHub IDE "admin preview" mode, which injects `{{session.email}}` (the IDE-logged-in Google account) into the workflow context in place of the public site's `{{auth.*}}`.
 
 Key rules (full templates in `references/admin-patterns.md`):
 
@@ -219,7 +219,7 @@ For admin / operator features (cancel, no-show, reply), list `admin/...` paths (
 ## Creating Files
 
 For EACH file in the plan:
-1. **Copy the matching template from `references/page-patterns.md` VERBATIM** — do NOT generate from your own knowledge. The Hubwork API surface differs from generic web patterns; ad-hoc code WILL NOT WORK.
+1. **Copy the matching template from `references/page-patterns.md` VERBATIM** — do NOT generate from your own knowledge. This platform's API surface differs from generic web patterns; ad-hoc code WILL NOT WORK.
 2. Replace only the placeholders (`ACCOUNT_TYPE`, `SheetName`, page-specific content).
 3. Pre-save check against the checklist below.
 4. Save with `create_drive_file` (new) or `update_drive_file` (existing — prefer this with the known fileId when editing). Both upsert by path with auto-detected mimeType from the extension.
