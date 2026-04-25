@@ -54,7 +54,7 @@ Frontmatter holds only Obsidian-standard metadata. Workflow / script definitions
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | No | Display name for the skill. Defaults to folder name |
-| `description` | No | Short description shown in the skill selector |
+| `description` | No | Short description shown in the skill selector. **Also the chat AI's primary cue for whether to use the skill** — write it as triggering conditions ("Use when the user asks about…"), not as a workflow summary. Lean toward over-triggering: chat LLMs tend to skip skills they could have used, so an extra "Use this skill whenever the user mentions X, Y, or Z, even if they don't explicitly ask" at the end is often warranted. |
 
 ### Workflow References
 
@@ -75,12 +75,27 @@ Every workflow the LLM may invoke must be declared here — the `workflows/` sub
 
 ## References
 
-Place reference documents in a `references/` subfolder. These are automatically loaded and included in the AI's context when the skill is active. Use references for:
+Place reference documents in a `references/` subfolder. The chat AI loads them on demand by calling `read_drive_file` — they are NOT injected into the system prompt automatically, so the SKILL.md body must point at them explicitly (e.g. *"see `references/api-reference.md` for the full surface"*). Use references for:
 
 - Style guides and coding standards
 - Templates and examples
 - Checklists and procedures
 - Domain-specific knowledge
+
+### Progressive disclosure
+
+Skills load in three layers, and you should design around them:
+
+1. **`name` + `description` (frontmatter)** — Always in the chat AI's context. The only signal used to decide whether to consult the skill.
+2. **SKILL.md body** — Pulled in by the chat AI's first `read_drive_file` call when it activates the skill. Keep it lean (rough target: under ~500 lines) — every line is paid for in every conversation that activates the skill.
+3. **`references/` and `workflows/` files** — Loaded only when the chat AI calls `read_drive_file` on a specific file (the SKILL.md body must reference them by path). Long reference material, multi-variant docs (e.g. `references/aws.md`, `references/gcp.md`), and example libraries belong here.
+
+### Authoring tips for effective SKILL.md bodies
+
+- **Explain the *why*, not just `MUST` / `NEVER`.** Modern LLMs follow reasoned guidance better than walls of imperatives. Give the one-clause reason a rule exists.
+- **Prefer tables to prose** for Before/After patterns and "tempting thought → counter-rule" red flags.
+- **Add an `## Examples` section** with `Input:` / `Output:` pairs for skills with a deterministic transformation (commit-message format, data extraction, etc.). Skip for open-ended skills where examples would over-constrain.
+- See the "Modify Skill with AI" prompt (in `app/engine/workflowSpec.ts`) for the full convention catalogue used by AI-generated skills.
 
 ## Workflows
 

@@ -36,11 +36,17 @@ The second part (after the separator) is the workflow YAML wrapped in a \`\`\`ya
 
 Follow these conventions — based on the obra/superpowers writing-skills research — so future AI agents reliably load and obey the skill.
 
+**Progressive disclosure (3 loading layers — design the skill around this)**:
+1. **Frontmatter (\`name\` + \`description\`)** is *always* in the chat LLM's context. It is the only signal the LLM uses to decide whether to consult the skill.
+2. **SKILL.md body** is pulled in by the chat LLM's first \`read_drive_file\` call when it activates the skill. Keep it under ~500 lines; every line is paid for in every future conversation that activates the skill.
+3. **\`references/\` and \`workflows/\` files** are loaded only when the chat LLM calls \`read_drive_file\` on a specific file — they are NOT auto-injected. The SKILL.md body MUST point at them by path (e.g. *"see \`references/api-reference.md\` for the full surface"*) or the LLM will never find them. Long reference material, multiple variants (e.g. \`references/aws.md\`, \`references/gcp.md\`), and example libraries belong here.
+
 **Frontmatter**:
 - \`name\`: lowercase-hyphenated only (letters, digits, hyphens). No spaces, no capitalisation, no other special characters. Example: \`weekly-newsletter\` — NOT "Weekly Newsletter".
 - \`description\`: describe ONLY **when to use** the skill — triggering conditions, symptoms, user-phrased keywords. Start with "Use when...". NEVER summarise what the skill does or its workflow steps. Research finding: when the description summarises the workflow, the LLM follows the description and skips the skill body entirely.
   - ❌ BAD: \`description: Generates a weekly newsletter by pulling metrics and emailing the team\` — summarises the workflow
   - ✅ GOOD: \`description: Use when the user asks for a weekly summary, digest, newsletter, metrics roundup, team update, or says "週次レポート送信"\` — triggering conditions + keywords
+- **Lean toward over-triggering, not under-triggering.** Chat LLMs systematically *under*-use skills they could have used. Make the description a little pushy: spell out adjacent phrasings, end with a directive like *"Use this skill whenever the user mentions X, Y, or Z, even if they don't explicitly ask for it."* A skill that fires too often is easy to fix; a skill that never fires is invisible.
 
 **\`skill-capabilities\` block**:
 - Each workflow entry needs \`path\` and \`description\` only. Do NOT add a \`name:\` field — the runtime derives the tool name from the filename (\`workflows/send-weekly-newsletter.yaml\` → \`send-weekly-newsletter\`). One file = one workflow. Duplicating the filename as \`name:\` only creates drift.
@@ -53,15 +59,18 @@ Follow these conventions — based on the obra/superpowers writing-skills resear
 5. \`## Quick Reference\` — compact tables for APIs, commands, or variables the agent will reach for often.
 6. \`## Required Flow\` — numbered steps (e.g. Clarify → Plan → Approve → Implement → Verify) when the skill enforces a multi-step discipline.
 7. \`## ⚠️ Red Flags / Rationalisations\` — two-column table "Tempting thought → Counter-rule". Preempts rationalisations the LLM is likely to make (e.g. "The plan is obvious, I'll skip approval"). Include only for discipline-enforcing skills.
-8. Domain-specific sections (checklists, data schemas, examples) last.
+8. \`## Examples\` — Input → Output pairs for skills with a deterministic transformation (commit-message generation, data extraction, code-style fixes, etc.). Two or three pairs are usually enough; format as \`**Example N:**\` with explicit \`Input:\` / \`Output:\` lines so the LLM can pattern-match. Skip for open-ended skills where examples would over-constrain.
+9. Domain-specific sections (checklists, data schemas, long reference tables) last — and prefer pushing them to \`references/\` if they are large.
 
 **Prefer tables to prose.** Reference input variables by their exact name so the chat LLM knows what to pass. Keep instructions concise — every extra sentence is loaded into every future conversation that activates the skill.
+
+**Explain the *why*, don't just bark orders.** Modern LLMs follow reasoned guidance better than raw \`MUST\` / \`NEVER\` walls. When you write a rule, give the one-clause reason it exists ("…because bare \`{{var}}\` breaks JSON.parse on values that contain quotes"). Reserve all-caps absolutes for the Iron Law and one or two genuinely load-bearing rules.
 
 ### Example output structure
 
 ---
 name: weekly-newsletter
-description: Use when the user asks for a weekly summary, digest, newsletter, metrics roundup, team update, or says "週次レポート送信"
+description: Use when the user asks for a weekly summary, digest, newsletter, metrics roundup, team update, or says "週次レポート送信". Use this skill whenever the user mentions weekly reports, KPI emails, or recap mailings — even if they don't explicitly say "newsletter".
 ---
 
 \`\`\`skill-capabilities

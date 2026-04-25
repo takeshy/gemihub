@@ -153,7 +153,12 @@ export function buildRefineUserPrompt(options: {
   let outputInstruction: string;
   if (isSkill && previousExplanation) {
     generatedOutput = `GENERATED SKILL.md INSTRUCTIONS:\n${previousExplanation}\n\nGENERATED YAML:\n${previousYaml}`;
-    outputInstruction = `Fix all high-severity issues. Output the corrected SKILL.md instructions body first, then a line containing only "===WORKFLOW===", then the corrected complete YAML inside a \`\`\`yaml code fence.`;
+    outputInstruction = `Fix all high-severity issues. Output the corrected SKILL.md instructions body first, then a line containing only "===WORKFLOW===", then the corrected complete YAML inside a \`\`\`yaml code fence.
+
+When revising the SKILL.md body, apply these meta-principles:
+- **Generalise — don't overfit to the reviewer's example.** A skill is loaded for many future conversations, not just the one that surfaced this issue. Prefer fixes that broaden a rule ("user-derived values inside JSON strings need \`:json\`") over fixes that patch a single phrasing ("for the field named X, do Y"). If the same class of mistake could happen elsewhere in the workflow, generalise the rule.
+- **Explain the *why*, not just \`MUST\` / \`NEVER\`.** When you have to add or tighten a rule, give the one-clause reason ("…because bare \`{{var}}\` breaks JSON.parse on values containing quotes"). Reasoned rules survive edge cases; bare imperatives don't. If you find yourself writing more all-caps absolutes, prefer reframing as a Before/After row or a "Tempting thought → Counter-rule" entry instead.
+- **Keep the body lean.** Issues are often fixed by *removing* something that was misleading, not by adding more rules. Before adding a paragraph, ask whether an existing one needs to be cut or shortened.`;
   } else {
     generatedOutput = `GENERATED YAML:\n${previousYaml}`;
     outputInstruction = `Fix all high-severity issues and output the corrected complete YAML, starting with "name:".`;
