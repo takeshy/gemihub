@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GemiHub サイトの初期ページ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 text-slate-900">
+    <main class="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-8 px-6 py-16 text-center">
+      <div class="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-600 shadow-sm ring-1 ring-slate-200">
+        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+        サイト公開中
+      </div>
+
+      <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">
+        GemiHub サイトへようこそ
+      </h1>
+
+      <p class="max-w-prose text-base text-slate-600 sm:text-lg">
+        このページは Pro プラン登録時に自動配置されました。本格的に作り始める前に、DNS / SSL / カスタムドメインの疎通確認用としてご利用ください。
+      </p>
+
+      <section class="w-full rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Webpage Builder スキルとは</h2>
+        <p class="mt-3 text-sm text-slate-700">
+          チャットでの指示から、実際に動く Web サイトを構築する組み込み AI スキルです。「ログイン付きの会員サイト」「問い合わせフォーム」「予約ページ」「ブログ」などを伝えると、HTML、API ワークフロー、認証まわり、シートスキーマまで一式を、Drive 上の <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs">web/</code> 配下に生成します。
+        </p>
+        <ul class="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+          <li class="flex gap-2"><span class="text-emerald-600">✓</span> 公開ページ / マジックリンクログイン保護ページ</li>
+          <li class="flex gap-2"><span class="text-emerald-600">✓</span> Google Sheets を裏に持つ JSON API エンドポイント</li>
+          <li class="flex gap-2"><span class="text-emerald-600">✓</span> 問い合わせフォーム、予約、カレンダー連携</li>
+          <li class="flex gap-2"><span class="text-emerald-600">✓</span> キャンセル / 返信 / 無断キャンセル管理用の Admin ページ</li>
+          <li class="flex gap-2"><span class="text-emerald-600">✓</span> Drive のメモからブログ・お知らせを公開</li>
+          <li class="flex gap-2"><span class="text-emerald-600">✓</span> 新規シート追加時の schema 自動マイグレーション</li>
+        </ul>
+      </section>
+
+      <section class="w-full rounded-2xl bg-white p-6 text-left shadow-sm ring-1 ring-slate-200">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">次のステップ</h2>
+        <ol class="mt-3 space-y-3 text-sm text-slate-700">
+          <li>
+            <span class="font-semibold text-slate-900">1.</span>
+            GemiHub IDE を開き、チャットパネルで <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs">webpage-builder</code> スキルが有効になっていることを確認します。
+          </li>
+          <li>
+            <span class="font-semibold text-slate-900">2.</span>
+            作りたいものをアシスタントに伝えます（例：「マジックリンクログインと面談予約ページ付きのパートナーサイトを作って」）。
+          </li>
+          <li>
+            <span class="font-semibold text-slate-900">3.</span>
+            アシスタントが計画を提示 → 承認 → このページを実際のサイトに差し替えます。
+          </li>
+        </ol>
+      </section>
+
+      <p class="text-xs text-slate-400">
+        準備ができたら <code class="rounded bg-white/60 px-1 py-0.5">web/index.html</code> を差し替えてください。
+      </p>
+    </main>
+  </body>
+</html>
