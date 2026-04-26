@@ -67,7 +67,7 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "create_drive_file",
-    description: "Create a new file in Google Drive. Specify the full path including folder (e.g. 'web/index.html', 'notes/memo.md', 'temporaries/draft.md').",
+    description: "Create a NEW file in Google Drive at a path that does not yet exist. Specify the full path including folder (e.g. 'web/index.html', 'notes/memo.md', 'temporaries/draft.md'). This call FAILS with an error if a file already exists at the path — to edit an existing file, call update_drive_file with its fileId instead. Use list_drive_files / search_drive_files first if you are not sure whether the path is taken.",
     parameters: {
       type: "object",
       properties: {
@@ -85,7 +85,7 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: "update_drive_file",
-    description: "Update the content of an existing file in Google Drive",
+    description: "Replace the content of an existing file in Google Drive. The file must already exist; locate its fileId via list_drive_files or search_drive_files first. For new paths, call create_drive_file instead.",
     parameters: {
       type: "object",
       properties: {

@@ -10,6 +10,7 @@ import {
   searchFilesLocal,
   writeFileLocal,
   renameFileLocal,
+  findFileByNameLocal,
   getRemoteMetaFiles,
 } from "./drive-local";
 import { getCachedRemoteMeta } from "./indexeddb-cache";
@@ -199,6 +200,19 @@ export async function executeLocalDriveTool(
         return { error: "create_drive_file: 'content' must be a string" };
       }
       const name = rawName;
+
+      // Refuse to silently overwrite. The LLM must consciously call
+      // update_drive_file with the existing fileId — this surfaces the
+      // edit in the tools panel as an "update", and lets schema.md /
+      // sheet migrations fire on the right code path.
+      const existing = await findFileByNameLocal(name);
+      if (existing) {
+        return {
+          error: `create_drive_file: a file already exists at '${name}' (fileId=${existing.id}). Use update_drive_file with that fileId instead — create_drive_file is for new paths only.`,
+          existingFileId: existing.id,
+        };
+      }
+
       const result = await writeFileLocal(name, content);
 
       callbacks?.onDriveEvent?.({

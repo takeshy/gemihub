@@ -222,7 +222,7 @@ For EACH file in the plan:
 1. **Copy the matching template from `references/page-patterns.md` VERBATIM** — do NOT generate from your own knowledge. This platform's API surface differs from generic web patterns; ad-hoc code WILL NOT WORK.
 2. Replace only the placeholders (`ACCOUNT_TYPE`, `SheetName`, page-specific content).
 3. Pre-save check against the checklist below.
-4. Save with `create_drive_file` (new) or `update_drive_file` (existing — prefer this with the known fileId when editing). Both upsert by path with auto-detected mimeType from the extension.
+4. Save with the right tool — `create_drive_file` is **only** for paths that do not yet exist; it errors out if the path is taken. `update_drive_file` is for editing existing files and requires the fileId (look it up via `list_drive_files` / `search_drive_files`, or reuse a fileId from a prior `read_drive_file` call). Picking the wrong one is a hard error, not a silent overwrite. Both auto-detect mimeType from the extension.
 
 ## Pre-Save & Verification Checklist
 
