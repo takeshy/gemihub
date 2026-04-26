@@ -1,5 +1,5 @@
 import { provisionHubworkSkillFiles, pickOldestSpreadsheet, type ProvisionHubworkSkillFilesResult, type SkillFile } from "./hubwork-skill-provisioner-core";
-import { findFilesByExactNameAndMimeType, deleteFile, type DriveFile } from "./google-drive.server";
+import { findFilesByExactNameAndMimeType, deleteFile, moveFile, type DriveFile } from "./google-drive.server";
 import { google } from "googleapis";
 import type { Language } from "~/types/settings";
 import { WEBPAGE_BUILDER_SKILL_RELEASE_DATE, WEBPAGE_BUILDER_SKILL_VERSION, extractSkillVersion } from "./hubwork-skill-version";
@@ -183,7 +183,7 @@ async function runProvision(
   // first-provision calls can't each create their own copy.
   const [result, spreadsheetInfo] = await Promise.all([
     provisionHubworkSkillFiles(accessToken, rootFolderId, buildSkillFiles(language), force),
-    findOrCreateSpreadsheet(accessToken, force),
+    findOrCreateSpreadsheet(accessToken, rootFolderId, force),
   ]);
 
   if (spreadsheetInfo) {
@@ -232,6 +232,7 @@ async function deleteDuplicateSpreadsheets(accessToken: string, discard: DriveFi
  */
 async function findOrCreateSpreadsheet(
   accessToken: string,
+  rootFolderId: string,
   force: boolean,
 ): Promise<{ id: string; isNew: boolean; discardedIds: string[] } | undefined> {
   try {
@@ -246,7 +247,7 @@ async function findOrCreateSpreadsheet(
 
     if (force) return undefined;
 
-    const createdId = await createSpreadsheet(accessToken);
+    const createdId = await createSpreadsheet(accessToken, rootFolderId);
     if (!createdId) return undefined;
 
     // Re-check to self-heal duplicates produced by a concurrent racer.
@@ -265,7 +266,7 @@ async function findOrCreateSpreadsheet(
   }
 }
 
-async function createSpreadsheet(accessToken: string): Promise<string | undefined> {
+async function createSpreadsheet(accessToken: string, rootFolderId: string): Promise<string | undefined> {
   try {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
@@ -288,6 +289,15 @@ async function createSpreadsheet(accessToken: string): Promise<string | undefine
       valueInputOption: "RAW",
       requestBody: { values: [["email", "name", "created_at", "logined_at"]] },
     });
+
+    // Sheets API creates spreadsheets in My Drive root; relocate into the
+    // gemihub folder so the user sees it alongside the rest of their data.
+    // Failure here is non-fatal — the spreadsheet is still usable from root.
+    try {
+      await moveFile(accessToken, spreadsheetId, rootFolderId, "root");
+    } catch (e) {
+      console.error("[hubwork-skill-provisioner] Failed to move spreadsheet into gemihub folder:", e instanceof Error ? e.message : e);
+    }
 
     return spreadsheetId;
   } catch (e) {
