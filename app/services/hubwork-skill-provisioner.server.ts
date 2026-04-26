@@ -1,5 +1,5 @@
 import { provisionHubworkSkillFiles, pickOldestSpreadsheet, type ProvisionHubworkSkillFilesResult, type SkillFile } from "./hubwork-skill-provisioner-core";
-import { findFilesByExactNameAndMimeType, deleteFile, moveFile, type DriveFile } from "./google-drive.server";
+import { findFilesByExactNameAndMimeType, deleteFile, moveFile, getFileMetadata, type DriveFile } from "./google-drive.server";
 import { google } from "googleapis";
 import type { Language } from "~/types/settings";
 import { WEBPAGE_BUILDER_SKILL_RELEASE_DATE, WEBPAGE_BUILDER_SKILL_VERSION, extractSkillVersion } from "./hubwork-skill-version";
@@ -230,6 +230,27 @@ async function deleteDuplicateSpreadsheets(accessToken: string, discard: DriveFi
  * first-ever provision writes the spreadsheet reference; subsequent self-
  * healing runs must not clobber the user's saved configuration).
  */
+/**
+ * Move the spreadsheet into rootFolderId if it isn't already there. Sheets
+ * API always creates inside My Drive root, so freshly-created spreadsheets
+ * need this; spreadsheets discovered from earlier provisions may be in root
+ * (legacy) or already in rootFolderId (current). Idempotent and non-fatal.
+ */
+async function ensureSpreadsheetInRootFolder(
+  accessToken: string,
+  spreadsheetId: string,
+  rootFolderId: string,
+): Promise<void> {
+  try {
+    const meta = await getFileMetadata(accessToken, spreadsheetId);
+    if (meta.parents?.includes(rootFolderId)) return;
+    const oldParent = meta.parents?.[0] ?? "root";
+    await moveFile(accessToken, spreadsheetId, rootFolderId, oldParent);
+  } catch (e) {
+    console.error("[hubwork-skill-provisioner] Failed to relocate spreadsheet into gemihub folder:", e instanceof Error ? e.message : e);
+  }
+}
+
 async function findOrCreateSpreadsheet(
   accessToken: string,
   rootFolderId: string,
@@ -242,6 +263,7 @@ async function findOrCreateSpreadsheet(
       if (discard.length > 0) {
         await deleteDuplicateSpreadsheets(accessToken, discard);
       }
+      await ensureSpreadsheetInRootFolder(accessToken, keep.id, rootFolderId);
       return { id: keep.id, isNew: false, discardedIds: discard.map((d) => d.id) };
     }
 
@@ -255,6 +277,7 @@ async function findOrCreateSpreadsheet(
     if (after.length > 1) {
       const { keep, discard } = pickOldestSpreadsheet(after);
       await deleteDuplicateSpreadsheets(accessToken, discard);
+      await ensureSpreadsheetInRootFolder(accessToken, keep.id, rootFolderId);
       // Only the racer whose spreadsheet survived returns isNew=true so
       // exactly one caller writes the settings entry.
       return { id: keep.id, isNew: keep.id === createdId, discardedIds: discard.map((d) => d.id) };
@@ -292,12 +315,7 @@ async function createSpreadsheet(accessToken: string, rootFolderId: string): Pro
 
     // Sheets API creates spreadsheets in My Drive root; relocate into the
     // gemihub folder so the user sees it alongside the rest of their data.
-    // Failure here is non-fatal — the spreadsheet is still usable from root.
-    try {
-      await moveFile(accessToken, spreadsheetId, rootFolderId, "root");
-    } catch (e) {
-      console.error("[hubwork-skill-provisioner] Failed to move spreadsheet into gemihub folder:", e instanceof Error ? e.message : e);
-    }
+    await ensureSpreadsheetInRootFolder(accessToken, spreadsheetId, rootFolderId);
 
     return spreadsheetId;
   } catch (e) {

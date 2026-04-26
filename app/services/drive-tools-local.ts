@@ -42,6 +42,46 @@ interface LocalDriveToolCallbacks {
   onDriveEvent?: (event: DriveEvent) => void;
 }
 
+const SCHEMA_FILE_PATH = "web/__gemihub/schema.md";
+
+/**
+ * Apply schema.md to the spreadsheet whenever it is written. The skill
+ * declares a `migrate_spreadsheet_schema` tool for this, but the LLM
+ * frequently forgets to call it after editing schema.md, leaving the
+ * sheet structure out of sync. Triggering migration server-side as a
+ * side effect of the file write makes it impossible to skip.
+ *
+ * Returned to the caller so the LLM sees the migration outcome (created
+ * / updated / unchanged sheets, or an error) without an extra round-trip.
+ */
+async function autoMigrateSchemaIfNeeded(
+  fileName: string,
+  content: string,
+  abortSignal?: AbortSignal,
+): Promise<unknown | undefined> {
+  if (fileName !== SCHEMA_FILE_PATH) return undefined;
+  try {
+    const res = await fetch("/api/settings/hubwork-migrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ schema: content }),
+      signal: abortSignal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = (data as { error?: string }).error || `HTTP ${res.status}`;
+      console.error("[drive-tools-local] Auto schema migration failed:", message);
+      return { error: message };
+    }
+    return data;
+  } catch (err) {
+    if (abortSignal?.aborted) return undefined;
+    const message = err instanceof Error ? err.message : "Schema migration failed";
+    console.error("[drive-tools-local] Auto schema migration threw:", message);
+    return { error: message };
+  }
+}
+
 /**
  * Execute a Drive tool call locally using IndexedDB cache.
  * Returns the same result format as the server-side executeDriveTool.
@@ -170,10 +210,13 @@ export async function executeLocalDriveTool(
         modifiedTime: new Date().toISOString(),
       });
 
+      const schemaMigration = await autoMigrateSchemaIfNeeded(name, content, abortSignal);
+
       return {
         id: result.fileId,
         name,
         content,
+        ...(schemaMigration !== undefined ? { schemaMigration } : {}),
       };
     }
 
@@ -200,10 +243,13 @@ export async function executeLocalDriveTool(
         content,
       });
 
+      const schemaMigration = await autoMigrateSchemaIfNeeded(fileName, content, abortSignal);
+
       return {
         id: fileId,
         name: fileName,
         content,
+        ...(schemaMigration !== undefined ? { schemaMigration } : {}),
       };
     }
 

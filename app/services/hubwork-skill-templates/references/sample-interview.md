@@ -39,7 +39,7 @@ This sample uses a `meetings` sheet. Before building, update `web/__gemihub/sche
 
 The `status` / `cancelled_*` / `cancel_reason` columns are written by the **admin side** (operator-facing pages under `admin/`), not by the partner-facing booking flow. They enable soft-delete cancellation and no-show tracking without losing the original row. See `references/admin-patterns.md` for the admin workflow templates and the rationale for keeping admin pages out of `web/`.
 
-Then call `migrate_spreadsheet_schema` with the schema content to create the sheet in the spreadsheet.
+Saving `schema.md` with `update_drive_file` runs migration automatically — the response includes a `schemaMigration` field with `created` / `updated` / `unchanged` lists. Verify the new sheet appears there before any `sheet-write` against it; only fall back to an explicit `migrate_spreadsheet_schema` call if the auto-run reported an error.
 
 ## Protected Page Key Patterns (`web/partner/interview.html`)
 

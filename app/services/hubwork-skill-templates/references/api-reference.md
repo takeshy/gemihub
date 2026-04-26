@@ -177,6 +177,28 @@ For API workflows, commonly used nodes:
 | `variable` | Declare a variable with default value |
 | `script` | Run sandboxed JavaScript (code, saveTo, timeout?) — use for UUIDs, timestamps, and display formatting |
 
+### Placeholder Syntax — `{{var}}` Only, Never `${var}`
+
+The workflow engine recognizes **`{{var}}`** (Mustache-style) as the ONLY interpolation syntax. JavaScript template-literal syntax (**`${var}`**) is NOT processed and ends up in the output as the literal four characters `${`…`}`. This applies to **every** field — `body`, `subject`, `data`, `filter`, `summary`, `description`, etc.
+
+```yaml
+# ✅ CORRECT — workflow placeholders interpolate before the node runs
+- id: send_mail
+  type: gmail-send
+  to: "{{auth.email}}"
+  subject: "Booking confirmed at {{prepared.displayTime}}"
+  body: |
+    Your interview is scheduled for {{prepared.displayDate}} at {{prepared.displayTime}}.
+
+# ❌ WRONG — ${...} is JS template-literal syntax; the engine does NOT evaluate it
+- id: send_mail
+  type: gmail-send
+  body: |
+    Your interview is scheduled at ${prepared.displayTime}.   # user receives the literal "${prepared.displayTime}"
+```
+
+`${...}` is only meaningful **inside a `script` node's `code:`** (because that field is real JavaScript and JS template literals work there). Anywhere else — `body`, `subject`, `data`, `filter`, page HTML inside `<script>` tags is also real JS and `${}` works inside backtick strings — but for workflow YAML strings outside `code:`, use `{{...}}`.
+
 ### `script` Node — Dynamic Values & Display Formatting
 
 The template engine has no date-format / UUID / locale helpers. Use a `script` node to generate these values, then reference them from later nodes via `{{saveTo.*}}`. The code runs in a sandboxed V8 (server: `isolated-vm`, client: sandboxed iframe); see the Rules section below for what's available.
@@ -217,11 +239,15 @@ Rules for `script`:
 - **JSON arrays / objects (e.g., `calendar-list` events, `sheet-read` rows, a prior `script`'s return) → `{{var}}` (bare, NO `:json`, NO surrounding quotes).** GemiHub stores every variable as a JSON-serialized string, so raw interpolation drops `[{"id":"abc",...}]` straight into the JS as a valid array literal. Using `{{events:json}}` without surrounding quotes escapes the `"` into `\"` and the script fails at parse time with `Unexpected token`. If you prefer the explicit form, use `JSON.parse("{{events:json}}")` (note the required `"..."`).
   ```yaml
   code: |
-    const events = {{events}} || [];          # ✅ bare → valid JS array literal
-    const names = "{{userName:json}}";        # ✅ quoted + :json → safe JS string literal
-    # const events = {{events:json}} || [];   # ❌ escapes " to \" outside quotes — parse error
-    # const names = {{userName:json}};        # ❌ missing quotes — bare identifier, ReferenceError
+    const events = {{events}} || [];               # ✅ bare → valid JS array literal
+    const names = "{{userName:json}}";             # ✅ quoted + :json → safe JS string literal
+    const more = JSON.parse("{{events:json}}");    # ✅ explicit form — double quotes + :json
+    # const events = {{events:json}} || [];        # ❌ escapes " to \" outside quotes — parse error
+    # const names = {{userName:json}};             # ❌ missing quotes — bare identifier, ReferenceError
+    # const events = JSON.parse('{{events}}');     # ❌ single quotes around bare interpolation — JSON contains " which is fine in single-quoted JS, but as soon as a string value contains an apostrophe (Bob's, it's, etc.) the literal closes early → SyntaxError. NEVER use single quotes around any {{...}}.
+    # const events = JSON.parse('{{events:json}}');# ❌ same trap — :json escapes " but does not escape ', so values with apostrophes still close the literal.
   ```
+- **Single quotes around `{{...}}` are banned.** Both `'{{var}}'` and `'{{var:json}}'` break the moment a value contains an apostrophe. Always use double quotes (`"{{var:json}}"`) or no quotes (`{{events}}` for whole JSON literals). The `:json` modifier escapes `"`, `\`, and newlines — never `'`.
 - `Date`, `Intl.*`, `JSON.*`, `Math.*`, and the rest of the ECMAScript standard library are available.
 - `utils.randomUUID()` — RFC 4122 v4 UUID string. Use for row IDs, event IDs, idempotency keys. `utils` is the only injected helper namespace (same API on server and client script sandboxes).
 - NOT available (throws `ReferenceError`): `crypto` (use `utils.randomUUID()`), `fetch`, `setTimeout`/`setInterval` beyond node completion, DOM, `process`, `require`, `import`.

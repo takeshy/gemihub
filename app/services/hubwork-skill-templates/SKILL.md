@@ -132,8 +132,8 @@ A spreadsheet **webpage_builder** is auto-created with an **accounts** sheet (`e
 
 **Adding a new sheet or column:**
 1. `read_drive_file` `web/__gemihub/schema.md`, edit, save with `update_drive_file`.
-2. Re-read it.
-3. Call `migrate_spreadsheet_schema` with the schema content. **Always do this BEFORE any `sheet-write` to a new sheet** — `sheet-write` requires the headers to exist.
+2. Migration runs **automatically** as a side effect of saving — the response from `update_drive_file`/`create_drive_file` includes a `schemaMigration` field with `created` / `updated` / `unchanged` lists. Inspect that field to confirm the new sheets/columns landed before any `sheet-write` to them. If `schemaMigration.error` is set, retry with `migrate_spreadsheet_schema` after fixing the issue (or pass the file content again via `update_drive_file`).
+3. `migrate_spreadsheet_schema` is still available for explicit retries / dry runs, but you do **not** need to call it after a normal `update_drive_file` save.
 
 **NEVER guess column names.** Call `get_spreadsheet_schema` first to read the exact case-sensitive names (formats like `contact-email` are common).
 
@@ -192,7 +192,7 @@ The Plan is chat text (NOT tool calls). List every file with full `web/...` path
 
 For any auth-enabled feature the Plan MUST cover ALL of: login page → protected page → API workflow → auth mock → API mock → spec + history update. Missing one silently breaks the flow.
 
-If new sheets/columns are needed: include the schema.md update + `migrate_spreadsheet_schema` call BEFORE any API workflow that uses `sheet-write` / `sheet-read`.
+If new sheets/columns are needed: include the schema.md update step. Migration runs automatically when `web/__gemihub/schema.md` is saved (the file-write response carries `schemaMigration`); inspect that response before any API workflow that uses `sheet-write` / `sheet-read`.
 
 Example:
 ```
