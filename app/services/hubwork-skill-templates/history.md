@@ -2,7 +2,7 @@
 
 ## v1.1.7 - 2026-04-26
 
-- Replaced the initial-provisioned `web/__gemihub/schema.md` with a sample `web/index.html` landing page so the user can verify DNS / SSL / custom-domain routing immediately after Pro provisioning (the previous bootstrap file lived under `web/__gemihub/` and never produced a visible page). The page is rendered in the user's UI language (Japanese / English) at provision time and includes a short overview of what the Webpage Builder skill is and the first steps to use it, so the page itself acts as the welcome / orientation. `schema.md` is now created on demand by the skill the first time any sheet beyond `accounts` is needed; SKILL.md updated to spell out the create-vs-update branch.
+- Replaced the initial-provisioned `web/__gemihub/schema.md` with a sample `web/sample.html` landing page so the user can verify DNS / SSL / custom-domain routing immediately after Pro provisioning (the previous bootstrap file lived under `web/__gemihub/` and never produced a visible page). The placeholder is served at `/sample` rather than `/` so it never collides with the user's real homepage at `web/index.html`. The page is rendered in the user's UI language (Japanese / English) at provision time and includes a short overview of what the Webpage Builder skill is and the first steps to use it, so the page itself acts as the welcome / orientation. `schema.md` is now created on demand by the skill the first time any sheet beyond `accounts` is needed; SKILL.md updated to spell out the create-vs-update branch.
 
 ## v1.1.6 - 2026-04-26
 

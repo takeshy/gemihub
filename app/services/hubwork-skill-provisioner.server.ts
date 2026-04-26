@@ -15,8 +15,8 @@ import REF_API from "./hubwork-skill-templates/references/api-reference.md?raw";
 import REF_PATTERNS from "./hubwork-skill-templates/references/page-patterns.md?raw";
 import REF_SAMPLE_INTERVIEW from "./hubwork-skill-templates/references/sample-interview.md?raw";
 import WORKFLOW_CREATE_ARTICLE from "./hubwork-skill-templates/workflows/create-article.yaml?raw";
-import INITIAL_INDEX_HTML_EN from "./hubwork-skill-templates/initial-index.en.html?raw";
-import INITIAL_INDEX_HTML_JA from "./hubwork-skill-templates/initial-index.ja.html?raw";
+import INITIAL_SAMPLE_HTML_EN from "./hubwork-skill-templates/initial-sample.en.html?raw";
+import INITIAL_SAMPLE_HTML_JA from "./hubwork-skill-templates/initial-sample.ja.html?raw";
 
 const RESPONSE_LANGUAGE_PLACEHOLDER = "{{RESPONSE_LANGUAGE_INSTRUCTION}}";
 const SKILL_VERSION_PLACEHOLDER = "{{SKILL_TEMPLATE_VERSION}}";
@@ -121,11 +121,12 @@ function buildSkillFiles(language: Language | null | undefined): SkillFile[] {
     { path: "skills/webpage-builder/references/sample-interview.md", content: REF_SAMPLE_INTERVIEW, mimeType: "text/markdown" },
     { path: "skills/webpage-builder/workflows/create-article.yaml", content: renderWorkflow(WORKFLOW_CREATE_ARTICLE, language), mimeType: "text/yaml" },
     // Sample landing page so the user can verify DNS / SSL / custom-domain
-    // routing immediately after provision. The webpage-builder skill replaces
-    // this page (and creates web/__gemihub/schema.md on demand) once the user
-    // starts building. Without an initial file under web/, the Drive folder
-    // is empty and the custom domain returns 404, which is hard to debug.
-    { path: "web/index.html", content: language === "ja" ? INITIAL_INDEX_HTML_JA : INITIAL_INDEX_HTML_EN, mimeType: "text/html" },
+    // routing immediately after provision. Served at /sample on the custom
+    // domain — index.html is intentionally left to the user / skill so this
+    // placeholder never collides with the real homepage. Without any seed
+    // file under web/, the Drive folder is empty and every custom-domain
+    // request 404s, which is hard to debug.
+    { path: "web/sample.html", content: language === "ja" ? INITIAL_SAMPLE_HTML_JA : INITIAL_SAMPLE_HTML_EN, mimeType: "text/html" },
   ];
 }
 
