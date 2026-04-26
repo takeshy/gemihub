@@ -15,7 +15,7 @@ import REF_API from "./hubwork-skill-templates/references/api-reference.md?raw";
 import REF_PATTERNS from "./hubwork-skill-templates/references/page-patterns.md?raw";
 import REF_SAMPLE_INTERVIEW from "./hubwork-skill-templates/references/sample-interview.md?raw";
 import WORKFLOW_CREATE_ARTICLE from "./hubwork-skill-templates/workflows/create-article.yaml?raw";
-import INITIAL_SCHEMA from "./hubwork-skill-templates/initial-schema.md?raw";
+import INITIAL_INDEX_HTML from "./hubwork-skill-templates/initial-index.html?raw";
 
 const RESPONSE_LANGUAGE_PLACEHOLDER = "{{RESPONSE_LANGUAGE_INSTRUCTION}}";
 const SKILL_VERSION_PLACEHOLDER = "{{SKILL_TEMPLATE_VERSION}}";
@@ -119,7 +119,12 @@ function buildSkillFiles(language: Language | null | undefined): SkillFile[] {
     { path: "skills/webpage-builder/references/page-patterns.md", content: REF_PATTERNS, mimeType: "text/markdown" },
     { path: "skills/webpage-builder/references/sample-interview.md", content: REF_SAMPLE_INTERVIEW, mimeType: "text/markdown" },
     { path: "skills/webpage-builder/workflows/create-article.yaml", content: renderWorkflow(WORKFLOW_CREATE_ARTICLE, language), mimeType: "text/yaml" },
-    { path: "web/__gemihub/schema.md", content: INITIAL_SCHEMA, mimeType: "text/markdown" },
+    // Sample landing page so the user can verify DNS / SSL / custom-domain
+    // routing immediately after provision. The webpage-builder skill replaces
+    // this page (and creates web/__gemihub/schema.md on demand) once the user
+    // starts building. Without an initial file under web/, the Drive folder
+    // is empty and the custom domain returns 404, which is hard to debug.
+    { path: "web/index.html", content: INITIAL_INDEX_HTML, mimeType: "text/html" },
   ];
 }
 

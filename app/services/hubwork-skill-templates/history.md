@@ -1,5 +1,9 @@
 # Webpage Builder Skill History
 
+## v1.1.7 - 2026-04-26
+
+- Replaced the initial-provisioned `web/__gemihub/schema.md` with a sample `web/index.html` landing page so the user can verify DNS / SSL / custom-domain routing immediately after Pro provisioning (the previous bootstrap file lived under `web/__gemihub/` and never produced a visible page). `schema.md` is now created on demand by the skill the first time any sheet beyond `accounts` is needed; SKILL.md updated to spell out the create-vs-update branch.
+
 ## v1.1.6 - 2026-04-26
 
 - Added explicit anti-pattern warnings to `references/api-reference.md` based on real review feedback. Two LLM-invented mistakes are now called out by name: (1) wrapping a placeholder in single quotes inside a `script` `code:` (e.g., `JSON.parse('{{events}}')`) — the apostrophe in any string value (`Bob's Meeting`, `it's`) closes the JS literal early, even with `:json`; (2) using JS template-literal syntax (`${var}`) in any field outside a `script` `code:` (e.g., a `gmail-send` body) — the workflow engine does not evaluate `${...}`, so the user receives the literal four characters.

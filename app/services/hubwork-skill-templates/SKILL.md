@@ -120,7 +120,7 @@ If you catch yourself thinking any of these, STOP — the counter-rule is load-b
 
 A spreadsheet **webpage_builder** is auto-created with an **accounts** sheet (`email`, `name`, `created_at`, `logined_at`). Account type is fixed to **accounts**, identity column `email`.
 
-`web/__gemihub/schema.md` is the source of truth for sheets and columns. Format:
+`web/__gemihub/schema.md` is the source of truth for sheets and columns. It is **NOT** provisioned by default — the only sheet that exists right after Pro provisioning is `accounts`. Create the file the first time you need to add any sheet or column. Format:
 
 ```markdown
 ## sheet_name
@@ -131,9 +131,9 @@ A spreadsheet **webpage_builder** is auto-created with an **accounts** sheet (`e
 `migrate_spreadsheet_schema` extracts only the column name (before `:`) when creating sheets.
 
 **Adding a new sheet or column:**
-1. `read_drive_file` `web/__gemihub/schema.md`, edit, save with `update_drive_file`.
-2. Migration runs **automatically** as a side effect of saving — the response from `update_drive_file`/`create_drive_file` includes a `schemaMigration` field with `created` / `updated` / `unchanged` lists. Inspect that field to confirm the new sheets/columns landed before any `sheet-write` to them. If `schemaMigration.error` is set, retry with `migrate_spreadsheet_schema` after fixing the issue (or pass the file content again via `update_drive_file`).
-3. `migrate_spreadsheet_schema` is still available for explicit retries / dry runs, but you do **not** need to call it after a normal `update_drive_file` save.
+1. If `web/__gemihub/schema.md` does not yet exist, write it with `create_drive_file` containing every sheet you intend to use (start with `accounts` so the existing sheet is represented, then add yours). If it already exists, `read_drive_file` it, edit, and save with `update_drive_file` — `create_drive_file` errors out on existing paths.
+2. Migration runs **automatically** as a side effect of saving — the response from `update_drive_file` / first-time `create_drive_file` includes a `schemaMigration` field with `created` / `updated` / `unchanged` lists. Inspect that field to confirm the new sheets/columns landed before any `sheet-write` to them. If `schemaMigration.error` is set, retry with `migrate_spreadsheet_schema` after fixing the issue (or pass the file content again via `update_drive_file`).
+3. `migrate_spreadsheet_schema` is still available for explicit retries / dry runs, but you do **not** need to call it after a normal save.
 
 **NEVER guess column names.** Call `get_spreadsheet_schema` first to read the exact case-sensitive names (formats like `contact-email` are common).
 
