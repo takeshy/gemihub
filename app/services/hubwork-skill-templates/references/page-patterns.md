@@ -643,7 +643,9 @@ Replace `ACCOUNT_TYPE` with the actual type name (e.g., `"partner"`, `"customer"
 
 ### API mock file (`web/__gemihub/api/{path}.json`)
 
-For an API endpoint at `web/api/tickets/list.yaml`, create `web/__gemihub/api/tickets/list.json`:
+**Only for GET endpoints.** Mocks are read by the IDE preview when the page calls `gemihub.get(...)`. Endpoints invoked via `gemihub.post(...)` (or an HTML `<form action>` POST) do NOT need a mock — they are no-ops in preview and the page either shows a static success state or never renders any field from the response. If a POST endpoint truly returns data the page reads, create a mock; otherwise skip it.
+
+For a GET endpoint at `web/api/tickets/list.yaml`, create `web/__gemihub/api/tickets/list.json`:
 
 ```json
 [
@@ -652,7 +654,7 @@ For an API endpoint at `web/api/tickets/list.yaml`, create `web/__gemihub/api/ti
 ]
 ```
 
-For parameterized endpoints like `web/api/tickets/[id].yaml`, create `web/__gemihub/api/tickets/[id].json`:
+For parameterized GET endpoints like `web/api/tickets/[id].yaml`, create `web/__gemihub/api/tickets/[id].json`:
 
 ```json
 {"id": "1", "title": "Sample Ticket", "status": "open", "email": "test@example.com"}

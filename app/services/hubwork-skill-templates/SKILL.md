@@ -170,7 +170,7 @@ The standard Plan → Approval flow still applies. After collecting inputs, post
 - **Protected pages** — `gemihub.auth.require` guard
 - **Contact forms** — public `web/contact.html` + `web/api/contact.yaml` (writes to `inquiries`, notifies owner; replies are sent from the IDE admin preview, see below)
 - **Admin pages (IDE-only)** — `admin/*.html` + `admin/api/*.yaml` for the Drive owner to cancel bookings, mark no-shows, reply to inquiries. See `references/admin-patterns.md`.
-- **Mock files** — `web/__gemihub/auth/me.json` (auth) and `web/__gemihub/api/{path}.json` (one per endpoint) for IDE preview
+- **Mock files** — `web/__gemihub/auth/me.json` (auth) and `web/__gemihub/api/{path}.json` (one per **GET** endpoint; POST endpoints don't need a mock) for IDE preview
 - **Living docs** — `web/__gemihub/spec.md` (overview) and `web/__gemihub/history.md` (change log)
 - **Articles** — via the `create-article` workflow above
 
@@ -190,7 +190,7 @@ Key rules (full templates in `references/admin-patterns.md`):
 
 The Plan is chat text (NOT tool calls). List every file with full `web/...` paths. Use the account type name(s) from the "Configured Account Types" section; if none are listed, ask the user which account type to use before proceeding.
 
-For any auth-enabled feature the Plan MUST cover ALL of: login page → protected page → API workflow → auth mock → API mock → spec + history update. Missing one silently breaks the flow.
+For any auth-enabled feature the Plan MUST cover ALL of: login page → protected page → API workflow → auth mock → API mock (only for GET endpoints) → spec + history update. Missing one silently breaks the flow. POST workflows do not need a mock entry — leave them off the plan list.
 
 If new sheets/columns are needed: include the schema.md update step. Migration runs automatically when `web/__gemihub/schema.md` is saved (the file-write response carries `schemaMigration`); inspect that response before any API workflow that uses `sheet-write` / `sheet-read`.
 
@@ -297,8 +297,8 @@ Run before saving AND after `read_drive_file` of each saved file.
 
 ### Mock files
 - [ ] Auth mock at `web/__gemihub/auth/me.json` exists (if ANY page uses auth)
-- [ ] API mock at `web/__gemihub/api/{path}.json` exists for each API endpoint
-- [ ] Admin page mocks go at `admin/__gemihub/api/{path}.json` (same `[param]` pattern rules) — only if the IDE preview for `admin/` is still using mocks; once live exec is enabled, mocks are optional
+- [ ] API mock at `web/__gemihub/api/{path}.json` exists for each **GET** endpoint (the page calls `gemihub.get(...)` against it). **POST endpoints do NOT need a mock** — `gemihub.post(...)` and HTML form submissions are no-ops in IDE preview, and the page typically just shows a success state regardless of response. Skip the mock unless the page renders specific fields out of the POST response.
+- [ ] Admin page mocks go at `admin/__gemihub/api/{path}.json` (same `[param]` pattern rules, GET only) — only if the IDE preview for `admin/` is still using mocks; once live exec is enabled, mocks are optional
 - [ ] Mock data structure matches what the API/auth would return
 
 ### Spec / history

@@ -144,7 +144,7 @@ Flat structure containing the user data normally returned by `auth.me()`. The op
 
 ### API Mock (`web/__gemihub/api/{path}.json`)
 
-Each mock file corresponds to an API endpoint. The JSON content is returned directly as the response.
+**GET endpoints only.** Each mock file corresponds to a GET API endpoint and the JSON content is returned directly as the response when the page calls `gemihub.get(...)`. POST endpoints (`gemihub.post(...)`, HTML form submissions) do not consume a mock — they no-op in preview, so creating a `*.json` for them is unnecessary and is intentionally NOT flagged as missing by the automated review.
 
 ```
 web/__gemihub/api/users/list.json    -> mock for gemihub.get("users/list")

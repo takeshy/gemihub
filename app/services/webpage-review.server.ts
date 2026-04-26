@@ -67,7 +67,7 @@ Check each file against the skill's Pre-Save & Verification Checklist. Evaluate 
 
 **Mock files**
 - \`web/__gemihub/auth/me.json\` exists if ANY page uses auth
-- \`web/__gemihub/api/{path}.json\` exists for each API endpoint
+- \`web/__gemihub/api/{path}.json\` exists for each **GET** API endpoint (i.e. paths the page reads via \`gemihub.get(...)\`). POST endpoints — paths invoked via \`gemihub.post(...)\` or an HTML \`<form action>\` — do NOT need a mock; their preview is a no-op and the page handles the response shape itself. Do NOT flag a missing \`web/__gemihub/api/.../*.json\` for an endpoint whose YAML / page calls indicate it is POST-only.
 - Mock shape matches what the real API / auth endpoint would return
 
 **Spec file**
