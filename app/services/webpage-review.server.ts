@@ -37,8 +37,8 @@ Check each file against the skill's Pre-Save & Verification Checklist. Evaluate 
 - Starts with a loading state (e.g. \`<div id="loading">Loading...</div>\`)
 - Main content is hidden by default (\`class="hidden"\`)
 - Calls \`gemihub.auth.require("TYPE", "/login/TYPE")\` first, and returns early on \`!user\`
-- Shows user email and a logout button
 - Content is only revealed after auth resolves
+- A visible logout control / user-email display is OPTIONAL — do NOT flag a protected page just for missing one. The sample templates include a logout button as a convenience, not a requirement.
 
 **API workflow YAML** (\`web/api/**/*.yaml\`)
 - Top-level is \`trigger:\` + \`nodes:\` — NOT \`steps:\` / \`action:\` / \`params:\` / \`readSheet\`

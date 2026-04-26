@@ -256,8 +256,8 @@ Run before saving AND after `read_drive_file` of each saved file.
 - [ ] Content is hidden by default (`class="hidden"`)
 - [ ] Calls `gemihub.auth.require("TYPE", "/login/TYPE")` FIRST
 - [ ] Has `if (!user) return;` guard after require
-- [ ] Header shows the user's email AND a logout button — do NOT strip the header from the Protected Page Template
 - [ ] Content is revealed only after auth resolves
+- (A logout button / user-email header is OPTIONAL — include it when the page benefits from one, omit it for narrow-purpose pages such as a single-action confirmation. Not a checklist failure either way.)
 
 ### API workflows (YAML)
 - [ ] Has `trigger.requireAuth: TYPE` (if auth-protected)
