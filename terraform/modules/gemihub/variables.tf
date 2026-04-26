@@ -19,6 +19,16 @@ variable "domain" {
   type        = string
 }
 
+# Legacy domain in 60-day 301 redirect window. Empty disables all legacy
+# resources (DNS zone, records, cert, cert map entries).
+# TODO(2026-06-25): remove this variable and the legacy_* resources after the
+# 60-day overlap window ends.
+variable "legacy_domain" {
+  description = "Legacy domain in 301-redirect window. Empty disables legacy resources."
+  type        = string
+  default     = ""
+}
+
 variable "google_site_verification_token" {
   description = "Google site verification token (without the 'google-site-verification=' prefix). Empty disables TXT record."
   type        = string

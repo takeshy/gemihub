@@ -245,7 +245,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                   placeholder="acme"
                   className="w-28 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono"
                 />
-                <span className="text-xs text-gray-400">.gemihub.online</span>
+                <span className="text-xs text-gray-400">.gemihub.net</span>
               </div>
               {slugError && (
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1">{slugError}</p>
@@ -327,7 +327,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                           placeholder="acme"
                           className="w-28 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono"
                         />
-                        <span className="text-xs text-gray-400">.gemihub.online</span>
+                        <span className="text-xs text-gray-400">.gemihub.net</span>
                       </div>
                       {slugError && (
                         <p className="text-xs text-red-600 dark:text-red-400 mt-1">{slugError}</p>
@@ -378,7 +378,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                 {t("settings.hubwork.siteUrl")}
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-300 font-mono mt-0.5">
-                {hubwork.accountSlug}.gemihub.online
+                {hubwork.accountSlug}.gemihub.net
               </p>
             </div>
           </div>

@@ -257,7 +257,7 @@ All Lite features, plus:
 |---------|-------------|
 | **Google Sheets CRUD** | Workflow nodes: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete` |
 | **File-Based Page Hosting** | Place files in `web/` on Drive — served directly via Drive API + CDN with file-based routing and `[param]` dynamic routes |
-| **Built-in Subdomain** | `{slug}.gemihub.online` available immediately on account creation |
+| **Built-in Subdomain** | `{slug}.gemihub.net` available immediately on account creation |
 | **Custom Domains** | Optional per-account domain with auto-provisioned SSL via Certificate Manager |
 | **Multi-Type Auth** | Multiple account types (e.g., "talent", "company") with independent magic link sessions per type |
 | **Workflow API** | YAML workflows in `web/api/` exposed as JSON endpoints via `/__gemihub/api/*`, with form POST support |
@@ -270,7 +270,7 @@ All Lite features, plus:
 
 ```
 Load Balancer + Cloud CDN + Certificate Manager
-  ├── *.gemihub.online     → Cloud Run (wildcard subdomain)
+  ├── *.gemihub.net     → Cloud Run (wildcard subdomain)
   ├── app.acme.com         → Cloud Run (custom domain)
   └── app.other.com        → Cloud Run (same backend)
 

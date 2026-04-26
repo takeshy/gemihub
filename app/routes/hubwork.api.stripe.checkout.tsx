@@ -114,7 +114,7 @@ export async function action({ request }: Route.ActionArgs) {
     const updates: Record<string, string> = { plan: planType };
     if (planType === "pro" && accountSlug && !existing.accountSlug) {
       updates.accountSlug = accountSlug;
-      updates.defaultDomain = `${accountSlug}.gemihub.online`;
+      updates.defaultDomain = `${accountSlug}.gemihub.net`;
     }
     await updateAccount(existing.id, updates);
 

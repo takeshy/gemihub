@@ -37,6 +37,14 @@ variable "domain" {
   type        = string
 }
 
+# Legacy domain in 60-day 301 redirect window. Empty disables legacy resources.
+# TODO(2026-06-25): remove after the redirect window ends.
+variable "legacy_domain" {
+  description = "Legacy domain in 301-redirect window. Empty disables legacy resources."
+  type        = string
+  default     = ""
+}
+
 variable "google_site_verification_token" {
   description = "Google site verification token"
   type        = string
@@ -58,6 +66,7 @@ module "gemihub" {
   project_number                 = var.project_number
   region                         = var.region
   domain                         = var.domain
+  legacy_domain                  = var.legacy_domain
   google_site_verification_token = var.google_site_verification_token
   cpu_idle                       = false
   hubwork_review_slugs           = var.hubwork_review_slugs

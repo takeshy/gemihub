@@ -10,8 +10,8 @@ const CACHE_TTL_MS = 60 * 1000;
 const CACHE_MAX_SIZE = 1000;
 
 export function extractAllowedSlugHost(domain: string): string | null {
-  if (domain.endsWith(".gemihub.online")) {
-    return domain.slice(0, -".gemihub.online".length);
+  if (domain.endsWith(".gemihub.net")) {
+    return domain.slice(0, -".gemihub.net".length);
   }
   if (domain.endsWith(".localhost")) {
     return domain.slice(0, -".localhost".length);

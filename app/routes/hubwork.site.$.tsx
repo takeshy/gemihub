@@ -73,7 +73,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ...SECURITY_HEADERS,
   };
 
-  // When a custom domain is active, exclude the gemihub.online URL from Google
+  // When a custom domain is active, exclude the gemihub.net URL from Google
   // to avoid duplicate-content dilution. Relies on Cloud CDN keying by host.
   const requestHost = request.headers.get("host")?.split(":")[0] || "";
   if (

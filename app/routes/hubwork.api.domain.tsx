@@ -42,9 +42,19 @@ export async function action({ request }: Route.ActionArgs) {
         return data({ error: "Invalid domain" }, { status: 400 });
       }
 
-      // Block platform domains to prevent hijacking
-      const BLOCKED_DOMAINS = ["gemihub.online", "www.gemihub.online"];
-      if (BLOCKED_DOMAINS.includes(domain) || domain.endsWith(".gemihub.online")) {
+      // Block platform domains to prevent hijacking. Both `.net` (current) and
+      // `.online` (legacy 301-redirect window) suffixes are reserved.
+      const BLOCKED_DOMAINS = [
+        "gemihub.net",
+        "www.gemihub.net",
+        "gemihub.online",
+        "www.gemihub.online",
+      ];
+      if (
+        BLOCKED_DOMAINS.includes(domain) ||
+        domain.endsWith(".gemihub.net") ||
+        domain.endsWith(".gemihub.online")
+      ) {
         return data({ error: "This domain is reserved and cannot be used" }, { status: 400 });
       }
 

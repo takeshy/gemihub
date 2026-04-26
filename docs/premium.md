@@ -6,7 +6,7 @@ GemiHub's premium plan transforms it into a web app builder with Google Sheets/G
 
 ```
 Load Balancer + Cloud CDN + Certificate Manager
-  ├── *.gemihub.online     → Cloud Run (wildcard subdomain)
+  ├── *.gemihub.net     → Cloud Run (wildcard subdomain)
   ├── app.acme.com         → Cloud Run (custom domain)
   └── app.other.com        → Cloud Run (custom domain)
 
@@ -32,7 +32,7 @@ Cloud Scheduler (single job)
 ### Design Decisions
 
 - **Single Cloud Run for all accounts** — no per-account instances. Accounts are resolved from the `Host` header via Firestore lookup (cached 60s in memory).
-- **Two-tier URL** — every account gets `{accountSlug}.gemihub.online` immediately; custom domains are optional and additive. DNS-pending accounts still work via the built-in subdomain.
+- **Two-tier URL** — every account gets `{accountSlug}.gemihub.net` immediately; custom domains are optional and additive. DNS-pending accounts still work via the built-in subdomain.
 - **Cloud Run as Drive proxy** — pages are read from Google Drive via `_sync-meta.json` lookup and served with `Cache-Control` headers. Cloud CDN caches the responses. No Cloud Storage or Backend Buckets needed.
 - **Firestore for multi-instance state** — magic link tokens must be shared across Cloud Run instances. Rate limiting stays in-memory (per-instance, acceptable for DoS mitigation).
 - **AJAX-based data access** — pages are static HTML; authenticated data is fetched at runtime via `/__gemihub/auth/me` and `/__gemihub/api/*` workflow endpoints. No server-side injection.
@@ -68,8 +68,8 @@ Cloud Scheduler (single job)
 hubwork-accounts/{accountId}
   email: string
   encryptedRefreshToken: string      — AES-256-GCM, key derived from SESSION_SECRET
-  accountSlug: string                — unique, e.g. "acme" → acme.gemihub.online
-  defaultDomain: string              — "acme.gemihub.online" (auto-generated from slug)
+  accountSlug: string                — unique, e.g. "acme" → acme.gemihub.net
+  defaultDomain: string              — "acme.gemihub.net" (auto-generated from slug)
   customDomain?: string              — e.g. "app.acme.com"
   rootFolderName: string
   rootFolderId: string
@@ -148,7 +148,7 @@ All Hubwork routes resolve the account from the request's `Host` header:
 4. Cache result in memory (60-second TTL)
 5. Return 404 if no account matches, no plan set, or access rules fail
 
-Initial public URL is always `https://{accountSlug}.gemihub.online`. After custom domain setup, both URLs serve the same content.
+Initial public URL is always `https://{accountSlug}.gemihub.net`. After custom domain setup, both URLs serve the same content.
 
 This is handled by `resolveHubworkAccount(request)` in `app/services/hubwork-account-resolver.server.ts`.
 
@@ -473,11 +473,11 @@ Every Hubwork account has two URL tiers:
 
 | Tier | URL | Availability |
 |------|-----|-------------|
-| Built-in | `https://{accountSlug}.gemihub.online` | Immediately on account creation |
+| Built-in | `https://{accountSlug}.gemihub.net` | Immediately on account creation |
 | Custom | `https://app.acme.com` | After DNS verification + SSL provisioning |
 
 The admin panel displays both:
-- **Preview URL**: `https://{accountSlug}.gemihub.online` (always working)
+- **Preview URL**: `https://{accountSlug}.gemihub.net` (always working)
 - **Production URL**: custom domain (shown only when `domainStatus == "active"`)
 
 ### Provisioning Flow
@@ -495,7 +495,7 @@ The admin panel displays both:
 All domains (built-in + custom) point to the same Cloud Run backend:
 
 ```
-*.gemihub.online     → Cloud Run (wildcard subdomain)
+*.gemihub.net     → Cloud Run (wildcard subdomain)
 app.acme.com         → Cloud Run (host rule added dynamically)
 app.other.com        → Cloud Run (host rule added dynamically)
 ```

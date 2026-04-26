@@ -55,7 +55,7 @@ export async function action({ request }: Route.ActionArgs) {
           billingStatus: "active",
           accountStatus: "enabled",
           ...(email && !account.email ? { email } : {}),
-          ...(accountSlug && !account.accountSlug ? { accountSlug, defaultDomain: `${accountSlug}.gemihub.online` } : {}),
+          ...(accountSlug && !account.accountSlug ? { accountSlug, defaultDomain: `${accountSlug}.gemihub.net` } : {}),
         });
       } else {
         const newId = await createAccount({

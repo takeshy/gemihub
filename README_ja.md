@@ -234,7 +234,7 @@ docker run -p 8080:8080 \
 
 ## プレミアムプラン
 
-有料プラン（Stripe 経由 ¥2,000/月）では、GemiHub に **Web アプリビルダー** 機能が追加されます。単一の共有 Cloud Run インスタンスが全有料アカウントを処理し、各アカウントはビルトインサブドメイン（`{slug}.gemihub.online`）とオプションのカスタムドメインを持ちます。アカウントデータは Firestore に保存、ページは Drive から CDN 経由で直接配信、スケジュールワークフローは自動実行されます。詳細は [docs/premium.md](docs/premium.md) を参照。
+有料プラン（Stripe 経由 ¥2,000/月）では、GemiHub に **Web アプリビルダー** 機能が追加されます。単一の共有 Cloud Run インスタンスが全有料アカウントを処理し、各アカウントはビルトインサブドメイン（`{slug}.gemihub.net`）とオプションのカスタムドメインを持ちます。アカウントデータは Firestore に保存、ページは Drive から CDN 経由で直接配信、スケジュールワークフローは自動実行されます。詳細は [docs/premium.md](docs/premium.md) を参照。
 
 ### 有料限定機能
 
@@ -245,7 +245,7 @@ docker run -p 8080:8080 \
 | **Google Sheets CRUD** | ワークフローノード: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete` |
 | **Gmail 送信** | ワークフローノード: `gmail-send`。Gmail API 経由でメール送信 |
 | **ファイルベースページホスティング** | Drive の `web/` にファイルを配置 — Drive API + CDN 経由で直接配信、`[param]` 動的ルート対応 |
-| **ビルトインサブドメイン** | アカウント作成時に `{slug}.gemihub.online` が即座に利用可能 |
+| **ビルトインサブドメイン** | アカウント作成時に `{slug}.gemihub.net` が即座に利用可能 |
 | **カスタムドメイン** | オプションでアカウントごとに独自ドメイン。Certificate Manager で SSL 自動発行 |
 | **コンタクト認証** | Gmail 経由のマジックリンクログイン。セッション Cookie で AJAX データアクセス |
 | **currentUser API** | Sheets からフィールドフィルタ済みユーザーデータを `GET /hubwork/api/me` で取得 |
@@ -257,7 +257,7 @@ docker run -p 8080:8080 \
 
 ```
 Load Balancer + Cloud CDN + Certificate Manager
-  ├── *.gemihub.online     → Cloud Run（ワイルドカードサブドメイン）
+  ├── *.gemihub.net     → Cloud Run（ワイルドカードサブドメイン）
   ├── app.acme.com         → Cloud Run（カスタムドメイン）
   └── app.other.com        → Cloud Run（同じバックエンド）
 

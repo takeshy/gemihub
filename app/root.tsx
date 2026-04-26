@@ -58,7 +58,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             __html: [
               // Register SW only on main app domains (skip hubwork custom domains).
               'var _h=location.hostname;',
-              'var _isMain=_h==="localhost"||_h==="gemihub.online"||_h==="www.gemihub.online";',
+              'var _isMain=_h==="localhost"||_h==="gemihub.net"||_h==="www.gemihub.net";',
               'if(_isMain&&"serviceWorker"in navigator){window.addEventListener("load",function(){',
               'navigator.serviceWorker.register("/sw.js").then(function(){',
               'navigator.serviceWorker.addEventListener("controllerchange",function cc(){',

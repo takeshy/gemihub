@@ -52,53 +52,140 @@ resource "google_certificate_manager_certificate_map" "default" {
   depends_on = [google_project_service.apis]
 }
 
-# DNS authorization for certificate validation
-resource "google_certificate_manager_dns_authorization" "main" {
-  name   = "gemihub-dns-auth"
+# --- Primary domain (gemihub.net) certificates ---
+
+resource "google_certificate_manager_dns_authorization" "primary" {
+  name   = "gemihub-net-dns-auth"
   domain = var.domain
 
   depends_on = [google_project_service.apis]
 }
 
-# Main domain certificate (Google-managed, DNS-authorized)
-resource "google_certificate_manager_certificate" "main" {
-  name = "gemihub-main-cert"
+resource "google_certificate_manager_certificate" "primary_main" {
+  name = "gemihub-net-main-cert"
 
   managed {
     domains            = [var.domain]
-    dns_authorizations = [google_certificate_manager_dns_authorization.main.id]
+    dns_authorizations = [google_certificate_manager_dns_authorization.primary.id]
   }
 
   depends_on = [google_project_service.apis]
 }
 
-# Certificate map entry for main domain
-resource "google_certificate_manager_certificate_map_entry" "main" {
-  name         = "gemihub-main-entry"
+resource "google_certificate_manager_certificate_map_entry" "primary_main" {
+  name         = "gemihub-net-main-entry"
   map          = google_certificate_manager_certificate_map.default.name
   hostname     = var.domain
-  certificates = [google_certificate_manager_certificate.main.id]
+  certificates = [google_certificate_manager_certificate.primary_main.id]
 }
 
-# Wildcard certificate for slug subdomains (*.gemihub.online).
+# Wildcard certificate for slug subdomains (*.gemihub.net).
 # The DNS authorization for the apex covers the wildcard without needing a
 # separate authorization record.
-resource "google_certificate_manager_certificate" "wildcard" {
-  name = "gemihub-wildcard-cert"
+resource "google_certificate_manager_certificate" "primary_wildcard" {
+  name = "gemihub-net-wildcard-cert"
 
   managed {
     domains            = ["*.${var.domain}"]
-    dns_authorizations = [google_certificate_manager_dns_authorization.main.id]
+    dns_authorizations = [google_certificate_manager_dns_authorization.primary.id]
   }
 
   depends_on = [google_project_service.apis]
 }
 
-resource "google_certificate_manager_certificate_map_entry" "wildcard" {
-  name         = "gemihub-wildcard-entry"
+resource "google_certificate_manager_certificate_map_entry" "primary_wildcard" {
+  name         = "gemihub-net-wildcard-entry"
   map          = google_certificate_manager_certificate_map.default.name
   hostname     = "*.${var.domain}"
-  certificates = [google_certificate_manager_certificate.wildcard.id]
+  certificates = [google_certificate_manager_certificate.primary_wildcard.id]
+}
+
+# --- Legacy domain (gemihub.online) certificates, 60-day 301 redirect window ---
+# TODO(2026-06-25): remove these resources together with the legacy_domain
+# variable and the moved blocks below.
+
+resource "google_certificate_manager_dns_authorization" "legacy" {
+  count = var.legacy_domain != "" ? 1 : 0
+
+  name   = "gemihub-dns-auth"
+  domain = var.legacy_domain
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_certificate_manager_certificate" "legacy_main" {
+  count = var.legacy_domain != "" ? 1 : 0
+
+  name = "gemihub-main-cert"
+
+  managed {
+    domains            = [var.legacy_domain]
+    dns_authorizations = [google_certificate_manager_dns_authorization.legacy[0].id]
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_certificate_manager_certificate_map_entry" "legacy_main" {
+  count = var.legacy_domain != "" ? 1 : 0
+
+  name         = "gemihub-main-entry"
+  map          = google_certificate_manager_certificate_map.default.name
+  hostname     = var.legacy_domain
+  certificates = [google_certificate_manager_certificate.legacy_main[0].id]
+}
+
+resource "google_certificate_manager_certificate" "legacy_wildcard" {
+  count = var.legacy_domain != "" ? 1 : 0
+
+  name = "gemihub-wildcard-cert"
+
+  managed {
+    domains            = ["*.${var.legacy_domain}"]
+    dns_authorizations = [google_certificate_manager_dns_authorization.legacy[0].id]
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_certificate_manager_certificate_map_entry" "legacy_wildcard" {
+  count = var.legacy_domain != "" ? 1 : 0
+
+  name         = "gemihub-wildcard-entry"
+  map          = google_certificate_manager_certificate_map.default.name
+  hostname     = "*.${var.legacy_domain}"
+  certificates = [google_certificate_manager_certificate.legacy_wildcard[0].id]
+}
+
+# --- State migrations (rename existing .online resources to legacy_*) ---
+# The original main/wildcard cert resources had no count; the new legacy_* are
+# count-gated on var.legacy_domain. Each `to` therefore needs an explicit `[0]`
+# so terraform recognises the move instead of destroying + recreating.
+# TODO(2026-06-25): drop these moved blocks with the legacy resources.
+
+moved {
+  from = google_certificate_manager_dns_authorization.main
+  to   = google_certificate_manager_dns_authorization.legacy[0]
+}
+
+moved {
+  from = google_certificate_manager_certificate.main
+  to   = google_certificate_manager_certificate.legacy_main[0]
+}
+
+moved {
+  from = google_certificate_manager_certificate_map_entry.main
+  to   = google_certificate_manager_certificate_map_entry.legacy_main[0]
+}
+
+moved {
+  from = google_certificate_manager_certificate.wildcard
+  to   = google_certificate_manager_certificate.legacy_wildcard[0]
+}
+
+moved {
+  from = google_certificate_manager_certificate_map_entry.wildcard
+  to   = google_certificate_manager_certificate_map_entry.legacy_wildcard[0]
 }
 
 # HTTPS proxy (uses Certificate Map for dynamic custom domain certs)

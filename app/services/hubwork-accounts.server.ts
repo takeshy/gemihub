@@ -107,7 +107,7 @@ export async function createAccount(params: {
     email: params.email,
     encryptedRefreshToken: params.refreshToken ? encrypt(params.refreshToken) : null,
     accountSlug: uniqueSlug,
-    defaultDomain: `${uniqueSlug}.gemihub.online`,
+    defaultDomain: `${uniqueSlug}.gemihub.net`,
     customDomain: params.customDomain || "",
     rootFolderName: params.rootFolderName,
     rootFolderId: params.rootFolderId,
@@ -144,7 +144,7 @@ function docToAccount(doc: FirebaseFirestore.DocumentSnapshot): HubworkAccount {
   // Migration: old docs without slug/defaultDomain
   if (!data.accountSlug) {
     data.accountSlug = data.email ? deriveSlugFromEmail(data.email) : doc.id;
-    data.defaultDomain = `${data.accountSlug}.gemihub.online`;
+    data.defaultDomain = `${data.accountSlug}.gemihub.net`;
   }
   return { id: doc.id, plan: "granted", ...data } as HubworkAccount;
 }

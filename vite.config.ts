@@ -70,7 +70,7 @@ function hubworkRootPage(): Plugin {
         const host = req.headers.host;
         if (!host) return next();
         const domain = host.split(":")[0];
-        if (domain === "localhost" || domain === "gemihub.online" || domain === "www.gemihub.online") return next();
+        if (domain === "localhost" || domain === "gemihub.net" || domain === "www.gemihub.net") return next();
 
         try {
           const mod = await server.ssrLoadModule("/app/services/hubwork-page.server.ts");

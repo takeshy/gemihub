@@ -122,7 +122,7 @@ trigger:
 
 ## IDE Preview Mock Data
 
-When previewing Hubwork pages in the IDE (localhost or gemihub.online), real Hubwork auth and API calls are not available. Place mock data JSON files in `web/__gemihub/` to enable preview.
+When previewing Hubwork pages in the IDE (localhost or gemihub.net), real Hubwork auth and API calls are not available. Place mock data JSON files in `web/__gemihub/` to enable preview.
 
 ### Auth Mock (`web/__gemihub/auth/me.json`)
 

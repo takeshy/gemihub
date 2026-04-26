@@ -70,8 +70,8 @@ function TokushohoJa() {
       </a>
     )},
     { label: "ホームページURL", value: (
-      <a href="https://gemihub.online/lp" className="text-blue-600 hover:underline dark:text-blue-400">
-        https://gemihub.online/lp
+      <a href="https://gemihub.net/lp" className="text-blue-600 hover:underline dark:text-blue-400">
+        https://gemihub.net/lp
       </a>
     )},
     { label: "販売価格", value: (
@@ -122,8 +122,8 @@ function TokushohoEn() {
       </a>
     )},
     { label: "Website", value: (
-      <a href="https://gemihub.online/lp" className="text-blue-600 hover:underline dark:text-blue-400">
-        https://gemihub.online/lp
+      <a href="https://gemihub.net/lp" className="text-blue-600 hover:underline dark:text-blue-400">
+        https://gemihub.net/lp
       </a>
     )},
     { label: "Pricing", value: (

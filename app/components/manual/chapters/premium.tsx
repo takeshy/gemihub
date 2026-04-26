@@ -99,7 +99,7 @@ function PremiumEn() {
 
         <h3>Static Page Hosting</h3>
         <p>
-          Files in the <code>web/</code> folder on Drive are served as static pages via Cloud CDN. Every account gets a built-in subdomain (<code>{"{accountSlug}"}.gemihub.online</code>) immediately.
+          Files in the <code>web/</code> folder on Drive are served as static pages via Cloud CDN. Every account gets a built-in subdomain (<code>{"{accountSlug}"}.gemihub.net</code>) immediately.
         </p>
         <p>File-based routing:</p>
         <ul>
@@ -259,7 +259,7 @@ function PremiumJa() {
 
         <h3>静的ページホスティング</h3>
         <p>
-          Driveの<code>web/</code>フォルダ内のファイルがCloud CDN経由で静的ページとして配信されます。アカウント作成時にサブドメイン（<code>{"{accountSlug}"}.gemihub.online</code>）が即時発行されます。
+          Driveの<code>web/</code>フォルダ内のファイルがCloud CDN経由で静的ページとして配信されます。アカウント作成時にサブドメイン（<code>{"{accountSlug}"}.gemihub.net</code>）が即時発行されます。
         </p>
         <p>ファイルベースルーティング：</p>
         <ul>
