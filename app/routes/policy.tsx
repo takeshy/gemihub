@@ -78,6 +78,9 @@ function PolicyEn() {
           <li>User authentication and session management</li>
           <li>Service improvement and development of new features</li>
         </ul>
+        <p>
+          The use of raw or derived user data received from Workspace APIs will adhere to the Google User Data Policy, including the Limited Use requirements.
+        </p>
 
         <h2>5. Disclosure of Personal Information to Third Parties</h2>
         <p>The Company will not disclose personal information to third parties except in the following cases:</p>
@@ -120,7 +123,7 @@ function PolicyEn() {
           <li>Email: <a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work@gmail.com</a></li>
         </ul>
 
-        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">Last updated: April 20, 2026</p>
+        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">Last updated: April 30, 2026</p>
       </div>
     </>
   );
@@ -171,6 +174,9 @@ function PolicyJa() {
           <li>ユーザー認証とセッション管理</li>
           <li>サービスの改善と新機能の開発</li>
         </ul>
+        <p>
+          Workspace API から受け取る未加工または派生ユーザーデータの利用について、当社は以下の通り Google User Data Policy（Limited Use 要件を含む）を遵守します。The use of raw or derived user data received from Workspace APIs will adhere to the Google User Data Policy, including the Limited Use requirements.
+        </p>
 
         <h2>5. 個人情報の第三者提供</h2>
         <p>当社は、以下の場合を除き、お客様の個人情報を第三者へ提供することはありません：</p>
@@ -213,7 +219,7 @@ function PolicyJa() {
           <li>メールアドレス：<a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work@gmail.com</a></li>
         </ul>
 
-        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">最終更新日：2026年4月20日</p>
+        <p className="mt-10 text-sm text-gray-400 dark:text-gray-500">最終更新日：2026年4月30日</p>
       </div>
     </>
   );
