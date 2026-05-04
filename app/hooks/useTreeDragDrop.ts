@@ -21,6 +21,7 @@ import {
 } from "~/utils/tree-helpers";
 import type { TranslationStrings } from "~/i18n/translations";
 import type { UploadReturn } from "~/hooks/useFileUpload";
+import { fileToBase64 } from "~/utils/file-bytes";
 
 interface UseTreeDragDropParams {
   treeItems: CachedTreeNode[];
@@ -444,6 +445,7 @@ export function useTreeDragDrop({
       // Handle text duplicates: local cache update only (yellow dot)
       for (const { file, existing } of textDuplicates) {
         const content = await file.text();
+        const rawContentBase64 = await fileToBase64(file);
         const fullPath = namePrefix ? `${namePrefix}/${file.name}` : file.name;
         // saveLocalEdit must be called BEFORE setCachedFile (reads old content from cache)
         const saved = await saveLocalEdit(existing.id, fullPath, content);
@@ -452,6 +454,7 @@ export function useTreeDragDrop({
         await setCachedFile({
           fileId: existing.id,
           content,
+          rawContentBase64,
           md5Checksum: existingCache?.md5Checksum ?? "",
           modifiedTime: new Date().toISOString(),
           cachedAt: Date.now(),
@@ -478,14 +481,7 @@ export function useTreeDragDrop({
           const localMeta = await getLocalSyncMeta();
           for (const { file, existing } of binaryDuplicates) {
             if (result.failedNames.has(file.name)) continue;
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const dataUrl = reader.result as string;
-                resolve(dataUrl.split(",")[1]);
-              };
-              reader.readAsDataURL(file);
-            });
+            const base64 = await fileToBase64(file);
             const rm = meta?.files?.[existing.id];
             await setCachedFile({
               fileId: existing.id,
@@ -525,14 +521,7 @@ export function useTreeDragDrop({
             const uploaded = result.fileMap.get(file.name);
             if (!uploaded) continue;
             if (isBinaryMimeType(uploaded.mimeType)) {
-              const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const dataUrl = reader.result as string;
-                  resolve(dataUrl.split(",")[1]);
-                };
-                reader.readAsDataURL(file);
-              });
+              const base64 = await fileToBase64(file);
               await setCachedFile({
                 fileId: uploaded.id,
                 content: base64,
@@ -544,9 +533,11 @@ export function useTreeDragDrop({
               });
             } else {
               const content = await file.text();
+              const rawContentBase64 = await fileToBase64(file);
               await setCachedFile({
                 fileId: uploaded.id,
                 content,
+                rawContentBase64,
                 md5Checksum: uploaded.md5Checksum ?? "",
                 modifiedTime: uploaded.modifiedTime ?? "",
                 cachedAt: Date.now(),

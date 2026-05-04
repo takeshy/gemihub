@@ -102,6 +102,16 @@ function getFileIcon(name: string, _mimeType: string) {
   return <File size={ICON.MD} className="text-gray-400 flex-shrink-0" />;
 }
 
+function base64ToArrayBuffer(content: string): ArrayBuffer {
+  const byteString = atob(content);
+  const buffer = new ArrayBuffer(byteString.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < byteString.length; i++) {
+    bytes[i] = byteString.charCodeAt(i);
+  }
+  return buffer;
+}
+
 export function DriveFileTree({
   rootFolderId,
   onSelectFile,
@@ -683,14 +693,21 @@ export function DriveFileTree({
             const fileName = item.name.split("/").pop() || item.name;
             const cached = await getCachedFile(item.id);
             if (cached) {
+              if (cached.rawContentBase64) {
+                const blob = new Blob([base64ToArrayBuffer(cached.rawContentBase64)], { type: item.mimeType || "application/octet-stream" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                return;
+              }
               if (cached.encoding === "base64") {
                 // Decode base64 to binary blob
-                const byteString = atob(cached.content);
-                const bytes = new Uint8Array(byteString.length);
-                for (let i = 0; i < byteString.length; i++) {
-                  bytes[i] = byteString.charCodeAt(i);
-                }
-                const blob = new Blob([bytes], { type: item.mimeType || "application/octet-stream" });
+                const blob = new Blob([base64ToArrayBuffer(cached.content)], { type: item.mimeType || "application/octet-stream" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
@@ -832,7 +849,9 @@ export function DriveFileTree({
                       : fullPath;
                     const cached = await getCachedFile(id);
                     if (cached) {
-                      if (cached.encoding === "base64") {
+                      if (cached.rawContentBase64) {
+                        zip.file(relativePath, cached.rawContentBase64, { base64: true });
+                      } else if (cached.encoding === "base64") {
                         zip.file(relativePath, cached.content, { base64: true });
                       } else {
                         zip.file(relativePath, cached.content);

@@ -17,6 +17,7 @@ import { findFileByPath } from "~/utils/file-tree-operations";
 import type { TranslationStrings } from "~/i18n/translations";
 import type { UploadFile, UploadReturn } from "~/hooks/useFileUpload";
 import { getUploadFileName } from "~/hooks/useFileUpload";
+import { fileToBase64 } from "~/utils/file-bytes";
 
 interface UseTreeFileCreateParams {
   treeItems: CachedTreeNode[];
@@ -252,12 +253,14 @@ export function useTreeFileCreate({
     // Text duplicates: local cache update only
     for (const { file, existing, fullPath } of textDuplicates) {
       const content = await file.text();
+      const rawContentBase64 = await fileToBase64(file);
       const saved = await saveLocalEdit(existing.id, fullPath, content);
       if (!saved) continue;
       const existingCache = await getCachedFile(existing.id);
       await setCachedFile({
         fileId: existing.id,
         content,
+        rawContentBase64,
         md5Checksum: existingCache?.md5Checksum ?? "",
         modifiedTime: new Date().toISOString(),
         cachedAt: Date.now(),
@@ -283,14 +286,7 @@ export function useTreeFileCreate({
         const localMeta = await getLocalSyncMeta();
         for (const { file, existing, uploadName } of binaryDuplicates) {
           if (result.failedNames.has(uploadName)) continue;
-          const base64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const dataUrl = reader.result as string;
-              resolve(dataUrl.split(",")[1]);
-            };
-            reader.readAsDataURL(file);
-          });
+          const base64 = await fileToBase64(file);
           const rm = meta?.files?.[existing.id];
           await setCachedFile({
             fileId: existing.id,
@@ -332,14 +328,7 @@ export function useTreeFileCreate({
           const uploaded = result.fileMap.get(uploadName);
           if (!uploaded) continue;
           if (isBinaryMimeType(uploaded.mimeType)) {
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => {
-                const dataUrl = reader.result as string;
-                resolve(dataUrl.split(",")[1]);
-              };
-              reader.readAsDataURL(file);
-            });
+            const base64 = await fileToBase64(file);
             await setCachedFile({
               fileId: uploaded.id,
               content: base64,
@@ -351,9 +340,11 @@ export function useTreeFileCreate({
             });
           } else {
             const content = await file.text();
+            const rawContentBase64 = await fileToBase64(file);
             await setCachedFile({
               fileId: uploaded.id,
               content,
+              rawContentBase64,
               md5Checksum: uploaded.md5Checksum ?? "",
               modifiedTime: uploaded.modifiedTime ?? "",
               cachedAt: Date.now(),

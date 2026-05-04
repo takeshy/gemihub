@@ -11,6 +11,7 @@ const DB_VERSION = 6;
 export interface CachedFile {
   fileId: string; // primary key
   content: string;
+  rawContentBase64?: string;
   md5Checksum: string;
   modifiedTime: string;
   cachedAt: number;
