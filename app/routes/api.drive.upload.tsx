@@ -35,6 +35,9 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
   const files = formData.getAll("files") as File[];
+  const filePaths = formData
+    .getAll("filePaths")
+    .map((value) => (typeof value === "string" ? value : ""));
 
   if (files.length === 0) {
     return Response.json({ error: "No files provided" }, { status: 400, headers: responseHeaders });
@@ -44,11 +47,24 @@ export async function action({ request }: Route.ActionArgs) {
 
   const results: { name: string; file?: unknown; error?: string }[] = [];
 
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
+    const clientPath = filePaths[index] || file.name;
+    const safeName = clientPath
+      .replace(/\\/g, "/")
+      .replace(/\.\.\//g, "")
+      .replace(/^\/+/, "")
+      .split("/")
+      .filter((part) => part && part !== "." && part !== "..")
+      .join("/");
+    if (!safeName) {
+      results.push({ name: clientPath || file.name, error: "Invalid file path" });
+      continue;
+    }
+
     if (file.size > maxFileSize) {
       const limitMB = Math.round(maxFileSize / 1024 / 1024);
       results.push({
-        name: file.name,
+        name: safeName,
         error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max ${limitMB}MB per file.`,
       });
       continue;
@@ -58,16 +74,21 @@ export async function action({ request }: Route.ActionArgs) {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       // Sanitize namePrefix and file.name to prevent path traversal
-      const safePrefix = namePrefix?.replace(/\.\.\//g, "").replace(/^\/+/, "") || "";
-      const safeName = file.name.replace(/\.\.\//g, "").replace(/^\/+/, "");
+      const safePrefix = namePrefix
+        ?.replace(/\\/g, "/")
+        .replace(/\.\.\//g, "")
+        .replace(/^\/+/, "")
+        .split("/")
+        .filter((part) => part && part !== "." && part !== "..")
+        .join("/") || "";
       const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
-      const existingFileId = replaceMap[file.name];
+      const existingFileId = replaceMap[safeName] || replaceMap[file.name];
       let driveFile;
       if (existingFileId) {
         // Verify the file belongs to the target folder before overwriting
         const fileMeta = await getFileMetadata(validTokens.accessToken, existingFileId);
         if (!fileMeta.parents?.includes(targetFolderId)) {
-          results.push({ name: file.name, error: "File does not belong to target folder" });
+          results.push({ name: safeName, error: "File does not belong to target folder" });
           continue;
         }
         // Replace existing file content (keep same file ID)
@@ -87,10 +108,10 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
       await upsertFileInMeta(validTokens.accessToken, targetFolderId, driveFile);
-      results.push({ name: file.name, file: driveFile });
+      results.push({ name: safeName, file: driveFile });
     } catch (e) {
       results.push({
-        name: file.name,
+        name: safeName,
         error: e instanceof Error ? e.message : "Upload failed",
       });
     }

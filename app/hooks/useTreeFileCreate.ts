@@ -15,7 +15,8 @@ import { saveLocalEdit } from "~/services/edit-history-local";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { findFileByPath } from "~/utils/file-tree-operations";
 import type { TranslationStrings } from "~/i18n/translations";
-import type { UploadReturn } from "~/hooks/useFileUpload";
+import type { UploadFile, UploadReturn } from "~/hooks/useFileUpload";
+import { getUploadFileName } from "~/hooks/useFileUpload";
 
 interface UseTreeFileCreateParams {
   treeItems: CachedTreeNode[];
@@ -29,6 +30,54 @@ interface UseTreeFileCreateParams {
   setSelectedFolderId: Dispatch<SetStateAction<string | null>>;
   fetchAndCacheTree: (refresh?: boolean) => Promise<void>;
   t: (key: keyof TranslationStrings) => string;
+}
+
+function normalizeImportPath(path: string): string {
+  return path
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+}
+
+function withUploadRelativePath(file: File, relativePath: string): File {
+  const uploadFile = file as UploadFile;
+  uploadFile.relativePathForUpload = normalizeImportPath(relativePath) || file.name;
+  return uploadFile;
+}
+
+function folderPathFromId(folderId: string | null | undefined): string {
+  return folderId?.startsWith("vfolder:") ? folderId.slice("vfolder:".length) : "";
+}
+
+function mimeTypeFromImportPath(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    md: "text/markdown",
+    txt: "text/plain",
+    json: "application/json",
+    yaml: "text/yaml",
+    yml: "text/yaml",
+    js: "application/javascript",
+    ts: "application/typescript",
+    css: "text/css",
+    html: "text/html",
+    xml: "text/xml",
+    csv: "text/csv",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    pdf: "application/pdf",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    mp4: "video/mp4",
+    webm: "video/webm",
+  };
+  return ext ? map[ext] || "application/octet-stream" : "application/octet-stream";
 }
 
 export function useTreeFileCreate({
@@ -120,71 +169,169 @@ export function useTreeFileCreate({
     setCreateFileDialog({ open: true, name: "", ext: ".md", customExt: "", addDateTime: !!opts.addDateTime, addLocation: !!opts.addLocation });
   }, []);
 
-  const handleUploadClick = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.onchange = async () => {
-      const files = Array.from(input.files || []);
-      if (files.length === 0) return;
-
-      const namePrefix = selectedFolderId?.startsWith("vfolder:")
-        ? selectedFolderId.slice("vfolder:".length)
-        : undefined;
-
-      // Check for duplicates
-      const duplicates: { file: File; existing: CachedTreeNode }[] = [];
-      for (const file of files) {
-        const fullPath = namePrefix ? `${namePrefix}/${file.name}` : file.name;
-        const existing = findFileByPath(treeItems, fullPath);
-        if (existing) duplicates.push({ file, existing });
-      }
-      if (duplicates.length > 0) {
-        const names = duplicates.map((d) => d.file.name).join(", ");
-        const msg = t("contextMenu.fileAlreadyExists").replace("{name}", names);
-        if (!confirm(msg)) return;
+  const expandZipFiles = useCallback(async (files: File[]): Promise<File[]> => {
+    const imported: File[] = [];
+    for (const file of files) {
+      if (!file.name.toLowerCase().endsWith(".zip")) {
+        const relativePath = normalizeImportPath(file.webkitRelativePath || file.name);
+        imported.push(withUploadRelativePath(file, relativePath));
+        continue;
       }
 
-      const duplicateSet = new Set(duplicates.map((d) => d.file));
-      const textDuplicates = duplicates.filter((d) => !isBinaryMimeType(d.existing.mimeType));
-      const binaryDuplicates = duplicates.filter((d) => isBinaryMimeType(d.existing.mimeType));
-      const newFiles = files.filter((f) => !duplicateSet.has(f));
-
-      // Text duplicates: local cache update only
-      for (const { file, existing } of textDuplicates) {
-        const content = await file.text();
-        const fullPath = namePrefix ? `${namePrefix}/${file.name}` : file.name;
-        const saved = await saveLocalEdit(existing.id, fullPath, content);
-        if (!saved) continue;
-        const existingCache = await getCachedFile(existing.id);
-        await setCachedFile({
-          fileId: existing.id,
-          content,
-          md5Checksum: existingCache?.md5Checksum ?? "",
-          modifiedTime: new Date().toISOString(),
-          cachedAt: Date.now(),
-          fileName: fullPath,
+      const JSZip = (await import("jszip")).default;
+      const zip = await JSZip.loadAsync(file);
+      for (const [entryPath, entry] of Object.entries(zip.files)) {
+        if (entry.dir) continue;
+        const normalizedPath = normalizeImportPath(entryPath);
+        if (!normalizedPath || normalizedPath.startsWith("__MACOSX/") || normalizedPath.endsWith("/.DS_Store")) continue;
+        const blob = await entry.async("blob");
+        const extracted = new File([blob], normalizedPath.split("/").pop() || normalizedPath, {
+          type: mimeTypeFromImportPath(normalizedPath),
         });
-        window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: existing.id } }));
-        if (existing.id === activeFileId) {
-          window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: [existing.id] } }));
+        imported.push(withUploadRelativePath(extracted, normalizedPath));
+      }
+    }
+    return imported;
+  }, []);
+
+  const importFilesToFolder = useCallback(async (
+    inputFiles: File[],
+    targetFolderId: string | null | undefined,
+    options?: { expandZip?: boolean },
+  ) => {
+    if (inputFiles.length === 0) return;
+
+    let files: File[];
+    try {
+      files = options?.expandZip === false
+        ? inputFiles.map((file) => withUploadRelativePath(file, normalizeImportPath(file.webkitRelativePath || file.name)))
+        : await expandZipFiles(inputFiles);
+    } catch {
+      alert(t("contextMenu.importFailed"));
+      return;
+    }
+    if (files.length === 0) return;
+
+    const namePrefix = folderPathFromId(targetFolderId) || undefined;
+    const seenImportPaths = new Set<string>();
+    const duplicateImportPaths = new Set<string>();
+    for (const file of files) {
+      const uploadName = getUploadFileName(file);
+      const fullPath = namePrefix ? `${namePrefix}/${uploadName}` : uploadName;
+      if (seenImportPaths.has(fullPath)) {
+        duplicateImportPaths.add(fullPath);
+      } else {
+        seenImportPaths.add(fullPath);
+      }
+    }
+    if (duplicateImportPaths.size > 0) {
+      const names = Array.from(duplicateImportPaths).join(", ");
+      alert(t("contextMenu.importDuplicatePaths").replace("{name}", names));
+      return;
+    }
+
+    // Check for duplicates
+    const duplicates: { file: File; existing: CachedTreeNode; uploadName: string; fullPath: string }[] = [];
+    for (const file of files) {
+      const uploadName = getUploadFileName(file);
+      const fullPath = namePrefix ? `${namePrefix}/${uploadName}` : uploadName;
+      const existing = findFileByPath(treeItems, fullPath);
+      if (existing) duplicates.push({ file, existing, uploadName, fullPath });
+    }
+    if (duplicates.length > 0) {
+      const names = duplicates.map((d) => d.fullPath).join(", ");
+      const msg = t("contextMenu.fileAlreadyExists").replace("{name}", names);
+      if (!confirm(msg)) return;
+    }
+
+    const duplicateSet = new Set(duplicates.map((d) => d.file));
+    const textDuplicates = duplicates.filter((d) => !isBinaryMimeType(d.existing.mimeType));
+    const binaryDuplicates = duplicates.filter((d) => isBinaryMimeType(d.existing.mimeType));
+    const newFiles = files.filter((f) => !duplicateSet.has(f));
+
+    // Text duplicates: local cache update only
+    for (const { file, existing, fullPath } of textDuplicates) {
+      const content = await file.text();
+      const saved = await saveLocalEdit(existing.id, fullPath, content);
+      if (!saved) continue;
+      const existingCache = await getCachedFile(existing.id);
+      await setCachedFile({
+        fileId: existing.id,
+        content,
+        md5Checksum: existingCache?.md5Checksum ?? "",
+        modifiedTime: new Date().toISOString(),
+        cachedAt: Date.now(),
+        fileName: fullPath,
+      });
+      window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: existing.id } }));
+      if (existing.id === activeFileId) {
+        window.dispatchEvent(new CustomEvent("files-pulled", { detail: { fileIds: [existing.id] } }));
+      }
+    }
+
+    // Binary duplicates: server update via replaceMap
+    if (binaryDuplicates.length > 0) {
+      const replaceMap: Record<string, string> = {};
+      const binaryFiles = binaryDuplicates.map((d) => {
+        replaceMap[d.uploadName] = d.existing.id;
+        return d.file;
+      });
+      const result = await upload(binaryFiles, rootFolderId, namePrefix, replaceMap);
+      if (result.ok) {
+        await fetchAndCacheTree();
+        const meta = await getCachedRemoteMeta();
+        const localMeta = await getLocalSyncMeta();
+        for (const { file, existing, uploadName } of binaryDuplicates) {
+          if (result.failedNames.has(uploadName)) continue;
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result as string;
+              resolve(dataUrl.split(",")[1]);
+            };
+            reader.readAsDataURL(file);
+          });
+          const rm = meta?.files?.[existing.id];
+          await setCachedFile({
+            fileId: existing.id,
+            content: base64,
+            md5Checksum: rm?.md5Checksum ?? "",
+            modifiedTime: rm?.modifiedTime ?? "",
+            cachedAt: Date.now(),
+            fileName: rm?.name ?? uploadName,
+            encoding: "base64",
+          });
+          window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: existing.id } }));
+          if (localMeta) {
+            localMeta.files[existing.id] = {
+              md5Checksum: rm?.md5Checksum ?? "",
+              modifiedTime: rm?.modifiedTime ?? "",
+              name: rm?.name,
+              size: rm?.size,
+            };
+          }
+        }
+        if (localMeta) {
+          localMeta.lastUpdatedAt = new Date().toISOString();
+          await setLocalSyncMeta(localMeta);
         }
       }
+    }
 
-      // Binary duplicates: server update via replaceMap
-      if (binaryDuplicates.length > 0) {
-        const replaceMap: Record<string, string> = {};
-        const binaryFiles = binaryDuplicates.map((d) => {
-          replaceMap[d.file.name] = d.existing.id;
-          return d.file;
-        });
-        const result = await upload(binaryFiles, rootFolderId, namePrefix, replaceMap);
-        if (result.ok) {
-          await fetchAndCacheTree();
-          const meta = await getCachedRemoteMeta();
-          const localMeta = await getLocalSyncMeta();
-          for (const { file, existing } of binaryDuplicates) {
-            if (result.failedNames.has(file.name)) continue;
+    // New files: normal upload
+    if (newFiles.length > 0) {
+      const result = await upload(newFiles, rootFolderId, namePrefix);
+      if (result.ok) {
+        // Register every uploaded file in localSyncMeta BEFORE fetchAndCacheTree.
+        // buildTreeFromMeta's local-first filter hides remote entries that
+        // aren't tracked locally, so skipping this leaves newly uploaded
+        // files invisible until the next sync.
+        const localMeta = await getLocalSyncMeta();
+        for (const file of newFiles) {
+          const uploadName = getUploadFileName(file);
+          const uploaded = result.fileMap.get(uploadName);
+          if (!uploaded) continue;
+          if (isBinaryMimeType(uploaded.mimeType)) {
             const base64 = await new Promise<string>((resolve) => {
               const reader = new FileReader();
               reader.onload = () => {
@@ -193,95 +340,75 @@ export function useTreeFileCreate({
               };
               reader.readAsDataURL(file);
             });
-            const rm = meta?.files?.[existing.id];
             await setCachedFile({
-              fileId: existing.id,
+              fileId: uploaded.id,
               content: base64,
-              md5Checksum: rm?.md5Checksum ?? "",
-              modifiedTime: rm?.modifiedTime ?? "",
+              md5Checksum: uploaded.md5Checksum ?? "",
+              modifiedTime: uploaded.modifiedTime ?? "",
               cachedAt: Date.now(),
-              fileName: rm?.name ?? file.name,
+              fileName: uploaded.name ?? uploadName,
               encoding: "base64",
             });
-            window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: existing.id } }));
-            if (localMeta) {
-              localMeta.files[existing.id] = {
-                md5Checksum: rm?.md5Checksum ?? "",
-                modifiedTime: rm?.modifiedTime ?? "",
-              };
-            }
+          } else {
+            const content = await file.text();
+            await setCachedFile({
+              fileId: uploaded.id,
+              content,
+              md5Checksum: uploaded.md5Checksum ?? "",
+              modifiedTime: uploaded.modifiedTime ?? "",
+              cachedAt: Date.now(),
+              fileName: uploaded.name ?? uploadName,
+            });
           }
+          window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: uploaded.id } }));
           if (localMeta) {
-            localMeta.lastUpdatedAt = new Date().toISOString();
-            await setLocalSyncMeta(localMeta);
+            localMeta.files[uploaded.id] = {
+              md5Checksum: uploaded.md5Checksum ?? "",
+              modifiedTime: uploaded.modifiedTime ?? "",
+              name: uploaded.name,
+            };
           }
         }
-      }
-
-      // New files: normal upload
-      if (newFiles.length > 0) {
-        const result = await upload(newFiles, rootFolderId, namePrefix);
-        if (result.ok) {
-          // Register every uploaded file in localSyncMeta BEFORE fetchAndCacheTree.
-          // buildTreeFromMeta's local-first filter hides remote entries that
-          // aren't tracked locally, so skipping this leaves newly uploaded
-          // files invisible until the next sync.
-          const localMeta = await getLocalSyncMeta();
-          for (const file of newFiles) {
-            const uploaded = result.fileMap.get(file.name);
-            if (!uploaded) continue;
-            if (isBinaryMimeType(uploaded.mimeType)) {
-              const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                  const dataUrl = reader.result as string;
-                  resolve(dataUrl.split(",")[1]);
-                };
-                reader.readAsDataURL(file);
-              });
-              await setCachedFile({
-                fileId: uploaded.id,
-                content: base64,
-                md5Checksum: uploaded.md5Checksum ?? "",
-                modifiedTime: uploaded.modifiedTime ?? "",
-                cachedAt: Date.now(),
-                fileName: uploaded.name ?? file.name,
-                encoding: "base64",
-              });
-            } else {
-              const content = await file.text();
-              await setCachedFile({
-                fileId: uploaded.id,
-                content,
-                md5Checksum: uploaded.md5Checksum ?? "",
-                modifiedTime: uploaded.modifiedTime ?? "",
-                cachedAt: Date.now(),
-                fileName: uploaded.name ?? file.name,
-              });
-            }
-            window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: uploaded.id } }));
-            if (localMeta) {
-              localMeta.files[uploaded.id] = {
-                md5Checksum: uploaded.md5Checksum ?? "",
-                modifiedTime: uploaded.modifiedTime ?? "",
-              };
-            }
-          }
-          if (localMeta) {
-            localMeta.lastUpdatedAt = new Date().toISOString();
-            await setLocalSyncMeta(localMeta);
-          }
-          await fetchAndCacheTree();
+        if (localMeta) {
+          localMeta.lastUpdatedAt = new Date().toISOString();
+          await setLocalSyncMeta(localMeta);
         }
+        await fetchAndCacheTree();
       }
+    }
 
-      // Expand folder
-      if (selectedFolderId && selectedFolderId !== rootFolderId) {
-        setExpandedFolders((prev) => new Set(prev).add(selectedFolderId));
-      }
+    // Expand folder
+    if (targetFolderId && targetFolderId !== rootFolderId) {
+      setExpandedFolders((prev) => new Set(prev).add(targetFolderId));
+    }
+  }, [activeFileId, expandZipFiles, fetchAndCacheTree, rootFolderId, setExpandedFolders, t, treeItems, upload]);
+
+  const handleUploadClick = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = Array.from(input.files || []);
+      await importFilesToFolder(files, selectedFolderId, { expandZip: false });
     };
     input.click();
-  }, [selectedFolderId, treeItems, t, activeFileId, upload, rootFolderId, fetchAndCacheTree, setExpandedFolders]);
+  }, [importFilesToFolder, selectedFolderId]);
+
+  const handleImportClick = useCallback((targetFolderId: string, mode: "files" | "folder") => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    if (mode === "folder") {
+      input.setAttribute("webkitdirectory", "");
+      input.setAttribute("directory", "");
+    } else {
+      input.accept = ".zip,*/*";
+    }
+    input.onchange = async () => {
+      await importFilesToFolder(Array.from(input.files || []), targetFolderId);
+    };
+    input.click();
+  }, [importFilesToFolder]);
 
   const buildDefaultName = useCallback(() => {
     const now = new Date();
@@ -570,6 +697,7 @@ export function useTreeFileCreate({
     handleCreateFolderSubmit,
     handleCreateFile,
     handleUploadClick,
+    handleImportClick,
     handleCreateFileSubmit,
     buildDefaultName,
   };

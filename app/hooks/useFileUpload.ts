@@ -20,8 +20,17 @@ export interface UploadedFile {
 export interface UploadReturn {
   ok: boolean;
   failedNames: Set<string>;
-  /** Map from original file name to uploaded Drive file metadata */
+  /** Map from client upload path to uploaded Drive file metadata */
   fileMap: Map<string, UploadedFile>;
+}
+
+export type UploadFile = File & {
+  relativePathForUpload?: string;
+};
+
+export function getUploadFileName(file: File): string {
+  const uploadFile = file as UploadFile;
+  return uploadFile.relativePathForUpload || uploadFile.webkitRelativePath || file.name;
 }
 
 export function useFileUpload() {
@@ -37,14 +46,15 @@ export function useFileUpload() {
 
       // Initialize progress with client-side size checks
       const initial: UploadProgress[] = files.map((f) => {
+        const name = getUploadFileName(f);
         if (f.size > MAX_FILE_SIZE) {
           return {
-            name: f.name,
+            name,
             status: "error" as const,
             error: `Too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 30MB.`,
           };
         }
-        return { name: f.name, status: "uploading" as const };
+        return { name, status: "uploading" as const };
       });
       setProgress(initial);
 
@@ -64,6 +74,7 @@ export function useFileUpload() {
       }
       for (const f of validFiles) {
         formData.append("files", f);
+        formData.append("filePaths", getUploadFileName(f));
       }
 
       try {

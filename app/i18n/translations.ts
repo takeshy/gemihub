@@ -275,6 +275,11 @@ export interface TranslationStrings {
   "contextMenu.convertToHtml": string;
   "contextMenu.convertedHtml": string;
   "contextMenu.convertHtmlFailed": string;
+  "contextMenu.import": string;
+  "contextMenu.importFilesOrZip": string;
+  "contextMenu.importFolder": string;
+  "contextMenu.importFailed": string;
+  "contextMenu.importDuplicatePaths": string;
   "contextMenu.downloadZip": string;
   "contextMenu.downloadZipFailed": string;
 
@@ -1054,6 +1059,11 @@ const en: TranslationStrings = {
   "contextMenu.convertToHtml": "Convert to HTML",
   "contextMenu.convertedHtml": "HTML created in temporaries/.",
   "contextMenu.convertHtmlFailed": "Failed to convert file to HTML.",
+  "contextMenu.import": "Import",
+  "contextMenu.importFilesOrZip": "Files / ZIP",
+  "contextMenu.importFolder": "Folder",
+  "contextMenu.importFailed": "Failed to import.",
+  "contextMenu.importDuplicatePaths": "Import contains duplicate paths: {name}",
   "contextMenu.downloadZip": "Download as ZIP",
   "contextMenu.downloadZipFailed": "Failed to create ZIP.",
 
@@ -1833,6 +1843,11 @@ const ja: TranslationStrings = {
   "contextMenu.convertToHtml": "HTMLに変換",
   "contextMenu.convertedHtml": "temporaries/ にHTMLを作成しました。",
   "contextMenu.convertHtmlFailed": "HTML変換に失敗しました。",
+  "contextMenu.import": "インポート",
+  "contextMenu.importFilesOrZip": "ファイル / ZIP",
+  "contextMenu.importFolder": "フォルダ",
+  "contextMenu.importFailed": "インポートに失敗しました。",
+  "contextMenu.importDuplicatePaths": "インポート対象に重複したパスがあります: {name}",
   "contextMenu.downloadZip": "ZIPでダウンロード",
   "contextMenu.downloadZipFailed": "ZIP作成に失敗しました。",
 

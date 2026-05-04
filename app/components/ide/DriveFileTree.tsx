@@ -553,6 +553,7 @@ export function DriveFileTree({
     handleCreateFolderSubmit,
     handleCreateFile,
     handleUploadClick,
+    handleImportClick,
     handleCreateFileSubmit,
     buildDefaultName,
   } = useTreeFileCreate({
@@ -783,6 +784,22 @@ export function DriveFileTree({
       }
 
       if (item.isFolder) {
+        items.push({
+          label: t("contextMenu.import"),
+          icon: <Upload size={ICON.MD} />,
+          children: [
+            {
+              label: t("contextMenu.importFilesOrZip"),
+              icon: <FilePlus size={ICON.MD} />,
+              onClick: () => handleImportClick(item.id, "files"),
+            },
+            {
+              label: t("contextMenu.importFolder"),
+              icon: <FolderPlus size={ICON.MD} />,
+              onClick: () => handleImportClick(item.id, "folder"),
+            },
+          ],
+        });
         const uncachedIds = collectFileIds(item).filter((id) => !cachedFiles.has(id) && !id.startsWith("new:"));
         if (uncachedIds.length > 0) {
           items.push({
@@ -889,7 +906,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, remoteMeta, cachedFiles, encryptedFiles, t, treeItems, cacheFilesByIds]
+    [handleDelete, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, handleImportClick, remoteMeta, cachedFiles, encryptedFiles, t, treeItems, cacheFilesByIds]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
