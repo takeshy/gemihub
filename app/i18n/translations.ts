@@ -41,6 +41,8 @@ export interface TranslationStrings {
   "mainViewer.raw": string;
   "mainViewer.diff": string;
   "mainViewer.diffTarget": string;
+  "workspace.openExternal": string;
+  "workspace.reload": string;
 
   // ChatPanel
   "chat.newChat": string;
@@ -278,6 +280,11 @@ export interface TranslationStrings {
   "contextMenu.import": string;
   "contextMenu.importFilesOrZip": string;
   "contextMenu.importFolder": string;
+  "contextMenu.importGoogleWorkspacePicker": string;
+  "contextMenu.importGoogleWorkspaceUrl": string;
+  "contextMenu.importGoogleWorkspacePrompt": string;
+  "contextMenu.importGoogleWorkspaceInvalid": string;
+  "contextMenu.importGooglePickerMissingKey": string;
   "contextMenu.importFailed": string;
   "contextMenu.importDuplicatePaths": string;
   "contextMenu.downloadZip": string;
@@ -824,6 +831,8 @@ const en: TranslationStrings = {
   "mainViewer.raw": "Raw",
   "mainViewer.diff": "Diff",
   "mainViewer.diffTarget": "Select file to compare",
+  "workspace.openExternal": "Open in Google",
+  "workspace.reload": "Reload",
 
   // ChatPanel
   "chat.newChat": "New Chat",
@@ -1062,6 +1071,11 @@ const en: TranslationStrings = {
   "contextMenu.import": "Import",
   "contextMenu.importFilesOrZip": "Files / ZIP",
   "contextMenu.importFolder": "Folder",
+  "contextMenu.importGoogleWorkspacePicker": "Google Doc / Sheet",
+  "contextMenu.importGoogleWorkspaceUrl": "Google Doc / Sheet URL",
+  "contextMenu.importGoogleWorkspacePrompt": "Paste a Google Docs or Sheets URL, or file ID.",
+  "contextMenu.importGoogleWorkspaceInvalid": "Enter a valid Google Docs or Sheets URL or file ID.",
+  "contextMenu.importGooglePickerMissingKey": "Google Picker API key is not configured. Set GOOGLE_PICKER_API_KEY.",
   "contextMenu.importFailed": "Failed to import.",
   "contextMenu.importDuplicatePaths": "Import contains duplicate paths: {name}",
   "contextMenu.downloadZip": "Download as ZIP",
@@ -1608,6 +1622,8 @@ const ja: TranslationStrings = {
   "mainViewer.raw": "Raw",
   "mainViewer.diff": "比較",
   "mainViewer.diffTarget": "比較するファイルを選択",
+  "workspace.openExternal": "Googleで開く",
+  "workspace.reload": "再読み込み",
 
   // ChatPanel
   "chat.newChat": "新しいチャット",
@@ -1846,6 +1862,11 @@ const ja: TranslationStrings = {
   "contextMenu.import": "インポート",
   "contextMenu.importFilesOrZip": "ファイル / ZIP",
   "contextMenu.importFolder": "フォルダ",
+  "contextMenu.importGoogleWorkspacePicker": "Google Doc / Sheet",
+  "contextMenu.importGoogleWorkspaceUrl": "Google Doc / Sheet URL",
+  "contextMenu.importGoogleWorkspacePrompt": "Google Docs または Sheets のURL、またはファイルIDを貼り付けてください。",
+  "contextMenu.importGoogleWorkspaceInvalid": "有効な Google Docs / Sheets のURLまたはファイルIDを入力してください。",
+  "contextMenu.importGooglePickerMissingKey": "Google Picker APIキーが設定されていません。GOOGLE_PICKER_API_KEY を設定してください。",
   "contextMenu.importFailed": "インポートに失敗しました。",
   "contextMenu.importDuplicatePaths": "インポート対象に重複したパスがあります: {name}",
   "contextMenu.downloadZip": "ZIPでダウンロード",

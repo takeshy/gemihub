@@ -52,6 +52,49 @@ function folderPathFromId(folderId: string | null | undefined): string {
   return folderId?.startsWith("vfolder:") ? folderId.slice("vfolder:".length) : "";
 }
 
+function extractGoogleWorkspaceFileId(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const patterns = [
+    /\/document\/d\/([a-zA-Z0-9_-]+)/,
+    /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/,
+    /[?&]id=([a-zA-Z0-9_-]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+
+  return /^[a-zA-Z0-9_-]{20,}$/.test(trimmed) ? trimmed : null;
+}
+
+async function loadGooglePickerApi(): Promise<void> {
+  const existing = window as typeof window & { gapi?: { load: (api: string, callback: () => void) => void } };
+  if (existing.gapi) {
+    await new Promise<void>((resolve) => existing.gapi!.load("picker", resolve));
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://apis.google.com/js/api.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Google API script"));
+    document.head.appendChild(script);
+  });
+
+  const loaded = window as typeof window & { gapi?: { load: (api: string, callback: () => void) => void } };
+  await new Promise<void>((resolve, reject) => {
+    if (!loaded.gapi) {
+      reject(new Error("Google API script did not initialize"));
+      return;
+    }
+    loaded.gapi.load("picker", resolve);
+  });
+}
+
 function mimeTypeFromImportPath(fileName: string): string {
   const ext = fileName.split(".").pop()?.toLowerCase();
   const map: Record<string, string> = {
@@ -374,13 +417,14 @@ export function useTreeFileCreate({
     }
   }, [activeFileId, expandZipFiles, fetchAndCacheTree, rootFolderId, setExpandedFolders, t, treeItems, upload]);
 
-  const handleUploadClick = useCallback(() => {
+  const handleImportFilesClick = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
+    input.accept = ".zip,*/*";
     input.onchange = async () => {
       const files = Array.from(input.files || []);
-      await importFilesToFolder(files, selectedFolderId, { expandZip: false });
+      await importFilesToFolder(files, selectedFolderId);
     };
     input.click();
   }, [importFilesToFolder, selectedFolderId]);
@@ -400,6 +444,170 @@ export function useTreeFileCreate({
     };
     input.click();
   }, [importFilesToFolder]);
+
+  const handleImportGoogleWorkspaceClick = useCallback(async (targetFolderId: string) => {
+    const input = prompt(t("contextMenu.importGoogleWorkspacePrompt"));
+    if (!input) return;
+    const sourceFileId = extractGoogleWorkspaceFileId(input);
+    if (!sourceFileId) {
+      alert(t("contextMenu.importGoogleWorkspaceInvalid"));
+      return;
+    }
+
+    const namePrefix = folderPathFromId(targetFolderId) || undefined;
+    try {
+      const res = await fetch("/api/drive/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "import-google-workspace",
+          sourceFileId,
+          namePrefix,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        alert(data.error || t("contextMenu.importFailed"));
+        return;
+      }
+      if (data.meta) {
+        await setCachedRemoteMeta({
+          id: "current",
+          rootFolderId,
+          lastUpdatedAt: data.meta.lastUpdatedAt,
+          files: data.meta.files,
+          cachedAt: Date.now(),
+        });
+      }
+      const file = data.file as { id: string; name: string; mimeType: string; modifiedTime?: string; md5Checksum?: string } | undefined;
+      if (file) {
+        const localMeta = await getLocalSyncMeta();
+        if (localMeta) {
+          localMeta.files[file.id] = {
+            md5Checksum: file.md5Checksum ?? "",
+            modifiedTime: file.modifiedTime ?? "",
+            name: file.name,
+          };
+          localMeta.lastUpdatedAt = new Date().toISOString();
+          await setLocalSyncMeta(localMeta);
+        }
+        await fetchAndCacheTree();
+        onSelectFile(file.id, file.name.split("/").pop() || file.name, file.mimeType);
+      } else {
+        await fetchAndCacheTree();
+      }
+    } catch {
+      alert(t("contextMenu.importFailed"));
+    }
+  }, [fetchAndCacheTree, onSelectFile, rootFolderId, t]);
+
+  const importGoogleWorkspaceFile = useCallback(async (sourceFileId: string, targetFolderId: string) => {
+    const namePrefix = folderPathFromId(targetFolderId) || undefined;
+    const res = await fetch("/api/drive/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "import-google-workspace",
+        sourceFileId,
+        namePrefix,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || t("contextMenu.importFailed"));
+    }
+    if (data.meta) {
+      await setCachedRemoteMeta({
+        id: "current",
+        rootFolderId,
+        lastUpdatedAt: data.meta.lastUpdatedAt,
+        files: data.meta.files,
+        cachedAt: Date.now(),
+      });
+    }
+    const file = data.file as { id: string; name: string; mimeType: string; modifiedTime?: string; md5Checksum?: string } | undefined;
+    if (file) {
+      const localMeta = await getLocalSyncMeta();
+      if (localMeta) {
+        localMeta.files[file.id] = {
+          md5Checksum: file.md5Checksum ?? "",
+          modifiedTime: file.modifiedTime ?? "",
+          name: file.name,
+        };
+        localMeta.lastUpdatedAt = new Date().toISOString();
+        await setLocalSyncMeta(localMeta);
+      }
+      await fetchAndCacheTree();
+      onSelectFile(file.id, file.name.split("/").pop() || file.name, file.mimeType);
+    } else {
+      await fetchAndCacheTree();
+    }
+  }, [fetchAndCacheTree, onSelectFile, rootFolderId, t]);
+
+  const handleImportGoogleWorkspacePickerClick = useCallback(async (targetFolderId: string) => {
+    try {
+      const configRes = await fetch("/api/google/picker");
+      const config = await configRes.json() as {
+        accessToken?: string;
+        appId?: string;
+        developerKey?: string;
+        error?: string;
+      };
+      if (!configRes.ok || config.error || !config.accessToken) {
+        throw new Error(config.error || t("contextMenu.importFailed"));
+      }
+      if (!config.developerKey) {
+        alert(t("contextMenu.importGooglePickerMissingKey"));
+        return;
+      }
+
+      await loadGooglePickerApi();
+      const pickerWindow = window as typeof window & {
+        google?: {
+          picker?: {
+            Action: { PICKED: string; CANCEL: string };
+            DocsView: new () => {
+              setIncludeFolders: (value: boolean) => unknown;
+              setSelectFolderEnabled: (value: boolean) => unknown;
+              setMimeTypes: (value: string) => unknown;
+            };
+            PickerBuilder: new () => {
+              setAppId: (value: string) => unknown;
+              setOAuthToken: (value: string) => unknown;
+              setDeveloperKey: (value: string) => unknown;
+              addView: (view: unknown) => unknown;
+              setCallback: (callback: (data: { action?: string; docs?: Array<{ id?: string }> }) => void) => unknown;
+              build: () => { setVisible: (value: boolean) => void };
+            };
+          };
+        };
+      };
+      const picker = pickerWindow.google?.picker;
+      if (!picker) throw new Error("Google Picker did not initialize");
+
+      const view = new picker.DocsView();
+      view.setIncludeFolders(false);
+      view.setSelectFolderEnabled(false);
+      view.setMimeTypes("application/vnd.google-apps.document,application/vnd.google-apps.spreadsheet");
+
+      const builder = new picker.PickerBuilder();
+      if (config.appId) builder.setAppId(config.appId);
+      builder.setOAuthToken(config.accessToken);
+      builder.setDeveloperKey(config.developerKey);
+      builder.addView(view);
+      builder.setCallback((data) => {
+        if (data.action !== picker.Action.PICKED) return;
+        const sourceFileId = data.docs?.[0]?.id;
+        if (!sourceFileId) return;
+        importGoogleWorkspaceFile(sourceFileId, targetFolderId).catch((error) => {
+          alert(error instanceof Error ? error.message : t("contextMenu.importFailed"));
+        });
+      });
+      builder.build().setVisible(true);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : t("contextMenu.importFailed"));
+    }
+  }, [importGoogleWorkspaceFile, t]);
 
   const buildDefaultName = useCallback(() => {
     const now = new Date();
@@ -687,8 +895,10 @@ export function useTreeFileCreate({
     handleCreateFolder,
     handleCreateFolderSubmit,
     handleCreateFile,
-    handleUploadClick,
+    handleImportFilesClick,
     handleImportClick,
+    handleImportGoogleWorkspaceClick,
+    handleImportGoogleWorkspacePickerClick,
     handleCreateFileSubmit,
     buildDefaultName,
   };

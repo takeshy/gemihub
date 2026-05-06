@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import type { UserSettings } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 import { usePlugins } from "~/contexts/PluginContext";
@@ -6,6 +6,7 @@ import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { getMediaType } from "~/utils/media-utils";
 import { MediaViewer } from "./editors/MediaViewer";
 import { TextBasedViewer } from "./TextBasedViewer";
+import { GOOGLE_DOC_MIME, GOOGLE_SHEET_MIME, GoogleDocViewer, GoogleSheetViewer } from "./GoogleWorkspaceViewers";
 
 interface MainViewerProps {
   fileId: string | null;
@@ -69,6 +70,24 @@ export function MainViewer({
         );
       }
     }
+  }
+
+  // When opened from a URL, metadata is resolved asynchronously. Do not fall
+  // through to TextBasedViewer before we know whether this is a Workspace file.
+  if (!fileName && !fileMimeType) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <Loader2 size={24} className="animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (fileMimeType === GOOGLE_DOC_MIME) {
+    return <GoogleDocViewer fileId={fileId} fileName={fileName || "Google Doc"} />;
+  }
+
+  if (fileMimeType === GOOGLE_SHEET_MIME) {
+    return <GoogleSheetViewer fileId={fileId} fileName={fileName || "Google Sheet"} />;
   }
 
   // Binary files (PDF, video, audio, image) - don't load via useFileWithCache

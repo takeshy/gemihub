@@ -186,6 +186,7 @@ Edit `.env`:
 ```env
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
+GOOGLE_PICKER_API_KEY=your-browser-api-key
 GOOGLE_REDIRECT_URI=http://localhost:8132/auth/google/callback
 SESSION_SECRET=<random string>
 ```
@@ -229,6 +230,7 @@ docker build -t gemihub .
 docker run -p 8080:8080 \
   -e GOOGLE_CLIENT_ID=... \
   -e GOOGLE_CLIENT_SECRET=... \
+  -e GOOGLE_PICKER_API_KEY=... \
   -e GOOGLE_REDIRECT_URI=https://your-domain/auth/google/callback \
   -e SESSION_SECRET=... \
   gemihub

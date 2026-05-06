@@ -6,6 +6,7 @@ import {
   FileCode,
   FileText,
   FileJson,
+  FileSpreadsheet,
   File,
   ChevronRight,
   ChevronDown,
@@ -89,7 +90,10 @@ interface DriveFileTreeProps {
   onPush?: () => Promise<void>;
 }
 
-function getFileIcon(name: string, _mimeType: string) {
+function getFileIcon(name: string, mimeType: string) {
+  if (mimeType === "application/vnd.google-apps.spreadsheet") {
+    return <FileSpreadsheet size={ICON.MD} className="text-green-600 dark:text-green-400 flex-shrink-0" />;
+  }
   if (name.endsWith(".yaml") || name.endsWith(".yml")) {
     return <FileCode size={ICON.MD} className="text-orange-500 flex-shrink-0" />;
   }
@@ -152,6 +156,7 @@ export function DriveFileTree({
     currentModifiedTime: string;
     isBinary: boolean;
   } | null>(null);
+  const [toolbarImportMenu, setToolbarImportMenu] = useState<{ x: number; y: number } | null>(null);
   const [remoteMeta, setRemoteMeta] = useState<CachedRemoteMeta["files"]>({});
   const [busyFileIds, setBusyFileIds] = useState<Set<string>>(new Set());
   const setBusy = useCallback((ids: string[]) => {
@@ -531,6 +536,7 @@ export function DriveFileTree({
           fetchAndCacheTree();
         } else {
           setLoading(false);
+          fetchAndCacheTree();
         }
       }
     })();
@@ -562,8 +568,9 @@ export function DriveFileTree({
     handleCreateFolder,
     handleCreateFolderSubmit,
     handleCreateFile,
-    handleUploadClick,
     handleImportClick,
+    handleImportGoogleWorkspaceClick,
+    handleImportGoogleWorkspacePickerClick,
     handleCreateFileSubmit,
     buildDefaultName,
   } = useTreeFileCreate({
@@ -579,6 +586,32 @@ export function DriveFileTree({
     fetchAndCacheTree,
     t,
   });
+
+  const importMenuItems = useCallback(
+    (targetFolderId: string): ContextMenuItem[] => [
+      {
+        label: t("contextMenu.importFilesOrZip"),
+        icon: <FilePlus size={ICON.MD} />,
+        onClick: () => handleImportClick(targetFolderId, "files"),
+      },
+      {
+        label: t("contextMenu.importFolder"),
+        icon: <FolderPlus size={ICON.MD} />,
+        onClick: () => handleImportClick(targetFolderId, "folder"),
+      },
+      {
+        label: t("contextMenu.importGoogleWorkspacePicker"),
+        icon: <FileSpreadsheet size={ICON.MD} />,
+        onClick: () => handleImportGoogleWorkspacePickerClick(targetFolderId),
+      },
+      {
+        label: t("contextMenu.importGoogleWorkspaceUrl"),
+        icon: <FileSpreadsheet size={ICON.MD} />,
+        onClick: () => handleImportGoogleWorkspaceClick(targetFolderId),
+      },
+    ],
+    [handleImportClick, handleImportGoogleWorkspaceClick, handleImportGoogleWorkspacePickerClick, t]
+  );
 
   // Listen for create-file-requested event (from mobile editor FAB)
   useEffect(() => {
@@ -804,18 +837,7 @@ export function DriveFileTree({
         items.push({
           label: t("contextMenu.import"),
           icon: <Upload size={ICON.MD} />,
-          children: [
-            {
-              label: t("contextMenu.importFilesOrZip"),
-              icon: <FilePlus size={ICON.MD} />,
-              onClick: () => handleImportClick(item.id, "files"),
-            },
-            {
-              label: t("contextMenu.importFolder"),
-              icon: <FolderPlus size={ICON.MD} />,
-              onClick: () => handleImportClick(item.id, "folder"),
-            },
-          ],
+          children: importMenuItems(item.id),
         });
         const uncachedIds = collectFileIds(item).filter((id) => !cachedFiles.has(id) && !id.startsWith("new:"));
         if (uncachedIds.length > 0) {
@@ -925,7 +947,7 @@ export function DriveFileTree({
 
       return items;
     },
-    [handleDelete, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, handleImportClick, remoteMeta, cachedFiles, encryptedFiles, t, treeItems, cacheFilesByIds]
+    [handleDelete, handleDuplicate, handleEncrypt, handleClearCache, handlePublish, handleUnpublish, handleCopyLink, handleConvertMarkdownToPdf, handleConvertMarkdownToHtml, importMenuItems, remoteMeta, cachedFiles, encryptedFiles, t, treeItems, cacheFilesByIds]
   );
 
   const renderItem = (item: CachedTreeNode, depth: number, parentId: string) => {
@@ -1177,9 +1199,12 @@ export function DriveFileTree({
             <FolderPlus size={ICON.MD} />
           </button>
           <button
-            onClick={handleUploadClick}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setToolbarImportMenu({ x: rect.left, y: rect.bottom + 4 });
+            }}
             className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            title="Upload Files"
+            title={t("contextMenu.import")}
           >
             <Upload size={ICON.MD} />
           </button>
@@ -1260,6 +1285,15 @@ export function DriveFileTree({
             </div>
           ))}
         </div>
+      )}
+
+      {toolbarImportMenu && (
+        <ContextMenu
+          x={toolbarImportMenu.x}
+          y={toolbarImportMenu.y}
+          items={importMenuItems(selectedFolderId || rootFolderId)}
+          onClose={() => setToolbarImportMenu(null)}
+        />
       )}
 
       {contextMenu && (

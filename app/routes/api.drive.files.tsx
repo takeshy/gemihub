@@ -10,6 +10,7 @@ import {
   createFile,
   createFileBinary,
   createGoogleDocFromHtml,
+  copyFile,
   exportFile,
   updateFile,
   updateFileBinary,
@@ -45,6 +46,7 @@ import { saveEdit } from "~/services/edit-history.server";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { createLogContext, emitLog } from "~/services/logger.server";
 import { handleRagAction } from "~/services/sync-rag.server";
+import { ensureHubworkSpreadsheetsInMeta, filesFromMeta } from "~/services/hubwork-spreadsheets-meta.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
@@ -73,7 +75,9 @@ export async function loader({ request }: Route.LoaderArgs) {
         const files = await listFiles(validTokens.accessToken, folderId);
         return logAndReturn({ files });
       }
-      const { files, meta } = await getFileListFromMeta(validTokens.accessToken, validTokens.rootFolderId);
+      let { files, meta } = await getFileListFromMeta(validTokens.accessToken, validTokens.rootFolderId);
+      meta = await ensureHubworkSpreadsheetsInMeta(validTokens.accessToken, validTokens.rootFolderId, meta);
+      files = filesFromMeta(meta);
       return logAndReturn({ files, meta: { lastUpdatedAt: meta.lastUpdatedAt, files: meta.files } });
     }
     case "metadata": {
@@ -83,10 +87,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
     case "read": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
-      const [content, meta] = await Promise.all([
-        readFile(validTokens.accessToken, fileId),
-        getFileMetadata(validTokens.accessToken, fileId),
-      ]);
+      const meta = await getFileMetadata(validTokens.accessToken, fileId);
+      if (meta.mimeType?.startsWith("application/vnd.google-apps.")) {
+        return logAndReturn(
+          { error: "Google Workspace files must be opened with the Workspace viewer or exported." },
+          { status: 400 }
+        );
+      }
+      const content = await readFile(validTokens.accessToken, fileId);
       return logAndReturn({ content, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime });
     }
     case "search": {
@@ -105,6 +113,30 @@ export async function loader({ request }: Route.LoaderArgs) {
       if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
       emitLog(logCtx, 200);
       return new Response(rawRes.body, { headers });
+    }
+    case "export": {
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
+      const exportMimeType = url.searchParams.get("mimeType") || "application/pdf";
+      const allowedMimeTypes = new Set([
+        "application/pdf",
+        "text/html",
+        "text/plain",
+        "text/csv",
+      ]);
+      if (!allowedMimeTypes.has(exportMimeType)) {
+        return logAndReturn({ error: "Unsupported export MIME type" }, { status: 400 });
+      }
+      const meta = await getFileMetadata(validTokens.accessToken, fileId);
+      const buffer = await exportFile(validTokens.accessToken, fileId, exportMimeType);
+      const body = new Uint8Array(buffer);
+      const headers = new Headers({
+        "Content-Type": exportMimeType,
+        "Content-Disposition": `inline; filename="${encodeURIComponent(meta.name)}"`,
+        "Cache-Control": "no-store",
+      });
+      if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
+      emitLog(logCtx, 200);
+      return new Response(body.buffer, { headers });
     }
     default:
       return logAndReturn({ error: "Unknown action" }, { status: 400 });
@@ -197,7 +229,7 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   const body = await request.json();
-  const { action: actionType, fileId, name, content, data, mimeType, overwriteFileId, dedup } = body;
+  const { action: actionType, fileId, name, content, data, mimeType, overwriteFileId, dedup, sourceFileId, namePrefix } = body;
   logCtx.action = actionType;
   logCtx.details = { fileId };
 
@@ -235,6 +267,30 @@ export async function action({ request }: Route.ActionArgs) {
         buf,
         validTokens.rootFolderId,
         mimeType || "image/png"
+      );
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });
+    }
+    case "import-google-workspace": {
+      if (!sourceFileId) return logAndReturn({ error: "Missing sourceFileId" }, { status: 400 });
+      const sourceMeta = await getFileMetadata(validTokens.accessToken, sourceFileId);
+      const allowedMimeTypes = new Set([
+        "application/vnd.google-apps.document",
+        "application/vnd.google-apps.spreadsheet",
+      ]);
+      if (!allowedMimeTypes.has(sourceMeta.mimeType)) {
+        return logAndReturn({ error: "Only Google Docs and Google Sheets can be imported here" }, { status: 400 });
+      }
+      const cleanPrefix = typeof namePrefix === "string"
+        ? namePrefix.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")
+        : "";
+      const baseName = sourceMeta.name.split("/").pop() || sourceMeta.name;
+      const targetName = cleanPrefix ? `${cleanPrefix}/${baseName}` : baseName;
+      const file = await copyFile(
+        validTokens.accessToken,
+        sourceFileId,
+        targetName,
+        validTokens.rootFolderId
       );
       const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
       return logAndReturn({ file, meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files } });

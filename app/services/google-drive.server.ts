@@ -541,6 +541,29 @@ export async function createFolder(
   return res.json();
 }
 
+export async function copyFile(
+  accessToken: string,
+  fileId: string,
+  name: string,
+  parentId: string,
+  options: DriveOperationOptions = {}
+): Promise<DriveFile> {
+  const res = await driveRequest(
+    `${DRIVE_API}/files/${fileId}/copy?fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
+    accessToken,
+    {
+      method: "POST",
+      signal: options.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        parents: [parentId],
+      }),
+    }
+  );
+  return res.json();
+}
+
 // Create a file with binary content (for file uploads)
 export async function createFileBinary(
   accessToken: string,

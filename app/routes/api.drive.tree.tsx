@@ -7,6 +7,7 @@ import {
   rebuildSyncMeta,
   type SyncMeta,
 } from "~/services/sync-meta.server";
+import { ensureHubworkSpreadsheetsInMeta, filesFromMeta } from "~/services/hubwork-spreadsheets-meta.server";
 
 interface TreeNode {
   id: string;
@@ -114,7 +115,8 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Read from meta file (fast path)
     const result = await getFileListFromMeta(validTokens.accessToken, folderId);
     meta = result.meta;
-    files = result.files;
+    meta = await ensureHubworkSpreadsheetsInMeta(validTokens.accessToken, folderId, meta);
+    files = filesFromMeta(meta);
   }
 
   const items = buildVirtualTree(files);
