@@ -48,6 +48,16 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
+        name = "GOOGLE_PICKER_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = data.google_secret_manager_secret.google_picker_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
         name = "SESSION_SECRET"
         value_source {
           secret_key_ref {
@@ -180,6 +190,7 @@ resource "google_cloud_run_v2_service" "app" {
     google_project_service.apis,
     google_secret_manager_secret_iam_member.cloud_run_google_client_id,
     google_secret_manager_secret_iam_member.cloud_run_google_client_secret,
+    google_secret_manager_secret_iam_member.cloud_run_google_picker_api_key,
     google_secret_manager_secret_iam_member.cloud_run_session_secret,
     google_secret_manager_secret_iam_member.cloud_run_stripe_secret_key,
     google_secret_manager_secret_iam_member.cloud_run_stripe_webhook_secret,

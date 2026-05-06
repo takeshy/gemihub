@@ -18,6 +18,12 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_google_client_secr
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
+resource "google_secret_manager_secret_iam_member" "cloud_run_google_picker_api_key" {
+  secret_id = data.google_secret_manager_secret.google_picker_api_key.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
 resource "google_secret_manager_secret_iam_member" "cloud_run_session_secret" {
   secret_id = data.google_secret_manager_secret.session_secret.id
   role      = "roles/secretmanager.secretAccessor"

@@ -186,8 +186,18 @@ Google Cloud DNS で管理。ゾーンには以下を含む：
 gcloud auth login
 gcloud auth application-default login
 
-# terraform.tfvars にシークレットを設定してから:
-cd terraform
+# Secret Manager にシークレットを作成（合計10個）
+gcloud secrets create google-client-id --replication-policy=automatic
+gcloud secrets versions add google-client-id --data-file=-
+# 以下も同様に作成:
+# google-client-secret, google-picker-api-key, session-secret,
+# stripe-secret-key, stripe-webhook-secret,
+# stripe-price-id-lite, stripe-price-id-pro,
+# hubwork-admin-credentials（user:password形式）,
+# hubwork-admin-emails（カンマ区切りメールアドレス）
+
+# terraform.tfvars に非シークレット設定を入れてから:
+cd terraform/environments/prod
 terraform init
 terraform apply
 ```

@@ -193,10 +193,10 @@ Multi-stage Dockerfile (`node:24-slim`):
 gcloud auth login
 gcloud auth application-default login
 
-# Create secrets in Secret Manager (9 total)
+# Create secrets in Secret Manager (10 total)
 gcloud secrets create google-client-id --replication-policy=automatic
 gcloud secrets versions add google-client-id --data-file=-
-# Repeat for: google-client-secret, session-secret,
+# Repeat for: google-client-secret, google-picker-api-key, session-secret,
 # stripe-secret-key, stripe-webhook-secret,
 # stripe-price-id-lite, stripe-price-id-pro,
 # hubwork-admin-credentials (user:password format),
