@@ -101,6 +101,53 @@ export interface ChatWithToolsOptions {
 const DEFAULT_MAX_FUNCTION_CALLS = 50;
 const DEFAULT_WARNING_THRESHOLD = 10;
 const DEFAULT_RAG_TOP_K = 5;
+const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
+
+function normalizeFileSearchStoreName(storeName: string | null | undefined): string | null {
+  const trimmed = storeName?.trim();
+  if (!trimmed) return null;
+  return trimmed.startsWith(FILE_SEARCH_STORE_PREFIX) ? trimmed : `${FILE_SEARCH_STORE_PREFIX}${trimmed}`;
+}
+
+interface FileSearchRetrievedContext {
+  uri?: string;
+  title?: string;
+  pageNumber?: number;
+  page_number?: number;
+  mediaId?: string;
+  media_id?: string;
+  customMetadata?: Array<{
+    key?: string;
+    stringValue?: string;
+    string_value?: string;
+    numericValue?: number;
+    numeric_value?: number;
+  }>;
+}
+
+function getCustomMetadataValue(ctx: FileSearchRetrievedContext, key: string): string | undefined {
+  const metadata = ctx.customMetadata ?? [];
+  const item = metadata.find((m) => m.key === key);
+  const value = item?.stringValue ?? item?.string_value ?? item?.numericValue ?? item?.numeric_value;
+  return value == null ? undefined : String(value);
+}
+
+export function formatFileSearchSource(ctx: FileSearchRetrievedContext): string | null {
+  const title =
+    ctx.title ||
+    getCustomMetadataValue(ctx, "file_path") ||
+    getCustomMetadataValue(ctx, "path") ||
+    getCustomMetadataValue(ctx, "file_name") ||
+    getCustomMetadataValue(ctx, "basename") ||
+    ctx.uri;
+  if (!title) return null;
+  const pageNumber = ctx.pageNumber ?? ctx.page_number;
+  const mediaId = ctx.mediaId ?? ctx.media_id;
+  const suffixes: string[] = [];
+  if (typeof pageNumber === "number") suffixes.push(`p.${pageNumber}`);
+  if (mediaId) suffixes.push("image");
+  return suffixes.length > 0 ? `${title} (${suffixes.join(", ")})` : title;
+}
 
 // Convert our Message format to Gemini Content format
 export function messagesToContents(messages: Message[]): Content[] {
@@ -422,6 +469,9 @@ export async function* chatWithToolsStream(
   let geminiTools: Tool[] | undefined;
 
   const ragEnabled = ragStoreIds && ragStoreIds.length > 0;
+  const normalizedRagStoreIds = ragStoreIds
+    ?.map((id) => normalizeFileSearchStoreName(id))
+    .filter((id): id is string => !!id);
   const webSearchEnabled = options?.webSearchEnabled ?? false;
 
   if (webSearchEnabled) {
@@ -430,13 +480,13 @@ export async function* chatWithToolsStream(
     if (tools.length > 0 && !ragEnabled) {
       geminiTools = toolsToGeminiFormat(tools);
     }
-    if (ragEnabled) {
+    if (normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {
       if (!geminiTools) {
         geminiTools = [];
       }
       geminiTools.push({
         fileSearch: {
-          fileSearchStoreNames: ragStoreIds,
+          fileSearchStoreNames: normalizedRagStoreIds,
           topK: clampedTopK,
         },
       });
@@ -506,7 +556,7 @@ export async function* chatWithToolsStream(
             };
             groundingMetadata?: {
               groundingChunks?: Array<{
-                retrievedContext?: { uri?: string; title?: string };
+                retrievedContext?: FileSearchRetrievedContext;
               }>;
             };
           }>;
@@ -556,9 +606,9 @@ export async function* chatWithToolsStream(
           if (groundingMetadata) {
             if (groundingMetadata.groundingChunks) {
               for (const gc of groundingMetadata.groundingChunks) {
-                const ctx = gc.retrievedContext as { uri?: string; title?: string } | undefined;
+                const ctx = gc.retrievedContext;
                 const web = (gc as { web?: { uri?: string; title?: string } }).web;
-                const source = ctx?.title || ctx?.uri || web?.title || web?.uri;
+                const source = ctx ? formatFileSearchSource(ctx) : web?.title || web?.uri;
                 if (source && !accumulatedSources.includes(source)) {
                   accumulatedSources.push(source);
                 }

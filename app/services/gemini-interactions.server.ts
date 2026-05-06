@@ -14,7 +14,15 @@ import {
 } from "@google/genai";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
-import { MODEL_PRICING, SEARCH_GROUNDING_COST } from "./gemini-chat-core";
+import { formatFileSearchSource, MODEL_PRICING, SEARCH_GROUNDING_COST } from "./gemini-chat-core";
+
+const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
+
+function normalizeFileSearchStoreName(storeName: string | null | undefined): string | null {
+  const trimmed = storeName?.trim();
+  if (!trimmed) return null;
+  return trimmed.startsWith(FILE_SEARCH_STORE_PREFIX) ? trimmed : `${FILE_SEARCH_STORE_PREFIX}${trimmed}`;
+}
 
 // ---------------------------------------------------------------------------
 // Tool conversion — Interactions API format
@@ -71,10 +79,14 @@ export function buildInteractionsTools(
     } as Interactions.Tool);
   }
 
-  if (ragStoreIds && ragStoreIds.length > 0) {
+  const normalizedRagStoreIds = ragStoreIds
+    ?.map((id) => normalizeFileSearchStoreName(id))
+    .filter((id): id is string => !!id);
+
+  if (normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {
     result.push({
       type: "file_search" as const,
-      file_search_store_names: ragStoreIds,
+      file_search_store_names: normalizedRagStoreIds,
       top_k: ragTopK,
     } as Interactions.Tool);
   }
@@ -379,6 +391,7 @@ export async function* streamInteraction(
   let currentInteractionId: string | undefined;
   const functionCallsToProcess: ToolCall[] = [];
   const accumulatedSources: string[] = [];
+  let fileSearchCalled = false;
   let ragEmitted = false;
   let webSearchEmitted = false;
   let finalUsage: StreamChunkUsage | undefined;
@@ -395,6 +408,14 @@ export async function* streamInteraction(
         case "interaction.start": {
           const interaction = (event as { interaction?: { id?: string } }).interaction;
           currentInteractionId = interaction?.id;
+          break;
+        }
+
+        case "content.start": {
+          const content = (event as { content?: { type?: string } }).content;
+          if (content?.type === "file_search_result") {
+            fileSearchCalled = true;
+          }
           break;
         }
 
@@ -429,10 +450,29 @@ export async function* streamInteraction(
               break;
 
             case "file_search_result":
+              fileSearchCalled = true;
               if ("result" in delta && Array.isArray(delta.result)) {
-                for (const r of delta.result as Array<{ title?: string }>) {
-                  if (r.title && !accumulatedSources.includes(r.title)) {
-                    accumulatedSources.push(r.title);
+                for (const r of delta.result as Array<{
+                  title?: string;
+                  uri?: string;
+                  pageNumber?: number;
+                  page_number?: number;
+                  mediaId?: string;
+                  media_id?: string;
+                  customMetadata?: Array<{ key?: string; stringValue?: string; string_value?: string; numericValue?: number; numeric_value?: number }>;
+                  custom_metadata?: Array<{ key?: string; stringValue?: string; string_value?: string; numericValue?: number; numeric_value?: number }>;
+                }>) {
+                  const source = formatFileSearchSource({
+                    title: r.title,
+                    uri: r.uri,
+                    pageNumber: r.pageNumber,
+                    page_number: r.page_number,
+                    mediaId: r.mediaId,
+                    media_id: r.media_id,
+                    customMetadata: r.customMetadata ?? r.custom_metadata,
+                  });
+                  if (source && !accumulatedSources.includes(source)) {
+                    accumulatedSources.push(source);
                   }
                 }
               }
@@ -482,7 +522,7 @@ export async function* streamInteraction(
     }
 
     // Emit accumulated RAG sources
-    if (accumulatedSources.length > 0 && !ragEmitted) {
+    if ((fileSearchCalled || accumulatedSources.length > 0) && !ragEmitted) {
       ragEmitted = true;
       yield { type: "rag_used", ragSources: accumulatedSources };
     }

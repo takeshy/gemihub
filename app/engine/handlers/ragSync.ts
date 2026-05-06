@@ -1,8 +1,9 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import { replaceVariables } from "./utils";
 import * as driveService from "~/services/google-drive.server";
-import { uploadDriveFile, getOrCreateStore } from "~/services/file-search.server";
+import { FILE_SEARCH_EMBEDDING_MODEL, uploadDriveFile, getOrCreateStore } from "~/services/file-search.server";
 import { DEFAULT_RAG_SETTING } from "~/types/settings";
+import { saveSettings } from "~/services/user-settings.server";
 
 // Handle rag-sync node - sync a Drive file to a RAG store
 export async function handleRagSyncNode(
@@ -55,9 +56,11 @@ export async function handleRagSyncNode(
     }
     const rs = serviceContext.settings.ragSettings[ragSettingName];
     rs.storeName = storeName;
+    rs.embeddingModel = FILE_SEARCH_EMBEDDING_MODEL;
     if (!rs.storeId) {
       rs.storeId = storeName;
     }
+    await saveSettings(accessToken, folderId, serviceContext.settings);
   }
 
   // Upload the file to the RAG store

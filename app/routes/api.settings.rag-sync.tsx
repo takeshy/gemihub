@@ -2,7 +2,7 @@ import type { Route } from "./+types/api.settings.rag-sync";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
-import { smartSync, getOrCreateStore } from "~/services/file-search.server";
+import { FILE_SEARCH_EMBEDDING_MODEL, smartSync, getOrCreateStore } from "~/services/file-search.server";
 
 // ---------------------------------------------------------------------------
 // POST -- RAG sync with SSE progress
@@ -83,15 +83,19 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
-        // Ensure store exists
-        if (!ragSetting.storeName) {
+        // Ensure store exists. If this setting predates multimodal File Search,
+        // create a gemini-embedding-2 store and let the sync re-index files.
+        if (!ragSetting.storeName || ragSetting.embeddingModel !== FILE_SEARCH_EMBEDDING_MODEL) {
           sendEvent("progress", {
-            message: "Creating File Search store...",
+            message: "Creating multimodal File Search store...",
             current: 0,
             total: 0,
           });
           const storeName = await getOrCreateStore(apiKey, settingName);
           ragSetting.storeName = storeName;
+          ragSetting.storeId = storeName;
+          ragSetting.embeddingModel = FILE_SEARCH_EMBEDDING_MODEL;
+          ragSetting.files = {};
         }
 
         sendEvent("progress", {

@@ -1,6 +1,6 @@
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { readFileBytes } from "~/services/google-drive.server";
-import { getOrCreateStore, registerSingleFile, calculateChecksum, deleteSingleFileFromRag } from "~/services/file-search.server";
+import { FILE_SEARCH_EMBEDDING_MODEL, getOrCreateStore, registerSingleFile, calculateChecksum, deleteSingleFileFromRag } from "~/services/file-search.server";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
 import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 import { isRagEligible } from "~/constants/rag";
@@ -109,11 +109,14 @@ export async function handleRagAction(
         return jsonWithCookie({ ok: true, skipped: true });
       }
 
-      // Ensure store exists
-      if (!ragSetting.storeName) {
+      // Ensure store exists. Older settings may point to text-only stores; switch
+      // the default auto-registration store to gemini-embedding-2 for images.
+      if (!ragSetting.storeName || ragSetting.embeddingModel !== FILE_SEARCH_EMBEDDING_MODEL) {
         const storeName = await deps.getOrCreateStore(apiKey, storeKey);
         ragSetting.storeName = storeName;
         ragSetting.storeId = storeName;
+        ragSetting.embeddingModel = FILE_SEARCH_EMBEDDING_MODEL;
+        ragSetting.files = {};
         // Save settings to persist store name (one-time)
         await deps.saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
       }
@@ -263,7 +266,19 @@ export async function handleRagAction(
 
       const retryStoreKey = DEFAULT_RAG_STORE_KEY;
       const retryRagSetting = retrySettings.ragSettings[retryStoreKey];
-      if (!retryRagSetting?.storeName || !retryRagSetting.files) {
+      if (!retryRagSetting) {
+        return jsonWithCookie({ ok: true, retried: 0, stillPending: 0 });
+      }
+      if (!retryRagSetting.storeName || retryRagSetting.embeddingModel !== FILE_SEARCH_EMBEDDING_MODEL) {
+        const storeName = await deps.getOrCreateStore(retryApiKey, retryStoreKey);
+        retryRagSetting.storeName = storeName;
+        retryRagSetting.storeId = storeName;
+        retryRagSetting.embeddingModel = FILE_SEARCH_EMBEDDING_MODEL;
+        retryRagSetting.files = {};
+        await deps.saveSettings(validTokens.accessToken, validTokens.rootFolderId, retrySettings);
+        return jsonWithCookie({ ok: true, retried: 0, stillPending: 0 });
+      }
+      if (!retryRagSetting.files) {
         return jsonWithCookie({ ok: true, retried: 0, stillPending: 0 });
       }
 

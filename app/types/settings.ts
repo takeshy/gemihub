@@ -416,6 +416,7 @@ export interface RagSetting {
   storeId: string | null;
   storeIds: string[];
   storeName: string | null;
+  embeddingModel?: string | null;
   isExternal: boolean;
   targetFolders: string[];
   excludePatterns: string[];
@@ -436,6 +437,7 @@ export const DEFAULT_RAG_SETTING: RagSetting = {
   storeId: null,
   storeIds: [],
   storeName: null,
+  embeddingModel: null,
   isExternal: false,
   targetFolders: [],
   excludePatterns: ["^temporaries/", "^workflows/"],
