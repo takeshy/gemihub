@@ -1043,6 +1043,7 @@ function IDEContent({
       cacheFilesByIds={cacheFilesByIds}
       cachingProgress={cachingProgress}
       onPush={push}
+      hasPremiumUpload={!!settings.hubwork?.plan}
     />
   );
 
@@ -1520,6 +1521,7 @@ function DriveFileTreeWithContext(props: {
   cacheFilesByIds: (ids: string[]) => Promise<void>;
   cachingProgress: { total: number; done: number } | null;
   onPush?: () => Promise<void>;
+  hasPremiumUpload?: boolean;
 }) {
   const { setFileList } = useEditorContext();
   return (

@@ -53,7 +53,7 @@ import { cryptoCache } from "~/services/crypto-cache";
 import { hasNetContentChange } from "~/services/edit-history-local";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
-import { useFileUpload } from "~/hooks/useFileUpload";
+import { FREE_UPLOAD_SIZE_LIMIT_BYTES, useFileUpload } from "~/hooks/useFileUpload";
 import { EditHistoryModal } from "./EditHistoryModal";
 import { TempDiffModal } from "./TempDiffModal";
 import { useI18n } from "~/i18n/context";
@@ -88,6 +88,7 @@ interface DriveFileTreeProps {
   cacheFilesByIds: (ids: string[]) => Promise<void>;
   cachingProgress: { total: number; done: number } | null;
   onPush?: () => Promise<void>;
+  hasPremiumUpload?: boolean;
 }
 
 function getFileIcon(name: string, mimeType: string) {
@@ -127,6 +128,7 @@ export function DriveFileTree({
   cacheFilesByIds,
   cachingProgress,
   onPush,
+  hasPremiumUpload,
 }: DriveFileTreeProps) {
   const [treeItems, setTreeItems] = useState<CachedTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +170,9 @@ export function DriveFileTree({
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const { progress, upload, clearProgress } = useFileUpload();
+  const { progress, upload, clearProgress } = useFileUpload(
+    hasPremiumUpload ? null : FREE_UPLOAD_SIZE_LIMIT_BYTES
+  );
 
   const filteredTreeItems = useMemo(
     () =>

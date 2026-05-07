@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { ragRegisterNewFile } from "~/services/rag-sync";
 
-const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30MB
+export const FREE_UPLOAD_SIZE_LIMIT_BYTES = 20 * 1024 * 1024; // 20MB
 
 export interface UploadProgress {
   name: string;
@@ -33,7 +33,7 @@ export function getUploadFileName(file: File): string {
   return uploadFile.relativePathForUpload || uploadFile.webkitRelativePath || file.name;
 }
 
-export function useFileUpload() {
+export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_LIMIT_BYTES) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress[]>([]);
 
@@ -47,18 +47,21 @@ export function useFileUpload() {
       // Initialize progress with client-side size checks
       const initial: UploadProgress[] = files.map((f) => {
         const name = getUploadFileName(f);
-        if (f.size > MAX_FILE_SIZE) {
+        if (sizeLimitBytes !== null && f.size > sizeLimitBytes) {
+          const limitMB = Math.round(sizeLimitBytes / 1024 / 1024);
           return {
             name,
             status: "error" as const,
-            error: `Too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max 30MB.`,
+            error: `Too large (${(f.size / 1024 / 1024).toFixed(1)}MB). Max ${limitMB}MB.`,
           };
         }
         return { name, status: "uploading" as const };
       });
       setProgress(initial);
 
-      const validFiles = files.filter((f) => f.size <= MAX_FILE_SIZE);
+      const validFiles = sizeLimitBytes === null
+        ? files
+        : files.filter((f) => f.size <= sizeLimitBytes);
       if (validFiles.length === 0) {
         setUploading(false);
         return fail;
@@ -139,7 +142,7 @@ export function useFileUpload() {
         return fail;
       }
     },
-    []
+    [sizeLimitBytes]
   );
 
   const clearProgress = useCallback(() => {
