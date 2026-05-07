@@ -602,6 +602,67 @@ export async function createFileBinary(
   return res.json();
 }
 
+export async function createResumableUploadSession(
+  accessToken: string,
+  name: string,
+  parentId: string,
+  mimeType: string = "application/octet-stream",
+  contentLength?: number,
+  options: DriveOperationOptions = {}
+): Promise<string> {
+  const res = await driveRequest(
+    `${DRIVE_UPLOAD_API}/files?uploadType=resumable&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
+    accessToken,
+    {
+      method: "POST",
+      signal: options.signal,
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": mimeType,
+        ...(contentLength !== undefined ? { "X-Upload-Content-Length": String(contentLength) } : {}),
+      },
+      body: JSON.stringify({
+        name,
+        parents: [parentId],
+        mimeType,
+      }),
+    }
+  );
+  const uploadUrl = res.headers.get("Location");
+  if (!uploadUrl) {
+    throw new Error("Drive API did not return a resumable upload URL");
+  }
+  return uploadUrl;
+}
+
+export async function updateResumableUploadSession(
+  accessToken: string,
+  fileId: string,
+  mimeType: string = "application/octet-stream",
+  contentLength?: number,
+  options: DriveOperationOptions = {}
+): Promise<string> {
+  const res = await driveRequest(
+    `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=resumable&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
+    accessToken,
+    {
+      method: "PATCH",
+      signal: options.signal,
+      headers: {
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": mimeType,
+        ...(contentLength !== undefined ? { "X-Upload-Content-Length": String(contentLength) } : {}),
+      },
+      body: JSON.stringify({}),
+    }
+  );
+  const uploadUrl = res.headers.get("Location");
+  if (!uploadUrl) {
+    throw new Error("Drive API did not return a resumable upload URL");
+  }
+  return uploadUrl;
+}
+
 export async function createGoogleDocFromHtml(
   accessToken: string,
   name: string,

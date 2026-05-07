@@ -1,0 +1,124 @@
+import type { Route } from "./+types/api.drive.upload-resumable";
+import { requireAuth } from "~/services/session.server";
+import { getValidTokens } from "~/services/google-auth.server";
+import {
+  createResumableUploadSession,
+  getFileMetadata,
+  updateResumableUploadSession,
+} from "~/services/google-drive.server";
+import { upsertFileInMeta } from "~/services/sync-meta.server";
+
+const MAX_FILE_SIZE_FREE = 20 * 1024 * 1024; // 20MB per file (free)
+const MAX_FILE_SIZE_PAID = 5 * 1024 * 1024 * 1024; // 5GB per file (Drive API limit)
+
+function sanitizeDrivePath(path: string): string {
+  return path
+    .replace(/\\/g, "/")
+    .replace(/\.\.\//g, "")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+}
+
+async function getMaxFileSize(rootFolderId: string): Promise<number> {
+  try {
+    const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
+    const account = await getAccountByRootFolderId(rootFolderId);
+    if (account?.plan) return MAX_FILE_SIZE_PAID;
+  } catch {
+    // Treat lookup failures as free tier.
+  }
+  return MAX_FILE_SIZE_FREE;
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const tokens = await requireAuth(request);
+  const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
+  const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
+
+  const body = await request.json().catch(() => null) as
+    | {
+        intent?: "create-session" | "complete";
+        folderId?: string;
+        namePrefix?: string;
+        clientPath?: string;
+        fileName?: string;
+        mimeType?: string;
+        size?: number;
+        replaceFileId?: string;
+        fileId?: string;
+      }
+    | null;
+
+  if (!body?.intent) {
+    return Response.json({ error: "Invalid request" }, { status: 400, headers: responseHeaders });
+  }
+
+  const targetFolderId = body.folderId || validTokens.rootFolderId;
+
+  if (body.intent === "create-session") {
+    const clientPath = body.clientPath || body.fileName || "";
+    const safeName = sanitizeDrivePath(clientPath);
+    if (!safeName) {
+      return Response.json({ error: "Invalid file path" }, { status: 400, headers: responseHeaders });
+    }
+
+    const size = Number(body.size ?? 0);
+    const maxFileSize = await getMaxFileSize(validTokens.rootFolderId);
+    if (!Number.isFinite(size) || size < 0 || size > maxFileSize) {
+      const limitMB = Math.round(maxFileSize / 1024 / 1024);
+      return Response.json(
+        { error: `File too large (${(size / 1024 / 1024).toFixed(1)}MB). Max ${limitMB}MB per file.` },
+        { status: 413, headers: responseHeaders }
+      );
+    }
+
+    const mimeType = body.mimeType || "application/octet-stream";
+    let uploadUrl: string;
+
+    if (body.replaceFileId) {
+      const fileMeta = await getFileMetadata(validTokens.accessToken, body.replaceFileId);
+      if (!fileMeta.parents?.includes(targetFolderId)) {
+        return Response.json(
+          { error: "File does not belong to target folder" },
+          { status: 400, headers: responseHeaders }
+        );
+      }
+      uploadUrl = await updateResumableUploadSession(
+        validTokens.accessToken,
+        body.replaceFileId,
+        mimeType,
+        size
+      );
+    } else {
+      const safePrefix = sanitizeDrivePath(body.namePrefix || "");
+      const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
+      uploadUrl = await createResumableUploadSession(
+        validTokens.accessToken,
+        uploadName,
+        targetFolderId,
+        mimeType,
+        size
+      );
+    }
+
+    return Response.json({ uploadUrl, name: safeName }, { headers: responseHeaders });
+  }
+
+  const fileId = body.fileId;
+  if (!fileId) {
+    return Response.json({ error: "Missing fileId" }, { status: 400, headers: responseHeaders });
+  }
+
+  const file = await getFileMetadata(validTokens.accessToken, fileId);
+  if (!file.parents?.includes(targetFolderId)) {
+    return Response.json(
+      { error: "Uploaded file does not belong to target folder" },
+      { status: 400, headers: responseHeaders }
+    );
+  }
+
+  await upsertFileInMeta(validTokens.accessToken, targetFolderId, file);
+  return Response.json({ file }, { headers: responseHeaders });
+}

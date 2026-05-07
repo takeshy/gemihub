@@ -59,6 +59,7 @@ export default [
   route("api/search", "routes/api.search.tsx"),
   route("api/sync", "routes/api.sync.tsx"),
   route("api/drive/upload", "routes/api.drive.upload.tsx"),
+  route("api/drive/upload-resumable", "routes/api.drive.upload-resumable.tsx"),
   route("api/drive/temp", "routes/api.drive.temp.tsx"),
   // Public (no auth) — temp edit URLs for local editor integration
   route("api/temp-edit/:token/:fileName", "routes/api.temp-edit.$token.$fileName.tsx"),
