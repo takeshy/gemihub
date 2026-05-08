@@ -70,11 +70,11 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return createPortal(
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex max-w-md flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[min(calc(100vw-2rem),28rem)] flex-col gap-2">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-start gap-2 rounded-md border px-3 py-2 text-sm shadow-lg ${
+          className={`pointer-events-auto relative rounded-md border px-3 py-2 pr-10 text-sm shadow-lg ${
             toast.variant === "error"
               ? "border-red-300 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100"
               : toast.variant === "success"
@@ -82,8 +82,8 @@ export function ToastContainer() {
                 : "border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100"
           }`}
         >
-          <div className="flex-1">
-            <span className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words block">{toast.message}</span>
+          <div>
+            <span className="block max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words">{toast.message}</span>
             {toast.href && toast.linkLabel && (
               <a
                 href={toast.href}
@@ -97,7 +97,7 @@ export function ToastContainer() {
           <button
             type="button"
             onClick={() => dismiss(toast.id)}
-            className="flex-shrink-0 rounded p-0.5 opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
+            className="absolute right-2 top-2 rounded p-0.5 opacity-70 hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
             aria-label="Dismiss"
           >
             <X size={14} />

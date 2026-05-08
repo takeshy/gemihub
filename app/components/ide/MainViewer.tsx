@@ -3,7 +3,9 @@ import type { UserSettings } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 import { usePlugins } from "~/contexts/PluginContext";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
+import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
 import { getMediaType } from "~/utils/media-utils";
+import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
 import { MediaViewer } from "./editors/MediaViewer";
 import { TextBasedViewer } from "./TextBasedViewer";
 import { GOOGLE_DOC_MIME, GOOGLE_SHEET_MIME, GoogleDocViewer, GoogleSheetViewer } from "./GoogleWorkspaceViewers";
@@ -95,6 +97,12 @@ export function MainViewer({
   if (mediaType) {
     return (
       <MediaViewer fileId={fileId} fileName={fileName || "file"} mediaType={mediaType} fileMimeType={fileMimeType} />
+    );
+  }
+
+  if (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName)) {
+    return (
+      <BinaryFileInfoViewer fileId={fileId} fileName={fileName} fileMimeType={fileMimeType} />
     );
   }
 

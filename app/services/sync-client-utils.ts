@@ -35,6 +35,25 @@ const BINARY_APPLICATION_PREFIXES = [
   "application/vnd.oasis.opendocument.", // odt, ods, odp
 ];
 
+const BINARY_FILE_EXTENSIONS = new Set([
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "odt",
+  "ods",
+  "odp",
+  "zip",
+  "gz",
+  "tar",
+  "bz2",
+  "7z",
+  "rar",
+  "wasm",
+]);
+
 export function isBinaryMimeType(mimeType: string | undefined | null): boolean {
   if (!mimeType) return false;
   if (
@@ -45,6 +64,11 @@ export function isBinaryMimeType(mimeType: string | undefined | null): boolean {
   ) return true;
   if (BINARY_APPLICATION_TYPES.has(mimeType)) return true;
   return BINARY_APPLICATION_PREFIXES.some((p) => mimeType.startsWith(p));
+}
+
+export function isBinaryFileName(fileName: string | undefined | null): boolean {
+  const ext = fileName?.toLowerCase().split(".").pop() ?? "";
+  return BINARY_FILE_EXTENSIONS.has(ext);
 }
 
 /**

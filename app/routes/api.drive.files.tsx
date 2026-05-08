@@ -83,7 +83,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     case "metadata": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       const meta = await getFileMetadata(validTokens.accessToken, fileId);
-      return logAndReturn({ name: meta.name, mimeType: meta.mimeType, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime, size: meta.size });
+      return logAndReturn({ name: meta.name, mimeType: meta.mimeType, md5Checksum: meta.md5Checksum, modifiedTime: meta.modifiedTime, size: meta.size, webViewLink: meta.webViewLink });
     }
     case "read": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
@@ -106,9 +106,10 @@ export async function loader({ request }: Route.LoaderArgs) {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
       const meta = await getFileMetadata(validTokens.accessToken, fileId);
       const rawRes = await readFileRaw(validTokens.accessToken, fileId);
+      const disposition = url.searchParams.get("download") === "1" ? "attachment" : "inline";
       const headers = new Headers({
         "Content-Type": meta.mimeType || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${encodeURIComponent(meta.name)}"`,
+        "Content-Disposition": `${disposition}; filename="${encodeURIComponent(meta.name)}"`,
       });
       if (setCookieHeader) headers.set("Set-Cookie", setCookieHeader);
       emitLog(logCtx, 200);

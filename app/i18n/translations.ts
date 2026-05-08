@@ -41,6 +41,13 @@ export interface TranslationStrings {
   "mainViewer.raw": string;
   "mainViewer.diff": string;
   "mainViewer.diffTarget": string;
+  "mainViewer.binaryFile": string;
+  "mainViewer.binaryDescription": string;
+  "mainViewer.fileName": string;
+  "mainViewer.fileSize": string;
+  "mainViewer.modifiedTime": string;
+  "mainViewer.mimeType": string;
+  "mainViewer.download": string;
   "workspace.openExternal": string;
   "workspace.reload": string;
 
@@ -831,6 +838,13 @@ const en: TranslationStrings = {
   "mainViewer.raw": "Raw",
   "mainViewer.diff": "Diff",
   "mainViewer.diffTarget": "Select file to compare",
+  "mainViewer.binaryFile": "Binary file",
+  "mainViewer.binaryDescription": "This file cannot be edited in GemiHub.",
+  "mainViewer.fileName": "Name",
+  "mainViewer.fileSize": "Size",
+  "mainViewer.modifiedTime": "Updated",
+  "mainViewer.mimeType": "MIME type",
+  "mainViewer.download": "Download",
   "workspace.openExternal": "Open in Google",
   "workspace.reload": "Reload",
 
@@ -1622,6 +1636,13 @@ const ja: TranslationStrings = {
   "mainViewer.raw": "Raw",
   "mainViewer.diff": "比較",
   "mainViewer.diffTarget": "比較するファイルを選択",
+  "mainViewer.binaryFile": "バイナリファイル",
+  "mainViewer.binaryDescription": "このファイルは GemiHub では編集できません。",
+  "mainViewer.fileName": "名前",
+  "mainViewer.fileSize": "サイズ",
+  "mainViewer.modifiedTime": "更新日時",
+  "mainViewer.mimeType": "MIMEタイプ",
+  "mainViewer.download": "ダウンロード",
   "workspace.openExternal": "Googleで開く",
   "workspace.reload": "再読み込み",
 
