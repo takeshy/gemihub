@@ -24,7 +24,7 @@ import { TrashDialog } from "~/components/settings/TrashDialog";
 import { ConflictsDialog } from "~/components/settings/ConflictsDialog";
 import type { UserSettings } from "~/types/settings";
 
-export function SyncTab({ settings: _settings }: { settings: UserSettings }) {
+export function SyncTab({ settings }: { settings: UserSettings }) {
   const { t } = useI18n();
   const migrationFetcher = useFetcher<{ success?: boolean; migrationToken?: string; message?: string }>();
 
@@ -41,6 +41,7 @@ export function SyncTab({ settings: _settings }: { settings: UserSettings }) {
   const [backupToken, setBackupToken] = useState<string | null>(null);
   const [notifyDialog, setNotifyDialog] = useState<{ message: string; variant: "info" | "error" } | null>(null);
   const [backupCopied, setBackupCopied] = useState(false);
+  const hasPremium = !!settings.hubwork?.plan && settings.hubwork?.billingStatus === "active" && settings.hubwork?.accountStatus !== "disabled";
 
   // Load lastUpdatedAt from IndexedDB
   useEffect(() => {
@@ -408,15 +409,21 @@ export function SyncTab({ settings: _settings }: { settings: UserSettings }) {
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
           {t("settings.sync.migrationToolDescription")}
         </p>
+        {!hasPremium && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 mb-3">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{t("settings.sync.migrationTokenPremiumRequired")}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 mb-3">
           <AlertCircle size={14} className="shrink-0" />
-          <span>{t("settings.sync.migrationTokenFreeNotice")}</span>
+          <span>{t("settings.sync.migrationTokenPremiumNotice")}</span>
         </div>
         {!backupToken ? (
           <button
             type="button"
             onClick={handleGenerateMigrationToken}
-            disabled={migrationFetcher.state !== "idle"}
+            disabled={!hasPremium || migrationFetcher.state !== "idle"}
             className={actionBtnClass}
           >
             {migrationFetcher.state !== "idle" ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
@@ -533,7 +540,7 @@ export function SyncTab({ settings: _settings }: { settings: UserSettings }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-700 dark:text-gray-300">{t("settings.editHistory.pruneLabel")}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.editHistory.pruneDescription").replace("{days}", String(_settings.editHistory.retention.maxAgeInDays)).replace("{max}", String(_settings.editHistory.retention.maxEntriesPerFile))}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.editHistory.pruneDescription").replace("{days}", String(settings.editHistory.retention.maxAgeInDays)).replace("{max}", String(settings.editHistory.retention.maxEntriesPerFile))}</p>
             </div>
             <div className="flex items-center gap-2">
               {pruneMsg && <span className="text-xs text-gray-500 dark:text-gray-400">{pruneMsg}</span>}

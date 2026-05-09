@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug, Music, FolderOpen, Sparkles } from "lucide-react";

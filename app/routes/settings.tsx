@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { data, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
-import { getValidTokens } from "~/services/google-auth.server";
+import { getValidTokens, hasRequiredHubworkScopes } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { resolveLanguage } from "~/i18n/resolve-language";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
@@ -57,6 +57,7 @@ import { RagTab } from "~/components/settings/RagTab";
 import { HubworkTab } from "~/components/settings/HubworkTab";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { PluginProvider } from "~/contexts/PluginContext";
+import { isActivePremiumAccount } from "~/types/hubwork";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -102,11 +103,12 @@ export async function loader({ request }: Route.LoaderArgs) {
     const { getAccountByEmail } = await import("~/services/hubwork-accounts.server");
     hubworkAccount = await getAccountByEmail(validTokens.email);
   }
+  const grantedScopes = validTokens.grantedScopes || "";
+  const hasHubworkScopes = hasRequiredHubworkScopes(grantedScopes);
 
-  // Ensure refresh token for all Hubwork accounts
+  // Ensure refresh token for all Hubwork accounts without downgrading stored scopes.
   if (hubworkAccount?.plan) {
-    // Always update refresh token if available (ensures new OAuth scopes are persisted)
-    if (validTokens.refreshToken) {
+    if (validTokens.refreshToken && hasHubworkScopes) {
       import("~/services/hubwork-accounts.server").then(({ updateRefreshToken, updateAccount }) => {
         updateRefreshToken(hubworkAccount!.id, validTokens.refreshToken).catch(() => {});
         // Also update rootFolderId/email if missing
@@ -173,11 +175,6 @@ export async function loader({ request }: Route.LoaderArgs) {
   const mergedSettings = { ...settings, plugins: mergedPlugins };
   const acceptLanguage = request.headers.get("Accept-Language");
   const effectiveLanguage = resolveLanguage(mergedSettings.language, acceptLanguage);
-
-  const grantedScopes = validTokens.grantedScopes || "";
-  const hasGmailScope = grantedScopes.includes("gmail");
-  const hasCalendarScope = grantedScopes.includes("calendar");
-  const hasHubworkScopes = hasGmailScope && hasCalendarScope;
 
   return data(
     {
@@ -501,14 +498,15 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       case "generateMigrationToken": {
-        // TODO: Re-enable paid plan check once Premium Plan is fully launched
-        // {
-        //   const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
-        //   const account = await getAccountByRootFolderId(validTokens.rootFolderId);
-        //   if (!account?.plan) {
-        //     return jsonWithCookie({ success: false, message: "A paid plan is required to generate migration tokens." });
-        //   }
-        // }
+        const { getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
+        let account = await getAccountByRootFolderId(validTokens.rootFolderId);
+        if (!account && validTokens.email) {
+          account = await getAccountByEmail(validTokens.email);
+        }
+        if (!account || !isActivePremiumAccount(account)) {
+          return jsonWithCookie({ success: false, message: "A Premium plan is required to generate migration tokens." }, { status: 403 });
+        }
+
         // Generate migration token (XOR-encoded accessToken + rootFolderId)
         const payload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
         const buf = Buffer.from(payload);

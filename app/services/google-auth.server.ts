@@ -12,6 +12,11 @@ const HUBWORK_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events.owned",
 ];
 
+export function hasRequiredHubworkScopes(grantedScopes?: string): boolean {
+  if (!grantedScopes) return false;
+  return HUBWORK_SCOPES.every((scope) => grantedScopes.includes(scope));
+}
+
 function getOAuth2Client(request?: Request) {
   const url = request ? new URL(request.url) : null;
   const proto = request?.headers.get("x-forwarded-proto") || url?.protocol.replace(":", "");
@@ -45,8 +50,11 @@ export async function getAuthUrl(
   const session = await getSession(request);
   session.set("oauthState", state);
   session.set("oauthCodeVerifier", codeVerifier);
+  session.set("oauthIncludeHubworkScopes", options?.includeHubworkScopes ? "1" : "0");
   if (options?.returnTo) {
     session.set("oauthReturnTo", options.returnTo);
+  } else {
+    session.unset("oauthReturnTo");
   }
   const setCookieHeader = await commitSession(session);
 

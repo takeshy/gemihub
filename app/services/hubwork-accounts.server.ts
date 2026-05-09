@@ -291,6 +291,13 @@ export async function updateRefreshToken(
   tokenCache.delete(accountId);
 }
 
+export function getStoredRefreshToken(
+  account: Pick<HubworkAccount, "encryptedRefreshToken">
+): string | null {
+  if (!account.encryptedRefreshToken) return null;
+  return decrypt(account.encryptedRefreshToken);
+}
+
 /** Remove the server-side encrypted Gemini API key from an account. */
 export async function clearEncryptedGeminiApiKey(accountId: string): Promise<void> {
   const db = getFirestore();
@@ -327,7 +334,10 @@ export async function getTokensForAccount(
     if (!account.encryptedRefreshToken) {
       throw new Error(`Account ${account.id} has no refresh token. Owner must log in to GemiHub first.`);
     }
-    const refreshToken = decrypt(account.encryptedRefreshToken);
+    const refreshToken = getStoredRefreshToken(account);
+    if (!refreshToken) {
+      throw new Error(`Account ${account.id} has no refresh token. Owner must log in to GemiHub first.`);
+    }
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET

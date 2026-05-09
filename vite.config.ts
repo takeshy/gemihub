@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, type Plugin } from "vite";
+import { createLogger, defineConfig, type Logger, type Plugin } from "vite";
+import type { LogLevel, RollupLog } from "rollup";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 /** Basic Auth gate for /hubwork/admin routes (runs before React Router). */
@@ -100,8 +101,38 @@ function hubworkRootPage(): Plugin {
   };
 }
 
+function filterBuildLog(
+  level: LogLevel,
+  log: RollupLog,
+  handler: (level: LogLevel, log: RollupLog) => void
+) {
+  if (log.code === "DYNAMIC_IMPORT_WILL_NOT_MOVE_MODULE_INTO_ANOTHER_CHUNK") return;
+  if (log.code === "SOURCEMAP_ERROR" && log.message.includes("Can't resolve original location")) return;
+  handler(level, log);
+}
+
+const viteLogger = createLogger();
+const customLogger: Logger = {
+  ...viteLogger,
+  warn(msg, options) {
+    if (msg.includes("dynamic import will not move module into another chunk")) return;
+    viteLogger.warn(msg, options);
+  },
+  warnOnce(msg, options) {
+    if (msg.includes("dynamic import will not move module into another chunk")) return;
+    viteLogger.warnOnce(msg, options);
+  },
+};
+
 export default defineConfig({
+  customLogger,
   plugins: [adminBasicAuth(), hubworkRootPage(), serveWasmAssets(), tailwindcss(), reactRouter(), tsconfigPaths()],
+  build: {
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      onLog: filterBuildLog,
+    },
+  },
   server: {
     host: true,
     port: Number(process.env.PORT) || 8132,

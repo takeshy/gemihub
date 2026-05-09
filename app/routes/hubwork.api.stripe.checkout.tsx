@@ -22,14 +22,12 @@ export async function action({ request }: Route.ActionArgs) {
   const accountSlug = (formData.get("accountSlug") as string || "").toLowerCase().trim();
 
   const reviewSlugs = parseSlugList(process.env.HUBWORK_REVIEW_SLUGS);
-  const stripeAllowedSlugs = parseSlugList(process.env.HUBWORK_STRIPE_ALLOWED_SLUGS);
 
   const existing = await getAccountByRootFolderId(tokens.rootFolderId);
 
   const url = new URL(request.url);
   const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
   const baseUrl = `${proto}://${url.host}`;
-  const isLocalhost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
 
   // Google OAuth verification bypass: create a granted Pro account without Stripe.
   // Only effective when HUBWORK_REVIEW_SLUGS contains the submitted slug and the
@@ -51,20 +49,6 @@ export async function action({ request }: Route.ActionArgs) {
       accountSlug,
     });
     return redirect(`${baseUrl}/settings?hubwork_subscribed=1`);
-  }
-
-  // Stripe checkout allowlist: any non-listed Pro slug is treated as "not yet
-  // available" while OAuth verification is in progress. The UI displays the
-  // returned error message without navigating away.
-  // Localhost bypasses the allowlist so sandbox Stripe flows can be tested.
-  if (planType === "pro" && !isLocalhost) {
-    const effectiveSlug = accountSlug || existing?.accountSlug || "";
-    if (!stripeAllowedSlugs.includes(effectiveSlug)) {
-      return Response.json(
-        { error: "unavailable" },
-        { status: 200 }
-      );
-    }
   }
 
   // Upgrade existing subscription (e.g. Lite → Pro)

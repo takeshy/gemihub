@@ -38,6 +38,10 @@ export function hasPaidFeatures(account: HubworkAccount): boolean {
   return account.accountStatus === "enabled" && !!account.plan;
 }
 
+export function isActivePremiumAccount(account: HubworkAccount): boolean {
+  return account.accountStatus === "enabled" && !!account.plan && account.billingStatus === "active";
+}
+
 /** Check if account has Pro features (Sheets, web builder, scheduled, server-side) */
 export function hasProFeatures(account: HubworkAccount): boolean {
   return account.accountStatus === "enabled" && (account.plan === "pro" || account.plan === "granted");

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef } from "react";
 import { Brain, ImageIcon, Minimize2, Plus, Globe, Users, Calendar, Code } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";

@@ -18,15 +18,6 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
 
   const [slug, setSlug] = useState("");
   const [slugError, setSlugError] = useState("");
-
-  // Surface server-returned "unavailable" errors (e.g. new subscriptions disabled
-  // while OAuth verification is in progress) as a slug error message.
-  useEffect(() => {
-    const data = stripeFetcher.data as { error?: string } | undefined;
-    if (data?.error === "unavailable") {
-      setSlugError(t("settings.hubwork.slugUnavailable"));
-    }
-  }, [stripeFetcher.data, t]);
   const [skillUpdating, setSkillUpdating] = useState(false);
   const [skillUpdateResult, setSkillUpdateResult] = useState<"success" | "error" | null>(null);
   const [provisioning, setProvisioning] = useState(false);
