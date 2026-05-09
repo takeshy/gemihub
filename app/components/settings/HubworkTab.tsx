@@ -159,6 +159,24 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   const skillVersionStatus = t("settings.hubwork.skillVersionStatus")
     .replace("{{installed}}", installedSkillVersion || "unknown")
     .replace("{{latest}}", WEBPAGE_BUILDER_SKILL_VERSION);
+  const litePlanFeatures = [
+    t("settings.hubwork.featureInteractionsApiChat"),
+    t("settings.hubwork.featureGmailSend"),
+    t("settings.hubwork.featurePdfGeneration"),
+    t("settings.hubwork.featureCalendar"),
+    t("settings.hubwork.featureExternalSyncToken"),
+    t("settings.hubwork.featureTempUploadUrl"),
+    t("settings.hubwork.featureMaxFileSize5gb"),
+  ];
+  const proPlanFeatures = [
+    t("settings.hubwork.featureAllLiteFeatures"),
+    t("settings.hubwork.featureGoogleSheetsCrud"),
+    t("settings.hubwork.featureStaticPageHosting"),
+    t("settings.hubwork.featureCustomDomains"),
+    t("settings.hubwork.featureScheduledWorkflows"),
+    t("settings.hubwork.featureServerSideExecution"),
+    t("settings.hubwork.featureAiWebBuilder"),
+  ];
 
 
   return (
@@ -211,10 +229,10 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         {plan === "lite" && (
           <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
             <div>
-              <div className="font-medium text-gray-900 dark:text-gray-100">Upgrade to Pro</div>
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">¥2,000<span className="text-xs font-normal text-gray-500">/month</span></div>
+              <div className="font-medium text-gray-900 dark:text-gray-100">{t("settings.hubwork.upgradeToPro")}</div>
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">¥2,000<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
               <ul className="mt-2 space-y-0.5">
-                {["All Lite features", "Google Sheets CRUD", "Static Page Hosting (CDN)", "Custom Domains (auto SSL)", "Scheduled Workflows", "Server-Side Execution", "AI Web Builder"].map((f) => (
+                {proPlanFeatures.map((f) => (
                   <li key={f} className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-1">
                     <span className="text-green-500 mt-px">•</span>{f}
                   </li>
@@ -265,7 +283,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                 type="submit"
                 className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
               >
-                Upgrade
+                {t("settings.hubwork.upgradeButton")}
               </button>
             </stripeFetcher.Form>
           </div>
@@ -285,16 +303,16 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
               {([
                 {
                   plan: "lite" as const, price: "¥300",
-                  features: ["Interactions API Chat", "Gmail Send", "PDF Generation", "Calendar", "Obsidian Sync Token", "Temp Upload URL", "Max File Size: 5 GB"],
+                  features: litePlanFeatures,
                 },
                 {
                   plan: "pro" as const, price: "¥2,000",
-                  features: ["All Lite features", "Google Sheets CRUD", "Static Page Hosting (CDN)", "Custom Domains (auto SSL)", "Scheduled Workflows", "Server-Side Execution", "AI Web Builder"],
+                  features: proPlanFeatures,
                 },
               ]).map(({ plan: p, price, features }) => (
                 <div key={p} className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
                   <div className="font-medium text-gray-900 dark:text-gray-100 capitalize">{p}</div>
-                  <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{price}<span className="text-xs font-normal text-gray-500">/month</span></div>
+                  <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{price}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
                   <ul className="mt-2 space-y-0.5 mb-3">
                     {features.map((f) => (
                       <li key={f} className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-1">
@@ -350,7 +368,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                       type="submit"
                       className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
                     >
-                      Subscribe
+                      {t("settings.hubwork.checkoutSubscribeButton")}
                     </button>
                   </stripeFetcher.Form>
                 </div>

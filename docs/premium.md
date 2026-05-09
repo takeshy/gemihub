@@ -46,7 +46,7 @@ Cloud Scheduler (single job)
 | Gmail Send node | - | Yes | Yes |
 | HTTP node CORS proxy (cross-origin fetch) | 2 req/min | 60 req/min | 60 req/min |
 | PDF Generation | - | Yes | Yes |
-| Migration Token / Temp Edit URL | - | Yes | Yes |
+| External Sync Token / Temp Edit URL | - | Yes | Yes |
 | Google Sheets CRUD nodes | - | - | Yes |
 | Static Page Hosting (CDN) | - | - | Yes |
 | Built-in Subdomain | - | - | Yes |

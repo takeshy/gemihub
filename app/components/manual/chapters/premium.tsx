@@ -72,7 +72,7 @@ function PremiumEn() {
 
         <h3>Obsidian Sync Token</h3>
         <p>
-          A migration token that allows syncing GemiHub files with Obsidian or other external editors.
+          An external sync token that allows syncing GemiHub files with Obsidian or other external editors.
         </p>
 
         <h3>Temp Upload URL</h3>

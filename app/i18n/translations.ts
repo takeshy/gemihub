@@ -714,6 +714,24 @@ export interface TranslationStrings {
   "settings.hubwork.scheduleApiKeyRequired": string;
   "settings.hubwork.subscription": string;
   "settings.hubwork.subscribeButton": string;
+  "settings.hubwork.checkoutSubscribeButton": string;
+  "settings.hubwork.upgradeToPro": string;
+  "settings.hubwork.upgradeButton": string;
+  "settings.hubwork.priceMonthSuffix": string;
+  "settings.hubwork.featureInteractionsApiChat": string;
+  "settings.hubwork.featureGmailSend": string;
+  "settings.hubwork.featurePdfGeneration": string;
+  "settings.hubwork.featureCalendar": string;
+  "settings.hubwork.featureExternalSyncToken": string;
+  "settings.hubwork.featureTempUploadUrl": string;
+  "settings.hubwork.featureMaxFileSize5gb": string;
+  "settings.hubwork.featureAllLiteFeatures": string;
+  "settings.hubwork.featureGoogleSheetsCrud": string;
+  "settings.hubwork.featureStaticPageHosting": string;
+  "settings.hubwork.featureCustomDomains": string;
+  "settings.hubwork.featureScheduledWorkflows": string;
+  "settings.hubwork.featureServerSideExecution": string;
+  "settings.hubwork.featureAiWebBuilder": string;
   "settings.hubwork.slugLabel": string;
   "settings.hubwork.slugRequired": string;
   "settings.hubwork.slugInvalid": string;
@@ -1398,12 +1416,12 @@ const en: TranslationStrings = {
   "settings.sync.conflictsTitle": "Conflict Backups",
   "settings.sync.conflictsDescription": "Manage conflict backup files from sync resolution.",
   "settings.sync.manage": "Manage",
-  "settings.sync.migrationTool": "Migration Tool",
-  "settings.sync.migrationToolDescription": "Generate a token for the GemiHub - Drive Sync Obsidian plugin or other external migration tools. If encryption is enabled, authentication credentials are also exported to Google Drive.",
-  "settings.sync.migrationTokenGenerate": "Generate Token",
-  "settings.sync.migrationTokenWarning": "This token grants access to your GemHub files in Google Drive. It expires in about 1 hour.",
+  "settings.sync.migrationTool": "External Sync",
+  "settings.sync.migrationToolDescription": "Generate a token for syncing GemiHub files with the GemiHub - Drive Sync Obsidian plugin or another external client. If encryption is enabled, authentication credentials are also exported to Google Drive.",
+  "settings.sync.migrationTokenGenerate": "Generate Sync Token",
+  "settings.sync.migrationTokenWarning": "This token grants access to your GemiHub files in Google Drive. It expires in about 1 hour.",
   "settings.sync.migrationTokenPremiumNotice": "This feature is available to Premium Plan users.",
-  "settings.sync.migrationTokenPremiumRequired": "A Premium Plan subscription is required to generate migration tokens.",
+  "settings.sync.migrationTokenPremiumRequired": "A Premium Plan subscription is required to generate external sync tokens.",
   "settings.sync.backupTokenCopy": "Copy",
   "settings.sync.backupTokenCopied": "Copied!",
   "settings.sync.backupTokenHide": "Hide Token",
@@ -1513,6 +1531,24 @@ const en: TranslationStrings = {
   "settings.hubwork.scheduleApiKeyRequired": "Please unlock your Gemini API key before enabling scheduled workflows.",
   "settings.hubwork.subscription": "Subscription",
   "settings.hubwork.subscribeButton": "Subscribe — ¥2,000/month",
+  "settings.hubwork.checkoutSubscribeButton": "Subscribe",
+  "settings.hubwork.upgradeToPro": "Upgrade to Pro",
+  "settings.hubwork.upgradeButton": "Upgrade",
+  "settings.hubwork.priceMonthSuffix": "/month",
+  "settings.hubwork.featureInteractionsApiChat": "Interactions API Chat",
+  "settings.hubwork.featureGmailSend": "Gmail Send",
+  "settings.hubwork.featurePdfGeneration": "PDF Generation",
+  "settings.hubwork.featureCalendar": "Calendar",
+  "settings.hubwork.featureExternalSyncToken": "External Sync Token",
+  "settings.hubwork.featureTempUploadUrl": "Temp Upload URL",
+  "settings.hubwork.featureMaxFileSize5gb": "Max File Size: 5 GB",
+  "settings.hubwork.featureAllLiteFeatures": "All Lite features",
+  "settings.hubwork.featureGoogleSheetsCrud": "Google Sheets CRUD",
+  "settings.hubwork.featureStaticPageHosting": "Static Page Hosting (CDN)",
+  "settings.hubwork.featureCustomDomains": "Custom Domains (auto SSL)",
+  "settings.hubwork.featureScheduledWorkflows": "Scheduled Workflows",
+  "settings.hubwork.featureServerSideExecution": "Server-Side Execution",
+  "settings.hubwork.featureAiWebBuilder": "AI Web Builder",
   "settings.hubwork.slugLabel": "Your subdomain",
   "settings.hubwork.slugRequired": "Please enter a subdomain",
   "settings.hubwork.slugInvalid": "3+ chars, lowercase letters, numbers, and hyphens only",
@@ -2197,12 +2233,12 @@ const ja: TranslationStrings = {
   "settings.sync.conflictsTitle": "コンフリクトバックアップ",
   "settings.sync.conflictsDescription": "同期コンフリクト解決時のバックアップファイルを管理します。",
   "settings.sync.manage": "管理",
-  "settings.sync.migrationTool": "移行ツール",
-  "settings.sync.migrationToolDescription": "Obsidian プラグイン「GemiHub - Drive Sync」やその他の外部移行ツール用のトークンを生成します。暗号化が有効な場合、認証情報も Google Drive にエクスポートされます。",
-  "settings.sync.migrationTokenGenerate": "トークンを生成",
-  "settings.sync.migrationTokenWarning": "このトークンは Google Drive の GemHub ファイルへのアクセス権を付与します。約1時間で失効します。",
+  "settings.sync.migrationTool": "外部同期",
+  "settings.sync.migrationToolDescription": "Obsidian プラグイン「GemiHub - Drive Sync」などの外部クライアントと GemiHub ファイルを同期するためのトークンを生成します。暗号化が有効な場合、認証情報も Google Drive にエクスポートされます。",
+  "settings.sync.migrationTokenGenerate": "同期トークンを生成",
+  "settings.sync.migrationTokenWarning": "このトークンは Google Drive の GemiHub ファイルへのアクセス権を付与します。約1時間で失効します。",
   "settings.sync.migrationTokenPremiumNotice": "この機能はプレミアムプランユーザーが利用できます。",
-  "settings.sync.migrationTokenPremiumRequired": "移行トークンの生成にはプレミアムプランの契約が必要です。",
+  "settings.sync.migrationTokenPremiumRequired": "外部同期トークンの生成にはプレミアムプランの契約が必要です。",
   "settings.sync.backupTokenCopy": "コピー",
   "settings.sync.backupTokenCopied": "コピーしました！",
   "settings.sync.backupTokenHide": "トークンを非表示",
@@ -2312,6 +2348,24 @@ const ja: TranslationStrings = {
   "settings.hubwork.scheduleApiKeyRequired": "定期実行を有効にするには Gemini APIキーをアンロックしてください。",
   "settings.hubwork.subscription": "サブスクリプション",
   "settings.hubwork.subscribeButton": "登録する — ¥2,000/月",
+  "settings.hubwork.checkoutSubscribeButton": "登録する",
+  "settings.hubwork.upgradeToPro": "Proにアップグレード",
+  "settings.hubwork.upgradeButton": "アップグレード",
+  "settings.hubwork.priceMonthSuffix": "/月",
+  "settings.hubwork.featureInteractionsApiChat": "Interactions APIチャット",
+  "settings.hubwork.featureGmailSend": "Gmail送信",
+  "settings.hubwork.featurePdfGeneration": "PDF生成",
+  "settings.hubwork.featureCalendar": "カレンダー",
+  "settings.hubwork.featureExternalSyncToken": "外部同期トークン",
+  "settings.hubwork.featureTempUploadUrl": "一時アップロードURL",
+  "settings.hubwork.featureMaxFileSize5gb": "最大ファイルサイズ: 5 GB",
+  "settings.hubwork.featureAllLiteFeatures": "Liteの全機能",
+  "settings.hubwork.featureGoogleSheetsCrud": "Google Sheets CRUD",
+  "settings.hubwork.featureStaticPageHosting": "静的ページ配信（CDN）",
+  "settings.hubwork.featureCustomDomains": "カスタムドメイン（自動SSL）",
+  "settings.hubwork.featureScheduledWorkflows": "スケジュール実行",
+  "settings.hubwork.featureServerSideExecution": "サーバーサイド実行",
+  "settings.hubwork.featureAiWebBuilder": "AI Web Builder",
   "settings.hubwork.slugLabel": "サブドメイン",
   "settings.hubwork.slugRequired": "サブドメインを入力してください",
   "settings.hubwork.slugInvalid": "3文字以上、小文字英数字とハイフンのみ",

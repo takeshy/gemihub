@@ -398,7 +398,7 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
         </div>
       </SectionCard>
 
-      {/* Migration Tool */}
+      {/* External Sync */}
       <SectionCard>
         <div className="flex items-center gap-2 mb-3">
           <KeyRound size={16} className="text-gray-600 dark:text-gray-400" />

@@ -93,7 +93,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, settings panels, custom file icons, and file extension handling
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
-- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore. Backup token for external migration tools
+- **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore. External sync token for tools like Obsidian
 - **Encryption** — Optional hybrid RSA + AES encryption for individual files, chat history, and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
 - **Multi-Model Support** — Gemini 3.1 Pro, Gemini 3, 2.5, Flash, Pro, Lite, Gemma 4; paid and free plan model lists
@@ -247,7 +247,7 @@ Two paid plans extend GemiHub with Google Sheets/Gmail integration and web app b
 | **Gmail Send** | Workflow node: `gmail-send`. Send emails via Gmail API |
 | **PDF Generation** | Convert Markdown/HTML to PDF |
 | **Upload Limit Removed** | Free plan has 20MB limit; Lite and Pro have no practical limit |
-| **Migration Token** | Export token for external migration tools |
+| **External Sync Token** | Export token for external clients like Obsidian |
 | **Temp Edit URL** | Generate temporary URLs for external editor integration |
 | **Interactions API Chat** | Chat uses the Gemini Interactions API: function tools + RAG + Web Search simultaneously, conversation chaining via `previous_interaction_id` |
 

@@ -123,21 +123,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
   const settings = {
     ...driveSettings,
-    hubwork: driveSettings.hubwork
+    hubwork: hubworkAccount?.plan
       ? {
           ...driveSettings.hubwork,
-          accountId: hubworkAccount?.id,
-          plan: hubworkAccount?.plan,
-          accountSlug: hubworkAccount?.accountSlug,
-          defaultDomain: hubworkAccount?.defaultDomain,
-          customDomain: hubworkAccount?.customDomain || driveSettings.hubwork.customDomain,
-          billingStatus: hubworkAccount?.billingStatus,
-          accountStatus: hubworkAccount?.accountStatus,
-          domainStatus: hubworkAccount?.domainStatus || driveSettings.hubwork.domainStatus,
+          accountId: hubworkAccount.id,
+          plan: hubworkAccount.plan,
+          accountSlug: hubworkAccount.accountSlug,
+          defaultDomain: hubworkAccount.defaultDomain,
+          customDomain: hubworkAccount.customDomain || driveSettings.hubwork?.customDomain,
+          billingStatus: hubworkAccount.billingStatus,
+          accountStatus: hubworkAccount.accountStatus,
+          domainStatus: hubworkAccount.domainStatus || driveSettings.hubwork?.domainStatus,
         }
-      : hubworkAccount?.plan
-        ? { plan: hubworkAccount.plan, accountId: hubworkAccount.id, accountSlug: hubworkAccount.accountSlug, defaultDomain: hubworkAccount.defaultDomain }
-        : driveSettings.hubwork,
+      : driveSettings.hubwork,
   };
 
   // Persist plan/billingStatus into Drive settings.json so _index loader can
@@ -504,10 +502,10 @@ export async function action({ request }: Route.ActionArgs) {
           account = await getAccountByEmail(validTokens.email);
         }
         if (!account || !isActivePremiumAccount(account)) {
-          return jsonWithCookie({ success: false, message: "A Premium plan is required to generate migration tokens." }, { status: 403 });
+          return jsonWithCookie({ success: false, message: "A Premium plan is required to generate external sync tokens." }, { status: 403 });
         }
 
-        // Generate migration token (XOR-encoded accessToken + rootFolderId)
+        // Generate external sync token (XOR-encoded accessToken + rootFolderId)
         const payload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
         const buf = Buffer.from(payload);
         for (let i = 0; i < buf.length; i++) buf[i] ^= 0x5a;

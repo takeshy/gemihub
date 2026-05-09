@@ -260,7 +260,7 @@ const en: LpStrings = {
   premiumFeaturePdf: "PDF Generation",
   premiumFeaturePdfDesc: "Generate PDF files from Markdown or HTML within workflows. Perfect for invoices, reports, and certificates.",
   premiumFeatureObsidianToken: "Obsidian Sync Token",
-  premiumFeatureObsidianTokenDesc: "Issue a migration token to sync your GemiHub files with Obsidian. Edit in either app — changes sync both ways through Google Drive.",
+  premiumFeatureObsidianTokenDesc: "Issue an external sync token to sync your GemiHub files with Obsidian. Edit in either app — changes sync both ways through Google Drive.",
   premiumFeatureTempUrl: "Temporary Upload URL",
   premiumFeatureTempUrlDesc: "Generate a temporary URL to upload or edit files from any external editor or tool. Work in your favorite environment and push changes back.",
   premiumFeatureSheets: "Google Sheets CRUD",
