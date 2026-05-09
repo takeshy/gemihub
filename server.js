@@ -17,6 +17,7 @@ function isHubworkHost(domain) {
   // Dev: bare localhost is the main app; *.localhost is a hubwork slug.
   if (domain === "localhost" || domain.startsWith("localhost:")) return false;
   if (domain === MAIN_APP_DOMAIN) return false;
+  if (domain === `www.${MAIN_APP_DOMAIN}`) return false;
   // Internal probes and direct Cloud Run URLs never carry a hubwork hostname.
   if (/^\d+\.\d+\.\d+\.\d+$/.test(domain)) return false; // IPv4 literal
   if (domain === "::1" || domain.startsWith("[")) return false; // IPv6 literal
@@ -33,6 +34,10 @@ app.use((req, res, next) => {
   const host = req.headers.host;
   if (!host) return next();
   const domain = host.split(":")[0].toLowerCase();
+  if (domain === `www.${MAIN_APP_DOMAIN}`) {
+    res.redirect(301, `https://${MAIN_APP_DOMAIN}${req.originalUrl}`);
+    return;
+  }
   const isLegacy =
     domain === LEGACY_DOMAIN || domain.endsWith(`.${LEGACY_DOMAIN}`);
   if (!isLegacy) return next();
