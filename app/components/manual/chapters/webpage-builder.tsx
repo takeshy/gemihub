@@ -10,20 +10,6 @@ function WebpageBuilderEn() {
   return (
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">AI Web Builder</h1>
-      <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-          <iframe
-            src="https://www.youtube-nocookie.com/embed/rdVAgAhHLxk"
-            title="Webpage Builder demo"
-            className="absolute inset-0 h-full w-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        </div>
-        <figcaption className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-          Sample: building a website end-to-end through chat.
-        </figcaption>
-      </figure>
       <div className={prose}>
         <p>
           The <strong>Webpage Builder</strong> is a built-in Agent Skill that ships with the Pro plan and turns the chat into an end-to-end website author. You describe what you want — a booking page, a member portal, a contact form — and the AI produces the HTML, the workflow YAML behind it, the sheet schema it needs, and the spec / change-log entries to go with it.
@@ -104,20 +90,6 @@ function WebpageBuilderJa() {
   return (
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">AI Web ビルダー</h1>
-      <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-          <iframe
-            src="https://www.youtube-nocookie.com/embed/rdVAgAhHLxk"
-            title="Webpage Builder デモ"
-            className="absolute inset-0 h-full w-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        </div>
-        <figcaption className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-          サンプル: チャットでウェブサイトをエンドツーエンドに構築する様子。
-        </figcaption>
-      </figure>
       <div className={prose}>
         <p>
           <strong>Webpage Builder</strong> は Pro プランに同梱される組み込み Agent Skill で、チャットをウェブサイトのエンドツーエンド作成ツールに変えます。「予約ページが欲しい」「会員制ポータルを作りたい」「問い合わせフォームを置きたい」と話すだけで、AI が HTML、裏側のワークフロー YAML、必要なシートスキーマ、仕様書 / 変更履歴まで一式生成します。

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useLocation, useParams, Navigate } from "react-router";
 import type { Language } from "~/types/settings";
 import { ManualLayout, type ChapterInfo } from "~/components/manual/ManualLayout";
@@ -56,6 +57,19 @@ export default function Manual() {
   const { pathname } = useLocation();
   const { chapter } = useParams();
   const lang: Language = pathname.startsWith("/manual/ja") ? "ja" : "en";
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const hadDark = root.classList.contains("dark");
+    const previousColorScheme = root.style.colorScheme;
+    root.classList.remove("dark");
+    root.style.colorScheme = "light";
+
+    return () => {
+      root.classList.toggle("dark", hadDark);
+      root.style.colorScheme = previousColorScheme;
+    };
+  }, []);
 
   const chapterInfos: ChapterInfo[] = CHAPTERS.map(({ slug, num, titleEn, titleJa, descEn, descJa }) => ({
     slug,

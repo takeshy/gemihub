@@ -50,7 +50,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var f=localStorage.getItem("gemihub-fontSize");var l=localStorage.getItem("gemihub-language");if(!l){var n=(navigator.language||"").toLowerCase();if(n.indexOf("ja")===0)l="ja";}if(f)document.documentElement.style.setProperty("--user-font-size",f+"px");if(l)document.documentElement.lang=l;var t=localStorage.getItem("gemihub-theme")||"system";var d=t==="dark"||(t==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark";}else{document.documentElement.style.colorScheme="light";}}catch(e){}})();`,
+            __html: `(function(){try{var f=localStorage.getItem("gemihub-fontSize");var l=localStorage.getItem("gemihub-language");if(!l){var n=(navigator.language||"").toLowerCase();if(n.indexOf("ja")===0)l="ja";}if(f)document.documentElement.style.setProperty("--user-font-size",f+"px");if(l)document.documentElement.lang=l;var t=localStorage.getItem("gemihub-theme")||"system";var p=location.pathname;var forceLight=p==="/lp"||p==="/lp/ja"||p==="/manual"||p.indexOf("/manual/")===0;var d=!forceLight&&(t==="dark"||(t==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches));if(d){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark";}else{document.documentElement.classList.remove("dark");document.documentElement.style.colorScheme="light";}}catch(e){}})();`,
           }}
         />
         <script
