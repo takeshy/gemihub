@@ -6,6 +6,7 @@ import { getSettings } from "~/services/user-settings.server";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions } from "~/services/mcp-tools.server";
 import { HUBWORK_TOOL_DEFINITIONS, HUBWORK_TOOL_DEFINITIONS_EXTRA } from "~/services/hubwork-tool-definitions";
+import { supportsWebSearch } from "~/types/settings";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 import { createLogContext, emitLog } from "~/services/logger.server";
@@ -103,7 +104,7 @@ export async function action({ request }: Route.ActionArgs) {
   const ragStoreIds = validData.ragStoreIds;
   const driveToolMode = validData.driveToolMode ?? "all";
   const requestedMcpServerIds = validData.mcpServerIds ?? [];
-  const webSearchEnabled = validData.webSearchEnabled;
+  const webSearchEnabled = validData.webSearchEnabled && supportsWebSearch(model);
   const enableThinking = validData.enableThinking;
   const toolResults = validData.toolResults as ToolResultInput[] | undefined;
   const currentInteractionId = validData.currentInteractionId;
@@ -166,7 +167,7 @@ export async function action({ request }: Route.ActionArgs) {
   const rawTopK = validData.settings?.ragTopK;
   const clampedTopK = rawTopK != null && Number.isFinite(rawTopK) ? Math.min(20, Math.max(1, rawTopK)) : undefined;
 
-  const interactionsTools = buildInteractionsTools(tools, ragStoreIds, clampedTopK, webSearchEnabled);
+  const interactionsTools = buildInteractionsTools(tools, ragStoreIds, clampedTopK, webSearchEnabled, model);
 
   const input = toolResults
     ? buildToolResultInput(toolResults)

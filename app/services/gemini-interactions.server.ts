@@ -14,6 +14,7 @@ import {
 } from "@google/genai";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
+import { mustUseWebSearchOnly, supportsWebSearch } from "~/types/settings";
 import { formatFileSearchSource, MODEL_PRICING, SEARCH_GROUNDING_COST } from "./gemini-chat-core";
 
 const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
@@ -67,16 +68,21 @@ export function buildInteractionsTools(
   ragStoreIds?: string[],
   ragTopK?: number,
   webSearchEnabled?: boolean,
+  model?: ModelType,
 ): Interactions.Tool[] {
   const result: Interactions.Tool[] = [];
+  const effectiveWebSearch = webSearchEnabled && (!model || supportsWebSearch(model));
+  const includeFunctionTools = !(model && mustUseWebSearchOnly(model) && effectiveWebSearch);
 
-  for (const tool of tools) {
-    result.push({
-      type: "function" as const,
-      name: tool.name,
-      description: tool.description,
-      parameters: toJsonSchema(tool.parameters),
-    } as Interactions.Tool);
+  if (includeFunctionTools) {
+    for (const tool of tools) {
+      result.push({
+        type: "function" as const,
+        name: tool.name,
+        description: tool.description,
+        parameters: toJsonSchema(tool.parameters),
+      } as Interactions.Tool);
+    }
   }
 
   const normalizedRagStoreIds = ragStoreIds
@@ -91,7 +97,7 @@ export function buildInteractionsTools(
     } as Interactions.Tool);
   }
 
-  if (webSearchEnabled) {
+  if (effectiveWebSearch) {
     result.push({
       type: "google_search" as const,
     } as Interactions.Tool);

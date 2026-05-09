@@ -20,7 +20,7 @@ import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
 import type { SkillMetadata } from "~/types/skill";
 import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, McpServerConfig } from "~/types/settings";
-import { getDriveToolModeConstraint } from "~/types/settings";
+import { getDriveToolModeConstraint, supportsWebSearch } from "~/types/settings";
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
 import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
@@ -893,7 +893,7 @@ export function ChatInput({
               className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
             >
               <option value="">No RAG</option>
-              <option value="__websearch__">Web Search</option>
+              {supportsWebSearch(selectedModel) && <option value="__websearch__">Web Search</option>}
               {ragSettingKeys.map((name) => (
                 <option key={name} value={name}>
                   RAG: {name}

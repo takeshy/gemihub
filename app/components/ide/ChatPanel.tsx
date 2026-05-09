@@ -16,6 +16,7 @@ import {
   getDefaultModelForPlan,
   getDriveToolModeConstraint,
   normalizeSelectedMcpServerIds,
+  supportsWebSearch,
 } from "~/types/settings";
 import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
@@ -699,14 +700,15 @@ export function ChatPanel({
 
   const applyConstraint = useCallback(
     (model: string, ragSetting: string | null) => {
+      if (ragSetting === "__websearch__" && !supportsWebSearch(model)) {
+        ragSetting = null;
+        setSelectedRagSetting(null);
+        try { localStorage.setItem("gemihub:selectedRagSetting", ""); } catch { /* ignore */ }
+      }
       const c = getDriveToolModeConstraint(model, ragSetting);
       setDriveToolMode(c.forcedMode ?? c.defaultMode);
       // Modes that disable function calling should also disable MCP.
-      const hasRag = !!(ragSetting && ragSetting !== "__websearch__");
-      if (
-        ragSetting === "__websearch__" ||
-        (model.toLowerCase().includes("flash-lite") && hasRag)
-      ) {
+      if (c.forcedMode === "none") {
         setEnabledMcpServerIds([]);
       }
     },
@@ -715,6 +717,9 @@ export function ChatPanel({
 
   const handleRagSettingChange = useCallback(
     (name: string | null) => {
+      if (name === "__websearch__" && !supportsWebSearch(selectedModel)) {
+        name = null;
+      }
       setSelectedRagSetting(name);
       try { localStorage.setItem("gemihub:selectedRagSetting", name ?? ""); } catch { /* ignore */ }
       applyConstraint(selectedModel, name);
@@ -762,7 +767,10 @@ export function ChatPanel({
           effectiveModel = fallbackImage.name;
         }
       }
-      const effectiveRagSetting = overrides?.searchSetting !== undefined ? overrides.searchSetting : selectedRagSetting;
+      let effectiveRagSetting = overrides?.searchSetting !== undefined ? overrides.searchSetting : selectedRagSetting;
+      if (effectiveRagSetting === "__websearch__" && !supportsWebSearch(effectiveModel)) {
+        effectiveRagSetting = null;
+      }
       const requestedDriveToolMode = overrides?.driveToolMode || driveToolMode;
       const effectiveConstraint = getDriveToolModeConstraint(
         effectiveModel,
@@ -799,7 +807,7 @@ export function ChatPanel({
 
       const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
 
-      const isWebSearch = effectiveRagSetting === "__websearch__";
+      const isWebSearch = effectiveRagSetting === "__websearch__" && supportsWebSearch(effectiveModel);
 
       const ragSetting =
         effectiveRagSetting && !isWebSearch

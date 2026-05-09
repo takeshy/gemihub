@@ -3,6 +3,7 @@
 import { listFiles, readFile, createFile, updateFile } from "./google-drive.server";
 import {
   DEFAULT_USER_SETTINGS,
+  normalizeDeprecatedModelName,
   normalizeMcpServers,
   normalizeSelectedMcpServerIds,
   type UserSettings,
@@ -55,23 +56,12 @@ export async function getSettings(
       );
       return {
         ...cmd,
-        model: (cmd.model as string) === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview"
-          : (cmd.model as string) === "gemini-2.5-flash-image" ? "gemini-3.1-flash-image-preview"
-          : cmd.model,
+        model: normalizeDeprecatedModelName(cmd.model),
         enabledMcpServers: normalizedIds.length > 0 ? normalizedIds : null,
       };
     });
 
-    // Migrate deprecated model names
-    if ((parsed.selectedModel as string) === "gemini-3-pro-preview") {
-      parsed.selectedModel = "gemini-3.1-pro-preview";
-    }
-    if ((parsed.selectedModel as string) === "gemini-2.5-flash-image") {
-      parsed.selectedModel = "gemini-3.1-flash-image-preview";
-    }
-    if ((parsed.selectedModel as string) === "gemma-3-27b-it") {
-      parsed.selectedModel = "gemma-4-31b-it";
-    }
+    parsed.selectedModel = normalizeDeprecatedModelName(parsed.selectedModel) ?? null;
 
     // Merge with defaults to handle missing fields from older versions
     const settings: UserSettings = {
@@ -136,6 +126,7 @@ export async function saveSettings(
       );
       return {
         ...cmd,
+        model: normalizeDeprecatedModelName(cmd.model),
         enabledMcpServers: normalizedIds.length > 0 ? normalizedIds : null,
       };
     }),

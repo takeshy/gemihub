@@ -160,16 +160,33 @@ export function isGemma4(model: string): boolean {
   return model.toLowerCase().includes("gemma-4");
 }
 
+export function normalizeDeprecatedModelName(model: unknown): ModelType | null | undefined {
+  if (model === null || model === undefined) return model;
+  if (model === "gemini-3-pro-preview") return "gemini-3.1-pro-preview";
+  if (model === "gemini-3.1-flash-lite-preview") return "gemini-3.1-flash-lite";
+  if (model === "gemini-2.5-flash-image") return "gemini-3.1-flash-image-preview";
+  if (model === "gemma-3-27b-it") return "gemma-4-31b-it";
+  return model as ModelType;
+}
+
+export function supportsWebSearch(model: string): boolean {
+  return !isGemma4(model);
+}
+
+export function mustUseWebSearchOnly(model: string): boolean {
+  return model.toLowerCase() === "gemini-3.1-flash-lite";
+}
+
 export function getDriveToolModeConstraint(
   model: string,
   ragSetting: string | null
 ): DriveToolModeConstraint {
+  if (ragSetting === "__websearch__" && mustUseWebSearchOnly(model)) {
+    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockWebSearch" };
+  }
   // Gemma 4 + Web Search: function calling disabled
   if (isGemma4(model) && ragSetting === "__websearch__") {
     return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockGemma4WebSearch" };
-  }
-  if (ragSetting === "__websearch__") {
-    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockWebSearch" };
   }
   // fileSearch + functionDeclarations not supported by Gemini API
   if (ragSetting && ragSetting !== "__websearch__") {
@@ -212,7 +229,7 @@ export type ModelType =
   | "gemini-3-flash-preview"
   | "gemini-3.1-pro-preview"
   | "gemini-3.1-pro-preview-customtools"
-  | "gemini-3.1-flash-lite-preview"
+  | "gemini-3.1-flash-lite"
   | "gemini-2.5-flash-lite"
   | "gemini-3-pro-image-preview"
   | "gemini-3.1-flash-image-preview"
@@ -243,9 +260,9 @@ export const PAID_MODELS: ModelInfo[] = [
     description: "Fast model with 1M context, best cost-performance",
   },
   {
-    name: "gemini-3.1-flash-lite-preview",
-    displayName: "Gemini 3.1 Flash Lite Preview",
-    description: "Most cost-effective model with high performance",
+    name: "gemini-3.1-flash-lite",
+    displayName: "Gemini 3.1 Flash Lite",
+    description: "Stable low-latency, cost-effective model with 1M context",
   },
   {
     name: "gemini-2.5-flash",
@@ -298,9 +315,9 @@ export const FREE_MODELS: ModelInfo[] = [
     description: "Free tier preview model",
   },
   {
-    name: "gemini-3.1-flash-lite-preview",
-    displayName: "Gemini 3.1 Flash Lite Preview",
-    description: "Free tier cost-effective model",
+    name: "gemini-3.1-flash-lite",
+    displayName: "Gemini 3.1 Flash Lite",
+    description: "Free tier stable cost-effective model",
   },
   {
     name: "gemma-4-31b-it",

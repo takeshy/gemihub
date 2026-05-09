@@ -6,7 +6,7 @@ import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat.server";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES, executeDriveTool } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.server";
-import { getDriveToolModeConstraint, isImageGenerationModel } from "~/types/settings";
+import { getDriveToolModeConstraint, isImageGenerationModel, supportsWebSearch } from "~/types/settings";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 import { createLogContext, emitLog } from "~/services/logger.server";
@@ -81,7 +81,7 @@ export async function action({ request }: Route.ActionArgs) {
   const rawDriveToolMode = validData.driveToolMode;
   const enableMcp = validData.enableMcp;
   const requestedMcpServers = validData.mcpServers as McpServerConfig[] | undefined;
-  const webSearchEnabled = validData.webSearchEnabled;
+  const webSearchEnabled = validData.webSearchEnabled && supportsWebSearch(model);
   const enableThinking = validData.enableThinking;
   const requestSettings = validData.settings;
   const requestedMcpServerIds = (requestedMcpServers || [])

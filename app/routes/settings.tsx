@@ -14,7 +14,6 @@ import type {
   McpServerConfig,
   RagSetting,
   ApiPlan,
-  ModelType,
   Language,
   FontSize,
   Theme,
@@ -24,6 +23,7 @@ import type {
 import {
   normalizeMcpServers,
   normalizeSelectedMcpServerIds,
+  normalizeDeprecatedModelName,
   getDefaultModelForPlan,
   isModelAllowedForPlan,
 } from "~/types/settings";
@@ -220,7 +220,7 @@ export async function action({ request }: Route.ActionArgs) {
     switch (_action) {
       case "saveGeneral": {
         const apiPlan = (formData.get("apiPlan") as ApiPlan) || currentSettings.apiPlan;
-        const selectedModel = (formData.get("selectedModel") as ModelType) || null;
+        const selectedModel = normalizeDeprecatedModelName(formData.get("selectedModel")) ?? null;
         const systemPrompt = (formData.get("systemPrompt") as string) || "";
         const geminiApiKey = (formData.get("geminiApiKey") as string)?.trim() || "";
         const language = (formData.get("language") as Language) || currentSettings.language;
@@ -464,6 +464,7 @@ export async function action({ request }: Route.ActionArgs) {
         const normalizedMcpServers = normalizeMcpServers(currentSettings.mcpServers || []);
         const normalizedCommands = (slashCommands as typeof currentSettings.slashCommands).map((cmd) => ({
           ...cmd,
+          model: normalizeDeprecatedModelName(cmd.model),
           enabledMcpServers: (() => {
             const normalizedIds = normalizeSelectedMcpServerIds(
               cmd.enabledMcpServers,
