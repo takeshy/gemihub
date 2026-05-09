@@ -74,6 +74,11 @@ function PremiumEn() {
         <p>
           An external sync token that allows syncing GemiHub files with Obsidian or other external editors.
         </p>
+        <ol>
+          <li>Install the <a href="https://github.com/takeshy/obsidian-gemihub" target="_blank" rel="noopener noreferrer">GemiHub Obsidian plugin</a> in Obsidian via BRAT.</li>
+          <li>Open <strong>Settings &gt; Sync &gt; External Sync</strong> in GemiHub and click <strong>Generate Sync Token</strong>.</li>
+          <li>Copy the generated token and paste it into the GemiHub plugin settings in Obsidian.</li>
+        </ol>
 
         <h3>Temp Upload URL</h3>
         <p>
@@ -234,6 +239,11 @@ function PremiumJa() {
         <p>
           GemiHubのファイルをObsidianなどの外部エディタと同期するためのトークンです。
         </p>
+        <ol>
+          <li>Obsidian に BRAT 経由で <a href="https://github.com/takeshy/obsidian-gemihub" target="_blank" rel="noopener noreferrer">GemiHub Obsidian プラグイン</a>をインストールします。</li>
+          <li>GemiHub の<strong>設定 &gt; 同期 &gt; 外部同期</strong>を開き、<strong>同期トークンを生成</strong>ボタンでトークンを生成します。</li>
+          <li>生成されたトークンをコピーし、Obsidian 側の GemiHub プラグイン設定に貼り付けます。</li>
+        </ol>
 
         <h3>一時アップロードURL</h3>
         <p>

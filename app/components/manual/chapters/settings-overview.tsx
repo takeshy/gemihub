@@ -102,6 +102,7 @@ function SettingsEn() {
           <li>Trash management and conflict backup management.</li>
           <li>Edit history pruning and statistics.</li>
           <li>File tree rebuild and untracked file detection.</li>
+          <li>External Sync token generation for Obsidian and other external clients.</li>
         </ul>
       </div>
     </>
@@ -204,6 +205,7 @@ function SettingsJa() {
           <li>ゴミ箱管理とコンフリクトバックアップ管理。</li>
           <li>編集履歴の整理と統計。</li>
           <li>ファイルツリーの再構築と未追跡ファイルの検出。</li>
+          <li>Obsidian などの外部クライアント用の外部同期トークン生成。</li>
         </ul>
       </div>
     </>

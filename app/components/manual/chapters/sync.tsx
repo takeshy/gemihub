@@ -65,7 +65,15 @@ function SyncEn() {
           <li><strong>Manage Conflict Backups</strong> — View and restore conflict backup files.</li>
           <li><strong>Rebuild File Tree</strong> — Re-scan Drive to fix sync metadata.</li>
           <li><strong>Detect Untracked Files</strong> — Find remote files not in local cache.</li>
+          <li><strong>External Sync</strong> — Generate a sync token for the GemiHub Obsidian plugin or another external client.</li>
         </ul>
+
+        <h2>Obsidian Sync</h2>
+        <ol>
+          <li>Install the <a href="https://github.com/takeshy/obsidian-gemihub" target="_blank" rel="noopener noreferrer">GemiHub Obsidian plugin</a> in Obsidian via BRAT.</li>
+          <li>In GemiHub, open <strong>Settings &gt; Sync &gt; External Sync</strong> and click <strong>Generate Sync Token</strong>.</li>
+          <li>Copy the generated token into the GemiHub plugin settings in Obsidian.</li>
+        </ol>
 
         <h2>Trash</h2>
         <p>
@@ -140,7 +148,15 @@ function SyncJa() {
           <li><strong>コンフリクトバックアップ管理</strong> — コンフリクトバックアップファイルの表示と復元。</li>
           <li><strong>ファイルツリーの再構築</strong> — Driveを再スキャンして同期メタデータを修復。</li>
           <li><strong>未追跡ファイルの検出</strong> — ローカルキャッシュにないリモートファイルを検出。</li>
+          <li><strong>外部同期</strong> — GemiHub Obsidian プラグインなどの外部クライアント用の同期トークンを生成。</li>
         </ul>
+
+        <h2>Obsidian 同期</h2>
+        <ol>
+          <li>Obsidian に BRAT 経由で <a href="https://github.com/takeshy/obsidian-gemihub" target="_blank" rel="noopener noreferrer">GemiHub Obsidian プラグイン</a>をインストールします。</li>
+          <li>GemiHub の<strong>設定 &gt; 同期 &gt; 外部同期</strong>を開き、<strong>同期トークンを生成</strong>ボタンでトークンを生成します。</li>
+          <li>生成されたトークンをコピーし、Obsidian 側の GemiHub プラグイン設定に貼り付けます。</li>
+        </ol>
 
         <h2>ゴミ箱</h2>
         <p>
