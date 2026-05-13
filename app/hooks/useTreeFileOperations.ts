@@ -801,7 +801,9 @@ export function useTreeFileOperations({
         });
 
         if (!res.ok) {
-          alert(t("contextMenu.convertPdfFailed"));
+          const data = await res.json().catch(() => null) as { error?: string } | null;
+          const detail = data?.error ? `\n${data.error}` : "";
+          alert(`${t("contextMenu.convertPdfFailed")}${detail}`);
           return;
         }
 

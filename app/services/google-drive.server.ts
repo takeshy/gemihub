@@ -34,6 +34,32 @@ interface DriveOperationOptions {
   signal?: AbortSignal;
 }
 
+class DriveApiError extends Error {
+  constructor(
+    public status: number,
+    public responseText: string
+  ) {
+    super(`Drive API error ${status}: ${responseText}`);
+  }
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      },
+      { once: true }
+    );
+  });
+}
+
 async function driveRequest(
   url: string,
   accessToken: string,
@@ -50,7 +76,7 @@ async function driveRequest(
   });
 
   // Retry on 429 (rate limit) or 503 (service unavailable)
-  if ((response.status === 429 || response.status === 503) && retries > 0) {
+  if ((response.status === 429 || response.status === 500 || response.status === 503) && retries > 0) {
     const retryAfter = parseInt(response.headers.get("Retry-After") || "2", 10);
     await new Promise((r) => setTimeout(r, retryAfter * 1000));
     return driveRequest(url, accessToken, options, retries - 1);
@@ -58,7 +84,7 @@ async function driveRequest(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Drive API error ${response.status}: ${text}`);
+    throw new DriveApiError(response.status, text);
   }
 
   return response;
@@ -234,13 +260,27 @@ export async function exportFile(
   mimeType: string,
   options: DriveOperationOptions = {}
 ): Promise<Buffer> {
-  const res = await driveRequest(
-    `${DRIVE_API}/files/${fileId}/export?mimeType=${encodeURIComponent(mimeType)}`,
-    accessToken,
-    { signal: options.signal }
-  );
-  const buffer = await res.arrayBuffer();
-  return Buffer.from(buffer);
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await driveRequest(
+        `${DRIVE_API}/files/${fileId}/export?mimeType=${encodeURIComponent(mimeType)}`,
+        accessToken,
+        { signal: options.signal }
+      );
+      const buffer = await res.arrayBuffer();
+      return Buffer.from(buffer);
+    } catch (error) {
+      const retryable =
+        error instanceof DriveApiError &&
+        (error.status === 403 || error.status === 404 || error.status === 429 || error.status >= 500);
+      if (!retryable || attempt === maxAttempts) {
+        throw error;
+      }
+      await sleep(750 * attempt, options.signal);
+    }
+  }
+  throw new Error("Drive export failed");
 }
 
 // Read file as base64 string (for binary files in sync pipeline)
