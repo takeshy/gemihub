@@ -20,7 +20,8 @@ import {
   getFolderPath,
 } from "~/utils/tree-helpers";
 import type { TranslationStrings } from "~/i18n/translations";
-import type { UploadReturn } from "~/hooks/useFileUpload";
+import type { UploadFile, UploadReturn } from "~/hooks/useFileUpload";
+import { getUploadFileName } from "~/hooks/useFileUpload";
 import { fileToBase64 } from "~/utils/file-bytes";
 
 interface UseTreeDragDropParams {
@@ -62,7 +63,9 @@ async function readDirectoryEntries(
         const file = await new Promise<File>((resolve, reject) =>
           (item as FileSystemFileEntry).file(resolve, reject)
         );
-        files.push(new File([file], itemPath, { type: file.type, lastModified: file.lastModified }));
+        const uploadFile = new File([file], file.name, { type: file.type, lastModified: file.lastModified }) as UploadFile;
+        uploadFile.relativePathForUpload = itemPath;
+        files.push(uploadFile);
       } else if (item.isDirectory) {
         const subFiles = await readDirectoryEntries(item as FileSystemDirectoryEntry, itemPath);
         for (const f of subFiles) files.push(f);
@@ -424,14 +427,15 @@ export function useTreeDragDrop({
       const namePrefix = folderId.startsWith("vfolder:") ? getFolderPath(folderId) : undefined;
 
       // Check for duplicates
-      const duplicates: { file: File; existing: CachedTreeNode }[] = [];
+      const duplicates: { file: File; existing: CachedTreeNode; uploadName: string; fullPath: string }[] = [];
       for (const file of files) {
-        const fullPath = namePrefix ? `${namePrefix}/${file.name}` : file.name;
+        const uploadName = getUploadFileName(file);
+        const fullPath = namePrefix ? `${namePrefix}/${uploadName}` : uploadName;
         const existing = findFileByPath(treeItems, fullPath);
-        if (existing) duplicates.push({ file, existing });
+        if (existing) duplicates.push({ file, existing, uploadName, fullPath });
       }
       if (duplicates.length > 0) {
-        const names = duplicates.map((d) => d.file.name).join(", ");
+        const names = duplicates.map((d) => d.fullPath).join(", ");
         const msg = t("contextMenu.fileAlreadyExists").replace("{name}", names);
         if (!confirm(msg)) return;
       }
@@ -443,10 +447,9 @@ export function useTreeDragDrop({
       const newFiles = files.filter((f) => !duplicateSet.has(f));
 
       // Handle text duplicates: local cache update only (yellow dot)
-      for (const { file, existing } of textDuplicates) {
+      for (const { file, existing, fullPath } of textDuplicates) {
         const content = await file.text();
         const rawContentBase64 = await fileToBase64(file);
-        const fullPath = namePrefix ? `${namePrefix}/${file.name}` : file.name;
         // saveLocalEdit must be called BEFORE setCachedFile (reads old content from cache)
         const saved = await saveLocalEdit(existing.id, fullPath, content);
         if (!saved) continue; // Content unchanged — skip
@@ -470,7 +473,7 @@ export function useTreeDragDrop({
       if (binaryDuplicates.length > 0) {
         const replaceMap: Record<string, string> = {};
         const binaryFiles = binaryDuplicates.map((d) => {
-          replaceMap[d.file.name] = d.existing.id;
+          replaceMap[d.uploadName] = d.existing.id;
           return d.file;
         });
         const result = await upload(binaryFiles, rootFolderId, namePrefix, replaceMap);
@@ -479,8 +482,8 @@ export function useTreeDragDrop({
           const meta = await getCachedRemoteMeta();
           // Cache binary content as base64 and update localSyncMeta — only for files that succeeded
           const localMeta = await getLocalSyncMeta();
-          for (const { file, existing } of binaryDuplicates) {
-            if (result.failedNames.has(file.name)) continue;
+          for (const { file, existing, uploadName } of binaryDuplicates) {
+            if (result.failedNames.has(uploadName)) continue;
             const base64 = await fileToBase64(file);
             const rm = meta?.files?.[existing.id];
             await setCachedFile({
@@ -489,7 +492,7 @@ export function useTreeDragDrop({
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
               cachedAt: Date.now(),
-              fileName: rm?.name ?? file.name,
+              fileName: rm?.name ?? uploadName,
               encoding: "base64",
             });
             window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: existing.id } }));
@@ -497,6 +500,8 @@ export function useTreeDragDrop({
               localMeta.files[existing.id] = {
                 md5Checksum: rm?.md5Checksum ?? "",
                 modifiedTime: rm?.modifiedTime ?? "",
+                name: rm?.name,
+                size: rm?.size,
               };
             }
           }
@@ -518,7 +523,8 @@ export function useTreeDragDrop({
           // Use uploaded.mimeType (from Drive API) instead of file.type (browser, unreliable)
           const localMeta = await getLocalSyncMeta();
           for (const file of newFiles) {
-            const uploaded = result.fileMap.get(file.name);
+            const uploadName = getUploadFileName(file);
+            const uploaded = result.fileMap.get(uploadName);
             if (!uploaded) continue;
             if (isBinaryMimeType(uploaded.mimeType)) {
               const base64 = await fileToBase64(file);
@@ -528,7 +534,7 @@ export function useTreeDragDrop({
                 md5Checksum: uploaded.md5Checksum ?? "",
                 modifiedTime: uploaded.modifiedTime ?? "",
                 cachedAt: Date.now(),
-                fileName: uploaded.name ?? file.name,
+                fileName: uploaded.name ?? uploadName,
                 encoding: "base64",
               });
             } else {
@@ -541,7 +547,7 @@ export function useTreeDragDrop({
                 md5Checksum: uploaded.md5Checksum ?? "",
                 modifiedTime: uploaded.modifiedTime ?? "",
                 cachedAt: Date.now(),
-                fileName: uploaded.name ?? file.name,
+                fileName: uploaded.name ?? uploadName,
               });
             }
             window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId: uploaded.id } }));
@@ -549,6 +555,7 @@ export function useTreeDragDrop({
               localMeta.files[uploaded.id] = {
                 md5Checksum: uploaded.md5Checksum ?? "",
                 modifiedTime: uploaded.modifiedTime ?? "",
+                name: uploaded.name,
               };
             }
           }
