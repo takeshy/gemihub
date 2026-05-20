@@ -224,6 +224,7 @@ export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
 
 // Model types
 export type ModelType =
+  | "gemini-3.5-flash"
   | "gemini-2.5-flash"
   | "gemini-2.5-pro"
   | "gemini-3-flash-preview"
@@ -253,6 +254,11 @@ export const PAID_MODELS: ModelInfo[] = [
     name: "gemini-3.1-pro-preview-customtools",
     displayName: "Gemini 3.1 Pro Preview (Custom Tools)",
     description: "Optimized for agentic workflows with custom tools and bash",
+  },
+  {
+    name: "gemini-3.5-flash",
+    displayName: "Gemini 3.5 Flash",
+    description: "Latest high-speed Flash model with 1M context",
   },
   {
     name: "gemini-3-flash-preview",
@@ -299,6 +305,11 @@ export const PAID_MODELS: ModelInfo[] = [
 ];
 
 export const FREE_MODELS: ModelInfo[] = [
+  {
+    name: "gemini-3.5-flash",
+    displayName: "Gemini 3.5 Flash",
+    description: "Free tier latest high-speed Flash model",
+  },
   {
     name: "gemini-2.5-flash",
     displayName: "Gemini 2.5 Flash",

@@ -105,7 +105,7 @@ export function createPluginAPI(
                 ? { attachments: m.attachments }
                 : {}),
             })),
-            model: chatOpts?.model || "gemini-2.5-flash",
+            model: chatOpts?.model || "gemini-3.5-flash",
             systemPrompt: chatOpts?.systemPrompt,
           }),
         });
