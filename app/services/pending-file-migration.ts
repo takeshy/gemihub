@@ -61,7 +61,17 @@ async function runOnce(): Promise<void> {
 
       // Re-read cache — user may have edited since we started
       const latest = await getCachedFile(pf.fileId);
-      if (!latest) continue;
+      if (!latest) {
+        // The local draft was deleted while the Drive create request was in flight.
+        // Remove the just-created remote placeholder so a deleted local PNG/binary
+        // file does not reappear from remote metadata on the next tree refresh.
+        await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete", fileId: file.id, permanent: true }),
+        }).catch(() => {});
+        continue;
+      }
 
       const currentContent = latest.content;
       const emptyMd5 = file.md5Checksum ?? "";
@@ -85,6 +95,7 @@ async function runOnce(): Promise<void> {
         modifiedTime: emptyModifiedTime,
         cachedAt: Date.now(),
         fileName: file.name,
+        ...(latest.encoding ? { encoding: latest.encoding } : {}),
       });
 
       const meta = await getCachedRemoteMeta();
@@ -102,6 +113,7 @@ async function runOnce(): Promise<void> {
 
       const localMeta = await getLocalSyncMeta();
       if (localMeta) {
+        delete localMeta.files[pf.fileId];
         localMeta.files[file.id] = {
           md5Checksum: emptyMd5,
           modifiedTime: emptyModifiedTime,
