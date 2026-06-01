@@ -892,7 +892,7 @@ const en: TranslationStrings = {
   "canvas.addLink": "Link",
   "canvas.addGroup": "Group",
   "canvas.deleteSelection": "Delete selection",
-  "canvas.connectHint": "Drag to another card to connect",
+  "canvas.connectHint": "Click to connect",
   "canvas.textCard": "Text",
   "canvas.fileCard": "File",
   "canvas.linkCard": "Link",
@@ -902,8 +902,8 @@ const en: TranslationStrings = {
   "canvas.filePath": "File path",
   "canvas.label": "Label",
   "canvas.helpSelect": "Select a card to move, resize, edit details, or delete it.",
-  "canvas.helpConnect": "Select a card and drag a blue handle to another card to create an arrow.",
-  "canvas.helpPanZoom": "Use Pan mode or modifier-drag to move the canvas. Ctrl/Cmd + wheel zooms.",
+  "canvas.helpConnect": "In Edit mode, click a purple side handle, then click another card handle to connect them.",
+  "canvas.helpPanZoom": "Drag empty canvas space to pan. Ctrl/Cmd + wheel zooms.",
 
   // ChatPanel
   "chat.newChat": "New Chat",
@@ -1728,7 +1728,7 @@ const ja: TranslationStrings = {
   "canvas.addLink": "リンク",
   "canvas.addGroup": "グループ",
   "canvas.deleteSelection": "選択を削除",
-  "canvas.connectHint": "別のカードへドラッグして接続",
+  "canvas.connectHint": "クリックして接続",
   "canvas.textCard": "テキスト",
   "canvas.fileCard": "ファイル",
   "canvas.linkCard": "リンク",
@@ -1738,8 +1738,8 @@ const ja: TranslationStrings = {
   "canvas.filePath": "ファイルパス",
   "canvas.label": "ラベル",
   "canvas.helpSelect": "カードを選択すると、移動・リサイズ・詳細編集・削除ができます。",
-  "canvas.helpConnect": "カードを選択し、青いハンドルを別カードへドラッグすると矢印で接続できます。",
-  "canvas.helpPanZoom": "Pan モードまたは修飾キー + ドラッグでキャンバスを移動できます。Ctrl/Cmd + ホイールでズームします。",
+  "canvas.helpConnect": "Edit モードでは、紫の辺ハンドルをクリックしてから別カードのハンドルをクリックすると接続できます。",
+  "canvas.helpPanZoom": "空白部分をドラッグするとキャンバスを移動できます。Ctrl/Cmd + ホイールでズームします。",
 
   // ChatPanel
   "chat.newChat": "新しいチャット",
