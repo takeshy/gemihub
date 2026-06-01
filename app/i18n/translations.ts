@@ -51,6 +51,25 @@ export interface TranslationStrings {
   "workspace.openExternal": string;
   "workspace.reload": string;
 
+  // Canvas editor
+  "canvas.addText": string;
+  "canvas.addFile": string;
+  "canvas.addLink": string;
+  "canvas.addGroup": string;
+  "canvas.deleteSelection": string;
+  "canvas.connectHint": string;
+  "canvas.textCard": string;
+  "canvas.fileCard": string;
+  "canvas.linkCard": string;
+  "canvas.groupCard": string;
+  "canvas.inspector": string;
+  "canvas.color": string;
+  "canvas.filePath": string;
+  "canvas.label": string;
+  "canvas.helpSelect": string;
+  "canvas.helpConnect": string;
+  "canvas.helpPanZoom": string;
+
   // ChatPanel
   "chat.newChat": string;
   "chat.noHistory": string;
@@ -866,6 +885,25 @@ const en: TranslationStrings = {
   "mainViewer.download": "Download",
   "workspace.openExternal": "Open in Google",
   "workspace.reload": "Reload",
+
+  // Canvas editor
+  "canvas.addText": "Text",
+  "canvas.addFile": "File",
+  "canvas.addLink": "Link",
+  "canvas.addGroup": "Group",
+  "canvas.deleteSelection": "Delete selection",
+  "canvas.connectHint": "Click to connect",
+  "canvas.textCard": "Text",
+  "canvas.fileCard": "File",
+  "canvas.linkCard": "Link",
+  "canvas.groupCard": "Group",
+  "canvas.inspector": "Canvas inspector",
+  "canvas.color": "Color",
+  "canvas.filePath": "File path",
+  "canvas.label": "Label",
+  "canvas.helpSelect": "Select a card to move, resize, edit details, or delete it.",
+  "canvas.helpConnect": "In Edit mode, click a purple side handle, then click another card handle to connect them.",
+  "canvas.helpPanZoom": "Drag empty canvas space to pan. Ctrl/Cmd + wheel zooms.",
 
   // ChatPanel
   "chat.newChat": "New Chat",
@@ -1683,6 +1721,25 @@ const ja: TranslationStrings = {
   "mainViewer.download": "ダウンロード",
   "workspace.openExternal": "Googleで開く",
   "workspace.reload": "再読み込み",
+
+  // Canvas editor
+  "canvas.addText": "テキスト",
+  "canvas.addFile": "ファイル",
+  "canvas.addLink": "リンク",
+  "canvas.addGroup": "グループ",
+  "canvas.deleteSelection": "選択を削除",
+  "canvas.connectHint": "クリックして接続",
+  "canvas.textCard": "テキスト",
+  "canvas.fileCard": "ファイル",
+  "canvas.linkCard": "リンク",
+  "canvas.groupCard": "グループ",
+  "canvas.inspector": "Canvas インスペクタ",
+  "canvas.color": "色",
+  "canvas.filePath": "ファイルパス",
+  "canvas.label": "ラベル",
+  "canvas.helpSelect": "カードを選択すると、移動・リサイズ・詳細編集・削除ができます。",
+  "canvas.helpConnect": "Edit モードでは、紫の辺ハンドルをクリックしてから別カードのハンドルをクリックすると接続できます。",
+  "canvas.helpPanZoom": "空白部分をドラッグするとキャンバスを移動できます。Ctrl/Cmd + ホイールでズームします。",
 
   // ChatPanel
   "chat.newChat": "新しいチャット",

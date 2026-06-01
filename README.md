@@ -28,6 +28,12 @@ Build complex automation pipelines with a visual editor. Chain together AI promp
 
 ![Visual Workflow Editor](./public/images/visual_workflow.png)
 
+### Obsidian-Compatible Canvas
+
+Create and view `.canvas` files using an Obsidian-compatible JSON Canvas editor. GemiHub renders text cards, groups, file previews, web pages, and curved links, with read-only viewing by default and an edit mode for arranging cards, connecting objects, changing colors, and updating Markdown content.
+
+![Canvas Editor](./public/images/canvas.png)
+
 ### Your Data, Your Control
 
 All data — chat history, workflows, settings, edit history — is stored in your own Google Drive under a `gemihub/` folder. No proprietary database, no vendor lock-in. Optional hybrid encryption (RSA + AES) protects sensitive files. A Python decryption script is provided so you can always access your encrypted data independently.
@@ -93,6 +99,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, settings panels, custom file icons, and file extension handling
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
+- **Canvas Editor** — Obsidian-compatible JSON Canvas viewing and editing with file/link previews, groups, curved connections, read-only mode, and edit controls
 - **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore. External sync token for tools like Obsidian
 - **Encryption** — Optional hybrid RSA + AES encryption for individual files, chat history, and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
