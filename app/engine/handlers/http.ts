@@ -15,7 +15,7 @@ function guessContentType(filename: string): string {
   const ext = filename.toLowerCase().split(".").pop();
   const types: Record<string, string> = {
     html: "text/html", htm: "text/html", txt: "text/plain",
-    json: "application/json", xml: "application/xml", css: "text/css",
+    json: "application/json", canvas: "application/json", xml: "application/xml", css: "text/css",
     js: "application/javascript", png: "image/png", jpg: "image/jpeg",
     jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
     svg: "image/svg+xml", pdf: "application/pdf",

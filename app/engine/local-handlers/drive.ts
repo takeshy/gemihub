@@ -182,7 +182,7 @@ export async function handleDriveFileNodeLocal(
     const ext = fileName.includes(".") ? fileName.split(".").pop()!.toLowerCase() : "";
     const mimeByExt: Record<string, string> = {
       md: "text/markdown", yaml: "text/yaml", yml: "text/yaml",
-      json: "application/json", txt: "text/plain",
+      json: "application/json", canvas: "application/json", txt: "text/plain",
     };
     context.variables.set("__openFile", JSON.stringify({
       fileId: lastEvent.fileId,

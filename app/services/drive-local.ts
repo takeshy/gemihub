@@ -29,7 +29,7 @@ export function mimeTypeFromFileName(fileName: string): string {
   const ext = fileName.slice(dotIdx + 1).toLowerCase();
   const map: Record<string, string> = {
     md: "text/markdown", txt: "text/plain",
-    json: "application/json",
+    json: "application/json", canvas: "application/json",
     yaml: "text/yaml", yml: "text/yaml",
     js: "application/javascript", ts: "application/typescript",
     css: "text/css", html: "text/html", xml: "text/xml",

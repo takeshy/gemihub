@@ -36,6 +36,7 @@ import { createLogContext, emitLog } from "~/services/logger.server";
 function guessMimeType(fileName: string): string {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".json")) return "application/json";
+  if (lower.endsWith(".canvas")) return "application/json";
   if (lower.endsWith(".md")) return "text/markdown";
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
   if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";

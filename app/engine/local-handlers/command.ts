@@ -212,6 +212,7 @@ export async function handleCommandNodeLocal(
             if (!fileData.mimeType || fileData.mimeType === "application/octet-stream") {
               const ext = (fileData.extension || "").toLowerCase();
               const mimeMap: Record<string, string> = {
+                canvas: "application/json",
                 png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
                 gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
                 pdf: "application/pdf",

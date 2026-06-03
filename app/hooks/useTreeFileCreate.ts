@@ -101,6 +101,7 @@ function mimeTypeFromImportPath(fileName: string): string {
     md: "text/markdown",
     txt: "text/plain",
     json: "application/json",
+    canvas: "application/json",
     yaml: "text/yaml",
     yml: "text/yaml",
     js: "application/javascript",

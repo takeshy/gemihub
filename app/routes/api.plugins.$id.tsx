@@ -110,6 +110,7 @@ function mimeFromName(name: string): string {
     js: "application/javascript",
     wasm: "application/wasm",
     json: "application/json",
+    canvas: "application/json",
     css: "text/css",
   };
   return map[ext] ?? "application/octet-stream";
