@@ -75,7 +75,8 @@ export function buildReviewSystemPrompt(
     ? `
 5. **Skill instructions quality**: Are instructions written in imperative form? Do they explain WHY behind each guideline (not just rigid rules)? Are they concise (under 500 lines)?
 6. **Skill description**: Does the description specify both what the skill does AND when to use it? Is it specific enough to trigger reliably?
-7. **Input/output design**: Does the workflow have clear input variables for the AI to provide? Are outputs meaningful for continuing the conversation?`
+7. **Input/output design**: Does the workflow have clear input variables for the AI to provide? Are outputs meaningful for continuing the conversation?
+8. **Headless skill execution**: Does the workflow avoid depending on user-facing UI during chat execution? Flag final result \`dialog\` nodes, required \`prompt-value\`/\`prompt-selection\` nodes with no supplied variable/default, and picker-only flows. Skill workflows invoked by \`run_skill_workflow\` are background tool calls; they should return non-underscore variables and let SKILL.md tell the chat AI how to present them.`
     : "";
 
   return `You are a workflow quality reviewer for GemiHub. Evaluate the generated workflow YAML against the original request and plan.
@@ -84,6 +85,7 @@ Check for:
 1. **Completeness**: Does the workflow fulfill all aspects of the request?
 2. **Correctness**: Are node types valid? Are connections (next, trueNext, falseNext) properly set? Are variables initialized before use? NOTE: The \`value\` field on a variable node is OPTIONAL — omitting it defaults to "" for new variables and preserves the existing value for variables already set (input declaration). Do NOT flag missing \`value\` as an issue; only flag real problems (wrong type, broken references, undefined variables being read, etc.).
    IMPORTANT: Do NOT flag "workflow does not output variable X to chat" as an issue. When a skill workflow runs, ALL variables whose name does not start with \`_\` are automatically returned to the chat AI, which presents them to the user as guided by the SKILL.md instructions. A final \`command\` node just to "display" a value is UNNECESSARY — a \`command\` node runs an LLM call inside the workflow and saves to a variable; it does not write directly to the chat. If the concern is that the user should see a specific variable, the fix belongs in the SKILL.md instructions body (e.g., "output \`ogpMarkdown\` verbatim"), not in the workflow YAML.
+   IMPORTANT: For skill workflows, DO flag a final \`dialog\` node used to display results. Chat-invoked skill workflows are headless background tool calls, whether local or server-side, so user-facing dialogs are not the output channel. The fix is to save the result to a non-underscore variable and describe the desired chat response in SKILL.md. Also flag required prompt nodes that cannot be satisfied by an input variable or default.
 3. **Data flow**: Do saveTo variables match where they're referenced? Are there dangling references?
 4. **Best practices**: Descriptive node IDs? Comments on complex nodes? Proper error handling?
 5. **Variable interpolation in script nodes**: \`{{var:json}}\` does NOT add quotes — it only escapes content. Flag any occurrence where \`{{var:json}}\` appears without surrounding quotes in a JavaScript string context (e.g., \`var x = {{var:json}}\`, \`JSON.parse({{var:json}})\`). The correct form is \`"{{var:json}}"\` when the value should be a string literal.
@@ -158,6 +160,7 @@ export function buildRefineUserPrompt(options: {
 When revising the SKILL.md body, apply these meta-principles:
 - **Generalise — don't overfit to the reviewer's example.** A skill is loaded for many future conversations, not just the one that surfaced this issue. Prefer fixes that broaden a rule ("user-derived values inside JSON strings need \`:json\`") over fixes that patch a single phrasing ("for the field named X, do Y"). If the same class of mistake could happen elsewhere in the workflow, generalise the rule.
 - **Explain the *why*, not just \`MUST\` / \`NEVER\`.** When you have to add or tighten a rule, give the one-clause reason ("…because bare \`{{var}}\` breaks JSON.parse on values containing quotes"). Reasoned rules survive edge cases; bare imperatives don't. If you find yourself writing more all-caps absolutes, prefer reframing as a Before/After row or a "Tempting thought → Counter-rule" entry instead.
+- **Remember skill workflows are headless in chat.** Do not add \`dialog\` nodes just to display output, and do not rely on required prompt UI unless the same value is supplied by variables or defaults. Return non-underscore variables and guide the chat AI in SKILL.md.
 - **Keep the body lean.** Issues are often fixed by *removing* something that was misleading, not by adding more rules. Before adding a paragraph, ask whether an existing one needs to be cut or shortened.`;
   } else {
     generatedOutput = `GENERATED YAML:\n${previousYaml}`;

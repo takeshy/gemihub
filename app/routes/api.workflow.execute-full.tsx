@@ -6,7 +6,7 @@ import { getDriveContext } from "~/services/google-drive.server";
 import { getSettings } from "~/services/user-settings.server";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflow } from "~/engine/executor";
-import type { WorkflowInput, ServiceContext, ExecutionLog } from "~/engine/types";
+import type { WorkflowInput, ServiceContext, ExecutionLog, WorkflowNodeType } from "~/engine/types";
 import { google } from "googleapis";
 import { getAccountByRootFolderId } from "~/services/hubwork-accounts.server";
 
@@ -16,6 +16,7 @@ const ExecuteFullSchema = z.object({
   workflowYaml: z.string().min(1).max(MAX_WORKFLOW_YAML_SIZE),
   workflowName: z.string().max(256).optional(),
   variables: z.record(z.string(), z.string().or(z.number())).optional(),
+  promptMode: z.enum(["interactive", "headless"]).optional(),
 });
 
 /**
@@ -25,12 +26,6 @@ const ExecuteFullSchema = z.object({
 export async function action({ request }: Route.ActionArgs) {
   const sessionTokens = await requireAuth(request);
   const { tokens } = await getValidTokens(request, sessionTokens);
-
-  const { hasProFeatures } = await import("~/types/hubwork");
-  const hubworkAccount = await getAccountByRootFolderId(tokens.rootFolderId);
-  if (!hubworkAccount || !hasProFeatures(hubworkAccount)) {
-    throw new Response("Hubwork Pro subscription required", { status: 403 });
-  }
 
   const settings = await getSettings(tokens.accessToken, tokens.rootFolderId);
 
@@ -44,9 +39,34 @@ export async function action({ request }: Route.ActionArgs) {
   if (!parsed.success) {
     throw new Response(`Invalid request: ${parsed.error.issues.map(i => i.message).join(", ")}`, { status: 400 });
   }
-  const { workflowYaml, workflowName, variables: inputVars } = parsed.data;
+  const { workflowYaml, workflowName, variables: inputVars, promptMode } = parsed.data;
 
   const workflow = parseWorkflowYaml(workflowYaml);
+  const nodeTypes = new Set(Array.from(workflow.nodes.values()).map((node) => node.type));
+  const sheetNodeTypes: WorkflowNodeType[] = ["sheet-read", "sheet-write", "sheet-update", "sheet-delete"];
+  const hubworkLiteNodeTypes: WorkflowNodeType[] = [
+    "gmail-send",
+    "calendar-list",
+    "calendar-create",
+    "calendar-update",
+    "calendar-delete",
+  ];
+  const hasSheetNode = sheetNodeTypes.some((type) => nodeTypes.has(type));
+  const hasHubworkLiteNode = hubworkLiteNodeTypes.some((type) => nodeTypes.has(type));
+  if (hasSheetNode) {
+    const { hasProFeatures } = await import("~/types/hubwork");
+    const hubworkAccount = await getAccountByRootFolderId(tokens.rootFolderId);
+    if (!hubworkAccount || !hasProFeatures(hubworkAccount)) {
+      throw new Response("Hubwork Pro subscription required", { status: 403 });
+    }
+  } else if (hasHubworkLiteNode) {
+    const { hasPaidFeatures } = await import("~/types/hubwork");
+    const hubworkAccount = await getAccountByRootFolderId(tokens.rootFolderId);
+    if (!hubworkAccount || !hasPaidFeatures(hubworkAccount)) {
+      throw new Response("Hubwork Lite or Pro subscription required", { status: 403 });
+    }
+  }
+
   const variablesMap = new Map<string, string | number>(
     Object.entries(inputVars || {})
   );
@@ -96,10 +116,29 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
+        const promptCallbacks = promptMode === "headless"
+          ? {
+              promptForValue: async () => null,
+              promptForDialog: async (
+                _title: string,
+                _message: string,
+                options: string[],
+                _multiSelect: boolean,
+                button1: string,
+                button2?: string,
+                _markdown?: boolean,
+                inputTitle?: string,
+              ) => {
+                if (options.length > 0 || button2 || inputTitle) return null;
+                return { button: button1 || "OK", selected: [] };
+              },
+              promptForDriveFile: async () => null,
+            }
+          : undefined;
         const result = await executeWorkflow(workflow, input, serviceContext, onLog, {
           workflowName,
           abortSignal: abortController.signal,
-        });
+        }, promptCallbacks);
 
         const finalVars: Record<string, string | number> = {};
         for (const [k, v] of result.context.variables) {

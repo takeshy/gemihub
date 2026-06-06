@@ -712,6 +712,7 @@ function IDEContent({
             geminiApiKey: getCachedApiKey() || undefined,
             settings: silentSettings,
             canUseProxy: true,
+            executionMode: silentSettings?.apiPlan === "paid" ? "server" : "local",
           },
         );
         if (abortController.signal.aborted) return;

@@ -82,6 +82,8 @@ export interface LocalExecuteOptions {
   subWorkflowDepth?: number;
   /** When "server", delegate entire workflow to /api/workflow/execute-full (paid feature). */
   executionMode?: "local" | "server";
+  /** Headless mode is used for chat-invoked skill workflows. */
+  promptMode?: "interactive" | "headless";
 }
 
 export interface LocalExecuteCallbacks {
@@ -283,7 +285,10 @@ export async function executeWorkflowLocally(
   options: LocalExecuteOptions,
 ): Promise<LocalExecuteResult> {
   // Server delegation mode: send entire workflow to server for execution
-  if (options.executionMode === "server") {
+  if (
+    options.executionMode === "server" &&
+    (options.promptMode === "headless" || !hasInteractivePromptNodes(workflow))
+  ) {
     return executeWorkflowOnServer(workflow, callbacks, options);
   }
 
@@ -539,6 +544,24 @@ export async function executeWorkflowLocally(
           const pvSaveTo = node.properties["saveTo"];
 
           if (!pvSaveTo) throw new Error("prompt-value node missing 'saveTo' property");
+          if (context.variables.has(pvSaveTo) && context.variables.get(pvSaveTo) !== "") {
+            const pvExisting = context.variables.get(pvSaveTo);
+            log(node.id, node.type, `Input already provided`, "success",
+              { title: pvTitle }, pvExisting);
+            addHistoryStep(node.id, node.type, { title: pvTitle }, pvExisting);
+            const next = getNextNodes(workflow, node.id);
+            for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+            break;
+          }
+          if (pvDefault !== undefined) {
+            context.variables.set(pvSaveTo, pvDefault);
+            log(node.id, node.type, `Input default applied`, "success",
+              { title: pvTitle }, pvDefault);
+            addHistoryStep(node.id, node.type, { title: pvTitle }, pvDefault);
+            const next = getNextNodes(workflow, node.id);
+            for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+            break;
+          }
 
           log(node.id, node.type, `Prompting: ${pvTitle}`, "info");
 
@@ -558,13 +581,34 @@ export async function executeWorkflowLocally(
         case "prompt-selection": {
           if (options.abortSignal?.aborted) throw new Error("Execution cancelled");
           const psTitle = replaceVariables(node.properties["title"] || "Enter text", context);
+          const psDefault = node.properties["default"]
+            ? replaceVariables(node.properties["default"], context)
+            : undefined;
           const psSaveTo = node.properties["saveTo"];
 
           if (!psSaveTo) throw new Error("prompt-selection node missing 'saveTo' property");
+          if (context.variables.has(psSaveTo) && context.variables.get(psSaveTo) !== "") {
+            const psExisting = context.variables.get(psSaveTo);
+            log(node.id, node.type, `Selection already provided`, "success",
+              { title: psTitle }, psExisting);
+            addHistoryStep(node.id, node.type, { title: psTitle }, psExisting);
+            const next = getNextNodes(workflow, node.id);
+            for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+            break;
+          }
+          if (psDefault !== undefined) {
+            context.variables.set(psSaveTo, psDefault);
+            log(node.id, node.type, `Selection default applied`, "success",
+              { title: psTitle }, psDefault);
+            addHistoryStep(node.id, node.type, { title: psTitle }, psDefault);
+            const next = getNextNodes(workflow, node.id);
+            for (const id of next.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+            break;
+          }
 
           log(node.id, node.type, `Prompt selection: ${psTitle}`, "info");
 
-          const psResult = await callbacks.promptCallbacks.promptForValue(psTitle, "", true);
+          const psResult = await callbacks.promptCallbacks.promptForValue(psTitle, psDefault ?? "", true);
           if (psResult === null) throw new Error("Input cancelled by user");
 
           context.variables.set(psSaveTo, psResult);
@@ -901,6 +945,7 @@ async function executeWorkflowOnServer(
       workflowYaml,
       workflowName: options.workflowName,
       variables: options.initialVariables || {},
+      promptMode: options.promptMode,
     }),
     signal: options.abortSignal,
   });
@@ -983,4 +1028,19 @@ async function executeWorkflowOnServer(
     context: { variables: new Map(), logs: [] },
     historyRecord,
   };
+}
+
+function hasInteractivePromptNodes(workflow: Workflow): boolean {
+  for (const node of workflow.nodes.values()) {
+    if (
+      node.type === "dialog" ||
+      node.type === "prompt-value" ||
+      node.type === "prompt-selection" ||
+      node.type === "prompt-file" ||
+      node.type === "drive-file-picker"
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

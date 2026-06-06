@@ -66,6 +66,8 @@ Follow these conventions — based on the obra/superpowers writing-skills resear
 
 **Explain the *why*, don't just bark orders.** Modern LLMs follow reasoned guidance better than raw \`MUST\` / \`NEVER\` walls. When you write a rule, give the one-clause reason it exists ("…because bare \`{{var}}\` breaks JSON.parse on values that contain quotes"). Reserve all-caps absolutes for the Iron Law and one or two genuinely load-bearing rules.
 
+**Skill workflow execution is headless in chat.** Workflows invoked through \`run_skill_workflow\` do not show user-facing UI, whether they run locally or on the server. Do not use \`dialog\` as the final result display for a skill workflow. Save outputs to non-underscore variables and instruct the chat AI in SKILL.md how to present them. Required inputs must be declared as workflow input variables and supplied by \`run_skill_workflow.variables\`; \`prompt-value\` and \`prompt-selection\` are only safe as manual Workflow panel fallbacks when the same value can also come from an input variable or default. Avoid \`prompt-file\` / picker-only flows for chat-invoked skills.
+
 ### Example output structure
 
 ---
@@ -609,7 +611,7 @@ Loop key points:
 ## Best Practices
 1. Use descriptive node IDs (e.g., "fetch-data", "check-status" rather than "node-1", "node-2")
 2. Initialize variables before use
-3. Use dialog for confirmations and user feedback
+3. Use dialog for confirmations and user feedback only in manually run workflows; chat-invoked skill workflows are headless and should return variables instead
 4. Always specify saveTo for output nodes
 5. One task per command node — break complex tasks into multiple command nodes
 6. Use set node for counter operations in loops
@@ -656,6 +658,10 @@ values to the user, guided by the SKILL.md instructions.
 
 - You do NOT need to add a final \`command\` node just to "output" a variable.
   The chat-side AI already receives it.
+- Do NOT add a final \`dialog\` node to show the result of a skill workflow.
+  Skill workflows run headlessly in chat, so user-facing UI is not the output
+  channel. Save the result to a normal variable and describe the chat response
+  requirement in SKILL.md.
 - A \`command\` node runs a separate LLM call **inside** the workflow; its
   output gets saved to a variable — it does not bypass the chat AI to write
   directly to the chat.
@@ -667,6 +673,10 @@ values to the user, guided by the SKILL.md instructions.
   variables are not surfaced to the chat — in that case use UI-producing
   nodes such as \`dialog\`, or file-writing nodes like \`drive-save\`, for
   visible results.
+- Required skill inputs should come from \`run_skill_workflow.variables\`.
+  \`prompt-value\` and \`prompt-selection\` may exist only as manual fallbacks
+  when a variable/default is also available; otherwise the chat invocation will
+  fail because there is no prompt UI to answer.
 `;
 }
 

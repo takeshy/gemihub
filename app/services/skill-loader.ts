@@ -305,6 +305,15 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], hubworkAccounts?: 
       sections.push(skill.description);
     }
     sections.push(`SKILL.md fileId: \`${skill.skillMdFileId}\` — call \`read_drive_file({fileId: "${skill.skillMdFileId}"})\` to load the full instructions and workflow details.`);
+    if (skill.workflows.length > 0) {
+      sections.push("");
+      sections.push("### Available Workflow IDs");
+      for (const wf of skill.workflows) {
+        const workflowId = buildWorkflowToolId(skill.id, wf);
+        const inputs = wf.inputVariables?.length ? wf.inputVariables.join(", ") : "(none declared)";
+        sections.push(`- \`${workflowId}\` — ${wf.description || wf.path}; inputVariables: ${inputs}`);
+      }
+    }
 
     if (skill.id === "webpage-builder" && hubworkAccounts && Object.keys(hubworkAccounts).length > 0) {
       const types = Object.keys(hubworkAccounts);

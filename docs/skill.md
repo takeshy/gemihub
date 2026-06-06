@@ -124,7 +124,21 @@ When a skill with workflows is active, the AI receives a `run_skill_workflow` to
 
 Skill workflows run in headless mode when invoked by the AI:
 
-- Interactive prompts (`dialog`, `prompt-value`, `prompt-file`, `prompt-selection`) are skipped (return null)
+- User-facing UI is not shown during `run_skill_workflow`. This is true for
+  both local and server execution; the skill call is a background tool call from
+  chat, not an interactive Workflow panel run.
+- Do not use `dialog` as the final output of a skill workflow. Save the result
+  to a non-underscore variable and describe in SKILL.md how the chat AI should
+  present it.
+- Declare required inputs in `skill-capabilities.workflows[].inputVariables`
+  and pass them through `run_skill_workflow.variables`.
+- `prompt-value` and `prompt-selection` are only safe as manual Workflow panel
+  fallbacks when the workflow also accepts the same value as an input variable
+  or has a default. A required prompt with no provided variable/default will
+  fail in headless execution.
+- `prompt-file` and file-picker style UI require manual Workflow panel
+  execution; skill workflows should use declared variables or Drive search/read
+  steps instead.
 - Drive events are forwarded to the chat so file changes appear in the conversation
 - The AI receives the workflow's result variables as the tool result
 

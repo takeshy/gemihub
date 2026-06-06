@@ -166,6 +166,14 @@ export function normalizeDeprecatedModelName(model: unknown): ModelType | null |
   if (model === "gemini-3.1-flash-lite-preview") return "gemini-3.1-flash-lite";
   if (model === "gemini-2.5-flash-image") return "gemini-3.1-flash-image-preview";
   if (model === "gemma-3-27b-it") return "gemma-4-31b-it";
+  if (
+    model === "gemini-3-flash-preview" ||
+    model === "gemini-2.5-flash-lite" ||
+    model === "gemini-2.5-pro" ||
+    model === "gemini-2.5-flash"
+  ) {
+    return DEFAULT_MODEL_PAID;
+  }
   return model as ModelType;
 }
 
@@ -225,13 +233,9 @@ export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
 // Model types
 export type ModelType =
   | "gemini-3.5-flash"
-  | "gemini-2.5-flash"
-  | "gemini-2.5-pro"
-  | "gemini-3-flash-preview"
   | "gemini-3.1-pro-preview"
   | "gemini-3.1-pro-preview-customtools"
   | "gemini-3.1-flash-lite"
-  | "gemini-2.5-flash-lite"
   | "gemini-3-pro-image-preview"
   | "gemini-3.1-flash-image-preview"
   | "gemma-4-31b-it"
@@ -261,24 +265,9 @@ export const PAID_MODELS: ModelInfo[] = [
     description: "Latest high-speed Flash model with 1M context",
   },
   {
-    name: "gemini-3-flash-preview",
-    displayName: "Gemini 3 Flash Preview",
-    description: "Fast model with 1M context, best cost-performance",
-  },
-  {
     name: "gemini-3.1-flash-lite",
     displayName: "Gemini 3.1 Flash Lite",
     description: "Stable low-latency, cost-effective model with 1M context",
-  },
-  {
-    name: "gemini-2.5-flash",
-    displayName: "Gemini 2.5 Flash",
-    description: "Fast model with 1M context",
-  },
-  {
-    name: "gemini-2.5-pro",
-    displayName: "Gemini 2.5 Pro",
-    description: "Pro model with 1M context",
   },
   {
     name: "gemini-3-pro-image-preview",
@@ -309,21 +298,6 @@ export const FREE_MODELS: ModelInfo[] = [
     name: "gemini-3.5-flash",
     displayName: "Gemini 3.5 Flash",
     description: "Free tier latest high-speed Flash model",
-  },
-  {
-    name: "gemini-2.5-flash",
-    displayName: "Gemini 2.5 Flash",
-    description: "Free tier fast model",
-  },
-  {
-    name: "gemini-2.5-flash-lite",
-    displayName: "Gemini 2.5 Flash Lite",
-    description: "Free tier lightweight model",
-  },
-  {
-    name: "gemini-3-flash-preview",
-    displayName: "Gemini 3 Flash Preview",
-    description: "Free tier preview model",
   },
   {
     name: "gemini-3.1-flash-lite",

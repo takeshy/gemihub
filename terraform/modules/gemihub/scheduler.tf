@@ -28,7 +28,7 @@ resource "google_cloud_scheduler_job" "hubwork" {
 
     oidc_token {
       service_account_email = google_service_account.hubwork_scheduler.email
-      audience              = google_cloud_run_v2_service.app.uri
+      audience              = "https://${var.domain}"
     }
   }
 

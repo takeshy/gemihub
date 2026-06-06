@@ -94,10 +94,16 @@ export function NodeEditorModal({
   const nextOptions = ["", "end", ...allNodeIds.filter((nid) => nid !== id)];
 
   const modal = (
-    <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[90vh] flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden bg-black/50 px-3 pt-3 md:items-center md:p-4"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" }}
+    >
+      <div
+        className="w-full max-w-lg overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col"
+        style={{ maxHeight: "calc(100dvh - env(safe-area-inset-bottom, 0px) - 1.5rem)" }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {isNew ? "Add Node" : `Edit Node: ${node?.id}`}
           </h3>
@@ -110,7 +116,7 @@ export function NodeEditorModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {/* ID */}
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -271,7 +277,7 @@ export function NodeEditorModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
           <button
             onClick={onCancel}
             className="rounded px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"

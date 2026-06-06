@@ -156,7 +156,7 @@ Gemini API を使用して LLM プロンプトを実行します。
 - id: ask
   type: command
   prompt: "要約してください: {{content}}"
-  model: gemini-2.5-flash
+  model: gemini-3.5-flash
   ragSetting: __websearch__
   driveToolMode: all
   mcpServers: "mcp_server_id_1,mcp_server_id_2"

@@ -96,6 +96,16 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
+        name  = "HUBWORK_SCHEDULER_AUDIENCE"
+        value = "https://${var.domain}"
+      }
+
+      env {
+        name  = "HUBWORK_SCHEDULER_SA_EMAIL"
+        value = google_service_account.hubwork_scheduler.email
+      }
+
+      env {
         name = "STRIPE_SECRET_KEY"
         value_source {
           secret_key_ref {

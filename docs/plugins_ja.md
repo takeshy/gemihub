@@ -153,7 +153,7 @@ const response = await api.gemini.chat(
     { role: "user", content: "こんにちは" },
   ],
   {
-    model: "gemini-2.5-flash",        // 任意
+    model: "gemini-3.5-flash",        // 任意
     systemPrompt: "あなたは親切です",   // 任意
   }
 );

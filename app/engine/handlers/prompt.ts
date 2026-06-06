@@ -19,9 +19,14 @@ export async function handlePromptValueNode(
   const saveTo = node.properties["saveTo"];
 
   if (!saveTo) throw new Error("prompt-value node missing 'saveTo' property");
+  if (context.variables.has(saveTo) && context.variables.get(saveTo) !== "") return;
+  if (defaultValue !== undefined) {
+    context.variables.set(saveTo, defaultValue);
+    return;
+  }
 
   if (!promptCallbacks?.promptForValue) {
-    throw new Error("Prompt callback not available");
+    throw new Error(`Prompt callback not available for '${saveTo}'. Provide '${saveTo}' as a workflow variable or set a default value.`);
   }
 
   const result = await promptCallbacks.promptForValue(title, defaultValue, multiline);
@@ -98,15 +103,23 @@ export async function handlePromptSelectionNode(
   promptCallbacks?: PromptCallbacks
 ): Promise<void> {
   const title = replaceVariables(node.properties["title"] || "Enter text", context);
+  const defaultValue = node.properties["default"]
+    ? replaceVariables(node.properties["default"], context)
+    : undefined;
   const saveTo = node.properties["saveTo"];
 
   if (!saveTo) throw new Error("prompt-selection node missing 'saveTo' property");
-
-  if (!promptCallbacks?.promptForValue) {
-    throw new Error("Prompt callback not available");
+  if (context.variables.has(saveTo) && context.variables.get(saveTo) !== "") return;
+  if (defaultValue !== undefined) {
+    context.variables.set(saveTo, defaultValue);
+    return;
   }
 
-  const result = await promptCallbacks.promptForValue(title, "", true);
+  if (!promptCallbacks?.promptForValue) {
+    throw new Error(`Prompt callback not available for '${saveTo}'. Provide '${saveTo}' as a workflow variable or set a default value.`);
+  }
+
+  const result = await promptCallbacks.promptForValue(title, defaultValue ?? "", true);
 
   if (result === null) {
     throw new Error("Input cancelled by user");

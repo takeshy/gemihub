@@ -225,7 +225,7 @@ nodes:
   - id: get-current-time
     type: command
     prompt: 'Please tell me the current time.'
-    model: gemini-3-flash-preview
+    model: gemini-3.5-flash
     saveTo: time_json
   - id: parse-time
     type: json

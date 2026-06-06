@@ -235,10 +235,10 @@ async function authorizeScheduledRequest(request: Request): Promise<void> {
   }
 
   const token = match[1];
-  const audience = new URL(request.url).origin;
+  const audiences = getScheduledRequestAudiences(request);
   const ticket = await new google.auth.OAuth2().verifyIdToken({
     idToken: token,
-    audience,
+    audience: audiences.length === 1 ? audiences[0] : audiences,
   });
   const payload = ticket.getPayload();
   if (!payload?.email) {
@@ -253,6 +253,16 @@ async function authorizeScheduledRequest(request: Request): Promise<void> {
     console.warn(`[hubwork-scheduled] Rejected token from unexpected SA: ${payload.email}`);
     throw new Response("Unauthorized service account", { status: 403 });
   }
+}
+
+export function getScheduledRequestAudiences(request: Request): string[] {
+  const configuredAudiences = (process.env.HUBWORK_SCHEDULER_AUDIENCE || "")
+    .split(",")
+    .map((audience) => audience.trim())
+    .filter(Boolean);
+  const requestOrigin = new URL(request.url).origin;
+
+  return Array.from(new Set([...configuredAudiences, requestOrigin]));
 }
 
 // Simple cron expression matcher (minute hour dayOfMonth month dayOfWeek).

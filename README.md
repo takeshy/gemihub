@@ -95,7 +95,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Keyboard Shortcuts** — Configurable shortcuts with modifier key support (Ctrl/Cmd, Shift, Alt) via Settings
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
 - **MCP** — Connect external MCP servers as tools for AI chat, with OAuth support and rich UI rendering (MCP Apps)
-- **Agent Skills** — User-defined AI agent configurations with custom instructions, reference materials, and executable workflows stored on Drive
+- **Agent Skills** — User-defined AI agent configurations with custom instructions, reference materials, and executable workflows stored on Drive. Skill workflows run as headless chat tools: return variables to chat instead of relying on dialogs
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, settings panels, custom file icons, and file extension handling
 - **Google Drive Integration** — All data stored in your own Drive, no external database
 - **Rich Markdown Editor** — WYSIWYG file editing powered by wysimark-lite
@@ -103,7 +103,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore. External sync token for tools like Obsidian
 - **Encryption** — Optional hybrid RSA + AES encryption for individual files, chat history, and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
-- **Multi-Model Support** — Gemini 3.1 Pro, Gemini 3, 2.5, Flash, Pro, Lite, Gemma 4; paid and free plan model lists
+- **Multi-Model Support** — Curated Gemini and Gemma model lists including Gemini 3.1 Pro, Gemini 3.5 Flash, Gemini 3.1 Flash Lite, Gemini image models, and Gemma 4
 - **Image Generation** — Generate images via Gemini image models
 - **i18n** — English and Japanese UI
 

@@ -165,9 +165,10 @@ export function useLocalWorkflowExecution(workflowId: string) {
 
       // Ensure Gemini API key is available for command nodes
       const hasCommandNode = Array.from(workflow.nodes.values()).some(n => n.type === "command");
+      const executionMode = settings?.apiPlan === "paid" ? "server" : "local";
       let geminiApiKey = getCachedApiKey() || undefined;
 
-      if (hasCommandNode && !geminiApiKey && settings?.encryptedApiKey && settings?.apiKeySalt) {
+      if (executionMode === "local" && hasCommandNode && !geminiApiKey && settings?.encryptedApiKey && settings?.apiKeySalt) {
         if (!promptCallbacks.promptForPassword) throw new Error("Password prompt not available");
         const password = await promptCallbacks.promptForPassword("Enter password");
         if (!password) throw new Error("API key unlock cancelled");
@@ -191,6 +192,7 @@ export function useLocalWorkflowExecution(workflowId: string) {
           geminiApiKey,
           settings,
           canUseProxy: true,
+          executionMode,
         },
       );
 

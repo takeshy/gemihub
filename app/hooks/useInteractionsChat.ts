@@ -121,6 +121,8 @@ function buildToolDispatcher(
   // MCP tool names are resolved dynamically (names come from server tool definitions)
   // We don't have the names here, so we route unknown tools to MCP if mcpServerIds is non-empty
   const mcpToolNames = new Set<string>();
+  const executedSkillWorkflowIds = new Set<string>();
+  let skillWorkflowFailed = false;
 
   const executeToolCall = async (
     name: string,
@@ -176,9 +178,17 @@ function buildToolDispatcher(
       if (planApprovalPending) {
         return { error: "BLOCKED: You must present a plan to the user FIRST and wait for their confirmation before calling this tool. List ALL files you will create with full web/ paths, then STOP. Do NOT call any more tools in this turn." };
       }
+      const workflowId = args.workflowId as string;
+      if (skillWorkflowFailed) {
+        return { error: "BLOCKED: A skill workflow already failed in this turn. Do not inspect files or retry automatically; report the failure to the user and stop." };
+      }
+      if (executedSkillWorkflowIds.has(workflowId)) {
+        return { error: `BLOCKED: Skill workflow ${workflowId} was already executed in this turn. Do not retry automatically; report the result to the user and stop.` };
+      }
+      executedSkillWorkflowIds.add(workflowId);
       try {
-        return await executeSkillWorkflowTool(
-          args.workflowId as string,
+        const result = await executeSkillWorkflowTool(
+          workflowId,
           (args.variables as string) || "{}",
           skillWorkflows,
           callbacks,
@@ -186,9 +196,13 @@ function buildToolDispatcher(
             canUseProxy: options?.canUseProxy,
             geminiApiKey: options?.geminiApiKey,
             settings: options?.settings,
+            executionMode: "server",
           },
         );
+        if (typeof result.error === "string") skillWorkflowFailed = true;
+        return result;
       } catch (err) {
+        skillWorkflowFailed = true;
         return { error: err instanceof Error ? err.message : "Skill workflow execution failed" };
       }
     }
@@ -358,10 +372,17 @@ export async function* executeInteractionsChat(
     },
   });
   if (skillWorkflows && skillWorkflows.length > 0) {
+    const workflowList = skillWorkflows
+      .map((sw) => {
+        const id = `${sw.skillId}/${sw.workflow.name || sw.workflow.path.replace(/^.*\//, "").replace(/\.(yaml|yml)$/, "")}`;
+        const inputs = sw.workflow.inputVariables?.length ? sw.workflow.inputVariables.join(", ") : "none declared";
+        return `- ${id}: ${sw.workflow.description || sw.workflow.path}; inputVariables: ${inputs}`;
+      })
+      .join("\n");
     extraToolDefinitions.push({
       name: "run_skill_workflow",
       description:
-        "Execute a workflow provided by an active agent skill. The available workflow IDs and their required input variables are defined in each skill's SKILL.md — load it with `read_drive_file` before calling this tool. If the workflow fails, do NOT retry automatically — report the error to the user instead.",
+        `Execute a workflow provided by an active agent skill. Use only one of these exact workflow IDs:\n${workflowList}\nLoad the relevant SKILL.md with read_drive_file before calling this tool. If the workflow fails, do NOT retry automatically — report the error to the user instead.`,
       parameters: {
         type: "object",
         properties: {

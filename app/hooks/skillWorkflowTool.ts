@@ -1,7 +1,7 @@
 import type { McpAppInfo } from "~/types/chat";
 import type { SkillWorkflowRef } from "~/types/skill";
 import type { UserSettings } from "~/types/settings";
-import type { DriveEvent, LocalExecuteCallbacks } from "~/engine/local-executor";
+import type { DriveEvent, LocalExecuteCallbacks, LocalExecuteOptions } from "~/engine/local-executor";
 import type { ExecutionLog } from "~/engine/types";
 import { executeWorkflowLocally } from "~/engine/local-executor";
 import { parseWorkflowContentByName } from "~/engine/parser";
@@ -27,6 +27,7 @@ export interface SkillWorkflowExecOptions {
   canUseProxy?: boolean;
   geminiApiKey?: string;
   settings?: UserSettings;
+  executionMode?: LocalExecuteOptions["executionMode"];
 }
 
 export async function executeSkillWorkflowTool(
@@ -39,7 +40,13 @@ export async function executeSkillWorkflowTool(
   const match = skillWorkflows.find(
     (sw) => buildWorkflowToolId(sw.skillId, sw.workflow) === workflowId,
   );
-  if (!match) return { error: `Skill workflow not found: ${workflowId}` };
+  if (!match) {
+    const availableWorkflowIds = skillWorkflows.map((sw) => buildWorkflowToolId(sw.skillId, sw.workflow));
+    return {
+      error: `Skill workflow not found: ${workflowId}. Use one of the available workflow IDs exactly as written.`,
+      availableWorkflowIds,
+    };
+  }
 
   const fileId = match.workflow.fileId;
   if (!fileId) return { error: `Workflow file not found: ${match.workflow.path}` };
@@ -70,18 +77,28 @@ export async function executeSkillWorkflowTool(
     },
     promptCallbacks: {
       promptForValue: async () => null,
-      promptForDialog: async () => null,
+      promptForDialog: async (_title, _message, options, _multiSelect, button1, button2, _markdown, inputTitle) => {
+        if (options.length > 0 || button2 || inputTitle) return null;
+        return {
+          button: button1 || "OK",
+          selected: [],
+        };
+      },
       promptForDriveFile: async () => null,
     },
   };
 
   try {
+    const executionMode =
+      execOptions?.executionMode ?? (execOptions?.settings?.apiPlan === "paid" ? "server" : "local");
     const result = await executeWorkflowLocally(workflow, executionCallbacks, {
       initialVariables,
       workflowId: fileId,
       canUseProxy: execOptions?.canUseProxy,
       geminiApiKey: execOptions?.geminiApiKey,
       settings: execOptions?.settings,
+      executionMode,
+      promptMode: "headless",
     });
 
     const resultVars: Record<string, string | number> = {};
