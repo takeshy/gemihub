@@ -27,7 +27,7 @@ import {
   SYNC_META_FILE_NAME,
   type SyncMeta,
 } from "~/services/sync-meta.server";
-import { SETTINGS_FILE_NAME } from "~/services/sync-diff";
+import { SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME } from "~/services/sync-diff";
 import { parallelProcess } from "~/utils/parallel";
 import { saveEdit } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
@@ -148,12 +148,13 @@ export async function action({ request }: Route.ActionArgs) {
 
     case "resolve": {
       // Resolve a conflict by choosing local or remote
-      const { fileId, choice, localContent, isEditDelete, fileName: clientFileName } = body as {
+      const { fileId, choice, localContent, isEditDelete, fileName: clientFileName, encoding } = body as {
         fileId: string;
         choice: "local" | "remote";
         localContent?: string;
         isEditDelete?: boolean;
         fileName?: string;
+        encoding?: "base64";
       };
 
       if (choice === "local" && localContent == null) {
@@ -163,6 +164,115 @@ export async function action({ request }: Route.ActionArgs) {
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       const conflictFolder = settings.syncConflictFolder || "sync_conflicts";
 
+      // Snapshot for name/mimeType lookups only. The final meta write below
+      // re-reads the latest _sync-meta.json so entries written by concurrent
+      // pushes are not clobbered (same strategy as pushFiles).
+      const metaSnapshot =
+        (await readRemoteSyncMeta(
+          validTokens.accessToken,
+          validTokens.rootFolderId
+        )) ?? {
+          lastUpdatedAt: new Date().toISOString(),
+          files: {},
+        };
+      const isLocalBinary = encoding === "base64";
+
+      // Apply the resolution to Drive, collecting the single meta entry to merge
+      let resolvedFileId = fileId;
+      let resolvedEntry: SyncMeta["files"][string] | null = null;
+
+      if (choice === "local") {
+        if (isEditDelete) {
+          // Edit-delete: file was deleted on remote — re-create it on Drive
+          const restoreName = clientFileName || fileId;
+          const restoreMime = guessMimeType(restoreName);
+          const newFile = isLocalBinary
+            ? await createFileBinary(
+                validTokens.accessToken, restoreName, Buffer.from(localContent!, "base64"),
+                validTokens.rootFolderId, restoreMime,
+              )
+            : await createFile(
+                validTokens.accessToken, restoreName, localContent!,
+                validTokens.rootFolderId, restoreMime,
+              );
+          resolvedFileId = newFile.id;
+          resolvedEntry = {
+            name: newFile.name,
+            mimeType: newFile.mimeType,
+            md5Checksum: newFile.md5Checksum ?? "",
+            modifiedTime: newFile.modifiedTime ?? "",
+            size: newFile.size,
+          };
+        } else {
+          // Normal conflict: local wins — remote content is the loser, back it up
+          const existingMeta = metaSnapshot.files[fileId];
+          const fileName = existingMeta?.name || fileId;
+          const remoteBinary = isBinaryMimeType(existingMeta?.mimeType);
+          try {
+            const remoteContent = remoteBinary
+              ? await readFileBase64(validTokens.accessToken, fileId)
+              : await readFile(validTokens.accessToken, fileId);
+            await saveConflictBackup(
+              validTokens.accessToken,
+              validTokens.rootFolderId,
+              conflictFolder,
+              fileName,
+              remoteContent,
+              remoteBinary ? { encoding: "base64", mimeType: existingMeta?.mimeType } : {}
+            );
+          } catch {
+            // Backup failure shouldn't block conflict resolution
+          }
+          // Update the Drive file with local content (binary cache content is base64)
+          const mimeType = existingMeta?.mimeType || guessMimeType(fileName);
+          const updated = isLocalBinary
+            ? await updateFileBinary(
+                validTokens.accessToken, fileId, Buffer.from(localContent!, "base64"), mimeType,
+              )
+            : await updateFile(validTokens.accessToken, fileId, localContent!, mimeType);
+          resolvedEntry = {
+            name: updated.name,
+            mimeType: updated.mimeType,
+            md5Checksum: updated.md5Checksum ?? "",
+            modifiedTime: updated.modifiedTime ?? "",
+            size: updated.size,
+          };
+        }
+      } else {
+        // Remote wins (or edit-delete discard): local content is the loser, back it up
+        if (localContent) {
+          const backupName = isEditDelete
+            ? (clientFileName || fileId)
+            : (metaSnapshot.files[fileId]?.name || fileId);
+          try {
+            await saveConflictBackup(
+              validTokens.accessToken,
+              validTokens.rootFolderId,
+              conflictFolder,
+              backupName,
+              localContent,
+              isLocalBinary ? { encoding: "base64", mimeType: guessMimeType(backupName) } : {}
+            );
+          } catch {
+            // Backup failure shouldn't block conflict resolution
+          }
+        }
+        if (!isEditDelete) {
+          // Normal conflict: refresh the meta entry from the current Drive file
+          const meta = await getFileMetadata(validTokens.accessToken, fileId);
+          resolvedEntry = {
+            name: meta.name,
+            mimeType: meta.mimeType,
+            md5Checksum: meta.md5Checksum ?? "",
+            modifiedTime: meta.modifiedTime ?? "",
+            size: meta.size,
+          };
+        }
+        // Edit-delete discard: file is already gone from remote meta — nothing to merge
+      }
+
+      // Merge the resolved entry into the LATEST meta (re-read after the Drive
+      // operations above) so concurrent pushes are not clobbered.
       const remoteMeta =
         (await readRemoteSyncMeta(
           validTokens.accessToken,
@@ -171,127 +281,9 @@ export async function action({ request }: Route.ActionArgs) {
           lastUpdatedAt: new Date().toISOString(),
           files: {},
         };
-
-      if (choice === "local") {
-        if (isEditDelete) {
-          // Edit-delete: file was deleted on remote — re-create it on Drive
-          if (localContent != null) {
-            const restoreName = clientFileName || fileId;
-            const newFile = await createFile(
-              validTokens.accessToken,
-              restoreName,
-              localContent,
-              validTokens.rootFolderId,
-              "text/plain"
-            );
-            remoteMeta.files[newFile.id] = {
-              name: newFile.name,
-              mimeType: newFile.mimeType,
-              md5Checksum: newFile.md5Checksum ?? "",
-              modifiedTime: newFile.modifiedTime ?? "",
-              size: newFile.size,
-            };
-            remoteMeta.lastUpdatedAt = new Date().toISOString();
-            await writeRemoteSyncMeta(
-              validTokens.accessToken,
-              validTokens.rootFolderId,
-              remoteMeta
-            );
-            return logAndReturn({
-              remoteMeta,
-              file: {
-                fileId: newFile.id,
-                md5Checksum: newFile.md5Checksum ?? "",
-                modifiedTime: newFile.modifiedTime ?? "",
-                fileName: newFile.name,
-              },
-            });
-          }
-        } else {
-          // Normal conflict: local wins — remote content is the loser, back it up
-          try {
-            const remoteContent = await readFile(validTokens.accessToken, fileId);
-            const fileName = remoteMeta.files[fileId]?.name || fileId;
-            await saveConflictBackup(
-              validTokens.accessToken,
-              validTokens.rootFolderId,
-              conflictFolder,
-              fileName,
-              remoteContent
-            );
-          } catch {
-            // Backup failure shouldn't block conflict resolution
-          }
-          // Update the Drive file with local content
-          if (localContent != null) {
-            const existingMeta = remoteMeta.files[fileId];
-            const mimeType = existingMeta?.mimeType || "text/plain";
-            const updated = await updateFile(validTokens.accessToken, fileId, localContent, mimeType);
-            remoteMeta.files[fileId] = {
-              name: updated.name,
-              mimeType: updated.mimeType,
-              md5Checksum: updated.md5Checksum ?? "",
-              modifiedTime: updated.modifiedTime ?? "",
-              size: updated.size,
-            };
-          }
-        }
-      } else {
-        if (isEditDelete) {
-          // Edit-delete discard: back up local content, file already deleted on remote
-          if (localContent) {
-            const backupName = clientFileName || fileId;
-            try {
-              await saveConflictBackup(
-                validTokens.accessToken,
-                validTokens.rootFolderId,
-                conflictFolder,
-                backupName,
-                localContent
-              );
-            } catch {
-              // Backup failure shouldn't block conflict resolution
-            }
-          }
-          // File is already not in remoteMeta — just return current meta
-          remoteMeta.lastUpdatedAt = new Date().toISOString();
-          await writeRemoteSyncMeta(
-            validTokens.accessToken,
-            validTokens.rootFolderId,
-            remoteMeta
-          );
-          return logAndReturn({ remoteMeta });
-        }
-
-        // Normal conflict: remote wins — local content is the loser, back it up
-        if (localContent) {
-          const fileName = remoteMeta.files[fileId]?.name || fileId;
-          try {
-            await saveConflictBackup(
-              validTokens.accessToken,
-              validTokens.rootFolderId,
-              conflictFolder,
-              fileName,
-              localContent
-            );
-          } catch {
-            // Backup failure shouldn't block conflict resolution
-          }
-        }
-        // Get current remote file metadata and update remote meta
-        const meta = await getFileMetadata(
-          validTokens.accessToken,
-          fileId
-        );
-        remoteMeta.files[fileId] = {
-          name: meta.name,
-          mimeType: meta.mimeType,
-          md5Checksum: meta.md5Checksum ?? "",
-          modifiedTime: meta.modifiedTime ?? "",
-          size: meta.size,
-        };
+      if (resolvedEntry) {
+        remoteMeta.files[resolvedFileId] = resolvedEntry;
       }
-
       remoteMeta.lastUpdatedAt = new Date().toISOString();
       await writeRemoteSyncMeta(
         validTokens.accessToken,
@@ -299,18 +291,22 @@ export async function action({ request }: Route.ActionArgs) {
         remoteMeta
       );
 
-      // Return file metadata for both choices so client can update cache
-      const resolvedEntry = remoteMeta.files[fileId];
-      if (choice === "remote") {
-        const content = await readFile(validTokens.accessToken, fileId);
+      // Return file metadata so the client can update its cache
+      if (choice === "remote" && !isEditDelete) {
+        const entry = remoteMeta.files[fileId];
+        const remoteBinary = isBinaryMimeType(entry?.mimeType);
+        const content = remoteBinary
+          ? await readFileBase64(validTokens.accessToken, fileId)
+          : await readFile(validTokens.accessToken, fileId);
         return logAndReturn({
           remoteMeta,
           file: {
             fileId,
             content,
-            md5Checksum: resolvedEntry?.md5Checksum ?? "",
-            modifiedTime: resolvedEntry?.modifiedTime ?? "",
-            fileName: resolvedEntry?.name ?? "",
+            md5Checksum: entry?.md5Checksum ?? "",
+            modifiedTime: entry?.modifiedTime ?? "",
+            fileName: entry?.name ?? "",
+            ...(remoteBinary ? { encoding: "base64" as const } : {}),
           },
         });
       }
@@ -318,7 +314,7 @@ export async function action({ request }: Route.ActionArgs) {
       return logAndReturn({
         remoteMeta,
         file: resolvedEntry ? {
-          fileId,
+          fileId: resolvedFileId,
           md5Checksum: resolvedEntry.md5Checksum,
           modifiedTime: resolvedEntry.modifiedTime,
           fileName: resolvedEntry.name,
@@ -333,7 +329,10 @@ export async function action({ request }: Route.ActionArgs) {
       const remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
 
       const fileEntries = Object.entries(remoteMeta.files).filter(
-        ([_id, f]) => f.name !== SYNC_META_FILE_NAME && f.name !== SETTINGS_FILE_NAME
+        ([_id, f]) =>
+          f.name !== SYNC_META_FILE_NAME &&
+          f.name !== SETTINGS_FILE_NAME &&
+          f.name !== ENCRYPTED_AUTH_FILE_NAME
       );
 
       const skipLargeFiles = body.skipLargeFiles === true;
@@ -404,7 +403,7 @@ export async function action({ request }: Route.ActionArgs) {
       const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
       const allFiles = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
       const trackedIds = new Set(Object.keys(remoteMeta?.files ?? {}));
-      const systemNames = new Set([SYNC_META_FILE_NAME, SETTINGS_FILE_NAME]);
+      const systemNames = new Set([SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME]);
 
       const untrackedFiles = allFiles
         .filter((f) => !trackedIds.has(f.id) && !systemNames.has(f.name))
@@ -440,27 +439,34 @@ export async function action({ request }: Route.ActionArgs) {
 
     case "restoreUntracked": {
       const fileIds = body.fileIds as string[];
-      const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
-        ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
 
+      // Collect entries from Drive first; read+write meta once afterwards so
+      // entries written by concurrent pushes are not clobbered.
+      const entries: Array<[string, SyncMeta["files"][string]]> = [];
       for (const fileId of fileIds) {
         try {
           const meta = await getFileMetadata(validTokens.accessToken, fileId);
-          remoteMeta.files[fileId] = {
+          entries.push([fileId, {
             name: meta.name,
             mimeType: meta.mimeType,
             md5Checksum: meta.md5Checksum ?? "",
             modifiedTime: meta.modifiedTime ?? "",
             size: meta.size,
-          };
+          }]);
         } catch {
           // skip files that can't be read
         }
       }
+
+      const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+        ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
+      for (const [fileId, entry] of entries) {
+        remoteMeta.files[fileId] = entry;
+      }
       remoteMeta.lastUpdatedAt = new Date().toISOString();
       await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
 
-      return logAndReturn({ restored: fileIds.length, remoteMeta });
+      return logAndReturn({ restored: entries.length, remoteMeta });
     }
 
     case "permanentDelete": {
@@ -508,10 +514,10 @@ export async function action({ request }: Route.ActionArgs) {
           validTokens.rootFolderId,
           "trash"
         );
-        const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
-          ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
 
-        let restoredCount = 0;
+        // Collect entries during the Drive operations; read+write meta once
+        // afterwards so concurrent pushes are not clobbered.
+        const entries: Array<[string, SyncMeta["files"][string]]> = [];
         for (const fileId of fileIds) {
           try {
             // Move file back to root folder
@@ -523,24 +529,28 @@ export async function action({ request }: Route.ActionArgs) {
             }
             // Add back to sync meta
             const meta = await getFileMetadata(validTokens.accessToken, fileId);
-            remoteMeta.files[fileId] = {
+            entries.push([fileId, {
               name: meta.name,
               mimeType: meta.mimeType,
               md5Checksum: meta.md5Checksum ?? "",
               modifiedTime: meta.modifiedTime ?? "",
               size: meta.size,
-            };
-            restoredCount++;
+            }]);
           } catch {
             // skip files that fail to restore
           }
         }
 
-        if (restoredCount > 0) {
+        const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+          ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
+        if (entries.length > 0) {
+          for (const [fileId, entry] of entries) {
+            remoteMeta.files[fileId] = entry;
+          }
           remoteMeta.lastUpdatedAt = new Date().toISOString();
           await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
         }
-        return logAndReturn({ restored: restoredCount, remoteMeta });
+        return logAndReturn({ restored: entries.length, remoteMeta });
       } catch {
         return logAndReturn({ restored: 0 });
       }
@@ -573,13 +583,16 @@ export async function action({ request }: Route.ActionArgs) {
       const fileIds = body.fileIds as string[];
       const renames = (body.renames ?? {}) as Record<string, string>;
       try {
-        const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
-          ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
-
+        // Collect adds/removals during the Drive operations; read+write meta
+        // once afterwards so concurrent pushes are not clobbered.
+        const added: Array<[string, SyncMeta["files"][string]]> = [];
+        const removedIds: string[] = [];
         for (const fileId of fileIds) {
-          // Read conflict file content
-          const content = await readFile(validTokens.accessToken, fileId);
           const meta = await getFileMetadata(validTokens.accessToken, fileId);
+          const isBinary = isBinaryMimeType(meta.mimeType);
+          const content = isBinary
+            ? await readFileBase64(validTokens.accessToken, fileId)
+            : await readFile(validTokens.accessToken, fileId);
           // Determine restored name: use provided rename, or strip timestamp prefix
           let restoreName = renames[fileId] ?? meta.name;
           if (!renames[fileId]) {
@@ -587,28 +600,44 @@ export async function action({ request }: Route.ActionArgs) {
             restoreName = restoreName.replace(/_\d{8}_\d{6}(?=\.)/, "");
           }
           // Create new file in root folder
-          const newFile = await createFile(
-            validTokens.accessToken,
-            restoreName,
-            content,
-            validTokens.rootFolderId,
-            meta.mimeType || "text/plain"
-          );
+          const newFile = isBinary
+            ? await createFileBinary(
+                validTokens.accessToken,
+                restoreName,
+                Buffer.from(content, "base64"),
+                validTokens.rootFolderId,
+                meta.mimeType || "application/octet-stream"
+              )
+            : await createFile(
+                validTokens.accessToken,
+                restoreName,
+                content,
+                validTokens.rootFolderId,
+                meta.mimeType || "text/plain"
+              );
           // Add to sync meta
           const newMeta = await getFileMetadata(validTokens.accessToken, newFile.id);
-          remoteMeta.files[newFile.id] = {
+          added.push([newFile.id, {
             name: newMeta.name,
             mimeType: newMeta.mimeType,
             md5Checksum: newMeta.md5Checksum ?? "",
             modifiedTime: newMeta.modifiedTime ?? "",
             size: newMeta.size,
-          };
+          }]);
           // Delete the conflict backup
           await deleteFile(validTokens.accessToken, fileId).catch(() => {});
           // Remove conflict file from meta if it was there
-          delete remoteMeta.files[fileId];
+          removedIds.push(fileId);
         }
 
+        const remoteMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId)
+          ?? { lastUpdatedAt: new Date().toISOString(), files: {} };
+        for (const [newId, entry] of added) {
+          remoteMeta.files[newId] = entry;
+        }
+        for (const fileId of removedIds) {
+          delete remoteMeta.files[fileId];
+        }
         remoteMeta.lastUpdatedAt = new Date().toISOString();
         await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, remoteMeta);
         return logAndReturn({ restored: fileIds.length, remoteMeta });

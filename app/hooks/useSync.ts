@@ -30,6 +30,7 @@ import { computeSyncDiff, type SyncMeta } from "~/services/sync-diff";
 import {
   toLocalSyncMeta,
   collectTrackedIds,
+  filterActionablePull,
   updateCachedRemoteMetaFromSyncMeta,
 } from "./sync-utils";
 
@@ -113,41 +114,16 @@ export function useSync() {
       if (!remoteMeta) {
         setRemoteModifiedCount(0);
       } else {
-        // Include localOnly files that are in localMeta (remotely deleted) so user knows pull is needed.
-        // Exclude localOnly files only in editHistory (new local files — shown in push badge).
-        // Include conflicts and editDeleteConflicts — shown in pull dialog with conflict badge.
-        // Include remoteOnly files — new files from other devices that need explicit pull.
-        const pullLocalOnly: string[] = [];
-        for (const id of diff.localOnly) {
-          if (!(id in localFiles)) continue;
-          // Skip orphaned entries with no resolvable name (stale migration artifacts)
-          const name = remoteFiles[id]?.name || localFiles[id]?.name;
-          if (!name) continue;
-          // Skip locally-deleted files with no cached content (stale metadata)
-          const cached = await getCachedFile(id);
-          if (!cached) continue;
-          pullLocalOnly.push(id);
-        }
-        const isExcluded = (id: string) => {
-          const name = remoteFiles[id]?.name || localFiles[id]?.name;
-          return name ? isSyncExcludedPath(name) : false;
-        };
-        // Filter toPull: skip files whose cached md5 already matches remote md5
-        // (localMeta may be stale from on-demand fetch, but cached content is up-to-date)
-        let toPullCount = 0;
-        for (const id of diff.toPull) {
-          if (isExcluded(id)) continue;
-          const cached = await getCachedFile(id);
-          if (cached && cached.md5Checksum && cached.md5Checksum === remoteFiles[id]?.md5Checksum) continue;
-          toPullCount++;
-        }
-        const pullCount =
-          toPullCount +
-          pullLocalOnly.filter(id => !isExcluded(id)).length +
-          diff.editDeleteConflicts.filter(id => !isExcluded(id)).length +
-          diff.conflicts.filter(c => !isExcluded(c.fileId)).length +
-          diff.remoteOnly.filter(id => !isExcluded(id)).length;
-        setRemoteModifiedCount(pullCount);
+        // Shared filters (see filterActionablePull) keep the badge, the pull
+        // dialog, and the push pre-check consistent. remoteOnly is not counted:
+        // background polling auto-registers new remote files as uncached entries.
+        const actionable = await filterActionablePull(diff, localFiles, remoteFiles);
+        setRemoteModifiedCount(
+          actionable.toPull.length +
+          actionable.deletedOnRemote.length +
+          actionable.editDeleteConflicts.length +
+          actionable.conflicts.length
+        );
       }
     } catch {
       // ignore
@@ -320,15 +296,20 @@ export function useSync() {
       // 3. Compute diff client-side
       const diff = computeSyncDiff(localMeta, remoteMeta, modifiedIds);
 
-      // 4. Reject push when remote has pending changes (pull first)
-      const localMetaFiles = localMeta?.files ?? {};
-      const remoteDeletedCount = diff.localOnly.filter(id => id in localMetaFiles).length;
-      // remoteOnly files (no local cache, no changes) do not block push
+      // 4. Reject push when remote has pending changes (pull first).
+      // Apply the same filters as the pull badge (filterActionablePull) so the
+      // gate and the UI agree — otherwise a badge showing 0 could still be
+      // rejected with "Pull first". remoteOnly files do not block push.
+      const actionable = await filterActionablePull(
+        diff,
+        localMeta?.files ?? {},
+        remoteMeta?.files ?? {}
+      );
       if (
-        diff.conflicts.length > 0
-        || diff.editDeleteConflicts.length > 0
-        || diff.toPull.length > 0
-        || remoteDeletedCount > 0
+        actionable.conflicts.length > 0
+        || actionable.editDeleteConflicts.length > 0
+        || actionable.toPull.length > 0
+        || actionable.deletedOnRemote.length > 0
       ) {
         // Update cached remoteMeta so subsequent pull uses the fresh data
         if (remoteMeta) {
@@ -357,22 +338,14 @@ export function useSync() {
         return;
       }
 
-      // 5. Collect modified files and batch update on Drive
+      // 5. Collect modified files and batch update on Drive.
+      // All editHistory ids are eligible: tracked files and new/untracked
+      // files alike (e.g. right after new: → Drive migration).
       const cachedRemote = await getCachedRemoteMeta();
-      const trackedIds = collectTrackedIds(
-        remoteMeta?.files,
-        localMeta?.files
-      );
-      const localFiles = localMeta?.files ?? {};
-      // Include tracked files + new/untracked files (not yet in localMeta, e.g. after migration)
-      const filteredIds = trackedIds.size > 0
-        ? new Set([...modifiedIds].filter((id) => trackedIds.has(id) || !localFiles[id]))
-        : modifiedIds;
-
       const filesToPush: Array<{ fileId: string; content: string; fileName: string; encoding?: "base64" }> = [];
       const revertedIds: string[] = [];
       // Skip "new:" files — they haven't been migrated to Drive yet and have no real file ID
-      for (const fid of [...filteredIds].filter(id => !id.startsWith("new:"))) {
+      for (const fid of [...modifiedIds].filter(id => !id.startsWith("new:"))) {
         const cached = await getCachedFile(fid);
         if (!cached) continue;
         const fileName = cached.fileName ?? cachedRemote?.files?.[fid]?.name ?? remoteMeta?.files?.[fid]?.name ?? fid;
@@ -424,15 +397,33 @@ export function useSync() {
           }
         }
 
-        // Update localSyncMeta directly from remoteMeta (no extra diff call)
+        // Merge only the pushed files' entries into localSyncMeta. The
+        // returned remoteMeta may contain concurrent changes from other
+        // devices (the server re-reads the latest meta before writing);
+        // copying it wholesale would mark those files as synced without
+        // their content ever being pulled, hiding the updates forever.
         if (pushData.remoteMeta) {
-          await setLocalSyncMeta(
-            toLocalSyncMeta(pushData.remoteMeta as {
-              lastUpdatedAt: string;
-              files: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string }>;
-            })
-          );
-          await updateCachedRemoteMetaFromSyncMeta(pushData.remoteMeta as SyncMeta);
+          const returnedMeta = pushData.remoteMeta as SyncMeta;
+          const existingLocal = await getLocalSyncMeta();
+          const mergedLocal: LocalSyncMeta = existingLocal ?? {
+            id: "current",
+            lastUpdatedAt: returnedMeta.lastUpdatedAt,
+            files: {},
+          };
+          for (const fid of pushedResultIds) {
+            const entry = returnedMeta.files[fid];
+            if (entry) {
+              mergedLocal.files[fid] = {
+                md5Checksum: entry.md5Checksum,
+                modifiedTime: entry.modifiedTime,
+                name: entry.name,
+                size: entry.size,
+              };
+            }
+          }
+          mergedLocal.lastUpdatedAt = returnedMeta.lastUpdatedAt;
+          await setLocalSyncMeta(mergedLocal);
+          await updateCachedRemoteMetaFromSyncMeta(returnedMeta);
         }
       }
 
@@ -503,9 +494,14 @@ export function useSync() {
       }
       const allConflicts = [...diff.conflicts, ...editDeleteConflictInfos];
 
-      // 5. Clean up localOnly files (deleted on remote)
-      // Skip "new:" files — they are local-only creations, not remote deletions
-      const localOnlyReal = diff.localOnly.filter(id => !id.startsWith("new:"));
+      // 5. Clean up localOnly files (deleted on remote).
+      // Skip "new:" files and entries that exist only in editHistory — both are
+      // local-only creations awaiting push (counted in the push badge), not
+      // remote deletions. Deleting them here would destroy unpushed work.
+      const localMetaFiles = localMeta?.files ?? {};
+      const localOnlyReal = diff.localOnly.filter(
+        id => !id.startsWith("new:") && (id in localMetaFiles)
+      );
       let baseMeta: LocalSyncMeta | null = localMeta;
       if (localOnlyReal.length > 0) {
         const updatedMetaForDelete: LocalSyncMeta = localMeta ?? {
@@ -530,6 +526,23 @@ export function useSync() {
       const remoteFiles = remoteMeta?.files ?? {};
       const remoteOnlySet = new Set(diff.remoteOnly);
 
+      // toPull entries that need no download: sync-excluded paths and files
+      // whose cached content already matches the remote checksum (lazy-fetched
+      // while localMeta was stale). Their localMeta entry is still updated
+      // below so they stop appearing as pending remote changes.
+      const metadataOnlyIds = new Set<string>();
+      for (const id of diff.toPull) {
+        const name = remoteFiles[id]?.name;
+        if (name && isSyncExcludedPath(name)) {
+          metadataOnlyIds.add(id);
+          continue;
+        }
+        const cached = await getCachedFile(id);
+        if (cached?.md5Checksum && cached.md5Checksum === remoteFiles[id]?.md5Checksum) {
+          metadataOnlyIds.add(id);
+        }
+      }
+
       // Separate ignored modified files — metadata only, no download
       const ignoredModifiedIds = new Set(
         ignoredIds ? diff.toPull.filter(id => ignoredIds.has(id)) : []
@@ -545,9 +558,11 @@ export function useSync() {
       if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
         const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
-        // Skip downloading: new remote files (uncached by design), binary on mobile, large files
+        // Skip downloading: new remote files (uncached by design), binary on
+        // mobile, large files, and metadata-only entries (already current/excluded)
         const filesToDownload = filesToPull.filter((id) => {
           if (remoteOnlySet.has(id)) return false;
+          if (metadataOnlyIds.has(id)) return false;
           if (isMobile && isBinaryMimeType(remoteFiles[id]?.mimeType)) return false;
           if (isLargeFile(remoteFiles[id]?.size)) return false;
           return true;
@@ -559,13 +574,14 @@ export function useSync() {
           if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
         }
 
-        // Track metadata-only entries (new remote files, mobile binary, large files) in localSyncMeta
+        // Track metadata-only entries (new remote files, mobile binary, large
+        // files, already-current/excluded files) in localSyncMeta
         for (const id of filesToPull) {
           const rm = remoteFiles[id];
           const isNewRemote = remoteOnlySet.has(id);
           const skippedMobile = isMobile && isBinaryMimeType(rm?.mimeType);
           const skippedLarge = isLargeFile(rm?.size);
-          if (isNewRemote || skippedMobile || skippedLarge) {
+          if (isNewRemote || skippedMobile || skippedLarge || metadataOnlyIds.has(id)) {
             updatedMeta.files[id] = {
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
@@ -698,6 +714,9 @@ export function useSync() {
             fileId,
             choice,
             localContent,
+            // Binary cache content is base64 — the server must round-trip it
+            // through binary upload/backup instead of writing it as text
+            encoding: cached?.encoding,
             isEditDelete: isEditDelete || undefined,
             fileName: isEditDelete ? fileName : undefined,
             localMeta: localMeta
@@ -711,7 +730,8 @@ export function useSync() {
 
         // If remote wins, update local cache with remote content
         if (choice === "remote" && data.file) {
-          await addCommitBoundary(data.file.fileId);
+          // Binary content has no text edit history — skip the commit boundary
+          if (!data.file.encoding) await addCommitBoundary(data.file.fileId);
           await setCachedFile({
             fileId: data.file.fileId,
             content: data.file.content,
@@ -719,6 +739,7 @@ export function useSync() {
             modifiedTime: data.file.modifiedTime,
             cachedAt: Date.now(),
             fileName: data.file.fileName,
+            ...(data.file.encoding ? { encoding: "base64" as const } : {}),
           });
         }
 
@@ -739,6 +760,7 @@ export function useSync() {
               modifiedTime: data.file.modifiedTime,
               cachedAt: Date.now(),
               fileName: data.file.fileName,
+              ...(cached.encoding ? { encoding: cached.encoding } : {}),
             });
           } else {
             await setCachedFile({
@@ -846,6 +868,8 @@ export function useSync() {
 
       // Include skipped files in meta too (including binary files not downloaded on mobile)
       for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { name?: string; md5Checksum: string; modifiedTime: string; size?: string }>)) {
+        // System files (e.g. legacy _encrypted-auth.json entries) never belong in local sync meta
+        if (fileMeta.name && SYNC_EXCLUDED_FILE_NAMES.has(fileMeta.name)) continue;
         updatedMeta.files[fileId] = {
           md5Checksum: fileMeta.md5Checksum,
           modifiedTime: fileMeta.modifiedTime,
@@ -890,7 +914,7 @@ export function useSync() {
       // Any pending local-only files are discarded along with their edit history (cleared above).
       if (data.remoteMeta) {
         const existing = await getCachedRemoteMeta();
-        if (existing?.rootFolderId) {
+        if (existing) {
           await setCachedRemoteMeta({
             id: "current",
             rootFolderId: existing.rootFolderId,

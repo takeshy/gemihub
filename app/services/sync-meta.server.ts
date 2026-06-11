@@ -5,6 +5,7 @@ import {
   listUserFiles,
   readFile,
   createFile,
+  createFileBinary,
   updateFile,
   findFilesByExactName,
   deleteFile,
@@ -364,6 +365,8 @@ export async function removeFileIdsFromMeta(
 
 /**
  * Save a conflict backup copy to the conflict folder.
+ * Pass `encoding: "base64"` (with the original mimeType) for binary content so
+ * the backup is written as a real binary file instead of base64 text.
  */
 export async function saveConflictBackup(
   accessToken: string,
@@ -371,7 +374,7 @@ export async function saveConflictBackup(
   conflictFolderName: string,
   fileName: string,
   content: string,
-  options: SyncMetaOperationOptions = {}
+  options: SyncMetaOperationOptions & { encoding?: "base64"; mimeType?: string } = {}
 ): Promise<void> {
   const folderId = await ensureSubFolder(accessToken, rootFolderId, conflictFolderName, options);
   const now = new Date();
@@ -382,7 +385,18 @@ export async function saveConflictBackup(
   const backupName = dotIdx > 0
     ? `${safeName.slice(0, dotIdx)}_${ts}${safeName.slice(dotIdx)}`
     : `${safeName}_${ts}`;
-  await createFile(accessToken, backupName, content, folderId, "text/plain", options);
+  if (options.encoding === "base64") {
+    await createFileBinary(
+      accessToken,
+      backupName,
+      Buffer.from(content, "base64"),
+      folderId,
+      options.mimeType || "application/octet-stream",
+      options
+    );
+  } else {
+    await createFile(accessToken, backupName, content, folderId, "text/plain", options);
+  }
 }
 
 /**

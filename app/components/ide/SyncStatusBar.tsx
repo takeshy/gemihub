@@ -111,12 +111,9 @@ export function SyncStatusBar({
         const remoteFiles = remoteMeta?.files ?? {};
         const localFiles = localMeta?.files ?? {};
 
-        // remoteOnly files are shown as "new" — new files from other devices
-        for (const id of diff.remoteOnly) {
-          const name = remoteFiles[id]?.name || id;
-          if (isSyncExcludedPath(name)) continue;
-          files.push({ id, name, type: "new" });
-        }
+        // remoteOnly (brand-new remote files) is intentionally not listed:
+        // background polling auto-registers those as uncached tree entries,
+        // so they are not pending pull work (keeps dialog in sync with badge).
         for (const id of diff.toPull) {
           const name = remoteFiles[id]?.name || id;
           if (isSyncExcludedPath(name)) continue;

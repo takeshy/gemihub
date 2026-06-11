@@ -95,11 +95,12 @@ Uploads locally-changed files to remote.
    ├─ GET /api/sync → { remoteMeta, syncMetaFileId }
    │   └─ Server: find + read _sync-meta.json, return meta and its file ID
    ├─ Compute diff client-side (localMeta vs remoteMeta + locallyModifiedFileIds)
-   └─ Remote has blocking changes (conflicts, edit-delete conflicts, toPull, or remote-deleted entries still in local meta) → error "Pull first". Pure new remote files (`remoteOnly`) do not block push.
+   └─ Remote has blocking changes (conflicts, edit-delete conflicts, toPull, or remote-deleted entries still cached locally) → error "Pull first".
+       The check applies the same filters as the Pull badge (`filterActionablePull`): sync-excluded paths, files whose cached content already
+       matches the remote checksum, and stale uncached deletions do not block. Pure new remote files (`remoteOnly`) do not block push.
 
 2. BATCH UPLOAD: Update all files via single API call
-   ├─ Get modified file IDs from IndexedDB editHistory
-   ├─ Filter to only files tracked in any known meta (remoteMeta or localMeta)
+   ├─ Get modified file IDs from IndexedDB editHistory (tracked and new/untracked files alike; `new:` placeholders excluded)
    ├─ Filter out system files and excluded paths (history/, plugins/, etc.)
    ├─ Include binary files (base64-encoded) with encoding flag (skip hasNetContentChange)
    ├─ Filter out reverted text files (hasNetContentChange = false)
@@ -115,7 +116,8 @@ Uploads locally-changed files to remote.
    │       ├─ Save remote edit history in background (best-effort)
    │       └─ Return results + updated remoteMeta
    ├─ Update IndexedDB cache with new md5/modifiedTime
-   └─ Update LocalSyncMeta directly from returned remoteMeta
+   └─ Merge only the pushed files' entries into LocalSyncMeta from the returned remoteMeta
+       (concurrent changes from other devices stay pending and surface on the next Pull)
 
 3. CLEANUP
    ├─ Clear IndexedDB editHistory for pushed files only
@@ -154,10 +156,10 @@ Downloads remotely-changed files to local cache. Brand-new remote files are regi
 ### Flow
 
 1. **Compute diff** using local meta vs remote meta (with `locallyModifiedFileIds`)
-2. **Check conflicts** — if any, stop and show conflict UI
-3. **Clean up `localOnly` files** — files that exist locally but were deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta
+2. **Collect conflicts** (including edit-delete conflicts) — they are shown in the conflict UI after the non-conflict work below completes
+3. **Clean up `localOnly` files** — files tracked in local sync meta but deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta. Entries that exist only in editHistory (new local files awaiting push) and `new:` placeholders are left untouched.
 4. **Combine** `toPull` + `remoteOnly` arrays
-5. **Skip download for uncached-by-design entries**: `remoteOnly` (new remote files), binary files on mobile, and files larger than 100 MB. Their metadata is still written to local sync meta so the tree displays them.
+5. **Skip download for entries that need no content**: `remoteOnly` (new remote files), binary files on mobile, files larger than 100 MB, sync-excluded paths, and files whose cached content already matches the remote checksum (lazy-fetched while local meta was stale). Their metadata is still written to local sync meta so the tree displays them and they stop counting as pending.
 6. **Download remaining files** in parallel (max 5 concurrent)
 7. **Update IndexedDB cache** with downloaded files (for text files, `addCommitBoundary` is called before updating to preserve edit history session boundaries)
 8. **Update local sync meta** with new checksums
@@ -270,7 +272,7 @@ After resolution:
 - Local sync meta is partially merged — only the resolved file's entry is updated from the server's remote meta (other remote changes are not applied until the next Pull)
 - localModifiedCount is updated
 
-The unselected version is always backed up for manual merging if needed.
+The unselected version is always backed up for manual merging if needed. Binary files round-trip through base64: the winning content is uploaded with a binary update/create, and binary backups are written as real binary files (not base64 text).
 
 ### Backup Naming
 

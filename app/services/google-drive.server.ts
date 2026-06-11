@@ -1,5 +1,5 @@
 import type { SessionTokens } from "./session.server";
-import { SYNC_META_FILE_NAME, SETTINGS_FILE_NAME } from "./sync-diff";
+import { SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME } from "./sync-diff";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -11,7 +11,10 @@ function escapeDriveQuery(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
-const SYSTEM_FILES = new Set([SETTINGS_FILE_NAME, SYNC_META_FILE_NAME]);
+// Keep in sync with SYSTEM_FILE_NAMES in computeSyncDiff (sync-diff.ts) and
+// SYNC_EXCLUDED_FILE_NAMES (sync-client-utils.ts) — system files must be
+// excluded consistently everywhere.
+const SYSTEM_FILES = new Set([SETTINGS_FILE_NAME, SYNC_META_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME]);
 
 export interface DriveFile {
   id: string;
