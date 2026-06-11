@@ -18,10 +18,11 @@
     "@google-cloud/firestore": "^8.3.0",
     "@google-cloud/storage": "^7.19.0",
     "@google/genai": "^1.40.0",
-    "@react-router/node": "7.12.0",
-    "@react-router/serve": "7.12.0",
+    "@react-router/node": "^7.14.2",
+    "@react-router/serve": "^7.14.2",
     "@tailwindcss/typography": "^0.5.19",
     "diff": "^8.0.3",
+    "esbuild": "^0.27.5",
     "googleapis": "^171.3.0",
     "isbot": "^5.1.31",
     "isolated-vm": "^6.1.2",
@@ -32,7 +33,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
-    "react-router": "7.12.0",
+    "react-router": "^7.14.2",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "stripe": "^20.4.1",
@@ -41,7 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
-    "@react-router/dev": "7.12.0",
+    "@react-router/dev": "^7.14.2",
     "@tailwindcss/vite": "^4.1.13",
     "@types/diff": "^7.0.2",
     "@types/js-yaml": "^4.0.9",
@@ -63,5 +64,10 @@
       "retry-request": "^8.0.2",
       "teeny-request": "^10.1.2"
     }
+  },
+  "allowScripts": {
+    "isolated-vm@6.1.2": true,
+    "protobufjs@7.6.3": true,
+    "esbuild@0.27.5": true
   }
 }
