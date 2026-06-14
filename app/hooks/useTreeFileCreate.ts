@@ -422,7 +422,7 @@ export function useTreeFileCreate({
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
-    input.accept = ".zip,*/*";
+    input.accept = "*/*";
     input.onchange = async () => {
       const files = Array.from(input.files || []);
       await importFilesToFolder(files, selectedFolderId);
@@ -438,7 +438,7 @@ export function useTreeFileCreate({
       input.setAttribute("webkitdirectory", "");
       input.setAttribute("directory", "");
     } else {
-      input.accept = ".zip,*/*";
+      input.accept = "*/*";
     }
     input.onchange = async () => {
       await importFilesToFolder(Array.from(input.files || []), targetFolderId);

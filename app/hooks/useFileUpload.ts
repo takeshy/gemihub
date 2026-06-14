@@ -33,15 +33,6 @@ export function getUploadFileName(file: File): string {
   return uploadFile.relativePathForUpload || uploadFile.webkitRelativePath || file.name;
 }
 
-function parseJsonText(text: string): unknown {
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
 export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_LIMIT_BYTES) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress[]>([]);
@@ -83,23 +74,29 @@ export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_L
         for (const f of validFiles) {
           const clientName = getUploadFileName(f);
           try {
-            const sessionRes = await fetch("/api/drive/upload-resumable", {
+            const formData = new FormData();
+            formData.set("intent", "upload-file");
+            formData.set("folderId", folderId);
+            formData.set("clientPath", clientName);
+            formData.set("fileName", f.name);
+            formData.set("mimeType", f.type || "application/octet-stream");
+            formData.set("size", String(f.size));
+            formData.set("file", f);
+            if (namePrefix) {
+              formData.set("namePrefix", namePrefix);
+            }
+            const replaceFileId = replaceMap?.[clientName] || replaceMap?.[f.name];
+            if (replaceFileId) {
+              formData.set("replaceFileId", replaceFileId);
+            }
+
+            const uploadRes = await fetch("/api/drive/upload-resumable", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                intent: "create-session",
-                folderId,
-                namePrefix,
-                clientPath: clientName,
-                fileName: f.name,
-                mimeType: f.type || "application/octet-stream",
-                size: f.size,
-                replaceFileId: replaceMap?.[clientName] || replaceMap?.[f.name],
-              }),
+              body: formData,
             });
-            const sessionData = await sessionRes.json().catch(() => ({}));
-            if (!sessionRes.ok || !sessionData.uploadUrl) {
-              const error = sessionData.error || "Upload failed";
+            const uploadData = await uploadRes.json().catch(() => ({}));
+            if (!uploadRes.ok || !uploadData.file) {
+              const error = uploadData.error || "Upload failed";
               failedNames.add(clientName);
               failedNames.add(f.name);
               setProgress((prev) =>
@@ -108,46 +105,7 @@ export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_L
               continue;
             }
 
-            const uploadRes = await fetch(sessionData.uploadUrl, {
-              method: "PUT",
-              headers: { "Content-Type": f.type || "application/octet-stream" },
-              body: f,
-            });
-            const uploadText = await uploadRes.text();
-            const uploaded = parseJsonText(uploadText) as (UploadedFile & { error?: unknown }) | null;
-            if (!uploadRes.ok || !uploaded?.id) {
-              const error = uploaded && "error" in uploaded
-                ? String((uploaded as { error?: unknown }).error)
-                : uploadText || "Upload failed";
-              failedNames.add(clientName);
-              failedNames.add(f.name);
-              setProgress((prev) =>
-                prev.map((p) => (p.name === clientName ? { ...p, status: "error", error } : p))
-              );
-              continue;
-            }
-
-            const completeRes = await fetch("/api/drive/upload-resumable", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                intent: "complete",
-                folderId,
-                fileId: uploaded.id,
-              }),
-            });
-            const completeData = await completeRes.json().catch(() => ({}));
-            if (!completeRes.ok || !completeData.file) {
-              const error = completeData.error || "Upload completed but metadata update failed";
-              failedNames.add(clientName);
-              failedNames.add(f.name);
-              setProgress((prev) =>
-                prev.map((p) => (p.name === clientName ? { ...p, status: "error", error } : p))
-              );
-              continue;
-            }
-
-            const completed = completeData.file as UploadedFile;
+            const completed = uploadData.file as UploadedFile;
             ragRegisterNewFile(completed.id, completed.name);
             fileMap.set(clientName, completed);
             fileMap.set(f.name, completed);

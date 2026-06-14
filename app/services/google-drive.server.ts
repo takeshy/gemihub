@@ -639,7 +639,7 @@ export async function createFileBinary(
       headers: {
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },
-      body,
+      body: new Uint8Array(body),
     }
   );
   return res.json();
@@ -704,6 +704,28 @@ export async function updateResumableUploadSession(
     throw new Error("Drive API did not return a resumable upload URL");
   }
   return uploadUrl;
+}
+
+export async function uploadResumableFile(
+  uploadUrl: string,
+  contentBuffer: Buffer,
+  mimeType: string = "application/octet-stream",
+  options: DriveOperationOptions = {}
+): Promise<DriveFile> {
+  const res = await fetch(uploadUrl, {
+    method: "PUT",
+    signal: options.signal ?? AbortSignal.timeout(10 * 60_000),
+    headers: {
+      "Content-Type": mimeType,
+      "Content-Length": String(contentBuffer.byteLength),
+    },
+    body: new Uint8Array(contentBuffer),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new DriveApiError(res.status, text);
+  }
+  return res.json();
 }
 
 export async function createGoogleDocFromHtml(
