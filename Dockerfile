@@ -1,13 +1,15 @@
-FROM node:24-slim AS development-dependencies-env
+FROM node:24-slim AS dependencies-base
+# isolated-vm requires build tools for native compilation
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+
+FROM dependencies-base AS development-dependencies-env
 COPY ./package.json package-lock.json /app/
 WORKDIR /app
 RUN npm ci
 
-FROM node:24-slim AS production-dependencies-env
+FROM dependencies-base AS production-dependencies-env
 COPY ./package.json package-lock.json /app/
 WORKDIR /app
-# isolated-vm requires build tools for native compilation
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 RUN npm ci --omit=dev
 
 FROM node:24-slim AS build-env
