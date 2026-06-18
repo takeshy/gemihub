@@ -96,7 +96,7 @@ Mode is auto-constrained by model and RAG settings:
 - **Web Search mode**: forced to `none` (incompatible with other tools — free plan only)
 - **RAG enabled**: function calling tools disabled (free plan only — the Chat API does not support fileSearch + functionDeclarations simultaneously)
 
-> **Paid plan advantage**: The Interactions API allows function tools + RAG + Web Search simultaneously. The above RAG/Web Search tool restrictions do not apply to paid plan users (except Gemma 4 + Web Search, which is a model-level limitation).
+> **Paid plan advantage**: The Interactions API allows function tools + RAG + Web Search simultaneously. RAG is pre-retrieved via the `generateContent` API (with the `file_search` tool) and injected into the system prompt, since the Interactions API does not support the `file_search` tool directly (returns 501 `not_implemented`). The above RAG/Web Search tool restrictions do not apply to paid plan users (except Gemma 4 + Web Search, which is a model-level limitation).
 
 ### MCP Tools
 

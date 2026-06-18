@@ -167,7 +167,7 @@ export async function action({ request }: Route.ActionArgs) {
   const rawTopK = validData.settings?.ragTopK;
   const clampedTopK = rawTopK != null && Number.isFinite(rawTopK) ? Math.min(20, Math.max(1, rawTopK)) : undefined;
 
-  const interactionsTools = buildInteractionsTools(tools, ragStoreIds, clampedTopK, webSearchEnabled, model);
+  const interactionsTools = buildInteractionsTools(tools, webSearchEnabled, model);
 
   const input = toolResults
     ? buildToolResultInput(toolResults)
@@ -208,6 +208,12 @@ export async function action({ request }: Route.ActionArgs) {
       };
 
       try {
+        // Extract last user message for RAG pre-retrieval (initial round only)
+        const isInitialRound = !toolResults;
+        const lastMsg = messages[messages.length - 1];
+        const lastUserContent = isInitialRound && lastMsg?.role === "user" ? lastMsg.content : undefined;
+        const lastUserAttachments = isInitialRound && lastMsg?.role === "user" ? lastMsg.attachments : undefined;
+
         const generator = streamInteraction({
           apiKey,
           model,
@@ -217,6 +223,10 @@ export async function action({ request }: Route.ActionArgs) {
           previousInteractionId: interactionId,
           generationConfig,
           webSearchEnabled,
+          ragStoreIds: isInitialRound ? ragStoreIds : undefined,
+          ragTopK: isInitialRound ? clampedTopK : undefined,
+          ragUserMessage: lastUserContent,
+          ragAttachments: lastUserAttachments,
         });
 
         for await (const chunk of generator) {

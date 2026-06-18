@@ -11,11 +11,14 @@
 import {
   GoogleGenAI,
   type Interactions,
+  type Part,
+  type Tool,
 } from "@google/genai";
-import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/chat";
+import type { Message, StreamChunk, StreamChunkUsage, ToolCall, Attachment } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
 import { mustUseWebSearchOnly, supportsWebSearch } from "~/types/settings";
 import { formatFileSearchSource, MODEL_PRICING, SEARCH_GROUNDING_COST } from "./gemini-chat-core";
+import { DEFAULT_SAFETY_SETTINGS } from "./gemini.server";
 
 const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
 
@@ -23,6 +26,107 @@ function normalizeFileSearchStoreName(storeName: string | null | undefined): str
   const trimmed = storeName?.trim();
   if (!trimmed) return null;
   return trimmed.startsWith(FILE_SEARCH_STORE_PREFIX) ? trimmed : `${FILE_SEARCH_STORE_PREFIX}${trimmed}`;
+}
+
+// ---------------------------------------------------------------------------
+// RAG pre-retrieval via generateContent API
+// ---------------------------------------------------------------------------
+
+export interface RagContext {
+  source: string;
+  text: string;
+}
+
+/**
+ * Retrieve RAG context via the generateContent API (file_search tool).
+ * The Interactions API does not support the file_search tool (returns 501
+ * not_implemented), so RAG retrieval is done as a pre-processing step using
+ * the generateContent API. The retrieved contexts are injected into the
+ * system prompt for the subsequent Interactions API call, preserving both
+ * RAG and function calling capabilities.
+ */
+export async function retrieveRagContext(
+  apiKey: string,
+  model: ModelType,
+  userMessage: string,
+  ragStoreIds: string[],
+  topK: number,
+  attachments?: Attachment[],
+): Promise<{ sources: string[]; contexts: RagContext[] }> {
+  const ai = new GoogleGenAI({ apiKey });
+
+  const normalizedStoreIds = ragStoreIds
+    .map((id) => normalizeFileSearchStoreName(id))
+    .filter((id): id is string => !!id);
+  if (normalizedStoreIds.length === 0) return { sources: [], contexts: [] };
+
+  const parts: Part[] = [];
+  if (attachments && attachments.length > 0) {
+    for (const attachment of attachments) {
+      parts.push({
+        inlineData: { mimeType: attachment.mimeType, data: attachment.data },
+      });
+    }
+    if (userMessage) {
+      parts.push({ text: userMessage });
+    }
+  } else {
+    parts.push({ text: userMessage });
+  }
+
+  const tools: Tool[] = [{
+    fileSearch: {
+      fileSearchStoreNames: normalizedStoreIds,
+      topK,
+    },
+  }];
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: [{ role: "user", parts }],
+    config: { tools, safetySettings: DEFAULT_SAFETY_SETTINGS },
+  });
+
+  const groundingMetadata = (response.candidates?.[0] as {
+    groundingMetadata?: {
+      groundingChunks?: Array<{
+        retrievedContext?: {
+          title?: string;
+          text?: string;
+          uri?: string;
+          pageNumber?: number;
+          page_number?: number;
+          mediaId?: string;
+          media_id?: string;
+          customMetadata?: Array<{ key?: string; stringValue?: string; string_value?: string; numericValue?: number; numeric_value?: number }>;
+          custom_metadata?: Array<{ key?: string; stringValue?: string; string_value?: string; numericValue?: number; numeric_value?: number }>;
+        };
+      }>;
+    };
+  })?.groundingMetadata;
+
+  const chunks = groundingMetadata?.groundingChunks ?? [];
+  const sources: string[] = [];
+  const contexts: RagContext[] = [];
+
+  for (const chunk of chunks) {
+    const ctx = chunk.retrievedContext;
+    if (!ctx) continue;
+    const source = formatFileSearchSource(ctx);
+    if (!source) continue;
+    if (!sources.includes(source)) {
+      sources.push(source);
+    }
+    const text = String(ctx.text ?? "").replace(/\s+/g, " ").trim();
+    if (text) {
+      const excerpt = text.length > 500 ? text.slice(0, 500) + "..." : text;
+      if (!contexts.some((c) => c.source === source && c.text === excerpt)) {
+        contexts.push({ source, text: excerpt });
+      }
+    }
+  }
+
+  return { sources, contexts };
 }
 
 // ---------------------------------------------------------------------------
@@ -60,13 +164,13 @@ function toJsonSchema(params: ToolDefinition["parameters"]): Record<string, unkn
 }
 
 /**
- * Convert GemiHub ToolDefinition[] + RAG/Search flags into Interactions API Tool_2[].
- * Unlike Chat API, Interactions API allows function + file_search + google_search simultaneously.
+ * Convert GemiHub ToolDefinition[] + search flags into Interactions API Tool_2[].
+ * The Interactions API does not support the file_search tool (returns 501
+ * not_implemented). RAG retrieval is handled separately via retrieveRagContext()
+ * as a pre-processing step, so only function tools and google_search are included here.
  */
 export function buildInteractionsTools(
   tools: ToolDefinition[],
-  ragStoreIds?: string[],
-  ragTopK?: number,
   webSearchEnabled?: boolean,
   model?: ModelType,
 ): Interactions.Tool[] {
@@ -83,18 +187,6 @@ export function buildInteractionsTools(
         parameters: toJsonSchema(tool.parameters),
       } as Interactions.Tool);
     }
-  }
-
-  const normalizedRagStoreIds = ragStoreIds
-    ?.map((id) => normalizeFileSearchStoreName(id))
-    .filter((id): id is string => !!id);
-
-  if (normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {
-    result.push({
-      type: "file_search" as const,
-      file_search_store_names: normalizedRagStoreIds,
-      top_k: ragTopK,
-    } as Interactions.Tool);
   }
 
   if (effectiveWebSearch) {
@@ -370,6 +462,11 @@ export interface StreamInteractionParams {
   previousInteractionId?: string;
   generationConfig?: Interactions.GenerationConfig;
   webSearchEnabled?: boolean;
+  // RAG pre-retrieval params (only on initial round, not resume)
+  ragStoreIds?: string[];
+  ragTopK?: number;
+  ragUserMessage?: string;
+  ragAttachments?: Attachment[];
 }
 
 /**
@@ -382,14 +479,48 @@ export async function* streamInteraction(
 ): AsyncGenerator<StreamChunk> {
   const ai = new GoogleGenAI({ apiKey: params.apiKey });
 
+  // RAG pre-retrieval via generateContent API.
+  // The Interactions API does not support the file_search tool (returns 501
+  // not_implemented), so we retrieve relevant contexts beforehand using
+  // the generateContent API and inject them into the system prompt.
+  let ragSystemPrompt = params.systemPrompt;
+  let ragEmitted = false;
+  const modelLower = params.model.toLowerCase();
+  const isGemma = modelLower.includes("gemma");
+  if (params.ragStoreIds && params.ragStoreIds.length > 0 && params.ragUserMessage && !isGemma) {
+    try {
+      const ragResult = await retrieveRagContext(
+        params.apiKey,
+        params.model,
+        params.ragUserMessage,
+        params.ragStoreIds,
+        params.ragTopK ?? 5,
+        params.ragAttachments,
+      );
+      if (ragResult.sources.length > 0) {
+        ragEmitted = true;
+        yield { type: "rag_used", ragSources: ragResult.sources };
+      }
+      if (ragResult.contexts.length > 0) {
+        const contextBlock = ragResult.contexts
+          .map((c) => `--- Source: ${c.source} ---\n${c.text}`)
+          .join("\n\n");
+        ragSystemPrompt = (params.systemPrompt || "") +
+          `\n\n[Semantic search results — use these retrieved passages as reference context]\n${contextBlock}`;
+      }
+    } catch {
+      // RAG retrieval failed — continue without RAG context
+    }
+  }
+
   const createParams: Record<string, unknown> = {
     model: params.model,
     input: params.input,
     stream: true,
     store: true,
   };
-  if (params.systemPrompt) {
-    createParams.system_instruction = params.systemPrompt;
+  if (ragSystemPrompt) {
+    createParams.system_instruction = ragSystemPrompt;
   }
   if (params.tools && params.tools.length > 0) {
     createParams.tools = params.tools;
@@ -406,8 +537,6 @@ export async function* streamInteraction(
   const functionCallByIndex = new Map<number, { id: string; name: string; args: Record<string, unknown> }>();
   const argumentsBufferByIndex = new Map<number, string>();
   const accumulatedSources: string[] = [];
-  let fileSearchCalled = false;
-  let ragEmitted = false;
   let webSearchEmitted = false;
   let finalUsage: StreamChunkUsage | undefined;
 
@@ -436,8 +565,6 @@ export async function* streamInteraction(
               name: fc.name,
               args: fc.arguments ?? {},
             });
-          } else if (step?.type === "file_search_call") {
-            fileSearchCalled = true;
           } else if (step?.type === "google_search_call") {
             if (!webSearchEmitted) {
               webSearchEmitted = true;
@@ -476,7 +603,6 @@ export async function* streamInteraction(
               break;
 
             case "file_search_result":
-              fileSearchCalled = true;
               if ("result" in delta && Array.isArray(delta.result)) {
                 for (const r of delta.result as Array<{
                   title?: string;
@@ -562,8 +688,9 @@ export async function* streamInteraction(
       functionCallsToProcess.push({ id: fc.id, name: fc.name, args: fc.args });
     }
 
-    // Emit accumulated RAG sources
-    if ((fileSearchCalled || accumulatedSources.length > 0) && !ragEmitted) {
+    // Emit accumulated RAG sources (fallback — primary RAG sources are
+    // pre-retrieved via generateContent API before the Interactions call)
+    if (accumulatedSources.length > 0 && !ragEmitted) {
       ragEmitted = true;
       yield { type: "rag_used", ragSources: accumulatedSources };
     }

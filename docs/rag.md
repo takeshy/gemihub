@@ -252,7 +252,9 @@ ragEnabled が true の場合、selectedRagSetting の値:
 
 **注意**: ワークフローの command ノードでは `"__none__"` を「RAG なし」として使用するが、ChatPanel では `null` がその役割を持つ。
 
-### Gemini API への渡し方 (`app/services/gemini-chat.server.ts`)
+### Gemini API への渡し方 (`app/services/gemini-chat.server.ts` / `app/services/gemini-chat-core.ts`)
+
+**Free プラン (Chat API — `generateContent`)**:
 
 ```typescript
 // ragStoreIds がある場合、tools に fileSearch を追加
@@ -264,13 +266,32 @@ geminiTools.push({
 });
 ```
 
+Chat API は `fileSearch` ツールをネイティブサポートしており、`groundingMetadata.groundingChunks.retrievedContext` から RAG ソース情報が返却される。
+
+**Paid プラン (Interactions API — 事前取得パターン)**:
+
+Interactions API は `file_search` ツールをサポートしていない（501 `not_implemented` エラーになる）。そのため RAG 検索は `generateContent` API で**事前取得**し、結果をシステムプロンプトに注入する方式をとる (`app/services/gemini-interactions.server.ts: retrieveRagContext()`)。
+
+```
+1. retrieveRagContext() で generateContent API を呼び出し (fileSearch tool 使用)
+   → groundingChunks.retrievedContext から sources[] と contexts[] を抽出
+2. 抽出したコンテキストをシステムプロンプトに注入:
+   "[Semantic search results — use these retrieved passages as reference context]
+    --- Source: {title} ---
+    {text}..."
+3. rag_used イベントを事前に emit (ソース一覧を UI に表示)
+4. 注入済みシステムプロンプトを使って Interactions API を呼び出し
+```
+
+これにより RAG + function calling + google_search を同時に利用可能（`buildInteractionsTools` は function tools と google_search のみを返し、file_search は含まない）。
+
 ### モデル制約 (`app/types/settings.ts: getDriveToolModeConstraint`)
 
 | 条件 | Drive ツール | RAG | locked | 備考 |
 |------|:-----------:|:---:|:------:|------|
 | Gemma モデル | 不可 | 不可 | Yes | ツール非対応。MCP も無効化 |
 | Web Search モード | 不可 | 不可 | Yes | `googleSearch` のみ使用。MCP も無効化 |
-| RAG設定選択中 | 不可 | 可 | Yes | fileSearch + functionDeclarations は API 非対応。MCP も無効化 |
+| RAG設定選択中 | 不可 | 可 | Yes | Interactions API では file_search 不可のため事前取得方式。Chat API では fileSearch + functionDeclarations が API 非対応。MCP も無効化 |
 | RAG設定未選択 (`null`) | 全機能 | - | No | 制約なし |
 
 ### グラウンディングメタデータ
