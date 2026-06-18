@@ -37,7 +37,7 @@
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "stripe": "^20.4.1",
-    "wysimark-lite": "^0.26.0",
+    "wysimark-lite": "^0.26.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
