@@ -110,9 +110,9 @@ export function buildInteractionsTools(
 // Input builders
 // ---------------------------------------------------------------------------
 
-function buildSingleMessageInput(msg: Message): string | Interactions.Content[] {
+function buildSingleMessageContent(msg: Message): Interactions.Content[] {
   if (!msg.attachments || msg.attachments.length === 0) {
-    return msg.content || "";
+    return [{ type: "text" as const, text: msg.content || "" } as Interactions.Content];
   }
 
   const contents: Interactions.Content[] = [];
@@ -200,26 +200,32 @@ function buildHistoryMessageText(msg: Message): string {
 }
 
 /**
- * Build Interactions API input from messages.
+ * Build Interactions API input from messages using the step_list schema.
  * When previousInteractionId is present, sends only the last message (server knows history).
- * When absent, replays conversation history as a text prefix.
+ * When absent, replays conversation history as a text prefix in a single user_input step.
  */
 export function buildInteractionInput(
   messages: Message[],
   previousInteractionId?: string,
-): string | Interactions.Content[] {
+): Interactions.Step[] {
   const lastMessage = messages[messages.length - 1];
-  if (!lastMessage) return "";
+  if (!lastMessage) return [];
 
   // Chaining: server already has context via previous_interaction_id
   if (previousInteractionId) {
-    return buildSingleMessageInput(lastMessage);
+    return [{
+      type: "user_input" as const,
+      content: buildSingleMessageContent(lastMessage),
+    } as Interactions.Step];
   }
 
   // No chaining: replay history
   const historyMessages = messages.slice(0, -1);
   if (historyMessages.length === 0) {
-    return buildSingleMessageInput(lastMessage);
+    return [{
+      type: "user_input" as const,
+      content: buildSingleMessageContent(lastMessage),
+    } as Interactions.Step];
   }
 
   const lines: string[] = [];
@@ -228,22 +234,23 @@ export function buildInteractionInput(
   }
   const historyText = "[Previous conversation]\n" + lines.join("\n\n") + "\n\n[Current message]\n";
 
-  // Text-only last message — merge into single string
+  // Text-only last message — merge into single text content
   if (!lastMessage.attachments || lastMessage.attachments.length === 0) {
-    return historyText + (lastMessage.content || "");
+    return [{
+      type: "user_input" as const,
+      content: [{ type: "text" as const, text: historyText + (lastMessage.content || "") } as Interactions.Content],
+    } as Interactions.Step];
   }
 
   // Multimodal: history as text prefix, then attachments
   const contents: Interactions.Content[] = [
     { type: "text" as const, text: historyText } as Interactions.Content,
+    ...buildSingleMessageContent(lastMessage),
   ];
-  const lastParts = buildSingleMessageInput(lastMessage);
-  if (Array.isArray(lastParts)) {
-    contents.push(...lastParts);
-  } else {
-    contents.push({ type: "text" as const, text: lastParts } as Interactions.Content);
-  }
-  return contents;
+  return [{
+    type: "user_input" as const,
+    content: contents,
+  } as Interactions.Step];
 }
 
 // ---------------------------------------------------------------------------
@@ -310,13 +317,13 @@ function sanitizeToolResult(val: unknown): unknown {
   return val;
 }
 
-export function buildToolResultInput(toolResults: ToolResultInput[]): Interactions.Content[] {
+export function buildToolResultInput(toolResults: ToolResultInput[]): Interactions.Step[] {
   return toolResults.map((tr) => ({
     type: "function_result" as const,
     call_id: tr.callId,
     name: tr.name,
     result: sanitizeToolResult(tr.result),
-  } as Interactions.Content));
+  } as Interactions.Step));
 }
 
 // ---------------------------------------------------------------------------
@@ -357,7 +364,7 @@ function extractUsage(usage: InteractionsUsage | undefined, model?: string): Str
 export interface StreamInteractionParams {
   apiKey: string;
   model: ModelType;
-  input: string | Interactions.Content[];
+  input: Interactions.Step[];
   systemPrompt?: string;
   tools?: Interactions.Tool[];
   previousInteractionId?: string;
@@ -396,6 +403,8 @@ export async function* streamInteraction(
 
   let currentInteractionId: string | undefined;
   const functionCallsToProcess: ToolCall[] = [];
+  const functionCallByIndex = new Map<number, { id: string; name: string; args: Record<string, unknown> }>();
+  const argumentsBufferByIndex = new Map<number, string>();
   const accumulatedSources: string[] = [];
   let fileSearchCalled = false;
   let ragEmitted = false;
@@ -411,22 +420,36 @@ export async function* streamInteraction(
       const eventType = (event as { event_type?: string }).event_type;
 
       switch (eventType) {
-        case "interaction.start": {
+        case "interaction.created": {
           const interaction = (event as { interaction?: { id?: string } }).interaction;
           currentInteractionId = interaction?.id;
           break;
         }
 
-        case "content.start": {
-          const content = (event as { content?: { type?: string } }).content;
-          if (content?.type === "file_search_result") {
+        case "step.start": {
+          const step = (event as { step?: { type?: string } }).step;
+          const index = (event as { index?: number }).index ?? 0;
+          if (step?.type === "function_call") {
+            const fc = step as { id: string; name: string; arguments: Record<string, unknown> };
+            functionCallByIndex.set(index, {
+              id: fc.id,
+              name: fc.name,
+              args: fc.arguments ?? {},
+            });
+          } else if (step?.type === "file_search_call") {
             fileSearchCalled = true;
+          } else if (step?.type === "google_search_call") {
+            if (!webSearchEmitted) {
+              webSearchEmitted = true;
+              yield { type: "web_search_used", ragSources: [] };
+            }
           }
           break;
         }
 
-        case "content.delta": {
+        case "step.delta": {
           const delta = (event as { delta?: Record<string, unknown> }).delta;
+          const index = (event as { index?: number }).index ?? 0;
           if (!delta) break;
 
           switch (delta.type) {
@@ -445,13 +468,10 @@ export async function* streamInteraction(
               }
               break;
 
-            case "function_call":
-              if ("name" in delta && "id" in delta) {
-                functionCallsToProcess.push({
-                  id: delta.id as string,
-                  name: delta.name as string,
-                  args: (delta.arguments as Record<string, unknown>) ?? {},
-                });
+            case "arguments_delta":
+              if ("arguments" in delta && delta.arguments) {
+                const existing = argumentsBufferByIndex.get(index) ?? "";
+                argumentsBufferByIndex.set(index, existing + (delta.arguments as string));
               }
               break;
 
@@ -494,7 +514,7 @@ export async function* streamInteraction(
           break;
         }
 
-        case "interaction.complete": {
+        case "interaction.completed": {
           const interaction = (event as { interaction?: { status?: string; usage?: InteractionsUsage } }).interaction;
           if (interaction?.usage) {
             finalUsage = extractUsage(interaction.usage, params.model);
@@ -525,6 +545,21 @@ export async function* streamInteraction(
           return;
         }
       }
+    }
+
+    // Merge streamed arguments into function calls
+    for (const [index, argsStr] of argumentsBufferByIndex) {
+      const fc = functionCallByIndex.get(index);
+      if (fc && argsStr) {
+        try {
+          fc.args = JSON.parse(argsStr);
+        } catch {
+          // keep original args from step.start
+        }
+      }
+    }
+    for (const [, fc] of functionCallByIndex) {
+      functionCallsToProcess.push({ id: fc.id, name: fc.name, args: fc.args });
     }
 
     // Emit accumulated RAG sources
