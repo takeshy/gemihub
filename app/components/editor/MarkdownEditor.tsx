@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { Editable, useEditor } from "wysimark-lite";
 
 interface MarkdownEditorProps {
@@ -7,6 +7,14 @@ interface MarkdownEditorProps {
   placeholder?: string;
   onFileSelect?: () => Promise<string | null>;
   onImageChange?: (file: File) => Promise<string>;
+  /** Enable Obsidian-style `[[Page]]` / `![[file]]` internal links. */
+  enableInternalLinks?: boolean;
+  /** Render the preview shown when an internal link is selected. */
+  renderInternalLinkPreview?: (target: string) => ReactNode;
+  /** Render the inline content for an internal embed (`![[spec]]`). */
+  renderInternalEmbed?: (spec: string) => ReactNode;
+  /** Called when an internal link is activated (navigate). Receives `target#heading`. */
+  onInternalLinkClick?: (target: string) => void;
 }
 
 // Minimal Slate-compatible types for the monkey-patch
@@ -22,8 +30,17 @@ export function MarkdownEditor({
   placeholder = "Write your content here...",
   onFileSelect,
   onImageChange,
+  enableInternalLinks,
+  renderInternalLinkPreview,
+  renderInternalEmbed,
+  onInternalLinkClick,
 }: MarkdownEditorProps) {
-  const editor = useEditor({});
+  const editor = useEditor({
+    enableInternalLinks,
+    renderInternalLinkPreview,
+    renderInternalEmbed,
+    onInternalLinkClick,
+  });
   const patchedRef = useRef(false);
 
   // Patch normalizeNode once to guard against empty children.

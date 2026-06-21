@@ -2,7 +2,20 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { MermaidCodeBlock } from "./MermaidCodeBlock";
+import { WikiEmbed } from "~/components/editor/WikiEmbed";
+import { useI18n } from "~/i18n/context";
+import { slugifyHeading } from "~/utils/wiki-subpath";
 import type { FileListItem } from "~/contexts/EditorContext";
+
+/** Recursively extract plain text from react-markdown children. */
+function nodeText(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(nodeText).join("");
+  if (value && typeof value === "object" && "props" in value) {
+    return nodeText((value as { props?: { children?: unknown } }).props?.children);
+  }
+  return "";
+}
 
 type MarkdownNode = {
   type?: string;
@@ -170,6 +183,21 @@ function preprocessWikiLinks(content: string): string {
     .join("");
 }
 
+// Convert `![[spec]]` embeds into image markdown with an `__embed__` src so the
+// `img` renderer can resolve them. Runs before preprocessWikiLinks (which only
+// handles `[[...]]` links) so the leading `!` is consumed here.
+function preprocessEmbeds(content: string): string {
+  const parts = content.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // code block/span — leave as-is
+      return part.replace(/!\[\[([^\]\n]+?)\]\]/g, (_, spec) => {
+        return `![](__embed__${encodeURIComponent(spec.trim())})`;
+      });
+    })
+    .join("");
+}
+
 export default function GfmMarkdownPreview({
   content,
   fileList,
@@ -179,12 +207,26 @@ export default function GfmMarkdownPreview({
   fileList?: FileListItem[];
   onWikiLinkClick?: (fileId: string, fileName: string, heading?: string) => void;
 }) {
-  const processedContent = fileList ? preprocessWikiLinks(content) : content;
+  const { t } = useI18n();
+  const processedContent = fileList ? preprocessWikiLinks(preprocessEmbeds(content)) : content;
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkCallouts]}
       rehypePlugins={[rehypeHighlight]}
       components={{
+        img({ src, ...props }) {
+          if (typeof src === "string" && src.startsWith("__embed__") && fileList) {
+            const spec = decodeURIComponent(src.slice("__embed__".length));
+            return <WikiEmbed spec={spec} fileList={fileList} t={t} />;
+          }
+          return <img src={src} {...props} />;
+        },
+        h1: ({ children }) => <h1 id={slugifyHeading(nodeText(children))}>{children}</h1>,
+        h2: ({ children }) => <h2 id={slugifyHeading(nodeText(children))}>{children}</h2>,
+        h3: ({ children }) => <h3 id={slugifyHeading(nodeText(children))}>{children}</h3>,
+        h4: ({ children }) => <h4 id={slugifyHeading(nodeText(children))}>{children}</h4>,
+        h5: ({ children }) => <h5 id={slugifyHeading(nodeText(children))}>{children}</h5>,
+        h6: ({ children }) => <h6 id={slugifyHeading(nodeText(children))}>{children}</h6>,
         a({ href, children, ...props }) {
           if (href?.startsWith("__wl__") && fileList) {
             const raw = decodeURIComponent(href.slice("__wl__".length));
@@ -192,9 +234,12 @@ export default function GfmMarkdownPreview({
             const fileName = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
             const heading = hashIdx >= 0 ? raw.slice(hashIdx + 1) : undefined;
             if (!fileName) {
-              // Same-file heading link
+              // Same-file heading link — scroll to the slugified heading id
               return (
-                <a href={`#${heading}`} className="text-purple-600 dark:text-purple-400 hover:underline">
+                <a
+                  href={`#${heading ? slugifyHeading(heading) : ""}`}
+                  className="text-purple-600 dark:text-purple-400 hover:underline"
+                >
                   {children}
                 </a>
               );
