@@ -3,6 +3,7 @@ import { Loader2, Eye, PenLine, Code, Plus } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
+import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { isEncryptedFile } from "~/services/crypto-core";
 import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditorToolbarActions } from "../EditorToolbarActions";
@@ -75,6 +76,10 @@ export function MarkdownFileEditor({
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
   const editorCtx = useEditorContext();
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showWikiLinkPicker, setShowWikiLinkPicker] = useState(false);
+  const wikiLinkStartRef = useRef<number>(0);
 
   const [uploading, setUploading] = useState(false);
   const [tempDiffData, setTempDiffData] = useState<{
@@ -353,7 +358,17 @@ export function MarkdownFileEditor({
           <div className="p-6">
             <div className="prose dark:prose-invert max-w-none [&_p]:my-1 [&_p]:leading-relaxed">
               <Suspense fallback={<Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />}>
-                <LazyGfmPreview content={fmParsed.hasFrontmatter ? fmParsed.body : content} />
+                <LazyGfmPreview
+                  content={fmParsed.hasFrontmatter ? fmParsed.body : content}
+                  fileList={editorCtx.fileList}
+                  onWikiLinkClick={(linkedFileId, linkedFileName) => {
+                    window.dispatchEvent(
+                      new CustomEvent("plugin-select-file", {
+                        detail: { fileId: linkedFileId, fileName: linkedFileName, mimeType: "text/markdown" },
+                      })
+                    );
+                  }}
+                />
               </Suspense>
             </div>
           </div>
@@ -402,11 +417,46 @@ export function MarkdownFileEditor({
       {mode === "raw" && (
         <div className="flex-1 p-4">
           <textarea
+            ref={textareaRef}
             value={content.replace(/^\u00A0$/gm, "")}
-            onChange={(e) => updateContent(e.target.value)}
+            onChange={(e) => {
+              updateContent(e.target.value);
+              const pos = e.target.selectionStart;
+              const before = e.target.value.slice(0, pos);
+              if (before.endsWith("[[")) {
+                wikiLinkStartRef.current = pos - 2;
+                setShowWikiLinkPicker(true);
+              }
+            }}
             onSelect={handleSelect}
             className="w-full h-full font-mono text-sm leading-relaxed bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
+          />
+          <QuickOpenDialog
+            open={showWikiLinkPicker}
+            fileList={editorCtx.fileList}
+            zClass="z-[60]"
+            onClose={() => {
+              setShowWikiLinkPicker(false);
+              setTimeout(() => textareaRef.current?.focus(), 0);
+            }}
+            onSelectFile={(_id, name) => {
+              const baseName = name.replace(/\.md$/i, "");
+              const start = wikiLinkStartRef.current;
+              const raw = content.replace(/^\u00A0$/gm, "");
+              const before = raw.slice(0, start);
+              const after = raw.slice(start + 2);
+              updateContent(`${before}[[${baseName}]]${after}`);
+              setShowWikiLinkPicker(false);
+              setTimeout(() => {
+                const ta = textareaRef.current;
+                if (ta) {
+                  const newPos = start + baseName.length + 4; // [[name]]
+                  ta.focus();
+                  ta.setSelectionRange(newPos, newPos);
+                }
+              }, 0);
+            }}
           />
         </div>
       )}

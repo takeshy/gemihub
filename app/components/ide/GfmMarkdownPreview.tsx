@@ -2,6 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { MermaidCodeBlock } from "./MermaidCodeBlock";
+import type { FileListItem } from "~/contexts/EditorContext";
 
 type MarkdownNode = {
   type?: string;
@@ -147,12 +148,80 @@ function remarkCallouts() {
   return (tree: MarkdownNode) => visitBlockquotes(tree);
 }
 
-export default function GfmMarkdownPreview({ content }: { content: string }) {
+function preprocessWikiLinks(content: string): string {
+  // Split by code fences and inline code spans to avoid processing inside them
+  const parts = content.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // code block/span — leave as-is
+      return part.replace(
+        /\[\[([^\]|#\n]+?)(?:#([^\]|\n]+?))?(?:\|([^\]\n]+?))?\]\]/g,
+        (_, fileName, heading, displayText) => {
+          const trimmedName = fileName.trim();
+          const trimmedHeading = heading?.trim();
+          const display = displayText?.trim() || (trimmedHeading ? `${trimmedName} > ${trimmedHeading}` : trimmedName);
+          const encoded =
+            encodeURIComponent(trimmedName) +
+            (trimmedHeading ? "#" + encodeURIComponent(trimmedHeading) : "");
+          return `[${display}](__wl__${encoded})`;
+        }
+      );
+    })
+    .join("");
+}
+
+export default function GfmMarkdownPreview({
+  content,
+  fileList,
+  onWikiLinkClick,
+}: {
+  content: string;
+  fileList?: FileListItem[];
+  onWikiLinkClick?: (fileId: string, fileName: string, heading?: string) => void;
+}) {
+  const processedContent = fileList ? preprocessWikiLinks(content) : content;
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkCallouts]}
       rehypePlugins={[rehypeHighlight]}
       components={{
+        a({ href, children, ...props }) {
+          if (href?.startsWith("__wl__") && fileList) {
+            const raw = decodeURIComponent(href.slice("__wl__".length));
+            const hashIdx = raw.indexOf("#");
+            const fileName = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
+            const heading = hashIdx >= 0 ? raw.slice(hashIdx + 1) : undefined;
+            if (!fileName) {
+              // Same-file heading link
+              return (
+                <a href={`#${heading}`} className="text-purple-600 dark:text-purple-400 hover:underline">
+                  {children}
+                </a>
+              );
+            }
+            const file = fileList.find(
+              (f) => f.name === fileName || f.name.replace(/\.md$/i, "") === fileName
+            );
+            return (
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (file && onWikiLinkClick) onWikiLinkClick(file.id, file.name, heading);
+                }}
+                className="text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                title={file ? file.path || file.name : `${fileName} (not found)`}
+              >
+                {children}
+              </a>
+            );
+          }
+          return (
+            <a href={href} {...props}>
+              {children}
+            </a>
+          );
+        },
         blockquote({ children, node, ...props }) {
           const calloutProps = props as typeof props & Record<string, unknown>;
           const calloutType = String(calloutProps["data-callout"] || "");
@@ -209,7 +278,7 @@ export default function GfmMarkdownPreview({ content }: { content: string }) {
         },
       }}
     >
-      {content}
+      {processedContent}
     </ReactMarkdown>
   );
 }
