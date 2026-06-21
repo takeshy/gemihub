@@ -12,6 +12,9 @@ import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { TempDiffModal } from "../TempDiffModal";
 import { FrontmatterEditor, parseFrontmatter, serializeFrontmatter } from "~/components/editor/FrontmatterEditor";
+import { WikiLinkPreview, resolveWikiTarget } from "~/components/editor/WikiLinkPreview";
+import { WikiEmbed } from "~/components/editor/WikiEmbed";
+import { splitSubpath, slugifyHeading } from "~/utils/wiki-subpath";
 
 const LazyGfmPreview = lazy(() => import("../GfmMarkdownPreview"));
 
@@ -78,8 +81,18 @@ export function MarkdownFileEditor({
   const editorCtx = useEditorContext();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [showWikiLinkPicker, setShowWikiLinkPicker] = useState(false);
   const wikiLinkStartRef = useRef<number>(0);
+
+  // Scroll the preview to a slugified heading id. Returns true if found.
+  const scrollToHeadingId = useCallback((slug: string): boolean => {
+    if (!slug) return false;
+    const el = previewRef.current?.querySelector(`#${CSS.escape(slug)}`);
+    if (!el) return false;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    return true;
+  }, []);
 
   const [uploading, setUploading] = useState(false);
   const [tempDiffData, setTempDiffData] = useState<{
@@ -216,6 +229,10 @@ export function MarkdownFileEditor({
       placeholder?: string;
       onFileSelect?: () => Promise<string | null>;
       onImageChange?: (file: File) => Promise<string>;
+      enableInternalLinks?: boolean;
+      renderInternalLinkPreview?: (target: string) => React.ReactNode;
+      renderInternalEmbed?: (spec: string) => React.ReactNode;
+      onInternalLinkClick?: (target: string) => void;
     }> | null
   >(null);
 
@@ -229,7 +246,8 @@ export function MarkdownFileEditor({
       lastSavedContentRef.current = null;
       contentFromProps.current = true;
       setContent(initialContent);
-      setMode("wysiwyg");
+      // Open in preview when arriving via a wiki heading link so we can scroll.
+      setMode(sessionStorage.getItem("pending-wiki-heading") ? "preview" : "wysiwyg");
       return;
     }
     // Same file -- skip if this is our own save being reflected back via
@@ -310,6 +328,68 @@ export function MarkdownFileEditor({
     },
     [updateContent]
   );
+  // Preview shown by wysimark-lite when an internal `[[link]]` is selected
+  const renderInternalLinkPreview = useCallback(
+    (target: string) => (
+      <WikiLinkPreview target={target} fileList={editorCtx.fileList} t={t} />
+    ),
+    [editorCtx.fileList, t]
+  );
+  // Inline content rendered by wysimark-lite for an internal `![[embed]]`
+  const renderInternalEmbed = useCallback(
+    (spec: string) => (
+      <WikiEmbed spec={spec} fileList={editorCtx.fileList} t={t} />
+    ),
+    [editorCtx.fileList, t]
+  );
+
+  // Navigate to a wiki target (`Page#heading`): open the file (or stay) and
+  // scroll to the heading. Cross-file navigation opens the target in preview.
+  const navigateToWikiTarget = useCallback(
+    (target: string) => {
+      const { target: name, subpath } = splitSubpath(target);
+      const headingSlug = subpath && !subpath.startsWith("^") ? slugifyHeading(subpath) : "";
+      const targetFile = name ? resolveWikiTarget(editorCtx.fileList, name) : null;
+
+      if (targetFile && targetFile.id !== fileId) {
+        if (headingSlug) sessionStorage.setItem("pending-wiki-heading", headingSlug);
+        else sessionStorage.removeItem("pending-wiki-heading");
+        window.dispatchEvent(
+          new CustomEvent("plugin-select-file", {
+            detail: { fileId: targetFile.id, fileName: targetFile.name, mimeType: "text/markdown" },
+          })
+        );
+        return;
+      }
+      // Same file (or heading-only target): ensure preview, then scroll.
+      if (!headingSlug) return;
+      if (mode === "preview") {
+        scrollToHeadingId(headingSlug);
+      } else {
+        sessionStorage.setItem("pending-wiki-heading", headingSlug);
+        setMode("preview");
+      }
+    },
+    [editorCtx.fileList, fileId, mode, scrollToHeadingId]
+  );
+
+  // After arriving via a wiki heading link, ensure we're in preview mode and
+  // scroll to the pending heading once rendered. Runs on mount too, so it works
+  // whether this editor instance is reused or freshly remounted per file.
+  useEffect(() => {
+    const slug = sessionStorage.getItem("pending-wiki-heading");
+    if (!slug) return;
+    if (mode !== "preview") {
+      setMode("preview");
+      return;
+    }
+    // Only consume the pending heading once the element actually exists, so a
+    // brief render of the previous file's content doesn't drop the target.
+    const id = setTimeout(() => {
+      if (scrollToHeadingId(slug)) sessionStorage.removeItem("pending-wiki-heading");
+    }, 80);
+    return () => clearTimeout(id);
+  }, [mode, content, fileId, scrollToHeadingId]);
 
   const modes: { key: MdEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
@@ -351,7 +431,7 @@ export function MarkdownFileEditor({
 
       {/* Content area */}
       {mode === "preview" && (
-        <div className="flex-1 overflow-y-auto">
+        <div ref={previewRef} className="flex-1 overflow-y-auto">
           {fmParsed.hasFrontmatter && (
             <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} readOnly />
           )}
@@ -361,7 +441,12 @@ export function MarkdownFileEditor({
                 <LazyGfmPreview
                   content={fmParsed.hasFrontmatter ? fmParsed.body : content}
                   fileList={editorCtx.fileList}
-                  onWikiLinkClick={(linkedFileId, linkedFileName) => {
+                  onWikiLinkClick={(linkedFileId, linkedFileName, heading) => {
+                    if (heading) {
+                      sessionStorage.setItem("pending-wiki-heading", slugifyHeading(heading));
+                    } else {
+                      sessionStorage.removeItem("pending-wiki-heading");
+                    }
                     window.dispatchEvent(
                       new CustomEvent("plugin-select-file", {
                         detail: { fileId: linkedFileId, fileName: linkedFileName, mimeType: "text/markdown" },
@@ -405,6 +490,10 @@ export function MarkdownFileEditor({
                   placeholder="Write your content here..."
                   onFileSelect={onFileSelect}
                   onImageChange={onImageChange}
+                  enableInternalLinks
+                  renderInternalLinkPreview={renderInternalLinkPreview}
+                  renderInternalEmbed={renderInternalEmbed}
+                  onInternalLinkClick={navigateToWikiTarget}
                 />
               </div>
             ) : (

@@ -819,6 +819,8 @@ export interface TranslationStrings {
   "frontmatter.properties": string;
   "frontmatter.addProperty": string;
   "frontmatter.addProperties": string;
+  "wikiPreview.notFound": string;
+  "wikiPreview.empty": string;
   "frontmatter.propertyType": string;
   "frontmatter.remove": string;
   "frontmatter.text": string;
@@ -1655,6 +1657,8 @@ const en: TranslationStrings = {
   "frontmatter.properties": "Properties",
   "frontmatter.addProperty": "Add property",
   "frontmatter.addProperties": "Add properties",
+  "wikiPreview.notFound": "File not found",
+  "wikiPreview.empty": "(empty file)",
   "frontmatter.propertyType": "Property type",
   "frontmatter.remove": "Remove",
   "frontmatter.text": "Text",
@@ -2491,6 +2495,8 @@ const ja: TranslationStrings = {
   "frontmatter.properties": "プロパティ",
   "frontmatter.addProperty": "プロパティを追加",
   "frontmatter.addProperties": "プロパティを追加",
+  "wikiPreview.notFound": "ファイルが見つかりません",
+  "wikiPreview.empty": "（空のファイル）",
   "frontmatter.propertyType": "プロパティタイプ",
   "frontmatter.remove": "削除",
   "frontmatter.text": "テキスト",
