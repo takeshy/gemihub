@@ -21,6 +21,8 @@ import { formatFileSearchSource, MODEL_PRICING, SEARCH_GROUNDING_COST } from "./
 import { DEFAULT_SAFETY_SETTINGS } from "./gemini.server";
 
 const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
+type InteractionInput = Interactions.CreateModelInteractionParamsStreaming["input"];
+type InteractionInputStep = Extract<InteractionInput, unknown[]>[number];
 
 function normalizeFileSearchStoreName(storeName: string | null | undefined): string | null {
   const trimmed = storeName?.trim();
@@ -299,7 +301,7 @@ function buildHistoryMessageText(msg: Message): string {
 export function buildInteractionInput(
   messages: Message[],
   previousInteractionId?: string,
-): Interactions.Step[] {
+): InteractionInputStep[] {
   const lastMessage = messages[messages.length - 1];
   if (!lastMessage) return [];
 
@@ -308,7 +310,7 @@ export function buildInteractionInput(
     return [{
       type: "user_input" as const,
       content: buildSingleMessageContent(lastMessage),
-    } as Interactions.Step];
+    } as InteractionInputStep];
   }
 
   // No chaining: replay history
@@ -317,7 +319,7 @@ export function buildInteractionInput(
     return [{
       type: "user_input" as const,
       content: buildSingleMessageContent(lastMessage),
-    } as Interactions.Step];
+    } as InteractionInputStep];
   }
 
   const lines: string[] = [];
@@ -331,7 +333,7 @@ export function buildInteractionInput(
     return [{
       type: "user_input" as const,
       content: [{ type: "text" as const, text: historyText + (lastMessage.content || "") } as Interactions.Content],
-    } as Interactions.Step];
+    } as InteractionInputStep];
   }
 
   // Multimodal: history as text prefix, then attachments
@@ -342,7 +344,7 @@ export function buildInteractionInput(
   return [{
     type: "user_input" as const,
     content: contents,
-  } as Interactions.Step];
+  } as InteractionInputStep];
 }
 
 // ---------------------------------------------------------------------------
@@ -409,13 +411,13 @@ function sanitizeToolResult(val: unknown): unknown {
   return val;
 }
 
-export function buildToolResultInput(toolResults: ToolResultInput[]): Interactions.Step[] {
+export function buildToolResultInput(toolResults: ToolResultInput[]): InteractionInputStep[] {
   return toolResults.map((tr) => ({
     type: "function_result" as const,
     call_id: tr.callId,
     name: tr.name,
     result: sanitizeToolResult(tr.result),
-  } as Interactions.Step));
+  } as InteractionInputStep));
 }
 
 // ---------------------------------------------------------------------------
@@ -456,7 +458,7 @@ function extractUsage(usage: InteractionsUsage | undefined, model?: string): Str
 export interface StreamInteractionParams {
   apiKey: string;
   model: ModelType;
-  input: Interactions.Step[];
+  input: InteractionInputStep[];
   systemPrompt?: string;
   tools?: Interactions.Tool[];
   previousInteractionId?: string;

@@ -10,11 +10,13 @@ import {
   renameCachedFile,
   deleteEditHistoryEntry,
   bulkRemoveLocalSyncMetaEntries,
+  getAllCachedFiles,
   type CachedTreeNode,
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
 import { decryptFileContent, isEncryptedFile } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
+import { saveLocalEdit } from "~/services/edit-history-local";
 import {
   migrateNewFileId,
   removeNodeFromTree,
@@ -24,6 +26,111 @@ import {
 } from "~/utils/file-tree-operations";
 import { findFullFileName, findNodeById, collectFileIds } from "~/utils/tree-helpers";
 import type { TranslationStrings } from "~/i18n/translations";
+
+type FilePathRef = {
+  id: string;
+  name: string;
+  path: string;
+};
+
+function markdownBaseName(name: string): string {
+  return name.replace(/\.md$/i, "");
+}
+
+function normalizeWikiPath(value: string): string {
+  return value.trim().replace(/\.md$/i, "").toLowerCase();
+}
+
+function collectFilePathRefs(nodes: CachedTreeNode[], parentPath = ""): FilePathRef[] {
+  const refs: FilePathRef[] = [];
+  for (const node of nodes) {
+    const path = parentPath ? `${parentPath}/${node.name}` : node.name;
+    if (node.isFolder) {
+      refs.push(...collectFilePathRefs(node.children || [], path));
+    } else {
+      refs.push({ id: node.id, name: node.name, path });
+    }
+  }
+  return refs;
+}
+
+function replaceWikiLinksOutsideCode(content: string, replaceTarget: (target: string) => string): string {
+  const parts = content.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part;
+      return part.replace(
+        /\[\[([^\]|#\n]+?)(#[^\x5D|\n]*)?(\|[^\x5D\n]*)?\]\]/g,
+        (match, target, heading = "", display = "") => {
+          const nextTarget = replaceTarget(String(target));
+          return nextTarget === target ? match : `[[${nextTarget}${heading}${display}]]`;
+        }
+      );
+    })
+    .join("");
+}
+
+async function updateWikiLinksInCache({
+  oldPath,
+  newPath,
+  treeItems,
+}: {
+  oldPath: string;
+  newPath: string;
+  treeItems: CachedTreeNode[];
+}): Promise<void> {
+  const oldFileName = oldPath.split("/").pop() || oldPath;
+  const newFileName = newPath.split("/").pop() || newPath;
+  const oldBaseName = markdownBaseName(oldFileName);
+  const newBaseName = markdownBaseName(newFileName);
+  const oldPathNoExt = normalizeWikiPath(oldPath);
+  const newPathNoExt = newPath.replace(/\.md$/i, "");
+  const oldBaseNoExt = normalizeWikiPath(oldBaseName);
+  const newBaseNoExt = normalizeWikiPath(newBaseName);
+  const allTreeFiles = collectFilePathRefs(treeItems);
+  const matchingBaseCount = allTreeFiles.filter(
+    (f) => f.name.toLowerCase().endsWith(".md") && normalizeWikiPath(f.name) === oldBaseNoExt
+  ).length;
+  const newBaseCountAfterRename = allTreeFiles.filter((f) => {
+    if (!f.name.toLowerCase().endsWith(".md")) return false;
+    if (normalizeWikiPath(f.path) === oldPathNoExt) return false;
+    return normalizeWikiPath(f.name) === newBaseNoExt;
+  }).length + 1;
+  const canRewriteBareBaseName = matchingBaseCount <= 1;
+
+  const replaceTarget = (target: string): string => {
+    const trimmed = target.trim();
+    const normalized = normalizeWikiPath(trimmed);
+    if (!normalized) return target;
+
+    if (normalized === oldPathNoExt) {
+      return newPathNoExt;
+    }
+
+    if (!trimmed.includes("/") && canRewriteBareBaseName && normalized === oldBaseNoExt) {
+      return newBaseCountAfterRename > 1 ? newPathNoExt : newBaseName;
+    }
+
+    return target;
+  };
+
+  const allFiles = await getAllCachedFiles();
+  const mdFiles = allFiles.filter((f) => f.fileName?.toLowerCase().endsWith(".md") && !f.encoding);
+  await Promise.all(
+    mdFiles.map(async (f) => {
+      if (!f.content?.includes("[[")) return;
+      const newContent = replaceWikiLinksOutsideCode(f.content, replaceTarget);
+      if (newContent !== f.content) {
+        const editHistoryModified = await saveLocalEdit(f.fileId, f.fileName || f.fileId, newContent);
+        await setCachedFile({ ...f, content: newContent });
+        window.dispatchEvent(new CustomEvent("wiki-links-updated", { detail: { fileId: f.fileId, content: newContent } }));
+        if (editHistoryModified) {
+          window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: f.fileId } }));
+        }
+      }
+    })
+  );
+}
 
 /**
  * Bulk-delete a set of fileIds, handling local-only (new:*) and remote files.
@@ -169,6 +276,9 @@ export function useTreeFileOperations({
         if (activeFileId === item.id) {
           onSelectFile(newTempId, trimmed, item.mimeType);
         }
+        if (item.name.toLowerCase().endsWith(".md") || trimmed.toLowerCase().endsWith(".md")) {
+          await updateWikiLinksInCache({ oldPath: oldFullName, newPath: newFullName, treeItems });
+        }
         return;
       }
 
@@ -201,12 +311,14 @@ export function useTreeFileOperations({
         setBusy(fileIds);
         try {
           // Handle local-only files
+          const localRenames: Array<{ oldPath: string; newPath: string }> = [];
           for (const fid of localFileIds) {
             const fullName = findFullFileName(fid, treeItems, "");
             if (!fullName) continue;
             const newFullName = newPrefix + fullName.slice(oldPrefix.length);
             const newTempId = `new:${newFullName}`;
             await migrateNewFileId(fid, newTempId, newFullName);
+            localRenames.push({ oldPath: fullName, newPath: newFullName });
             if (activeFileId === fid) {
               const baseName = newFullName.split("/").pop() || newFullName;
               const node = findNodeById(fid, treeItems);
@@ -225,14 +337,24 @@ export function useTreeFileOperations({
               const data = await res.json();
               const failedSet = new Set(data.failedFileIds as string[]);
               if (failedSet.size > 0) alert(t("contextMenu.renameFailed"));
-              await Promise.all(
-                remoteFiles
-                  .filter((rf) => !failedSet.has(rf.fileId))
-                  .map((rf) => renameCachedFile(rf.fileId, rf.name))
-              );
+              const succeeded = remoteFiles.filter((rf) => !failedSet.has(rf.fileId));
+              await Promise.all(succeeded.map((rf) => renameCachedFile(rf.fileId, rf.name)));
+              // Update wiki links for renamed .md files
+              for (const rf of succeeded) {
+                const oldPath = findFullFileName(rf.fileId, treeItems, "");
+                if (oldPath?.toLowerCase().endsWith(".md") || rf.name.toLowerCase().endsWith(".md")) {
+                  await updateWikiLinksInCache({ oldPath: oldPath || rf.name, newPath: rf.name, treeItems });
+                }
+              }
               if (data.meta) lastMeta = data.meta;
             } else {
               alert(t("contextMenu.renameFailed"));
+            }
+          }
+
+          for (const rename of localRenames) {
+            if (rename.oldPath.toLowerCase().endsWith(".md") || rename.newPath.toLowerCase().endsWith(".md")) {
+              await updateWikiLinksInCache({ ...rename, treeItems });
             }
           }
 
@@ -275,6 +397,13 @@ export function useTreeFileOperations({
             await renameCachedFile(item.id, newFullName);
             if (activeFileId === item.id) {
               onSelectFile(item.id, trimmed, item.mimeType);
+            }
+            if (item.name.toLowerCase().endsWith(".md")) {
+              await updateWikiLinksInCache({
+                oldPath: currentFullName || item.name,
+                newPath: newFullName,
+                treeItems,
+              });
             }
           }
           if (data.meta) {

@@ -3,6 +3,7 @@ import { Loader2, Eye, PenLine, Code, Plus } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
+import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { isEncryptedFile } from "~/services/crypto-core";
 import { addCommitBoundary } from "~/services/edit-history-local";
 import { EditorToolbarActions } from "../EditorToolbarActions";
@@ -76,6 +77,12 @@ export function MarkdownFileEditor({
   const [content, setContent] = useState(initialContent);
   const editorCtx = useEditorContext();
 
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [showWikiLinkPicker, setShowWikiLinkPicker] = useState(false);
+  const wikiLinkStartRef = useRef<number>(0);
+  const pendingWikiHeadingRef = useRef<string | null>(null);
+
   const [uploading, setUploading] = useState(false);
   const [tempDiffData, setTempDiffData] = useState<{
     fileName: string;
@@ -114,6 +121,20 @@ export function MarkdownFileEditor({
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [content, saveToCache, fileId]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ fileId?: string; content?: string }>).detail;
+      if (detail?.fileId !== fileId || typeof detail.content !== "string") return;
+      contentFromProps.current = true;
+      lastSavedContentRef.current = null;
+      pendingContentRef.current = null;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      setContent(detail.content);
+    };
+    window.addEventListener("wiki-links-updated", handler);
+    return () => window.removeEventListener("wiki-links-updated", handler);
+  }, [fileId]);
 
   // Flush pending content on unmount or fileId change (saveToCache identity changes)
   useEffect(() => {
@@ -214,6 +235,19 @@ export function MarkdownFileEditor({
     }> | null
   >(null);
 
+  const scrollToWikiHeading = useCallback((heading: string) => {
+    requestAnimationFrame(() => {
+      const slug = heading
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s-]/gu, "")
+        .replace(/\s+/g, "-");
+      const container = previewRef.current;
+      const target = slug ? container?.querySelector<HTMLElement>(`#${CSS.escape(slug)}`) : null;
+      target?.scrollIntoView({ block: "start" });
+    });
+  }, []);
+
   useEffect(() => {
     const prev = prevFileIdRef.current;
     prevFileIdRef.current = fileId;
@@ -239,6 +273,28 @@ export function MarkdownFileEditor({
     contentFromProps.current = true;
     setContent(initialContent);
   }, [initialContent, fileId]);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem("pending-wiki-heading");
+    if (!raw) return;
+    try {
+      const pending = JSON.parse(raw) as { fileId?: string; heading?: string };
+      if (pending.fileId === fileId && pending.heading) {
+        pendingWikiHeadingRef.current = pending.heading;
+        sessionStorage.removeItem("pending-wiki-heading");
+        setMode("preview");
+      }
+    } catch {
+      sessionStorage.removeItem("pending-wiki-heading");
+    }
+  }, [fileId]);
+
+  useEffect(() => {
+    if (mode !== "preview" || !pendingWikiHeadingRef.current) return;
+    const heading = pendingWikiHeadingRef.current;
+    pendingWikiHeadingRef.current = null;
+    scrollToWikiHeading(heading);
+  }, [mode, content, scrollToWikiHeading]);
 
   useEffect(() => {
     if (mode === "wysiwyg" && !MarkdownEditorComponent) {
@@ -306,6 +362,17 @@ export function MarkdownFileEditor({
     [updateContent]
   );
 
+  const wikiLinkTargetForFile = useCallback((id: string, name: string) => {
+    const baseName = name.replace(/\.md$/i, "");
+    const sameBaseCount = editorCtx.fileList.filter(
+      (f) => f.name.replace(/\.md$/i, "").toLowerCase() === baseName.toLowerCase()
+    ).length;
+    const selected = editorCtx.fileList.find((f) => f.id === id);
+    return sameBaseCount > 1 && selected?.path
+      ? selected.path.replace(/\.md$/i, "")
+      : baseName;
+  }, [editorCtx.fileList]);
+
   const modes: { key: MdEditMode; icon: React.ReactNode; label: string }[] = [
     { key: "preview", icon: <Eye size={ICON.MD} />, label: t("mainViewer.preview") },
     { key: "wysiwyg", icon: <PenLine size={ICON.MD} />, label: t("mainViewer.wysiwyg") },
@@ -346,14 +413,34 @@ export function MarkdownFileEditor({
 
       {/* Content area */}
       {mode === "preview" && (
-        <div className="flex-1 overflow-y-auto">
+        <div ref={previewRef} className="flex-1 overflow-y-auto">
           {fmParsed.hasFrontmatter && (
             <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} readOnly />
           )}
           <div className="p-6">
             <div className="prose dark:prose-invert max-w-none [&_p]:my-1 [&_p]:leading-relaxed">
               <Suspense fallback={<Loader2 size={ICON.XL} className="animate-spin text-gray-400 mx-auto mt-8" />}>
-                <LazyGfmPreview content={fmParsed.hasFrontmatter ? fmParsed.body : content} />
+                <LazyGfmPreview
+                  content={fmParsed.hasFrontmatter ? fmParsed.body : content}
+                  fileList={editorCtx.fileList}
+                  onWikiLinkClick={(linkedFileId, linkedFileName, heading) => {
+                    if (heading) {
+                      if (linkedFileId === fileId) {
+                        scrollToWikiHeading(heading);
+                        return;
+                      }
+                      sessionStorage.setItem(
+                        "pending-wiki-heading",
+                        JSON.stringify({ fileId: linkedFileId, heading })
+                      );
+                    }
+                    window.dispatchEvent(
+                      new CustomEvent("plugin-select-file", {
+                        detail: { fileId: linkedFileId, fileName: linkedFileName, mimeType: "text/markdown", heading },
+                      })
+                    );
+                  }}
+                />
               </Suspense>
             </div>
           </div>
@@ -402,11 +489,85 @@ export function MarkdownFileEditor({
       {mode === "raw" && (
         <div className="flex-1 p-4">
           <textarea
+            ref={textareaRef}
             value={content.replace(/^\u00A0$/gm, "")}
-            onChange={(e) => updateContent(e.target.value)}
+            onChange={(e) => {
+              updateContent(e.target.value);
+              const pos = e.target.selectionStart;
+              const before = e.target.value.slice(0, pos);
+              if (before.endsWith("[[")) {
+                wikiLinkStartRef.current = pos - 2;
+                setShowWikiLinkPicker(true);
+              }
+            }}
             onSelect={handleSelect}
+            onDragOver={(e) => {
+              if (
+                e.dataTransfer.types.includes("application/x-tree-node-id")
+                || e.dataTransfer.types.includes("application/x-tree-node-ids")
+              ) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+              }
+            }}
+            onDrop={(e) => {
+              const singleId = e.dataTransfer.getData("application/x-tree-node-id");
+              const rawIds = e.dataTransfer.getData("application/x-tree-node-ids");
+              let ids: string[] = singleId ? [singleId] : [];
+              if (rawIds) {
+                try {
+                  const parsed = JSON.parse(rawIds);
+                  ids = Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+                } catch {
+                  ids = [];
+                }
+              }
+              const files = ids
+                .map((id) => editorCtx.fileList.find((f) => f.id === id))
+                .filter((f): f is NonNullable<typeof f> => !!f);
+              if (files.length === 0) return;
+              e.preventDefault();
+              const ta = textareaRef.current;
+              const start = ta?.selectionStart ?? content.length;
+              const end = ta?.selectionEnd ?? start;
+              const raw = content.replace(/^\u00A0$/gm, "");
+              const embedText = files.map((file) => `![[${wikiLinkTargetForFile(file.id, file.name)}]]`).join("\n");
+              const nextContent = `${raw.slice(0, start)}${embedText}${raw.slice(end)}`;
+              updateContent(nextContent);
+              setTimeout(() => {
+                const newPos = start + embedText.length;
+                ta?.focus();
+                ta?.setSelectionRange(newPos, newPos);
+              }, 0);
+            }}
             className="w-full h-full font-mono text-sm leading-relaxed bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
             spellCheck={false}
+          />
+          <QuickOpenDialog
+            open={showWikiLinkPicker}
+            fileList={editorCtx.fileList}
+            zClass="z-[60]"
+            onClose={() => {
+              setShowWikiLinkPicker(false);
+              setTimeout(() => textareaRef.current?.focus(), 0);
+            }}
+            onSelectFile={(id, name) => {
+              const linkTarget = wikiLinkTargetForFile(id, name);
+              const start = wikiLinkStartRef.current;
+              const raw = content.replace(/^\u00A0$/gm, "");
+              const before = raw.slice(0, start);
+              const after = raw.slice(start + 2);
+              updateContent(`${before}[[${linkTarget}]]${after}`);
+              setShowWikiLinkPicker(false);
+              setTimeout(() => {
+                const ta = textareaRef.current;
+                if (ta) {
+                  const newPos = start + linkTarget.length + 4; // [[name]]
+                  ta.focus();
+                  ta.setSelectionRange(newPos, newPos);
+                }
+              }, 0);
+            }}
           />
         </div>
       )}
