@@ -124,6 +124,11 @@ interface AIWorkflowDialogProps {
    *  (e.g., "workflows/run-lint.yaml") — used by Modify Skill with AI to
    *  preserve the real frontmatter workflow reference. */
   workflowFilePath?: string;
+  /** Extra model-facing instructions appended to the user's description on
+   *  generation (e.g., the dashboard data widget appends an output-format
+   *  contract so the workflow emits rows matching the chosen view). Invisible
+   *  in the textarea; merged into the prompt for plan/generate/review/refine. */
+  appendInstructions?: string;
   onAccept: (yaml: string, name: string, meta: AIWorkflowMeta) => void | Promise<void>;
   onClose: () => void;
 }
@@ -159,6 +164,7 @@ export function AIWorkflowDialog({
   forceSkill = false,
   existingInstructions,
   workflowFilePath,
+  appendInstructions,
   onAccept,
   onClose,
 }: AIWorkflowDialogProps) {
@@ -609,9 +615,12 @@ export function AIWorkflowDialog({
     const desc = description.trim();
     if (!desc) return;
     if (mode === "create" && !name.trim()) return;
-    setLastDescription(desc);
-    void runPipeline(desc);
-  }, [description, mode, name, runPipeline]);
+    // Merge caller-supplied output-format instructions so they persist across
+    // plan/generate/review/refine (lastDescription is reused by the refiner).
+    const fullDesc = appendInstructions ? `${desc}\n\n${appendInstructions}` : desc;
+    setLastDescription(fullDesc);
+    void runPipeline(fullDesc);
+  }, [description, mode, name, runPipeline, appendInstructions]);
 
   const handlePlanOk = useCallback(() => {
     void runPipeline(lastDescription, planText);
@@ -714,6 +723,8 @@ export function AIWorkflowDialog({
 
     setError(null);
 
+    const fullDesc = appendInstructions ? `${desc}\n\n${appendInstructions}` : desc;
+
     try {
       const res = await fetch("/api/workflow/ai-prompt", {
         method: "POST",
@@ -721,7 +732,7 @@ export function AIWorkflowDialog({
         body: JSON.stringify({
           mode,
           name: mode === "create" ? name.trim() : undefined,
-          description: desc,
+          description: fullDesc,
           currentYaml: mode === "modify" ? currentYaml : undefined,
           existingInstructions: mode === "modify" && isSkillMode ? existingInstructions : undefined,
           executionSteps: selectedExecutionSteps.length > 0 ? selectedExecutionSteps : undefined,
@@ -738,7 +749,7 @@ export function AIWorkflowDialog({
 
       const data = await res.json();
       await navigator.clipboard.writeText(data.prompt);
-      setLastDescription(desc);
+      setLastDescription(fullDesc);
       setShowPasteSection(true);
       setPromptCopied(true);
       setTimeout(() => setPromptCopied(false), 2000);
@@ -749,7 +760,7 @@ export function AIWorkflowDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : t("workflow.ai.generationFailed"));
     }
-  }, [description, name, mode, currentYaml, selectedExecutionSteps, t, isSkillMode, skillFolderId, existingInstructions]);
+  }, [description, name, mode, currentYaml, selectedExecutionSteps, t, isSkillMode, skillFolderId, existingInstructions, appendInstructions]);
 
   const handleApplyPasted = useCallback(async () => {
     const text = pastedText.trim();

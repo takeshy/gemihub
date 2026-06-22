@@ -15,6 +15,7 @@ import { HtmlFileEditor } from "./editors/HtmlFileEditor";
 import { TextFileEditor } from "./editors/TextFileEditor";
 import { DiffEditor } from "./editors/DiffEditor";
 import { CanvasFileEditor } from "./editors/CanvasFileEditor";
+import { DashboardFileEditor } from "./editors/DashboardFileEditor";
 
 export function TextBasedViewer({
   fileId,
@@ -135,6 +136,17 @@ export function TextBasedViewer({
         fileName={name.replace(/\.ya?ml$/i, "")}
         initialContent={content}
         settings={settings}
+        saveToCache={saveToCache}
+        onDiffClick={handleDiffClick}
+        onHistoryClick={handleHistoryClick}
+      />
+    );
+  } else if (lower.endsWith(".dashboard")) {
+    editor = (
+      <DashboardFileEditor
+        fileId={fileId}
+        fileName={name}
+        initialContent={content}
         saveToCache={saveToCache}
         onDiffClick={handleDiffClick}
         onHistoryClick={handleHistoryClick}

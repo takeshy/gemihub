@@ -683,6 +683,16 @@ export async function action({ request }: Route.ActionArgs) {
         return jsonWithCookie({ success: true, message: "Schedules saved" });
       }
 
+      case "saveHomeDashboard": {
+        const homeDashboard = (formData.get("homeDashboard") as string) || null;
+        const updatedSettings: UserSettings = {
+          ...currentSettings,
+          homeDashboard,
+        };
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        return jsonWithCookie({ success: true });
+      }
+
       default:
         return jsonWithCookie({ success: false, message: "Unknown action." });
     }

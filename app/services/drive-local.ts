@@ -20,7 +20,7 @@ import type { ExecutionContext } from "~/engine/types";
 import { replaceVariables } from "~/engine/handlers/utils";
 
 /** Prefixes for files that should be excluded from search/list results. */
-const EXCLUDED_PREFIXES = ["trash/", "history/", "plugins/"];
+const EXCLUDED_PREFIXES = ["trash/", "history/", "plugins/", "dashboards/"];
 
 /** Infer a reasonable MIME type from the file name extension. */
 export function mimeTypeFromFileName(fileName: string): string {
@@ -31,6 +31,7 @@ export function mimeTypeFromFileName(fileName: string): string {
     md: "text/markdown", txt: "text/plain",
     json: "application/json", canvas: "application/json",
     yaml: "text/yaml", yml: "text/yaml",
+    dashboard: "text/yaml",
     js: "application/javascript", ts: "application/typescript",
     css: "text/css", html: "text/html", xml: "text/xml",
     csv: "text/csv",

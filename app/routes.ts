@@ -58,6 +58,7 @@ export default [
   route("api/mcp/tool-call", "routes/api.mcp.tool-call.tsx"),
   route("api/mcp/resource-read", "routes/api.mcp.resource-read.tsx"),
   route("api/search", "routes/api.search.tsx"),
+  route("api/embed-check", "routes/api.embed-check.tsx"),
   route("api/sync", "routes/api.sync.tsx"),
   route("api/drive/upload", "routes/api.drive.upload.tsx"),
   route("api/drive/upload-resumable", "routes/api.drive.upload-resumable.tsx"),

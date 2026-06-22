@@ -1,6 +1,5 @@
-import { FileText, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type { UserSettings } from "~/types/settings";
-import { useI18n } from "~/i18n/context";
 import { usePlugins } from "~/contexts/PluginContext";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
@@ -9,6 +8,7 @@ import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
 import { MediaViewer } from "./editors/MediaViewer";
 import { TextBasedViewer } from "./TextBasedViewer";
 import { GOOGLE_DOC_MIME, GOOGLE_SHEET_MIME, GoogleDocViewer, GoogleSheetViewer } from "./GoogleWorkspaceViewers";
+import DashboardHost from "~/dashboard/DashboardHost";
 
 interface MainViewerProps {
   fileId: string | null;
@@ -29,23 +29,14 @@ export function MainViewer({
   onFileSelect,
   onImageChange,
 }: MainViewerProps) {
-  const { t } = useI18n();
   const { mainViews, getPluginAPI } = usePlugins();
 
-  // No file selected - welcome screen
+  // No file selected - show dashboard home screen
   if (!fileId) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="text-center">
-          <FileText size={48} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            {t("mainViewer.welcome")}
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md">
-            {t("mainViewer.welcomeDescription")}
-          </p>
-        </div>
-      </div>
+      <PanelErrorBoundary fallbackLabel="Error loading dashboard">
+        <DashboardHost settings={settings} />
+      </PanelErrorBoundary>
     );
   }
 

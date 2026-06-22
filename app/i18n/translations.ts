@@ -48,6 +48,130 @@ export interface TranslationStrings {
   "mainViewer.modifiedTime": string;
   "mainViewer.mimeType": string;
   "mainViewer.download": string;
+
+  // Dashboard
+  "dashboard.title": string;
+  "dashboard.empty": string;
+  "dashboard.create": string;
+  "dashboard.edit": string;
+  "dashboard.done": string;
+  "dashboard.viewDisplay": string;
+  "dashboard.viewRaw": string;
+  "dashboard.unparseableDashboard": string;
+  "dashboard.undo": string;
+  "dashboard.redo": string;
+  "dashboard.addWidget": string;
+  "dashboard.noSettings": string;
+  "dashboard.settingsAutoSaved": string;
+  "dashboard.deleteWidget": string;
+  "dashboard.deleteWidgetConfirm": string;
+  "dashboard.newDashboard": string;
+  "dashboard.rename": string;
+  "dashboard.deleteDashboardConfirm": string;
+  "dashboard.dashboardName": string;
+  "dashboard.cancel": string;
+  "dashboard.setHome": string;
+  "dashboard.emptyDashboard": string;
+  "dashboard.addFirstWidget": string;
+  "dashboard.dashboardNameExists": string;
+  "dashboard.loading": string;
+  "dashboard.noFiles": string;
+  "dashboard.noUrl": string;
+  "dashboard.unsupportedWidget": string;
+  "dashboard.doubleClickToEdit": string;
+  "dashboard.readOnlyComplex": string;
+  "dashboard.invalidNumber": string;
+  "dashboard.writeFailed": string;
+  "dashboard.fileNotFound": string;
+  "dashboard.unparseableFrontmatter": string;
+  "dashboard.folder": string;
+  "dashboard.columns": string;
+  "dashboard.sort": string;
+  "dashboard.limit": string;
+  "dashboard.url": string;
+  "dashboard.content": string;
+  "dashboard.markdownSourceNew": string;
+  "dashboard.markdownSourceFile": string;
+  "dashboard.markdownSelectFile": string;
+  "dashboard.markdownSelectFilePlaceholder": string;
+  "dashboard.addColumnKey": string;
+  "dashboard.dragToReorder": string;
+  "dashboard.added": string;
+  "dashboard.rootFolderPlaceholder": string;
+  "dashboard.browseFolders": string;
+  "dashboard.root": string;
+  "dashboard.noSubfolders": string;
+  "dashboard.urlInvalid": string;
+  "dashboard.writeWidgetContent": string;
+  "dashboard.sortModifiedNew": string;
+  "dashboard.sortModifiedOld": string;
+  "dashboard.sortCreatedNew": string;
+  "dashboard.sortCreatedOld": string;
+  "dashboard.sortNameAz": string;
+  "dashboard.sortNameZa": string;
+  "dashboard.sortNone": string;
+  "dashboard.viewSortReset": string;
+  "dashboard.setHomeFailed": string;
+
+  // Data widget (P2)
+  "dashboard.dataSource": string;
+  "dashboard.sourceFolder": string;
+  "dashboard.sourceWorkflow": string;
+  "dashboard.selectWorkflow": string;
+  "dashboard.createWorkflowAI": string;
+  "dashboard.modifyWorkflowAI": string;
+  "dashboard.run": string;
+  "dashboard.testRunSuccess": string;
+  "dashboard.runToDetectFields": string;
+  "dashboard.workflowNotFound": string;
+  "dashboard.workflowError": string;
+  "dashboard.refresh": string;
+  "dashboard.executing": string;
+  "dashboard.lastUpdated": string;
+  "dashboard.stale": string;
+  "dashboard.noImage": string;
+  "dashboard.filter": string;
+  "dashboard.noFilters": string;
+  "dashboard.addFilter": string;
+  "dashboard.noFields": string;
+  "dashboard.loadingFields": string;
+  "dashboard.displayType": string;
+  "dashboard.viewTable": string;
+  "dashboard.viewCards": string;
+  "dashboard.cardTitle": string;
+  "dashboard.cardSubtitle": string;
+  "dashboard.cardImage": string;
+  "dashboard.cardBadges": string;
+  "dashboard.cardBadgesPlaceholder": string;
+  "dashboard.cardBody": string;
+  "dashboard.cardCols": string;
+  "dashboard.opEq": string;
+  "dashboard.opNeq": string;
+  "dashboard.opContains": string;
+  "dashboard.opNotContains": string;
+  "dashboard.opEmpty": string;
+  "dashboard.opNotEmpty": string;
+  "dashboard.opGt": string;
+  "dashboard.opLt": string;
+  "dashboard.opGte": string;
+  "dashboard.opLte": string;
+  "dashboard.opIsTrue": string;
+  "dashboard.opIsFalse": string;
+  "dashboard.opBefore": string;
+  "dashboard.opAfter": string;
+  "dashboard.outputVariable": string;
+  "dashboard.outputVariablePlaceholder": string;
+  "dashboard.outputFormat": string;
+  "dashboard.outputCard": string;
+  "dashboard.outputTable": string;
+  "dashboard.outputMarkdown": string;
+  "dashboard.outputHtml": string;
+  "dashboard.outputStringHint": string;
+  "dashboard.refreshInterval": string;
+  "dashboard.refreshIntervalHint": string;
+  "dashboard.workflowNotRun": string;
+  "dashboard.widgetWorkflow": string;
+
   "workspace.openExternal": string;
   "workspace.reload": string;
 
@@ -885,6 +1009,130 @@ const en: TranslationStrings = {
   "mainViewer.modifiedTime": "Updated",
   "mainViewer.mimeType": "MIME type",
   "mainViewer.download": "Download",
+
+  // Dashboard
+  "dashboard.title": "Dashboard",
+  "dashboard.empty": "No dashboard yet",
+  "dashboard.create": "Create dashboard",
+  "dashboard.edit": "Edit",
+  "dashboard.done": "Done",
+  "dashboard.viewDisplay": "Display",
+  "dashboard.viewRaw": "Raw",
+  "dashboard.unparseableDashboard": "Cannot parse this dashboard file",
+  "dashboard.undo": "Undo",
+  "dashboard.redo": "Redo",
+  "dashboard.addWidget": "Add Widget",
+  "dashboard.noSettings": "No settings for this widget type",
+  "dashboard.settingsAutoSaved": "Changes are applied automatically.",
+  "dashboard.deleteWidget": "Delete Widget",
+  "dashboard.deleteWidgetConfirm": "Delete this widget?",
+  "dashboard.newDashboard": "New Dashboard",
+  "dashboard.rename": "Rename",
+  "dashboard.deleteDashboardConfirm": "Delete this dashboard? This cannot be undone.",
+  "dashboard.dashboardName": "Dashboard name",
+  "dashboard.cancel": "Cancel",
+  "dashboard.setHome": "Set as Home",
+  "dashboard.emptyDashboard": "This dashboard is empty",
+  "dashboard.addFirstWidget": "Add your first widget",
+  "dashboard.dashboardNameExists": "A dashboard with that name already exists",
+  "dashboard.loading": "Loading...",
+  "dashboard.noFiles": "No files found",
+  "dashboard.noUrl": "No URL configured",
+  "dashboard.unsupportedWidget": "Unsupported widget",
+  "dashboard.doubleClickToEdit": "Double-click to edit",
+  "dashboard.readOnlyComplex": "Read-only (complex type)",
+  "dashboard.invalidNumber": "Invalid number",
+  "dashboard.writeFailed": "Write failed",
+  "dashboard.fileNotFound": "File not in cache",
+  "dashboard.unparseableFrontmatter": "Frontmatter is unparseable",
+  "dashboard.folder": "Folder",
+  "dashboard.columns": "Columns",
+  "dashboard.sort": "Sort",
+  "dashboard.limit": "Limit",
+  "dashboard.url": "URL",
+  "dashboard.content": "Content",
+  "dashboard.markdownSourceNew": "New",
+  "dashboard.markdownSourceFile": "Existing file",
+  "dashboard.markdownSelectFile": "Markdown file",
+  "dashboard.markdownSelectFilePlaceholder": "Select a file...",
+  "dashboard.addColumnKey": "Add column key...",
+  "dashboard.dragToReorder": "Drag chips to reorder. Suggestions from cached frontmatter.",
+  "dashboard.added": "added",
+  "dashboard.rootFolderPlaceholder": "Root folder (leave empty for all)",
+  "dashboard.browseFolders": "Browse folders",
+  "dashboard.root": "Root",
+  "dashboard.noSubfolders": "No subfolders",
+  "dashboard.urlInvalid": "Please enter a valid http:// or https:// URL",
+  "dashboard.writeWidgetContent": "Write widget content...",
+  "dashboard.sortModifiedNew": "Modified (newest first)",
+  "dashboard.sortModifiedOld": "Modified (oldest first)",
+  "dashboard.sortCreatedNew": "Created (newest first)",
+  "dashboard.sortCreatedOld": "Created (oldest first)",
+  "dashboard.sortNameAz": "Name (A-Z)",
+  "dashboard.sortNameZa": "Name (Z-A)",
+  "dashboard.sortNone": "No sort",
+  "dashboard.viewSortReset": "Reset",
+  "dashboard.setHomeFailed": "Failed to set home dashboard",
+
+  // Data widget (P2)
+  "dashboard.dataSource": "Data Source",
+  "dashboard.sourceFolder": "Folder",
+  "dashboard.sourceWorkflow": "Workflow",
+  "dashboard.selectWorkflow": "Select a workflow...",
+  "dashboard.createWorkflowAI": "Create new with AI",
+  "dashboard.modifyWorkflowAI": "Modify with AI",
+  "dashboard.run": "Run",
+  "dashboard.testRunSuccess": "Execution successful",
+  "dashboard.runToDetectFields": "Run once to detect output fields",
+  "dashboard.workflowNotFound": "Workflow file not found",
+  "dashboard.workflowError": "Workflow execution failed",
+  "dashboard.refresh": "Refresh",
+  "dashboard.executing": "Executing...",
+  "dashboard.lastUpdated": "Last updated",
+  "dashboard.stale": "stale",
+  "dashboard.noImage": "No image",
+  "dashboard.filter": "Filter",
+  "dashboard.noFilters": "No filters — all rows shown",
+  "dashboard.addFilter": "Add filter",
+  "dashboard.noFields": "No fields detected",
+  "dashboard.loadingFields": "Loading fields...",
+  "dashboard.displayType": "Display",
+  "dashboard.viewTable": "Table",
+  "dashboard.viewCards": "Cards",
+  "dashboard.cardTitle": "Title",
+  "dashboard.cardSubtitle": "Subtitle",
+  "dashboard.cardImage": "Image",
+  "dashboard.cardBadges": "Badges",
+  "dashboard.cardBadgesPlaceholder": "Comma-separated property names",
+  "dashboard.cardBody": "Body",
+  "dashboard.cardCols": "Cards per row",
+  "dashboard.opEq": "equals",
+  "dashboard.opNeq": "not equals",
+  "dashboard.opContains": "contains",
+  "dashboard.opNotContains": "not contains",
+  "dashboard.opEmpty": "is empty",
+  "dashboard.opNotEmpty": "is not empty",
+  "dashboard.opGt": "greater than",
+  "dashboard.opLt": "less than",
+  "dashboard.opGte": "greater or equal",
+  "dashboard.opLte": "less or equal",
+  "dashboard.opIsTrue": "is true",
+  "dashboard.opIsFalse": "is false",
+  "dashboard.opBefore": "before",
+  "dashboard.opAfter": "after",
+  "dashboard.outputVariable": "Output variable",
+  "dashboard.outputVariablePlaceholder": "Auto-detect if empty",
+  "dashboard.outputFormat": "Output format",
+  "dashboard.outputCard": "Card",
+  "dashboard.outputTable": "Table",
+  "dashboard.outputMarkdown": "Markdown",
+  "dashboard.outputHtml": "HTML",
+  "dashboard.outputStringHint": "The workflow must output a string (Markdown/HTML) in its output variable.",
+  "dashboard.refreshInterval": "Refresh interval (minutes)",
+  "dashboard.refreshIntervalHint": "Auto-runs when the dashboard opens if the last run is older than this. 0 = manual only.",
+  "dashboard.workflowNotRun": "Not run yet — use Refresh or Test run.",
+  "dashboard.widgetWorkflow": "Workflow",
+
   "workspace.openExternal": "Open in Google",
   "workspace.reload": "Reload",
 
@@ -1723,6 +1971,130 @@ const ja: TranslationStrings = {
   "mainViewer.modifiedTime": "更新日時",
   "mainViewer.mimeType": "MIMEタイプ",
   "mainViewer.download": "ダウンロード",
+
+  // Dashboard
+  "dashboard.title": "ダッシュボード",
+  "dashboard.empty": "ダッシュボードがありません",
+  "dashboard.create": "ダッシュボードを作成",
+  "dashboard.edit": "編集",
+  "dashboard.done": "完了",
+  "dashboard.viewDisplay": "表示",
+  "dashboard.viewRaw": "Raw",
+  "dashboard.unparseableDashboard": "このダッシュボードファイルを解析できません",
+  "dashboard.undo": "元に戻す",
+  "dashboard.redo": "やり直し",
+  "dashboard.addWidget": "ウィジェットを追加",
+  "dashboard.noSettings": "このウィジェットタイプに設定はありません",
+  "dashboard.settingsAutoSaved": "変更は自動で反映されます。",
+  "dashboard.deleteWidget": "ウィジェットを削除",
+  "dashboard.deleteWidgetConfirm": "このウィジェットを削除しますか？",
+  "dashboard.newDashboard": "新規ダッシュボード",
+  "dashboard.rename": "リネーム",
+  "dashboard.deleteDashboardConfirm": "このダッシュボードを削除しますか？元に戻せません。",
+  "dashboard.dashboardName": "ダッシュボード名",
+  "dashboard.cancel": "キャンセル",
+  "dashboard.setHome": "ホームに設定",
+  "dashboard.emptyDashboard": "このダッシュボードは空です",
+  "dashboard.addFirstWidget": "最初のウィジェットを追加",
+  "dashboard.dashboardNameExists": "同名のダッシュボードが既に存在します",
+  "dashboard.loading": "読み込み中...",
+  "dashboard.noFiles": "ファイルが見つかりません",
+  "dashboard.noUrl": "URLが設定されていません",
+  "dashboard.unsupportedWidget": "未対応のウィジェット",
+  "dashboard.doubleClickToEdit": "ダブルクリックで編集",
+  "dashboard.readOnlyComplex": "読み取り専用（複合型）",
+  "dashboard.invalidNumber": "無効な数値",
+  "dashboard.writeFailed": "書き込みに失敗しました",
+  "dashboard.fileNotFound": "ファイルがキャッシュにありません",
+  "dashboard.unparseableFrontmatter": "フロントマターを解析できません",
+  "dashboard.folder": "フォルダ",
+  "dashboard.columns": "列",
+  "dashboard.sort": "並び替え",
+  "dashboard.limit": "上限",
+  "dashboard.url": "URL",
+  "dashboard.content": "コンテンツ",
+  "dashboard.markdownSourceNew": "新規",
+  "dashboard.markdownSourceFile": "既存ファイル",
+  "dashboard.markdownSelectFile": "Markdownファイル",
+  "dashboard.markdownSelectFilePlaceholder": "ファイルを選択...",
+  "dashboard.addColumnKey": "列キーを追加...",
+  "dashboard.dragToReorder": "ドラッグで並べ替え。候補はキャッシュ済みフロントマターから取得。",
+  "dashboard.added": "追加済み",
+  "dashboard.rootFolderPlaceholder": "ルートフォルダ（空ですべて表示）",
+  "dashboard.browseFolders": "フォルダを参照",
+  "dashboard.root": "ルート",
+  "dashboard.noSubfolders": "サブフォルダなし",
+  "dashboard.urlInvalid": "有効な http:// または https:// URLを入力してください",
+  "dashboard.writeWidgetContent": "ウィジェットの内容を書く...",
+  "dashboard.sortModifiedNew": "更新日（新しい順）",
+  "dashboard.sortModifiedOld": "更新日（古い順）",
+  "dashboard.sortCreatedNew": "作成日（新しい順）",
+  "dashboard.sortCreatedOld": "作成日（古い順）",
+  "dashboard.sortNameAz": "名前（A-Z）",
+  "dashboard.sortNameZa": "名前（Z-A）",
+  "dashboard.sortNone": "並べ替えなし",
+  "dashboard.viewSortReset": "リセット",
+  "dashboard.setHomeFailed": "ホームダッシュボードの設定に失敗しました",
+
+  // Data widget (P2)
+  "dashboard.dataSource": "データソース",
+  "dashboard.sourceFolder": "フォルダ",
+  "dashboard.sourceWorkflow": "ワークフロー",
+  "dashboard.selectWorkflow": "ワークフローを選択...",
+  "dashboard.createWorkflowAI": "AIで新規作成",
+  "dashboard.modifyWorkflowAI": "AIで変更",
+  "dashboard.run": "実行",
+  "dashboard.testRunSuccess": "実行成功",
+  "dashboard.runToDetectFields": "フィールド検出には一度実行してください",
+  "dashboard.workflowNotFound": "ワークフローファイルが見つかりません",
+  "dashboard.workflowError": "ワークフロー実行に失敗しました",
+  "dashboard.refresh": "更新",
+  "dashboard.executing": "実行中...",
+  "dashboard.lastUpdated": "最終更新",
+  "dashboard.stale": "旧データ",
+  "dashboard.noImage": "画像なし",
+  "dashboard.filter": "フィルタ",
+  "dashboard.noFilters": "フィルタなし — 全行表示",
+  "dashboard.addFilter": "フィルタを追加",
+  "dashboard.noFields": "フィールドが検出されていません",
+  "dashboard.loadingFields": "フィールド読み込み中...",
+  "dashboard.displayType": "表示形式",
+  "dashboard.viewTable": "テーブル",
+  "dashboard.viewCards": "カード",
+  "dashboard.cardTitle": "タイトル",
+  "dashboard.cardSubtitle": "サブタイトル",
+  "dashboard.cardImage": "画像",
+  "dashboard.cardBadges": "バッジ",
+  "dashboard.cardBadgesPlaceholder": "カンマ区切りでプロパティ名を指定",
+  "dashboard.cardBody": "本文",
+  "dashboard.cardCols": "1行のカード数",
+  "dashboard.opEq": "等しい",
+  "dashboard.opNeq": "等しくない",
+  "dashboard.opContains": "含む",
+  "dashboard.opNotContains": "含まない",
+  "dashboard.opEmpty": "空である",
+  "dashboard.opNotEmpty": "空でない",
+  "dashboard.opGt": "より大きい",
+  "dashboard.opLt": "より小さい",
+  "dashboard.opGte": "以上",
+  "dashboard.opLte": "以下",
+  "dashboard.opIsTrue": "trueである",
+  "dashboard.opIsFalse": "falseである",
+  "dashboard.opBefore": "より前",
+  "dashboard.opAfter": "より後",
+  "dashboard.outputVariable": "出力変数",
+  "dashboard.outputVariablePlaceholder": "空なら自動検出",
+  "dashboard.outputFormat": "出力形式",
+  "dashboard.outputCard": "カード",
+  "dashboard.outputTable": "テーブル",
+  "dashboard.outputMarkdown": "マークダウン",
+  "dashboard.outputHtml": "HTML",
+  "dashboard.outputStringHint": "ワークフローは出力変数に文字列（Markdown/HTML）を出力する必要があります。",
+  "dashboard.refreshInterval": "更新間隔（分）",
+  "dashboard.refreshIntervalHint": "ダッシュボードを開いた時、最終実行がこの時間より古ければ自動実行します。0 = 手動のみ。",
+  "dashboard.workflowNotRun": "未実行です — 更新またはテスト実行してください。",
+  "dashboard.widgetWorkflow": "ワークフロー",
+
   "workspace.openExternal": "Googleで開く",
   "workspace.reload": "再読み込み",
 

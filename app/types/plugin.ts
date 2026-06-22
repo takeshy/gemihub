@@ -2,6 +2,7 @@
 
 import type React from "react";
 import type { PluginConfig } from "~/types/settings";
+import type { WidgetDef } from "~/dashboard/types";
 
 /** Permission scopes a plugin can request in manifest.json */
 export type PluginPermission =
@@ -78,6 +79,9 @@ export interface PluginAPI {
   registerSettingsTab(tab: {
     component: React.ComponentType<{ api: PluginAPI; language?: string; onClose?: () => void }>;
   }): void;
+  // Dashboard widget registration — adds a custom widget type to the
+  // dashboard widget registry (same map used by core widgets).
+  registerWidget(def: WidgetDef): void;
 
   // Gemini API (via host /api/chat) — requires "gemini" permission
   gemini?: {

@@ -3,6 +3,7 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import type { PluginAPI, PluginView, PluginSettingsTab } from "~/types/plugin";
+import { registerWidget as registerDashboardWidget } from "~/dashboard/widgets/registry";
 
 interface PluginAPICallbacks {
   onRegisterView: (view: PluginView) => void;
@@ -62,6 +63,10 @@ export function createPluginAPI(
         pluginId,
         component: tab.component,
       });
+    },
+
+    registerWidget(def) {
+      registerDashboardWidget(def);
     },
 
     onActiveFileChanged(callback: (detail: { fileId: string | null; fileName: string | null; mimeType: string | null }) => void): () => void {

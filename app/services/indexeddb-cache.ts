@@ -2,6 +2,7 @@
 // Uses a singleton DB connection for performance.
 
 import { isEncryptedFile } from "./crypto-core";
+import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 
 const DB_NAME = "gemihub-cache";
 const DB_VERSION = 6;
@@ -17,6 +18,8 @@ export interface CachedFile {
   cachedAt: number;
   fileName?: string;
   encoding?: "base64"; // present for binary files stored as base64
+  frontmatter?: Record<string, unknown>; // parsed frontmatter for .md files
+  fmParsedMtime?: number; // epoch ms of the modifiedTime when frontmatter was parsed
 }
 
 export interface LocalSyncMeta {
@@ -204,8 +207,22 @@ export async function getCachedFile(
 
 export async function setCachedFile(file: CachedFile): Promise<void> {
   if (typeof indexedDB === "undefined") return;
+
+  // Frontmatter write hook (§4.2): when a .md file is cached, parse its
+  // frontmatter and store it on the same record. Skip if already parsed
+  // for this mtime (avoids redundant YAML parsing on cache hits).
+  let toStore: CachedFile = file;
+  if (isMarkdownFile(file.fileName) && file.content !== undefined) {
+    const mtimeMs = file.modifiedTime
+      ? new Date(file.modifiedTime).getTime()
+      : file.cachedAt;
+    if (file.frontmatter === undefined || file.fmParsedMtime !== mtimeMs) {
+      toStore = { ...file, frontmatter: parseFrontmatter(file.content), fmParsedMtime: mtimeMs };
+    }
+  }
+
   const db = await getDB();
-  await txPut(db, "files", file);
+  await txPut(db, "files", toStore);
 }
 
 export async function renameCachedFile(
