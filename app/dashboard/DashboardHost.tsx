@@ -147,15 +147,17 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
   }, [newDashboardName, dashboards, t, refreshDashboardList]);
 
   const handleCreateDefaultFromEmpty = useCallback(async () => {
-    // Legacy: create home.dashboard with 4 default widgets
+    // Create the starter dashboard under dashboards/ (like workflows live under
+    // workflows/). New dashboards never go to the legacy root home.dashboard.
     const defaultData = createDefaultDashboard();
+    const path = dashboardPath("home");
     setData(defaultData);
     setLoading(false);
-    const id = await saveDashboardFile(defaultData, null, "home.dashboard");
+    const id = await saveDashboardFile(defaultData, null, path);
     setFileId(id);
     fileIdRef.current = id;
-    setFileName("home.dashboard");
-    fileNameRef.current = "home.dashboard";
+    setFileName(path);
+    fileNameRef.current = path;
     await refreshDashboardList();
   }, [refreshDashboardList]);
 

@@ -57,6 +57,12 @@ export interface WidgetContext {
   widgetId?: string;
   /** The .dashboard file's ID (for sidecar caches scoped per dashboard). */
   dashboardFileId?: string;
+  /**
+   * Persist a change to this widget's config from the widget itself — works in
+   * view mode too (not just the settings panel). Used e.g. by the markdown
+   * widget to switch the referenced file via its header picker.
+   */
+  onConfigChange?: (config: unknown) => void;
 }
 
 export interface ConfigEditorProps {

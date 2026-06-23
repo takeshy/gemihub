@@ -55,7 +55,7 @@ function WysiwygSelectionTracker({
   );
 }
 
-type MdEditMode = "preview" | "wysiwyg" | "raw";
+export type MdEditMode = "preview" | "wysiwyg" | "raw";
 
 export function MarkdownFileEditor({
   fileId,
@@ -66,6 +66,10 @@ export function MarkdownFileEditor({
   onImageChange,
   onDiffClick,
   onHistoryClick,
+  headerLeft,
+  hideToolbarActions,
+  initialMode = "wysiwyg",
+  onModeChange,
 }: {
   fileId: string;
   fileName: string;
@@ -75,6 +79,14 @@ export function MarkdownFileEditor({
   onImageChange?: (file: File) => Promise<string>;
   onDiffClick?: () => void;
   onHistoryClick?: () => void;
+  /** Extra content for the toolbar's left side (e.g. a dashboard file picker). */
+  headerLeft?: React.ReactNode;
+  /** Hide the diff/history/temp-upload actions (e.g. when embedded in a widget). */
+  hideToolbarActions?: boolean;
+  /** Default editing mode on mount / file switch (defaults to wysiwyg). */
+  initialMode?: MdEditMode;
+  /** Notified when the user explicitly switches mode via the toolbar. */
+  onModeChange?: (mode: MdEditMode) => void;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -198,7 +210,7 @@ export function MarkdownFileEditor({
     },
     [editorCtx]
   );
-  const [mode, setMode] = useState<MdEditMode>("wysiwyg");
+  const [mode, setMode] = useState<MdEditMode>(initialMode);
 
   // Track whether the user has genuinely interacted with the wysiwyg editor.
   // wysimark-lite (Slate-based) normalizes markdown on load (reformatting tables,
@@ -247,7 +259,7 @@ export function MarkdownFileEditor({
       contentFromProps.current = true;
       setContent(initialContent);
       // Open in preview when arriving via a wiki heading link so we can scroll.
-      setMode(sessionStorage.getItem("pending-wiki-heading") ? "preview" : "wysiwyg");
+      setMode(sessionStorage.getItem("pending-wiki-heading") ? "preview" : initialMode);
       return;
     }
     // Same file -- skip if this is our own save being reflected back via
@@ -261,7 +273,7 @@ export function MarkdownFileEditor({
     lastSavedContentRef.current = null;
     contentFromProps.current = true;
     setContent(initialContent);
-  }, [initialContent, fileId]);
+  }, [initialContent, fileId, initialMode]);
 
   useEffect(() => {
     if (mode === "wysiwyg" && !MarkdownEditorComponent) {
@@ -400,33 +412,41 @@ export function MarkdownFileEditor({
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-        {/* Mode selector */}
-        <div className="flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
-          {modes.map((m) => (
-            <button
-              key={m.key}
-              onClick={() => setMode(m.key)}
-              className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
-                mode === m.key
-                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                  : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              }`}
-              title={m.label}
-            >
-              {m.icon}
-              <span className="hidden sm:inline">{m.label}</span>
-            </button>
-          ))}
+      <div className="flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {headerLeft && <div className="min-w-0 flex-1">{headerLeft}</div>}
+          {/* Mode selector */}
+          <div className="flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden shrink-0">
+            {modes.map((m) => (
+              <button
+                key={m.key}
+                onClick={() => {
+                  setMode(m.key);
+                  onModeChange?.(m.key);
+                }}
+                className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
+                  mode === m.key
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                    : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                }`}
+                title={m.label}
+              >
+                {m.icon}
+                <span className="hidden sm:inline">{m.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <EditorToolbarActions
-          onDiffClick={onDiffClick}
-          onHistoryClick={onHistoryClick}
-          onTempUpload={handleTempUpload}
-          onTempDownload={handleTempDownload}
-          uploading={uploading}
-        />
+        {!hideToolbarActions && (
+          <EditorToolbarActions
+            onDiffClick={onDiffClick}
+            onHistoryClick={onHistoryClick}
+            onTempUpload={handleTempUpload}
+            onTempDownload={handleTempDownload}
+            uploading={uploading}
+          />
+        )}
       </div>
 
       {/* Content area */}

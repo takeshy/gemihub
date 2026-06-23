@@ -159,9 +159,7 @@ export function createDefaultDashboard(): DashboardData {
         layout: {
           lg: { x: 0, y: 0, w: 6, h: 3 },
         },
-        config: {
-          content: "## Welcome to your dashboard\n\nDrag and resize widgets. Click the edit toggle to move things around.",
-        },
+        config: {},
       },
       {
         id: crypto.randomUUID(),

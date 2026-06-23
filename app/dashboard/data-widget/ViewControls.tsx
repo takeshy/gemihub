@@ -27,14 +27,16 @@ interface ViewControlsProps {
 }
 
 /** Portal popover anchored under an element, closing on outside click / Escape. */
-function Popover({
+export function Popover({
   anchorRef,
   onClose,
   children,
+  widthClass = "w-72",
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   children: React.ReactNode;
+  widthClass?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -70,7 +72,7 @@ function Popover({
       ref={panelRef}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      className="fixed z-[1000] w-72 max-w-[90vw] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 shadow-lg"
+      className={`fixed z-[1000] ${widthClass} max-w-[90vw] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 shadow-lg`}
       style={{ top: pos.top, right: pos.right }}
     >
       {children}
@@ -145,7 +147,7 @@ export function ViewControls({
       </button>
 
       {open === "filter" && (
-        <Popover anchorRef={filterBtnRef} onClose={() => setOpen(null)}>
+        <Popover anchorRef={filterBtnRef} onClose={() => setOpen(null)} widthClass="w-80">
           <FilterEditor
             filters={viewFilter}
             fieldNames={fieldNames}

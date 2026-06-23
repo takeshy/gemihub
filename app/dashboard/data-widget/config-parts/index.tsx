@@ -182,7 +182,7 @@ export function FilterEditor({
                     value: undefined,
                   });
                 }}
-                className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
+                className="flex-1 min-w-0 px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
               >
                 {fieldNames.length === 0 && (
                   <option value="">{t("dashboard.noFields")}</option>

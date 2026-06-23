@@ -22,9 +22,16 @@ const registry = new Map<string, WidgetDef>();
 
 /**
  * Register a widget type. Plugins use this to add custom widgets.
+ *
+ * Plugins load asynchronously, often after a dashboard has already rendered.
+ * Emit a change signal so mounted DashboardCanvas instances re-render and swap
+ * a previously-unknown widget type (rendered as UnknownWidget) for the real one.
  */
 export function registerWidget(def: WidgetDef): void {
   registry.set(def.type, def);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("dashboard-widgets-changed"));
+  }
 }
 
 /**
@@ -63,7 +70,7 @@ registerWidget({
   type: "markdown",
   label: "Markdown",
   icon: React.createElement(FileText, { size: 16 }),
-  defaultConfig: { content: "" },
+  defaultConfig: {},
   render: (config, ctx) => React.createElement(MarkdownWidget, { config, ctx }),
   defaultSize: { w: 6, h: 3 },
   ConfigEditor: MarkdownConfigEditor,

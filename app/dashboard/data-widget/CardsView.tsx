@@ -18,11 +18,23 @@ interface CardsViewProps {
 }
 
 /**
+ * Extract the target path from an Obsidian internal embed/link
+ * (`![[path]]` or `[[path]]`), dropping any `|alias` or `#subpath`.
+ * Returns null when the value isn't a wiki embed/link.
+ */
+function extractWikiEmbed(value: string): string | null {
+  const m = value.trim().match(/^!?\[\[([^\]]+)\]\]$/);
+  if (!m) return null;
+  return m[1].split("|")[0].split("#")[0].trim() || null;
+}
+
+/**
  * Resolve a single image value to a displayable URL.
  * - Data URI (data:image/...;base64,...) → use directly (IndexedDB image format)
  * - Full URL (http/https) → use directly
  * - Drive file ID (alphanumeric with dashes, 20+ chars) → /api/drive/files?action=raw
  * - Drive path (contains / or has a file extension) → resolve via findFileByNameLocal
+ * - Obsidian embed `![[path]]` / `[[path]]` → resolve the inner path
  * - Otherwise → null (no image)
  *
  * Returns "pending" while a path is being resolved to a fileId.
@@ -82,8 +94,11 @@ function useResolvedImageUrls(
     return rows
       .map((row) => {
         const value = getCellValue(row, imageKey);
-        if (!looksLikeDrivePath(value)) return null;
-        return { rowId: row.id, path: String(value).trim() };
+        // Obsidian embed/link → resolve its inner path; else a plain Drive path.
+        const embed = typeof value === "string" ? extractWikiEmbed(value) : null;
+        const path = embed ?? (looksLikeDrivePath(value) ? String(value).trim() : null);
+        if (!path) return null;
+        return { rowId: row.id, path };
       })
       .filter((j): j is { rowId: string; path: string } => j !== null);
   }, [rows, imageKey]);

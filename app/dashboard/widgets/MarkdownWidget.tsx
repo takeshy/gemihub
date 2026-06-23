@@ -1,82 +1,101 @@
-import { useState, useEffect, useCallback } from "react";
-import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
-import { getCachedFile } from "~/services/indexeddb-cache";
-import { splitFrontmatter } from "../frontmatter-writeback";
+// Markdown widget — references an existing Drive markdown file and renders the
+// normal markdown editor (preview / wysiwyg / code) inline, so a dashboard can
+// act as a 2-column editing layout. The file can be changed from the header
+// picker even outside edit mode (persisted via ctx.onConfigChange).
+
+import { useFileWithCache } from "~/hooks/useFileWithCache";
+import { MarkdownFileEditor, type MdEditMode } from "~/components/ide/editors/MarkdownFileEditor";
 import { useI18n } from "~/i18n/context";
 import type { WidgetContext } from "../types";
+import { MarkdownFilePicker } from "./config-editors/MarkdownFilePicker";
 
 interface MarkdownConfig {
-  /** Inline markdown content (used when no fileId is set). */
-  content?: string;
-  /** When set, render the body of this Drive markdown file instead of inline content. */
+  /** The referenced Drive markdown file. */
   fileId?: string;
   fileName?: string;
 }
 
+// Session-scoped preview/wysiwyg/code mode for markdown widgets. Defaults to
+// preview on the first view of the session, then remembers the user's last
+// explicit toggle across file switches (the editor remounts per file, so this
+// survives those remounts). Reset to "preview" on a full page reload.
+let sessionMode: MdEditMode = "preview";
+
 export default function MarkdownWidget({
   config,
+  ctx,
 }: {
   config: unknown;
   ctx?: WidgetContext;
 }) {
   const { t } = useI18n();
   const cfg = (config ?? {}) as MarkdownConfig;
-  const inline = typeof cfg.content === "string" ? cfg.content : "";
-  const [fileText, setFileText] = useState<string | null>(null);
-  const [missing, setMissing] = useState(false);
+  const fileId = cfg.fileId ?? null;
 
-  const loadFile = useCallback(async () => {
-    if (!cfg.fileId) {
-      setFileText(null);
-      setMissing(false);
-      return;
-    }
-    const cached = await getCachedFile(cfg.fileId);
-    if (!cached) {
-      setMissing(true);
-      setFileText(null);
-      return;
-    }
-    setMissing(false);
-    // Render only the markdown body — drop the frontmatter block.
-    const split = splitFrontmatter(cached.content);
-    setFileText(split ? split.body : cached.content);
-  }, [cfg.fileId]);
+  const { content, loading, error, saveToCache } = useFileWithCache(fileId, undefined, "MarkdownWidget");
 
-  useEffect(() => {
-    loadFile();
-  }, [loadFile]);
+  const selectFile = (id: string, path: string) => {
+    ctx?.onConfigChange?.({ fileId: id, fileName: path });
+  };
 
-  // Refresh when the referenced file changes (push/pull, cell edits, etc.).
-  useEffect(() => {
-    if (!cfg.fileId) return;
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { fileId?: string } | undefined;
-      if (!detail || !detail.fileId || detail.fileId === cfg.fileId) {
-        loadFile();
-      }
-    };
-    window.addEventListener("file-modified", handler);
-    window.addEventListener("dashboard-data-changed", handler);
-    return () => {
-      window.removeEventListener("file-modified", handler);
-      window.removeEventListener("dashboard-data-changed", handler);
-    };
-  }, [cfg.fileId, loadFile]);
-
-  if (cfg.fileId && missing) {
+  // No file chosen yet — prompt to pick one.
+  if (!fileId) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-gray-400">
-        {t("dashboard.fileNotFound")}
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-sm text-gray-400">
+        <MarkdownFilePicker
+          onSelect={selectFile}
+          placeholder={t("dashboard.markdownSelectFile")}
+          buttonClassName="flex items-center gap-1 rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+        />
       </div>
     );
   }
 
-  const text = cfg.fileId ? (fileText ?? "") : inline;
+  if (loading && content === null) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-gray-400">
+        {t("dashboard.loading")}
+      </div>
+    );
+  }
 
+  if (content === null) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-sm text-gray-400">
+        <span>{error || t("dashboard.fileNotFound")}</span>
+        <MarkdownFilePicker
+          currentFileId={cfg.fileId}
+          onSelect={selectFile}
+          placeholder={t("dashboard.markdownSelectFile")}
+        />
+      </div>
+    );
+  }
+
+  // Wrap in a bounded flex column so the editor's `flex-1` content area fills
+  // the cell height and its preview/raw panes scroll internally (the GridCell
+  // wrapper is a plain h-full block, so flex-1 would otherwise have no height).
   return (
-    <div className="prose prose-sm h-full max-w-none overflow-auto dark:prose-invert">
-      <GfmMarkdownPreview content={text} />
+    <div className="flex h-full min-h-0 flex-col">
+      <MarkdownFileEditor
+        key={fileId}
+        fileId={fileId}
+        fileName={cfg.fileName ?? ""}
+        initialContent={content}
+        saveToCache={saveToCache}
+        hideToolbarActions
+        initialMode={sessionMode}
+        onModeChange={(m) => {
+          sessionMode = m;
+        }}
+        headerLeft={
+          <MarkdownFilePicker
+            currentFileId={cfg.fileId}
+            currentLabel={cfg.fileName}
+            onSelect={selectFile}
+          />
+        }
+      />
     </div>
   );
 }

@@ -70,6 +70,16 @@ export function DashboardCanvas({
     }
   }, [data]);
 
+  // Plugins register dashboard widgets asynchronously (after this canvas may
+  // already be mounted). The widget registry has no change notification, so a
+  // widget whose type loads late would stay stuck on UnknownWidget. Re-render on
+  // the registry's change signal so the real widget swaps in without a reload.
+  useEffect(() => {
+    const onWidgetsChanged = () => rerender();
+    window.addEventListener("dashboard-widgets-changed", onWidgetsChanged);
+    return () => window.removeEventListener("dashboard-widgets-changed", onWidgetsChanged);
+  }, []);
+
   // Push a new snapshot and emit it. When `coalesceKey` matches the previous
   // commit (e.g. consecutive keystrokes in a config form), replace the top
   // entry instead of stacking a new one so undo stays coarse-grained.
@@ -278,6 +288,7 @@ export function DashboardCanvas({
                 computeResizePos={gridLayout.computeResizePos}
                 onSettings={editMode ? () => setEditingWidgetId(widget.id) : undefined}
                 onDelete={editMode ? () => handleDeleteWidget(widget.id) : undefined}
+                onConfigChange={(config) => handleUpdateWidgetConfig(widget.id, config)}
                 dashboardFileId={dashboardFileId}
               />
             ))

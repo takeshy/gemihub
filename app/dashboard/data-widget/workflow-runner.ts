@@ -13,6 +13,7 @@ import { readFileLocal, writeFileLocal } from "~/services/drive-local";
 import { getCachedApiKey } from "~/services/api-key-cache";
 import {
   getCachedFile,
+  setCachedFile,
   getCachedRemoteMeta,
   getAllCachedFiles,
 } from "~/services/indexeddb-cache";
@@ -298,7 +299,7 @@ export async function runWorkflowText(
 
 // --- Sidecar cache (P2 spec §9.2) ---
 
-const CACHE_PREFIX = "dashboards/.cache/";
+const CACHE_PREFIX = "dashboards/data/";
 
 function cacheFilePath(dashboardFileId: string): string {
   return `${CACHE_PREFIX}${dashboardFileId}.json`;
@@ -312,20 +313,46 @@ async function loadCacheFile(
   dashboardFileId: string,
 ): Promise<Record<string, WorkflowCacheRecord>> {
   // Resolve the cache file by its path via CachedRemoteMeta, then read from cache.
-  // The cache file is stored at `dashboards/.cache/<dashboardFileId>.json`.
+  // The cache file is stored at `dashboards/data/<dashboardFileId>.json` and is a
+  // normal synced file (visible in the tree / push-pull diff).
   const meta = await getCachedRemoteMeta();
-  if (meta) {
-    const path = cacheFilePath(dashboardFileId);
-    for (const [id, entry] of Object.entries(meta.files)) {
-      if (entry.name === path) {
-        const file = await getCachedFile(id);
-        if (file) {
-          try {
-            return JSON.parse(file.content) as Record<string, WorkflowCacheRecord>;
-          } catch {
-            return {};
-          }
+  if (!meta) return {};
+
+  const path = cacheFilePath(dashboardFileId);
+  for (const [id, entry] of Object.entries(meta.files)) {
+    if (entry.name !== path) continue;
+
+    let file = await getCachedFile(id);
+    // The cache syncs across devices, but a machine that never ran the workflow
+    // only has it registered as metadata (new remote files are not downloaded by
+    // pull). Lazy-fetch the content so its dashboard still shows the results.
+    // Also re-fetch when the remote copy is newer (another device pushed a run).
+    const stale = file != null && entry.md5Checksum != null && file.md5Checksum !== entry.md5Checksum;
+    if ((!file || stale) && !id.startsWith("new:")) {
+      try {
+        const res = await fetch(`/api/drive/files?action=read&fileId=${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          await setCachedFile({
+            fileId: id,
+            content: data.content,
+            md5Checksum: data.md5Checksum ?? "",
+            modifiedTime: data.modifiedTime ?? "",
+            cachedAt: Date.now(),
+            fileName: path,
+          });
+          file = await getCachedFile(id);
         }
+      } catch {
+        // Offline or fetch failed — fall back to whatever is cached locally.
+      }
+    }
+
+    if (file) {
+      try {
+        return JSON.parse(file.content) as Record<string, WorkflowCacheRecord>;
+      } catch {
+        return {};
       }
     }
   }

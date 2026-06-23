@@ -8,10 +8,6 @@ export const SYNC_EXCLUDED_PREFIXES = [
   "sync_conflicts/",
   "__TEMP__/",
   "plugins/",
-  // Regenerable dashboard workflow-result sidecar cache — not user content, so
-  // it must not surface in the push/pull diff. (Dashboards themselves live at
-  // `dashboards/*.dashboard`, which is NOT matched by this prefix.)
-  "dashboards/.cache/",
 ];
 
 export function isSyncExcludedPath(fileName: string): boolean {

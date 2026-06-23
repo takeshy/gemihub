@@ -83,6 +83,7 @@ export interface TranslationStrings {
   "dashboard.invalidNumber": string;
   "dashboard.writeFailed": string;
   "dashboard.fileNotFound": string;
+  "dashboard.openFile": string;
   "dashboard.unparseableFrontmatter": string;
   "dashboard.folder": string;
   "dashboard.columns": string;
@@ -90,8 +91,6 @@ export interface TranslationStrings {
   "dashboard.limit": string;
   "dashboard.url": string;
   "dashboard.content": string;
-  "dashboard.markdownSourceNew": string;
-  "dashboard.markdownSourceFile": string;
   "dashboard.markdownSelectFile": string;
   "dashboard.markdownSelectFilePlaceholder": string;
   "dashboard.addColumnKey": string;
@@ -102,7 +101,6 @@ export interface TranslationStrings {
   "dashboard.root": string;
   "dashboard.noSubfolders": string;
   "dashboard.urlInvalid": string;
-  "dashboard.writeWidgetContent": string;
   "dashboard.sortModifiedNew": string;
   "dashboard.sortModifiedOld": string;
   "dashboard.sortCreatedNew": string;
@@ -1044,6 +1042,7 @@ const en: TranslationStrings = {
   "dashboard.invalidNumber": "Invalid number",
   "dashboard.writeFailed": "Write failed",
   "dashboard.fileNotFound": "File not in cache",
+  "dashboard.openFile": "Open",
   "dashboard.unparseableFrontmatter": "Frontmatter is unparseable",
   "dashboard.folder": "Folder",
   "dashboard.columns": "Columns",
@@ -1051,8 +1050,6 @@ const en: TranslationStrings = {
   "dashboard.limit": "Limit",
   "dashboard.url": "URL",
   "dashboard.content": "Content",
-  "dashboard.markdownSourceNew": "New",
-  "dashboard.markdownSourceFile": "Existing file",
   "dashboard.markdownSelectFile": "Markdown file",
   "dashboard.markdownSelectFilePlaceholder": "Select a file...",
   "dashboard.addColumnKey": "Add column key...",
@@ -1063,7 +1060,6 @@ const en: TranslationStrings = {
   "dashboard.root": "Root",
   "dashboard.noSubfolders": "No subfolders",
   "dashboard.urlInvalid": "Please enter a valid http:// or https:// URL",
-  "dashboard.writeWidgetContent": "Write widget content...",
   "dashboard.sortModifiedNew": "Modified (newest first)",
   "dashboard.sortModifiedOld": "Modified (oldest first)",
   "dashboard.sortCreatedNew": "Created (newest first)",
@@ -2006,6 +2002,7 @@ const ja: TranslationStrings = {
   "dashboard.invalidNumber": "無効な数値",
   "dashboard.writeFailed": "書き込みに失敗しました",
   "dashboard.fileNotFound": "ファイルがキャッシュにありません",
+  "dashboard.openFile": "開く",
   "dashboard.unparseableFrontmatter": "フロントマターを解析できません",
   "dashboard.folder": "フォルダ",
   "dashboard.columns": "列",
@@ -2013,8 +2010,6 @@ const ja: TranslationStrings = {
   "dashboard.limit": "上限",
   "dashboard.url": "URL",
   "dashboard.content": "コンテンツ",
-  "dashboard.markdownSourceNew": "新規",
-  "dashboard.markdownSourceFile": "既存ファイル",
   "dashboard.markdownSelectFile": "Markdownファイル",
   "dashboard.markdownSelectFilePlaceholder": "ファイルを選択...",
   "dashboard.addColumnKey": "列キーを追加...",
@@ -2025,7 +2020,6 @@ const ja: TranslationStrings = {
   "dashboard.root": "ルート",
   "dashboard.noSubfolders": "サブフォルダなし",
   "dashboard.urlInvalid": "有効な http:// または https:// URLを入力してください",
-  "dashboard.writeWidgetContent": "ウィジェットの内容を書く...",
   "dashboard.sortModifiedNew": "更新日（新しい順）",
   "dashboard.sortModifiedOld": "更新日（古い順）",
   "dashboard.sortCreatedNew": "作成日（新しい順）",

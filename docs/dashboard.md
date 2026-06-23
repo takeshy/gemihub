@@ -7,8 +7,8 @@ The dashboard is a grid of configurable **widgets** rendered on the IDE home vie
 ## File format & storage
 
 - A dashboard is a YAML file with the `.dashboard` extension.
-- New dashboards are stored at `dashboards/{name}.dashboard`. A legacy single dashboard may exist at the root as `home.dashboard`.
-- Sidecar cache data (regenerable workflow results) is stored at `dashboards/.cache/<dashboardFileId>.json`.
+- New dashboards are **always** created under `dashboards/` (`dashboards/{name}.dashboard`, the starter from the empty state is `dashboards/home.dashboard`) — mirroring how workflows live under `workflows/`. A legacy single dashboard may still be **read** from the root as `home.dashboard`, but new ones are never written there.
+- Workflow result data is stored at `dashboards/data/<dashboardFileId>.json` as a **normal synced file** — it pushes/pulls and appears in the file tree and the push/pull diff like any other file (so a device that never ran the workflow still gets the output via Pull). It is regenerable last-write-wins data; the widget also lazy-fetches the latest copy on load (`loadCacheFile`).
 - Trashed/history copies (`trash/…`, `history/…`) are excluded from the dashboard listing.
 
 The schema (version 1):
@@ -46,14 +46,24 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 
 | Type | Purpose | Source |
 |------|---------|--------|
-| `markdown` | Inline Markdown, or render the body of a Drive markdown file | static / Drive file |
-| `file-list` | A compact list of files in a folder | folder |
+| `markdown` | Edit an existing Drive markdown file inline (preview/wysiwyg/code) | Drive file |
+| `file-list` | A compact list of files in a folder (header path + filter/sort) | folder |
 | `web` | Embed an external URL (with embeddability check + fallback card) | URL |
 | `card` | Card grid over a folder of markdown files | folder |
 | `table` | Editable table over a folder of markdown files | folder |
 | `workflow` | Run a workflow and render its output | workflow |
 
-`markdown`, `file-list`, and `web` are unchanged from the initial dashboard release. The data-oriented widgets — `card`, `table`, `workflow` — are described below.
+`web` is unchanged from the initial dashboard release. `markdown` and `file-list` (below) and the data-oriented widgets — `card`, `table`, `workflow` — are described below.
+
+### Markdown widget
+
+References an **existing** Drive markdown file (no inline content) and renders the normal markdown editor inline via `MarkdownFileEditor` — the same **preview / wysiwyg / code** toggle, frontmatter, and wiki links as the main editor, with local-first saving (`useFileWithCache`). The editor toolbar is trimmed to *path + mode toggle* (`hideToolbarActions`); the file path on the left is a `MarkdownFilePicker` (@-mention-style search over `editorCtx.fileList`) that switches the referenced file **even outside edit mode** — the choice is persisted via `ctx.onConfigChange({ fileId, fileName })`. This makes 2-column layouts (e.g. a `file-list` next to a `markdown` editor) practical. The view mode defaults to **preview** on the first view of a session, then a session-scoped variable remembers the user's last explicit toggle across file switches (so opening another file keeps wysiwyg/code). Config: `{ fileId, fileName }`.
+
+### File List widget
+
+A folder file list with a header showing the folder path plus two header icons that work in view mode: a **filter** (filename substring) and a **sort** (the six mtime/ctime/name options). Both are ephemeral view-time overlays — the filter is applied client-side over the loaded list and the sort overrides the configured `sort` (re-fetched via `listFilesLocal`); neither is written back to the `.dashboard`. Popovers reuse the portal `Popover` from `data-widget/ViewControls.tsx`.
+
+Clicking a file does **not** open it immediately — it opens a `FilePreviewModal` (portal overlay) showing the content (markdown rendered via `GfmMarkdownPreview`, other files as plain text). The modal header has a navigate icon (open the file in the editor) and a close icon; only the navigate icon performs the actual `plugin-select-file` navigation.
 
 > **History.** Earlier builds had a single generalized `data` widget (`source` folder|workflow × `view` table|cards) and a `file-table` widget. These were replaced by the three explicit widgets here. Because the dashboard feature had not shipped, there is **no migration shim** — `data` / `file-table` types are gone and old test `.dashboard` files should be recreated with the new types.
 
@@ -66,6 +76,14 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 - **Post-source pipeline** — `applyPostSource(rows, { filter, sort, limit })` (`filter.ts`): filter conditions → sort → limit. Helpers: `getCellValue`, `formatCell`, `detectFields`.
 - **Views** — `CardsView.tsx` (field-mapped cards) and `TableView.tsx` (table with optional inline cell editing).
 - **Config parts** — `data-widget/config-parts/` holds the reusable editor pieces (`FilterEditor`, `SortLimitFields`, `CardMappingEditor`, `ColumnsEditor`, `useFolderFields`) shared by the three config editors.
+
+### View-time filter & sort (header controls)
+
+`card`/`table` folder widgets and `card`/`table` workflow output show two separate header icons — a **filter** icon (opens the `FilterEditor` popover) and a **sort** icon (opens a sort-option list). These are implemented by `ViewControls.tsx` and work in **view mode without entering edit mode**:
+
+- The state is **ephemeral**: the view-time filter is ANDed on top of the widget's configured `filter`, and the view-time sort overrides the configured `sort`. Nothing is written back to the `.dashboard` file, and both reset when the dashboard reloads.
+- Each icon shows a small blue dot when active; the sort popover has a "Reset" entry to clear the override.
+- Popovers render through a portal (widget cells are `overflow-hidden`, which would otherwise clip them). The filter popover is wider (`w-80`) and the property selector can shrink (`min-w-0`) so the condition row never overflows the panel.
 
 ## Card & Table (folder widgets)
 
@@ -88,7 +106,7 @@ config:
   cols: 3                 # cards per row (collapses to 1 on very narrow widgets)
 ```
 
-Cards map row fields to structured slots (title/subtitle/image/body/badges) — there are no free-form template strings. If `title` is unmapped, `CardsView` falls back to the row's file name, so a freshly added card always shows something (this fixes the "blank card" symptom). `image` accepts an inline data URI (`data:image/...;base64,...`, the format images take in the IndexedDB cache), a full URL, a Drive file ID, or a Drive path (resolved via `findFileByNameLocal`). Clicking a card opens the underlying file.
+Cards map row fields to structured slots (title/subtitle/image/body/badges) — there are no free-form template strings. If `title` is unmapped, `CardsView` falls back to the row's file name, so a freshly added card always shows something (this fixes the "blank card" symptom). `image` accepts an Obsidian internal embed/link (`![[folder/cover.png]]` / `[[cover.png]]`, resolved via `findFileByNameLocal`), a Drive path (`folder/cover.png`), a Drive file ID, a full URL, or an inline data URI (`data:image/...;base64,...`, the format images take in the IndexedDB cache). Prefer references (`![[…]]` / path) over base64 — the AI generation guidance instructs the model to reference existing Drive images and only inline base64 when it actually generates a new image. Clicking a card opens the underlying file.
 
 **`table` config**
 
@@ -125,7 +143,7 @@ config:
 
 ### Output contract
 
-- **`card` / `table`** — the workflow must produce a **JSON array of objects** (one object per row), stored in the output variable (`result` by default). A `script` node returning the array is the simplest form. Each object's keys become the row's columns / card fields. After a test run the config editor auto-seeds the field mapping (table columns, or a card title/image/subtitle/body/badges guess from the field names and sampled values — `image`/`cover`/… or any cell holding a data URI / image URL is mapped to the card image). If a row object carries a `fileId` (or `file.fileId`) key, that card/table row becomes clickable and opens the referenced note — same as folder-source rows.
+- **`card` / `table`** — the workflow must produce a **JSON array of objects** (one object per row), stored in the output variable (`result` by default). A `script` node returning the array is the simplest form. Each object's keys become the row's columns / card fields. After a test run the config editor auto-seeds the field mapping (table columns, or a card title/image/subtitle/body/badges guess from the field names and sampled values — `image`/`cover`/… or any cell holding a data URI, image URL, `![[…]]` embed, or image-extension path is mapped to the card image). If a row object carries a `fileId` (or `file.fileId`) key, that card/table row becomes clickable and opens the referenced note — same as folder-source rows.
 - **`markdown` / `html`** — the workflow must produce a **string** in the output variable. It is rendered with `GfmMarkdownPreview` (markdown) or in a sandboxed `<iframe sandbox="allow-scripts">` via `buildHtmlPreviewSrcDoc` (html, reused from the HTML file editor).
 
 The config editor appends this contract to the AI workflow-generation prompt (`buildFormatGuidance`, varied by output format) so generated workflows emit the right shape. Workflows run **unattended** — they must not use interactive nodes (`prompt-value`, `prompt-file`, `prompt-selection`, `dialog`, `drive-file-picker`); the runner surfaces a specific error if they do.
@@ -139,7 +157,7 @@ The config editor appends this contract to the AI workflow-generation prompt (`b
 
 ### Execution model & caching
 
-Results are cached in the per-dashboard sidecar (`dashboards/.cache/<dashboardFileId>.json`) as a `WorkflowCacheRecord` (`{ widgetId, ranAt, status, rows?, fields?, text?, error? }`, last-write-wins). On mount, the widget reads from the cache and renders.
+Results are cached in the per-dashboard file (`dashboards/data/<dashboardFileId>.json`) as a `WorkflowCacheRecord` (`{ widgetId, ranAt, status, rows?, fields?, text?, error? }`, last-write-wins). On mount, the widget reads from the cache and renders. This file is a normal synced file (see "File format and storage" above), so a machine that never ran the workflow still renders the latest results — `loadCacheFile` also lazy-fetches the content from Drive when it is missing locally or the remote copy is newer.
 
 Execution is triggered by:
 
@@ -151,7 +169,13 @@ A failed run preserves the previous rows/text and shows a "stale" indicator alon
 
 ## Extensibility
 
-Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts`). The `WidgetDef` contract (`types.ts`) is the extension point: provide a `render` and optional `ConfigEditor`. Unknown types degrade gracefully to `UnknownWidget`.
+Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts`, exposed to plugins via `PluginAPI.registerWidget`). The `WidgetDef` contract (`types.ts`) is the extension point: provide a `render` and optional `ConfigEditor`. Unknown types degrade gracefully to `UnknownWidget`, which preserves the widget's config/unknown keys on save.
+
+**Late registration.** Plugins load asynchronously, often after a dashboard has already rendered. `registerWidget` dispatches a `dashboard-widgets-changed` event and `DashboardCanvas` re-renders on it, so a widget whose plugin loads late swaps from `UnknownWidget` to the real renderer without a reload.
+
+**`base` widget (plugin-provided, e.g. Obsidian Bases).** Reading/creating/rendering `.base` files is intended to live in a plugin, not core. The convention is a widget `{ type: "base", config: { base: "dashboards/xx.base", view: "<view name>" } }`: the plugin registers `type: "base"` and renders the named view of the referenced `.base`. Core needs no special import machinery — the `.dashboard` just stores the widget, `WidgetContext` (size/editMode/widgetId/dashboardFileId/`onConfigChange`) is passed through, and when the plugin is absent the widget shows `UnknownWidget` with its config intact. (Note: `drive-local.ts`'s `EXCLUDED_PREFIXES` includes `dashboards/`, so a plugin discovering `.base` files should use `readFile`/`searchFiles` rather than `listFiles`.)
+
+**View-mode config.** `WidgetContext.onConfigChange(config)` lets a widget persist its own config from view mode (wired through `GridCell` → `DashboardCanvas` → the dashboard save). Used by the markdown widget's header file picker.
 
 ## Key files
 

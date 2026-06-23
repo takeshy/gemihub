@@ -74,6 +74,14 @@ function buildFormatGuidance(cfg: WorkflowWidgetConfig): string {
         "`saveTo: result`. Prefer a `script` node whose `return` value is that array. " +
         "Each object's keys become the row's columns/fields. Do NOT return prose.",
     );
+    lines.push(
+      "IMAGES: when a row has an image, reference an EXISTING Drive image with an " +
+        "Obsidian internal embed like `![[folder/cover.png]]` (or a plain Drive path " +
+        "such as `folder/cover.png`, a file ID, or an https URL). Do NOT inline a " +
+        "`data:image/...;base64,...` value for existing files — base64 bloats the saved " +
+        "result. Only emit base64 when the workflow itself generates a brand-new image " +
+        "that isn't saved as a Drive file.",
+    );
     if (output === "card") {
       const card = cfg.card ?? {};
       const keys = [card.title, card.subtitle, card.image, card.body, ...(card.badges ?? [])]
@@ -109,10 +117,11 @@ const BADGE_NAME_RE = /^(tag|badge|label|keyword)s?$/i;
 function looksLikeImageValue(v: unknown): boolean {
   if (typeof v !== "string") return false;
   const s = v.trim();
-  return (
-    s.startsWith("data:image/") ||
-    /^https?:\/\/.+\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(s)
-  );
+  if (s.startsWith("data:image/")) return true;
+  if (/^https?:\/\/.+\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(s)) return true;
+  // Obsidian embed/link `![[path]]` / `[[path]]`, or a bare Drive path to an image.
+  const inner = s.match(/^!?\[\[([^\]]+)\]\]$/)?.[1] ?? s;
+  return /\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(inner);
 }
 
 function seedCardMapping(
@@ -173,7 +182,11 @@ export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFile
   >(null);
 
   const loaderSettings = getCachedLoaderDataInMemory()?.settings;
-  const apiPlan = loaderSettings?.apiPlan ?? "free";
+  // Match the app-wide default (DEFAULT_USER_SETTINGS.apiPlan === "paid", and
+  // getAvailableModels treats anything other than "free" as paid). Falling back
+  // to "free" here would hide paid models (e.g. Gemini 3.1 Pro) whenever the
+  // cached loader data is momentarily unavailable.
+  const apiPlan = loaderSettings?.apiPlan ?? "paid";
   const encryptedPrivateKey = loaderSettings?.encryption?.encryptedPrivateKey;
   const salt = loaderSettings?.encryption?.salt;
 

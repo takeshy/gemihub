@@ -143,7 +143,18 @@ api.registerSlashCommand({
 api.registerSettingsTab({
   component: MySettingsComponent, // props に { api } を受け取る
 });
+
+// ダッシュボードのカスタムウィジェット型を登録（コアと同じレジストリ）
+api.registerWidget({
+  type: "base",                  // .dashboard の widget の `type` から参照される
+  label: "Base",
+  defaultConfig: {},
+  render: (config, ctx) => <MyWidget config={config} ctx={ctx} />,
+  // 任意で、ウィジェット設定パネルに出す ConfigEditor
+});
 ```
+
+`.dashboard` はプラグインウィジェットを `type` だけで参照する（例: `{ type: "base", config: { base: "dashboards/x.base", view: "..." } }`）。ダッシュボードはプラグインより先にロードされるため、未登録の型は config を保持したままプレースホルダ（`UnknownWidget`）として描画され、プラグインが `registerWidget` を呼ぶと（`dashboard-widgets-changed` イベントで）ダッシュボードが再描画して自動的に実ウィジェットへ差し替わる。`render` の `ctx` には `size` / `editMode` / `widgetId` / `dashboardFileId` / `onConfigChange(config)`（ビューモードから config を永続化）が渡る。参照先データファイル（例: `.base`）の読込/作成には `api.drive.readFile` / `searchFiles` を使う — `api.drive.listFiles` は `dashboards/` フォルダを列挙しない点に注意。
 
 #### Gemini AI
 

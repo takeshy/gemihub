@@ -147,7 +147,18 @@ api.registerSlashCommand({
 api.registerSettingsTab({
   component: MySettingsComponent, // receives { api, onClose } as props
 });
+
+// Register a custom dashboard widget type (same registry as core widgets)
+api.registerWidget({
+  type: "base",                  // referenced from a .dashboard widget's `type`
+  label: "Base",
+  defaultConfig: {},
+  render: (config, ctx) => <MyWidget config={config} ctx={ctx} />,
+  // optional ConfigEditor shown in the widget settings panel
+});
 ```
+
+A `.dashboard` references a plugin widget simply by `type` (e.g. `{ type: "base", config: { base: "dashboards/x.base", view: "..." } }`). Dashboards load before plugins, so a not-yet-registered type renders as a placeholder (`UnknownWidget`) with its config preserved on save; once the plugin calls `registerWidget`, the dashboard re-renders and swaps in the real widget automatically (via a `dashboard-widgets-changed` event). The widget `render` receives a `ctx` with `size`, `editMode`, `widgetId`, `dashboardFileId`, and `onConfigChange(config)` (persist config from view mode). To read/create the referenced data file (e.g. a `.base`), use `api.drive.readFile`/`searchFiles` — note `api.drive.listFiles` does not enumerate the `dashboards/` folder.
 
 #### Gemini AI
 

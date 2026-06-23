@@ -20,6 +20,8 @@ interface GridCellProps {
   computeResizePos: (widgetId: string, dxPx: number, dyPx: number) => LayoutPos;
   onSettings?: () => void;
   onDelete?: () => void;
+  /** Persist a config change emitted by the widget itself (works in view mode). */
+  onConfigChange?: (config: unknown) => void;
   /** The .dashboard file's ID (passed to WidgetContext for sidecar caches). */
   dashboardFileId?: string;
 }
@@ -38,6 +40,7 @@ export default function GridCell({
   computeResizePos,
   onSettings,
   onDelete,
+  onConfigChange,
   dashboardFileId,
 }: GridCellProps) {
   const { t } = useI18n();
@@ -121,6 +124,7 @@ export default function GridCell({
     editMode,
     widgetId: widget.id,
     dashboardFileId,
+    onConfigChange,
   };
 
   const transformStyle = transform

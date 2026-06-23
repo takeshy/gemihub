@@ -13,12 +13,16 @@ test("isSyncExcludedPath excludes special folders", () => {
   assert.equal(isSyncExcludedPath("sync_conflicts/backup.md"), true);
   assert.equal(isSyncExcludedPath("__TEMP__/draft.md"), true);
   assert.equal(isSyncExcludedPath("plugins/tool.js"), true);
-  assert.equal(isSyncExcludedPath("dashboards/.cache/abc123.json"), true);
 });
 
 test("isSyncExcludedPath still syncs dashboard files themselves", () => {
   assert.equal(isSyncExcludedPath("dashboards/home.dashboard"), false);
   assert.equal(isSyncExcludedPath("home.dashboard"), false);
+});
+
+test("dashboard workflow cache is a normal synced file", () => {
+  // Stored at dashboards/data/<id>.json — synced and visible like any file.
+  assert.equal(isSyncExcludedPath("dashboards/data/abc123.json"), false);
 });
 
 test("isSyncExcludedPath handles leading slash", () => {
