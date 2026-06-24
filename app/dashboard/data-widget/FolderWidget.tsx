@@ -8,7 +8,7 @@ import { useI18n } from "~/i18n/context";
 import type { WidgetContext } from "../types";
 import type { CardWidgetConfig, TableWidgetConfig, DataRow, FilterCondition } from "./types";
 import { loadFolderRows } from "./folder-source";
-import { applyPostSource, detectFields } from "./filter";
+import { applyPostSource, detectFields, fieldsToMap } from "./filter";
 import { TableView } from "./TableView";
 import { CardsView } from "./CardsView";
 import { ViewControls, deriveFieldsFromRows } from "./ViewControls";
@@ -69,6 +69,7 @@ export default function FolderWidget({
     () => deriveFieldsFromRows(rows.map((r) => r.cells), true, detectFields),
     [rows],
   );
+  const fieldTypes = useMemo(() => fieldsToMap(fields), [fields]);
 
   if (loading) {
     return (
@@ -92,7 +93,7 @@ export default function FolderWidget({
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {view === "cards" ? (
-          <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable />
+          <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable fieldTypes={fieldTypes} />
         ) : (
           <TableView
             rows={processedRows}
@@ -100,6 +101,7 @@ export default function FolderWidget({
             editable
             editMode={ctx?.editMode}
             folder={folder}
+            fieldTypes={fieldTypes}
           />
         )}
       </div>

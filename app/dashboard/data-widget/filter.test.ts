@@ -307,3 +307,24 @@ test("formatCell formats various types", () => {
   assert.equal(formatCell("hello"), "hello");
   assert.equal(formatCell(42), "42");
 });
+
+test("formatCell formats dates with locale", () => {
+  const ms = new Date("2024-01-15T10:30:00Z").getTime();
+  // Without type, a number is rendered as-is
+  assert.equal(formatCell(ms), String(ms));
+  // With type "date", it is rendered as a locale-formatted string
+  const en = formatCell(ms, "date", "en");
+  const ja = formatCell(ms, "date", "ja");
+  assert.ok(en.includes("2024"));
+  assert.ok(ja.includes("2024"));
+  // Locale difference: English uses AM/PM, Japanese does not
+  assert.notEqual(en, ja);
+  // ISO date strings are also handled
+  const isoEn = formatCell("2024-01-15T10:30:00Z", "date", "en");
+  assert.ok(isoEn.includes("2024"));
+  // Null/undefined dates return empty
+  assert.equal(formatCell(null, "date", "en"), "");
+  assert.equal(formatCell(undefined, "date", "en"), "");
+  // 0 (missing timestamp) returns empty rather than the 1970 epoch
+  assert.equal(formatCell(0, "date", "en"), "");
+});

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "~/i18n/context";
 import { findFileByNameLocal } from "~/services/drive-local";
-import type { DataRow, CardMapping } from "./types";
+import type { DataRow, CardMapping, PropertyType } from "./types";
 import { getCellValue, formatCell } from "./filter";
 
 interface CardsViewProps {
@@ -15,6 +15,8 @@ interface CardsViewProps {
    *  fileId is resolvable). Folder cards always have one; workflow cards only
    *  when the row carries a fileId / file.fileId cell. */
   clickable: boolean;
+  /** Field type map for locale-aware formatting (e.g. dates). */
+  fieldTypes?: Record<string, PropertyType>;
 }
 
 /**
@@ -130,8 +132,8 @@ function useResolvedImageUrls(
   return resolvedPaths;
 }
 
-export function CardsView({ rows, card, cols, clickable }: CardsViewProps) {
-  const { t } = useI18n();
+export function CardsView({ rows, card, cols, clickable, fieldTypes }: CardsViewProps) {
+  const { t, language } = useI18n();
 
   const resolvedPaths = useResolvedImageUrls(rows, card.image);
 
@@ -247,12 +249,12 @@ export function CardsView({ rows, card, cols, clickable }: CardsViewProps) {
             <div className="p-2 flex-1 min-h-0 overflow-hidden">
               {title != null && (
                 <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">
-                  {formatCell(title)}
+                  {formatCell(title, fieldTypes?.[card.title ?? ""], language)}
                 </div>
               )}
               {subtitle != null && (
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                  {formatCell(subtitle)}
+                  {formatCell(subtitle, fieldTypes?.[card.subtitle ?? ""], language)}
                 </div>
               )}
               {badges.length > 0 && (
@@ -265,7 +267,7 @@ export function CardsView({ rows, card, cols, clickable }: CardsViewProps) {
                         key={badge}
                         className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300 truncate max-w-full"
                       >
-                        {formatCell(val)}
+                        {formatCell(val, fieldTypes?.[badge], language)}
                       </span>
                     );
                   })}
@@ -273,7 +275,7 @@ export function CardsView({ rows, card, cols, clickable }: CardsViewProps) {
               )}
               {body != null && (
                 <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-1 line-clamp-3 overflow-hidden">
-                  {formatCell(body)}
+                  {formatCell(body, fieldTypes?.[card.body ?? ""], language)}
                 </div>
               )}
             </div>

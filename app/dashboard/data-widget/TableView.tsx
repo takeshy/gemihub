@@ -7,7 +7,7 @@ import { getCachedFile } from "~/services/indexeddb-cache";
 import { writeFileLocal } from "~/services/drive-local";
 import { updateFrontmatterKey } from "../frontmatter-writeback";
 import { useI18n } from "~/i18n/context";
-import type { DataRow } from "./types";
+import type { DataRow, PropertyType } from "./types";
 import { FILE_ATTR_KEYS } from "./types";
 import { getCellValue, formatCell } from "./filter";
 
@@ -20,6 +20,8 @@ interface TableViewProps {
   editMode?: boolean;
   /** Folder path for dispatching data-changed events. */
   folder?: string;
+  /** Field type map for locale-aware formatting (e.g. dates). */
+  fieldTypes?: Record<string, PropertyType>;
 }
 
 function isEditableType(value: unknown): boolean {
@@ -45,8 +47,9 @@ export function TableView({
   editable,
   editMode,
   folder,
+  fieldTypes,
 }: TableViewProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [editingCell, setEditingCell] = useState<
     { rowId: string; column: string } | null
   >(null);
@@ -353,7 +356,7 @@ export function TableView({
                         }}
                       />
                     ) : (
-                      formatCell(value)
+                      formatCell(value, fieldTypes?.[col], language)
                     )}
                   </td>
                 );

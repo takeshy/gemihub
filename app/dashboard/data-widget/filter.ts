@@ -257,10 +257,29 @@ export function applyPostSource(
 
 // --- Formatting ---
 
-export function formatCell(value: unknown): string {
+export function formatCell(
+  value: unknown,
+  type?: PropertyType,
+  locale?: string,
+): string {
   if (value == null) return "";
+  if (type === "date") return formatDate(value, locale);
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function formatDate(value: unknown, locale?: string): string {
+  let ms: number | null = null;
+  if (typeof value === "number") {
+    // Treat 0 (missing modifiedTime/createdTime) as empty rather than 1970.
+    if (value === 0) return "";
+    ms = value;
+  } else if (typeof value === "string") {
+    const t = Date.parse(value);
+    if (!isNaN(t)) ms = t;
+  }
+  if (ms == null) return String(value);
+  return new Date(ms).toLocaleString(locale);
 }

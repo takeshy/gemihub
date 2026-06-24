@@ -32,7 +32,7 @@ import {
   runWorkflowRows,
   runWorkflowText,
 } from "./workflow-runner";
-import { applyPostSource, detectFields } from "./filter";
+import { applyPostSource, detectFields, fieldsToMap } from "./filter";
 import { TableView } from "./TableView";
 import { CardsView } from "./CardsView";
 import { ViewControls, deriveFieldsFromRows } from "./ViewControls";
@@ -210,6 +210,7 @@ export default function WorkflowWidget({
     }
     return deriveFieldsFromRows(rows.map((r) => r.cells), false, detectFields);
   }, [cacheRecord, rows]);
+  const fieldTypes = useMemo(() => fieldsToMap(fields), [fields]);
 
   const htmlSrcDoc = useMemo(
     () => (output === "html" ? buildHtmlPreviewSrcDoc(cacheRecord?.text ?? "", "", {}) : ""),
@@ -240,10 +241,10 @@ export default function WorkflowWidget({
     );
   } else if (output === "card") {
     content = (
-      <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable />
+      <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable fieldTypes={fieldTypes} />
     );
   } else if (output === "table") {
-    content = <TableView rows={processedRows} columns={cfg.columns ?? []} editable={false} />;
+    content = <TableView rows={processedRows} columns={cfg.columns ?? []} editable={false} fieldTypes={fieldTypes} />;
   } else if (output === "markdown") {
     content = (
       <div className="prose prose-sm h-full max-w-none overflow-auto p-2 dark:prose-invert">
