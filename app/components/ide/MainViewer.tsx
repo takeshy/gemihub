@@ -96,11 +96,39 @@ export function MainViewer({
     );
   }
 
+  if (fileName?.toLowerCase().endsWith(".encrypted")) {
+    return (
+      <TextBasedViewer
+        fileId={fileId}
+        fileName={fileName}
+        settings={settings}
+        refreshKey={refreshKey}
+        onFileSelect={onFileSelect}
+        onImageChange={onImageChange}
+      />
+    );
+  }
+
   // Binary files (PDF, video, audio, image) - don't load via useFileWithCache
   const mediaType = getMediaType(fileName, fileMimeType);
   if (mediaType) {
     return (
       <MediaViewer fileId={fileId} fileName={fileName || "file"} mediaType={mediaType} fileMimeType={fileMimeType} />
+    );
+  }
+
+  if (settings.encryption.enabled && (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName))) {
+    return (
+      <TextBasedViewer
+        fileId={fileId}
+        fileName={fileName}
+        fileMimeType={fileMimeType}
+        settings={settings}
+        refreshKey={refreshKey}
+        onFileSelect={onFileSelect}
+        onImageChange={onImageChange}
+        binaryFallback
+      />
     );
   }
 

@@ -16,21 +16,27 @@ import { TextFileEditor } from "./editors/TextFileEditor";
 import { DiffEditor } from "./editors/DiffEditor";
 import { CanvasFileEditor } from "./editors/CanvasFileEditor";
 import { DashboardFileEditor } from "./editors/DashboardFileEditor";
+import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
+import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
 
 export function TextBasedViewer({
   fileId,
   fileName,
+  fileMimeType,
   settings,
   refreshKey,
   onFileSelect,
   onImageChange,
+  binaryFallback = false,
 }: {
   fileId: string;
   fileName: string | null;
+  fileMimeType?: string | null;
   settings: UserSettings;
   refreshKey?: number;
   onFileSelect?: () => Promise<string | null>;
   onImageChange?: (file: File) => Promise<string>;
+  binaryFallback?: boolean;
 }) {
   const { t } = useI18n();
   const { content, loading, error, saveToCache, refresh, forceRefresh } =
@@ -94,6 +100,11 @@ export function TextBasedViewer({
 
   const name = fileName || "";
   const lower = name.toLowerCase();
+  const encryptedCandidate = name.endsWith(".encrypted") || isEncryptedFile(content);
+
+  if (!encryptedCandidate && binaryFallback && (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName))) {
+    return <BinaryFileInfoViewer fileId={fileId} fileName={fileName} fileMimeType={fileMimeType ?? null} />;
+  }
 
   const handleHistoryClick = async () => {
     const cached = await getCachedFile(fileId);
@@ -104,7 +115,7 @@ export function TextBasedViewer({
   // Determine which editor to render
   let editor: React.ReactNode;
 
-  if (name.endsWith(".encrypted") || isEncryptedFile(content)) {
+  if (encryptedCandidate) {
     editor = (
       <EncryptedFileViewer
         fileId={fileId}
