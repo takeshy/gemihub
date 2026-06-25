@@ -91,6 +91,7 @@ Check for:
 5. **Variable interpolation in script nodes**: \`{{var:json}}\` does NOT add quotes — it only escapes content. Flag any occurrence where \`{{var:json}}\` appears without surrounding quotes in a JavaScript string context (e.g., \`var x = {{var:json}}\`, \`JSON.parse({{var:json}})\`). The correct form is \`"{{var:json}}"\` when the value should be a string literal.
 6. **json node source**: The \`source\` field must be a bare variable name (no \`{{...}}\`, no surrounding quotes, no wrapping like \`"[{{var}}]"\`). Flag any \`source\` that uses interpolation or wrapping.
 7. **http throwOnError silent-failure anti-pattern**: The default for \`throwOnError\` is \`"true"\` (HTTP 4xx/5xx aborts the workflow). Flag any \`http\` node that sets \`throwOnError: "false"\` **without** a corresponding error-handling branch downstream (e.g., an \`if\` node reading \`saveStatus\` and taking a different path on >= 400). Suppressing HTTP errors hides failures from the chat AI and the user, and blocks the "Open workflow" recovery UI. Also flag downstream \`script\` nodes that only inspect \`saveStatus\` to return an "error" string — that's the same silent-failure anti-pattern. The fix is to remove \`throwOnError: "false"\` (restoring the throwing default).${skillReviewChecks}
+8. **Dashboard widget contract**: If the original request says the workflow runs headlessly in a dashboard or feeds a dashboard widget, treat those instructions as mandatory. The workflow must not depend on interactive/user-facing nodes such as \`prompt-value\`, \`prompt-file\`, \`prompt-selection\`, \`dialog\`, or file pickers unless they are fully satisfied by defaults/input variables. For dashboard card/table output, the final saved output variable must be a JSON array of objects. For dashboard markdown/html output, the final saved output variable must be a string. Do NOT require a dialog or chat-style display node for dashboard workflows; dashboard widgets read the saved output variable directly. Flag incompatible output shape or interactive nodes as high severity.
 
 WORKFLOW SPECIFICATION (for reference):
 ${workflowSpec}
@@ -130,6 +131,8 @@ export function buildReviewUserPrompt(options: {
 ORIGINAL REQUEST:
 ${options.description}
 ${planSection}
+Treat every constraint in the original request, including any appended caller-provided context such as dashboard output contracts, as mandatory review criteria.
+
 GENERATED YAML:
 ${options.generatedYaml}`;
 }

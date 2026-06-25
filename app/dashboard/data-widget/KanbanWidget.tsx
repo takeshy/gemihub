@@ -1,0 +1,496 @@
+// Kanban widget: groups folder-backed Markdown files by a frontmatter status
+// property and writes status changes back to the file frontmatter on drop.
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, X } from "lucide-react";
+import yaml from "js-yaml";
+import { getCachedFile } from "~/services/indexeddb-cache";
+import { findFileByNameLocal, writeFileLocal } from "~/services/drive-local";
+import { updateFrontmatterKey } from "../frontmatter-writeback";
+import type { WidgetContext } from "../types";
+import type { DataRow, FilterCondition, KanbanColumnConfig, KanbanWidgetConfig } from "./types";
+import { loadFolderRows } from "./folder-source";
+import { applyPostSource, formatCell, getCellValue } from "./filter";
+import { useI18n } from "~/i18n/context";
+import { FilePreviewModal } from "../widgets/FilePreviewModal";
+
+const UNSPECIFIED = "__unspecified__";
+const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
+  { value: "todo", label: "To Do" },
+  { value: "in-progress", label: "In Progress" },
+  { value: "done", label: "Done" },
+];
+
+function scalar(value: unknown): string {
+  if (value == null) return "";
+  if (Array.isArray(value)) return value.map(scalar).filter(Boolean).join(", ");
+  if (typeof value === "object") return "";
+  return String(value).trim();
+}
+
+function normalizeColumns(columns: KanbanWidgetConfig["columns"]): KanbanColumnConfig[] {
+  const source = Array.isArray(columns) && columns.length > 0 ? columns : DEFAULT_COLUMNS;
+  const seen = new Set<string>();
+  const out: KanbanColumnConfig[] = [];
+  for (const col of source) {
+    const normalized =
+      typeof col === "string"
+        ? { value: col.trim(), label: col.trim() }
+        : {
+            value: typeof col.value === "string" ? col.value.trim() : "",
+            label: typeof col.label === "string" ? col.label.trim() : "",
+          };
+    if (!normalized.value || seen.has(normalized.value)) continue;
+    seen.add(normalized.value);
+    out.push(normalized);
+  }
+  return out;
+}
+
+function sanitizeFileName(name: string): string {
+  return name
+    .replace(/[\\/:*?"<>|#^[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^\.+/, "")
+    .trim();
+}
+
+function joinPath(folder: string, fileName: string): string {
+  const dir = folder.trim().replace(/[/\\]+$/, "");
+  return dir ? `${dir}/${fileName}` : fileName;
+}
+
+function buildNewCardContent(options: {
+  title: string;
+  titleProperty: string;
+  statusProperty: string;
+  status: string;
+}): string {
+  const frontmatter: Record<string, unknown> = {};
+  if (options.status) frontmatter[options.statusProperty] = options.status;
+  if (options.title && options.titleProperty && options.titleProperty !== "file.name") {
+    frontmatter[options.titleProperty] = options.title;
+  }
+  const fm = Object.keys(frontmatter).length > 0
+    ? `---\n${yaml.dump(frontmatter, { lineWidth: -1, noRefs: true })}---\n\n`
+    : "";
+  return `${fm}# ${options.title}\n`;
+}
+
+function fieldDisplayType(field: string): "date" | undefined {
+  return field === "file.mtime" || field === "mtime" || field === "file.ctime" || field === "ctime"
+    ? "date"
+    : undefined;
+}
+
+export default function KanbanWidget({
+  config,
+  ctx,
+}: {
+  config: unknown;
+  ctx?: WidgetContext;
+}) {
+  const { t, language } = useI18n();
+  const cfg = (config ?? {}) as KanbanWidgetConfig;
+  const folder = cfg.folder ?? "";
+  const boardTitle = (cfg.title ?? "").trim();
+  const statusProperty = cfg.statusProperty || "status";
+  const titleProperty = cfg.titleProperty || "title";
+  const displayFields = cfg.displayFields ?? [];
+  const configuredColumns = useMemo(() => normalizeColumns(cfg.columns), [cfg.columns]);
+  const showUnspecified = cfg.showUnspecified !== false;
+
+  const [rows, setRows] = useState<DataRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingFileId, setPendingFileId] = useState<string | null>(null);
+  const [draggingRowId, setDraggingRowId] = useState<string | null>(null);
+  const [dropColumn, setDropColumn] = useState<string | null>(null);
+  const [landedRowId, setLandedRowId] = useState<string | null>(null);
+  const [showNewCard, setShowNewCard] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newStatus, setNewStatus] = useState(configuredColumns[0]?.value ?? "");
+  const [previewRow, setPreviewRow] = useState<DataRow | null>(null);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const folderRows = await loadFolderRows(folder);
+    setRows(folderRows);
+    setLoading(false);
+  }, [folder]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadData(), 300);
+    return () => window.clearTimeout(timer);
+  }, [loadData]);
+
+  useEffect(() => {
+    const handler = () => void loadData();
+    window.addEventListener("dashboard-data-changed", handler);
+    return () => window.removeEventListener("dashboard-data-changed", handler);
+  }, [loadData]);
+
+  useEffect(() => {
+    if (configuredColumns.length > 0 && !configuredColumns.some((col) => col.value === newStatus)) {
+      setNewStatus(configuredColumns[0].value);
+    }
+  }, [configuredColumns, newStatus]);
+
+  const processedRows = useMemo(
+    () =>
+      applyPostSource(rows, {
+        filter: cfg.filter as FilterCondition[] | undefined,
+        sort: cfg.sort as string | undefined,
+        limit: cfg.limit,
+      }),
+    [rows, cfg.filter, cfg.sort, cfg.limit],
+  );
+
+  const columns = useMemo(() => {
+    if (!showUnspecified) return configuredColumns;
+    const known = new Set(configuredColumns.map((col) => col.value));
+    const hasUnspecified = processedRows.some((row) => {
+      const status = scalar(row.cells[statusProperty]);
+      return !status || !known.has(status);
+    });
+    return hasUnspecified || configuredColumns.length === 0
+      ? [...configuredColumns, { value: UNSPECIFIED, label: t("dashboard.kanbanUnspecified") }]
+      : configuredColumns;
+  }, [configuredColumns, processedRows, showUnspecified, statusProperty, t]);
+
+  const rowsByColumn = useMemo(() => {
+    const map = new Map<string, DataRow[]>();
+    const known = new Set(configuredColumns.map((col) => col.value));
+    for (const col of columns) map.set(col.value, []);
+    for (const row of processedRows) {
+      const status = scalar(row.cells[statusProperty]);
+      if (known.has(status)) {
+        map.get(status)!.push(row);
+      } else if (showUnspecified && map.has(UNSPECIFIED)) {
+        map.get(UNSPECIFIED)!.push(row);
+      }
+    }
+    return map;
+  }, [columns, configuredColumns, processedRows, showUnspecified, statusProperty]);
+
+  const navigateToFile = (row: DataRow) => {
+    if (!row.fileId) return;
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: row.fileId, fileName: row.fileName },
+      }),
+    );
+  };
+
+  const flashLanded = (rowId: string) => {
+    setLandedRowId(rowId);
+    window.setTimeout(() => setLandedRowId((current) => (current === rowId ? null : current)), 700);
+  };
+
+  const moveCard = async (row: DataRow, nextStatus: string) => {
+    if (!row.fileId || pendingFileId) return;
+    const oldStatus = row.cells[statusProperty];
+    const nextValue = nextStatus === UNSPECIFIED ? null : nextStatus;
+
+    setPendingFileId(row.fileId);
+    setError(null);
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? {
+              ...r,
+              cells: {
+                ...r.cells,
+                ...(nextValue === null ? { [statusProperty]: undefined } : { [statusProperty]: nextValue }),
+              },
+            }
+          : r,
+      ),
+    );
+
+    try {
+      const cached = await getCachedFile(row.fileId);
+      if (!cached) throw new Error(t("dashboard.fileNotFound"));
+      const result = updateFrontmatterKey(cached.content, statusProperty, nextValue);
+      if (result === null) throw new Error(t("dashboard.unparseableFrontmatter"));
+      await writeFileLocal(cached.fileName ?? row.fileName!, result.content, {
+        existingFileId: row.fileId,
+      });
+      flashLanded(row.id);
+      window.dispatchEvent(
+        new CustomEvent("dashboard-data-changed", {
+          detail: { folder },
+        }),
+      );
+    } catch (err) {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === row.id ? { ...r, cells: { ...r.cells, [statusProperty]: oldStatus } } : r,
+        ),
+      );
+      setError(err instanceof Error ? err.message : t("dashboard.writeFailed"));
+    } finally {
+      setPendingFileId(null);
+      setDraggingRowId(null);
+      setDropColumn(null);
+    }
+  };
+
+  const createCard = async () => {
+    const title = newTitle.trim() || t("dashboard.kanbanNewCardName");
+    const base = sanitizeFileName(title) || t("dashboard.kanbanNewCardName");
+    let candidate = `${base}.md`;
+    let index = 2;
+    while (await findFileByNameLocal(joinPath(folder, candidate))) {
+      candidate = `${base} ${index++}.md`;
+    }
+
+    setError(null);
+    try {
+      const path = joinPath(folder, candidate);
+      const result = await writeFileLocal(
+        path,
+        buildNewCardContent({
+          title,
+          titleProperty,
+          statusProperty,
+          status: newStatus,
+        }),
+      );
+      setShowNewCard(false);
+      setNewTitle("");
+      await loadData();
+      window.dispatchEvent(
+        new CustomEvent("dashboard-data-changed", {
+          detail: { folder },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("plugin-select-file", {
+          detail: { fileId: result.fileId, fileName: path, mimeType: "text/markdown" },
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("dashboard.kanbanNewCardError"));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-gray-400">
+        {t("dashboard.loading")}
+      </div>
+    );
+  }
+
+  if (!folder) {
+    return (
+      <div className="flex h-full items-center justify-center px-3 text-center text-sm text-gray-400">
+        {t("dashboard.kanbanSelectFolder")}
+      </div>
+    );
+  }
+
+  const allColumns = columns.map((column) => ({
+    ...column,
+    label: column.value === UNSPECIFIED ? t("dashboard.kanbanUnspecified") : column.label || column.value,
+    rows: rowsByColumn.get(column.value) ?? [],
+  }));
+
+  return (
+    <div className="relative flex h-full flex-col overflow-hidden bg-white dark:bg-gray-950">
+      <div className="flex flex-shrink-0 items-center gap-2 px-3 py-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {boardTitle}
+        </span>
+        {error && <span className="min-w-0 truncate text-[11px] text-red-500">{error}</span>}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowNewCard(true);
+          }}
+          className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          title={t("dashboard.kanbanNewCard")}
+        >
+          <Plus size={13} />
+          {t("dashboard.kanbanNewCard")}
+        </button>
+      </div>
+
+      {allColumns.length === 0 ? (
+        <div className="flex h-full items-center justify-center px-3 text-center text-sm text-gray-400">
+          {t("dashboard.kanbanEmpty")}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto overflow-y-hidden px-2 pb-2">
+          {allColumns.map((column, index) => (
+            <section
+              key={column.value}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDropColumn(column.value);
+              }}
+              onDragLeave={() => setDropColumn((current) => (current === column.value ? null : current))}
+              onDrop={(e) => {
+                e.preventDefault();
+                const rowId = e.dataTransfer.getData("text/plain") || draggingRowId;
+                const row = rows.find((r) => r.id === rowId);
+                if (row) void moveCard(row, column.value);
+              }}
+              className={`flex min-w-[240px] flex-[0_0_240px] flex-col overflow-hidden rounded-lg border-t-[3px] bg-gray-50 p-1.5 outline outline-2 -outline-offset-2 transition dark:bg-gray-900 ${
+                dropColumn === column.value ? "outline-current" : "outline-transparent"
+              } ${KANBAN_ACCENTS[index % KANBAN_ACCENTS.length]}`}
+            >
+              <div className="mb-1.5 flex items-center justify-between border-b-2 border-current px-1.5 pb-1.5 text-current">
+                <span className="truncate text-xs font-semibold">{column.label}</span>
+                <span className="min-w-[20px] rounded-full bg-current px-1.5 py-0.5 text-center text-[10px] font-semibold">
+                  <span className="text-white dark:text-gray-950">{column.rows.length}</span>
+                </span>
+              </div>
+              <div className="flex min-h-6 flex-1 flex-col gap-1.5 overflow-y-auto">
+                {column.rows.map((row) => {
+                  const title = scalar(getCellValue(row, titleProperty)) || row.fileName || t("dashboard.kanbanUntitled");
+                  return (
+                    <article
+                      key={row.id}
+                      draggable={!ctx?.editMode && row.fmParseable}
+                      onDragStart={(e) => {
+                        setDraggingRowId(row.id);
+                        e.dataTransfer.setData("text/plain", row.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingRowId(null);
+                        setDropColumn(null);
+                      }}
+                      onClick={() => setPreviewRow(row)}
+                      title={t("dashboard.kanbanDragToMove")}
+                      className={`cursor-pointer select-none rounded-md border border-gray-200 border-l-[3px] border-l-current bg-white px-2.5 py-2 text-xs shadow-sm transition hover:border-current hover:shadow-md dark:border-gray-700 dark:bg-gray-950 ${
+                        pendingFileId === row.fileId || draggingRowId === row.id ? "opacity-50" : ""
+                      } ${landedRowId === row.id ? "animate-pulse" : ""}`}
+                    >
+                      <div className="break-words font-medium leading-snug text-gray-900 dark:text-gray-100">
+                        {title}
+                      </div>
+                      {displayFields.length > 0 && (
+                        <dl className="mt-1.5 space-y-1">
+                          {displayFields.map((field) => {
+                            const value = getCellValue(row, field);
+                            const formatted = formatCell(value, fieldDisplayType(field), language);
+                            if (!formatted) return null;
+                            return (
+                              <div key={field} className="flex gap-1.5 text-[10px] leading-snug">
+                                <dt className="shrink-0 text-gray-400">{field}</dt>
+                                <dd className="min-w-0 break-words text-gray-600 dark:text-gray-300">{formatted}</dd>
+                              </div>
+                            );
+                          })}
+                        </dl>
+                      )}
+                      {row.fileName && row.fileName !== title && (
+                        <div className="mt-1.5 break-all text-[10px] text-gray-400">{row.fileName}</div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {showNewCard && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 p-3 backdrop-blur-[1px]"
+          onClick={() => setShowNewCard(false)}
+        >
+          <form
+            className="w-full max-w-xs rounded-lg border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void createCard();
+            }}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {t("dashboard.kanbanNewCardTitle")}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowNewCard(false)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                title={t("common.close")}
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <label className="mb-2 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              {t("dashboard.kanbanNewCardNameLabel")}
+              <input
+                autoFocus
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder={t("dashboard.kanbanNewCardName")}
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </label>
+            <label className="mb-3 block text-xs font-medium text-gray-600 dark:text-gray-400">
+              {t("dashboard.kanbanNewCardColumn")}
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              >
+                {configuredColumns.map((column) => (
+                  <option key={column.value} value={column.value}>
+                    {column.label || column.value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowNewCard(false)}
+                className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="submit"
+                className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                {t("dashboard.kanbanNewCardCreate")}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {previewRow?.fileId && previewRow.fileName && (
+        <FilePreviewModal
+          fileId={previewRow.fileId}
+          fileName={previewRow.fileName}
+          onNavigate={() => {
+            navigateToFile(previewRow);
+            setPreviewRow(null);
+          }}
+          onClose={() => setPreviewRow(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+const KANBAN_ACCENTS = [
+  "text-blue-600 dark:text-blue-400",
+  "text-amber-600 dark:text-amber-400",
+  "text-emerald-600 dark:text-emerald-400",
+  "text-violet-600 dark:text-violet-400",
+  "text-cyan-600 dark:text-cyan-400",
+  "text-pink-600 dark:text-pink-400",
+  "text-yellow-600 dark:text-yellow-400",
+  "text-red-600 dark:text-red-400",
+];

@@ -50,9 +50,10 @@ widgets:
 | `web` | 外部 URL を埋め込み（埋め込み可否チェック + フォールバックカード） | URL |
 | `card` | Markdown ファイルのフォルダに対するカードグリッド | フォルダ |
 | `table` | Markdown ファイルのフォルダに対する編集可能テーブル | フォルダ |
+| `kanban` | Markdown ファイルのフォルダに対するカンバンボード | フォルダ |
 | `workflow` | ワークフローを実行し出力を描画 | ワークフロー |
 
-`web` は初期リリースから変更なし。`markdown` / `file-list`（直下）とデータ指向の `card` / `table` / `workflow` を以下で説明する。
+`web` は初期リリースから変更なし。`markdown` / `file-list`（直下）とデータ指向の `card` / `table` / `kanban` / `workflow` を以下で説明する。
 
 ### Markdown ウィジェット
 
@@ -120,6 +121,30 @@ config:
 
 編集モードでは frontmatter セルをインライン編集でき、編集は順序/本文を保全して元ファイルに書き戻され（`frontmatter-writeback.ts`）、`dashboard-data-changed` イベントで他ウィジェットに通知して再表示させる。`file.*` 属性の列は読み取り専用。値がインライン data URI（`data:image/...`）のセルはテキストではなくサムネイル画像として表示され、編集不可になる。
 
+## Kanban ウィジェット
+
+`kanban` ウィジェットはフォルダ内の Markdown ファイルを読み、frontmatter のステータスプロパティで列分けする。カードを別の列へドラッグすると、同じファイルの frontmatter にステータス変更を書き戻す。
+
+![Kanban ボード](../public/images/dashboard_kanban.png)
+
+```yaml
+config:
+  folder: projects
+  title: Tasks
+  statusProperty: status              # 列に使う frontmatter キー
+  titleProperty: title                # カードタイトルのキー。なければファイル名
+  columns:
+    - { value: todo, label: To Do }
+    - { value: in-progress, label: In Progress }
+    - { value: done, label: Done }
+  showUnspecified: true               # 空/未知ステータスのカードを表示
+  displayFields: [owner, due]
+  filter: [ ... ]
+  limit: 100
+```
+
+新しい Kanban ウィジェットではボードタイトルが必須。ヘッダーの **新規** ボタンから、選択した列のステータスを持つ Markdown ノートを設定フォルダ内に作成できる。`showUnspecified` が有効なときだけ、空または未知ステータスのカードが「未指定」列に表示される。その列へドロップすると frontmatter からステータスキーを削除する。互換性のため `columns: [todo, doing, done]` 形式も引き続き読み込める。
+
 ## Workflow ウィジェット
 
 `workflow` ウィジェットは GemiHub ワークフローをヘッドレス実行し、その出力を描画する。`WorkflowWidget.tsx` + `workflow-runner.ts` で実装。
@@ -137,7 +162,7 @@ config:
   filter: [ ... ]
   sort: "-name"
   limit: 50
-  refreshInterval: 60                 # 分。0/省略 = 手動のみ
+  refreshInterval: 60                 # 分。0/省略 = 手動のみ。ダッシュボードを開いている間は定期的に再実行
 ```
 
 ### 出力契約
@@ -162,7 +187,7 @@ config エディタはこの契約を AI ワークフロー生成プロンプト
 
 1. **手動リフレッシュ** — ウィジェットヘッダの更新ボタン（キャンセル可）。
 2. **config エディタの「実行」** — 作成/設定変更時に出力プレビューとフィールド検出を行う。
-3. **間隔による自動実行** — マウント時、`refreshInterval > 0` かつ `now - cacheRecord.ranAt > refreshInterval * 60_000`（またはキャッシュ未取得）なら**1 回だけ**自動実行。`useRef` ガードで再描画/ブレークポイント変更時の多重実行を防止。ダッシュボードを開いている間の定期タイマーは無く、鮮度判定はダッシュボードを（再）オープンした時のみ。これは手動/テスト実行を律する「render/effect から実行しない」原則に対する、唯一の意図的な例外。
+3. **間隔による自動実行** — マウント時、`refreshInterval > 0` かつ `now - cacheRecord.ranAt > refreshInterval * 60_000`（またはキャッシュ未取得）なら一度自動実行する。その後、ダッシュボードを開いている間は `refreshInterval` 分ごとにワークフローを再実行する定期タイマーを登録する。タイマーはアンマウント時、またはワークフロー/間隔設定の変更時に解除される。
 
 実行失敗時は前回の rows/text を保持し、エラーと並べて「stale」表示を出す。
 

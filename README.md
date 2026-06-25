@@ -12,11 +12,13 @@ GemiHub is a self-hostable web application that turns Google Gemini into a perso
 
 ### Your Personal Dashboard
 
-The home screen is a customizable dashboard. Arrange widgets — Markdown notes, file lists, card grids, editable tables, workflow output, and embedded web pages — on a drag-and-drop grid. Toggle edit mode to add, configure, resize, and rearrange widgets, with undo/redo support. Create multiple dashboards, switch between them, and pin one as your home. Card and table widgets read Markdown files from a folder (with filter/sort/limit); tables let you edit frontmatter inline, written straight back to your Drive files. Workflow widgets run a GemiHub workflow and render its output as cards, a table, Markdown, or HTML — with optional auto-refresh. Each dashboard is saved as a `.dashboard` file in your Drive, with both a rendered view and a raw YAML view.
+The home screen is a customizable dashboard. Arrange widgets — Markdown notes, file lists, card grids, editable tables, kanban boards, workflow output, and embedded web pages — on a drag-and-drop grid. Toggle edit mode to add, configure, resize, and rearrange widgets, with undo/redo support. Create multiple dashboards, switch between them, and pin one as your home. Card, table, and kanban widgets read Markdown files from a folder (with filter/sort/limit); tables let you edit frontmatter inline, and kanban cards can be created from the board header or dragged between status columns, written straight back to your Drive files. Workflow widgets run a GemiHub workflow and render its output as cards, a table, Markdown, or HTML — with optional auto-refresh. Each dashboard is saved as a `.dashboard` file in your Drive, with both a rendered view and a raw YAML view.
 
 ![Dashboard](./public/images/dashboard.png)
 
 ![Dashboard Workflow Widget](./public/images/dashboard_workflow.png)
+
+![Dashboard Kanban Board](./public/images/dashboard_kanban.png)
 
 ### AI That Knows Your Data
 
@@ -102,7 +104,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 
 ## Features
 
-- **Customizable Dashboard** — Drag-and-drop widget grid as your home screen: Markdown (inline or referencing a Drive file), file lists, card grids and tables over a folder of Markdown files (with filter/sort/limit and inline frontmatter editing written back to `.md` files), workflow widgets that run a workflow and render its output (cards/table/Markdown/HTML, with optional auto-refresh), and web embeds. Multiple dashboards with edit mode, undo/redo, home pinning, and a rendered/raw YAML toggle
+- **Customizable Dashboard** — Drag-and-drop widget grid as your home screen: Markdown (inline or referencing a Drive file), file lists, card grids, tables, and kanban boards over a folder of Markdown files (with New card creation, optional unmatched-status column, filter/sort/limit, and frontmatter edits written back to `.md` files), workflow widgets that run a workflow and render its output (cards/table/Markdown/HTML, with optional auto-refresh), and web embeds. Multiple dashboards with edit mode, undo/redo, home pinning, and a rendered/raw YAML toggle
 - **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments. Paid plan uses the Interactions API for simultaneous function tools + RAG + Web Search and conversation chaining
 - **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides. `/run @workflow.yaml` executes workflows directly from chat with inline streaming logs
 - **Visual Workflow Editor** — Visual node-based builder (30 node types), YAML import/export, real-time SSE execution

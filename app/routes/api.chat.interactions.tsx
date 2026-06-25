@@ -19,6 +19,17 @@ import {
   type ToolResultInput,
 } from "~/services/gemini-interactions.server";
 
+function hasFunctionTools(tools: ReturnType<typeof buildInteractionsTools>): boolean {
+  return tools.some((tool) => (tool as { type?: string }).type === "function");
+}
+
+function getInteractionModel(model: ModelType, useFunctionTools: boolean): ModelType {
+  if (model === "gemini-3.1-pro-preview" && useFunctionTools) {
+    return "gemini-3.1-pro-preview-customtools";
+  }
+  return model;
+}
+
 const InteractionsChatRequestSchema = z.object({
   messages: z.array(z.object({
     role: z.enum(["user", "assistant"]),
@@ -168,6 +179,7 @@ export async function action({ request }: Route.ActionArgs) {
   const clampedTopK = rawTopK != null && Number.isFinite(rawTopK) ? Math.min(20, Math.max(1, rawTopK)) : undefined;
 
   const interactionsTools = buildInteractionsTools(tools, webSearchEnabled, model);
+  const interactionModel = getInteractionModel(model, hasFunctionTools(interactionsTools));
 
   const input = toolResults
     ? buildToolResultInput(toolResults)
@@ -179,6 +191,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   logCtx.details = {
     model,
+    interactionModel,
     toolCount: tools.length,
     ragStoreIds: ragStoreIds ?? [],
     isResume: !!toolResults,
@@ -216,9 +229,9 @@ export async function action({ request }: Route.ActionArgs) {
 
         const generator = streamInteraction({
           apiKey,
-          model,
+          model: interactionModel,
           input,
-          systemPrompt: toolResults ? undefined : systemPrompt,
+          systemPrompt,
           tools: interactionsTools.length > 0 ? interactionsTools : undefined,
           previousInteractionId: interactionId,
           generationConfig,

@@ -61,6 +61,26 @@ export interface TableWidgetConfig {
   [key: string]: unknown;
 }
 
+/** Config for the folder-backed `kanban` widget. */
+export interface KanbanColumnConfig {
+  value: string;
+  label?: string;
+}
+
+export interface KanbanWidgetConfig {
+  folder?: string;
+  title?: string;
+  statusProperty?: string;
+  titleProperty?: string;
+  columns?: Array<string | KanbanColumnConfig>;
+  showUnspecified?: boolean;
+  displayFields?: string[];
+  filter?: FilterCondition[];
+  limit?: number;
+  /** Unknown keys are preserved for round-trip safety. */
+  [key: string]: unknown;
+}
+
 /** Config for the `workflow` widget (runs a workflow, renders its output). */
 export interface WorkflowWidgetConfig {
   /** Workflow file path. */

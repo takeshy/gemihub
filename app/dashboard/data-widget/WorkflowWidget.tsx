@@ -6,10 +6,8 @@
 // interval auto-run below. Execution is triggered by:
 //   (a) the refresh button in the header (user action),
 //   (b) the config editor's "Test run" button (creation / config change),
-//   (c) interval auto-run: on mount, ONCE, only when refreshInterval is set and
-//       the cached result is older than the interval (or absent).
-// A useRef guard ensures (c) fires at most once per mount, never on re-render or
-// breakpoint change. There is no periodic timer while the dashboard stays open.
+//   (c) interval auto-run: stale-on-open plus a recurring timer while the
+//       dashboard view is open.
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { RefreshCw, AlertCircle, Clock, XCircle } from "lucide-react";
@@ -65,7 +63,7 @@ export default function WorkflowWidget({
   const [viewFilter, setViewFilter] = useState<FilterCondition[]>([]);
   const [viewSort, setViewSort] = useState<string | undefined>(undefined);
   const execAbortRef = useRef<AbortController | null>(null);
-  const autoRunDoneRef = useRef(false);
+  const executeWorkflowRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   // --- Load from sidecar cache (never executes) ---
   useEffect(() => {
@@ -164,23 +162,28 @@ export default function WorkflowWidget({
       }
     }
   }, [widgetId, dashboardFileId, executing, isText, cfg.workflow, cfg.outputVariable, cacheRecord, t]);
+  executeWorkflowRef.current = executeWorkflow;
 
-  // --- Interval auto-run (mount-time staleness check, fires at most once) ---
+  // --- Interval auto-run (stale-on-open + recurring timer while mounted) ---
   useEffect(() => {
     if (loading) return;
-    if (autoRunDoneRef.current) return;
     if (!widgetId || !dashboardFileId || !cfg.workflow) return;
-    autoRunDoneRef.current = true;
 
-    const interval = cfg.refreshInterval;
-    if (!interval || interval <= 0) return;
+    const interval = cfg.refreshInterval ?? 0;
+    if (interval <= 0) return;
+
     const ranAt = cacheRecord?.ranAt ?? 0;
     const isStale = Date.now() - ranAt > interval * 60_000;
     if (isStale) {
-      executeWorkflow();
+      void executeWorkflowRef.current();
     }
-    // executeWorkflow intentionally omitted from deps: the guard ref makes this a
-    // once-per-mount effect; including it would re-run when cacheRecord changes.
+
+    const timer = window.setInterval(() => {
+      void executeWorkflowRef.current();
+    }, interval * 60_000);
+    return () => window.clearInterval(timer);
+    // executeWorkflow/cacheRecord intentionally omitted: the timer is keyed by
+    // workflow path + interval value; the ref always calls the latest callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, widgetId, dashboardFileId, cfg.workflow, cfg.refreshInterval]);
 

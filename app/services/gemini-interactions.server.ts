@@ -409,12 +409,22 @@ function sanitizeToolResult(val: unknown): unknown {
   return val;
 }
 
+function serializeToolResult(value: unknown): string {
+  const sanitized = sanitizeToolResult(value);
+  if (typeof sanitized === "string") return sanitized || "null";
+  try {
+    return JSON.stringify(sanitized) || "null";
+  } catch {
+    return "null";
+  }
+}
+
 export function buildToolResultInput(toolResults: ToolResultInput[]): Interactions.Step[] {
   return toolResults.map((tr) => ({
     type: "function_result" as const,
     call_id: tr.callId,
     name: tr.name,
-    result: sanitizeToolResult(tr.result),
+    result: serializeToolResult(tr.result),
   } as Interactions.Step));
 }
 

@@ -65,6 +65,8 @@ export interface TranslationStrings {
   "dashboard.settingsAutoSaved": string;
   "dashboard.deleteWidget": string;
   "dashboard.deleteWidgetConfirm": string;
+  "dashboard.moveUp": string;
+  "dashboard.moveDown": string;
   "dashboard.newDashboard": string;
   "dashboard.rename": string;
   "dashboard.deleteDashboardConfirm": string;
@@ -169,6 +171,28 @@ export interface TranslationStrings {
   "dashboard.refreshIntervalHint": string;
   "dashboard.workflowNotRun": string;
   "dashboard.widgetWorkflow": string;
+  "dashboard.kanbanBoardTitle": string;
+  "dashboard.kanbanBoardTitleHint": string;
+  "dashboard.kanbanBoardTitlePlaceholder": string;
+  "dashboard.kanbanColumns": string;
+  "dashboard.kanbanColumnValue": string;
+  "dashboard.kanbanColumnLabel": string;
+  "dashboard.kanbanAddColumn": string;
+  "dashboard.kanbanShowUnspecified": string;
+  "dashboard.kanbanNewCard": string;
+  "dashboard.kanbanNewCardTitle": string;
+  "dashboard.kanbanNewCardNameLabel": string;
+  "dashboard.kanbanNewCardColumn": string;
+  "dashboard.kanbanNewCardCreate": string;
+  "dashboard.kanbanNewCardName": string;
+  "dashboard.kanbanNewCardError": string;
+  "dashboard.kanbanEmpty": string;
+  "dashboard.kanbanDragToMove": string;
+  "dashboard.kanbanStatusProperty": string;
+  "dashboard.kanbanTitleProperty": string;
+  "dashboard.kanbanSelectFolder": string;
+  "dashboard.kanbanUnspecified": string;
+  "dashboard.kanbanUntitled": string;
 
   "workspace.openExternal": string;
   "workspace.reload": string;
@@ -1024,6 +1048,8 @@ const en: TranslationStrings = {
   "dashboard.settingsAutoSaved": "Changes are applied automatically.",
   "dashboard.deleteWidget": "Delete Widget",
   "dashboard.deleteWidgetConfirm": "Delete this widget?",
+  "dashboard.moveUp": "Move up",
+  "dashboard.moveDown": "Move down",
   "dashboard.newDashboard": "New Dashboard",
   "dashboard.rename": "Rename",
   "dashboard.deleteDashboardConfirm": "Delete this dashboard? This cannot be undone.",
@@ -1125,9 +1151,31 @@ const en: TranslationStrings = {
   "dashboard.outputHtml": "HTML",
   "dashboard.outputStringHint": "The workflow must output a string (Markdown/HTML) in its output variable.",
   "dashboard.refreshInterval": "Refresh interval (minutes)",
-  "dashboard.refreshIntervalHint": "Auto-runs when the dashboard opens if the last run is older than this. 0 = manual only.",
+  "dashboard.refreshIntervalHint": "0 = manual only. On open, auto-runs once if the cached result is older than this, then re-runs periodically while the dashboard is open.",
   "dashboard.workflowNotRun": "Not run yet — use Refresh or Test run.",
   "dashboard.widgetWorkflow": "Workflow",
+  "dashboard.kanbanBoardTitle": "Board title",
+  "dashboard.kanbanBoardTitleHint": "Required. New kanban widgets are discarded if closed without a board title.",
+  "dashboard.kanbanBoardTitlePlaceholder": "Tasks",
+  "dashboard.kanbanColumns": "Kanban columns",
+  "dashboard.kanbanColumnValue": "Value",
+  "dashboard.kanbanColumnLabel": "Label",
+  "dashboard.kanbanAddColumn": "Add column",
+  "dashboard.kanbanShowUnspecified": "Show unmatched cards column",
+  "dashboard.kanbanNewCard": "New",
+  "dashboard.kanbanNewCardTitle": "New card",
+  "dashboard.kanbanNewCardNameLabel": "Title",
+  "dashboard.kanbanNewCardColumn": "Column",
+  "dashboard.kanbanNewCardCreate": "Create",
+  "dashboard.kanbanNewCardName": "Untitled",
+  "dashboard.kanbanNewCardError": "Failed to create card.",
+  "dashboard.kanbanEmpty": "No matching notes.",
+  "dashboard.kanbanDragToMove": "Click to open, drag to change status",
+  "dashboard.kanbanStatusProperty": "Status property",
+  "dashboard.kanbanTitleProperty": "Title property",
+  "dashboard.kanbanSelectFolder": "Select a folder to show a kanban board.",
+  "dashboard.kanbanUnspecified": "Unspecified",
+  "dashboard.kanbanUntitled": "Untitled",
 
   "workspace.openExternal": "Open in Google",
   "workspace.reload": "Reload",
@@ -1984,6 +2032,8 @@ const ja: TranslationStrings = {
   "dashboard.settingsAutoSaved": "変更は自動で反映されます。",
   "dashboard.deleteWidget": "ウィジェットを削除",
   "dashboard.deleteWidgetConfirm": "このウィジェットを削除しますか？",
+  "dashboard.moveUp": "上へ移動",
+  "dashboard.moveDown": "下へ移動",
   "dashboard.newDashboard": "新規ダッシュボード",
   "dashboard.rename": "リネーム",
   "dashboard.deleteDashboardConfirm": "このダッシュボードを削除しますか？元に戻せません。",
@@ -2085,9 +2135,31 @@ const ja: TranslationStrings = {
   "dashboard.outputHtml": "HTML",
   "dashboard.outputStringHint": "ワークフローは出力変数に文字列（Markdown/HTML）を出力する必要があります。",
   "dashboard.refreshInterval": "更新間隔（分）",
-  "dashboard.refreshIntervalHint": "ダッシュボードを開いた時、最終実行がこの時間より古ければ自動実行します。0 = 手動のみ。",
+  "dashboard.refreshIntervalHint": "0 = 手動のみ。開いたときにキャッシュがこの分数より古ければ一度自動実行し、その後ダッシュボードを開いている間は定期的に再実行します。",
   "dashboard.workflowNotRun": "未実行です — 更新またはテスト実行してください。",
   "dashboard.widgetWorkflow": "ワークフロー",
+  "dashboard.kanbanBoardTitle": "ボードのタイトル",
+  "dashboard.kanbanBoardTitleHint": "必須です。新規 Kanban ウィジェットは、タイトル未入力のまま閉じると破棄されます。",
+  "dashboard.kanbanBoardTitlePlaceholder": "タスク",
+  "dashboard.kanbanColumns": "カンバン列",
+  "dashboard.kanbanColumnValue": "値",
+  "dashboard.kanbanColumnLabel": "ラベル",
+  "dashboard.kanbanAddColumn": "列を追加",
+  "dashboard.kanbanShowUnspecified": "未該当カードの列を表示",
+  "dashboard.kanbanNewCard": "新規",
+  "dashboard.kanbanNewCardTitle": "新規カード",
+  "dashboard.kanbanNewCardNameLabel": "タイトル",
+  "dashboard.kanbanNewCardColumn": "列",
+  "dashboard.kanbanNewCardCreate": "作成",
+  "dashboard.kanbanNewCardName": "無題",
+  "dashboard.kanbanNewCardError": "カードの作成に失敗しました。",
+  "dashboard.kanbanEmpty": "該当するノートがありません。",
+  "dashboard.kanbanDragToMove": "クリックで開く、ドラッグでステータス変更",
+  "dashboard.kanbanStatusProperty": "ステータスプロパティ",
+  "dashboard.kanbanTitleProperty": "タイトルプロパティ",
+  "dashboard.kanbanSelectFolder": "フォルダを選択するとカンバンボードを表示します。",
+  "dashboard.kanbanUnspecified": "未指定",
+  "dashboard.kanbanUntitled": "無題",
 
   "workspace.openExternal": "Googleで開く",
   "workspace.reload": "再読み込み",

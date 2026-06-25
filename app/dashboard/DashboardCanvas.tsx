@@ -25,6 +25,36 @@ interface DashboardCanvasProps {
 }
 
 /**
+ * Whether a widget has its primary selection set. Used to discard a just-added
+ * widget that the user closed without choosing anything. Unknown/custom widget
+ * types have no single required field, so they are kept.
+ */
+function isWidgetConfigured(widget: Widget): boolean {
+  const c = widget.config ?? {};
+  const str = (key: string): string => {
+    const value = c[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+
+  switch (widget.type) {
+    case "markdown":
+      return str("fileId").length > 0 || str("fileName").length > 0;
+    case "web":
+      return str("url").length > 0;
+    case "workflow":
+      return str("workflow").length > 0;
+    case "file-list":
+    case "card":
+    case "table":
+      return str("folder").length > 0;
+    case "kanban":
+      return str("folder").length > 0 && str("title").length > 0;
+    default:
+      return true;
+  }
+}
+
+/**
  * Controlled, reusable dashboard grid editor: toolbar (add widget + edit toggle),
  * the widget grid with drag/resize, the widget palette, and the settings panel.
  *
@@ -46,6 +76,10 @@ export function DashboardCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [showPalette, setShowPalette] = useState(false);
   const [editingWidgetId, setEditingWidgetId] = useState<string | null>(null);
+  // Id of a widget that was just added from the palette and hasn't been
+  // configured yet. If its settings panel is closed without a selection, the
+  // widget is discarded rather than left empty on the grid.
+  const [pendingNewWidgetId, setPendingNewWidgetId] = useState<string | null>(null);
 
   // --- Undo/redo history ---
   // The canvas is controlled, so it tracks its own stack of data snapshots.
@@ -155,9 +189,24 @@ export function DashboardCanvas({
       onEditModeChange(true);
       // Open settings panel for the newly added widget.
       setEditingWidgetId(newWidget.id);
+      setPendingNewWidgetId(newWidget.id);
     },
     [data, commit, onEditModeChange],
   );
+
+  const handleCloseSettings = useCallback(() => {
+    const id = editingWidgetId;
+    setEditingWidgetId(null);
+
+    if (id && id === pendingNewWidgetId) {
+      const widget = data.widgets.find((w) => w.id === id);
+      if (widget && !isWidgetConfigured(widget)) {
+        commit({ ...data, widgets: data.widgets.filter((w) => w.id !== id) });
+      }
+    }
+
+    setPendingNewWidgetId(null);
+  }, [editingWidgetId, pendingNewWidgetId, data, commit]);
 
   const handleUpdateWidgetConfig = useCallback(
     (widgetId: string, config: unknown) => {
@@ -180,6 +229,7 @@ export function DashboardCanvas({
       if (!confirm(t("dashboard.deleteWidgetConfirm"))) return;
       commit({ ...data, widgets: data.widgets.filter((w) => w.id !== widgetId) });
       setEditingWidgetId(null);
+      setPendingNewWidgetId(null);
     },
     [data, commit, t],
   );
@@ -304,7 +354,7 @@ export function DashboardCanvas({
         <WidgetSettingsPanel
           widget={editingWidget}
           onChange={(config) => handleUpdateWidgetConfig(editingWidget.id, config)}
-          onClose={() => setEditingWidgetId(null)}
+          onClose={handleCloseSettings}
           onDelete={() => handleDeleteWidget(editingWidget.id)}
           dashboardFileId={dashboardFileId}
         />

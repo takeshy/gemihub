@@ -51,9 +51,10 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 | `web` | Embed an external URL (with embeddability check + fallback card) | URL |
 | `card` | Card grid over a folder of markdown files | folder |
 | `table` | Editable table over a folder of markdown files | folder |
+| `kanban` | Kanban board over a folder of markdown files | folder |
 | `workflow` | Run a workflow and render its output | workflow |
 
-`web` is unchanged from the initial dashboard release. `markdown` and `file-list` (below) and the data-oriented widgets — `card`, `table`, `workflow` — are described below.
+`web` is unchanged from the initial dashboard release. `markdown` and `file-list` (below) and the data-oriented widgets — `card`, `table`, `kanban`, `workflow` — are described below.
 
 ### Markdown widget
 
@@ -121,6 +122,30 @@ config:
 
 In edit mode, frontmatter cells are editable inline; edits are written back to the source file with order/body preservation (`frontmatter-writeback.ts`) and broadcast via the `dashboard-data-changed` event so other widgets refresh. `file.*` attribute columns are read-only. Cells whose value is an inline data URI (`data:image/...`) render as a thumbnail image instead of text and are never editable.
 
+## Kanban widget
+
+The `kanban` widget reads Markdown files from a folder, groups them by a frontmatter status property, and writes status changes back to the same file when a card is dragged to another column.
+
+![Kanban board](../public/images/dashboard_kanban.png)
+
+```yaml
+config:
+  folder: projects
+  title: Tasks
+  statusProperty: status              # frontmatter key used for columns
+  titleProperty: title                # card title key; falls back to file name
+  columns:
+    - { value: todo, label: To Do }
+    - { value: in-progress, label: In Progress }
+    - { value: done, label: Done }
+  showUnspecified: true               # show cards with empty/unknown status
+  displayFields: [owner, due]
+  filter: [ ... ]
+  limit: 100
+```
+
+The board title is required when adding a new kanban widget. The header includes a **New** button that creates a Markdown note in the configured folder with the chosen column status. When `showUnspecified` is enabled, cards with empty or unknown status appear in an "Unspecified" column; dropping a card there removes the status key from frontmatter. For backward compatibility, `columns: [todo, doing, done]` is still accepted.
+
 ## Workflow widget
 
 The `workflow` widget runs a GemiHub workflow headlessly and renders its output. Implemented by `WorkflowWidget.tsx` + `workflow-runner.ts`.
@@ -138,7 +163,7 @@ config:
   filter: [ ... ]
   sort: "-name"
   limit: 50
-  refreshInterval: 60                 # minutes; 0/omitted = manual only
+  refreshInterval: 60                 # minutes; 0/omitted = manual only; re-runs periodically while the dashboard is open
 ```
 
 ### Output contract
@@ -163,7 +188,7 @@ Execution is triggered by:
 
 1. **Manual refresh** — the refresh button in the widget header (cancellable).
 2. **Config editor "Run"** — on creation / config change, to preview output and detect fields.
-3. **Interval auto-run** — on mount, if `refreshInterval > 0` and `now - cacheRecord.ranAt > refreshInterval * 60_000` (or there is no cache yet), the widget auto-executes **once**. A `useRef` guard prevents repeated runs across re-renders / breakpoint changes. There is no periodic timer while the dashboard stays open — staleness is only evaluated when the dashboard is (re)opened. This is the one deliberate exception to the "never execute from a render/effect path" rule that governs the manual/test-run paths.
+3. **Interval auto-run** — on mount, if `refreshInterval > 0` and `now - cacheRecord.ranAt > refreshInterval * 60_000` (or there is no cache yet), the widget auto-executes once. It then registers a recurring timer that re-runs the workflow every `refreshInterval` minutes while the dashboard view is open. The timer is cleared on unmount or workflow/interval config changes.
 
 A failed run preserves the previous rows/text and shows a "stale" indicator alongside the error.
 

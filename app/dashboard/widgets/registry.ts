@@ -14,9 +14,11 @@ import { FileListConfigEditor } from "./config-editors/FileListConfigEditor";
 import { WebConfigEditor } from "./config-editors/WebConfigEditor";
 import FolderWidget from "../data-widget/FolderWidget";
 import WorkflowWidget from "../data-widget/WorkflowWidget";
+import KanbanWidget from "../data-widget/KanbanWidget";
 import { CardConfigEditor } from "../data-widget/CardConfigEditor";
 import { TableConfigEditor } from "../data-widget/TableConfigEditor";
 import { WorkflowConfigEditor } from "../data-widget/WorkflowConfigEditor";
+import { KanbanConfigEditor } from "../data-widget/KanbanConfigEditor";
 
 const registry = new Map<string, WidgetDef>();
 
@@ -107,6 +109,29 @@ registerWidget({
     React.createElement(FolderWidget, { config, ctx, view: "table" }),
   defaultSize: { w: 6, h: 5 },
   ConfigEditor: TableConfigEditor,
+});
+
+registerWidget({
+  type: "kanban",
+  label: "Kanban",
+  icon: React.createElement(LayoutGrid, { size: 16 }),
+  defaultConfig: {
+    folder: "",
+    title: "",
+    statusProperty: "status",
+    titleProperty: "title",
+    columns: [
+      { value: "todo", label: "To Do" },
+      { value: "in-progress", label: "In Progress" },
+      { value: "done", label: "Done" },
+    ],
+    showUnspecified: true,
+    displayFields: [],
+    limit: 100,
+  },
+  render: (config, ctx) => React.createElement(KanbanWidget, { config, ctx }),
+  defaultSize: { w: 8, h: 5 },
+  ConfigEditor: KanbanConfigEditor,
 });
 
 registerWidget({
