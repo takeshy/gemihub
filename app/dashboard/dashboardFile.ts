@@ -4,11 +4,10 @@
 
 import yaml from "js-yaml";
 import {
-  getCachedFile,
   getAllCachedFiles,
   getCachedRemoteMeta,
 } from "~/services/indexeddb-cache";
-import { writeFileLocal, renameFileLocal, deleteFileLocal } from "~/services/drive-local";
+import { readFileLocal, writeFileLocal, renameFileLocal, deleteFileLocal } from "~/services/drive-local";
 import {
   type DashboardData,
   type LayoutPos,
@@ -284,10 +283,18 @@ export async function loadDashboardByPath(
 
   if (!fileId) return null;
 
-  const cached = await getCachedFile(fileId);
-  if (!cached) return null;
+  // Read content with a server fallback: the file may be listed in remote meta
+  // (so it shows up in the dashboard listing) while its content has not been
+  // cached locally yet. Reading cache-only here is what made a fresh device
+  // spin forever on the dashboard home even though opening files worked.
+  let content: string;
+  try {
+    content = await readFileLocal(fileId);
+  } catch {
+    return null;
+  }
 
-  const data = parseDashboard(cached.content);
+  const data = parseDashboard(content);
   if (!data) return null;
 
   return { data, fileId };
@@ -328,10 +335,14 @@ export async function loadDashboardFile(): Promise<{
 
   if (!fileId) return null;
 
-  const cached = await getCachedFile(fileId);
-  if (!cached) return null;
+  let content: string;
+  try {
+    content = await readFileLocal(fileId);
+  } catch {
+    return null;
+  }
 
-  const data = parseDashboard(cached.content);
+  const data = parseDashboard(content);
   if (!data) return null;
 
   return { data, fileId };

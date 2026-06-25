@@ -281,10 +281,57 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
     );
   }
 
+  // Loading has finished (handled above) but no dashboard could be resolved —
+  // e.g. dashboards exist in the listing but their content failed to load
+  // (offline, deleted, or unparseable). Offer a retry / create instead of
+  // spinning forever.
   if (!data) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <Loader2 size={24} className="animate-spin text-gray-400" />
+      <div className="flex flex-1 flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 gap-4">
+        <LayoutDashboard size={48} className="text-gray-300 dark:text-gray-600" />
+        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+          {t("dashboard.loadFailed")}
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setLoading(true);
+              void loadAll();
+            }}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            {t("mainViewer.retry")}
+          </button>
+          <button
+            onClick={() => setShowCreateDialog(true)}
+            className="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <FilePlus size={16} />
+            {t("dashboard.newDashboard")}
+          </button>
+        </div>
+        {dashboards.length > 0 && (
+          <ul className="w-56 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 max-h-64 overflow-auto">
+            {dashboards.map((d) => (
+              <li key={d.fileId}>
+                <button
+                  onClick={() => handleSwitchDashboard(d)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  <span className="truncate">{d.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {showCreateDialog && (
+          <CreateDashboardDialog
+            value={newDashboardName}
+            onChange={setNewDashboardName}
+            onCreate={handleCreateDashboard}
+            onClose={() => setShowCreateDialog(false)}
+          />
+        )}
       </div>
     );
   }

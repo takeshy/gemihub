@@ -112,6 +112,7 @@ export interface TranslationStrings {
   "dashboard.sortNone": string;
   "dashboard.viewSortReset": string;
   "dashboard.setHomeFailed": string;
+  "dashboard.loadFailed": string;
 
   // Data widget (P2)
   "dashboard.dataSource": string;
@@ -1095,6 +1096,7 @@ const en: TranslationStrings = {
   "dashboard.sortNone": "No sort",
   "dashboard.viewSortReset": "Reset",
   "dashboard.setHomeFailed": "Failed to set home dashboard",
+  "dashboard.loadFailed": "Couldn't load the dashboard",
 
   // Data widget (P2)
   "dashboard.dataSource": "Data Source",
@@ -2079,6 +2081,7 @@ const ja: TranslationStrings = {
   "dashboard.sortNone": "並べ替えなし",
   "dashboard.viewSortReset": "リセット",
   "dashboard.setHomeFailed": "ホームダッシュボードの設定に失敗しました",
+  "dashboard.loadFailed": "ダッシュボードを読み込めませんでした",
 
   // Data widget (P2)
   "dashboard.dataSource": "データソース",
