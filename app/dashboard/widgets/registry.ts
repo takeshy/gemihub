@@ -3,15 +3,17 @@
 // via the registerWidget function (extensibility point for P1+).
 
 import React from "react";
-import { FileText, List, Table, Globe, Puzzle, LayoutGrid, Workflow } from "lucide-react";
+import { FileText, List, Table, Globe, Puzzle, LayoutGrid, Workflow, Database } from "lucide-react";
 import type { WidgetDef } from "../types";
 import MarkdownWidget from "./MarkdownWidget";
 import FileListWidget from "./FileListWidget";
 import WebWidget from "./WebWidget";
 import UnknownWidget from "./UnknownWidget";
+import BaseWidget from "./BaseWidget";
 import { MarkdownConfigEditor } from "./config-editors/MarkdownConfigEditor";
 import { FileListConfigEditor } from "./config-editors/FileListConfigEditor";
 import { WebConfigEditor } from "./config-editors/WebConfigEditor";
+import { BaseConfigEditor } from "./config-editors/BaseConfigEditor";
 import FolderWidget from "../data-widget/FolderWidget";
 import WorkflowWidget from "../data-widget/WorkflowWidget";
 import KanbanWidget from "../data-widget/KanbanWidget";
@@ -167,4 +169,14 @@ registerWidget({
   render: (config, ctx) => React.createElement(WebWidget, { config, ctx }),
   defaultSize: { w: 6, h: 4 },
   ConfigEditor: WebConfigEditor,
+});
+
+registerWidget({
+  type: "base",
+  label: "Base",
+  icon: React.createElement(Database, { size: 16 }),
+  defaultConfig: { base: "", view: "" },
+  render: (config, ctx) => React.createElement(BaseWidget, { config, ctx }),
+  defaultSize: { w: 6, h: 5 },
+  ConfigEditor: BaseConfigEditor,
 });

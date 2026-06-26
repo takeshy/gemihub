@@ -80,6 +80,13 @@ export interface TranslationStrings {
   "dashboard.noFiles": string;
   "dashboard.noUrl": string;
   "dashboard.unsupportedWidget": string;
+  "dashboard.baseFile": string;
+  "dashboard.baseSelectFile": string;
+  "dashboard.baseView": string;
+  "dashboard.baseNoViews": string;
+  "dashboard.baseCompileError": string;
+  "dashboard.baseQueryError": string;
+  "dashboard.baseSelectPlaceholder": string;
   "dashboard.doubleClickToEdit": string;
   "dashboard.readOnlyComplex": string;
   "dashboard.invalidNumber": string;
@@ -1064,6 +1071,13 @@ const en: TranslationStrings = {
   "dashboard.noFiles": "No files found",
   "dashboard.noUrl": "No URL configured",
   "dashboard.unsupportedWidget": "Unsupported widget",
+  "dashboard.baseFile": "Base file",
+  "dashboard.baseSelectFile": "Select a .base file",
+  "dashboard.baseView": "View",
+  "dashboard.baseNoViews": "No views defined",
+  "dashboard.baseCompileError": "Base compile error",
+  "dashboard.baseQueryError": "Query error",
+  "dashboard.baseSelectPlaceholder": "Select a .base file...",
   "dashboard.doubleClickToEdit": "Double-click to edit",
   "dashboard.readOnlyComplex": "Read-only (complex type)",
   "dashboard.invalidNumber": "Invalid number",
@@ -2049,6 +2063,13 @@ const ja: TranslationStrings = {
   "dashboard.noFiles": "ファイルが見つかりません",
   "dashboard.noUrl": "URLが設定されていません",
   "dashboard.unsupportedWidget": "未対応のウィジェット",
+  "dashboard.baseFile": "Baseファイル",
+  "dashboard.baseSelectFile": ".baseファイルを選択",
+  "dashboard.baseView": "ビュー",
+  "dashboard.baseNoViews": "ビューが定義されていません",
+  "dashboard.baseCompileError": "Baseコンパイルエラー",
+  "dashboard.baseQueryError": "クエリエラー",
+  "dashboard.baseSelectPlaceholder": ".baseファイルを選択...",
   "dashboard.doubleClickToEdit": "ダブルクリックで編集",
   "dashboard.readOnlyComplex": "読み取り専用（複合型）",
   "dashboard.invalidNumber": "無効な数値",
