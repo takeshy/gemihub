@@ -133,22 +133,46 @@ export function useGridLayout({
       const bp = breakpoint ?? "lg";
       const current = dataRef.current;
 
-      // Update the moved widget's position
-      let updated = updateWidgetLayout(current, widgetId, bp, pos);
+      // Cascading collision resolution: the moved/resized widget stays at `pos`;
+      // every other widget is processed top-to-bottom and pushed straight down
+      // until it clears all already-placed widgets. Pushing one widget can
+      // create a new overlap with another, so each is re-checked in a loop —
+      // unlike a single pass, this resolves chains of overlaps (the old single
+      // pass left widgets overlapping after a resize/move grew the footprint).
+      const placed: LayoutPos[] = [pos];
+      const moves = new Map<string, LayoutPos>();
 
-      // Resolve collisions — push overlapping widgets down using effective positions
-      updated = {
-        ...updated,
-        widgets: updated.widgets.map((w) => {
-          if (w.id === widgetId) return w;
-          const wPos = posMapRef.current.get(w.id) ?? getWidgetPos(w, bp);
-          if (overlaps(pos, wPos)) {
-            const newPos = { ...wPos, y: pos.y + pos.h };
-            return { ...w, layout: { ...w.layout, [bp]: newPos } };
-          }
-          return w;
-        }),
-      };
+      const others = current.widgets
+        .filter((w) => w.id !== widgetId)
+        .map((w) => ({ id: w.id, pos: posMapRef.current.get(w.id) ?? getWidgetPos(w, bp) }))
+        .sort((a, b) => a.pos.y - b.pos.y || a.pos.x - b.pos.x);
+
+      for (const other of others) {
+        let p = other.pos;
+        // y strictly increases each iteration (an overlap means some placed
+        // rect's bottom is below p.y), so this terminates; guard is belt-and-braces.
+        for (let guard = 0; guard < 1000; guard++) {
+          const hits = placed.filter((r) => overlaps(p, r));
+          if (hits.length === 0) break;
+          const maxBottom = Math.max(...hits.map((r) => r.y + r.h));
+          if (maxBottom <= p.y) break;
+          p = { ...p, y: maxBottom };
+        }
+        placed.push(p);
+        if (p.y !== other.pos.y) moves.set(other.id, p);
+      }
+
+      let updated = updateWidgetLayout(current, widgetId, bp, pos);
+      if (moves.size > 0) {
+        updated = {
+          ...updated,
+          widgets: updated.widgets.map((w) =>
+            moves.has(w.id)
+              ? { ...w, layout: { ...w.layout, [bp]: moves.get(w.id)! } }
+              : w,
+          ),
+        };
+      }
 
       onCommit(updated);
     },

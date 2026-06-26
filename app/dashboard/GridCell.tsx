@@ -46,7 +46,9 @@ export default function GridCell({
   const { t } = useI18n();
   const [interactionMode, setInteractionMode] = useState<InteractionMode>(null);
   const [transform, setTransform] = useState<{ dx: number; dy: number } | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerRef = useRef<{ id: number; target: HTMLElement } | null>(null);
   const [snapPreview, setSnapPreview] = useState<LayoutPos | null>(null);
 
   const isActive = interactionMode !== null;
@@ -59,11 +61,35 @@ export default function GridCell({
 
     const compute = interactionMode === "drag" ? computeDragPos : computeResizePos;
 
+    const clearInteraction = () => {
+      const pointer = pointerRef.current;
+      if (pointer?.target.hasPointerCapture?.(pointer.id)) {
+        pointer.target.releasePointerCapture(pointer.id);
+      }
+      pointerRef.current = null;
+      setInteractionMode(null);
+      setTransform(null);
+      setResizePreview(null);
+      setSnapPreview(null);
+      startRef.current = null;
+    };
+
     const onMove = (e: PointerEvent) => {
       if (!startRef.current) return;
+      if (pointerRef.current && e.pointerId !== pointerRef.current.id) return;
       const dx = e.clientX - startRef.current.x;
       const dy = e.clientY - startRef.current.y;
-      setTransform({ dx, dy });
+      // Drag follows the pointer via translate; resize grows the cell box
+      // itself (width/height) so it visibly resizes instead of moving.
+      if (interactionMode === "drag") {
+        setTransform({ dx, dy });
+      } else if (cellW > 0 && cellH > 0) {
+        const nextPos = compute(widget.id, dx, dy);
+        setResizePreview({
+          width: nextPos.w * cellW + (nextPos.w - 1) * grid.gap,
+          height: nextPos.h * cellH + (nextPos.h - 1) * grid.gap,
+        });
+      }
       if (cellW > 0 && cellH > 0) {
         setSnapPreview(compute(widget.id, dx, dy));
       }
@@ -71,6 +97,7 @@ export default function GridCell({
 
     const onUp = (e: PointerEvent) => {
       if (!startRef.current) return;
+      if (pointerRef.current && e.pointerId !== pointerRef.current.id) return;
       const dx = e.clientX - startRef.current.x;
       const dy = e.clientY - startRef.current.y;
       const finalPos = compute(widget.id, dx, dy);
@@ -79,25 +106,29 @@ export default function GridCell({
       } else {
         onResizeEnd(finalPos);
       }
-      setInteractionMode(null);
-      setTransform(null);
-      setSnapPreview(null);
-      startRef.current = null;
+      clearInteraction();
     };
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", clearInteraction);
+    window.addEventListener("blur", clearInteraction);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", clearInteraction);
+      window.removeEventListener("blur", clearInteraction);
     };
-  }, [interactionMode, cellW, cellH, computeDragPos, computeResizePos, onDragEnd, onResizeEnd, widget.id]);
+  }, [interactionMode, cellW, cellH, computeDragPos, computeResizePos, onDragEnd, onResizeEnd, widget.id, pos, grid]);
 
   const handleDragPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!editMode) return;
       e.preventDefault();
       e.stopPropagation();
+      const target = e.currentTarget as HTMLElement;
+      target.setPointerCapture(e.pointerId);
+      pointerRef.current = { id: e.pointerId, target };
       startRef.current = { x: e.clientX, y: e.clientY };
       setInteractionMode("drag");
       setTransform({ dx: 0, dy: 0 });
@@ -111,11 +142,20 @@ export default function GridCell({
       if (!editMode) return;
       e.preventDefault();
       e.stopPropagation();
+      const target = e.currentTarget as HTMLElement;
+      target.setPointerCapture(e.pointerId);
+      pointerRef.current = { id: e.pointerId, target };
       startRef.current = { x: e.clientX, y: e.clientY };
       setInteractionMode("resize");
-      setTransform({ dx: 0, dy: 0 });
+      setTransform(null);
+      if (cellW > 0 && cellH > 0) {
+        setResizePreview({
+          width: pos.w * cellW + (pos.w - 1) * grid.gap,
+          height: pos.h * cellH + (pos.h - 1) * grid.gap,
+        });
+      }
     },
-    [editMode],
+    [editMode, cellW, cellH, pos, grid.gap],
   );
 
   const ctx: WidgetContext = {
@@ -154,6 +194,8 @@ export default function GridCell({
           gridColumn: `${pos.x + 1} / span ${pos.w}`,
           gridRow: `${pos.y + 1} / span ${pos.h}`,
           transform: transformStyle,
+          width: resizePreview ? `${resizePreview.width}px` : undefined,
+          height: resizePreview ? `${resizePreview.height}px` : undefined,
           touchAction: interactionMode ? "none" : undefined,
         }}
       >
