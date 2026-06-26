@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseWorkflowYaml, serializeWorkflow, getNextNodes } from "./parser.ts";
+import { parseWorkflowYaml, serializeWorkflow, getNextNodes, extractWorkflowYaml } from "./parser.ts";
 import type { Workflow, WorkflowNode } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -1120,4 +1120,36 @@ nodes:
   assert.ok(wf4.edges.some((e) => e.from === "loop" && e.to === "finish" && e.label === "false"));
   assert.ok(wf4.edges.some((e) => e.from === "inc" && e.to === "loop"));
   assert.equal(wf4.edges.filter((e) => e.from === "finish").length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// extractWorkflowYaml — Obsidian-style ```workflow fenced blocks
+// ---------------------------------------------------------------------------
+
+test("extractWorkflowYaml pulls YAML out of a ```workflow block in a Markdown note", () => {
+  const md = [
+    "> [!info] AI Workflow History",
+    ">",
+    "> - 1/21/2026: Created",
+    "",
+    "```workflow",
+    "name: demo",
+    "nodes:",
+    "  - id: a",
+    "    type: dialog",
+    "```",
+    "",
+    "trailing note",
+  ].join("\n");
+
+  const yaml = extractWorkflowYaml(md);
+  assert.equal(yaml, "name: demo\nnodes:\n  - id: a\n    type: dialog");
+
+  const wf = parseWorkflowYaml(yaml);
+  assert.ok(wf.nodes.has("a"));
+});
+
+test("extractWorkflowYaml leaves plain YAML content unchanged", () => {
+  const plain = "name: demo\nnodes:\n  - id: a\n    type: dialog";
+  assert.equal(extractWorkflowYaml(plain), plain);
 });

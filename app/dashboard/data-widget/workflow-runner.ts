@@ -6,7 +6,7 @@
 //   (b) The "Test run" button in the config editor (creation / config change)
 // The widget's render path reads only from the sidecar cache.
 
-import { parseWorkflowYaml } from "~/engine/parser";
+import { parseWorkflowYaml, extractWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally } from "~/engine/local-executor";
 import type { ExecutionRecord } from "~/engine/types";
 import { readFileLocal, writeFileLocal } from "~/services/drive-local";
@@ -178,7 +178,10 @@ async function executeWorkflowVariables(
   abortSignal?: AbortSignal,
 ): Promise<Map<string, string | number>> {
   const content = await readFileLocal(workflowFileId);
-  const workflow = parseWorkflowYaml(content);
+  // Support Obsidian-style workflow notes: a Markdown file whose workflow YAML
+  // lives in a ```workflow fenced block (one workflow per file). Plain
+  // `.yaml`/`.yml` files pass through unchanged.
+  const workflow = parseWorkflowYaml(extractWorkflowYaml(content));
 
   const settings = getCachedLoaderDataInMemory()?.settings as
     import("~/types/settings").UserSettings | undefined;

@@ -43,6 +43,18 @@ function isWorkflowNodeType(value: unknown): value is WorkflowNodeType {
   return typeof value === "string" && VALID_NODE_TYPES.has(value);
 }
 
+/**
+ * GemiHub workflows are plain YAML files. Obsidian-style workflow notes instead
+ * store the workflow inside a ```workflow fenced code block within a Markdown
+ * file (one workflow per file). When such a block is present, return its body so
+ * it can be parsed as workflow YAML; otherwise return the content unchanged so
+ * plain `.yaml`/`.yml` workflows are unaffected.
+ */
+export function extractWorkflowYaml(content: string): string {
+  const match = content.match(/```+[ \t]*workflow[^\n]*\r?\n([\s\S]*?)\r?\n[ \t]*```+/);
+  return match ? match[1] : content;
+}
+
 export function parseWorkflowYaml(yamlContent: string): Workflow {
   const parsed = yaml.load(yamlContent) as Record<string, unknown>;
   if (!parsed || typeof parsed !== "object") {
