@@ -26,6 +26,14 @@ import type {
 } from "./types";
 import { detectFields, fieldsToMap } from "./filter";
 
+export const WORKFLOW_WIDGET_CACHE_UPDATED_EVENT = "dashboard-workflow-widget-cache-updated";
+
+export interface WorkflowWidgetCacheUpdatedDetail {
+  dashboardFileId: string;
+  widgetId: string;
+  record: WorkflowCacheRecord;
+}
+
 // --- Workflow file resolution ---
 
 /**
@@ -403,4 +411,12 @@ export async function saveWidgetCache(
   const caches = await loadCacheFile(dashboardFileId);
   caches[widgetId] = record;
   await saveCacheFile(dashboardFileId, caches);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<WorkflowWidgetCacheUpdatedDetail>(
+        WORKFLOW_WIDGET_CACHE_UPDATED_EVENT,
+        { detail: { dashboardFileId, widgetId, record } },
+      ),
+    );
+  }
 }

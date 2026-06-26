@@ -29,6 +29,8 @@ import {
   resolveWorkflowFileId,
   runWorkflowRows,
   runWorkflowText,
+  WORKFLOW_WIDGET_CACHE_UPDATED_EVENT,
+  type WorkflowWidgetCacheUpdatedDetail,
 } from "./workflow-runner";
 import { applyPostSource, detectFields, fieldsToMap } from "./filter";
 import { TableView } from "./TableView";
@@ -82,6 +84,23 @@ export default function WorkflowWidget({
     })();
     return () => {
       cancelled = true;
+    };
+  }, [widgetId, dashboardFileId]);
+
+  useEffect(() => {
+    if (!widgetId || !dashboardFileId) return;
+
+    const handleCacheUpdated = (event: Event) => {
+      const { detail } = event as CustomEvent<WorkflowWidgetCacheUpdatedDetail>;
+      if (!detail) return;
+      if (detail.dashboardFileId !== dashboardFileId || detail.widgetId !== widgetId) return;
+      setCacheRecord(detail.record);
+      setLoading(false);
+    };
+
+    window.addEventListener(WORKFLOW_WIDGET_CACHE_UPDATED_EVENT, handleCacheUpdated);
+    return () => {
+      window.removeEventListener(WORKFLOW_WIDGET_CACHE_UPDATED_EVENT, handleCacheUpdated);
     };
   }, [widgetId, dashboardFileId]);
 
