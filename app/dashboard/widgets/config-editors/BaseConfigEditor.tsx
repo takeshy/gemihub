@@ -4,8 +4,10 @@ import { useState, useEffect, useMemo } from "react";
 import { FileText, X, ChevronDown } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { ConfigEditorProps } from "../../types";
-import { readFileLocal, searchFilesLocal } from "~/services/drive-local";
+import { readFileLocal } from "~/services/drive-local";
+import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { compileBase } from "~/bases/index";
+import { collectBaseFileOptions, type BaseFileOption } from "../base-file-options";
 
 interface BaseWidgetConfig {
   base?: string;
@@ -15,7 +17,7 @@ interface BaseWidgetConfig {
 export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
   const { t } = useI18n();
   const cfg = useMemo(() => (config ?? {}) as BaseWidgetConfig, [config]);
-  const [baseFiles, setBaseFiles] = useState<Array<{ id: string; name: string }>>([]);
+  const [baseFiles, setBaseFiles] = useState<BaseFileOption[]>([]);
   const [showPicker, setShowPicker] = useState(false);
   const [search, setSearch] = useState("");
   const [views, setViews] = useState<string[]>([]);
@@ -23,8 +25,8 @@ export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
   // Load .base files
   useEffect(() => {
     (async () => {
-      const results = await searchFilesLocal(".base", false);
-      setBaseFiles(results.map((f) => ({ id: f.id, name: f.name })));
+      const meta = await getCachedRemoteMeta();
+      setBaseFiles(meta ? collectBaseFileOptions(meta.files) : []);
     })();
   }, []);
 

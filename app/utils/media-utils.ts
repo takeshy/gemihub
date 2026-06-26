@@ -15,6 +15,7 @@ export function guessMimeType(fileName: string): string {
   const ext = fileName.toLowerCase().split(".").pop() || "";
   const map: Record<string, string> = {
     canvas: "application/json",
+    base: "text/yaml",
     pdf: "application/pdf",
     mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg", mov: "video/quicktime", avi: "video/x-msvideo", mkv: "video/x-matroska",
     mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac", aac: "audio/aac", m4a: "audio/mp4", opus: "audio/opus",

@@ -148,6 +148,7 @@ const EXTENSION_MIME_TYPES: Record<string, string> = {
   txt: "text/plain",
   json: "application/json",
   canvas: "application/json",
+  base: "text/yaml",
   yaml: "application/yaml",
   yml: "application/yaml",
   pdf: "application/pdf",

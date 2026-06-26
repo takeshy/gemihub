@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isSyncExcludedPath, getSyncCompletionStatus } from "./sync-client-utils.ts";
+import { isSyncExcludedPath, getSyncCompletionStatus, shouldTreatAsBinaryFile } from "./sync-client-utils.ts";
 
 test("isSyncExcludedPath excludes system file names", () => {
   assert.equal(isSyncExcludedPath("_sync-meta.json"), true);
@@ -44,4 +44,15 @@ test("getSyncCompletionStatus returns warning message for skipped files", () => 
   const result = getSyncCompletionStatus(2, "Full push");
   assert.equal(result.status, "warning");
   assert.equal(result.error, "Full push completed with warning: skipped 2 file(s).");
+});
+
+test("shouldTreatAsBinaryFile keeps dashboard-like text files textual despite octet-stream mime", () => {
+  assert.equal(shouldTreatAsBinaryFile("dashboards/home.dashboard", "application/octet-stream"), false);
+  assert.equal(shouldTreatAsBinaryFile("Dashboards/Bases/Tips.base", "application/octet-stream"), false);
+  assert.equal(shouldTreatAsBinaryFile("workflows/example.yaml", "application/octet-stream"), false);
+});
+
+test("shouldTreatAsBinaryFile still treats real binary extensions as binary", () => {
+  assert.equal(shouldTreatAsBinaryFile("archive.zip", "application/octet-stream"), true);
+  assert.equal(shouldTreatAsBinaryFile("cover.png", ""), true);
 });

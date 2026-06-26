@@ -14,7 +14,9 @@ interface QuickOpenDialogProps {
 }
 
 function guessMimeType(name: string): string {
-  if (name.endsWith(".yaml") || name.endsWith(".yml")) return "text/yaml";
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
+  if (lower.endsWith(".base")) return "text/yaml";
   return "text/plain";
 }
 

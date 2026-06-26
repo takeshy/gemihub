@@ -54,6 +54,25 @@ const BINARY_FILE_EXTENSIONS = new Set([
   "wasm",
 ]);
 
+const TEXT_FILE_EXTENSIONS = new Set([
+  "base",
+  "css",
+  "csv",
+  "dashboard",
+  "html",
+  "js",
+  "json",
+  "jsx",
+  "md",
+  "mjs",
+  "ts",
+  "tsx",
+  "txt",
+  "xml",
+  "yaml",
+  "yml",
+]);
+
 export function isBinaryMimeType(mimeType: string | undefined | null): boolean {
   if (!mimeType) return false;
   if (
@@ -69,6 +88,19 @@ export function isBinaryMimeType(mimeType: string | undefined | null): boolean {
 export function isBinaryFileName(fileName: string | undefined | null): boolean {
   const ext = fileName?.toLowerCase().split(".").pop() ?? "";
   return BINARY_FILE_EXTENSIONS.has(ext);
+}
+
+export function isTextFileName(fileName: string | undefined | null): boolean {
+  const ext = fileName?.toLowerCase().split(".").pop() ?? "";
+  return TEXT_FILE_EXTENSIONS.has(ext);
+}
+
+export function shouldTreatAsBinaryFile(
+  fileName: string | undefined | null,
+  mimeType: string | undefined | null
+): boolean {
+  if (isBinaryMimeType(mimeType)) return !isTextFileName(fileName);
+  return isBinaryFileName(fileName) || (fileName ? isImageFileName(fileName) : false);
 }
 
 /**

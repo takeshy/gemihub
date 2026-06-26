@@ -12,7 +12,7 @@ import {
   type CachedTreeNode,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit } from "~/services/edit-history-local";
-import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
 import { findFileByPath } from "~/utils/file-tree-operations";
 import type { TranslationStrings } from "~/i18n/translations";
 import type { UploadFile, UploadReturn } from "~/hooks/useFileUpload";
@@ -104,6 +104,7 @@ function mimeTypeFromImportPath(fileName: string): string {
     canvas: "application/json",
     yaml: "text/yaml",
     yml: "text/yaml",
+    base: "text/yaml",
     js: "application/javascript",
     ts: "application/typescript",
     css: "text/css",
@@ -290,8 +291,8 @@ export function useTreeFileCreate({
     }
 
     const duplicateSet = new Set(duplicates.map((d) => d.file));
-    const textDuplicates = duplicates.filter((d) => !isBinaryMimeType(d.existing.mimeType));
-    const binaryDuplicates = duplicates.filter((d) => isBinaryMimeType(d.existing.mimeType));
+    const textDuplicates = duplicates.filter((d) => !shouldTreatAsBinaryFile(d.fullPath, d.existing.mimeType));
+    const binaryDuplicates = duplicates.filter((d) => shouldTreatAsBinaryFile(d.fullPath, d.existing.mimeType));
     const newFiles = files.filter((f) => !duplicateSet.has(f));
 
     // Text duplicates: local cache update only
@@ -371,7 +372,7 @@ export function useTreeFileCreate({
           const uploadName = getUploadFileName(file);
           const uploaded = result.fileMap.get(uploadName);
           if (!uploaded) continue;
-          if (isBinaryMimeType(uploaded.mimeType)) {
+          if (shouldTreatAsBinaryFile(uploaded.name ?? uploadName, uploaded.mimeType)) {
             const base64 = await fileToBase64(file);
             await setCachedFile({
               fileId: uploaded.id,

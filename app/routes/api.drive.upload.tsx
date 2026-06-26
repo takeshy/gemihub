@@ -7,6 +7,15 @@ import { upsertFileInMeta } from "~/services/sync-meta.server";
 const MAX_FILE_SIZE_FREE = 20 * 1024 * 1024; // 20MB per file (free)
 const MAX_FILE_SIZE_PAID = 5 * 1024 * 1024 * 1024; // 5GB per file (paid — Drive API limit)
 
+function guessUploadMimeType(fileName: string, browserMimeType: string): string {
+  if (browserMimeType && browserMimeType !== "application/octet-stream") return browserMimeType;
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".base")) return "text/yaml";
+  if (lower.endsWith(".dashboard")) return "text/yaml";
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
+  return browserMimeType || "application/octet-stream";
+}
+
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
@@ -83,6 +92,7 @@ export async function action({ request }: Route.ActionArgs) {
         .join("/") || "";
       const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
       const existingFileId = replaceMap[safeName] || replaceMap[file.name];
+      const mimeType = guessUploadMimeType(uploadName, file.type);
       let driveFile;
       if (existingFileId) {
         // Verify the file belongs to the target folder before overwriting
@@ -96,7 +106,7 @@ export async function action({ request }: Route.ActionArgs) {
           validTokens.accessToken,
           existingFileId,
           buffer,
-          file.type || "application/octet-stream"
+          mimeType
         );
       } else {
         driveFile = await createFileBinary(
@@ -104,7 +114,7 @@ export async function action({ request }: Route.ActionArgs) {
           uploadName,
           buffer,
           targetFolderId,
-          file.type || "application/octet-stream"
+          mimeType
         );
       }
       await upsertFileInMeta(validTokens.accessToken, targetFolderId, driveFile);

@@ -31,7 +31,7 @@ export function mimeTypeFromFileName(fileName: string): string {
     md: "text/markdown", txt: "text/plain",
     json: "application/json", canvas: "application/json",
     yaml: "text/yaml", yml: "text/yaml",
-    dashboard: "text/yaml",
+    dashboard: "text/yaml", base: "text/yaml",
     js: "application/javascript", ts: "application/typescript",
     css: "text/css", html: "text/html", xml: "text/xml",
     csv: "text/csv",

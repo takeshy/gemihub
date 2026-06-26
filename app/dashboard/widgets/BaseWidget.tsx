@@ -9,8 +9,9 @@ import { compileBase, queryView, createGemiHubHost } from "~/bases/index";
 import type { CompiledBase, QueryResult, BaseEntry, Value, Diagnostic } from "~/bases/types";
 import { valueToString } from "~/bases/values";
 import { getRemoteMetaFiles, readFileLocal } from "~/services/drive-local";
-import { getCachedFile } from "~/services/indexeddb-cache";
+import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
+import { findBaseFileOption } from "./base-file-options";
 
 interface BaseWidgetConfig {
   base?: string;
@@ -86,7 +87,8 @@ export default function BaseWidget({
         setVaultFiles(files);
 
         if (cfg.base) {
-          const found = files.find((f) => f.name === cfg.base);
+          const meta = await getCachedRemoteMeta();
+          const found = meta ? findBaseFileOption(meta.files, cfg.base) : null;
           if (found) {
             const content = await loadBaseContent(found.id);
             if (cancelled) return;

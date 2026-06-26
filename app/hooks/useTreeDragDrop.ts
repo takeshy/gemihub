@@ -11,7 +11,7 @@ import {
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit } from "~/services/edit-history-local";
-import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
 import { migrateNewFileId, findFileByPath } from "~/utils/file-tree-operations";
 import {
   findFullFileName,
@@ -442,8 +442,8 @@ export function useTreeDragDrop({
 
       // Split duplicates into text and binary
       const duplicateSet = new Set(duplicates.map((d) => d.file));
-      const textDuplicates = duplicates.filter((d) => !isBinaryMimeType(d.existing.mimeType));
-      const binaryDuplicates = duplicates.filter((d) => isBinaryMimeType(d.existing.mimeType));
+      const textDuplicates = duplicates.filter((d) => !shouldTreatAsBinaryFile(d.fullPath, d.existing.mimeType));
+      const binaryDuplicates = duplicates.filter((d) => shouldTreatAsBinaryFile(d.fullPath, d.existing.mimeType));
       const newFiles = files.filter((f) => !duplicateSet.has(f));
 
       // Handle text duplicates: local cache update only (yellow dot)
@@ -526,7 +526,7 @@ export function useTreeDragDrop({
             const uploadName = getUploadFileName(file);
             const uploaded = result.fileMap.get(uploadName);
             if (!uploaded) continue;
-            if (isBinaryMimeType(uploaded.mimeType)) {
+            if (shouldTreatAsBinaryFile(uploaded.name ?? uploadName, uploaded.mimeType)) {
               const base64 = await fileToBase64(file);
               await setCachedFile({
                 fileId: uploaded.id,

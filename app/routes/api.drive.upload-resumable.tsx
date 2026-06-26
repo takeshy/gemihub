@@ -22,6 +22,15 @@ function sanitizeDrivePath(path: string): string {
     .join("/");
 }
 
+function guessUploadMimeType(fileName: string, requestedMimeType: string | null | undefined): string {
+  if (requestedMimeType && requestedMimeType !== "application/octet-stream") return requestedMimeType;
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".base")) return "text/yaml";
+  if (lower.endsWith(".dashboard")) return "text/yaml";
+  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
+  return requestedMimeType || "application/octet-stream";
+}
+
 async function getMaxFileSize(rootFolderId: string): Promise<number> {
   try {
     const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
@@ -67,8 +76,10 @@ export async function action({ request }: Route.ActionArgs) {
       );
     }
 
-    const mimeType = (formData.get("mimeType") as string | null) || file.type || "application/octet-stream";
     const replaceFileId = formData.get("replaceFileId") as string | null;
+    const safePrefix = sanitizeDrivePath((formData.get("namePrefix") as string | null) || "");
+    const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
+    const mimeType = guessUploadMimeType(uploadName, (formData.get("mimeType") as string | null) || file.type);
     let uploadUrl: string;
 
     if (replaceFileId) {
@@ -86,8 +97,6 @@ export async function action({ request }: Route.ActionArgs) {
         size
       );
     } else {
-      const safePrefix = sanitizeDrivePath((formData.get("namePrefix") as string | null) || "");
-      const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
       uploadUrl = await createResumableUploadSession(
         validTokens.accessToken,
         uploadName,
@@ -155,7 +164,9 @@ export async function action({ request }: Route.ActionArgs) {
       );
     }
 
-    const mimeType = body.mimeType || "application/octet-stream";
+    const safePrefix = sanitizeDrivePath(body.namePrefix || "");
+    const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
+    const mimeType = guessUploadMimeType(uploadName, body.mimeType);
     let uploadUrl: string;
 
     if (body.replaceFileId) {
@@ -173,8 +184,6 @@ export async function action({ request }: Route.ActionArgs) {
         size
       );
     } else {
-      const safePrefix = sanitizeDrivePath(body.namePrefix || "");
-      const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
       uploadUrl = await createResumableUploadSession(
         validTokens.accessToken,
         uploadName,

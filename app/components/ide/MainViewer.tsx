@@ -83,10 +83,14 @@ export function MainViewer({
     return <GoogleSheetViewer fileId={fileId} fileName={fileName || "Google Sheet"} />;
   }
 
-  // .canvas / .dashboard are text (YAML/JSON) but may be served with a binary
+  // .canvas / .dashboard / .base are text but may be served with a binary
   // MIME type (application/octet-stream). Route them to TextBasedViewer before
   // the binary checks below so they open in their dedicated editors.
-  if (fileName?.toLowerCase().endsWith(".canvas") || fileName?.toLowerCase().endsWith(".dashboard")) {
+  if (
+    fileName?.toLowerCase().endsWith(".canvas") ||
+    fileName?.toLowerCase().endsWith(".dashboard") ||
+    fileName?.toLowerCase().endsWith(".base")
+  ) {
     return (
       <TextBasedViewer
         fileId={fileId}
