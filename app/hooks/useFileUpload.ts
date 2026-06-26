@@ -67,140 +67,63 @@ export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_L
         return fail;
       }
 
-      if (sizeLimitBytes === null) {
-        const failedNames = new Set<string>();
-        const fileMap = new Map<string, UploadedFile>();
+      const failedNames = new Set<string>();
+      const fileMap = new Map<string, UploadedFile>();
 
-        for (const f of validFiles) {
-          const clientName = getUploadFileName(f);
-          try {
-            const formData = new FormData();
-            formData.set("intent", "upload-file");
-            formData.set("folderId", folderId);
-            formData.set("clientPath", clientName);
-            formData.set("fileName", f.name);
-            formData.set("mimeType", f.type || "application/octet-stream");
-            formData.set("size", String(f.size));
-            formData.set("file", f);
-            if (namePrefix) {
-              formData.set("namePrefix", namePrefix);
-            }
-            const replaceFileId = replaceMap?.[clientName] || replaceMap?.[f.name];
-            if (replaceFileId) {
-              formData.set("replaceFileId", replaceFileId);
-            }
+      for (const f of validFiles) {
+        const clientName = getUploadFileName(f);
+        try {
+          const formData = new FormData();
+          formData.set("intent", "upload-file");
+          formData.set("folderId", folderId);
+          formData.set("clientPath", clientName);
+          formData.set("fileName", f.name);
+          formData.set("mimeType", f.type || "application/octet-stream");
+          formData.set("size", String(f.size));
+          formData.set("file", f);
+          if (namePrefix) {
+            formData.set("namePrefix", namePrefix);
+          }
+          const replaceFileId = replaceMap?.[clientName] || replaceMap?.[f.name];
+          if (replaceFileId) {
+            formData.set("replaceFileId", replaceFileId);
+          }
 
-            const uploadRes = await fetch("/api/drive/upload-resumable", {
-              method: "POST",
-              body: formData,
-            });
-            const uploadData = await uploadRes.json().catch(() => ({}));
-            if (!uploadRes.ok || !uploadData.file) {
-              const error = uploadData.error || "Upload failed";
-              failedNames.add(clientName);
-              failedNames.add(f.name);
-              setProgress((prev) =>
-                prev.map((p) => (p.name === clientName ? { ...p, status: "error", error } : p))
-              );
-              continue;
-            }
-
-            const completed = uploadData.file as UploadedFile;
-            ragRegisterNewFile(completed.id, completed.name);
-            fileMap.set(clientName, completed);
-            fileMap.set(f.name, completed);
-            setProgress((prev) =>
-              prev.map((p) => (p.name === clientName ? { ...p, status: "done" } : p))
-            );
-          } catch {
+          const uploadRes = await fetch("/api/drive/upload-resumable", {
+            method: "POST",
+            body: formData,
+          });
+          const uploadData = await uploadRes.json().catch(() => ({}));
+          if (!uploadRes.ok || !uploadData.file) {
+            const error = uploadData.error || "Upload failed";
             failedNames.add(clientName);
             failedNames.add(f.name);
             setProgress((prev) =>
-              prev.map((p) =>
-                p.name === clientName ? { ...p, status: "error", error: "Network error" } : p
-              )
+              prev.map((p) => (p.name === clientName ? { ...p, status: "error", error } : p))
             );
+            continue;
           }
-        }
 
-        setUploading(false);
-        return { ok: true, failedNames, fileMap };
-      }
-
-      const formData = new FormData();
-      formData.set("folderId", folderId);
-      if (namePrefix) {
-        formData.set("namePrefix", namePrefix);
-      }
-      if (replaceMap && Object.keys(replaceMap).length > 0) {
-        formData.set("replaceMap", JSON.stringify(replaceMap));
-      }
-      for (const f of validFiles) {
-        formData.append("files", f);
-        formData.append("filePaths", getUploadFileName(f));
-      }
-
-      try {
-        const res = await fetch("/api/drive/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
+          const completed = uploadData.file as UploadedFile;
+          ragRegisterNewFile(completed.id, completed.name);
+          fileMap.set(clientName, completed);
+          fileMap.set(f.name, completed);
+          setProgress((prev) =>
+            prev.map((p) => (p.name === clientName ? { ...p, status: "done" } : p))
+          );
+        } catch {
+          failedNames.add(clientName);
+          failedNames.add(f.name);
           setProgress((prev) =>
             prev.map((p) =>
-              p.status === "uploading"
-                ? { ...p, status: "error", error: data.error || "Upload failed" }
-                : p
+              p.name === clientName ? { ...p, status: "error", error: "Network error" } : p
             )
           );
-          setUploading(false);
-          return fail;
         }
-
-        const data = await res.json();
-        const resultMap = new Map<string, { file?: unknown; error?: string }>();
-        for (const r of data.results) {
-          resultMap.set(r.name, r);
-        }
-
-        const failedNames = new Set<string>();
-        const fileMap = new Map<string, UploadedFile>();
-        for (const [name, result] of resultMap) {
-          if (result.error) {
-            failedNames.add(name);
-          } else if (result.file) {
-            const f = result.file as UploadedFile;
-            ragRegisterNewFile(f.id, f.name);
-            fileMap.set(name, f);
-          }
-        }
-
-        setProgress((prev) =>
-          prev.map((p) => {
-            if (p.status !== "uploading") return p;
-            const result = resultMap.get(p.name);
-            if (result?.error) {
-              return { ...p, status: "error", error: result.error };
-            }
-            return { ...p, status: "done" };
-          })
-        );
-
-        setUploading(false);
-        return { ok: true, failedNames, fileMap };
-      } catch {
-        setProgress((prev) =>
-          prev.map((p) =>
-            p.status === "uploading"
-              ? { ...p, status: "error", error: "Network error" }
-              : p
-          )
-        );
-        setUploading(false);
-        return fail;
       }
+
+      setUploading(false);
+      return { ok: true, failedNames, fileMap };
     },
     [sizeLimitBytes]
   );
