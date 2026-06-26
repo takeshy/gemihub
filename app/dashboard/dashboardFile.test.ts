@@ -53,6 +53,52 @@ widgets:
   assert.equal(data.widgets[0].layout.lg?.x, 0);
 });
 
+test("parseDashboard fills runtime defaults for partial dashboard YAML", () => {
+  const yaml = `
+version: 1
+widgets:
+  - id: w1
+    type: markdown
+`;
+  const data = parseDashboard(yaml);
+  assert.ok(data);
+  assert.equal(data.grid.cols, 12);
+  assert.equal(data.grid.rowHeight, 80);
+  assert.equal(data.grid.gap, 8);
+  assert.equal(data.widgets.length, 1);
+  assert.deepEqual(data.widgets[0].layout, {});
+  assert.deepEqual(data.widgets[0].config, {});
+});
+
+test("parseDashboard fills missing widgets with an empty array", () => {
+  const yaml = `
+version: 1
+grid:
+  rowHeight: 96
+`;
+  const data = parseDashboard(yaml);
+  assert.ok(data);
+  assert.equal(data.grid.cols, 12);
+  assert.equal(data.grid.rowHeight, 96);
+  assert.equal(data.grid.gap, 8);
+  assert.deepEqual(data.widgets, []);
+});
+
+test("parseDashboard ignores invalid grid values", () => {
+  const yaml = `
+version: 1
+grid:
+  cols: wide
+  rowHeight: tall
+  gap: 4
+`;
+  const data = parseDashboard(yaml);
+  assert.ok(data);
+  assert.equal(data.grid.cols, 12);
+  assert.equal(data.grid.rowHeight, 80);
+  assert.equal(data.grid.gap, 4);
+});
+
 test("serializeDashboard round-trips unknown keys", () => {
   const yaml = `
 version: 1

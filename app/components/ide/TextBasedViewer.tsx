@@ -15,6 +15,7 @@ import { HtmlFileEditor } from "./editors/HtmlFileEditor";
 import { TextFileEditor } from "./editors/TextFileEditor";
 import { DiffEditor } from "./editors/DiffEditor";
 import { CanvasFileEditor } from "./editors/CanvasFileEditor";
+import { BaseFileEditor } from "./editors/BaseFileEditor";
 import { DashboardFileEditor } from "./editors/DashboardFileEditor";
 import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
 import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
@@ -166,6 +167,17 @@ export function TextBasedViewer({
   } else if (lower.endsWith(".canvas")) {
     editor = (
       <CanvasFileEditor
+        fileId={fileId}
+        fileName={name}
+        initialContent={content}
+        saveToCache={saveToCache}
+        onDiffClick={handleDiffClick}
+        onHistoryClick={handleHistoryClick}
+      />
+    );
+  } else if (lower.endsWith(".base")) {
+    editor = (
+      <BaseFileEditor
         fileId={fileId}
         fileName={name}
         initialContent={content}

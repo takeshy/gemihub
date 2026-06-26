@@ -2,21 +2,22 @@
 // Special forms (if, filter, map, reduce) are handled by the evaluator.
 
 import type {
-  Value, EvalContext, NumberValue, StringValue, BooleanValue,
+  Value, EvalContext, NumberValue, StringValue,
   DateValue, DurationValue, ListValue, ObjectValue, FileValue,
-  LinkValue, UrlValue, RegexpValue, HtmlValue, ImageValue, IconValue,
-  ErrorValue, NullValue, HostFile,
+  LinkValue, UrlValue, RegexpValue,
+  ErrorValue, HostFile,
 } from "./types";
-import { NULL, TRUE, FALSE, bool, num, str, dateVal, durVal, listVal, errorVal, objVal } from "./types";
+import { NULL, TRUE, FALSE, bool, num, str, dateVal, listVal, errorVal } from "./types";
 import {
   isTruthy, isEmpty, valueToString, isType, looseEquals, compareValues,
-  parseDate, parseDuration, addDurationToDate, subtractDurationFromDate,
-  addDurations, subtractDurations, multiplyDuration, divideDuration,
-  dateMinusDate, detectWikilink, getTimezoneOffsetMs,
+  parseDate, parseDuration,
+  detectWikilink, getTimezoneOffsetMs,
 } from "./values";
 
 type GlobalFn = (args: Value[], ctx: EvalContext) => Value;
-type MethodFn = (receiver: any, args: Value[], ctx: EvalContext) => Value;
+type MethodFn = {
+  bivarianceHack(receiver: unknown, args: Value[], ctx: EvalContext): Value;
+}["bivarianceHack"];
 
 // ---------------------------------------------------------------------------
 // Global functions
@@ -44,7 +45,7 @@ export const globalFunctions: Record<string, GlobalFn> = {
     return errorVal("TYPE001", "date() expects a string or date");
   },
 
-  duration(args: Value[], ctx: EvalContext): Value {
+  duration(args: Value[], _ctx: EvalContext): Value {
     const input = args[0];
     if (input.type === "error") return input;
     if (input.type === "duration") return input;

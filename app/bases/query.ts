@@ -3,16 +3,16 @@
 import type {
   CompiledBase, ViewConfig, FilterNode, BasesHostAdapter, QuerySnapshot,
   RowScope, EvalContext, BaseEntry, BaseEntryGroup, QueryResult,
-  Value, Diagnostic, AstNode, FormulaNamespace, HostFile, FileValue,
-  ObjectValue, NumberValue, DateValue, DurationValue, ListValue, ErrorValue,
+  Value, Diagnostic, AstNode, HostFile,
+  ObjectValue, NumberValue, DateValue, ErrorValue,
 } from "./types";
-import { NULL, num, str, bool, dateVal, durVal, listVal, errorVal, objVal } from "./types";
+import { NULL, num, str, dateVal, durVal, listVal, errorVal } from "./types";
 import { parseExpression, ParseError } from "./parser";
 import { LexError } from "./lexer";
 import { evaluate } from "./evaluator";
 import {
   isTruthy, looseEquals, compareValues, isEmpty, valueToString,
-  rawToValue, dateMinusDate,
+  rawToValue,
 } from "./values";
 import { hostFileToFileValue } from "./functions";
 import { createFormulaNamespace } from "./formula";
@@ -78,13 +78,6 @@ export function queryView(
           const values = group.entries.map((e) => resolveProperty(e, propId, host, snapshot, diagnostics));
           group.summaries.set(propId, computeSummary(summaryName, values, base, host, snapshot, diagnostics));
         }
-      }
-    }
-  } else {
-    // Apply summaries to final rows
-    if (view.summaries) {
-      for (const [propId, summaryName] of Object.entries(view.summaries)) {
-        // Summaries are stored in a single group
       }
     }
   }
@@ -330,8 +323,8 @@ export function resolveProperty(
   entry: BaseEntry,
   propertyId: string,
   host: BasesHostAdapter,
-  snapshot: QuerySnapshot,
-  diagnostics: Diagnostic[],
+  _snapshot: QuerySnapshot,
+  _diagnostics: Diagnostic[],
 ): Value {
   const dotIdx = propertyId.indexOf(".");
   if (dotIdx < 0) {

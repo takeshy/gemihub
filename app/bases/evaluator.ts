@@ -1,19 +1,18 @@
 // AST evaluator — interprets expression ASTs in an evaluation context (§9, §12).
 
 import type {
-  AstNode, Value, EvalContext, RowScope, ErrorValue, NumberValue,
-  StringValue, DateValue, DurationValue, ListValue, ObjectValue,
-  FileValue, LinkValue, NullValue, SourceSpan, Diagnostic,
+  AstNode, Value, EvalContext, ErrorValue, NumberValue,
+  DateValue, ListValue, FileValue,
 } from "./types";
-import { NULL, TRUE, FALSE, bool, num, str, dateVal, durVal, listVal, errorVal, objVal } from "./types";
+import { NULL, TRUE, FALSE, bool, num, str, dateVal, listVal, errorVal } from "./types";
 import {
-  isTruthy, isEmpty, valueToString, looseEquals, compareValues,
+  isTruthy, isEmpty, valueToString, looseEquals,
   parseDate, parseDuration, addDurationToDate, subtractDurationFromDate,
   addDurations, subtractDurations, multiplyDuration, divideDuration,
   dateMinusDate, getTimezoneOffsetMs,
 } from "./values";
 import {
-  globalFunctions, commonMethods, typeMethods, nullIsEmpty,
+  globalFunctions, commonMethods, typeMethods,
 } from "./functions";
 
 export function evaluate(ast: AstNode, ctx: EvalContext): Value {
@@ -311,7 +310,7 @@ function evalSub(left: Value, right: Value, ctx: EvalContext): Value {
   return errorVal("TYPE003", `Invalid arithmetic: ${left.type} - ${right.type}`);
 }
 
-function evalMul(left: Value, right: Value, ctx: EvalContext): Value {
+function evalMul(left: Value, right: Value, _ctx: EvalContext): Value {
   // Duration * Number
   if (left.type === "duration" && right.type === "number") {
     return multiplyDuration(left, right.value);
@@ -327,7 +326,7 @@ function evalMul(left: Value, right: Value, ctx: EvalContext): Value {
   return errorVal("TYPE003", `Invalid arithmetic: ${left.type} * ${right.type}`);
 }
 
-function evalDiv(left: Value, right: Value, ctx: EvalContext): Value {
+function evalDiv(left: Value, right: Value, _ctx: EvalContext): Value {
   // Duration / Number
   if (left.type === "duration" && right.type === "number") {
     return divideDuration(left, right.value);

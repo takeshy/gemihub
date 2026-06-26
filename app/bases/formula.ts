@@ -1,13 +1,13 @@
 // Formula compiler — dependency graph, cycle detection, lazy evaluation with cache (§9.4, §17).
 
 import type {
-  AstNode, CompiledFormula, CompiledBase, NormalizedBaseConfig,
+  AstNode, CompiledFormula, CompiledBase,
   Diagnostic, Value, EvalContext, RowScope, FormulaNamespace,
 } from "./types";
 import { parseExpression, ParseError } from "./parser";
 import { LexError } from "./lexer";
 import { evaluate } from "./evaluator";
-import { errorVal, NULL } from "./types";
+import { errorVal } from "./types";
 import { parseBaseConfig } from "./config";
 
 export function compileFormulas(

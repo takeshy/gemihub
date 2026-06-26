@@ -3,13 +3,8 @@
 
 import type {
   CompiledBase, BasesHostAdapter, QuerySnapshot, QueryResult,
-  Value, EvalContext, Diagnostic,
 } from "./types";
-import { compileBase as compileBaseImpl } from "./formula";
 import { queryView } from "./query";
-import { evaluate as evaluateImpl } from "./evaluator";
-import { parseExpression } from "./parser";
-import { NULL } from "./types";
 
 export { compileBase } from "./formula";
 export { queryView } from "./query";

@@ -27,6 +27,22 @@ export interface DashboardFileEntry {
   name: string;
 }
 
+function dashboardNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeDashboardGrid(value: unknown): DashboardData["grid"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ...DEFAULT_GRID };
+  }
+  const grid = value as Record<string, unknown>;
+  return {
+    cols: dashboardNumber(grid.cols, DEFAULT_GRID.cols),
+    rowHeight: dashboardNumber(grid.rowHeight, DEFAULT_GRID.rowHeight),
+    gap: dashboardNumber(grid.gap, DEFAULT_GRID.gap),
+  };
+}
+
 /**
  * Build the storage path for a dashboard name.
  * New dashboards are stored as `dashboards/{name}.dashboard`.
@@ -59,7 +75,22 @@ export function parseDashboard(content: string): DashboardData | null {
   try {
     const parsed = yaml.load(content);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    return parsed as DashboardData;
+    const record = parsed as Record<string, unknown>;
+    const widgets = Array.isArray(record.widgets)
+      ? record.widgets
+          .filter((w): w is Record<string, unknown> => !!w && typeof w === "object" && !Array.isArray(w))
+          .map((w) => ({
+            ...w,
+            layout: w.layout && typeof w.layout === "object" && !Array.isArray(w.layout) ? w.layout : {},
+            config: w.config && typeof w.config === "object" && !Array.isArray(w.config) ? w.config : {},
+          }))
+      : [];
+    return {
+      ...record,
+      version: typeof record.version === "number" ? record.version : 1,
+      grid: normalizeDashboardGrid(record.grid),
+      widgets,
+    } as DashboardData;
   } catch {
     return null;
   }

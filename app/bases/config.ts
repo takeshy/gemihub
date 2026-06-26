@@ -2,10 +2,9 @@
 
 import yaml from "js-yaml";
 import type {
-  BaseConfig, NormalizedBaseConfig, FilterNode, ViewConfig,
+  NormalizedBaseConfig, FilterNode, ViewConfig,
   PropertyConfig, Diagnostic,
 } from "./types";
-import { errorVal } from "./types";
 
 const VALID_ROOT_KEYS = new Set(["filters", "formulas", "properties", "summaries", "views"]);
 const BUILTIN_SUMMARY_NAMES = new Set([

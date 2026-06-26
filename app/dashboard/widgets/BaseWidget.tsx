@@ -6,12 +6,13 @@ import { Table as TableIcon, RefreshCw } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { WidgetContext } from "../types";
 import { compileBase, queryView, createGemiHubHost } from "~/bases/index";
-import type { CompiledBase, QueryResult, BaseEntry, Value, Diagnostic } from "~/bases/types";
-import { valueToString } from "~/bases/values";
+import type { CompiledBase, QueryResult, Diagnostic } from "~/bases/types";
+import { BaseViewRenderer } from "~/components/bases/BaseViewRenderer";
 import { getRemoteMetaFiles, readFileLocal } from "~/services/drive-local";
 import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 import { findBaseFileOption } from "./base-file-options";
+import { FilePreviewModal } from "./FilePreviewModal";
 
 interface BaseWidgetConfig {
   base?: string;
@@ -43,6 +44,7 @@ export default function BaseWidget({
   const [error, setError] = useState<string | null>(null);
   const [vaultFiles, setVaultFiles] = useState<VaultFile[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [previewFile, setPreviewFile] = useState<{ fileId: string; fileName: string } | null>(null);
 
   // Load vault files
   const loadVaultFiles = useCallback(async () => {
@@ -130,7 +132,7 @@ export default function BaseWidget({
 
   // Run the query
   const queryResult = useMemo<QueryResult | null>(() => {
-    if (!compiled || !viewName || vaultFiles.length === 0 || compileErrors.length > 0) return null;
+    if (!compiled || !viewName || compileErrors.length > 0) return null;
     try {
       const { host, snapshot } = createGemiHubHost({
         files: vaultFiles,
@@ -142,6 +144,45 @@ export default function BaseWidget({
       return null;
     }
   }, [compiled, viewName, vaultFiles, compileErrors]);
+
+  const fileRefsByPath = useMemo(() => {
+    const map = new Map<string, { fileId: string; fileName: string }>();
+    for (const file of vaultFiles) {
+      map.set(file.name, { fileId: file.id, fileName: file.name });
+    }
+    return map;
+  }, [vaultFiles]);
+
+  const assetByBasename = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const file of vaultFiles) {
+      const base = file.name.includes("/") ? file.name.substring(file.name.lastIndexOf("/") + 1) : file.name;
+      const key = base.toLowerCase();
+      if (!map.has(key)) map.set(key, file.id);
+    }
+    return map;
+  }, [vaultFiles]);
+
+  const resolveAssetUrl = useCallback(
+    (target: string): string | null => {
+      if (!target) return null;
+      let fileId = fileRefsByPath.get(target)?.fileId;
+      if (!fileId) {
+        const base = target.includes("/") ? target.substring(target.lastIndexOf("/") + 1) : target;
+        fileId = assetByBasename.get(base.toLowerCase());
+      }
+      return fileId ? `/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}` : null;
+    },
+    [fileRefsByPath, assetByBasename],
+  );
+
+  const navigateToFile = useCallback((file: { fileId: string; fileName: string }) => {
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: file.fileId, fileName: file.fileName },
+      }),
+    );
+  }, []);
 
   // Render
   if (loading) {
@@ -212,20 +253,30 @@ export default function BaseWidget({
         </button>
       </div>
 
-      {/* Table body */}
+      {/* View body */}
       <div className="flex-1 overflow-auto">
-        {queryResult.groupedData.length > 0 ? (
-          <GroupedTable
-            groups={queryResult.groupedData}
-            properties={queryResult.properties}
+        <div className="p-2">
+          <BaseViewRenderer
+            view={views.find((v) => v.name === viewName) ?? views[0]}
+            result={queryResult}
+            resolveFileRef={(entry) => fileRefsByPath.get(entry.file.path) ?? null}
+            onOpenFile={setPreviewFile}
+            resolveAssetUrl={resolveAssetUrl}
           />
-        ) : (
-          <BaseTable
-            entries={queryResult.data}
-            properties={queryResult.properties}
-          />
-        )}
+        </div>
       </div>
+
+      {previewFile && (
+        <FilePreviewModal
+          fileId={previewFile.fileId}
+          fileName={previewFile.fileName}
+          onNavigate={() => {
+            navigateToFile(previewFile);
+            setPreviewFile(null);
+          }}
+          onClose={() => setPreviewFile(null)}
+        />
+      )}
     </div>
   );
 }
@@ -256,148 +307,4 @@ function ViewSelector({
       </select>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Table rendering for Bases query results
-// ---------------------------------------------------------------------------
-
-function BaseTable({
-  entries,
-  properties,
-}: {
-  entries: BaseEntry[];
-  properties: string[];
-}) {
-  if (entries.length === 0) {
-    return <div className="p-4 text-center text-sm text-gray-400">No results</div>;
-  }
-
-  // Get column labels from properties
-  const columns = properties.length > 0 ? properties : entries.length > 0
-    ? [...entries[0].rowScope.note.map.keys()].map((k) => `note.${k}`)
-    : ["file.name"];
-
-  return (
-    <table className="w-full text-sm">
-      <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800">
-        <tr>
-          {columns.map((col) => (
-            <th
-              key={col}
-              className="truncate px-2 py-1 text-left text-xs font-medium text-gray-500 dark:text-gray-400"
-            >
-              {formatPropertyLabel(col)}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {entries.map((entry, i) => (
-          <tr
-            key={entry.file.path + i}
-            className="border-t border-gray-100 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-          >
-            {columns.map((col) => (
-              <td
-                key={col}
-                className="truncate px-2 py-1 text-gray-700 dark:text-gray-300"
-              >
-                {renderCellValue(getEntryProperty(entry, col))}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function GroupedTable({
-  groups,
-  properties,
-}: {
-  groups: Array<{ key: Value; entries: BaseEntry[]; summaries: Map<string, Value> }>;
-  properties: string[];
-}) {
-  return (
-    <div className="space-y-3 p-2">
-      {groups.map((group, gi) => (
-        <div key={gi}>
-          <div className="mb-1 flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300">
-            <span>{valueToString(group.key)}</span>
-            <span className="text-gray-400">({group.entries.length})</span>
-          </div>
-          <BaseTable entries={group.entries} properties={properties} />
-          {group.summaries.size > 0 && (
-            <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-              {[...group.summaries.entries()].map(([prop, val]) => (
-                <span key={prop} className="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-700">
-                  {formatPropertyLabel(prop)}: {valueToString(val)}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getEntryProperty(entry: BaseEntry, propertyId: string): Value {
-  const dotIdx = propertyId.indexOf(".");
-  if (dotIdx < 0) {
-    return entry.rowScope.note.map.get(propertyId) ?? { type: "null" };
-  }
-  const prefix = propertyId.substring(0, dotIdx);
-  const name = propertyId.substring(dotIdx + 1);
-
-  if (prefix === "note") {
-    return entry.rowScope.note.map.get(name) ?? { type: "null" };
-  }
-  if (prefix === "file") {
-    return resolveFileField(name, entry);
-  }
-  if (prefix === "formula") {
-    return entry.rowScope.formula.resolve(name) ?? { type: "null" };
-  }
-  return { type: "null" };
-}
-
-function resolveFileField(field: string, entry: BaseEntry): Value {
-  const file = entry.rowScope.file;
-  switch (field) {
-    case "name": return { type: "string", value: file.name };
-    case "basename": return { type: "string", value: file.basename };
-    case "path": return { type: "string", value: file.path };
-    case "folder": return { type: "string", value: file.folder };
-    case "ext": return { type: "string", value: file.ext };
-    case "size": return { type: "number", value: file.size };
-    case "ctime": return { type: "date", epochMs: file.ctimeMs, dateOnly: false };
-    case "mtime": return { type: "date", epochMs: file.mtimeMs, dateOnly: false };
-    default: return { type: "null" };
-  }
-}
-
-function formatPropertyLabel(propId: string): string {
-  const dotIdx = propId.indexOf(".");
-  if (dotIdx < 0) return propId;
-  const prefix = propId.substring(0, dotIdx);
-  const name = propId.substring(dotIdx + 1);
-  if (prefix === "note" || prefix === "file" || prefix === "formula") {
-    return name;
-  }
-  return propId;
-}
-
-function renderCellValue(value: Value): string {
-  if (value.type === "null") return "";
-  if (value.type === "error") return "";
-  if (value.type === "list") return value.items.map(renderCellValue).join(", ");
-  if (value.type === "object") return "";
-  return valueToString(value);
 }

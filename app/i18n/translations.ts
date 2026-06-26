@@ -49,6 +49,16 @@ export interface TranslationStrings {
   "mainViewer.mimeType": string;
   "mainViewer.download": string;
 
+  // Base editor
+  "base.viewDisplay": string;
+  "base.viewRaw": string;
+  "base.unparseable": string;
+  "base.loading": string;
+  "base.refresh": string;
+  "base.compileError": string;
+  "base.queryError": string;
+  "base.noViews": string;
+
   // Dashboard
   "dashboard.title": string;
   "dashboard.empty": string;
@@ -1039,6 +1049,16 @@ const en: TranslationStrings = {
   "mainViewer.modifiedTime": "Updated",
   "mainViewer.mimeType": "MIME type",
   "mainViewer.download": "Download",
+
+  // Base editor
+  "base.viewDisplay": "Display",
+  "base.viewRaw": "Raw",
+  "base.unparseable": "Cannot parse this base file",
+  "base.loading": "Loading...",
+  "base.refresh": "Refresh",
+  "base.compileError": "Base compile error",
+  "base.queryError": "Query error",
+  "base.noViews": "No views defined",
 
   // Dashboard
   "dashboard.title": "Dashboard",
@@ -2031,6 +2051,16 @@ const ja: TranslationStrings = {
   "mainViewer.modifiedTime": "更新日時",
   "mainViewer.mimeType": "MIMEタイプ",
   "mainViewer.download": "ダウンロード",
+
+  // Base editor
+  "base.viewDisplay": "表示",
+  "base.viewRaw": "Raw",
+  "base.unparseable": "このベースファイルを解析できません",
+  "base.loading": "読み込み中...",
+  "base.refresh": "更新",
+  "base.compileError": "Baseコンパイルエラー",
+  "base.queryError": "クエリエラー",
+  "base.noViews": "ビューが定義されていません",
 
   // Dashboard
   "dashboard.title": "ダッシュボード",

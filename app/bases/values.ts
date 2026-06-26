@@ -2,9 +2,7 @@
 // Duration parsing and Date parsing helpers.
 
 import type {
-  Value, NullValue, BooleanValue, NumberValue, StringValue, DateValue,
-  DurationValue, ListValue, ObjectValue, FileValue, LinkValue, UrlValue,
-  RegexpValue, ErrorValue, HostFile,
+  Value, DateValue, DurationValue, LinkValue, ErrorValue, HostFile,
 } from "./types";
 import { NULL, bool, num, str, dateVal, durVal, listVal, errorVal } from "./types";
 
@@ -381,7 +379,6 @@ export function parseDuration(input: string): DurationValue | ErrorValue {
 
   let months = 0;
   let milliseconds = 0;
-  let hasMonthComponent = false;
 
   // Parse components: number unit [number unit]...
   const re = /(\d+(?:\.\d+)?)\s*([A-Za-z]+)/g;
@@ -398,7 +395,6 @@ export function parseDuration(input: string): DurationValue | ErrorValue {
       return errorVal("DUR001", `Unknown duration unit: ${unit}`);
     }
     if (spec.months) {
-      hasMonthComponent = true;
       if (!Number.isInteger(value)) {
         return errorVal("DUR002", `Fractional month/year not supported: ${value}`);
       }

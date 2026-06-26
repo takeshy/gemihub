@@ -1,9 +1,9 @@
 // Expression parser — recursive descent parser following the EBNF grammar (§8).
 // Produces an AST from the lexer's token stream.
 
-import { Lexer, LexError } from "./lexer";
-import type { Token, AstNode, SourceSpan, Value, ValueTypeName } from "./types";
-import { NULL, TRUE, FALSE, num, str, bool, listVal, errorVal } from "./types";
+import { Lexer } from "./lexer";
+import type { Token, AstNode, SourceSpan } from "./types";
+import { NULL, num, str, bool } from "./types";
 
 export class ParseError extends Error {
   code: string;
