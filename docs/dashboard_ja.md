@@ -57,7 +57,7 @@ widgets:
 
 ### Markdown ウィジェット
 
-**既存**の Drive Markdown ファイルを参照し（インライン content は廃止）、`MarkdownFileEditor` で通常エディタと同じ **preview / wysiwyg / code** 切替・frontmatter・wiki リンク・local-first 保存（`useFileWithCache`）をインライン描画する。ツールバーは *パス + モード切替* のみに絞る（`hideToolbarActions`）。左のファイルパスは `MarkdownFilePicker`（`editorCtx.fileList` に対する @ 風検索）で、**編集モード外でも**参照ファイルを切替でき、選択は `ctx.onConfigChange({ fileId, fileName })` で永続化される。これにより 2 カラム（例: `file-list` の隣に `markdown` エディタ）が実用的になる。表示モードはセッション初回のみ **preview** が既定で、その後はセッションスコープの変数がユーザーの最後の明示的な切替を記憶し、別ファイルを開いても保持される（wysiwyg/code のまま）。config: `{ fileId, fileName }`。
+**既存**の Drive Markdown ファイルをパスで参照し（インライン content は廃止）、`MarkdownFileEditor` で通常エディタと同じ **preview / wysiwyg / code** 切替・frontmatter・wiki リンク・local-first 保存（`useFileWithCache`）をインライン描画する。ツールバーは *パス + モード切替* のみに絞る（`hideToolbarActions`）。左のファイルパスは `MarkdownFilePicker`（`editorCtx.fileList` に対する @ 風検索）で、**編集モード外でも**参照ファイルを切替でき、選択は `ctx.onConfigChange({ path })` で永続化される。Obsidian Gemini Helper の dashboard schema と同じなので、`.dashboard` ファイルを手書き・同期しやすい。表示モードはセッション初回のみ **preview** が既定で、その後はセッションスコープの変数がユーザーの最後の明示的な切替を記憶し、別ファイルを開いても保持される（wysiwyg/code のまま）。config: `{ path }`。
 
 ### File List ウィジェット
 
@@ -167,7 +167,7 @@ config:
 
 ### 出力契約
 
-- **`card` / `table`** — ワークフローは**オブジェクトの JSON 配列**（1 行 1 オブジェクト）を出力変数（既定 `result`）に格納する。配列を返す `script` ノードが最も簡単。各オブジェクトのキーが行の列 / カードフィールドになる。テスト実行後、config エディタがフィールドマッピングを自動シードする（table は列、card はフィールド名とサンプル値から title/image/subtitle/body/badges を推測 — `image`/`cover`/… や data URI・画像URL・`![[…]]` 埋め込み・画像拡張子パスを持つセルが card image に割り当てられる）。行オブジェクトが `fileId`（または `file.fileId`）キーを持つ場合、その card/table 行はクリック可能になり参照先ノートを開く（フォルダソース行と同じ）。
+- **`card` / `table`** — ワークフローは**オブジェクトの JSON 配列**（1 行 1 オブジェクト）を出力変数（既定 `result`）に格納する。配列を返す `script` ノードが最も簡単。各オブジェクトのキーが行の列 / カードフィールドになる。テスト実行後、config エディタがフィールドマッピングを自動シードする（table は列、card はフィールド名とサンプル値から title/image/subtitle/body/badges を推測 — `image`/`cover`/… や data URI・画像URL・`![[…]]` 埋め込み・画像拡張子パスを持つセルが card image に割り当てられる）。行オブジェクトが `path`（または `file.path`）キーを持つ場合、その card/table 行はクリック可能になり参照先ノートを開く（フォルダソース行と同じ）。
 - **`markdown` / `html`** — ワークフローは出力変数に**文字列**を出力する。`GfmMarkdownPreview`（markdown）、またはサンドボックス `<iframe sandbox="allow-scripts">` で `buildHtmlPreviewSrcDoc` 経由（html、HTML ファイルエディタから再利用）で描画する。
 
 config エディタはこの契約を AI ワークフロー生成プロンプトに付与する（`buildFormatGuidance`、出力形式で出し分け）ので、生成されるワークフローが正しい形を出力する。ワークフローは**無人実行**される — 対話ノード（`prompt-value`, `prompt-file`, `prompt-selection`, `dialog`, `drive-file-picker`）を使ってはならない。使った場合、ランナーが具体的なエラーを表示する。

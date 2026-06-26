@@ -6,13 +6,13 @@
 import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { MarkdownFileEditor, type MdEditMode } from "~/components/ide/editors/MarkdownFileEditor";
 import { useI18n } from "~/i18n/context";
+import { useEditorContext } from "~/contexts/EditorContext";
 import type { WidgetContext } from "../types";
 import { MarkdownFilePicker } from "./config-editors/MarkdownFilePicker";
 
 interface MarkdownConfig {
-  /** The referenced Drive markdown file. */
-  fileId?: string;
-  fileName?: string;
+  /** Drive file path of the referenced markdown file. */
+  path?: string;
 }
 
 // Session-scoped preview/wysiwyg/code mode for markdown widgets. Defaults to
@@ -29,23 +29,40 @@ export default function MarkdownWidget({
   ctx?: WidgetContext;
 }) {
   const { t } = useI18n();
+  const editorCtx = useEditorContext();
   const cfg = (config ?? {}) as MarkdownConfig;
-  const fileId = cfg.fileId ?? null;
+  const filePath = (cfg.path ?? "").trim();
+  const fileRef = editorCtx.fileList.find((f) => (f.path || f.name) === filePath);
+  const fileId = fileRef?.id ?? null;
 
   const { content, loading, error, saveToCache } = useFileWithCache(fileId, undefined, "MarkdownWidget");
 
-  const selectFile = (id: string, path: string) => {
-    ctx?.onConfigChange?.({ fileId: id, fileName: path });
+  const selectFile = (path: string) => {
+    ctx?.onConfigChange?.({ path });
   };
 
   // No file chosen yet — prompt to pick one.
-  if (!fileId) {
+  if (!filePath) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-sm text-gray-400">
         <MarkdownFilePicker
+          currentPath={filePath}
           onSelect={selectFile}
           placeholder={t("dashboard.markdownSelectFile")}
           buttonClassName="flex items-center gap-1 rounded border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+        />
+      </div>
+    );
+  }
+
+  if (!fileId) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-sm text-gray-400">
+        <span>{t("dashboard.fileNotFound")}: {filePath}</span>
+        <MarkdownFilePicker
+          currentPath={filePath}
+          onSelect={selectFile}
+          placeholder={t("dashboard.markdownSelectFile")}
         />
       </div>
     );
@@ -64,7 +81,7 @@ export default function MarkdownWidget({
       <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-sm text-gray-400">
         <span>{error || t("dashboard.fileNotFound")}</span>
         <MarkdownFilePicker
-          currentFileId={cfg.fileId}
+          currentPath={filePath}
           onSelect={selectFile}
           placeholder={t("dashboard.markdownSelectFile")}
         />
@@ -80,7 +97,7 @@ export default function MarkdownWidget({
       <MarkdownFileEditor
         key={fileId}
         fileId={fileId}
-        fileName={cfg.fileName ?? ""}
+        fileName={filePath}
         initialContent={content}
         saveToCache={saveToCache}
         hideToolbarActions
@@ -90,8 +107,7 @@ export default function MarkdownWidget({
         }}
         headerLeft={
           <MarkdownFilePicker
-            currentFileId={cfg.fileId}
-            currentLabel={cfg.fileName}
+            currentPath={filePath}
             onSelect={selectFile}
           />
         }

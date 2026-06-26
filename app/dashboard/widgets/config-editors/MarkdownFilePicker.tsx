@@ -12,16 +12,14 @@ import { isMarkdownFile } from "~/utils/frontmatter";
 import { Popover } from "~/dashboard/data-widget/ViewControls";
 
 export function MarkdownFilePicker({
-  currentFileId,
-  currentLabel,
+  currentPath,
   onSelect,
   buttonClassName,
   placeholder,
 }: {
-  currentFileId?: string;
   /** Path/name to display on the button (falls back to placeholder). */
-  currentLabel?: string;
-  onSelect: (fileId: string, path: string) => void;
+  currentPath?: string;
+  onSelect: (path: string) => void;
   buttonClassName?: string;
   placeholder?: string;
 }) {
@@ -43,7 +41,7 @@ export function MarkdownFilePicker({
     return base.slice(0, 50);
   }, [markdownFiles, query]);
 
-  const label = currentLabel || placeholder || t("dashboard.markdownSelectFile");
+  const label = currentPath || placeholder || t("dashboard.markdownSelectFile");
 
   return (
     <>
@@ -54,7 +52,7 @@ export function MarkdownFilePicker({
           e.stopPropagation();
           setOpen((o) => !o);
         }}
-        title={currentLabel || t("dashboard.markdownSelectFile")}
+        title={currentPath || t("dashboard.markdownSelectFile")}
         className={
           buttonClassName ??
           "flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -83,12 +81,12 @@ export function MarkdownFilePicker({
                     <button
                       type="button"
                       onClick={() => {
-                        onSelect(f.id, f.path || f.name);
+                        onSelect(f.path || f.name);
                         setQuery("");
                         setOpen(false);
                       }}
                       className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                        f.id === currentFileId
+                        (f.path || f.name) === currentPath
                           ? "text-blue-600 dark:text-blue-400"
                           : "text-gray-700 dark:text-gray-300"
                       }`}

@@ -154,19 +154,18 @@ Runs a GemiHub workflow headlessly and renders the result. The workflow runs una
     refreshInterval: 60                    # minutes; 0/omit = manual refresh only
 ```
 
-Output contract: `card`/`table` workflows must produce a JSON array of objects (one per row); `markdown`/`html` workflows must produce a string. A row object with a `fileId` key becomes clickable.
+Output contract: `card`/`table` workflows must produce a JSON array of objects (one per row); `markdown`/`html` workflows must produce a string. A row object with a `path` key becomes clickable.
 
 ### `markdown` — embed an existing Drive markdown note
 
-Renders an existing markdown file inline (preview / wysiwyg / code). It references the file by **id**, so it is best added via the UI picker; when authoring YAML, prefer `base`/folder widgets unless you already know the `fileId`.
+Renders an existing markdown file inline (preview / wysiwyg / code). It references the file by Drive path, matching the Obsidian Gemini Helper dashboard schema.
 
 ```yaml
 - id: notes-1
   type: markdown
   layout: { lg: { x: 8, y: 0, w: 4, h: 6 } }
   config:
-    fileId: <drive-file-id>
-    fileName: Home.md
+    path: Home.md
 ```
 
 ## Importing a `.base` into a Dashboard

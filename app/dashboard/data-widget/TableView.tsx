@@ -4,7 +4,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { getCachedFile } from "~/services/indexeddb-cache";
-import { writeFileLocal } from "~/services/drive-local";
+import { findFileByNameLocal, writeFileLocal } from "~/services/drive-local";
 import { updateFrontmatterKey } from "../frontmatter-writeback";
 import { useI18n } from "~/i18n/context";
 import type { DataRow, PropertyType } from "./types";
@@ -209,9 +209,9 @@ export function TableView({
     }
   };
 
-  // Resolve a row's file reference. Folder rows carry fileId/fileName directly;
-  // workflow rows may carry them as cells (fileId / file.fileId, file.name).
-  const resolveRowFileRef = (row: DataRow): { fileId?: string; fileName?: string } => {
+  // Resolve a row's file reference. Folder rows carry runtime fileId/fileName
+  // directly; workflow rows may carry path/file.path cells.
+  const resolveRowFileRef = (row: DataRow): { fileId?: string; fileName?: string; path?: string } => {
     const fileId =
       row.fileId ??
       (typeof row.cells.fileId === "string" ? row.cells.fileId : undefined) ??
@@ -220,12 +220,24 @@ export function TableView({
       row.fileName ??
       (typeof row.cells.fileName === "string" ? row.cells.fileName : undefined) ??
       (typeof row.cells["file.name"] === "string" ? row.cells["file.name"] : undefined);
-    return { fileId, fileName };
+    const path =
+      row.fileName ??
+      (typeof row.cells.path === "string" ? row.cells.path : undefined) ??
+      (typeof row.cells["file.path"] === "string" ? row.cells["file.path"] : undefined) ??
+      fileName;
+    return { fileId, fileName, path };
   };
 
-  const handleRowClick = (row: DataRow) => {
+  const handleRowClick = async (row: DataRow) => {
     if (editingCell) return;
-    const { fileId, fileName } = resolveRowFileRef(row);
+    const ref = resolveRowFileRef(row);
+    let { fileId, fileName } = ref;
+    const { path } = ref;
+    if (!fileId && path) {
+      const found = await findFileByNameLocal(path);
+      fileId = found?.id;
+      fileName = found?.name ?? fileName ?? path;
+    }
     if (fileId) {
       window.dispatchEvent(
         new CustomEvent("plugin-select-file", {
@@ -269,7 +281,10 @@ export function TableView({
               key={row.id}
               onClick={() => handleRowClick(row)}
               className={`${
-                resolveRowFileRef(row).fileId ? "cursor-pointer" : ""
+                (() => {
+                  const ref = resolveRowFileRef(row);
+                  return ref.fileId || ref.path ? "cursor-pointer" : "";
+                })()
               } hover:bg-gray-50 dark:hover:bg-gray-800/50`}
             >
               {columns.map((col) => {

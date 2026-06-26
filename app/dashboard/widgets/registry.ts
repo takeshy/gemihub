@@ -74,7 +74,7 @@ registerWidget({
   type: "markdown",
   label: "Markdown",
   icon: React.createElement(FileText, { size: 16 }),
-  defaultConfig: {},
+  defaultConfig: { path: "" },
   render: (config, ctx) => React.createElement(MarkdownWidget, { config, ctx }),
   defaultSize: { w: 6, h: 3 },
   ConfigEditor: MarkdownConfigEditor,

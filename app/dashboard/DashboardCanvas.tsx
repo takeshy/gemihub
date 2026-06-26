@@ -38,7 +38,7 @@ function isWidgetConfigured(widget: Widget): boolean {
 
   switch (widget.type) {
     case "markdown":
-      return str("fileId").length > 0 || str("fileName").length > 0;
+      return str("path").length > 0;
     case "web":
       return str("url").length > 0;
     case "workflow":

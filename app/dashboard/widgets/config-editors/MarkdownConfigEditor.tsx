@@ -5,8 +5,7 @@ import type { ConfigEditorProps } from "../../types";
 import { MarkdownFilePicker } from "./MarkdownFilePicker";
 
 interface MarkdownConfig {
-  fileId?: string;
-  fileName?: string;
+  path?: string;
 }
 
 /**
@@ -24,15 +23,14 @@ export function MarkdownConfigEditor({ config, onChange }: ConfigEditorProps) {
         {t("dashboard.markdownSelectFile")}
       </label>
       <MarkdownFilePicker
-        currentFileId={cfg.fileId}
-        currentLabel={cfg.fileName}
-        onSelect={(id, path) => onChange({ fileId: id, fileName: path })}
+        currentPath={cfg.path}
+        onSelect={(path) => onChange({ path })}
         buttonClassName="flex w-full items-center gap-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
       />
-      {cfg.fileId && (
+      {cfg.path && (
         <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
           <FileText size={12} className="shrink-0" />
-          <span className="truncate">{cfg.fileName ?? cfg.fileId}</span>
+          <span className="truncate">{cfg.path}</span>
           <button
             type="button"
             onClick={() => onChange({})}

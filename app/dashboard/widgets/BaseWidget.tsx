@@ -1,5 +1,6 @@
 // Base widget — renders an Obsidian Bases .base file view in the dashboard.
 // Config: { base: "path/to/file.base", view: "ViewName" }
+// Empty/omitted view means the first view in the .base file.
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Table as TableIcon, RefreshCw } from "lucide-react";
@@ -127,7 +128,8 @@ export default function BaseWidget({
   }, [compiled]);
 
   // Determine the active view
-  const viewName = cfg.view ?? compiled?.config.views[0]?.name;
+  const requestedView = cfg.view?.trim();
+  const viewName = requestedView || compiled?.config.views[0]?.name;
   const views = compiled?.config.views ?? [];
 
   // Run the query

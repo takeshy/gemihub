@@ -11,9 +11,8 @@ interface CardsViewProps {
   rows: DataRow[];
   card: CardMapping;
   cols?: number;
-  /** Enables card click to open the underlying file (per-row, only when a
-   *  fileId is resolvable). Folder cards always have one; workflow cards only
-   *  when the row carries a fileId / file.fileId cell. */
+  /** Enables card click to open the underlying file. Folder cards carry a
+   *  runtime fileId; workflow cards can carry a path / file.path cell. */
   clickable: boolean;
   /** Field type map for locale-aware formatting (e.g. dates). */
   fieldTypes?: Record<string, PropertyType>;
@@ -163,7 +162,7 @@ export function CardsView({ rows, card, cols, clickable, fieldTypes }: CardsView
   const gridCols =
     containerWidth != null && containerWidth < 360 ? 1 : configuredCols;
 
-  const resolveRowFileRef = (row: DataRow): { fileId?: string; fileName?: string } => {
+  const resolveRowFileRef = (row: DataRow): { fileId?: string; fileName?: string; path?: string } => {
     // Folder source: row.fileId is set directly.
     // Workflow source: look for common file-reference keys in the row.
     const fileId =
@@ -178,12 +177,24 @@ export function CardsView({ rows, card, cols, clickable, fieldTypes }: CardsView
       (typeof row.cells["file.name"] === "string"
         ? row.cells["file.name"]
         : undefined);
-    return { fileId, fileName };
+    const path =
+      row.fileName ??
+      (typeof row.cells.path === "string" ? row.cells.path : undefined) ??
+      (typeof row.cells["file.path"] === "string" ? row.cells["file.path"] : undefined) ??
+      fileName;
+    return { fileId, fileName, path };
   };
 
-  const handleCardClick = (row: DataRow) => {
+  const handleCardClick = async (row: DataRow) => {
     if (!clickable) return;
-    const { fileId, fileName } = resolveRowFileRef(row);
+    const ref = resolveRowFileRef(row);
+    let { fileId, fileName } = ref;
+    const { path } = ref;
+    if (!fileId && path) {
+      const found = await findFileByNameLocal(path);
+      fileId = found?.id;
+      fileName = found?.name ?? fileName ?? path;
+    }
     if (!fileId) return;
     window.dispatchEvent(
       new CustomEvent("plugin-select-file", {
@@ -215,8 +226,8 @@ export function CardsView({ rows, card, cols, clickable, fieldTypes }: CardsView
         const imageUrl = hasImage
           ? (resolveStaticUrl(image) ?? resolvedPaths[row.id] ?? null)
           : null;
-        const { fileId: rowFileId } = resolveRowFileRef(row);
-        const isClickable = clickable && rowFileId != null;
+        const { fileId: rowFileId, path: rowPath } = resolveRowFileRef(row);
+        const isClickable = clickable && (rowFileId != null || rowPath != null);
 
         return (
           <div
