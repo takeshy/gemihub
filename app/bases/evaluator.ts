@@ -85,15 +85,17 @@ function resolveIdentifier(name: string, ctx: EvalContext): Value {
     return NULL;
   }
 
-  // 4. Global function name (when used as identifier, not call) — return null
-  if (globalFunctions[name]) return NULL;
-
-  // 5. Bare note property
+  // 4. Bare note property — takes precedence over a global function name used
+  //    as a bare value, so a frontmatter property like `image` resolves even
+  //    though there is also an image() function (e.g. formula `image(image)`).
   if (ctx.rowScope) {
     const prop = ctx.rowScope.note.map.get(name);
     if (prop !== undefined) return prop;
     // Try case-fold (§26 hasProperty, but for bare access we do exact match)
   }
+
+  // 5. Global function name (when used as identifier, not call) — return null
+  if (globalFunctions[name]) return NULL;
 
   // 6. Unresolved → Null
   return NULL;

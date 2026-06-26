@@ -92,3 +92,51 @@ views:
   assert.equal(result.data.length, 1);
   assert.equal(valueToString(resolveProperty(result.data[0], "note.title", host, snapshot, [])), "");
 });
+
+test("bare property reference resolves even when it shares a global function name", () => {
+  // Regression: `image(image)` — the inner bare `image` must resolve to the
+  // note property `image`, not be shadowed by the image() function name.
+  const base = compileBase(`
+filters:
+  and:
+    - file.inFolder("cooking")
+    - image != null
+formulas:
+  cover: image(image)
+views:
+  - type: cards
+    name: Cooking
+    order:
+      - file.name
+`);
+  const { host, snapshot } = createGemiHubHost({
+    files: [
+      {
+        id: "a",
+        name: "cooking/Curry.md",
+        mimeType: "text/markdown",
+        modifiedTime: "2025-01-01T00:00:00.000Z",
+        content: "---\nimage: cooking/curry.png\n---\n# Curry\n",
+      },
+      {
+        id: "img",
+        name: "cooking/curry.png",
+        mimeType: "image/png",
+        modifiedTime: "2025-01-01T00:00:00.000Z",
+      },
+    ],
+  });
+
+  const result = queryView(base, "Cooking", host, snapshot);
+
+  // The `image != null` filter keeps the note (bare `image` must be the property).
+  assert.deepEqual(result.data.map((e) => e.file.path), ["cooking/Curry.md"]);
+
+  // The formula resolves to an image value pointing at the resolved file.
+  const cover = resolveProperty(result.data[0], "formula.cover", host, snapshot, []);
+  assert.equal(cover.type, "image");
+  if (cover.type === "image") {
+    assert.equal(cover.source, "cooking/curry.png");
+    assert.equal(cover.resolvedPath, "cooking/curry.png");
+  }
+});
