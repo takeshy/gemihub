@@ -348,7 +348,16 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
           <>
             <LayoutDashboard size={14} className="text-gray-400" />
             <button
-              onClick={() => setShowDashboardMenu((v) => !v)}
+              onClick={() =>
+                setShowDashboardMenu((v) => {
+                  const next = !v;
+                  // Refresh on open: rename/move from the file tree updates
+                  // CachedRemoteMeta but fires no event, so re-read the listing
+                  // here to drop dashboards that were moved/renamed/deleted.
+                  if (next) void refreshDashboardList();
+                  return next;
+                })
+              }
               className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
             >
               {fileName ? dashboardDisplayName(fileName) : t("dashboard.title")}
