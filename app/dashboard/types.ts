@@ -68,6 +68,12 @@ export interface WidgetContext {
 export interface ConfigEditorProps {
   config: unknown;
   onChange: (next: unknown) => void;
+  /**
+   * Optional per-editor action invoked when the settings panel's Done button is
+   * pressed. Returning a config object applies it as the widget config before
+   * the panel closes.
+   */
+  setDoneAction?: (action: (() => unknown | Promise<unknown>) | null) => void;
   /** Current widget type; used by config editors that can switch compatible types. */
   widgetType?: string;
   /** Switch this widget to another registered type without introducing a new schema type. */

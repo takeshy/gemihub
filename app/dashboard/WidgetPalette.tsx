@@ -1,6 +1,5 @@
 import { createPortal } from "react-dom";
-import { useMemo } from "react";
-import { Import, X } from "lucide-react";
+import { X } from "lucide-react";
 import { listWidgetDefs } from "./widgets/registry";
 import type { WidgetDef } from "./types";
 import { useI18n } from "~/i18n/context";
@@ -14,23 +13,16 @@ interface WidgetPaletteProps {
  * Modal palette showing all registered widget types.
  * Selecting a type calls onSelect with the WidgetDef.
  */
+/** Leading palette entries, in display order; remaining widgets keep their order after these. */
+const PALETTE_ORDER = ["base", "markdown", "kanban"];
+const paletteRank = (type: string) => {
+  const i = PALETTE_ORDER.indexOf(type);
+  return i === -1 ? PALETTE_ORDER.length : i;
+};
+
 export function WidgetPalette({ onSelect, onClose }: WidgetPaletteProps) {
   const { t } = useI18n();
-  const defs = listWidgetDefs();
-  const visibleDefs = useMemo(
-    () => defs.filter((def) => def.type !== "markdown" && def.type !== "base"),
-    [defs],
-  );
-  const importDef = useMemo<WidgetDef | null>(() => {
-    const markdown = defs.find((def) => def.type === "markdown");
-    if (!markdown) return null;
-    return {
-      ...markdown,
-      label: "Import",
-      icon: <Import size={16} />,
-      defaultSize: { w: 6, h: 5 },
-    };
-  }, [defs]);
+  const visibleDefs = [...listWidgetDefs()].sort((a, b) => paletteRank(a.type) - paletteRank(b.type));
 
   const selectDef = (def: WidgetDef) => {
     onSelect(def);
@@ -58,20 +50,6 @@ export function WidgetPalette({ onSelect, onClose }: WidgetPaletteProps) {
         </div>
         <div className="overflow-auto p-4">
           <div className="grid grid-cols-2 gap-3">
-            {importDef && (
-              <button
-                type="button"
-                onClick={() => selectDef(importDef)}
-                className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              >
-                <div className="text-gray-600 dark:text-gray-400">
-                  {importDef.icon}
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {importDef.label}
-                </span>
-              </button>
-            )}
             {visibleDefs.map((def) => (
               <button
                 key={def.type}

@@ -3,12 +3,12 @@
 // Empty/omitted view means the first view in the .base file.
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { ArrowUpDown, FileText, Filter, Folder, RefreshCw, Table as TableIcon, X } from "lucide-react";
+import { ArrowUpDown, FileText, Filter, Folder, RefreshCw, Search, Table as TableIcon, X } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { WidgetContext } from "../types";
 import { compileBase, queryView, createGemiHubHost } from "~/bases/index";
 import type { CompiledBase, QueryResult, Diagnostic, BaseEntry, Value, ViewConfig } from "~/bases/types";
-import { BaseViewRenderer } from "~/components/bases/BaseViewRenderer";
+import { BaseViewRenderer, entryPropertyText } from "~/components/bases/BaseViewRenderer";
 import { getRemoteMetaFiles, readFileLocal } from "~/services/drive-local";
 import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
@@ -16,9 +16,13 @@ import { findBaseFileOption } from "./base-file-options";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { DASHBOARD_BASE_FILE_UPDATED_EVENT } from "./base-events";
 import { Popover, ViewControls, deriveFieldsFromRows } from "../data-widget/ViewControls";
+import { FilterEditor } from "../data-widget/config-parts";
 import { applyPostSource, detectFields } from "../data-widget/filter";
-import type { DataRow, FilterCondition } from "../data-widget/types";
+import type { DataRow, FieldInfo, FilterCondition, PropertyType } from "../data-widget/types";
 import type { TranslationStrings } from "~/i18n/translations";
+
+/** Which list-header popover is open: filename search, structured filter, or sort. */
+type ListControl = "search" | "filter" | "sort" | null;
 
 interface BaseWidgetConfig {
   base?: string;
@@ -65,7 +69,7 @@ export default function BaseWidget({
   const [viewLimit, setViewLimit] = useState<number | undefined>(undefined);
   const [listFilter, setListFilter] = useState("");
   const [listSort, setListSort] = useState<string | undefined>(undefined);
-  const [listControl, setListControl] = useState<"filter" | "sort" | null>(null);
+  const [listControl, setListControl] = useState<ListControl>(null);
 
   // Load vault files
   const loadVaultFiles = useCallback(async () => {
@@ -227,12 +231,19 @@ export default function BaseWidget({
     const q = listFilter.trim().toLowerCase();
     const folder = extractFolderFilter(activeView);
     const displayName = (entry: BaseEntry) => fileListDisplayName(entry.file.path, folder);
-    const filtered = q
-      ? queryResult.data.filter((entry) => displayName(entry).toLowerCase().includes(q))
-      : queryResult.data;
+    // Structured view-time filter (same FilterEditor as the other view types),
+    // applied over the row cells; the text box stays a filename quick-search.
+    const allowedIds = viewFilter.length > 0
+      ? new Set(applyPostSource(baseRows, { filter: viewFilter }).map((r) => r.id))
+      : null;
+    const filtered = queryResult.data.filter((entry) => {
+      if (allowedIds && !allowedIds.has(entry.file.path)) return false;
+      if (q && !displayName(entry).toLowerCase().includes(q)) return false;
+      return true;
+    });
     const sorted = [...filtered].sort((a, b) => compareFileEntries(a, b, effectiveSort));
     return viewLimit && viewLimit > 0 ? sorted.slice(0, viewLimit) : sorted;
-  }, [queryResult, activeView, listFilter, listSort, viewLimit]);
+  }, [queryResult, activeView, listFilter, listSort, viewLimit, viewFilter, baseRows]);
 
   const fileRefsByPath = useMemo(() => {
     const map = new Map<string, { fileId: string; fileName: string }>();
@@ -329,6 +340,9 @@ export default function BaseWidget({
           onSelectView={(v) => ctx.onConfigChange?.({ ...cfg, view: v })}
           filter={listFilter}
           onFilterChange={setListFilter}
+          fields={fields}
+          viewFilter={viewFilter}
+          onViewFilterChange={setViewFilter}
           sort={listSort}
           onSortChange={setListSort}
           limit={viewLimit}
@@ -370,6 +384,8 @@ export default function BaseWidget({
           <BaseFileListBody
             entries={listEntries}
             folder={extractFolderFilter(activeView)}
+            properties={Array.isArray(activeView.order) ? activeView.order : []}
+            indent={activeView.indentProperties === true}
             onPreview={(entry) => setPreviewFile(fileRefsByPath.get(entry.file.path) ?? null)}
           />
         ) : (
@@ -377,6 +393,7 @@ export default function BaseWidget({
           <BaseViewRenderer
             view={activeView}
             result={displayedResult}
+            properties={compiled?.config.properties}
             resolveFileRef={(entry) => fileRefsByPath.get(entry.file.path) ?? null}
             onOpenFile={setPreviewFile}
             resolveAssetUrl={resolveAssetUrl}
@@ -445,6 +462,9 @@ function BaseFileListHeader({
   onSelectView,
   filter,
   onFilterChange,
+  fields,
+  viewFilter,
+  onViewFilterChange,
   sort,
   onSortChange,
   limit,
@@ -459,21 +479,31 @@ function BaseFileListHeader({
   onSelectView: (view: string) => void;
   filter: string;
   onFilterChange: (filter: string) => void;
+  fields: FieldInfo[];
+  viewFilter: FilterCondition[];
+  onViewFilterChange: (next: FilterCondition[]) => void;
   sort: string | undefined;
   onSortChange: (sort: string | undefined) => void;
   limit: number | undefined;
   onLimitChange: (limit: number | undefined) => void;
-  openControl: "filter" | "sort" | null;
-  onOpenControlChange: (next: "filter" | "sort" | null) => void;
+  openControl: ListControl;
+  onOpenControlChange: (next: ListControl) => void;
   onRefresh: () => void;
 }) {
   const { t } = useI18n();
+  const searchBtnRef = useRef<HTMLButtonElement>(null);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
   const folder = extractFolderFilter(view);
   const effectiveSort = sort ?? "-mtime";
-  const hasFilter = filter.trim().length > 0;
+  const hasSearch = filter.trim().length > 0;
+  const hasFilter = viewFilter.length > 0;
   const hasSort = !!sort;
+  const fieldNames = useMemo(() => fields.map((f) => f.name), [fields]);
+  const fieldTypeMap = useMemo(
+    () => new Map(fields.map((f) => [f.name, f.type] as const)) as Map<string, PropertyType>,
+    [fields],
+  );
   const iconClass = (active: boolean) =>
     `relative flex items-center rounded px-1 py-0.5 ${
       active
@@ -494,6 +524,16 @@ function BaseFileListHeader({
           />
         )}
       </span>
+      <button
+        ref={searchBtnRef}
+        type="button"
+        onClick={() => onOpenControlChange(openControl === "search" ? null : "search")}
+        title={t("search.title")}
+        className={iconClass(hasSearch)}
+      >
+        <Search size={12} />
+        {hasSearch && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />}
+      </button>
       <button
         ref={filterBtnRef}
         type="button"
@@ -517,15 +557,25 @@ function BaseFileListHeader({
       <LimitInput limit={limit} onLimitChange={onLimitChange} />
       <RefreshButton onClick={onRefresh} />
 
-      {openControl === "filter" && (
-        <Popover anchorRef={filterBtnRef} onClose={() => onOpenControlChange(null)}>
+      {openControl === "search" && (
+        <Popover anchorRef={searchBtnRef} onClose={() => onOpenControlChange(null)}>
           <input
             type="text"
             autoFocus
             value={filter}
             onChange={(e) => onFilterChange(e.target.value)}
-            placeholder={t("dashboard.filter")}
+            placeholder={t("search.title")}
             className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </Popover>
+      )}
+      {openControl === "filter" && (
+        <Popover anchorRef={filterBtnRef} onClose={() => onOpenControlChange(null)} widthClass="w-[28rem]">
+          <FilterEditor
+            filters={viewFilter}
+            fieldNames={fieldNames}
+            fieldTypeMap={fieldTypeMap}
+            onChange={onViewFilterChange}
           />
         </Popover>
       )}
@@ -567,13 +617,23 @@ function BaseFileListHeader({
 function BaseFileListBody({
   entries,
   folder,
+  properties,
+  indent,
   onPreview,
 }: {
   entries: BaseEntry[];
   folder: string;
+  properties: string[];
+  indent: boolean;
   onPreview: (entry: BaseEntry) => void;
 }) {
   const { t } = useI18n();
+  // The first selected property is the parent (title row); the rest are children
+  // (indented sub-lines when indent is on, else inline). Values only — no labels.
+  const props = properties.length > 0 ? properties : ["file.name"];
+  const parentProp = props[0];
+  const childProps = props.slice(1);
+  const isFileParent = parentProp === "file.name" || parentProp === "name";
   if (entries.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-gray-400">
@@ -585,27 +645,56 @@ function BaseFileListBody({
     <ul className="divide-y divide-gray-100 dark:divide-gray-800">
       {entries.map((entry) => {
         const name = fileListDisplayName(entry.file.path, folder);
+        const parentText = isFileParent ? name : listCellValue(entry, parentProp);
+        const children = childProps
+          .map((prop) => listCellValue(entry, prop))
+          .filter(Boolean);
         return (
           <li key={entry.file.path}>
             <button
               onClick={() => onPreview(entry)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50"
+              className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50"
             >
-              {name.includes("/") ? (
-                <Folder size={14} className="shrink-0 text-blue-500" />
-              ) : (
-                <FileText size={14} className="shrink-0 text-gray-400" />
+              <div className="flex items-center gap-2">
+                {isFileParent &&
+                  (name.includes("/") ? (
+                    <Folder size={14} className="shrink-0 text-blue-500" />
+                  ) : (
+                    <FileText size={14} className="shrink-0 text-gray-400" />
+                  ))}
+                <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300">{parentText}</span>
+                {!indent && children.length > 0 && (
+                  <span className="ml-auto max-w-[50%] shrink-0 truncate text-[11px] text-gray-400 dark:text-gray-500">
+                    {children.join(" · ")}
+                  </span>
+                )}
+              </div>
+              {indent && children.length > 0 && (
+                <div className="ml-6 mt-0.5 space-y-0.5">
+                  {children.map((value, i) => (
+                    <div key={i} className="truncate text-[11px] text-gray-500 dark:text-gray-400">
+                      {value}
+                    </div>
+                  ))}
+                </div>
               )}
-              <span className="truncate text-gray-700 dark:text-gray-300">{name}</span>
-              <span className="ml-auto shrink-0 text-[11px] text-gray-400 dark:text-gray-500">
-                {formatModifiedTime(entry.file.mtimeMs)}
-              </span>
             </button>
           </li>
         );
       })}
     </ul>
   );
+}
+
+/**
+ * Display value for a list-item property. mtime/ctime get the compact date
+ * format; everything else (note frontmatter, file.*, and formulas) is resolved
+ * through the shared base property resolver so e.g. formula.* values appear.
+ */
+function listCellValue(entry: BaseEntry, prop: string): string {
+  if (prop === "file.mtime" || prop === "mtime") return formatModifiedTime(entry.file.mtimeMs);
+  if (prop === "file.ctime" || prop === "ctime") return formatModifiedTime(entry.file.ctimeMs);
+  return entryPropertyText(entry, prop);
 }
 
 function formatModifiedTime(ms: number): string {

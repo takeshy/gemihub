@@ -2,38 +2,30 @@ import type { Route } from "./+types/api.base.ai-generate";
 import { requireAuth } from "~/services/session.server";
 import { generateWorkflow } from "~/services/gemini.server";
 import { compileBase } from "~/bases/index";
+import BASE_SKILL_MD from "~/services/gemihub-skill-templates/base/SKILL.md?raw";
+import BASE_REF_FUNCTIONS from "~/services/gemihub-skill-templates/base/references/functions.md?raw";
+import BASE_REF_VIEWS from "~/services/gemihub-skill-templates/base/references/views.md?raw";
 
+// The base editor's AI uses the same spec the bundled "base" skill ships to the
+// model, so it knows the full Bases syntax (filters, functions, view options,
+// formulas, summaries) — not just a hand-written schema summary.
 const BASE_SYSTEM_PROMPT = `You create and edit GemiHub Bases (.base) files.
 
-A .base file is YAML. Return ONLY complete valid YAML, with no prose and no markdown fence.
+A .base file is YAML. Return ONLY the complete valid .base YAML, with no prose and no markdown code fence.
 
-Schema:
-- Top-level keys may include filters, formulas, properties, summaries, views.
-- views is an array. Each view has type, name, and may include filters, order, sort, limit.
-- View type is one of table, cards, list.
-- filters is either a string expression or an object with and/or/not arrays.
-- order is a list of property ids.
-- sort is a list of { property, direction }, where direction is ASC or DESC.
-- limit is a positive integer.
+The following is the authoritative GemiHub Bases reference.
 
-Important property ids:
-- File properties use file.*, for example file.name, file.basename, file.ext, file.folder, file.ctime, file.mtime, file.size.
-- Note frontmatter properties may be written as status or note.status.
-- Formula properties use formula.*.
+===== BASES SKILL =====
+${BASE_SKILL_MD}
 
-Examples:
-views:
-  - type: list
-    name: Recent files
-    filters: file.inFolder("Projects")
-    order:
-      - file.name
-      - file.mtime
-    sort:
-      - property: file.mtime
-        direction: DESC
-    limit: 20
-`;
+===== REFERENCE: FUNCTIONS =====
+${BASE_REF_FUNCTIONS}
+
+===== REFERENCE: VIEWS =====
+${BASE_REF_VIEWS}
+===== END REFERENCE =====
+
+Remember: output ONLY the updated .base YAML (top-level keys among filters, formulas, properties, summaries, views). No explanation, no code fence.`;
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);

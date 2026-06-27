@@ -1,4 +1,4 @@
-import type { BaseEntry, QueryResult, Value, ViewConfig } from "~/bases/types";
+import type { BaseEntry, PropertyConfig, QueryResult, Value, ViewConfig } from "~/bases/types";
 import { valueToString } from "~/bases/values";
 
 export interface BaseEntryFileRef {
@@ -9,18 +9,30 @@ export interface BaseEntryFileRef {
 interface BaseViewRendererProps {
   view: ViewConfig;
   result: QueryResult;
+  /** Base-level property config (for display-name aliases on columns). */
+  properties?: Record<string, PropertyConfig>;
   resolveFileRef?: (entry: BaseEntry) => BaseEntryFileRef | null;
   onOpenFile?: (file: BaseEntryFileRef) => void;
   /** Resolve a vault file name/path/wikilink target to a fetchable asset URL (e.g. card cover images). */
   resolveAssetUrl?: (target: string) => string | null;
 }
 
-export function BaseViewRenderer({ view, result, resolveFileRef, onOpenFile, resolveAssetUrl }: BaseViewRendererProps) {
+export function BaseViewRenderer({ view, result, properties, resolveFileRef, onOpenFile, resolveAssetUrl }: BaseViewRendererProps) {
   const interaction = { resolveFileRef, onOpenFile, resolveAssetUrl };
+  // Column ids are bare (e.g. "status") but the property config is keyed by the
+  // normalized id ("note.status"); bare keys map to the note.* namespace. Only
+  // the table view labels its columns — list/card views show values only.
+  const label = (propId: string) => {
+    const key = propId.includes(".") ? propId : `note.${propId}`;
+    return properties?.[key]?.displayName?.trim() || formatPropertyLabel(propId);
+  };
   if (view.type === "cards") return <CardsView view={view} result={result} interaction={interaction} />;
   if (view.type === "list") return <ListView view={view} result={result} interaction={interaction} />;
-  return <TableView view={view} result={result} interaction={interaction} />;
+  return <TableView view={view} result={result} label={label} interaction={interaction} />;
 }
+
+/** Resolve a property id to its display label (alias if configured). */
+type LabelFn = (propId: string) => string;
 
 interface EntryInteraction {
   resolveFileRef?: (entry: BaseEntry) => BaseEntryFileRef | null;
@@ -28,7 +40,7 @@ interface EntryInteraction {
   resolveAssetUrl?: (target: string) => string | null;
 }
 
-function TableView({ view, result, interaction }: { view: ViewConfig; result: QueryResult; interaction: EntryInteraction }) {
+function TableView({ view, result, label, interaction }: { view: ViewConfig; result: QueryResult; label: LabelFn; interaction: EntryInteraction }) {
   const columns = getColumns(result);
 
   if (result.groupedData.length > 0) {
@@ -41,7 +53,7 @@ function TableView({ view, result, interaction }: { view: ViewConfig; result: Qu
               <span className="text-gray-400">({group.entries.length})</span>
             </div>
             {group.summaries.size > 0 && (
-              <SummaryStrip summaries={group.summaries} />
+              <SummaryStrip summaries={group.summaries} label={label} />
             )}
             <BaseTable
               view={view}
@@ -49,6 +61,7 @@ function TableView({ view, result, interaction }: { view: ViewConfig; result: Qu
               columns={columns}
               summaries={view.summaries}
               getSummaryValue={result.getSummaryValue}
+              label={label}
               interaction={interaction}
             />
           </section>
@@ -64,6 +77,7 @@ function TableView({ view, result, interaction }: { view: ViewConfig; result: Qu
       columns={columns}
       summaries={view.summaries}
       getSummaryValue={result.getSummaryValue}
+      label={label}
       interaction={interaction}
     />
   );
@@ -75,6 +89,7 @@ function BaseTable({
   columns,
   summaries,
   getSummaryValue,
+  label,
   interaction,
 }: {
   view: ViewConfig;
@@ -82,6 +97,7 @@ function BaseTable({
   columns: string[];
   summaries?: Record<string, string>;
   getSummaryValue: QueryResult["getSummaryValue"];
+  label: LabelFn;
   interaction: EntryInteraction;
 }) {
   if (entries.length === 0) {
@@ -100,7 +116,7 @@ function BaseTable({
               key={col}
               className="truncate border-b border-gray-200 px-2 py-1 text-left text-xs font-medium text-gray-500 dark:border-gray-700 dark:text-gray-400"
             >
-              {formatPropertyLabel(col)}
+              {label(col)}
             </th>
           ))}
         </tr>
@@ -159,12 +175,12 @@ function BaseTable({
   );
 }
 
-function SummaryStrip({ summaries }: { summaries: Map<string, Value> }) {
+function SummaryStrip({ summaries, label }: { summaries: Map<string, Value>; label: LabelFn }) {
   return (
     <div className="mb-1 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
       {[...summaries.entries()].map(([prop, val]) => (
         <span key={prop} className="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-700">
-          {formatPropertyLabel(prop)}: {renderCellValue(val)}
+          {label(prop)}: {renderCellValue(val)}
         </span>
       ))}
     </div>
@@ -277,10 +293,9 @@ function BaseCard({
             const val = getEntryProperty(entry, prop);
             if (val.type === "null") return null;
             return (
-              <div key={prop} className="flex min-w-0 gap-1 text-xs">
-                <dt className="shrink-0 text-gray-400">{formatPropertyLabel(prop)}:</dt>
-                <dd className="truncate text-gray-700 dark:text-gray-300">{renderCellValue(val)}</dd>
-              </div>
+              <dd key={prop} className="truncate text-xs text-gray-700 dark:text-gray-300">
+                {renderCellValue(val)}
+              </dd>
             );
           })}
         </dl>
@@ -351,8 +366,11 @@ function BaseListItem({
   separator: string;
   interaction: EntryInteraction;
 }) {
-  const title = valueToString(getEntryProperty(entry, "file.name"));
-  const props = properties.filter((p) => p !== "file.name");
+  // The first selected property is the parent (title line); the rest are children.
+  const props = properties.length > 0 ? properties : ["file.name"];
+  const parentProp = props[0];
+  const childProps = props.slice(1);
+  const parentTitle = renderCellValue(getEntryProperty(entry, parentProp)) || valueToString(getEntryProperty(entry, "file.name"));
   const marker = renderMarker(markers, index);
   const fileRef = interaction.resolveFileRef?.(entry) ?? null;
   const clickable = !!fileRef && !!interaction.onOpenFile;
@@ -368,24 +386,26 @@ function BaseListItem({
           className={`rounded text-left focus:outline-none focus:ring-2 focus:ring-blue-500 ${clickable ? "cursor-pointer hover:text-blue-700 dark:hover:text-blue-300" : "cursor-default"}`}
         >
           <span className="inline-flex min-w-5 text-gray-400">{marker}</span>
-          <span>{title}</span>
+          <span>{parentTitle}</span>
         </button>
-        <ul className="ml-7 mt-1 space-y-0.5">
-          {props.map((prop) => {
-            const val = getEntryProperty(entry, prop);
-            if (val.type === "null") return null;
-            return (
-              <li key={prop} className="text-xs text-gray-500 dark:text-gray-400">
-                <span className="text-gray-400">-</span> {formatPropertyLabel(prop)}: {renderCellValue(val)}
-              </li>
-            );
-          })}
-        </ul>
+        {childProps.length > 0 && (
+          <ul className="ml-7 mt-1 space-y-0.5">
+            {childProps.map((prop) => {
+              const val = getEntryProperty(entry, prop);
+              if (val.type === "null") return null;
+              return (
+                <li key={prop} className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="text-gray-400">-</span> {renderCellValue(val)}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </li>
     );
   }
 
-  const propParts = props
+  const propParts = childProps
     .map((prop) => renderCellValue(getEntryProperty(entry, prop)))
     .filter((s) => s.length > 0)
     .join(separator);
@@ -399,7 +419,7 @@ function BaseListItem({
         className={`rounded text-left focus:outline-none focus:ring-2 focus:ring-blue-500 ${clickable ? "cursor-pointer hover:text-blue-700 dark:hover:text-blue-300" : "cursor-default"}`}
       >
         {marker && <span className="inline-flex min-w-5 text-gray-400">{marker}</span>}
-        <span>{title}</span>
+        <span>{parentTitle}</span>
         {propParts && <span className="text-gray-400"> {propParts}</span>}
       </button>
     </li>
@@ -480,6 +500,15 @@ function renderCellValue(value: Value): string {
   if (value.type === "list") return value.items.map(renderCellValue).join(", ");
   if (value.type === "object") return "";
   return valueToString(value);
+}
+
+/**
+ * Resolve a property id (note.* / file.* / formula.* / bare) on an entry to its
+ * display text. Exported so non-table renderers (e.g. the dashboard list) format
+ * the same property values — including formulas, which aren't in the note map.
+ */
+export function entryPropertyText(entry: BaseEntry, propertyId: string): string {
+  return renderCellValue(getEntryProperty(entry, propertyId));
 }
 
 function resolveCoverSrc(

@@ -21,6 +21,9 @@ const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
   { value: "done", label: "Done" },
 ];
 
+type DropPosition = "before" | "after";
+type DropTarget = { column: string; rowId: string; position: DropPosition } | null;
+
 function scalar(value: unknown): string {
   if (value == null) return "";
   if (Array.isArray(value)) return value.map(scalar).filter(Boolean).join(", ");
@@ -106,7 +109,11 @@ export default function KanbanWidget({
   const [pendingFileId, setPendingFileId] = useState<string | null>(null);
   const [draggingRowId, setDraggingRowId] = useState<string | null>(null);
   const [dropColumn, setDropColumn] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget>(null);
   const [landedRowId, setLandedRowId] = useState<string | null>(null);
+  const [cardOrder, setCardOrder] = useState<string[]>(
+    Array.isArray(cfg.cardOrder) ? cfg.cardOrder.filter((id): id is string => typeof id === "string") : [],
+  );
   const [showNewCard, setShowNewCard] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newStatus, setNewStatus] = useState(configuredColumns[0]?.value ?? "");
@@ -118,6 +125,10 @@ export default function KanbanWidget({
     setRows(folderRows);
     setLoading(false);
   }, [folder]);
+
+  useEffect(() => {
+    setCardOrder(Array.isArray(cfg.cardOrder) ? cfg.cardOrder.filter((id): id is string => typeof id === "string") : []);
+  }, [cfg.cardOrder]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadData(), 300);
@@ -137,13 +148,23 @@ export default function KanbanWidget({
   }, [configuredColumns, newStatus]);
 
   const processedRows = useMemo(
-    () =>
-      applyPostSource(rows, {
+    () => {
+      const filtered = applyPostSource(rows, {
         filter: cfg.filter as FilterCondition[] | undefined,
         sort: cfg.sort as string | undefined,
         limit: cfg.limit,
-      }),
-    [rows, cfg.filter, cfg.sort, cfg.limit],
+      });
+      const orderMap = new Map(cardOrder.map((id, index) => [id, index]));
+      return [...filtered].sort((a, b) => {
+        const ai = orderMap.get(a.id);
+        const bi = orderMap.get(b.id);
+        if (ai == null && bi == null) return 0;
+        if (ai == null) return 1;
+        if (bi == null) return -1;
+        return ai - bi;
+      });
+    },
+    [rows, cfg.filter, cfg.sort, cfg.limit, cardOrder],
   );
 
   const columns = useMemo(() => {
@@ -187,13 +208,54 @@ export default function KanbanWidget({
     window.setTimeout(() => setLandedRowId((current) => (current === rowId ? null : current)), 700);
   };
 
-  const moveCard = async (row: DataRow, nextStatus: string) => {
+  const persistCardOrder = (nextOrder: string[]) => {
+    setCardOrder(nextOrder);
+    ctx?.onConfigChange?.({ ...cfg, cardOrder: nextOrder });
+  };
+
+  const reorderCard = (rowId: string, target: DropTarget, fallbackColumn: string): string[] => {
+    const visibleIds = new Set(processedRows.map((row) => row.id));
+    const base = [
+      ...cardOrder.filter((id) => visibleIds.has(id)),
+      ...processedRows.map((row) => row.id).filter((id) => !cardOrder.includes(id)),
+    ].filter((id) => id !== rowId);
+    if (target?.rowId && target.rowId !== rowId) {
+      const index = base.indexOf(target.rowId);
+      if (index >= 0) {
+        base.splice(target.position === "before" ? index : index + 1, 0, rowId);
+        return base;
+      }
+    }
+    const columnRows = rowsByColumn.get(fallbackColumn) ?? [];
+    const lastInColumn = [...columnRows].reverse().find((r) => r.id !== rowId);
+    if (!lastInColumn) return [rowId, ...base];
+    const index = base.indexOf(lastInColumn.id);
+    base.splice(index >= 0 ? index + 1 : base.length, 0, rowId);
+    return base;
+  };
+
+  const moveCard = async (row: DataRow, nextStatus: string, target: DropTarget) => {
     if (!row.fileId || pendingFileId) return;
     const oldStatus = row.cells[statusProperty];
     const nextValue = nextStatus === UNSPECIFIED ? null : nextStatus;
+    const oldColumn = scalar(oldStatus);
+    const sameColumn =
+      (nextStatus === UNSPECIFIED && (!oldColumn || !configuredColumns.some((col) => col.value === oldColumn))) ||
+      oldColumn === nextStatus;
+    const nextOrder = reorderCard(row.id, target, nextStatus);
+
+    if (sameColumn) {
+      persistCardOrder(nextOrder);
+      flashLanded(row.id);
+      setDraggingRowId(null);
+      setDropColumn(null);
+      setDropTarget(null);
+      return;
+    }
 
     setPendingFileId(row.fileId);
     setError(null);
+    persistCardOrder(nextOrder);
     setRows((prev) =>
       prev.map((r) =>
         r.id === row.id
@@ -223,6 +285,7 @@ export default function KanbanWidget({
         }),
       );
     } catch (err) {
+      persistCardOrder(cardOrder);
       setRows((prev) =>
         prev.map((r) =>
           r.id === row.id ? { ...r, cells: { ...r.cells, [statusProperty]: oldStatus } } : r,
@@ -233,6 +296,7 @@ export default function KanbanWidget({
       setPendingFileId(null);
       setDraggingRowId(null);
       setDropColumn(null);
+      setDropTarget(null);
     }
   };
 
@@ -331,12 +395,15 @@ export default function KanbanWidget({
                 e.preventDefault();
                 setDropColumn(column.value);
               }}
-              onDragLeave={() => setDropColumn((current) => (current === column.value ? null : current))}
+              onDragLeave={() => {
+                setDropColumn((current) => (current === column.value ? null : current));
+                setDropTarget((current) => (current?.column === column.value ? null : current));
+              }}
               onDrop={(e) => {
                 e.preventDefault();
                 const rowId = e.dataTransfer.getData("text/plain") || draggingRowId;
                 const row = rows.find((r) => r.id === rowId);
-                if (row) void moveCard(row, column.value);
+                if (row) void moveCard(row, column.value, dropTarget?.column === column.value ? dropTarget : null);
               }}
               className={`flex min-w-[240px] flex-[0_0_240px] flex-col overflow-hidden rounded-lg border-t-[3px] bg-gray-50 p-1.5 outline outline-2 -outline-offset-2 transition dark:bg-gray-900 ${
                 dropColumn === column.value ? "outline-current" : "outline-transparent"
@@ -359,15 +426,38 @@ export default function KanbanWidget({
                         setDraggingRowId(row.id);
                         e.dataTransfer.setData("text/plain", row.id);
                       }}
+                      onDragOver={(e) => {
+                        if (!draggingRowId || draggingRowId === row.id) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const position: DropPosition = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+                        setDropColumn(column.value);
+                        setDropTarget({ column: column.value, rowId: row.id, position });
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const rowId = e.dataTransfer.getData("text/plain") || draggingRowId;
+                        const dragged = rows.find((r) => r.id === rowId);
+                        if (dragged) void moveCard(dragged, column.value, dropTarget?.column === column.value ? dropTarget : null);
+                      }}
                       onDragEnd={() => {
                         setDraggingRowId(null);
                         setDropColumn(null);
+                        setDropTarget(null);
                       }}
                       onClick={() => setPreviewRow(row)}
                       title={t("dashboard.kanbanDragToMove")}
                       className={`cursor-pointer select-none rounded-md border border-gray-200 border-l-[3px] border-l-current bg-white px-2.5 py-2 text-xs shadow-sm transition hover:border-current hover:shadow-md dark:border-gray-700 dark:bg-gray-950 ${
                         pendingFileId === row.fileId || draggingRowId === row.id ? "opacity-50" : ""
-                      } ${landedRowId === row.id ? "animate-pulse" : ""}`}
+                      } ${landedRowId === row.id ? "animate-pulse" : ""} ${
+                        dropTarget?.rowId === row.id && dropTarget.position === "before"
+                          ? "ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-900"
+                          : dropTarget?.rowId === row.id && dropTarget.position === "after"
+                            ? "ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-900"
+                            : ""
+                      }`}
                     >
                       <div className="break-words font-medium leading-snug text-gray-900 dark:text-gray-100">
                         {title}

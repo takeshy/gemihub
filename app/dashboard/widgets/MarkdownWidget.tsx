@@ -13,6 +13,8 @@ import { MarkdownFilePicker } from "./config-editors/MarkdownFilePicker";
 interface MarkdownConfig {
   /** Drive file path of the referenced markdown file. */
   path?: string;
+  /** Whether to show the embedded editor's toolbar/header. Defaults to true. */
+  showHeader?: boolean;
 }
 
 // Session-scoped preview/wysiwyg/code mode for markdown widgets. Defaults to
@@ -32,13 +34,14 @@ export default function MarkdownWidget({
   const editorCtx = useEditorContext();
   const cfg = (config ?? {}) as MarkdownConfig;
   const filePath = (cfg.path ?? "").trim();
+  const showHeader = cfg.showHeader !== false;
   const fileRef = editorCtx.fileList.find((f) => (f.path || f.name) === filePath);
   const fileId = fileRef?.id ?? null;
 
   const { content, loading, error, saveToCache } = useFileWithCache(fileId, undefined, "MarkdownWidget");
 
   const selectFile = (path: string) => {
-    ctx?.onConfigChange?.({ path });
+    ctx?.onConfigChange?.({ ...cfg, path });
   };
 
   // No file chosen yet — prompt to pick one.
@@ -100,6 +103,7 @@ export default function MarkdownWidget({
         fileName={filePath}
         initialContent={content}
         saveToCache={saveToCache}
+        hideHeader={!showHeader}
         hideToolbarActions
         initialMode={sessionMode}
         onModeChange={(m) => {

@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import { getWidgetDef } from "./widgets/registry";
 import type { Widget } from "./types";
@@ -10,7 +10,7 @@ interface WidgetSettingsPanelProps {
   widget: Widget;
   onChange: (config: unknown) => void;
   onTypeChange: (nextType: string, nextConfig: Record<string, unknown>) => void;
-  onClose: () => void;
+  onClose: (nextConfig?: unknown) => void;
   onDelete: () => void;
   /** The .dashboard file's ID (passed to ConfigEditor as a sidecar cache fallback). */
   dashboardFileId?: string;
@@ -36,6 +36,7 @@ export function WidgetSettingsPanel({
   const ConfigEditor = def.ConfigEditor;
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
+  const doneActionRef = useRef<(() => unknown | Promise<unknown>) | null>(null);
   const canConvertLegacy = !ConfigEditor && isLegacyFolderWidget(widget.type);
 
   const handleConvertLegacy = async () => {
@@ -53,10 +54,15 @@ export function WidgetSettingsPanel({
     }
   };
 
+  const handleDone = async () => {
+    const nextConfig = await doneActionRef.current?.();
+    onClose(nextConfig);
+  };
+
   const panel = (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-black/30"
-      onClick={onClose}
+      onClick={() => onClose()}
     >
       <div
         className="w-full max-w-md h-full bg-white dark:bg-gray-900 shadow-xl flex flex-col"
@@ -71,7 +77,7 @@ export function WidgetSettingsPanel({
             </h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => onClose()}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800"
           >
             <X size={18} />
@@ -89,6 +95,9 @@ export function WidgetSettingsPanel({
                 key={widget.id}
                 config={widget.config}
                 onChange={onChange}
+                setDoneAction={(action) => {
+                  doneActionRef.current = action;
+                }}
                 widgetType={widget.type}
                 onTypeChange={onTypeChange}
                 widgetId={widget.id}
@@ -133,7 +142,7 @@ export function WidgetSettingsPanel({
             {t("dashboard.deleteWidget")}
           </button>
           <button
-            onClick={onClose}
+            onClick={handleDone}
             className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
           >
             {t("dashboard.done")}

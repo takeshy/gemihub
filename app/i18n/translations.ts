@@ -92,8 +92,40 @@ export interface TranslationStrings {
   "dashboard.unsupportedWidget": string;
   "dashboard.baseFile": string;
   "dashboard.baseSelectFile": string;
+  "dashboard.baseCreateNew": string;
+  "dashboard.baseCreate": string;
+  "dashboard.baseImportExisting": string;
+  "dashboard.markdownCreateNew": string;
+  "dashboard.markdownImportExisting": string;
+  "dashboard.markdownCreateOnDone": string;
+  "dashboard.markdownShowHeader": string;
   "dashboard.baseView": string;
   "dashboard.baseNoViews": string;
+  "dashboard.baseAdvancedFilters": string;
+  "dashboard.baseFilterInFolder": string;
+  "dashboard.baseFilterHasTag": string;
+  "dashboard.baseFilterSelectFolder": string;
+  "dashboard.baseFilterAnd": string;
+  "dashboard.baseFilterOr": string;
+  "dashboard.baseProperties": string;
+  "dashboard.baseAddField": string;
+  "dashboard.baseFieldsAuto": string;
+  "dashboard.baseCardImage": string;
+  "dashboard.baseCardImageFit": string;
+  "dashboard.baseCardSize": string;
+  "dashboard.baseImageNone": string;
+  "dashboard.baseEditWithAi": string;
+  "dashboard.baseAiTitle": string;
+  "dashboard.baseAiRequest": string;
+  "dashboard.baseAiPlaceholder": string;
+  "dashboard.baseAiPreview": string;
+  "dashboard.baseAiGenerate": string;
+  "dashboard.baseAiGenerating": string;
+  "dashboard.baseAiApply": string;
+  "dashboard.baseAiBack": string;
+  "dashboard.baseAiFailed": string;
+  "dashboard.baseAiCtrlEnter": string;
+  "dashboard.baseListIndent": string;
   "dashboard.baseCompileError": string;
   "dashboard.baseQueryError": string;
   "dashboard.baseSelectPlaceholder": string;
@@ -1093,8 +1125,40 @@ const en: TranslationStrings = {
   "dashboard.unsupportedWidget": "Unsupported widget",
   "dashboard.baseFile": "Base file",
   "dashboard.baseSelectFile": "Select a .base file",
+  "dashboard.baseCreateNew": "Create a new base",
+  "dashboard.baseCreate": "Create",
+  "dashboard.baseImportExisting": "Or import an existing base",
+  "dashboard.markdownCreateNew": "Create a new note",
+  "dashboard.markdownImportExisting": "Or import an existing file",
+  "dashboard.markdownCreateOnDone": "Created when you press Done.",
+  "dashboard.markdownShowHeader": "Show header on dashboard",
   "dashboard.baseView": "View",
   "dashboard.baseNoViews": "No views defined",
+  "dashboard.baseAdvancedFilters": "Advanced filters are kept — edit them in Raw base YAML.",
+  "dashboard.baseFilterInFolder": "In folder",
+  "dashboard.baseFilterHasTag": "Has tag",
+  "dashboard.baseFilterSelectFolder": "Select folder…",
+  "dashboard.baseFilterAnd": "Match all (AND)",
+  "dashboard.baseFilterOr": "Match any (OR)",
+  "dashboard.baseProperties": "Properties",
+  "dashboard.baseAddField": "Add field…",
+  "dashboard.baseFieldsAuto": "No fields selected — all properties shown",
+  "dashboard.baseCardImage": "Image property",
+  "dashboard.baseCardImageFit": "Image fit",
+  "dashboard.baseCardSize": "Card size",
+  "dashboard.baseImageNone": "None",
+  "dashboard.baseEditWithAi": "Edit with AI",
+  "dashboard.baseAiTitle": "Edit base with AI",
+  "dashboard.baseAiRequest": "Describe the change",
+  "dashboard.baseAiPlaceholder": "e.g. Show incomplete tasks in the Projects folder as a list sorted by modified date",
+  "dashboard.baseAiPreview": "Generated .base YAML",
+  "dashboard.baseAiGenerate": "Generate",
+  "dashboard.baseAiGenerating": "Generating…",
+  "dashboard.baseAiApply": "Apply",
+  "dashboard.baseAiBack": "Back",
+  "dashboard.baseAiFailed": "Failed to generate base YAML.",
+  "dashboard.baseAiCtrlEnter": "Ctrl+Enter to generate",
+  "dashboard.baseListIndent": "Indent properties",
   "dashboard.baseCompileError": "Base compile error",
   "dashboard.baseQueryError": "Query error",
   "dashboard.baseSelectPlaceholder": "Select a .base file...",
@@ -2095,8 +2159,40 @@ const ja: TranslationStrings = {
   "dashboard.unsupportedWidget": "未対応のウィジェット",
   "dashboard.baseFile": "Baseファイル",
   "dashboard.baseSelectFile": ".baseファイルを選択",
+  "dashboard.baseCreateNew": "新規baseを作成",
+  "dashboard.baseCreate": "作成",
+  "dashboard.baseImportExisting": "または既存のbaseをインポート",
+  "dashboard.markdownCreateNew": "新規ノートを作成",
+  "dashboard.markdownImportExisting": "または既存ファイルをインポート",
+  "dashboard.markdownCreateOnDone": "Doneで作成します。",
+  "dashboard.markdownShowHeader": "ダッシュボード上でヘッダーを表示",
   "dashboard.baseView": "ビュー",
   "dashboard.baseNoViews": "ビューが定義されていません",
+  "dashboard.baseAdvancedFilters": "高度なフィルタは保持されます — Raw base YAML で編集してください。",
+  "dashboard.baseFilterInFolder": "フォルダ内",
+  "dashboard.baseFilterHasTag": "タグを持つ",
+  "dashboard.baseFilterSelectFolder": "フォルダを選択…",
+  "dashboard.baseFilterAnd": "すべて一致（AND）",
+  "dashboard.baseFilterOr": "いずれか一致（OR）",
+  "dashboard.baseProperties": "プロパティ",
+  "dashboard.baseAddField": "フィールドを追加…",
+  "dashboard.baseFieldsAuto": "フィールド未選択 — 全プロパティを表示",
+  "dashboard.baseCardImage": "画像プロパティ",
+  "dashboard.baseCardImageFit": "画像のフィット",
+  "dashboard.baseCardSize": "カードサイズ",
+  "dashboard.baseImageNone": "なし",
+  "dashboard.baseEditWithAi": "AIで編集",
+  "dashboard.baseAiTitle": "AIでbaseを編集",
+  "dashboard.baseAiRequest": "変更内容を記述",
+  "dashboard.baseAiPlaceholder": "例: Projectsフォルダの未完了タスクを更新日順で表示するlistにして",
+  "dashboard.baseAiPreview": "生成された .base YAML",
+  "dashboard.baseAiGenerate": "生成",
+  "dashboard.baseAiGenerating": "生成中…",
+  "dashboard.baseAiApply": "適用",
+  "dashboard.baseAiBack": "戻る",
+  "dashboard.baseAiFailed": "base YAML の生成に失敗しました。",
+  "dashboard.baseAiCtrlEnter": "Ctrl+Enter で生成",
+  "dashboard.baseListIndent": "プロパティをインデント",
   "dashboard.baseCompileError": "Baseコンパイルエラー",
   "dashboard.baseQueryError": "クエリエラー",
   "dashboard.baseSelectPlaceholder": ".baseファイルを選択...",

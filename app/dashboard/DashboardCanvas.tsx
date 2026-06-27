@@ -197,15 +197,28 @@ export function DashboardCanvas({
     [data, commit, onEditModeChange],
   );
 
-  const handleCloseSettings = useCallback(async () => {
+  const handleCloseSettings = useCallback(async (nextConfig?: unknown) => {
     const id = editingWidgetId;
     setEditingWidgetId(null);
 
+    const nextData = id && nextConfig !== undefined
+      ? {
+          ...data,
+          widgets: data.widgets.map((w) =>
+            w.id === id ? { ...w, config: nextConfig as Record<string, unknown> } : w,
+          ),
+        }
+      : data;
+
     if (id && id === pendingNewWidgetId) {
-      const widget = data.widgets.find((w) => w.id === id);
+      const widget = nextData.widgets.find((w) => w.id === id);
       if (widget && !isWidgetConfigured(widget)) {
-        commit({ ...data, widgets: data.widgets.filter((w) => w.id !== id) });
+        commit({ ...nextData, widgets: nextData.widgets.filter((w) => w.id !== id) });
+      } else if (nextConfig !== undefined) {
+        commit(nextData, `config:${id}`);
       }
+    } else if (nextConfig !== undefined) {
+      commit(nextData, id ? `config:${id}` : undefined);
     }
 
     setPendingNewWidgetId(null);

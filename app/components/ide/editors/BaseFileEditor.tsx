@@ -323,6 +323,7 @@ export function BaseFileEditor({
             <BaseViewRenderer
               view={activeView}
               result={queryResult}
+              properties={compiled?.config.properties}
               resolveFileRef={(entry) => fileRefsByPath.get(entry.file.path) ?? null}
               onOpenFile={setPreviewFile}
               resolveAssetUrl={resolveAssetUrl}

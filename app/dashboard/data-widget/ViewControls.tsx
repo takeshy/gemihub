@@ -147,7 +147,7 @@ export function ViewControls({
       </button>
 
       {open === "filter" && (
-        <Popover anchorRef={filterBtnRef} onClose={() => setOpen(null)} widthClass="w-80">
+        <Popover anchorRef={filterBtnRef} onClose={() => setOpen(null)} widthClass="w-[28rem]">
           <FilterEditor
             filters={viewFilter}
             fieldNames={fieldNames}

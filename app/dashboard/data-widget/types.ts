@@ -74,6 +74,8 @@ export interface KanbanWidgetConfig {
   titleProperty?: string;
   columns?: Array<string | KanbanColumnConfig>;
   showUnspecified?: boolean;
+  /** Persisted visual card order by row id/file id. */
+  cardOrder?: string[];
   displayFields?: string[];
   filter?: FilterCondition[];
   limit?: number;

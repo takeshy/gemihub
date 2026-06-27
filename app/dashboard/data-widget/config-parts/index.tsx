@@ -170,7 +170,7 @@ export function FilterEditor({
           const availableOps = OPERATORS_BY_TYPE[propType] ?? ["eq"];
           const needsValue = !VALUELESS_OPS.has(filter.op);
           return (
-            <div key={index} className="flex items-center gap-1.5">
+            <div key={index} className="grid grid-cols-[minmax(6.5rem,0.9fr)_minmax(5.5rem,0.7fr)_minmax(8rem,1.6fr)_auto] items-center gap-1.5">
               <select
                 value={filter.property}
                 onChange={(e) => {
@@ -182,7 +182,7 @@ export function FilterEditor({
                     value: undefined,
                   });
                 }}
-                className="flex-1 min-w-0 px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
+                className="min-w-0 px-2 py-1 pr-7 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
               >
                 {fieldNames.length === 0 && (
                   <option value="">{t("dashboard.noFields")}</option>
@@ -196,7 +196,7 @@ export function FilterEditor({
               <select
                 value={filter.op}
                 onChange={(e) => updateFilter(index, { op: e.target.value as FilterOp })}
-                className="px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
+                className="min-w-0 px-2 py-1 pr-7 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
               >
                 {availableOps.map((op) => (
                   <option key={op} value={op}>
@@ -213,10 +213,10 @@ export function FilterEditor({
                     if (propType === "number") val = Number(val);
                     updateFilter(index, { value: val });
                   }}
-                  className="w-24 px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
+                  className="min-w-0 px-2 py-1 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs"
                 />
               ) : (
-                <div className="w-24" />
+                <div />
               )}
               <button
                 type="button"
@@ -315,8 +315,25 @@ export function ColumnsEditor({
   const { t } = useI18n();
   const [newColumn, setNewColumn] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestRef = useRef<HTMLDivElement | null>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!suggestRef.current?.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowSuggestions(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showSuggestions]);
 
   const addColumn = (key: string) => {
     const trimmed = key.trim();
@@ -383,7 +400,7 @@ export function ColumnsEditor({
           </div>
         ))}
       </div>
-      <div className="relative">
+      <div className="relative" ref={suggestRef}>
         <div className="flex gap-1">
           <input
             type="text"
