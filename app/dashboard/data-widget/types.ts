@@ -102,6 +102,10 @@ export interface WorkflowWidgetConfig {
   limit?: number;
   /** Auto-run interval in minutes. 0/undefined = manual only. */
   refreshInterval?: number;
+  /** Whether to show the widget header controls. Defaults to true. */
+  showHeader?: boolean;
+  /** Hide scrollbars while keeping content scrollable. */
+  hideScrollbar?: boolean;
   /** Unknown keys are preserved for round-trip safety. */
   [key: string]: unknown;
 }

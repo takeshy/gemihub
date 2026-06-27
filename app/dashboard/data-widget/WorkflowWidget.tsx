@@ -55,6 +55,8 @@ export default function WorkflowWidget({
   const cfg = (config ?? {}) as WorkflowWidgetConfig;
   const output = cfg.output ?? "table";
   const isText = output === "markdown" || output === "html";
+  const showHeader = cfg.showHeader !== false;
+  const hideScrollbar = cfg.hideScrollbar === true;
   const widgetId = ctx?.widgetId;
   const dashboardCacheKey = ctx?.dashboardFileName ?? ctx?.dashboardFileId;
 
@@ -263,13 +265,13 @@ export default function WorkflowWidget({
     );
   } else if (output === "card") {
     content = (
-      <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable fieldTypes={fieldTypes} />
+      <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable fieldTypes={fieldTypes} hideScrollbar={hideScrollbar} />
     );
   } else if (output === "table") {
-    content = <TableView rows={processedRows} columns={cfg.columns ?? []} editable={false} fieldTypes={fieldTypes} />;
+    content = <TableView rows={processedRows} columns={cfg.columns ?? []} editable={false} fieldTypes={fieldTypes} hideScrollbar={hideScrollbar} />;
   } else if (output === "markdown") {
     content = (
-      <div className="prose prose-sm h-full max-w-none overflow-auto p-2 dark:prose-invert">
+      <div className={`prose prose-sm h-full max-w-none overflow-auto p-2 dark:prose-invert ${hideScrollbar ? "scrollbar-hide" : ""}`}>
         <GfmMarkdownPreview content={cacheRecord.text ?? ""} />
       </div>
     );
@@ -278,7 +280,7 @@ export default function WorkflowWidget({
     content = (
       <iframe
         srcDoc={htmlSrcDoc}
-        className="h-full w-full border-0 bg-white"
+        className={`h-full w-full border-0 bg-white ${hideScrollbar ? "scrollbar-hide" : ""}`}
         title={t("dashboard.widgetWorkflow")}
         sandbox="allow-scripts"
       />
@@ -287,6 +289,7 @@ export default function WorkflowWidget({
 
   return (
     <div className="flex h-full flex-col">
+      {showHeader && (
       <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-2 py-1 flex-shrink-0">
         <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500">
           {cacheRecord && (
@@ -341,6 +344,7 @@ export default function WorkflowWidget({
           )}
         </div>
       </div>
+      )}
       {hasError && !isStale && cacheRecord?.error && (
         <div className="bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 px-2 py-1 text-xs text-red-600 dark:text-red-400 flex-shrink-0">
           {cacheRecord.error}

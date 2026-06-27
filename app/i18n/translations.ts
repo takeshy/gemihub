@@ -74,6 +74,8 @@ export interface TranslationStrings {
   "dashboard.addWidget": string;
   "dashboard.noSettings": string;
   "dashboard.settingsAutoSaved": string;
+  "dashboard.showWidgetHeader": string;
+  "dashboard.hideScrollbar": string;
   "dashboard.deleteWidget": string;
   "dashboard.deleteWidgetConfirm": string;
   "dashboard.moveUp": string;
@@ -1108,6 +1110,8 @@ const en: TranslationStrings = {
   "dashboard.addWidget": "Add Widget",
   "dashboard.noSettings": "No settings for this widget type",
   "dashboard.settingsAutoSaved": "Changes are applied automatically.",
+  "dashboard.showWidgetHeader": "Show header on dashboard",
+  "dashboard.hideScrollbar": "Hide scrollbar",
   "dashboard.deleteWidget": "Delete Widget",
   "dashboard.deleteWidgetConfirm": "Delete this widget?",
   "dashboard.moveUp": "Move up",
@@ -2143,6 +2147,8 @@ const ja: TranslationStrings = {
   "dashboard.addWidget": "ウィジェットを追加",
   "dashboard.noSettings": "このウィジェットタイプに設定はありません",
   "dashboard.settingsAutoSaved": "変更は自動で反映されます。",
+  "dashboard.showWidgetHeader": "ダッシュボード上でヘッダーを表示",
+  "dashboard.hideScrollbar": "スクロールバーを非表示",
   "dashboard.deleteWidget": "ウィジェットを削除",
   "dashboard.deleteWidgetConfirm": "このウィジェットを削除しますか？",
   "dashboard.moveUp": "上へ移動",

@@ -17,6 +17,10 @@ interface WebEmbedProps {
   url: string;
   /** When false, the iframe is pointer-events-none (used by Canvas previews). */
   interactive?: boolean;
+  /** Hide scrollbars where the embedded document allows it. Cross-origin iframes may ignore this. */
+  hideScrollbar?: boolean;
+  /** Show the embed chrome (title/open link and footer URL). Defaults to true. */
+  showHeader?: boolean;
 }
 
 /**
@@ -27,7 +31,7 @@ interface WebEmbedProps {
  * sites render in the iframe; blocked sites show a clean "open in new tab" card
  * instead of a broken blank frame.
  */
-export default function WebEmbed({ url, interactive = true }: WebEmbedProps) {
+export default function WebEmbed({ url, interactive = true, hideScrollbar = false, showHeader = true }: WebEmbedProps) {
   const [embeddable, setEmbeddable] = useState<boolean | null>(
     () => embedCache.get(url) ?? null,
   );
@@ -82,7 +86,7 @@ export default function WebEmbed({ url, interactive = true }: WebEmbedProps) {
   if (embeddable === null) {
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        {header}
+        {showHeader && header}
         <div className="flex flex-1 items-center justify-center">
           <Loader2 size={20} className="animate-spin text-gray-300 dark:text-gray-600" />
         </div>
@@ -95,7 +99,7 @@ export default function WebEmbed({ url, interactive = true }: WebEmbedProps) {
     // — offer a clear link out instead of a broken blank iframe.
     return (
       <div className="flex h-full flex-col overflow-hidden">
-        {header}
+        {showHeader && header}
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
           <Globe size={28} className="text-gray-300 dark:text-gray-600" />
           <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -117,17 +121,19 @@ export default function WebEmbed({ url, interactive = true }: WebEmbedProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {header}
+      {showHeader && header}
       <iframe
         title={url}
         src={url}
-        className={`min-h-0 flex-1 border-0 bg-white ${interactive ? "" : "pointer-events-none"}`}
+        className={`min-h-0 flex-1 border-0 bg-white ${interactive ? "" : "pointer-events-none"} ${hideScrollbar ? "scrollbar-hide" : ""}`}
         sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
         referrerPolicy="no-referrer"
       />
-      <div className="truncate border-t border-gray-200 px-2 py-1 text-[10px] text-blue-700 dark:border-gray-700 dark:text-blue-300">
-        {url}
-      </div>
+      {showHeader && (
+        <div className="truncate border-t border-gray-200 px-2 py-1 text-[10px] text-blue-700 dark:border-gray-700 dark:text-blue-300">
+          {url}
+        </div>
+      )}
     </div>
   );
 }

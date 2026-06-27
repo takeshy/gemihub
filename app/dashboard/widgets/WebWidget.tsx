@@ -9,8 +9,11 @@ export default function WebWidget({
   ctx?: WidgetContext;
 }) {
   const { t } = useI18n();
-  const url = (config as Record<string, unknown>)?.url;
+  const cfg = (config ?? {}) as Record<string, unknown>;
+  const url = cfg.url;
   const href = typeof url === "string" ? url : "";
+  const showHeader = cfg.showHeader !== false;
+  const hideScrollbar = cfg.hideScrollbar === true;
 
   if (!href) {
     return (
@@ -20,5 +23,5 @@ export default function WebWidget({
     );
   }
 
-  return <WebEmbed url={href} interactive />;
+  return <WebEmbed url={href} interactive showHeader={showHeader} hideScrollbar={hideScrollbar} />;
 }
