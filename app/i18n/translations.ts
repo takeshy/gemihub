@@ -51,6 +51,7 @@ export interface TranslationStrings {
 
   // Base editor
   "base.viewDisplay": string;
+  "base.viewEdit": string;
   "base.viewRaw": string;
   "base.unparseable": string;
   "base.loading": string;
@@ -1084,6 +1085,7 @@ const en: TranslationStrings = {
 
   // Base editor
   "base.viewDisplay": "Display",
+  "base.viewEdit": "Edit",
   "base.viewRaw": "Raw",
   "base.unparseable": "Cannot parse this base file",
   "base.loading": "Loading...",
@@ -2118,6 +2120,7 @@ const ja: TranslationStrings = {
 
   // Base editor
   "base.viewDisplay": "表示",
+  "base.viewEdit": "編集",
   "base.viewRaw": "Raw",
   "base.unparseable": "このベースファイルを解析できません",
   "base.loading": "読み込み中...",

@@ -21,15 +21,17 @@ import {
   useFolderFields,
 } from "../../data-widget/config-parts";
 import { OPERATORS_BY_TYPE } from "../../data-widget/filter";
-import type { FilterCondition, FilterOp, PropertyType } from "../../data-widget/types";
+import type { FieldInfo, FilterCondition, FilterOp, PropertyType } from "../../data-widget/types";
 
 interface BaseWidgetConfig {
   base?: string;
+  baseFileId?: string;
   view?: string;
 }
 
 type EditableBaseConfig = Record<string, unknown> & {
   views: EditableBaseView[];
+  formulas?: Record<string, string>;
   /** Base-level property config (display-name aliases, shared across views). */
   properties?: Record<string, PropertyConfig>;
 };
@@ -72,6 +74,7 @@ type EditableBaseView = Record<string, unknown> & {
 export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
   const { t } = useI18n();
   const cfg = useMemo(() => (config ?? {}) as BaseWidgetConfig, [config]);
+  const onChangeRef = useRef(onChange);
   const [baseFiles, setBaseFiles] = useState<BaseFileOption[]>([]);
   const [views, setViews] = useState<string[]>([]);
   const [baseContent, setBaseContent] = useState("");
@@ -82,6 +85,10 @@ export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
   const [showAI, setShowAI] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     (async () => {
@@ -101,7 +108,7 @@ export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
 
     let cancelled = false;
     (async () => {
-      const found = baseFiles.find((f) => f.name === cfg.base);
+      const found = baseFiles.find((f) => f.name === cfg.base || f.id === cfg.baseFileId);
       if (!found) {
         setViews([]);
         setBaseContent("");
@@ -116,11 +123,15 @@ export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
         const content = cached?.content ?? await readFileLocal(found.id);
         if (cancelled) return;
         const compiled = compileBase(content);
-        setViews(compiled.config.views.map((v) => v.name));
+        const nextViews = compiled.config.views.map((v) => v.name);
+        setViews(nextViews);
         setBaseContent(content);
         setBaseConfig(parseEditableBase(content));
         setBaseFileId(found.id);
         setLoadError(null);
+        if (nextViews.length > 0 && (!cfg.view || !nextViews.includes(cfg.view))) {
+          onChangeRef.current({ ...cfg, view: nextViews[0] });
+        }
       } catch (err) {
         if (cancelled) return;
         setViews([]);
@@ -133,7 +144,7 @@ export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
     return () => {
       cancelled = true;
     };
-  }, [cfg.base, baseFiles]);
+  }, [cfg, baseFiles]);
 
   const activeViewName = cfg.view || views[0] || baseConfig?.views[0]?.name || "";
   const activeViewIndex = baseConfig?.views.findIndex((v) => v.name === activeViewName) ?? -1;
@@ -343,14 +354,26 @@ function ManualBaseEditor({
     [activeView, baseConfig],
   );
   const { fields } = useFolderFields(folder);
-  const fieldNames = useMemo(() => fields.map((f) => f.name), [fields]);
+  const formulaFields = useMemo<FieldInfo[]>(
+    () => Object.keys(baseConfig.formulas ?? {}).map((name) => ({ name: `formula.${name}`, type: "string" })),
+    [baseConfig.formulas],
+  );
+  const fieldsWithFormulas = useMemo(() => {
+    const seen = new Set<string>();
+    return [...fields, ...formulaFields].filter((field) => {
+      if (seen.has(field.name)) return false;
+      seen.add(field.name);
+      return true;
+    });
+  }, [fields, formulaFields]);
+  const fieldNames = useMemo(() => fieldsWithFormulas.map((f) => f.name), [fieldsWithFormulas]);
   const fieldTypeMap = useMemo(() => {
     const map = new Map<string, PropertyType>();
-    for (const f of fields) map.set(f.name, f.type);
+    for (const f of fieldsWithFormulas) map.set(f.name, f.type);
     return map;
-  }, [fields]);
+  }, [fieldsWithFormulas]);
 
-  const sortOptions = useMemo(() => buildSortOptions(fields, false), [fields]);
+  const sortOptions = useMemo(() => buildSortOptions(fieldsWithFormulas, false), [fieldsWithFormulas]);
   const order = activeView.order ?? [];
   const setOrder = (next: string[]) => updateActiveView({ order: next.length > 0 ? next : undefined });
 
@@ -553,6 +576,7 @@ function BaseCardOptions({
 }) {
   const imageProp = typeof view.image === "string" ? view.image : "";
   const imageFit = typeof view.imageFit === "string" ? view.imageFit : "cover";
+  const imageAspectRatio = typeof view.imageAspectRatio === "string" ? view.imageAspectRatio : "16 / 9";
   const cardSize = typeof view.cardSize === "string" ? view.cardSize : "medium";
   const selectClass =
     "w-full rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300";
@@ -585,6 +609,21 @@ function BaseCardOptions({
         >
           <option value="cover">Cover</option>
           <option value="contain">Contain</option>
+        </select>
+      </div>
+      <div className="col-span-2">
+        <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+          Image ratio
+        </label>
+        <select
+          value={imageAspectRatio}
+          onChange={(e) => updateActiveView({ imageAspectRatio: e.target.value })}
+          className={selectClass}
+        >
+          <option value="16 / 9">16:9</option>
+          <option value="4 / 3">4:3</option>
+          <option value="1 / 1">1:1</option>
+          <option value="3 / 2">3:2</option>
         </select>
       </div>
       <div className="col-span-2">

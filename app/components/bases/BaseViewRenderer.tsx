@@ -306,12 +306,12 @@ function BaseCard({
 
 function cardAspectRatio(value: unknown): string {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) return String(value);
-  if (typeof value !== "string" || value.trim() === "") return "1 / 1";
+  if (typeof value !== "string" || value.trim() === "") return "16 / 9";
   const trimmed = value.trim();
   const colon = trimmed.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
   if (colon) return `${colon[1]} / ${colon[2]}`;
   if (/^\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?$/.test(trimmed)) return trimmed;
-  return "1 / 1";
+  return "16 / 9";
 }
 
 function ListView({ view, result, interaction }: { view: ViewConfig; result: QueryResult; interaction: EntryInteraction }) {

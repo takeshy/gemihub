@@ -37,6 +37,7 @@ import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
 import { executeInteractionsChat } from "~/hooks/useInteractionsChat";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { useSkills } from "~/contexts/SkillContext";
+import { useEditorContext } from "~/contexts/EditorContext";
 import { readFileLocal, findFileByNameLocal } from "~/services/drive-local";
 import type { ReviewResult } from "~/services/ai-workflow-generation";
 
@@ -50,6 +51,7 @@ export interface ChatOverrides {
 
 const WEBPAGE_REVIEW_MAX_ITERATIONS = 1;
 const WEBPAGE_BUILDER_SKILL_ID = "webpage-builder";
+const FILE_CONTEXT_SKILL_IDS = ["markdown", "base", "dashboard"];
 
 type T = (key: keyof TranslationStrings) => string;
 
@@ -230,7 +232,16 @@ export function ChatPanel({
   onOpenFile,
 }: ChatPanelProps) {
   const { t, language: uiLanguage } = useI18n();
-  const { skills, activeSkillIds, toggleSkill, activateSkill, getActiveSkillsSystemPrompt, getActiveSkillWorkflows } = useSkills();
+  const {
+    skills,
+    activeSkillIds,
+    toggleSkill,
+    activateSkill,
+    activateExclusiveSkill,
+    getActiveSkillsSystemPrompt,
+    getActiveSkillWorkflows,
+  } = useSkills();
+  const editorCtx = useEditorContext();
   const [histories, setHistories] = useState<ChatHistoryItem[]>([]);
 
   // Session ID to track which chat session owns the UI; incremented on new/load chat
@@ -278,6 +289,23 @@ export function ChatPanel({
   // re-entry means this is an auto-review turn (don't reset the iteration
   // counter, and reuse the description the reviewer saw).
   const pendingAutoReviewRef = useRef<{ originalDescription: string } | null>(null);
+
+  useEffect(() => {
+    const fileName = editorCtx.activeFileName?.toLowerCase();
+    const targetSkillId = fileName?.endsWith(".md") || fileName?.endsWith(".markdown")
+      ? "markdown"
+      : fileName?.endsWith(".base")
+      ? "base"
+      : fileName?.endsWith(".dashboard")
+        ? "dashboard"
+        : null;
+    if (!targetSkillId) return;
+
+    const skill = skills.find((s) =>
+      s.id === targetSkillId || s.name.toLowerCase() === targetSkillId
+    );
+    if (skill) activateExclusiveSkill(skill.id, FILE_CONTEXT_SKILL_IDS);
+  }, [activateExclusiveSkill, editorCtx.activeFileName, skills]);
   // Latest handleSend, so the deferred auto-fix reads the re-rendered closure
   // (which sees the appended review message).
   const handleSendRef = useRef<

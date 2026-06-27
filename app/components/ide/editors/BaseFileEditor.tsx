@@ -3,12 +3,15 @@
 // view (table, cards, or list) using the Bases engine.
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   Code,
   Database,
   GitCompareArrows,
   History,
+  Pencil,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
@@ -19,8 +22,10 @@ import { getRemoteMetaFiles, readFileLocal } from "~/services/drive-local";
 import { getCachedFile } from "~/services/indexeddb-cache";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 import { FilePreviewModal } from "~/dashboard/widgets/FilePreviewModal";
+import { BaseConfigEditor } from "~/dashboard/widgets/config-editors/BaseConfigEditor";
+import { DASHBOARD_BASE_FILE_UPDATED_EVENT } from "~/dashboard/widgets/base-events";
 
-type ViewMode = "display" | "raw";
+type ViewMode = "display" | "edit" | "raw";
 
 interface VaultFile {
   id: string;
@@ -79,6 +84,20 @@ export function BaseFileEditor({
   }, [initialContent, fileId]);
 
   useEffect(() => {
+    const onBaseUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ fileId?: string; fileName?: string }>).detail;
+      if (detail?.fileId !== fileId && detail?.fileName !== fileName) return;
+      void getCachedFile(fileId).then((cached) => {
+        if (!cached) return;
+        contentFromProps.current = true;
+        setContent(cached.content);
+      });
+    };
+    window.addEventListener(DASHBOARD_BASE_FILE_UPDATED_EVENT, onBaseUpdated);
+    return () => window.removeEventListener(DASHBOARD_BASE_FILE_UPDATED_EVENT, onBaseUpdated);
+  }, [fileId, fileName]);
+
+  useEffect(() => {
     if (contentFromProps.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pendingContentRef.current = content;
@@ -100,9 +119,9 @@ export function BaseFileEditor({
     };
   }, [saveToCache]);
 
-  // Load vault files for the query host (display mode).
+  // Load vault files for the query host (display/edit mode).
   useEffect(() => {
-    if (viewMode !== "display") return;
+    if (viewMode === "raw") return;
     let cancelled = false;
     (async () => {
       setVaultLoading(true);
@@ -151,11 +170,16 @@ export function BaseFileEditor({
 
   const views = useMemo(() => compiled?.config.views ?? [], [compiled]);
   const viewName = activeViewName ?? views[0]?.name ?? null;
-  const activeView = views.find((v) => v.name === viewName) ?? null;
+  const activeView = views.find((v) => v.name === viewName) ?? views[0] ?? null;
 
   useEffect(() => {
-    if (!activeViewName || views.some((v) => v.name === activeViewName)) return;
-    setActiveViewName(views[0]?.name ?? null);
+    const firstViewName = views[0]?.name ?? null;
+    if (!firstViewName) {
+      if (activeViewName !== null) setActiveViewName(null);
+      return;
+    }
+    if (activeViewName && views.some((v) => v.name === activeViewName)) return;
+    setActiveViewName(firstViewName);
   }, [activeViewName, views]);
 
   const queryResult = useMemo<QueryResult | null>(() => {
@@ -227,6 +251,19 @@ export function BaseFileEditor({
         {t("base.viewDisplay")}
       </button>
       <button
+        onClick={() => compiled && setViewMode("edit")}
+        disabled={!compiled}
+        title={!compiled ? t("base.unparseable") : undefined}
+        className={`flex items-center gap-1 px-2 py-1 text-xs ${
+          viewMode === "edit"
+            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+            : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+        } disabled:opacity-40`}
+      >
+        <Pencil size={ICON.SM} />
+        {t("base.viewEdit")}
+      </button>
+      <button
         onClick={() => setViewMode("raw")}
         className={`flex items-center gap-1 px-2 py-1 text-xs ${
           viewMode === "raw"
@@ -247,7 +284,7 @@ export function BaseFileEditor({
         <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">
           {fileName.replace(/\.base$/i, "")}
         </span>
-        {views.length > 1 && viewMode === "display" && (
+        {views.length > 1 && viewMode !== "raw" && (
           <select
             value={viewName ?? ""}
             onChange={(e) => setActiveViewName(e.target.value)}
@@ -262,7 +299,7 @@ export function BaseFileEditor({
         )}
       </div>
       <div className="flex items-center gap-1 sm:gap-2">
-        {viewMode === "display" && (
+        {viewMode !== "raw" && (
           <button
             onClick={() => setRefreshKey((k) => k + 1)}
             className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -296,7 +333,20 @@ export function BaseFileEditor({
     </div>
   );
 
-  if (viewMode === "display" && compiled) {
+  const editPanel =
+    viewMode === "edit" && compiled
+      ? (
+        <BaseEditSidePanel
+          fileId={fileId}
+          fileName={fileName}
+          viewName={activeViewName ?? undefined}
+          onViewChange={setActiveViewName}
+          onClose={() => setViewMode("display")}
+        />
+      )
+      : null;
+
+  if (viewMode !== "raw" && compiled) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-gray-900">
         {toolbar}
@@ -341,6 +391,7 @@ export function BaseFileEditor({
             onClose={() => setPreviewFile(null)}
           />
         )}
+        {editPanel}
       </div>
     );
   }
@@ -360,4 +411,70 @@ export function BaseFileEditor({
       </div>
     </div>
   );
+}
+
+function BaseEditSidePanel({
+  fileId,
+  fileName,
+  viewName,
+  onViewChange,
+  onClose,
+}: {
+  fileId: string;
+  fileName: string;
+  viewName?: string;
+  onViewChange: (viewName: string) => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const panel = (
+    <div className="fixed inset-y-0 right-0 z-50 flex w-full justify-end pointer-events-none">
+      <div className="pointer-events-auto flex h-full w-full max-w-md flex-col border-l border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+          <div className="flex min-w-0 items-center gap-2">
+            <Database size={ICON.MD} className="shrink-0 text-gray-500 dark:text-gray-400" />
+            <h3 className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">
+              {fileName.replace(/\.base$/i, "")}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title={t("common.close")}
+          >
+            <X size={ICON.LG} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          <p className="mb-3 text-xs text-gray-400 dark:text-gray-500">
+            {t("dashboard.settingsAutoSaved")}
+          </p>
+          <BaseConfigEditor
+            config={{ base: fileName, baseFileId: fileId, view: viewName }}
+            onChange={(next) => {
+              const cfg = (next ?? {}) as { view?: unknown };
+              if (typeof cfg.view === "string") onViewChange(cfg.view);
+            }}
+          />
+        </div>
+
+        <div className="flex justify-end border-t border-gray-200 px-4 py-3 dark:border-gray-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            {t("dashboard.done")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (typeof document !== "undefined") {
+    return createPortal(panel, document.body);
+  }
+  return panel;
 }
