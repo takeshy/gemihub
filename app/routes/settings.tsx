@@ -87,6 +87,10 @@ function isTabId(value: string | null): value is TabId {
   return value !== null && TABS.some((tab) => tab.id === value);
 }
 
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // ---------------------------------------------------------------------------
 // Loader
 // ---------------------------------------------------------------------------
@@ -95,13 +99,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-  const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
 
-  let hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
-  // Also try matching by email for accounts created via Stripe/admin before user enabled
-  if (!hubworkAccount && validTokens.email) {
-    const { getAccountByEmail } = await import("~/services/hubwork-accounts.server");
-    hubworkAccount = await getAccountByEmail(validTokens.email);
+  let hubworkAccount: Awaited<ReturnType<typeof import("~/services/hubwork-accounts.server").getAccountByRootFolderId>> = null;
+  let hubworkLookupSucceeded = true;
+  try {
+    const { getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
+    hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+    // Also try matching by email for accounts created via Stripe/admin before user enabled
+    if (!hubworkAccount && validTokens.email) {
+      hubworkAccount = await getAccountByEmail(validTokens.email);
+    }
+  } catch (error) {
+    hubworkLookupSucceeded = false;
+    console.warn("[settings] Failed to load Hubwork account from Firestore:", describeError(error));
   }
   const grantedScopes = validTokens.grantedScopes || "";
   const hasHubworkScopes = hasRequiredHubworkScopes(grantedScopes);
@@ -154,7 +164,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         hubwork: updatedHubwork,
       }).catch(() => {});
     }
-  } else if (!hubworkAccount?.plan && driveSettings.hubwork?.plan) {
+  } else if (hubworkLookupSucceeded && !hubworkAccount?.plan && driveSettings.hubwork?.plan) {
     // Clean up stale plan from Drive settings when Firestore account no longer exists
     const { plan: _stale, billingStatus: _staleBilling, ...rest } = driveSettings.hubwork;
     saveSettings(validTokens.accessToken, validTokens.rootFolderId, {
@@ -496,10 +506,16 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       case "generateMigrationToken": {
-        const { getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
-        let account = await getAccountByRootFolderId(validTokens.rootFolderId);
-        if (!account && validTokens.email) {
-          account = await getAccountByEmail(validTokens.email);
+        let account: Awaited<ReturnType<typeof import("~/services/hubwork-accounts.server").getAccountByRootFolderId>> = null;
+        try {
+          const { getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
+          account = await getAccountByRootFolderId(validTokens.rootFolderId);
+          if (!account && validTokens.email) {
+            account = await getAccountByEmail(validTokens.email);
+          }
+        } catch (error) {
+          console.warn("[settings] Failed to load Hubwork account for migration token:", describeError(error));
+          return jsonWithCookie({ success: false, message: "Could not verify Premium plan for external sync tokens." }, { status: 503 });
         }
         if (!account || !isActivePremiumAccount(account)) {
           return jsonWithCookie({ success: false, message: "A Premium plan is required to generate external sync tokens." }, { status: 403 });

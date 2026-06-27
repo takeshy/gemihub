@@ -101,6 +101,28 @@ export interface TranslationStrings {
   "dashboard.markdownImportExisting": string;
   "dashboard.markdownCreateOnDone": string;
   "dashboard.markdownShowHeader": string;
+  "dashboard.timelineNoFile": string;
+  "dashboard.timelineName": string;
+  "dashboard.timelineStorageHint": string;
+  "dashboard.timelineLatestCount": string;
+  "dashboard.timelineComposerMode": string;
+  "dashboard.timelinePlaceholder": string;
+  "dashboard.timelineNew": string;
+  "dashboard.timelineAttachImage": string;
+  "dashboard.timelinePost": string;
+  "dashboard.timelineEmpty": string;
+  "dashboard.timelineLoadOlder": string;
+  "dashboard.timelineDeleteConfirm": string;
+  "dashboard.timelineShowMore": string;
+  "dashboard.timelineShowLess": string;
+  "dashboard.timelineFilterWord": string;
+  "dashboard.timelineFilterTags": string;
+  "dashboard.timelineFilterFrom": string;
+  "dashboard.timelineFilterTo": string;
+  "dashboard.timelineFilterClear": string;
+  "dashboard.timelinePinnedOnly": string;
+  "dashboard.timelinePin": string;
+  "dashboard.timelineUnpin": string;
   "dashboard.baseView": string;
   "dashboard.baseNoViews": string;
   "dashboard.baseAdvancedFilters": string;
@@ -1136,6 +1158,28 @@ const en: TranslationStrings = {
   "dashboard.markdownImportExisting": "Or import an existing file",
   "dashboard.markdownCreateOnDone": "Created when you press Done.",
   "dashboard.markdownShowHeader": "Show header on dashboard",
+  "dashboard.timelineNoFile": "Configure a timeline file first.",
+  "dashboard.timelineName": "Timeline name",
+  "dashboard.timelineStorageHint": "Posts are stored under Dashboards/Timeline/{name}/ by date.",
+  "dashboard.timelineLatestCount": "Latest posts to show",
+  "dashboard.timelineComposerMode": "Editor mode",
+  "dashboard.timelinePlaceholder": "What's happening?",
+  "dashboard.timelineNew": "New",
+  "dashboard.timelineAttachImage": "Attach images",
+  "dashboard.timelinePost": "Post",
+  "dashboard.timelineEmpty": "No posts yet",
+  "dashboard.timelineLoadOlder": "Show previous",
+  "dashboard.timelineDeleteConfirm": "Delete this post?",
+  "dashboard.timelineShowMore": "Show more",
+  "dashboard.timelineShowLess": "Show less",
+  "dashboard.timelineFilterWord": "Word",
+  "dashboard.timelineFilterTags": "#tag #tag2",
+  "dashboard.timelineFilterFrom": "From",
+  "dashboard.timelineFilterTo": "To",
+  "dashboard.timelineFilterClear": "Clear filters",
+  "dashboard.timelinePinnedOnly": "Pinned",
+  "dashboard.timelinePin": "Pin",
+  "dashboard.timelineUnpin": "Unpin",
   "dashboard.baseView": "View",
   "dashboard.baseNoViews": "No views defined",
   "dashboard.baseAdvancedFilters": "Advanced filters are kept — edit them in Raw base YAML.",
@@ -2172,6 +2216,28 @@ const ja: TranslationStrings = {
   "dashboard.markdownImportExisting": "または既存ファイルをインポート",
   "dashboard.markdownCreateOnDone": "Doneで作成します。",
   "dashboard.markdownShowHeader": "ダッシュボード上でヘッダーを表示",
+  "dashboard.timelineNoFile": "先にタイムラインファイルを設定してください。",
+  "dashboard.timelineName": "Timeline名",
+  "dashboard.timelineStorageHint": "投稿は Dashboards/Timeline/{name}/ 配下に日付ごとに保存されます。",
+  "dashboard.timelineLatestCount": "表示する最新投稿数",
+  "dashboard.timelineComposerMode": "エディタモード",
+  "dashboard.timelinePlaceholder": "いまどうしてる？",
+  "dashboard.timelineNew": "New",
+  "dashboard.timelineAttachImage": "画像を添付",
+  "dashboard.timelinePost": "投稿",
+  "dashboard.timelineEmpty": "投稿はまだありません",
+  "dashboard.timelineLoadOlder": "前を見る",
+  "dashboard.timelineDeleteConfirm": "この投稿を削除しますか？",
+  "dashboard.timelineShowMore": "もっと見る",
+  "dashboard.timelineShowLess": "閉じる",
+  "dashboard.timelineFilterWord": "Word",
+  "dashboard.timelineFilterTags": "#tag #tag2",
+  "dashboard.timelineFilterFrom": "From",
+  "dashboard.timelineFilterTo": "To",
+  "dashboard.timelineFilterClear": "絞り込みをクリア",
+  "dashboard.timelinePinnedOnly": "Pinのみ",
+  "dashboard.timelinePin": "Pin",
+  "dashboard.timelineUnpin": "Pin解除",
   "dashboard.baseView": "ビュー",
   "dashboard.baseNoViews": "ビューが定義されていません",
   "dashboard.baseAdvancedFilters": "高度なフィルタは保持されます — Raw base YAML で編集してください。",

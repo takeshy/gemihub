@@ -3,15 +3,17 @@
 // via the registerWidget function (extensibility point for P1+).
 
 import React from "react";
-import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database } from "lucide-react";
+import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database, MessageCircle } from "lucide-react";
 import type { WidgetDef } from "../types";
 import MarkdownWidget from "./MarkdownWidget";
 import WebWidget from "./WebWidget";
 import UnknownWidget from "./UnknownWidget";
 import BaseWidget from "./BaseWidget";
+import TimelineWidget from "./TimelineWidget";
 import { MarkdownConfigEditor } from "./config-editors/MarkdownConfigEditor";
 import { WebConfigEditor } from "./config-editors/WebConfigEditor";
 import { BaseConfigEditor } from "./config-editors/BaseConfigEditor";
+import { TimelineConfigEditor } from "./config-editors/TimelineConfigEditor";
 import WorkflowWidget from "../data-widget/WorkflowWidget";
 import KanbanWidget from "../data-widget/KanbanWidget";
 import { WorkflowConfigEditor } from "../data-widget/WorkflowConfigEditor";
@@ -96,6 +98,20 @@ registerWidget({
   render: (config, ctx) => React.createElement(KanbanWidget, { config, ctx }),
   defaultSize: { w: 8, h: 5 },
   ConfigEditor: KanbanConfigEditor,
+});
+
+registerWidget({
+  type: "timeline",
+  label: "Timeline",
+  icon: React.createElement(MessageCircle, { size: 16 }),
+  defaultConfig: {
+    name: "",
+    latestCount: 20,
+    composerMode: "raw",
+  },
+  render: (config, ctx) => React.createElement(TimelineWidget, { config, ctx }),
+  defaultSize: { w: 6, h: 6 },
+  ConfigEditor: TimelineConfigEditor,
 });
 
 registerWidget({

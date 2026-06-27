@@ -1,4 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ExternalLink, X } from "lucide-react";
 import { getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
 import { parseFrontmatter } from "~/components/editor/FrontmatterEditor";
 import { bytesToBase64, base64ToBytes, guessMimeType } from "~/utils/media-utils";
@@ -112,9 +114,45 @@ function EmbeddedMedia({
   height?: number;
 }) {
   const src = useFileBlobUrl(file);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const navigate = () => {
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: file.id, fileName: file.path || file.name, mimeType: guessMimeType(file.name) },
+      }),
+    );
+  };
   if (!src) return <span>…</span>;
   if (kind === "image") {
-    return <img src={src} width={width} height={height} alt={file.name} />;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(true)}
+          className="inline-block max-w-full cursor-zoom-in rounded p-0 text-left"
+          title={file.path || file.name}
+        >
+          <img
+            src={src}
+            width={width}
+            height={height}
+            alt={file.name}
+            className="max-h-64 max-w-full rounded-md object-contain"
+          />
+        </button>
+        {previewOpen && (
+          <ImagePreviewModal
+            src={src}
+            fileName={file.path || file.name}
+            onNavigate={() => {
+              navigate();
+              setPreviewOpen(false);
+            }}
+            onClose={() => setPreviewOpen(false)}
+          />
+        )}
+      </>
+    );
   }
   if (kind === "audio") {
     return <audio src={src} controls />;
@@ -131,6 +169,63 @@ function EmbeddedMedia({
       height={height ?? 480}
       style={{ border: 0 }}
     />
+  );
+}
+
+function ImagePreviewModal({
+  src,
+  fileName,
+  onNavigate,
+  onClose,
+}: {
+  src: string;
+  fileName: string;
+  onNavigate: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const displayName = fileName.includes("/") ? fileName.slice(fileName.lastIndexOf("/") + 1) : fileName;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-200">
+            {displayName}
+          </span>
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            title="Open"
+          >
+            <ExternalLink size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            title="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <img src={src} alt={displayName} className="mx-auto max-h-[70vh] max-w-full rounded-md object-contain" />
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

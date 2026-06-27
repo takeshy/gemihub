@@ -41,6 +41,8 @@ function isWidgetConfigured(widget: Widget): boolean {
   switch (widget.type) {
     case "markdown":
       return str("path").length > 0;
+    case "timeline":
+      return str("name").length > 0 || str("path").length > 0;
     case "web":
       return str("url").length > 0;
     case "workflow":

@@ -202,10 +202,12 @@ export default function GfmMarkdownPreview({
   content,
   fileList,
   onWikiLinkClick,
+  onMissingWikiLinkClick,
 }: {
   content: string;
   fileList?: FileListItem[];
   onWikiLinkClick?: (fileId: string, fileName: string, heading?: string) => void;
+  onMissingWikiLinkClick?: (target: string) => void;
 }) {
   const { t } = useI18n();
   const processedContent = fileList ? preprocessWikiLinks(preprocessEmbeds(content)) : content;
@@ -244,15 +246,25 @@ export default function GfmMarkdownPreview({
                 </a>
               );
             }
-            const file = fileList.find(
-              (f) => f.name === fileName || f.name.replace(/\.md$/i, "") === fileName
-            );
+            const lowerFileName = fileName.toLowerCase();
+            const lowerNoExt = lowerFileName.replace(/\.md$/i, "");
+            const file = fileList.find((f) => {
+              const name = f.name.toLowerCase();
+              const path = f.path.toLowerCase();
+              return (
+                name === lowerFileName ||
+                name.replace(/\.md$/i, "") === lowerNoExt ||
+                path === lowerFileName ||
+                path.replace(/\.md$/i, "") === lowerNoExt
+              );
+            });
             return (
               <a
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
                   if (file && onWikiLinkClick) onWikiLinkClick(file.id, file.name, heading);
+                  if (!file && onMissingWikiLinkClick) onMissingWikiLinkClick(fileName);
                 }}
                 className="text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
                 title={file ? file.path || file.name : `${fileName} (not found)`}

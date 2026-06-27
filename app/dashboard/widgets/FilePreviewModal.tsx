@@ -2,7 +2,7 @@
 // shows its content here first, with a navigate icon (open the file in the
 // editor) and a close icon in the header — instead of navigating immediately.
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, X, Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
@@ -11,6 +11,18 @@ import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { isMarkdownFile } from "~/utils/frontmatter";
 import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
 import { splitFrontmatter } from "../frontmatter-writeback";
+import { getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
+import { bytesToBase64, base64ToBytes, guessMimeType } from "~/utils/media-utils";
+
+type MediaKind = "image" | "audio" | "video" | "pdf";
+
+function mediaKind(name: string): MediaKind | null {
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(name)) return "image";
+  if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(name)) return "audio";
+  if (/\.(mp4|webm|ogv|mov|m4v)$/i.test(name)) return "video";
+  if (/\.pdf$/i.test(name)) return "pdf";
+  return null;
+}
 
 export function FilePreviewModal({
   fileId,
@@ -25,8 +37,7 @@ export function FilePreviewModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const { fileList } = useEditorContext();
-  const { content, loading } = useFileWithCache(fileId, undefined, "FileListPreview");
+  const kind = mediaKind(fileName);
 
   // Close on Escape.
   useEffect(() => {
@@ -41,34 +52,6 @@ export function FilePreviewModal({
   const displayName = fileName.includes("/")
     ? fileName.slice(fileName.lastIndexOf("/") + 1)
     : fileName;
-
-  let bodyContent: React.ReactNode;
-  if (loading && content == null) {
-    bodyContent = (
-      <div className="flex h-40 items-center justify-center text-gray-400">
-        <Loader2 size={20} className="animate-spin" />
-      </div>
-    );
-  } else if (content == null) {
-    bodyContent = (
-      <div className="flex h-40 items-center justify-center text-sm text-gray-400">
-        {t("dashboard.fileNotFound")}
-      </div>
-    );
-  } else if (isMd) {
-    const split = splitFrontmatter(content);
-    bodyContent = (
-      <div className="prose prose-sm max-w-none dark:prose-invert">
-        <GfmMarkdownPreview content={split ? split.body : content} fileList={fileList} />
-      </div>
-    );
-  } else {
-    bodyContent = (
-      <pre className="whitespace-pre-wrap break-words font-mono text-xs text-gray-800 dark:text-gray-200">
-        {content}
-      </pre>
-    );
-  }
 
   return createPortal(
     <div
@@ -100,9 +83,109 @@ export function FilePreviewModal({
             <X size={16} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto p-4">{bodyContent}</div>
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          {kind ? (
+            <BinaryPreviewBody fileId={fileId} fileName={fileName} kind={kind} />
+          ) : (
+            <TextPreviewBody fileId={fileId} fileName={fileName} />
+          )}
+        </div>
       </div>
     </div>,
     document.body,
   );
+}
+
+function TextPreviewBody({ fileId, fileName }: { fileId: string; fileName: string }) {
+  const { t } = useI18n();
+  const { fileList } = useEditorContext();
+  const { content, loading } = useFileWithCache(fileId, undefined, "FileListPreview");
+
+  if (loading && content == null) {
+    return (
+      <div className="flex h-40 items-center justify-center text-gray-400">
+        <Loader2 size={20} className="animate-spin" />
+      </div>
+    );
+  }
+  if (content == null) {
+    return (
+      <div className="flex h-40 items-center justify-center text-sm text-gray-400">
+        {t("dashboard.fileNotFound")}
+      </div>
+    );
+  }
+  if (isMarkdownFile(fileName)) {
+    const split = splitFrontmatter(content);
+    return (
+      <div className="prose prose-sm max-w-none dark:prose-invert">
+        <GfmMarkdownPreview content={split ? split.body : content} fileList={fileList} />
+      </div>
+    );
+  }
+  return (
+    <pre className="whitespace-pre-wrap break-words font-mono text-xs text-gray-800 dark:text-gray-200">
+      {content}
+    </pre>
+  );
+}
+
+function BinaryPreviewBody({ fileId, fileName, kind }: { fileId: string; fileName: string; kind: MediaKind }) {
+  const { t } = useI18n();
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const show = (buf: ArrayBuffer) => {
+      const blob = new Blob([buf], { type: guessMimeType(fileName) });
+      objectUrl = URL.createObjectURL(blob);
+      if (cancelled) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      setSrc(objectUrl);
+    };
+    (async () => {
+      const cached = await getCachedFile(fileId);
+      if (cancelled) return;
+      if (cached?.encoding === "base64" && cached.content) {
+        show(base64ToBytes(cached.content).buffer as ArrayBuffer);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}`);
+        if (!res.ok || cancelled) {
+          if (!cancelled) setError(t("mainViewer.loadError"));
+          return;
+        }
+        const buf = await res.arrayBuffer();
+        if (cancelled) return;
+        await setCachedFile({
+          fileId,
+          content: bytesToBase64(new Uint8Array(buf)),
+          md5Checksum: cached?.md5Checksum ?? "",
+          modifiedTime: cached?.modifiedTime ?? "",
+          cachedAt: Date.now(),
+          fileName,
+          encoding: "base64",
+        });
+        show(buf);
+      } catch {
+        if (!cancelled) setError(t("mainViewer.offlineNoCache"));
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fileId, fileName, t]);
+
+  if (error) return <div className="flex h-40 items-center justify-center text-sm text-gray-400">{error}</div>;
+  if (!src) return <div className="flex h-40 items-center justify-center text-gray-400"><Loader2 size={20} className="animate-spin" /></div>;
+  if (kind === "image") return <img src={src} alt={fileName} className="mx-auto max-h-[70vh] max-w-full rounded-md object-contain" />;
+  if (kind === "audio") return <audio src={src} controls className="w-full" />;
+  if (kind === "video") return <video src={src} controls className="max-h-[70vh] w-full rounded-md" />;
+  return <iframe src={src} title={fileName} className="h-[70vh] w-full border-0" />;
 }
