@@ -78,6 +78,18 @@ function extractPostTags(content: string): string[] {
   return Array.from(tags);
 }
 
+// Remove inline `#tag` tokens from the post body so they aren't shown twice —
+// once in the rendered text and again as the tag chips below the post. Keeps
+// the boundary char before the tag, then tidies up leftover whitespace.
+function stripPostTags(content: string): string {
+  return content
+    .replace(/(^|[\s([{])#([^\s#.,;:!?()[\]{}'"`<>]+)/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function parseTagFilter(value: string): string[] {
   return value
     .split(/\s+/)
@@ -1279,7 +1291,7 @@ function TimelinePostViewComponent({
         <>
           <div className="prose max-w-none text-base leading-relaxed dark:prose-invert prose-p:my-1.5 prose-img:rounded-md">
             <GfmMarkdownPreview
-              content={visibleContent}
+              content={stripPostTags(visibleContent)}
               fileList={fileList}
               onWikiLinkClick={onWikiLinkClick}
               onMissingWikiLinkClick={onMissingWikiLinkClick}
@@ -1316,24 +1328,34 @@ function TimelinePostViewComponent({
 }
 
 const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
-  return (
-    prev.post.id === next.post.id &&
-    prev.post.createdAt === next.post.createdAt &&
-    prev.post.content === next.post.content &&
-    prev.post.sourcePath === next.post.sourcePath &&
-    prev.fileList === next.fileList &&
-    prev.language === next.language &&
-    prev.expanded === next.expanded &&
-    prev.isEditing === next.isEditing &&
-    prev.editDraft === next.editDraft &&
-    prev.editImages === next.editImages &&
-    prev.saving === next.saving &&
-    prev.showMoreLabel === next.showMoreLabel &&
-    prev.showLessLabel === next.showLessLabel &&
-    prev.pinLabel === next.pinLabel &&
-    prev.unpinLabel === next.unpinLabel &&
-    prev.saveLabel === next.saveLabel &&
-    prev.cancelLabel === next.cancelLabel &&
-    prev.attachImageLabel === next.attachImageLabel
-  );
+  if (
+    prev.post.id !== next.post.id ||
+    prev.post.createdAt !== next.post.createdAt ||
+    prev.post.content !== next.post.content ||
+    prev.post.sourcePath !== next.post.sourcePath ||
+    prev.fileList !== next.fileList ||
+    prev.language !== next.language ||
+    prev.expanded !== next.expanded ||
+    prev.isEditing !== next.isEditing ||
+    prev.showMoreLabel !== next.showMoreLabel ||
+    prev.showLessLabel !== next.showLessLabel ||
+    prev.pinLabel !== next.pinLabel ||
+    prev.unpinLabel !== next.unpinLabel ||
+    prev.saveLabel !== next.saveLabel ||
+    prev.cancelLabel !== next.cancelLabel ||
+    prev.attachImageLabel !== next.attachImageLabel
+  ) {
+    return false;
+  }
+  // editDraft/editImages/saving are shared across all posts but only affect the
+  // one being edited. Ignoring them for non-editing posts prevents every post
+  // (each rendering markdown) from re-rendering on every keystroke.
+  if (next.isEditing) {
+    return (
+      prev.editDraft === next.editDraft &&
+      prev.editImages === next.editImages &&
+      prev.saving === next.saving
+    );
+  }
+  return true;
 });
