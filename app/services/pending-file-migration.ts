@@ -13,7 +13,6 @@ import {
   deleteCachedFile,
   setCachedFile,
   getEditHistoryForFile,
-  setEditHistoryEntry,
   deleteEditHistoryEntry,
   getCachedRemoteMeta,
   setCachedRemoteMeta,
@@ -40,7 +39,8 @@ async function runOnce(): Promise<void> {
       const fullName = pf.fileId.slice("new:".length);
       const mimeType = mimeTypeFromFileName(fullName);
 
-      // Create file on Drive (empty — content uploaded separately below).
+      // Create file on Drive; cached content is uploaded immediately after
+      // the placeholder is resolved to a real Drive file ID.
       // dedup: true handles the case where a prior session's create succeeded
       // on Drive but the client reloaded before finishing the migration.
       const createRes = await fetch("/api/drive/files", {
@@ -57,7 +57,7 @@ async function runOnce(): Promise<void> {
       if (!createRes.ok) continue;
 
       const createData = await createRes.json();
-      const file = createData.file;
+      let file = createData.file;
 
       // Re-read cache — user may have edited since we started
       const latest = await getCachedFile(pf.fileId);
@@ -74,25 +74,57 @@ async function runOnce(): Promise<void> {
       }
 
       const currentContent = latest.content;
-      const emptyMd5 = file.md5Checksum ?? "";
-      const emptyModifiedTime = file.modifiedTime ?? "";
+
+      const updateRes = latest.encoding === "base64"
+        ? await fetch("/api/drive/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "updateBinary",
+              fileId: file.id,
+              content: currentContent,
+            }),
+          })
+        : currentContent
+          ? await fetch("/api/drive/files", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "update",
+                fileId: file.id,
+                content: currentContent,
+                mimeType,
+              }),
+            })
+          : null;
+
+      if (updateRes && !updateRes.ok) {
+        await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete", fileId: file.id, permanent: true }),
+        }).catch(() => {});
+        continue;
+      }
+      if (updateRes) {
+        const updateData = await updateRes.json();
+        file = updateData.file ?? file;
+      }
+
+      const currentMd5 = file.md5Checksum ?? "";
+      const currentModifiedTime = file.modifiedTime ?? "";
 
       const editHistory = await getEditHistoryForFile(pf.fileId);
       if (editHistory) {
         await deleteEditHistoryEntry(pf.fileId);
-        await setEditHistoryEntry({
-          ...editHistory,
-          fileId: file.id,
-          filePath: file.name,
-        });
       }
 
       await deleteCachedFile(pf.fileId);
       await setCachedFile({
         fileId: file.id,
         content: currentContent,
-        md5Checksum: emptyMd5,
-        modifiedTime: emptyModifiedTime,
+        md5Checksum: currentMd5,
+        modifiedTime: currentModifiedTime,
         cachedAt: Date.now(),
         fileName: file.name,
         ...(latest.encoding ? { encoding: latest.encoding } : {}),
@@ -104,9 +136,9 @@ async function runOnce(): Promise<void> {
         meta.files[file.id] = {
           name: file.name,
           mimeType: file.mimeType,
-          md5Checksum: emptyMd5,
-          modifiedTime: emptyModifiedTime,
-          createdTime: file.createdTime ?? emptyModifiedTime,
+          md5Checksum: currentMd5,
+          modifiedTime: currentModifiedTime,
+          createdTime: file.createdTime ?? currentModifiedTime,
         };
         await setCachedRemoteMeta(meta);
       }
@@ -115,8 +147,8 @@ async function runOnce(): Promise<void> {
       if (localMeta) {
         delete localMeta.files[pf.fileId];
         localMeta.files[file.id] = {
-          md5Checksum: emptyMd5,
-          modifiedTime: emptyModifiedTime,
+          md5Checksum: currentMd5,
+          modifiedTime: currentModifiedTime,
         };
         await setLocalSyncMeta(localMeta);
       }

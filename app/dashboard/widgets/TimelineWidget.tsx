@@ -89,7 +89,7 @@ function sanitizeName(value: string): string {
   return value
     .trim()
     .replace(/\.md$/i, "")
-    .replace(/[\\/:*?"<>|#\[\]\n\r\t]+/g, "-")
+    .replace(/[\\/:*?"<>|#[\]\n\r\t]+/g, "-")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
@@ -398,6 +398,7 @@ export default function TimelineWidget({
   const [editDraft, setEditDraft] = useState("");
   const [savingPostId, setSavingPostId] = useState<string | null>(null);
   const [images, setImages] = useState<PendingImage[]>([]);
+  const [editImages, setEditImages] = useState<PendingImage[]>([]);
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(() => new Set());
   const [resolvedFiles, setResolvedFiles] = useState<FileListItem[]>([]);
   const [showWikiLinkPicker, setShowWikiLinkPicker] = useState(false);
@@ -409,6 +410,7 @@ export default function TimelineWidget({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const imagesRef = useRef<PendingImage[]>([]);
+  const editImagesRef = useRef<PendingImage[]>([]);
   const wikiLinkStartRef = useRef(0);
 
   const scrollToLatest = useCallback(() => {
@@ -488,16 +490,22 @@ export default function TimelineWidget({
   }, [images]);
 
   useEffect(() => {
+    editImagesRef.current = editImages;
+  }, [editImages]);
+
+  useEffect(() => {
     return () => {
       imagesRef.current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+      editImagesRef.current.forEach((img) => URL.revokeObjectURL(img.previewUrl));
     };
   }, []);
 
   useEffect(() => {
+    if (editingPostId) return;
     requestAnimationFrame(scrollToLatest);
     const timers = [80, 240, 600].map((delay) => window.setTimeout(scrollToLatest, delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [name, posts.length, loading, scrollToLatest]);
+  }, [name, posts.length, loading, editingPostId, scrollToLatest]);
 
   const createAndOpenMissingNote = useCallback(async (target: string) => {
     const path = wikiTargetPath(target);
@@ -549,6 +557,34 @@ export default function TimelineWidget({
     });
   };
 
+  const addEditImages = (files: FileList | null) => {
+    if (!files) return;
+    const selected = Array.from(files).filter(isImageFile);
+    setEditImages((prev) => {
+      const slots = Math.max(0, 8 - prev.length);
+      const next = selected
+        .slice(0, slots)
+        .map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
+      return [...prev, ...next];
+    });
+  };
+
+  const removeEditImage = (index: number) => {
+    setEditImages((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(index, 1);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
+  };
+
+  const clearEditImages = () => {
+    setEditImages((prev) => {
+      prev.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+      return [];
+    });
+  };
+
   const closeComposer = () => {
     setComposerOpen(false);
     setDraft("");
@@ -562,6 +598,7 @@ export default function TimelineWidget({
   };
 
   const startEditing = (post: TimelinePost) => {
+    clearEditImages();
     setEditingPostId(post.id);
     setEditDraft(post.content);
     setExpandedPosts((prev) => new Set(prev).add(post.id));
@@ -570,17 +607,24 @@ export default function TimelineWidget({
   const cancelEditing = () => {
     setEditingPostId(null);
     setEditDraft("");
+    clearEditImages();
   };
 
   const saveEditing = async (post: TimelinePost) => {
-    const nextBody = editDraft.trim();
-    if (!nextBody) return;
+    const body = editDraft.trim();
+    if (!body && editImages.length === 0) return;
     setSavingPostId(post.id);
     setError(null);
     try {
       const file = await findFileByNameLocal(post.sourcePath);
       if (!file) throw new Error("file not found");
       const current = await readFileLocal(file.id);
+      const imageLines: string[] = [];
+      for (const [index, pending] of editImages.entries()) {
+        const imagePath = await savePostImage(name, new Date(post.createdAt), post.id, pending.file, index);
+        imageLines.push(`![[${imagePath}]]`);
+      }
+      const nextBody = [body, ...imageLines].filter(Boolean).join("\n\n");
       const nextContent = replacePostContent(current, post.sourcePath, post.id, nextBody);
       if (nextContent == null) throw new Error("post not found");
       await writeFileLocal(post.sourcePath, nextContent, { existingFileId: file.id });
@@ -780,7 +824,6 @@ export default function TimelineWidget({
       <div
         ref={listRef}
         className="min-h-0 flex-1 overflow-auto"
-        onLoadCapture={scrollToLatest}
       >
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-gray-400">
@@ -824,6 +867,9 @@ export default function TimelineWidget({
                 isEditing={editingPostId === post.id}
                 editDraft={editDraft}
                 onEditDraftChange={setEditDraft}
+                editImages={editImages}
+                onAddEditImages={addEditImages}
+                onRemoveEditImage={removeEditImage}
                 onEdit={() => startEditing(post)}
                 onCancelEdit={cancelEditing}
                 onSaveEdit={() => saveEditing(post)}
@@ -837,6 +883,7 @@ export default function TimelineWidget({
                 unpinLabel={t("dashboard.timelineUnpin")}
                 saveLabel={t("common.save")}
                 cancelLabel={t("common.cancel")}
+                attachImageLabel={t("dashboard.timelineAttachImage")}
               />
             ))}
           </div>
@@ -1025,6 +1072,9 @@ function TimelinePostViewComponent({
   isEditing,
   editDraft,
   onEditDraftChange,
+  editImages,
+  onAddEditImages,
+  onRemoveEditImage,
   onEdit,
   onCancelEdit,
   onSaveEdit,
@@ -1038,6 +1088,7 @@ function TimelinePostViewComponent({
   unpinLabel,
   saveLabel,
   cancelLabel,
+  attachImageLabel,
 }: {
   post: TimelinePost;
   fileList: FileListItem[];
@@ -1049,6 +1100,9 @@ function TimelinePostViewComponent({
   isEditing: boolean;
   editDraft: string;
   onEditDraftChange: (value: string) => void;
+  editImages: PendingImage[];
+  onAddEditImages: (files: FileList | null) => void;
+  onRemoveEditImage: (index: number) => void;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -1062,13 +1116,16 @@ function TimelinePostViewComponent({
   unpinLabel: string;
   saveLabel: string;
   cancelLabel: string;
+  attachImageLabel: string;
 }) {
   const collapsible = shouldCollapsePost(post.content, fileList);
   const visibleContent = collapsible && !expanded ? collapsedContent(post.content, fileList) : post.content;
   const tags = extractPostTags(post.content);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editImageInputRef = useRef<HTMLInputElement | null>(null);
   const editWikiLinkStartRef = useRef(0);
   const [showEditWikiLinkPicker, setShowEditWikiLinkPicker] = useState(false);
+  const editImageInputId = useId();
 
   return (
     <article className="px-3 py-3">
@@ -1158,24 +1215,64 @@ function TimelinePostViewComponent({
               }}
             />
           </div>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCancelEdit}
-              disabled={saving}
-              className="rounded-md px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 disabled:opacity-50"
-            >
-              {cancelLabel}
-            </button>
-            <button
-              type="button"
-              onClick={onSaveEdit}
-              disabled={saving || !editDraft.trim()}
-              className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving && <Loader2 size={12} className="animate-spin" />}
-              {saveLabel}
-            </button>
+          {editImages.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto">
+              {editImages.map((img, index) => (
+                <div key={img.previewUrl} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
+                  <img src={img.previewUrl} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => onRemoveEditImage(index)}
+                    className="absolute right-1 top-1 rounded bg-black/60 p-0.5 text-white"
+                    title={cancelLabel}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              <input
+                id={editImageInputId}
+                ref={editImageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  onAddEditImages(e.target.files);
+                  if (editImageInputRef.current) editImageInputRef.current.value = "";
+                }}
+              />
+              <label
+                htmlFor={editImageInputId}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                title={attachImageLabel}
+              >
+                <Image size={16} />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onCancelEdit}
+                disabled={saving}
+                className="rounded-md px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 disabled:opacity-50"
+              >
+                {cancelLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onSaveEdit}
+                disabled={saving || (!editDraft.trim() && editImages.length === 0)}
+                className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving && <Loader2 size={12} className="animate-spin" />}
+                {saveLabel}
+              </button>
+            </div>
           </div>
         </div>
       ) : (
@@ -1229,12 +1326,14 @@ const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
     prev.expanded === next.expanded &&
     prev.isEditing === next.isEditing &&
     prev.editDraft === next.editDraft &&
+    prev.editImages === next.editImages &&
     prev.saving === next.saving &&
     prev.showMoreLabel === next.showMoreLabel &&
     prev.showLessLabel === next.showLessLabel &&
     prev.pinLabel === next.pinLabel &&
     prev.unpinLabel === next.unpinLabel &&
     prev.saveLabel === next.saveLabel &&
-    prev.cancelLabel === next.cancelLabel
+    prev.cancelLabel === next.cancelLabel &&
+    prev.attachImageLabel === next.attachImageLabel
   );
 });

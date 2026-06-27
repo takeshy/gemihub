@@ -25,6 +25,11 @@ test("dashboard workflow cache is a normal synced file", () => {
   assert.equal(isSyncExcludedPath("Dashboards/Data/abc123.json"), false);
 });
 
+test("timeline notes and attachments are normal synced files", () => {
+  assert.equal(isSyncExcludedPath("Dashboards/Timeline/Daily/2026-06-27.md"), false);
+  assert.equal(isSyncExcludedPath("Dashboards/Timeline/Daily/attachments/2026-06-27/post_01.png"), false);
+});
+
 test("isSyncExcludedPath handles leading slash", () => {
   assert.equal(isSyncExcludedPath("/history/run.log"), true);
 });

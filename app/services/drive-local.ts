@@ -22,6 +22,11 @@ import { replaceVariables } from "~/engine/handlers/utils";
 /** Prefixes for files that should be excluded from search/list results. */
 const EXCLUDED_PREFIXES = ["trash/", "history/", "plugins/", "Dashboards/"];
 
+function dispatchFileModified(fileId: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId } }));
+}
+
 /** Infer a reasonable MIME type from the file name extension. */
 export function mimeTypeFromFileName(fileName: string): string {
   const dotIdx = fileName.lastIndexOf(".");
@@ -353,6 +358,7 @@ export async function writeFileLocal(
       fileName,
     });
     await addCommitBoundary(existingId);
+    dispatchFileModified(existingId);
     return { fileId: existingId, isNew: false };
   }
 
@@ -371,6 +377,7 @@ export async function writeFileLocal(
       fileName,
     });
     await addCommitBoundary(existing.id);
+    dispatchFileModified(existing.id);
     return { fileId: existing.id, isNew: false };
   }
 
@@ -411,6 +418,7 @@ export async function writeFileLocal(
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("pending-files-created"));
   }
+  dispatchFileModified(newId);
 
   return { fileId: newId, isNew: true };
 }
@@ -485,6 +493,7 @@ export async function saveBinaryFileLocal(
       fileName,
       encoding: "base64",
     });
+    dispatchFileModified(options.existingFileId);
     return { fileId: options.existingFileId, isNew: false };
   }
 
@@ -501,6 +510,7 @@ export async function saveBinaryFileLocal(
       fileName,
       encoding: "base64",
     });
+    dispatchFileModified(existing.id);
     return { fileId: existing.id, isNew: false };
   }
 
@@ -537,6 +547,7 @@ export async function saveBinaryFileLocal(
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("pending-files-created"));
   }
+  dispatchFileModified(newId);
 
   return { fileId: newId, isNew: true };
 }
