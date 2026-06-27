@@ -21,7 +21,7 @@ grid:
   gap: 8
 widgets:
   - id: <uuid>
-    type: markdown | file-list | web | card | table | workflow
+    type: markdown | base | kanban | timeline | workflow | web
     layout:
       lg: { x: 0, y: 0, w: 6, h: 3 }
       sm: { x: 0, y: 0, w: 12, h: 3 }   # 省略時は自動導出
@@ -46,30 +46,61 @@ widgets:
 | 型 | 役割 | ソース |
 |------|---------|--------|
 | `markdown` | 既存 Drive Markdown ファイルをインライン編集（preview/wysiwyg/code） | Drive ファイル |
-| `file-list` | フォルダ内ファイルの一覧（ヘッダにパス + 絞り込み/並び替え） | フォルダ |
-| `web` | 外部 URL を埋め込み（埋め込み可否チェック + フォールバックカード） | URL |
-| `card` | Markdown ファイルのフォルダに対するカードグリッド | フォルダ |
-| `table` | Markdown ファイルのフォルダに対する編集可能テーブル | フォルダ |
+| `base` | Obsidian 風 `.base` クエリファイルのビュー（テーブル/カード/リスト）を描画 | `.base` + フォルダ |
 | `kanban` | Markdown ファイルのフォルダに対するカンバンボード | フォルダ |
+| `timeline` | 日付ごとの投稿による個人マイクロブログ（タグ・画像添付・ピン留め/編集） | timeline フォルダ |
 | `workflow` | ワークフローを実行し出力を描画 | ワークフロー |
+| `web` | 外部 URL を埋め込み（埋め込み可否チェック + フォールバックカード） | URL |
 
-`web` は初期リリースから変更なし。`markdown` / `file-list`（直下）とデータ指向の `card` / `table` / `kanban` / `workflow` を以下で説明する。
+現在のコアウィジェットは `widgets/registry.ts` に登録されている: `markdown`, `base`, `kanban`, `timeline`, `workflow`, `web`。`web` は初期リリースから変更なし。それ以外を以下で説明する。
+
+> **フォルダ系データウィジェットは Base に統合。** 以前の `card` / `table` / `file-list` ウィジェット（フォルダソースのカードグリッド／編集可能テーブル／ファイル一覧）は **`base` ウィジェットに統合**された — 現在は `.base` ファイル（フォルダに対する cards/table/list ビュー）として作成する。これら 3 型はもう登録されておらず、`.dashboard` がまだ参照している場合はロード時に等価な `base` ウィジェットへ**自動変換**される（`legacyFolderWidgetConversion.ts`）。生成された `.base` は `Dashboards/Bases/` 配下に書き出される。共有のフォルダソースパイプライン（`data-widget/`: `folder-source.ts`, `filter.ts`, `ViewControls.tsx`, `config-parts/`）は残り、`base` ウィジェットのフィルタ/ソートやビュー時ヘッダ操作に再利用される。
 
 ### Markdown ウィジェット
 
 **既存**の Drive Markdown ファイルをパスで参照し（インライン content は廃止）、`MarkdownFileEditor` で通常エディタと同じ **preview / wysiwyg / code** 切替・frontmatter・wiki リンク・local-first 保存（`useFileWithCache`）をインライン描画する。ツールバーは *パス + モード切替* のみに絞る（`hideToolbarActions`）。左のファイルパスは `MarkdownFilePicker`（`editorCtx.fileList` に対する @ 風検索）で、**編集モード外でも**参照ファイルを切替でき、選択は `ctx.onConfigChange({ path })` で永続化される。Obsidian Gemini Helper の dashboard schema と同じなので、`.dashboard` ファイルを手書き・同期しやすい。表示モードはセッション初回のみ **preview** が既定で、その後はセッションスコープの変数がユーザーの最後の明示的な切替を記憶し、別ファイルを開いても保持される（wysiwyg/code のまま）。config: `{ path }`。
 
-### File List ウィジェット
+### Base ウィジェット
 
-フォルダのファイル一覧。ヘッダにフォルダパスと、ビューモードで効く 2 つのアイコン — **絞り込み**（ファイル名の部分一致）と**並び替え**（mtime/ctime/name の 6 種）— を表示する。いずれもエフェメラルなビュー時オーバーレイで、絞り込みは読込済みリストにクライアント側で適用、並び替えは設定の `sort` を上書き（`listFilesLocal` で再取得）する。`.dashboard` には書き戻さない。ポップオーバーは `data-widget/ViewControls.tsx` のポータル `Popover` を再利用。
+`base` ウィジェットは **Obsidian 風 `.base` ファイルのビュー** — フォルダ内 Markdown ノートに対する保存済みクエリ（フィルタ・ソート・limit・算出プロパティ）— を **テーブル** / **カードグリッド** / **リスト** として描画する。旧 `card` / `table` / `file-list` フォルダウィジェットを置き換える（それらは Base へ自動変換される。上記の注記参照）。実装は `widgets/BaseWidget.tsx`。`.base` のパース/クエリエンジンは `app/bases/`（`compileBase`, `queryView`, `createGemiHubHost`）、ビュー描画は `app/components/bases/BaseViewRenderer.tsx` にある。
 
-ファイルをクリックしても**すぐには開かず**、`FilePreviewModal`（ポータルのオーバーレイ）で内容をプレビューする（Markdown は `GfmMarkdownPreview` で描画、その他はプレーンテキスト）。モーダルのヘッダには遷移アイコン（エディタで開く）と閉じるアイコンがあり、遷移アイコンを押したときだけ実際の `plugin-select-file` 遷移を行う。
+![Base ウィジェット設定](../public/images/base_setting.png)
 
-> **経緯。** 以前のビルドには汎用の `data` ウィジェット（`source` folder|workflow × `view` table|cards）と `file-table` ウィジェットがあった。これらは本書の 3 つの明示ウィジェットに置き換えられた。ダッシュボード機能は未リリースだったため**互換シムは無い** — `data` / `file-table` 型は廃止され、旧テスト用 `.dashboard` は新型で作り直すこと。
+```yaml
+config:
+  base: Dashboards/Bases/projects.base   # .base ファイルのパス
+  view: Cards                            # view 名。空 = ファイル内の最初の view
+```
+
+- `.base` ファイルは YAML で、1 つ以上の名前付き `views`（`type: table | cards | list`）を持ち、各 view は任意の `filters`（式または `and`/`or` ツリー。例: `file.inFolder("projects")`, `status == "done"`, `tags.contains("ai")`）、`order`（表示プロパティ/列）、`sort`、`limit`、（カードの場合）`image` プロパティを持つ。プロパティは `file.*` 属性または frontmatter キー。
+- ウィジェットは参照先の `.base` とソースノートをローカルキャッシュから再読込し、再コンパイルして選択中の view を描画する。フォルダウィジェットと同じ**ビュー時の絞り込み/並び替え/検索**ヘッダ操作が効く（エフェメラル、書き戻さない）。
+- 行/カードのクリックで対象ノートを開く。ヘッダでアクティブ view を切替でき、選択は `ctx.onConfigChange` で永続化される。
+- config エディタ（`config-editors/BaseConfigEditor.tsx`）で `.base` ファイルと view を選ぶ。自然言語から `.base` を生成/修正する **AI ダイアログ**（`AIBaseDialog.tsx`）も備える。`.base` ファイルにはダッシュボード外の専用エディタがある（`docs/editor.md` 参照）。
+
+> `Dashboards/` は `drive-local.ts` の `EXCLUDED_PREFIXES` に含まれるため、ダッシュボード所有の `.base` の置き場所は `Dashboards/Bases/`（レガシー変換の書き出し先）が推奨だが、`base` ウィジェットは vault 内のどこにある `.base` でも参照できる。
+
+### Timeline ウィジェット
+
+`timeline` ウィジェットは**個人用マイクロブログ**で、`#タグ`や画像添付つきの短い投稿を逆時系列のフィードで表示する。実装は `widgets/TimelineWidget.tsx`。
+
+![Timeline ウィジェット](../public/images/timeline_edit.png)
+
+```yaml
+config:
+  name: Journal            # タイムライン名 → フォルダ Dashboards/Timeline/<name>/
+  latestCount: 20          # 初回ロードする最近の投稿数（古いものは追加読込）
+  composerMode: raw        # raw | wysiwyg — 投稿エディタの編集モード
+```
+
+- **保存** — 各日が Markdown ファイル `Dashboards/Timeline/<name>/<YYYY-MM-DD>.md` になる。投稿は `---` 区切りのブロックで、`<!-- timeline-post: … -->` 形式のヘッダに ISO タイムスタンプ・`id`・任意の `pinned: true` を持つ。画像添付は `…/attachments/<date>/<postId>_NN.<ext>` にバイナリファイルとして保存し、投稿本文に Obsidian 埋め込み（`![[…]]`）で挿入する。すべての書き込みはローカルファースト（`writeFileLocal` / `saveBinaryFileLocal`）。
+- **投稿** — コンポーザはテキストと画像アップロード（base64 化して `saveBinaryFileLocal` で保存）を受け付ける。投稿は**ピン留め**・その場**編集**・削除ができる。
+- **タグ** — 投稿本文中のインライン `#タグ` を抽出し、投稿下にクリック可能なチップとして表示する（チップが正式な表示で、二重表示を防ぐため本文の生 `#タグ` トークンは描画から除去される）。チップをクリックするとそのタグでフィードを絞り込む。
+- **絞り込み・ページング** — ヘッダ操作でフリーワード・タグ・日付範囲による絞り込みとピン留めのみ表示を切り替え、`latestCount` を超える古い投稿は必要に応じて追加読込する。
+- 投稿は `GfmMarkdownPreview` で描画（画像の wiki 埋め込みは `WikiEmbed`）。各投稿は memo 化された `TimelinePostView` なので、ある投稿の編集中にフィード全体が再描画されない。
 
 ### 共通の構成部品
 
-`card` / `table` / `workflow` は共通パイプラインを再利用する:
+`base` / `workflow` と（現在はレガシーで Base が裏にある）フォルダウィジェットは共通パイプラインを再利用する:
 
 - **行モデル** — `DataRow`（`data-widget/types.ts`）: `{ id, fileName?, fileId?, mtime?, ctime?, cells }`。`cells` は名前をキーとするプロパティ値（frontmatter キー + `file.*` 属性）を保持。
 - **フォルダソース** — `loadFolderRows(folder)` / `scanFolderFields(folder)`（`folder-source.ts`）がフォルダ内の Markdown を読み、frontmatter + ファイル属性を行/フィールドとして公開。
@@ -85,7 +116,9 @@ widgets:
 - アクティブ時は各アイコンに青いドットが付く。並び替えポップオーバーには上書きを解除する「リセット」項目がある。
 - ポップオーバーはポータル描画（ウィジェットセルは `overflow-hidden` で、そのままだとクリップされる）。絞り込みポップオーバーは幅広（`w-80`）で、プロパティセレクタは縮小可能（`min-w-0`）なため条件行がパネルからはみ出さない。
 
-## Card と Table（フォルダウィジェット）
+## Card と Table（レガシーフォルダウィジェット）
+
+> **レガシー / `base` に置き換え済み。** `card` / `table` / `file-list` はもう登録ウィジェット型ではなく、ロード時に `base` ウィジェットへ自動変換される（上記「フォルダ系データウィジェットは Base に統合」参照）。実装ファイル（`FolderWidget`, `CardsView`, `TableView`, `FileListWidget` とその config エディタ）はレガシー変換の基盤として、また `base` ウィジェットが再利用する共有描画パイプラインとしてツリーに残っている。以下の config 形状はこれらレガシーウィジェットと変換器の入力を説明する。
 
 両者ともフォルダから Markdown を読み、フィルタ → ソート → limit を通す。行の描画方法だけが異なる。共有の `FolderWidget` で実装し、registry が型ごとにビューを出し分ける。
 
@@ -197,7 +230,7 @@ config エディタはこの契約を AI ワークフロー生成プロンプト
 
 **遅延登録。** プラグインは非同期ロードされ、ダッシュボード描画後に登録されることが多い。`registerWidget` は `dashboard-widgets-changed` イベントを発火し、`DashboardCanvas` がそれを購読して再描画するため、後からロードされた型は `UnknownWidget` からリロード無しで実描画に差し替わる。
 
-**`base` ウィジェット（プラグイン提供、例: Obsidian Bases）。** `.base` の読込/作成/描画はコアではなくプラグインに置く方針。規約はウィジェット `{ type: "base", config: { base: "Dashboards/xx.base", view: "<view名>" } }`: プラグインが `type: "base"` を登録し、参照 `.base` の指定 view を描画する。コアに専用 import 機構は不要 — `.dashboard` は widget を保存するだけ、`WidgetContext`（size/editMode/widgetId/dashboardFileId/`onConfigChange`）が渡り、プラグイン未導入時は config を保持したまま `UnknownWidget` を表示する。（注: `drive-local.ts` の `EXCLUDED_PREFIXES` は `Dashboards/` を含むため、プラグインが `.base` を発見する際は `listFiles` ではなく `readFile`/`searchFiles` を使うこと。）
+> **`base` について。** 以前はこのウィジェットをプラグイン提供とする構想だったが、現在は**コアウィジェット**（`type: "base"`、Base ウィジェットの節参照）で、リポジトリ内の Obsidian Bases エンジン（`app/bases/`）が裏にある。`WidgetContext` の配線は同じで、プラグインがカスタム型に対して別の描画器を登録することも引き続き可能。
 
 **ビューモードでの config 更新。** `WidgetContext.onConfigChange(config)` により、ウィジェットがビューモードから自身の config を永続化できる（`GridCell` → `DashboardCanvas` → ダッシュボード保存に配線）。Markdown ウィジェットのヘッダファイルピッカーで使用。
 
@@ -207,6 +240,8 @@ config エディタはこの契約を AI ワークフロー生成プロンプト
 - `app/dashboard/DashboardCanvas.tsx`, `GridCell.tsx`, `useGridLayout.ts`, `useBreakpoint.ts` — グリッドと操作。
 - `app/dashboard/dashboardFile.ts`, `types.ts` — ファイル I/O とスキーマ。
 - `app/dashboard/widgets/registry.ts`, `WidgetPalette.tsx`, `WidgetRenderer.tsx`, `WidgetSettingsPanel.tsx` — 登録と UI。
-- `app/dashboard/widgets/` — `MarkdownWidget`, `FileListWidget`, `WebWidget`, `UnknownWidget`（+ それぞれの config エディタ）。
-- `app/dashboard/data-widget/` — `FolderWidget`, `WorkflowWidget`, `CardsView`, `TableView`, `folder-source.ts`, `filter.ts`, `workflow-runner.ts`、`Card`/`Table`/`Workflow` config エディタ、共有 `config-parts/`。
-- `app/dashboard/frontmatter-writeback.ts`, `frontmatter-cache.ts` — テーブルセルの書き戻し。
+- `app/dashboard/widgets/` — `MarkdownWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget`（レガシー）, `FilePreviewModal`, `base-file-options.ts`（+ それぞれの config エディタ、`AIBaseDialog` を含む）。
+- `app/dashboard/legacyFolderWidgetConversion.ts` — レガシー `card`/`table`/`file-list` を `base` に変換（生成した `.base` を書き出す）。
+- `app/bases/`, `app/components/bases/` — `base` ウィジェットが使う `.base` のコンパイル/クエリエンジンとビュー描画。
+- `app/dashboard/data-widget/` — `FolderWidget`, `WorkflowWidget`, `KanbanWidget`, `CardsView`, `TableView`, `ViewControls.tsx`, `folder-source.ts`, `filter.ts`, `workflow-runner.ts`、`Card`/`Table`/`Kanban`/`Workflow` config エディタ、共有 `config-parts/`。
+- `app/dashboard/frontmatter-writeback.ts`, `frontmatter-cache.ts` — テーブル/base セルの書き戻し。

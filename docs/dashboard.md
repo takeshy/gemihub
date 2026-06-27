@@ -21,7 +21,7 @@ grid:
   gap: 8
 widgets:
   - id: <uuid>
-    type: markdown | file-list | web | card | table | workflow
+    type: markdown | base | kanban | timeline | workflow | web
     layout:
       lg: { x: 0, y: 0, w: 6, h: 3 }
       sm: { x: 0, y: 0, w: 12, h: 3 }   # auto-derived if omitted
@@ -47,30 +47,61 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 | Type | Purpose | Source |
 |------|---------|--------|
 | `markdown` | Edit an existing Drive markdown file inline (preview/wysiwyg/code) | Drive file |
-| `file-list` | A compact list of files in a folder (header path + filter/sort) | folder |
-| `web` | Embed an external URL (with embeddability check + fallback card) | URL |
-| `card` | Card grid over a folder of markdown files | folder |
-| `table` | Editable table over a folder of markdown files | folder |
+| `base` | Render a view (table/cards/list) of an Obsidian-style `.base` query file | `.base` + folder |
 | `kanban` | Kanban board over a folder of markdown files | folder |
+| `timeline` | Personal microblog of dated posts (tags, image attachments, pin/edit) | timeline folder |
 | `workflow` | Run a workflow and render its output | workflow |
+| `web` | Embed an external URL (with embeddability check + fallback card) | URL |
 
-`web` is unchanged from the initial dashboard release. `markdown` and `file-list` (below) and the data-oriented widgets — `card`, `table`, `kanban`, `workflow` — are described below.
+The current core widget set is registered in `widgets/registry.ts`: `markdown`, `base`, `kanban`, `timeline`, `workflow`, `web`. `web` is unchanged from the initial dashboard release; the others are described below.
+
+> **Folder data widgets are now Bases.** The earlier `card`, `table`, and `file-list` widgets (folder-source card grid / editable table / file list) have been **folded into the `base` widget** — they are now authored as `.base` files (a cards/table/list view over a folder). These three types are no longer registered; when a `.dashboard` still references one, it is **auto-converted** to an equivalent `base` widget on load (`legacyFolderWidgetConversion.ts`), writing a generated `.base` under `Dashboards/Bases/`. The shared folder-source pipeline (`data-widget/`: `folder-source.ts`, `filter.ts`, `ViewControls.tsx`, `config-parts/`) lives on and is reused by the `base` widget for filtering/sorting and the view-time header controls.
 
 ### Markdown widget
 
 References an **existing** Drive markdown file by path (no inline content) and renders the normal markdown editor inline via `MarkdownFileEditor` — the same **preview / wysiwyg / code** toggle, frontmatter, and wiki links as the main editor, with local-first saving (`useFileWithCache`). The editor toolbar is trimmed to *path + mode toggle* (`hideToolbarActions`); the file path on the left is a `MarkdownFilePicker` (@-mention-style search over `editorCtx.fileList`) that switches the referenced file **even outside edit mode** — the choice is persisted as `ctx.onConfigChange({ path })`. This matches the Obsidian Gemini Helper dashboard schema and keeps `.dashboard` files hand-editable/syncable. The view mode defaults to **preview** on the first view of a session, then a session-scoped variable remembers the user's last explicit toggle across file switches (so opening another file keeps wysiwyg/code). Config: `{ path }`.
 
-### File List widget
+### Base widget
 
-A folder file list with a header showing the folder path plus two header icons that work in view mode: a **filter** (filename substring) and a **sort** (the six mtime/ctime/name options). Both are ephemeral view-time overlays — the filter is applied client-side over the loaded list and the sort overrides the configured `sort` (re-fetched via `listFilesLocal`); neither is written back to the `.dashboard`. Popovers reuse the portal `Popover` from `data-widget/ViewControls.tsx`.
+The `base` widget renders a **view of an Obsidian-style `.base` file** — a saved query (filters, sort, limit, computed properties) over a folder of Markdown notes — as a **table**, **card grid**, or **list**. It replaces the old `card` / `table` / `file-list` folder widgets (which are auto-converted to Bases, see the note above). Implemented by `widgets/BaseWidget.tsx`; the `.base` parsing/query engine lives in `app/bases/` (`compileBase`, `queryView`, `createGemiHubHost`) and the view renderer in `app/components/bases/BaseViewRenderer.tsx`.
 
-Clicking a file does **not** open it immediately — it opens a `FilePreviewModal` (portal overlay) showing the content (markdown rendered via `GfmMarkdownPreview`, other files as plain text). The modal header has a navigate icon (open the file in the editor) and a close icon; only the navigate icon performs the actual `plugin-select-file` navigation.
+![Base widget settings](../public/images/base_setting.png)
 
-> **History.** Earlier builds had a single generalized `data` widget (`source` folder|workflow × `view` table|cards) and a `file-table` widget. These were replaced by the three explicit widgets here. Because the dashboard feature had not shipped, there is **no migration shim** — `data` / `file-table` types are gone and old test `.dashboard` files should be recreated with the new types.
+```yaml
+config:
+  base: Dashboards/Bases/projects.base   # path to the .base file
+  view: Cards                            # view name; empty = first view in the file
+```
+
+- A `.base` file is YAML with one or more named `views` (`type: table | cards | list`), each with optional `filters` (expression or `and`/`or` tree, e.g. `file.inFolder("projects")`, `status == "done"`, `tags.contains("ai")`), `order` (displayed properties / columns), `sort`, `limit`, and (for cards) an `image` property. Properties are `file.*` attributes or frontmatter keys.
+- The widget re-reads the referenced `.base` and the source notes from the local cache, recompiles, and renders the selected view. The same **view-time filter / sort / search** header controls as the folder widgets apply (ephemeral, not written back).
+- Clicking a row/card opens the underlying note. The header lets you switch the active view; the choice persists via `ctx.onConfigChange`.
+- The config editor (`config-editors/BaseConfigEditor.tsx`) picks the `.base` file and view, and includes an **AI dialog** (`AIBaseDialog.tsx`) to generate or modify a `.base` from natural language. `.base` files have their own dedicated editor outside the dashboard (see `docs/editor.md`).
+
+> Because `Dashboards/` is in `drive-local.ts`'s `EXCLUDED_PREFIXES`, the recommended home for dashboard-owned `.base` files is `Dashboards/Bases/` (where legacy conversion writes them), but a `base` widget can reference a `.base` anywhere in the vault.
+
+### Timeline widget
+
+The `timeline` widget is a **personal microblog**: a reverse-chronological feed of short posts with `#tags` and image attachments. Implemented by `widgets/TimelineWidget.tsx`.
+
+![Timeline widget](../public/images/timeline_edit.png)
+
+```yaml
+config:
+  name: Journal            # timeline name → folder Dashboards/Timeline/<name>/
+  latestCount: 20          # how many recent posts to load initially (older load on demand)
+  composerMode: raw        # raw | wysiwyg — the post composer editing mode
+```
+
+- **Storage** — each day is a Markdown file `Dashboards/Timeline/<name>/<YYYY-MM-DD>.md`; posts are `---`-separated blocks marked with a `<!-- timeline-post: … -->`-style header carrying the ISO timestamp, `id`, and optional `pinned: true`. Image attachments are saved as binary files under `…/attachments/<date>/<postId>_NN.<ext>` and embedded in the post body as Obsidian embeds (`![[…]]`). All writes are local-first (`writeFileLocal` / `saveBinaryFileLocal`).
+- **Posting** — the composer accepts text plus image uploads (converted to base64 and saved via `saveBinaryFileLocal`). Posts can be **pinned**, **edited** in place, and deleted.
+- **Tags** — inline `#tags` in a post body are extracted into clickable chips shown below the post (the chips are the canonical display; the raw `#tag` tokens are stripped from the rendered body so they aren't shown twice). Clicking a chip filters the feed by that tag.
+- **Filtering & paging** — header controls filter by free-text word, tags, and date range, and toggle pinned-only; older posts load on demand beyond `latestCount`.
+- Posts render through `GfmMarkdownPreview` (wiki embeds for images via `WikiEmbed`); each post is a memoized `TimelinePostView` so editing one post doesn't re-render the whole feed.
 
 ### Shared building blocks
 
-`card`, `table`, and `workflow` reuse a common pipeline:
+The `base`, `workflow`, and the (now legacy, Base-backed) folder widgets reuse a common pipeline:
 
 - **Row model** — `DataRow` (`data-widget/types.ts`): `{ id, fileName?, fileId?, mtime?, ctime?, cells }`. `cells` holds property values keyed by name (frontmatter keys plus `file.*` attributes).
 - **Folder source** — `loadFolderRows(folder)` / `scanFolderFields(folder)` (`folder-source.ts`) read markdown files in a folder and expose their frontmatter + file attributes as rows/fields.
@@ -86,7 +117,9 @@ Clicking a file does **not** open it immediately — it opens a `FilePreviewModa
 - Each icon shows a small blue dot when active; the sort popover has a "Reset" entry to clear the override.
 - Popovers render through a portal (widget cells are `overflow-hidden`, which would otherwise clip them). The filter popover is wider (`w-80`) and the property selector can shrink (`min-w-0`) so the condition row never overflows the panel.
 
-## Card & Table (folder widgets)
+## Card & Table (legacy folder widgets)
+
+> **Legacy / superseded by `base`.** `card`, `table`, and `file-list` are no longer registered widget types — they are auto-converted to `base` widgets on load (see "Folder data widgets are now Bases" above). The implementation files (`FolderWidget`, `CardsView`, `TableView`, `FileListWidget`, and their config editors) remain in the tree as the basis of the legacy conversion and as the shared rendering pipeline reused by the `base` widget. The config shapes below document those legacy widgets and the converter's input.
 
 Both read markdown files from a folder and run them through filter → sort → limit. They differ only in how rows are rendered. Implemented by a shared `FolderWidget` (the registry picks the view per type).
 
@@ -198,7 +231,7 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 
 **Late registration.** Plugins load asynchronously, often after a dashboard has already rendered. `registerWidget` dispatches a `dashboard-widgets-changed` event and `DashboardCanvas` re-renders on it, so a widget whose plugin loads late swaps from `UnknownWidget` to the real renderer without a reload.
 
-**`base` widget (plugin-provided, e.g. Obsidian Bases).** Reading/creating/rendering `.base` files is intended to live in a plugin, not core. The convention is a widget `{ type: "base", config: { base: "Dashboards/xx.base", view: "<view name>" } }`: the plugin registers `type: "base"` and renders the named view of the referenced `.base`. Core needs no special import machinery — the `.dashboard` just stores the widget, `WidgetContext` (size/editMode/widgetId/dashboardFileId/`onConfigChange`) is passed through, and when the plugin is absent the widget shows `UnknownWidget` with its config intact. (Note: `drive-local.ts`'s `EXCLUDED_PREFIXES` includes `Dashboards/`, so a plugin discovering `.base` files should use `readFile`/`searchFiles` rather than `listFiles`.)
+> **Note on `base`.** Earlier this widget was envisioned as plugin-provided. It is now a **core widget** (`type: "base"`, see the Base widget section) backed by the in-repo Obsidian Bases engine in `app/bases/`. The same `WidgetContext` plumbing still applies, and a plugin could still register an alternative renderer for a custom type.
 
 **View-mode config.** `WidgetContext.onConfigChange(config)` lets a widget persist its own config from view mode (wired through `GridCell` → `DashboardCanvas` → the dashboard save). Used by the markdown widget's header file picker.
 
@@ -208,6 +241,8 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 - `app/dashboard/DashboardCanvas.tsx`, `GridCell.tsx`, `useGridLayout.ts`, `useBreakpoint.ts` — grid & interaction.
 - `app/dashboard/dashboardFile.ts`, `types.ts` — file I/O & schema.
 - `app/dashboard/widgets/registry.ts`, `WidgetPalette.tsx`, `WidgetRenderer.tsx`, `WidgetSettingsPanel.tsx` — registration & UI.
-- `app/dashboard/widgets/` — `MarkdownWidget`, `FileListWidget`, `WebWidget`, `UnknownWidget` (+ their config editors).
-- `app/dashboard/data-widget/` — `FolderWidget`, `WorkflowWidget`, `CardsView`, `TableView`, `folder-source.ts`, `filter.ts`, `workflow-runner.ts`, the `Card`/`Table`/`Workflow` config editors, and shared `config-parts/`.
-- `app/dashboard/frontmatter-writeback.ts`, `frontmatter-cache.ts` — table cell writeback.
+- `app/dashboard/widgets/` — `MarkdownWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget` (legacy), `FilePreviewModal`, `base-file-options.ts` (+ their config editors, incl. `AIBaseDialog`).
+- `app/dashboard/legacyFolderWidgetConversion.ts` — converts legacy `card`/`table`/`file-list` widgets to `base` (writes a generated `.base`).
+- `app/bases/`, `app/components/bases/` — `.base` compile/query engine and view renderer used by the `base` widget.
+- `app/dashboard/data-widget/` — `FolderWidget`, `WorkflowWidget`, `KanbanWidget`, `CardsView`, `TableView`, `ViewControls.tsx`, `folder-source.ts`, `filter.ts`, `workflow-runner.ts`, the `Card`/`Table`/`Kanban`/`Workflow` config editors, and shared `config-parts/`.
+- `app/dashboard/frontmatter-writeback.ts`, `frontmatter-cache.ts` — table/base cell writeback.
