@@ -50,8 +50,8 @@ import {
 } from "~/services/indexeddb-cache";
 import { isEncryptedFile } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
-import { hasNetContentChange } from "~/services/edit-history-local";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { collectPushCandidates } from "~/hooks/sync-utils";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FREE_UPLOAD_SIZE_LIMIT_BYTES, useFileUpload } from "~/hooks/useFileUpload";
 import { EditHistoryModal } from "./EditHistoryModal";
@@ -206,6 +206,12 @@ export function DriveFileTree({
     [filteredTreeItems, modifiedFiles]
   );
 
+  const refreshModifiedFiles = useCallback(async () => {
+    const ids = await getLocallyModifiedFileIds();
+    const candidates = await collectPushCandidates(ids, remoteMeta);
+    setModifiedFiles(new Set(candidates.map((file) => file.id)));
+  }, [remoteMeta]);
+
   const updateTreeFromMeta = useCallback(async (
     metaData: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] },
     fullySyncedFileIds?: string[] | Set<string>,
@@ -349,30 +355,17 @@ export function DriveFileTree({
         setEncryptedFiles(ids);
       } catch { /* ignore */ }
       try {
-        const ids = await getLocallyModifiedFileIds();
-        const actuallyModified = new Set<string>();
-        for (const id of ids) {
-          if (await hasNetContentChange(id)) actuallyModified.add(id);
-        }
-        setModifiedFiles(actuallyModified);
+        await refreshModifiedFiles();
       } catch { /* ignore */ }
     })();
-  }, [treeItems]);
+  }, [treeItems, refreshModifiedFiles]);
 
   // Listen for file-modified / file-cached events from useFileWithCache
   useEffect(() => {
     const handleModified = async (e: Event) => {
       const fileId = (e as CustomEvent).detail?.fileId;
       if (!fileId) return;
-      if (await hasNetContentChange(fileId)) {
-        setModifiedFiles((prev) => new Set(prev).add(fileId));
-      } else {
-        setModifiedFiles((prev) => {
-          const next = new Set(prev);
-          next.delete(fileId);
-          return next;
-        });
-      }
+      await refreshModifiedFiles();
     };
     const handleCached = async (e: Event) => {
       const fileId = (e as CustomEvent).detail?.fileId;
@@ -395,13 +388,7 @@ export function DriveFileTree({
     };
     // After push/pull/sync-check, re-read modified files and refresh tree
     const syncHandler = () => {
-      getLocallyModifiedFileIds().then(async (ids) => {
-        const actuallyModified = new Set<string>();
-        for (const id of ids) {
-          if (await hasNetContentChange(id)) actuallyModified.add(id);
-        }
-        setModifiedFiles(actuallyModified);
-      }).catch(() => {});
+      refreshModifiedFiles().catch(() => {});
       fetchAndCacheTree();
     };
     const workflowHandler = () => {
@@ -471,7 +458,7 @@ export function DriveFileTree({
       window.removeEventListener("file-decrypted", handleDecrypted);
       window.removeEventListener("tree-meta-updated", handleTreeMetaUpdated);
     };
-  }, [fetchAndCacheTree, updateTreeFromMeta]);
+  }, [fetchAndCacheTree, refreshModifiedFiles, updateTreeFromMeta]);
 
   // Persist tree to IndexedDB cache when it changes
   // (covers optimistic insert, migration ID swap, rename, delete, etc.)

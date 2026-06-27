@@ -10,9 +10,8 @@ import {
   getLocalSyncMeta,
   pruneOrphanedEditHistory,
 } from "~/services/indexeddb-cache";
-import { hasNetContentChange } from "~/services/edit-history-local";
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
-import { collectTrackedIds } from "~/hooks/sync-utils";
+import { collectPushCandidates, collectTrackedIds } from "~/hooks/sync-utils";
 import { computeSyncDiff } from "~/services/sync-diff";
 import { SyncDiffDialog } from "./SyncDiffDialog";
 import type { FileListItem } from "./SyncDiffDialog";
@@ -81,27 +80,8 @@ export function SyncStatusBar({
       const diff = computeSyncDiff(localMeta ?? null, remoteMeta, modifiedIds);
 
       if (type === "push") {
-        const files: FileListItem[] = [];
         const remoteFiles = remoteMeta?.files ?? {};
-        const localFiles = localMeta?.files ?? {};
-
-        for (const id of diff.toPush) {
-          // Skip files whose content was reverted to synced state (no net change)
-          if (!(await hasNetContentChange(id))) continue;
-          const cached = await getCachedFile(id);
-          const name = cached?.fileName || remoteFiles[id]?.name || id;
-          if (isSyncExcludedPath(name)) continue;
-          const isNew = !localFiles[id];
-          files.push({ id, name, type: isNew ? "new" : "modified" });
-        }
-        for (const id of diff.localOnly) {
-          if (!modifiedIds.has(id)) continue;  // Skip remotely-deleted files
-          const cached = await getCachedFile(id);
-          const name = cached?.fileName || id;
-          if (isSyncExcludedPath(name)) continue;
-          files.push({ id, name, type: "new" });
-        }
-        files.sort((a, b) => a.name.localeCompare(b.name));
+        const files = await collectPushCandidates(modifiedIds, remoteFiles);
         setDialogFiles(files);
         window.dispatchEvent(new CustomEvent("sync-counts-corrected", {
           detail: { type, count: files.length }

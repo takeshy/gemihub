@@ -48,7 +48,6 @@ export function FilePreviewModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const isMd = isMarkdownFile(fileName);
   const displayName = fileName.includes("/")
     ? fileName.slice(fileName.lastIndexOf("/") + 1)
     : fileName;

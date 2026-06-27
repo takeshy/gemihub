@@ -4,6 +4,7 @@ import {
   setCachedRemoteMeta,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
+import { hasNetContentChange } from "~/services/edit-history-local";
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
 import { type SyncDiff, type SyncMeta } from "~/services/sync-diff";
 
@@ -96,6 +97,24 @@ export function collectTrackedIds(
     }
   }
   return ids;
+}
+
+export async function collectPushCandidates(
+  modifiedIds: Set<string>,
+  remoteFiles: Record<string, { name?: string }> = {},
+): Promise<Array<{ id: string; name: string; type: "new" | "modified" }>> {
+  const files: Array<{ id: string; name: string; type: "new" | "modified" }> = [];
+  for (const id of modifiedIds) {
+    const cached = await getCachedFile(id);
+    if (!cached) continue;
+    const name = cached.fileName || remoteFiles[id]?.name || id;
+    if (isSyncExcludedPath(name)) continue;
+
+    if (cached.encoding !== "base64" && !(await hasNetContentChange(id))) continue;
+    files.push({ id, name, type: id.startsWith("new:") ? "new" : "modified" });
+  }
+  files.sort((a, b) => a.name.localeCompare(b.name));
+  return files;
 }
 
 /**

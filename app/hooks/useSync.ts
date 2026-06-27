@@ -30,6 +30,7 @@ import { computeSyncDiff, type SyncMeta } from "~/services/sync-diff";
 import {
   toLocalSyncMeta,
   collectTrackedIds,
+  collectPushCandidates,
   filterActionablePull,
   updateCachedRemoteMetaFromSyncMeta,
 } from "./sync-utils";
@@ -93,21 +94,8 @@ export function useSync() {
       const localFiles = localMeta?.files ?? {};
 
       // --- Push count ---
-      let pushCount = 0;
-      if (ids.size > 0) {
-        // Only count localOnly files that have editHistory (new local files).
-        // Files in localMeta but not editHistory are remotely deleted — shown in pull badge.
-        const pushLocalOnly = diff.localOnly.filter(id => ids.has(id));
-        for (const id of [...diff.toPush, ...pushLocalOnly]) {
-          const cached = await getCachedFile(id);
-          const name = cached?.fileName || remoteFiles[id]?.name;
-          if (name && isSyncExcludedPath(name)) continue;
-          // Skip files whose content was reverted to the synced state (no net change)
-          if (!pushLocalOnly.includes(id) && !(await hasNetContentChange(id))) continue;
-          pushCount++;
-        }
-      }
-      setLocalModifiedCount(pushCount);
+      const pushCandidates = await collectPushCandidates(ids, remoteFiles);
+      setLocalModifiedCount(pushCandidates.length);
 
       // --- Pull count ---
       // When remoteMeta is null (no sync meta on Drive), there is nothing to pull.
