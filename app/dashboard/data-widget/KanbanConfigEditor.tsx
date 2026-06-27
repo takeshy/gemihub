@@ -211,8 +211,15 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
           type="number"
           min={1}
           max={500}
-          value={cfg.limit ?? 100}
-          onChange={(e) => update({ limit: Number(e.target.value) || 100 })}
+          value={cfg.limit ?? ""}
+          placeholder="100"
+          onChange={(e) => {
+            const value = e.target.value;
+            update({ limit: value === "" ? undefined : Number(value) || 100 });
+          }}
+          onBlur={() => {
+            if (cfg.limit == null) update({ limit: 100 });
+          }}
           className="w-28 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         />
       </div>

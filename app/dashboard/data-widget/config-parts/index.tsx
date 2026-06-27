@@ -285,8 +285,15 @@ export function SortLimitFields({
           type="number"
           min={1}
           max={500}
-          value={limit ?? 50}
-          onChange={(e) => onChange({ limit: Number(e.target.value) || 50 })}
+          value={limit ?? ""}
+          placeholder="50"
+          onChange={(e) => {
+            const value = e.target.value;
+            onChange({ limit: value === "" ? undefined : Number(value) || 50 });
+          }}
+          onBlur={() => {
+            if (limit == null) onChange({ limit: 50 });
+          }}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
       </div>

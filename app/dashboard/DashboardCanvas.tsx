@@ -46,7 +46,7 @@ function isWidgetConfigured(widget: Widget): boolean {
     case "file-list":
     case "card":
     case "table":
-      return str("folder").length > 0;
+      return true;
     case "kanban":
       return str("folder").length > 0 && str("title").length > 0;
     default:

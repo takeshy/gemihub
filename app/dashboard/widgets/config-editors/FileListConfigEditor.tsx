@@ -60,8 +60,15 @@ export function FileListConfigEditor({ config, onChange }: ConfigEditorProps) {
           type="number"
           min={1}
           max={500}
-          value={cfg.limit ?? 20}
-          onChange={(e) => update({ limit: Number(e.target.value) || 20 })}
+          value={cfg.limit ?? ""}
+          placeholder="20"
+          onChange={(e) => {
+            const value = e.target.value;
+            update({ limit: value === "" ? undefined : Number(value) || 20 });
+          }}
+          onBlur={() => {
+            if (cfg.limit == null) update({ limit: 20 });
+          }}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
       </div>
