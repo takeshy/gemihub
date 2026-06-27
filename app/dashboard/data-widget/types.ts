@@ -104,8 +104,6 @@ export interface WorkflowWidgetConfig {
   refreshInterval?: number;
   /** Whether to show the widget header controls. Defaults to true. */
   showHeader?: boolean;
-  /** Hide scrollbars while keeping content scrollable. */
-  hideScrollbar?: boolean;
   /** Unknown keys are preserved for round-trip safety. */
   [key: string]: unknown;
 }

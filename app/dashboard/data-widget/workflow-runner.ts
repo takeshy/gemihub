@@ -25,6 +25,7 @@ import type {
   WorkflowTextResult,
 } from "./types";
 import { detectFields, fieldsToMap } from "./filter";
+import { workflowCacheFilePath } from "./workflow-cache-path";
 
 export const WORKFLOW_WIDGET_CACHE_UPDATED_EVENT = "dashboard-workflow-widget-cache-updated";
 
@@ -310,12 +311,6 @@ export async function runWorkflowText(
 
 // --- Sidecar cache (P2 spec §9.2) ---
 
-const CACHE_PREFIX = "Dashboards/Data/";
-
-function cacheFilePath(dashboardCacheKey: string): string {
-  return `${CACHE_PREFIX}${encodeURIComponent(dashboardCacheKey)}.json`;
-}
-
 /**
  * Load the workflow cache for a dashboard.
  * Returns all widget caches for this dashboard.
@@ -326,7 +321,7 @@ async function loadCacheFile(
   // Resolve the cache file by its path via CachedRemoteMeta, then read from cache.
   // The cache file is stored at `Dashboards/Data/<encoded dashboard path>.json` and is a
   // normal synced file (visible in the tree / push-pull diff).
-  const path = cacheFilePath(dashboardCacheKey);
+  const path = workflowCacheFilePath(dashboardCacheKey);
   const readCachedJson = async (id: string): Promise<Record<string, WorkflowCacheRecord> | null> => {
     const file = await getCachedFile(id);
     if (!file) return null;
@@ -396,7 +391,7 @@ async function saveCacheFile(
   dashboardCacheKey: string,
   caches: Record<string, WorkflowCacheRecord>,
 ): Promise<void> {
-  const path = cacheFilePath(dashboardCacheKey);
+  const path = workflowCacheFilePath(dashboardCacheKey);
   const content = JSON.stringify(caches, null, 2);
   await writeFileLocal(path, content);
 }

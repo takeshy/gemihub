@@ -22,8 +22,6 @@ interface TableViewProps {
   folder?: string;
   /** Field type map for locale-aware formatting (e.g. dates). */
   fieldTypes?: Record<string, PropertyType>;
-  /** Hide scrollbars while keeping the table scrollable. */
-  hideScrollbar?: boolean;
 }
 
 function isEditableType(value: unknown): boolean {
@@ -50,7 +48,6 @@ export function TableView({
   editMode,
   folder,
   fieldTypes,
-  hideScrollbar = false,
 }: TableViewProps) {
   const { t, language } = useI18n();
   const [editingCell, setEditingCell] = useState<
@@ -259,7 +256,7 @@ export function TableView({
   }
 
   return (
-    <div className={`h-full overflow-auto ${hideScrollbar ? "scrollbar-hide" : ""}`}>
+    <div className="h-full overflow-auto">
       {editError && (
         <div className="sticky top-0 z-10 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 px-2 py-1 text-xs text-red-600 dark:text-red-400">
           {editError}

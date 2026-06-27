@@ -16,8 +16,6 @@ interface CardsViewProps {
   clickable: boolean;
   /** Field type map for locale-aware formatting (e.g. dates). */
   fieldTypes?: Record<string, PropertyType>;
-  /** Hide scrollbars while keeping the card grid scrollable. */
-  hideScrollbar?: boolean;
 }
 
 /**
@@ -133,7 +131,7 @@ function useResolvedImageUrls(
   return resolvedPaths;
 }
 
-export function CardsView({ rows, card, cols, clickable, fieldTypes, hideScrollbar = false }: CardsViewProps) {
+export function CardsView({ rows, card, cols, clickable, fieldTypes }: CardsViewProps) {
   const { t, language } = useI18n();
 
   const resolvedPaths = useResolvedImageUrls(rows, card.image);
@@ -208,7 +206,7 @@ export function CardsView({ rows, card, cols, clickable, fieldTypes, hideScrollb
   return (
     <div
       ref={containerRef}
-      className={`h-full overflow-auto p-2 ${hideScrollbar ? "scrollbar-hide" : ""}`}
+      className="h-full overflow-auto p-2"
       style={{ display: "grid", gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, gap: "8px", alignContent: "start" }}
     >
       {rows.map((row) => {

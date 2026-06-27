@@ -403,16 +403,6 @@ export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFile
         />
       </label>
 
-      <label className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">
-        <span>{t("dashboard.hideScrollbar")}</span>
-        <input
-          type="checkbox"
-          checked={cfg.hideScrollbar === true}
-          onChange={(e) => update({ hideScrollbar: e.target.checked })}
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-        />
-      </label>
-
       {/* Workflow source */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

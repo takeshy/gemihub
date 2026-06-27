@@ -4,7 +4,6 @@ import type { ConfigEditorProps } from "../../types";
 interface WebConfig {
   url?: string;
   showHeader?: boolean;
-  hideScrollbar?: boolean;
 }
 
 export function WebConfigEditor({ config, onChange }: ConfigEditorProps) {
@@ -51,15 +50,6 @@ export function WebConfigEditor({ config, onChange }: ConfigEditorProps) {
           type="checkbox"
           checked={cfg.showHeader !== false}
           onChange={(e) => onChange({ ...cfg, showHeader: e.target.checked })}
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-        />
-      </label>
-      <label className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:text-gray-300">
-        <span>{t("dashboard.hideScrollbar")}</span>
-        <input
-          type="checkbox"
-          checked={cfg.hideScrollbar === true}
-          onChange={(e) => onChange({ ...cfg, hideScrollbar: e.target.checked })}
           className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
       </label>

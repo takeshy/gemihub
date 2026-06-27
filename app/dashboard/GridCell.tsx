@@ -221,7 +221,7 @@ export default function GridCell({
 
         {/* Settings & Delete buttons (edit mode only, top-right corner) */}
         {editMode && (
-          <div className="absolute top-0.5 right-1 flex items-center gap-0.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute top-1 right-1 flex items-center gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
             {onSettings && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -229,10 +229,10 @@ export default function GridCell({
                   e.stopPropagation();
                   onSettings();
                 }}
-                className="rounded p-1 bg-gray-50/80 dark:bg-gray-800/80 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-50/90 text-gray-500 shadow-sm hover:text-gray-700 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:text-gray-100"
                 title={t("common.settings")}
               >
-                <Settings size={12} />
+                <Settings size={16} />
               </button>
             )}
             {onDelete && (
@@ -242,10 +242,10 @@ export default function GridCell({
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="rounded p-1 bg-gray-50/80 dark:bg-gray-800/80 text-gray-400 hover:text-red-500"
+                className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-50/90 text-gray-500 shadow-sm hover:text-red-500 dark:bg-gray-800/90 dark:text-gray-300"
                 title={t("dashboard.deleteWidget")}
               >
-                <Trash2 size={12} />
+                <Trash2 size={16} />
               </button>
             )}
           </div>

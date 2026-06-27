@@ -13,7 +13,6 @@ export default function WebWidget({
   const url = cfg.url;
   const href = typeof url === "string" ? url : "";
   const showHeader = cfg.showHeader !== false;
-  const hideScrollbar = cfg.hideScrollbar === true;
 
   if (!href) {
     return (
@@ -23,5 +22,5 @@ export default function WebWidget({
     );
   }
 
-  return <WebEmbed url={href} interactive showHeader={showHeader} hideScrollbar={hideScrollbar} />;
+  return <WebEmbed url={href} interactive showHeader={showHeader} />;
 }

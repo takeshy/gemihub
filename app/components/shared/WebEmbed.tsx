@@ -17,8 +17,6 @@ interface WebEmbedProps {
   url: string;
   /** When false, the iframe is pointer-events-none (used by Canvas previews). */
   interactive?: boolean;
-  /** Hide scrollbars where the embedded document allows it. Cross-origin iframes may ignore this. */
-  hideScrollbar?: boolean;
   /** Show the embed chrome (title/open link and footer URL). Defaults to true. */
   showHeader?: boolean;
 }
@@ -31,7 +29,7 @@ interface WebEmbedProps {
  * sites render in the iframe; blocked sites show a clean "open in new tab" card
  * instead of a broken blank frame.
  */
-export default function WebEmbed({ url, interactive = true, hideScrollbar = false, showHeader = true }: WebEmbedProps) {
+export default function WebEmbed({ url, interactive = true, showHeader = true }: WebEmbedProps) {
   const [embeddable, setEmbeddable] = useState<boolean | null>(
     () => embedCache.get(url) ?? null,
   );
@@ -125,7 +123,7 @@ export default function WebEmbed({ url, interactive = true, hideScrollbar = fals
       <iframe
         title={url}
         src={url}
-        className={`min-h-0 flex-1 border-0 bg-white ${interactive ? "" : "pointer-events-none"} ${hideScrollbar ? "scrollbar-hide" : ""}`}
+        className={`min-h-0 flex-1 border-0 bg-white ${interactive ? "" : "pointer-events-none"}`}
         sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
         referrerPolicy="no-referrer"
       />

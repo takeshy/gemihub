@@ -56,7 +56,6 @@ export default function WorkflowWidget({
   const output = cfg.output ?? "table";
   const isText = output === "markdown" || output === "html";
   const showHeader = cfg.showHeader !== false;
-  const hideScrollbar = cfg.hideScrollbar === true;
   const widgetId = ctx?.widgetId;
   const dashboardCacheKey = ctx?.dashboardFileName ?? ctx?.dashboardFileId;
 
@@ -265,13 +264,13 @@ export default function WorkflowWidget({
     );
   } else if (output === "card") {
     content = (
-      <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable fieldTypes={fieldTypes} hideScrollbar={hideScrollbar} />
+      <CardsView rows={processedRows} card={cfg.card ?? {}} cols={cfg.cols} clickable fieldTypes={fieldTypes} />
     );
   } else if (output === "table") {
-    content = <TableView rows={processedRows} columns={cfg.columns ?? []} editable={false} fieldTypes={fieldTypes} hideScrollbar={hideScrollbar} />;
+    content = <TableView rows={processedRows} columns={cfg.columns ?? []} editable={false} fieldTypes={fieldTypes} />;
   } else if (output === "markdown") {
     content = (
-      <div className={`prose prose-sm h-full max-w-none overflow-auto p-2 dark:prose-invert ${hideScrollbar ? "scrollbar-hide" : ""}`}>
+      <div className="prose prose-sm h-full max-w-none overflow-auto p-2 dark:prose-invert">
         <GfmMarkdownPreview content={cacheRecord.text ?? ""} />
       </div>
     );
@@ -280,7 +279,7 @@ export default function WorkflowWidget({
     content = (
       <iframe
         srcDoc={htmlSrcDoc}
-        className={`h-full w-full border-0 bg-white ${hideScrollbar ? "scrollbar-hide" : ""}`}
+        className="h-full w-full border-0 bg-white"
         title={t("dashboard.widgetWorkflow")}
         sandbox="allow-scripts"
       />
