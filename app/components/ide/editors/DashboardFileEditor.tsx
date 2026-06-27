@@ -129,6 +129,7 @@ export function DashboardFileEditor({
         editMode={editMode}
         onEditModeChange={setEditMode}
         dashboardFileId={fileId}
+        dashboardFileName={fileName}
         toolbarLeft={
           <>
             <LayoutDashboard size={14} className="text-gray-400" />

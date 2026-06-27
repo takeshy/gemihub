@@ -282,14 +282,13 @@ test("deriveSmLayout derives all when none have sm", () => {
   assert.equal(result.widgets[1].layout.sm?.h, 4);
 });
 
-test("createDefaultDashboard creates 4 widgets with unique IDs", () => {
+test("createDefaultDashboard creates 3 widgets with unique IDs", () => {
   const data = createDefaultDashboard();
   assert.equal(data.version, 1);
-  assert.equal(data.widgets.length, 4);
+  assert.equal(data.widgets.length, 3);
   const types = data.widgets.map((w) => w.type);
   assert.ok(types.includes("markdown"));
-  assert.ok(types.includes("file-list"));
-  assert.ok(types.includes("table"));
+  assert.ok(types.includes("base"));
   assert.ok(types.includes("web"));
   // Unique IDs
   const ids = data.widgets.map((w) => w.id);
@@ -306,17 +305,15 @@ test("createEmptyDashboard creates an empty dashboard with default grid", () => 
 });
 
 test("dashboardPath builds correct path with folder prefix", () => {
-  assert.equal(dashboardPath("my-board"), "dashboards/my-board.dashboard");
-  assert.equal(dashboardPath("home"), "dashboards/home.dashboard");
+  assert.equal(dashboardPath("my-board"), "Dashboards/my-board.dashboard");
+  assert.equal(dashboardPath("home"), "Dashboards/home.dashboard");
 });
 
 test("dashboardDisplayName extracts name from path", () => {
-  assert.equal(dashboardDisplayName("dashboards/my-board.dashboard"), "my-board");
-  assert.equal(dashboardDisplayName("dashboards/home.dashboard"), "home");
-  // Legacy root-level dashboard
-  assert.equal(dashboardDisplayName("home.dashboard"), "home");
+  assert.equal(dashboardDisplayName("Dashboards/my-board.dashboard"), "my-board");
+  assert.equal(dashboardDisplayName("Dashboards/home.dashboard"), "home");
   // No extension
-  assert.equal(dashboardDisplayName("dashboards/custom"), "custom");
+  assert.equal(dashboardDisplayName("Dashboards/custom"), "custom");
 });
 
 test("serializeDashboard preserves unknown widget config keys (round-trip)", () => {

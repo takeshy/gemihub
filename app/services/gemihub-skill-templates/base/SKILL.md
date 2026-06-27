@@ -12,7 +12,7 @@ Always output valid YAML when creating or modifying a `.base` file.
 ## Workflow
 
 1. **Clarify the use case** — what notes to show, how to filter, and how to group/sort.
-2. **Create the file** — use `create_drive_file` (or `update_drive_file` to edit) with a path like `dashboards/bases/<Name>.base`. Any folder works; `dashboards/bases/` mirrors how dashboards live under `dashboards/`.
+2. **Create the file** — use `create_drive_file` (or `update_drive_file` to edit) with a path like `Dashboards/Bases/<Name>.base`. Any folder works; `Dashboards/Bases/` mirrors how dashboards live under `Dashboards/`.
 3. **Define filters** — narrow down which notes appear (by tag, folder, property, or date).
 4. **Add formulas** (optional) — compute derived values in the `formulas` section.
 5. **Configure views** — add one or more views (`table`, `cards`, or `list`).

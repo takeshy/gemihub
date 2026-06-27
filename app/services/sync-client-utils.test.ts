@@ -16,13 +16,13 @@ test("isSyncExcludedPath excludes special folders", () => {
 });
 
 test("isSyncExcludedPath still syncs dashboard files themselves", () => {
-  assert.equal(isSyncExcludedPath("dashboards/home.dashboard"), false);
+  assert.equal(isSyncExcludedPath("Dashboards/home.dashboard"), false);
   assert.equal(isSyncExcludedPath("home.dashboard"), false);
 });
 
 test("dashboard workflow cache is a normal synced file", () => {
-  // Stored at dashboards/data/<id>.json — synced and visible like any file.
-  assert.equal(isSyncExcludedPath("dashboards/data/abc123.json"), false);
+  // Stored at Dashboards/Data/<id>.json — synced and visible like any file.
+  assert.equal(isSyncExcludedPath("Dashboards/Data/abc123.json"), false);
 });
 
 test("isSyncExcludedPath handles leading slash", () => {
@@ -47,7 +47,7 @@ test("getSyncCompletionStatus returns warning message for skipped files", () => 
 });
 
 test("shouldTreatAsBinaryFile keeps dashboard-like text files textual despite octet-stream mime", () => {
-  assert.equal(shouldTreatAsBinaryFile("dashboards/home.dashboard", "application/octet-stream"), false);
+  assert.equal(shouldTreatAsBinaryFile("Dashboards/home.dashboard", "application/octet-stream"), false);
   assert.equal(shouldTreatAsBinaryFile("Dashboards/Bases/Tips.base", "application/octet-stream"), false);
   assert.equal(shouldTreatAsBinaryFile("workflows/example.yaml", "application/octet-stream"), false);
 });

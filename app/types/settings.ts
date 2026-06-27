@@ -567,7 +567,7 @@ export interface UserSettings {
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
   showManagementFolders: boolean;
-  /** Path of the dashboard to open on app launch (e.g. "dashboards/home.dashboard"). */
+  /** Path of the dashboard to open on app launch (e.g. "Dashboards/home.dashboard"). */
   homeDashboard?: string | null;
   // Hubwork (paid feature) - web app builder with Sheets/Gmail
   hubwork?: HubworkSettings;

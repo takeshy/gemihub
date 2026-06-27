@@ -29,7 +29,7 @@ import { detectFields, fieldsToMap } from "./filter";
 export const WORKFLOW_WIDGET_CACHE_UPDATED_EVENT = "dashboard-workflow-widget-cache-updated";
 
 export interface WorkflowWidgetCacheUpdatedDetail {
-  dashboardFileId: string;
+  dashboardCacheKey: string;
   widgetId: string;
   record: WorkflowCacheRecord;
 }
@@ -310,10 +310,10 @@ export async function runWorkflowText(
 
 // --- Sidecar cache (P2 spec §9.2) ---
 
-const CACHE_PREFIX = "dashboards/data/";
+const CACHE_PREFIX = "Dashboards/Data/";
 
-function cacheFilePath(dashboardFileId: string): string {
-  return `${CACHE_PREFIX}${dashboardFileId}.json`;
+function cacheFilePath(dashboardCacheKey: string): string {
+  return `${CACHE_PREFIX}${encodeURIComponent(dashboardCacheKey)}.json`;
 }
 
 /**
@@ -321,51 +321,67 @@ function cacheFilePath(dashboardFileId: string): string {
  * Returns all widget caches for this dashboard.
  */
 async function loadCacheFile(
-  dashboardFileId: string,
+  dashboardCacheKey: string,
 ): Promise<Record<string, WorkflowCacheRecord>> {
   // Resolve the cache file by its path via CachedRemoteMeta, then read from cache.
-  // The cache file is stored at `dashboards/data/<dashboardFileId>.json` and is a
+  // The cache file is stored at `Dashboards/Data/<encoded dashboard path>.json` and is a
   // normal synced file (visible in the tree / push-pull diff).
+  const path = cacheFilePath(dashboardCacheKey);
+  const readCachedJson = async (id: string): Promise<Record<string, WorkflowCacheRecord> | null> => {
+    const file = await getCachedFile(id);
+    if (!file) return null;
+    try {
+      return JSON.parse(file.content) as Record<string, WorkflowCacheRecord>;
+    } catch {
+      return {};
+    }
+  };
+
   const meta = await getCachedRemoteMeta();
-  if (!meta) return {};
+  if (meta) {
+    for (const [id, entry] of Object.entries(meta.files)) {
+      if (entry.name !== path) continue;
 
-  const path = cacheFilePath(dashboardFileId);
-  for (const [id, entry] of Object.entries(meta.files)) {
-    if (entry.name !== path) continue;
-
-    let file = await getCachedFile(id);
-    // The cache syncs across devices, but a machine that never ran the workflow
-    // only has it registered as metadata (new remote files are not downloaded by
-    // pull). Lazy-fetch the content so its dashboard still shows the results.
-    // Also re-fetch when the remote copy is newer (another device pushed a run).
-    const stale = file != null && entry.md5Checksum != null && file.md5Checksum !== entry.md5Checksum;
-    if ((!file || stale) && !id.startsWith("new:")) {
-      try {
-        const res = await fetch(`/api/drive/files?action=read&fileId=${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          await setCachedFile({
-            fileId: id,
-            content: data.content,
-            md5Checksum: data.md5Checksum ?? "",
-            modifiedTime: data.modifiedTime ?? "",
-            cachedAt: Date.now(),
-            fileName: path,
-          });
-          file = await getCachedFile(id);
+      let file = await getCachedFile(id);
+      // The cache syncs across devices, but a machine that never ran the workflow
+      // only has it registered as metadata (new remote files are not downloaded by
+      // pull). Lazy-fetch the content so its dashboard still shows the results.
+      // Also re-fetch when the remote copy is newer (another device pushed a run).
+      const stale = file != null && entry.md5Checksum != null && file.md5Checksum !== entry.md5Checksum;
+      if ((!file || stale) && !id.startsWith("new:")) {
+        try {
+          const res = await fetch(`/api/drive/files?action=read&fileId=${id}`);
+          if (res.ok) {
+            const data = await res.json();
+            await setCachedFile({
+              fileId: id,
+              content: data.content,
+              md5Checksum: data.md5Checksum ?? "",
+              modifiedTime: data.modifiedTime ?? "",
+              cachedAt: Date.now(),
+              fileName: path,
+            });
+            file = await getCachedFile(id);
+          }
+        } catch {
+          // Offline or fetch failed — fall back to whatever is cached locally.
         }
-      } catch {
-        // Offline or fetch failed — fall back to whatever is cached locally.
       }
-    }
 
-    if (file) {
-      try {
-        return JSON.parse(file.content) as Record<string, WorkflowCacheRecord>;
-      } catch {
-        return {};
+      if (file) {
+        try {
+          return JSON.parse(file.content) as Record<string, WorkflowCacheRecord>;
+        } catch {
+          return {};
+        }
       }
     }
+  }
+
+  const allFiles = await getAllCachedFiles();
+  for (const file of allFiles) {
+    if (file.fileName !== path) continue;
+    return (await readCachedJson(file.fileId)) ?? {};
   }
 
   return {};
@@ -377,10 +393,10 @@ async function loadCacheFile(
  * Cache conflicts must NOT block .dashboard saves.
  */
 async function saveCacheFile(
-  dashboardFileId: string,
+  dashboardCacheKey: string,
   caches: Record<string, WorkflowCacheRecord>,
 ): Promise<void> {
-  const path = cacheFilePath(dashboardFileId);
+  const path = cacheFilePath(dashboardCacheKey);
   const content = JSON.stringify(caches, null, 2);
   await writeFileLocal(path, content);
 }
@@ -390,11 +406,11 @@ async function saveCacheFile(
  * Returns null if no cache exists.
  */
 export async function loadWidgetCache(
-  dashboardFileId: string,
+  dashboardCacheKey: string,
   widgetId: string,
 ): Promise<WorkflowCacheRecord | null> {
-  if (!dashboardFileId) return null;
-  const caches = await loadCacheFile(dashboardFileId);
+  if (!dashboardCacheKey) return null;
+  const caches = await loadCacheFile(dashboardCacheKey);
   return caches[widgetId] ?? null;
 }
 
@@ -403,19 +419,19 @@ export async function loadWidgetCache(
  * Merges with existing caches (other widgets in the same dashboard).
  */
 export async function saveWidgetCache(
-  dashboardFileId: string,
+  dashboardCacheKey: string,
   widgetId: string,
   record: WorkflowCacheRecord,
 ): Promise<void> {
-  if (!dashboardFileId) return;
-  const caches = await loadCacheFile(dashboardFileId);
+  if (!dashboardCacheKey) return;
+  const caches = await loadCacheFile(dashboardCacheKey);
   caches[widgetId] = record;
-  await saveCacheFile(dashboardFileId, caches);
+  await saveCacheFile(dashboardCacheKey, caches);
   if (typeof window !== "undefined") {
     window.dispatchEvent(
       new CustomEvent<WorkflowWidgetCacheUpdatedDetail>(
         WORKFLOW_WIDGET_CACHE_UPDATED_EVENT,
-        { detail: { dashboardFileId, widgetId, record } },
+        { detail: { dashboardCacheKey, widgetId, record } },
       ),
     );
   }

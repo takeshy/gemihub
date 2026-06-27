@@ -2,18 +2,23 @@
 // Config: { base: "path/to/file.base", view: "ViewName" }
 // Empty/omitted view means the first view in the .base file.
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { Table as TableIcon, RefreshCw } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { ArrowUpDown, FileText, Filter, Folder, RefreshCw, Table as TableIcon, X } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { WidgetContext } from "../types";
 import { compileBase, queryView, createGemiHubHost } from "~/bases/index";
-import type { CompiledBase, QueryResult, Diagnostic } from "~/bases/types";
+import type { CompiledBase, QueryResult, Diagnostic, BaseEntry, Value, ViewConfig } from "~/bases/types";
 import { BaseViewRenderer } from "~/components/bases/BaseViewRenderer";
 import { getRemoteMetaFiles, readFileLocal } from "~/services/drive-local";
 import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 import { findBaseFileOption } from "./base-file-options";
 import { FilePreviewModal } from "./FilePreviewModal";
+import { DASHBOARD_BASE_FILE_UPDATED_EVENT } from "./base-events";
+import { Popover, ViewControls, deriveFieldsFromRows } from "../data-widget/ViewControls";
+import { applyPostSource, detectFields } from "../data-widget/filter";
+import type { DataRow, FilterCondition } from "../data-widget/types";
+import type { TranslationStrings } from "~/i18n/translations";
 
 interface BaseWidgetConfig {
   base?: string;
@@ -29,6 +34,15 @@ interface VaultFile {
   content?: string;
   frontmatter?: Record<string, unknown>;
 }
+
+const FILE_LIST_SORT_OPTIONS: { value: string; labelKey: keyof TranslationStrings }[] = [
+  { value: "-mtime", labelKey: "dashboard.sortModifiedNew" },
+  { value: "mtime", labelKey: "dashboard.sortModifiedOld" },
+  { value: "-ctime", labelKey: "dashboard.sortCreatedNew" },
+  { value: "ctime", labelKey: "dashboard.sortCreatedOld" },
+  { value: "name", labelKey: "dashboard.sortNameAz" },
+  { value: "-name", labelKey: "dashboard.sortNameZa" },
+];
 
 export default function BaseWidget({
   config,
@@ -46,6 +60,12 @@ export default function BaseWidget({
   const [vaultFiles, setVaultFiles] = useState<VaultFile[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [previewFile, setPreviewFile] = useState<{ fileId: string; fileName: string } | null>(null);
+  const [viewFilter, setViewFilter] = useState<FilterCondition[]>([]);
+  const [viewSort, setViewSort] = useState<string | undefined>(undefined);
+  const [viewLimit, setViewLimit] = useState<number | undefined>(undefined);
+  const [listFilter, setListFilter] = useState("");
+  const [listSort, setListSort] = useState<string | undefined>(undefined);
+  const [listControl, setListControl] = useState<"filter" | "sort" | null>(null);
 
   // Load vault files
   const loadVaultFiles = useCallback(async () => {
@@ -131,6 +151,8 @@ export default function BaseWidget({
   const requestedView = cfg.view?.trim();
   const viewName = requestedView || compiled?.config.views[0]?.name;
   const views = compiled?.config.views ?? [];
+  const activeView = views.find((v) => v.name === viewName) ?? views[0];
+  const isListView = activeView?.type === "list";
 
   // Run the query
   const queryResult = useMemo<QueryResult | null>(() => {
@@ -146,6 +168,71 @@ export default function BaseWidget({
       return null;
     }
   }, [compiled, viewName, vaultFiles, compileErrors]);
+
+  useEffect(() => {
+    setViewFilter([]);
+    setViewSort(undefined);
+    setViewLimit(undefined);
+    setListFilter("");
+    setListSort(undefined);
+  }, [cfg.base, viewName]);
+
+  useEffect(() => {
+    const handleBaseUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ fileName?: string }>).detail;
+      if (detail?.fileName !== cfg.base) return;
+      setRefreshKey((k) => k + 1);
+    };
+    window.addEventListener(DASHBOARD_BASE_FILE_UPDATED_EVENT, handleBaseUpdated);
+    return () => {
+      window.removeEventListener(DASHBOARD_BASE_FILE_UPDATED_EVENT, handleBaseUpdated);
+    };
+  }, [cfg.base]);
+
+  const rowsById = useMemo(() => {
+    if (!queryResult) return new Map<string, BaseEntry>();
+    return new Map(queryResult.data.map((entry) => [entry.file.path, entry]));
+  }, [queryResult]);
+
+  const baseRows = useMemo<DataRow[]>(() => {
+    if (!queryResult) return [];
+    return queryResult.data.map((entry) => baseEntryToRow(entry));
+  }, [queryResult]);
+
+  const fields = useMemo(
+    () => deriveFieldsFromRows(baseRows.map((row) => row.cells), true, detectFields),
+    [baseRows],
+  );
+
+  const displayedResult = useMemo<QueryResult | null>(() => {
+    if (!queryResult) return null;
+    const rows = applyPostSource(baseRows, {
+      filter: viewFilter,
+      sort: viewSort,
+      limit: viewLimit,
+    });
+    const data = rows
+      .map((row) => rowsById.get(row.id))
+      .filter((entry): entry is BaseEntry => !!entry);
+    return {
+      ...queryResult,
+      data,
+      groupedData: [],
+    };
+  }, [queryResult, baseRows, viewFilter, viewSort, viewLimit, rowsById]);
+
+  const listEntries = useMemo(() => {
+    if (!queryResult || !activeView) return [];
+    const effectiveSort = listSort ?? "-mtime";
+    const q = listFilter.trim().toLowerCase();
+    const folder = extractFolderFilter(activeView);
+    const displayName = (entry: BaseEntry) => fileListDisplayName(entry.file.path, folder);
+    const filtered = q
+      ? queryResult.data.filter((entry) => displayName(entry).toLowerCase().includes(q))
+      : queryResult.data;
+    const sorted = [...filtered].sort((a, b) => compareFileEntries(a, b, effectiveSort));
+    return viewLimit && viewLimit > 0 ? sorted.slice(0, viewLimit) : sorted;
+  }, [queryResult, activeView, listFilter, listSort, viewLimit]);
 
   const fileRefsByPath = useMemo(() => {
     const map = new Map<string, { fileId: string; fileName: string }>();
@@ -223,7 +310,7 @@ export default function BaseWidget({
     );
   }
 
-  if (!queryResult || !viewName) {
+  if (!queryResult || !displayedResult || !viewName || !activeView) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-gray-400">
         {t("dashboard.baseNoViews")}
@@ -234,38 +321,68 @@ export default function BaseWidget({
   return (
     <div className="flex h-full flex-col">
       {/* Header with view selector + refresh */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-2 py-1 dark:border-gray-700">
-        <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-          <span className="truncate font-medium">{cfg.base}</span>
-          {views.length > 1 && (
-            <ViewSelector
-              views={views.map((v) => v.name)}
-              current={viewName}
-              onSelect={(v) => ctx.onConfigChange?.({ ...cfg, view: v })}
+      {isListView ? (
+        <BaseFileListHeader
+          view={activeView}
+          views={views}
+          viewName={viewName}
+          onSelectView={(v) => ctx.onConfigChange?.({ ...cfg, view: v })}
+          filter={listFilter}
+          onFilterChange={setListFilter}
+          sort={listSort}
+          onSortChange={setListSort}
+          limit={viewLimit}
+          onLimitChange={setViewLimit}
+          openControl={listControl}
+          onOpenControlChange={setListControl}
+          onRefresh={() => setRefreshKey((k) => k + 1)}
+        />
+      ) : (
+        <div className="flex items-center justify-between border-b border-gray-200 px-2 py-1 dark:border-gray-700">
+          <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+            <span className="truncate font-medium">{cfg.base}</span>
+            {views.length > 1 && (
+              <ViewSelector
+                views={views.map((v) => v.name)}
+                current={viewName}
+                onSelect={(v) => ctx.onConfigChange?.({ ...cfg, view: v })}
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <ViewControls
+              fields={fields}
+              isWorkflow={false}
+              viewFilter={viewFilter}
+              onViewFilterChange={setViewFilter}
+              viewSort={viewSort}
+              onViewSortChange={setViewSort}
             />
-          )}
+            <LimitInput limit={viewLimit} onLimitChange={setViewLimit} />
+            <RefreshButton onClick={() => setRefreshKey((k) => k + 1)} />
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setRefreshKey((k) => k + 1)}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
-          title="Refresh"
-        >
-          <RefreshCw size={12} />
-        </button>
-      </div>
+      )}
 
       {/* View body */}
       <div className="flex-1 overflow-auto">
+        {isListView ? (
+          <BaseFileListBody
+            entries={listEntries}
+            folder={extractFolderFilter(activeView)}
+            onPreview={(entry) => setPreviewFile(fileRefsByPath.get(entry.file.path) ?? null)}
+          />
+        ) : (
         <div className="p-2">
           <BaseViewRenderer
-            view={views.find((v) => v.name === viewName) ?? views[0]}
-            result={queryResult}
+            view={activeView}
+            result={displayedResult}
             resolveFileRef={(entry) => fileRefsByPath.get(entry.file.path) ?? null}
             onOpenFile={setPreviewFile}
             resolveAssetUrl={resolveAssetUrl}
           />
         </div>
+        )}
       </div>
 
       {previewFile && (
@@ -281,6 +398,303 @@ export default function BaseWidget({
       )}
     </div>
   );
+}
+
+function RefreshButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+      title="Refresh"
+    >
+      <RefreshCw size={12} />
+    </button>
+  );
+}
+
+function LimitInput({
+  limit,
+  onLimitChange,
+}: {
+  limit: number | undefined;
+  onLimitChange: (limit: number | undefined) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <input
+      type="number"
+      min={1}
+      max={500}
+      value={limit ?? ""}
+      placeholder="Limit"
+      onChange={(e) => {
+        const value = e.target.value;
+        onLimitChange(value === "" ? undefined : Number(value) || undefined);
+      }}
+      className="h-6 w-16 rounded border border-gray-200 bg-white px-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+      title={t("dashboard.limit")}
+    />
+  );
+}
+
+function BaseFileListHeader({
+  view,
+  views,
+  viewName,
+  onSelectView,
+  filter,
+  onFilterChange,
+  sort,
+  onSortChange,
+  limit,
+  onLimitChange,
+  openControl,
+  onOpenControlChange,
+  onRefresh,
+}: {
+  view: ViewConfig;
+  views: ViewConfig[];
+  viewName: string;
+  onSelectView: (view: string) => void;
+  filter: string;
+  onFilterChange: (filter: string) => void;
+  sort: string | undefined;
+  onSortChange: (sort: string | undefined) => void;
+  limit: number | undefined;
+  onLimitChange: (limit: number | undefined) => void;
+  openControl: "filter" | "sort" | null;
+  onOpenControlChange: (next: "filter" | "sort" | null) => void;
+  onRefresh: () => void;
+}) {
+  const { t } = useI18n();
+  const filterBtnRef = useRef<HTMLButtonElement>(null);
+  const sortBtnRef = useRef<HTMLButtonElement>(null);
+  const folder = extractFolderFilter(view);
+  const effectiveSort = sort ?? "-mtime";
+  const hasFilter = filter.trim().length > 0;
+  const hasSort = !!sort;
+  const iconClass = (active: boolean) =>
+    `relative flex items-center rounded px-1 py-0.5 ${
+      active
+        ? "text-blue-600 dark:text-blue-400"
+        : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+    }`;
+
+  return (
+    <div className="flex items-center gap-2 border-b border-gray-100 px-2 py-1 dark:border-gray-800">
+      <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
+        <Folder size={11} className="shrink-0" />
+        <span className="truncate">{folder || "/"}</span>
+        {views.length > 1 && (
+          <ViewSelector
+            views={views.map((v) => v.name)}
+            current={viewName}
+            onSelect={onSelectView}
+          />
+        )}
+      </span>
+      <button
+        ref={filterBtnRef}
+        type="button"
+        onClick={() => onOpenControlChange(openControl === "filter" ? null : "filter")}
+        title={t("dashboard.filter")}
+        className={iconClass(hasFilter)}
+      >
+        <Filter size={12} />
+        {hasFilter && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />}
+      </button>
+      <button
+        ref={sortBtnRef}
+        type="button"
+        onClick={() => onOpenControlChange(openControl === "sort" ? null : "sort")}
+        title={t("dashboard.sort")}
+        className={iconClass(hasSort)}
+      >
+        <ArrowUpDown size={12} />
+        {hasSort && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />}
+      </button>
+      <LimitInput limit={limit} onLimitChange={onLimitChange} />
+      <RefreshButton onClick={onRefresh} />
+
+      {openControl === "filter" && (
+        <Popover anchorRef={filterBtnRef} onClose={() => onOpenControlChange(null)}>
+          <input
+            type="text"
+            autoFocus
+            value={filter}
+            onChange={(e) => onFilterChange(e.target.value)}
+            placeholder={t("dashboard.filter")}
+            className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </Popover>
+      )}
+      {openControl === "sort" && (
+        <Popover anchorRef={sortBtnRef} onClose={() => onOpenControlChange(null)}>
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t("dashboard.sort")}</span>
+            {hasSort && (
+              <button
+                type="button"
+                onClick={() => onSortChange(undefined)}
+                className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-red-500"
+              >
+                <X size={11} />
+                {t("dashboard.viewSortReset")}
+              </button>
+            )}
+          </div>
+          {FILE_LIST_SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onSortChange(opt.value)}
+              className={`block w-full rounded px-2 py-1 text-left text-xs ${
+                effectiveSort === opt.value
+                  ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+              }`}
+            >
+              {t(opt.labelKey)}
+            </button>
+          ))}
+        </Popover>
+      )}
+    </div>
+  );
+}
+
+function BaseFileListBody({
+  entries,
+  folder,
+  onPreview,
+}: {
+  entries: BaseEntry[];
+  folder: string;
+  onPreview: (entry: BaseEntry) => void;
+}) {
+  const { t } = useI18n();
+  if (entries.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-gray-400">
+        {t("dashboard.noFiles")}
+      </div>
+    );
+  }
+  return (
+    <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+      {entries.map((entry) => {
+        const name = fileListDisplayName(entry.file.path, folder);
+        return (
+          <li key={entry.file.path}>
+            <button
+              onClick={() => onPreview(entry)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50"
+            >
+              {name.includes("/") ? (
+                <Folder size={14} className="shrink-0 text-blue-500" />
+              ) : (
+                <FileText size={14} className="shrink-0 text-gray-400" />
+              )}
+              <span className="truncate text-gray-700 dark:text-gray-300">{name}</span>
+              <span className="ml-auto shrink-0 text-[11px] text-gray-400 dark:text-gray-500">
+                {formatModifiedTime(entry.file.mtimeMs)}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function formatModifiedTime(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(ms));
+}
+
+function baseEntryToRow(entry: BaseEntry): DataRow {
+  const cells: Record<string, unknown> = {};
+  for (const [key, value] of entry.rowScope.note.map.entries()) {
+    const raw = baseValueToRaw(value);
+    cells[key] = raw;
+    cells[`note.${key}`] = raw;
+  }
+  return {
+    id: entry.file.path,
+    fileName: entry.file.name,
+    mtime: entry.file.mtimeMs,
+    ctime: entry.file.ctimeMs,
+    cells,
+  };
+}
+
+function extractFolderFilter(view: ViewConfig): string {
+  const fromNode = (node: unknown): string | null => {
+    if (typeof node === "string") {
+      const match = node.match(/file\.inFolder\((["'])(.*?)\1\)/);
+      return match?.[2] ?? null;
+    }
+    if (!node || typeof node !== "object") return null;
+    const obj = node as { and?: unknown[]; or?: unknown[]; not?: unknown[] };
+    for (const child of [...(obj.and ?? []), ...(obj.or ?? []), ...(obj.not ?? [])]) {
+      const found = fromNode(child);
+      if (found != null) return found;
+    }
+    return null;
+  };
+  return fromNode(view.filters) ?? "";
+}
+
+function fileListDisplayName(path: string, folder: string): string {
+  return folder && path.startsWith(`${folder}/`) ? path.slice(folder.length + 1) : path;
+}
+
+function compareFileEntries(a: BaseEntry, b: BaseEntry, sort: string): number {
+  const desc = sort.startsWith("-");
+  const key = desc ? sort.slice(1) : sort;
+  const av = key === "name" ? a.file.name.toLowerCase() : key === "ctime" ? a.file.ctimeMs : a.file.mtimeMs;
+  const bv = key === "name" ? b.file.name.toLowerCase() : key === "ctime" ? b.file.ctimeMs : b.file.mtimeMs;
+  let result = 0;
+  if (av < bv) result = -1;
+  else if (av > bv) result = 1;
+  return desc ? -result : result;
+}
+
+function baseValueToRaw(value: Value): unknown {
+  switch (value.type) {
+    case "null":
+      return null;
+    case "boolean":
+      return value.value;
+    case "number":
+      return value.value;
+    case "string":
+      return value.value;
+    case "date":
+      return value.epochMs;
+    case "list":
+      return value.items.map(baseValueToRaw);
+    case "file":
+      return value.path;
+    case "link":
+      return value.display ? baseValueToRaw(value.display) : value.target;
+    case "url":
+      return value.display ? baseValueToRaw(value.display) : value.url;
+    case "image":
+      return value.source;
+    case "html":
+      return value.source;
+    case "icon":
+      return value.name;
+    default:
+      return "";
+  }
 }
 
 // ---------------------------------------------------------------------------

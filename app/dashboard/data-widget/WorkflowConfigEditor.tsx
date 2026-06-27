@@ -162,12 +162,13 @@ type TestResult =
   | { status: "ok"; kind: "text"; text: string }
   | { status: "error"; error: string };
 
-export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFileId }: ConfigEditorProps) {
+export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFileId, dashboardFileName }: ConfigEditorProps) {
   const { t } = useI18n();
   const { fileList } = useEditorContext();
   const cfg = useMemo(() => (config ?? {}) as WorkflowWidgetConfig, [config]);
   const output = cfg.output ?? "table";
   const isText = output === "markdown" || output === "html";
+  const dashboardCacheKey = dashboardFileName ?? dashboardFileId;
 
   const [fields, setFields] = useState<FieldInfo[]>([]);
   const [testing, setTesting] = useState(false);
@@ -236,10 +237,10 @@ export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFile
   // Seed detected fields from the last cached run on mount, so the mapping
   // dropdowns are populated (and show the current selection) without re-running.
   useEffect(() => {
-    if (!widgetId || !dashboardFileId) return;
+    if (!widgetId || !dashboardCacheKey) return;
     let cancelled = false;
     (async () => {
-      const cached = await loadWidgetCache(dashboardFileId, widgetId);
+      const cached = await loadWidgetCache(dashboardCacheKey, widgetId);
       if (cancelled || !cached?.fields) return;
       setFields(
         Object.entries(cached.fields).map(([name, type]) => ({
@@ -251,11 +252,11 @@ export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFile
     return () => {
       cancelled = true;
     };
-  }, [widgetId, dashboardFileId]);
+  }, [widgetId, dashboardCacheKey]);
 
   // --- Run ---
   const handleTestRun = useCallback(async () => {
-    if (!widgetId || !dashboardFileId || testing || !cfg.workflow) return;
+    if (!widgetId || !dashboardCacheKey || testing || !cfg.workflow) return;
 
     setTesting(true);
     testAbortRef.current?.abort();
@@ -269,7 +270,7 @@ export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFile
       if (isText) {
         const result = await runWorkflowText(workflowFileId, cfg.outputVariable, abortController.signal);
         if (abortController.signal.aborted) return;
-        await saveWidgetCache(dashboardFileId, widgetId, {
+        await saveWidgetCache(dashboardCacheKey, widgetId, {
           widgetId,
           ranAt: Date.now(),
           status: "ok",
@@ -279,7 +280,7 @@ export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFile
       } else {
         const result = await runWorkflowRows(workflowFileId, cfg.outputVariable, abortController.signal);
         if (abortController.signal.aborted) return;
-        await saveWidgetCache(dashboardFileId, widgetId, {
+        await saveWidgetCache(dashboardCacheKey, widgetId, {
           widgetId,
           ranAt: Date.now(),
           status: "ok",
@@ -313,18 +314,18 @@ export function WorkflowConfigEditor({ config, onChange, widgetId, dashboardFile
         setTesting(false);
       }
     }
-  }, [widgetId, dashboardFileId, testing, cfg, isText, output, onChange, t]);
+  }, [widgetId, dashboardCacheKey, testing, cfg, isText, output, onChange, t]);
 
   // Auto-run when the selected workflow CHANGES (explicit user action).
   // Seeded with the workflow at mount so merely opening settings doesn't run it.
   const prevWorkflowRef = useRef<string | undefined>(cfg.workflow);
   useEffect(() => {
     const current = cfg.workflow;
-    if (current && current !== prevWorkflowRef.current && widgetId && dashboardFileId) {
+    if (current && current !== prevWorkflowRef.current && widgetId && dashboardCacheKey) {
       handleTestRun();
     }
     prevWorkflowRef.current = current;
-  }, [cfg.workflow, widgetId, dashboardFileId, handleTestRun]);
+  }, [cfg.workflow, widgetId, dashboardCacheKey, handleTestRun]);
 
   useEffect(() => {
     return () => {

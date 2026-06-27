@@ -20,8 +20,10 @@ interface DashboardCanvasProps {
   toolbarEditActions?: ReactNode;
   /** Right-side buttons always shown, placed before the edit toggle (e.g. raw toggle). */
   toolbarRight?: ReactNode;
-  /** The .dashboard file's ID (passed to widgets for sidecar caches). */
+  /** The .dashboard file's ID (passed to widgets as a sidecar cache fallback). */
   dashboardFileId?: string;
+  /** The .dashboard file path (stable sidecar cache scope). */
+  dashboardFileName?: string;
 }
 
 /**
@@ -71,6 +73,7 @@ export function DashboardCanvas({
   toolbarEditActions,
   toolbarRight,
   dashboardFileId,
+  dashboardFileName,
 }: DashboardCanvasProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -194,7 +197,7 @@ export function DashboardCanvas({
     [data, commit, onEditModeChange],
   );
 
-  const handleCloseSettings = useCallback(() => {
+  const handleCloseSettings = useCallback(async () => {
     const id = editingWidgetId;
     setEditingWidgetId(null);
 
@@ -216,6 +219,21 @@ export function DashboardCanvas({
           ...data,
           widgets: data.widgets.map((w) =>
             w.id === widgetId ? { ...w, config: config as Record<string, unknown> } : w,
+          ),
+        },
+        `config:${widgetId}`,
+      );
+    },
+    [data, commit],
+  );
+
+  const handleUpdateWidgetType = useCallback(
+    (widgetId: string, nextType: string, nextConfig: Record<string, unknown>) => {
+      commit(
+        {
+          ...data,
+          widgets: data.widgets.map((w) =>
+            w.id === widgetId ? { ...w, type: nextType, config: nextConfig } : w,
           ),
         },
         `config:${widgetId}`,
@@ -340,6 +358,7 @@ export function DashboardCanvas({
                 onDelete={editMode ? () => handleDeleteWidget(widget.id) : undefined}
                 onConfigChange={(config) => handleUpdateWidgetConfig(widget.id, config)}
                 dashboardFileId={dashboardFileId}
+                dashboardFileName={dashboardFileName}
               />
             ))
           )}
@@ -354,9 +373,11 @@ export function DashboardCanvas({
         <WidgetSettingsPanel
           widget={editingWidget}
           onChange={(config) => handleUpdateWidgetConfig(editingWidget.id, config)}
+          onTypeChange={(type, config) => handleUpdateWidgetType(editingWidget.id, type, config)}
           onClose={handleCloseSettings}
           onDelete={() => handleDeleteWidget(editingWidget.id)}
           dashboardFileId={dashboardFileId}
+          dashboardFileName={dashboardFileName}
         />
       )}
     </div>

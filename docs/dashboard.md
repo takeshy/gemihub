@@ -7,8 +7,8 @@ The dashboard is a grid of configurable **widgets** rendered on the IDE home vie
 ## File format & storage
 
 - A dashboard is a YAML file with the `.dashboard` extension.
-- New dashboards are **always** created under `dashboards/` (`dashboards/{name}.dashboard`, the starter from the empty state is `dashboards/home.dashboard`) — mirroring how workflows live under `workflows/`. A legacy single dashboard may still be **read** from the root as `home.dashboard`, but new ones are never written there.
-- Workflow result data is stored at `dashboards/data/<dashboardFileId>.json` as a **normal synced file** — it pushes/pulls and appears in the file tree and the push/pull diff like any other file (so a device that never ran the workflow still gets the output via Pull). It is regenerable last-write-wins data; the widget also lazy-fetches the latest copy on load (`loadCacheFile`).
+- New dashboards are **always** created under `Dashboards/` (`Dashboards/{name}.dashboard`, the starter from the empty state is `Dashboards/home.dashboard`) — mirroring how workflows live under `workflows/`.
+- Workflow result data is stored at `Dashboards/Data/<dashboardFileId>.json` as a **normal synced file** — it pushes/pulls and appears in the file tree and the push/pull diff like any other file (so a device that never ran the workflow still gets the output via Pull). It is regenerable last-write-wins data; the widget also lazy-fetches the latest copy on load (`loadCacheFile`).
 - Trashed/history copies (`trash/…`, `history/…`) are excluded from the dashboard listing.
 
 The schema (version 1):
@@ -182,7 +182,7 @@ The config editor appends this contract to the AI workflow-generation prompt (`b
 
 ### Execution model & caching
 
-Results are cached in the per-dashboard file (`dashboards/data/<dashboardFileId>.json`) as a `WorkflowCacheRecord` (`{ widgetId, ranAt, status, rows?, fields?, text?, error? }`, last-write-wins). On mount, the widget reads from the cache and renders. This file is a normal synced file (see "File format and storage" above), so a machine that never ran the workflow still renders the latest results — `loadCacheFile` also lazy-fetches the content from Drive when it is missing locally or the remote copy is newer.
+Results are cached in the per-dashboard file (`Dashboards/Data/<dashboardFileId>.json`) as a `WorkflowCacheRecord` (`{ widgetId, ranAt, status, rows?, fields?, text?, error? }`, last-write-wins). On mount, the widget reads from the cache and renders. This file is a normal synced file (see "File format and storage" above), so a machine that never ran the workflow still renders the latest results — `loadCacheFile` also lazy-fetches the content from Drive when it is missing locally or the remote copy is newer.
 
 Execution is triggered by:
 
@@ -198,7 +198,7 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 
 **Late registration.** Plugins load asynchronously, often after a dashboard has already rendered. `registerWidget` dispatches a `dashboard-widgets-changed` event and `DashboardCanvas` re-renders on it, so a widget whose plugin loads late swaps from `UnknownWidget` to the real renderer without a reload.
 
-**`base` widget (plugin-provided, e.g. Obsidian Bases).** Reading/creating/rendering `.base` files is intended to live in a plugin, not core. The convention is a widget `{ type: "base", config: { base: "dashboards/xx.base", view: "<view name>" } }`: the plugin registers `type: "base"` and renders the named view of the referenced `.base`. Core needs no special import machinery — the `.dashboard` just stores the widget, `WidgetContext` (size/editMode/widgetId/dashboardFileId/`onConfigChange`) is passed through, and when the plugin is absent the widget shows `UnknownWidget` with its config intact. (Note: `drive-local.ts`'s `EXCLUDED_PREFIXES` includes `dashboards/`, so a plugin discovering `.base` files should use `readFile`/`searchFiles` rather than `listFiles`.)
+**`base` widget (plugin-provided, e.g. Obsidian Bases).** Reading/creating/rendering `.base` files is intended to live in a plugin, not core. The convention is a widget `{ type: "base", config: { base: "Dashboards/xx.base", view: "<view name>" } }`: the plugin registers `type: "base"` and renders the named view of the referenced `.base`. Core needs no special import machinery — the `.dashboard` just stores the widget, `WidgetContext` (size/editMode/widgetId/dashboardFileId/`onConfigChange`) is passed through, and when the plugin is absent the widget shows `UnknownWidget` with its config intact. (Note: `drive-local.ts`'s `EXCLUDED_PREFIXES` includes `Dashboards/`, so a plugin discovering `.base` files should use `readFile`/`searchFiles` rather than `listFiles`.)
 
 **View-mode config.** `WidgetContext.onConfigChange(config)` lets a widget persist its own config from view mode (wired through `GridCell` → `DashboardCanvas` → the dashboard save). Used by the markdown widget's header file picker.
 

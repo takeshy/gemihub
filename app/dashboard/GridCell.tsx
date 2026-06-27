@@ -22,8 +22,10 @@ interface GridCellProps {
   onDelete?: () => void;
   /** Persist a config change emitted by the widget itself (works in view mode). */
   onConfigChange?: (config: unknown) => void;
-  /** The .dashboard file's ID (passed to WidgetContext for sidecar caches). */
+  /** The .dashboard file's ID (passed to WidgetContext as a sidecar cache fallback). */
   dashboardFileId?: string;
+  /** The .dashboard file path (stable sidecar cache scope). */
+  dashboardFileName?: string;
 }
 
 export default function GridCell({
@@ -42,6 +44,7 @@ export default function GridCell({
   onDelete,
   onConfigChange,
   dashboardFileId,
+  dashboardFileName,
 }: GridCellProps) {
   const { t } = useI18n();
   const [interactionMode, setInteractionMode] = useState<InteractionMode>(null);
@@ -164,6 +167,7 @@ export default function GridCell({
     editMode,
     widgetId: widget.id,
     dashboardFileId,
+    dashboardFileName,
     onConfigChange,
   };
 

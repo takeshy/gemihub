@@ -41,10 +41,8 @@ export const DEFAULT_GRID: GridLayout = {
 
 export const BREAKPOINT_THRESHOLD = 768;
 
-/** Legacy single-dashboard filename (root level, backward compat). */
-export const DASHBOARD_FILE_NAME = "home.dashboard";
 /** Folder prefix for multi-dashboard storage. */
-export const DASHBOARD_FOLDER = "dashboards";
+export const DASHBOARD_FOLDER = "Dashboards";
 export const DASHBOARD_MIME_TYPE = "text/yaml";
 export const DASHBOARD_EXT = ".dashboard";
 
@@ -55,8 +53,10 @@ export interface WidgetContext {
   editMode?: boolean;
   /** The widget's own ID (for sidecar caches, events, etc.). */
   widgetId?: string;
-  /** The .dashboard file's ID (for sidecar caches scoped per dashboard). */
+  /** The .dashboard file's ID (fallback for sidecar caches scoped per dashboard). */
   dashboardFileId?: string;
+  /** The .dashboard file path (stable sidecar cache scope, survives fileId changes). */
+  dashboardFileName?: string;
   /**
    * Persist a change to this widget's config from the widget itself — works in
    * view mode too (not just the settings panel). Used e.g. by the markdown
@@ -68,10 +68,16 @@ export interface WidgetContext {
 export interface ConfigEditorProps {
   config: unknown;
   onChange: (next: unknown) => void;
+  /** Current widget type; used by config editors that can switch compatible types. */
+  widgetType?: string;
+  /** Switch this widget to another registered type without introducing a new schema type. */
+  onTypeChange?: (nextType: string, nextConfig: Record<string, unknown>) => void;
   /** The widget's own ID (for sidecar caches, test-run, etc.). */
   widgetId?: string;
-  /** The .dashboard file's ID (for sidecar caches scoped per dashboard). */
+  /** The .dashboard file's ID (fallback for sidecar caches scoped per dashboard). */
   dashboardFileId?: string;
+  /** The .dashboard file path (stable sidecar cache scope, survives fileId changes). */
+  dashboardFileName?: string;
 }
 
 export interface WidgetDef {

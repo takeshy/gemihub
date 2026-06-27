@@ -13,7 +13,6 @@ import {
   type LayoutPos,
   type Breakpoint,
   DEFAULT_GRID,
-  DASHBOARD_FILE_NAME,
   DASHBOARD_FOLDER,
   DASHBOARD_EXT,
 } from "./types";
@@ -45,7 +44,7 @@ function normalizeDashboardGrid(value: unknown): DashboardData["grid"] {
 
 /**
  * Build the storage path for a dashboard name.
- * New dashboards are stored as `dashboards/{name}.dashboard`.
+ * New dashboards are stored as `Dashboards/{name}.dashboard`.
  */
 export function dashboardPath(name: string): string {
   return `${DASHBOARD_FOLDER}/${name}${DASHBOARD_EXT}`;
@@ -173,10 +172,8 @@ export function createEmptyDashboard(): DashboardData {
 }
 
 /**
- * Create a default dashboard with one widget of each type.
- * Used when home.dashboard doesn't exist yet and the user clicks "Create dashboard"
- * from the empty state (legacy convenience — new dashboards via the lifecycle
- * UI use createEmptyDashboard instead).
+ * Create a default dashboard with starter widgets.
+ * New dashboard creation normally uses createEmptyDashboard instead.
  */
 export function createDefaultDashboard(): DashboardData {
   return {
@@ -193,27 +190,13 @@ export function createDefaultDashboard(): DashboardData {
       },
       {
         id: crypto.randomUUID(),
-        type: "file-list",
+        type: "base",
         layout: {
-          lg: { x: 6, y: 0, w: 6, h: 4 },
+          lg: { x: 6, y: 0, w: 6, h: 5 },
         },
         config: {
-          folder: "",
-          sort: "-mtime",
-          limit: 20,
-        },
-      },
-      {
-        id: crypto.randomUUID(),
-        type: "table",
-        layout: {
-          lg: { x: 0, y: 3, w: 6, h: 5 },
-        },
-        config: {
-          folder: "",
-          sort: "-mtime",
-          limit: 50,
-          columns: ["title", "status", "tags"],
+          base: "",
+          view: "",
         },
       },
       {
@@ -246,8 +229,7 @@ function isHiddenDashboardPath(name: string): boolean {
 /**
  * Enumerate all .dashboard files from CachedRemoteMeta (and cached files fallback).
  * Returns entries sorted by display name.
- * Includes both legacy `home.dashboard` (root) and `dashboards/*.dashboard`,
- * but excludes trashed/history copies.
+ * Includes only dashboards under `Dashboards/`, excluding trashed/history copies.
  */
 export async function listDashboardFiles(): Promise<DashboardFileEntry[]> {
   const meta = await getCachedRemoteMeta();
@@ -255,7 +237,7 @@ export async function listDashboardFiles(): Promise<DashboardFileEntry[]> {
 
   if (meta) {
     for (const [id, entry] of Object.entries(meta.files)) {
-      if (entry.name.endsWith(DASHBOARD_EXT) && !isHiddenDashboardPath(entry.name)) {
+      if (entry.name.startsWith(`${DASHBOARD_FOLDER}/`) && entry.name.endsWith(DASHBOARD_EXT) && !isHiddenDashboardPath(entry.name)) {
         entries.push({
           fileId: id,
           fileName: entry.name,
@@ -269,7 +251,7 @@ export async function listDashboardFiles(): Promise<DashboardFileEntry[]> {
   if (entries.length === 0) {
     const allFiles = await getAllCachedFiles();
     for (const f of allFiles) {
-      if (f.fileName?.endsWith(DASHBOARD_EXT) && !isHiddenDashboardPath(f.fileName)) {
+      if (f.fileName?.startsWith(`${DASHBOARD_FOLDER}/`) && f.fileName.endsWith(DASHBOARD_EXT) && !isHiddenDashboardPath(f.fileName)) {
         entries.push({
           fileId: f.fileId,
           fileName: f.fileName,
@@ -332,60 +314,11 @@ export async function loadDashboardByPath(
 }
 
 /**
- * Find home.dashboard in the cache (legacy backward compat).
- * Checks CachedRemoteMeta first (fast), then falls back to scanning all cached files.
- * Returns the fileId and cached content, or null if not found.
- */
-export async function loadDashboardFile(): Promise<{
-  data: DashboardData;
-  fileId: string;
-} | null> {
-  // 1. Try CachedRemoteMeta (fast path)
-  const meta = await getCachedRemoteMeta();
-  let fileId: string | null = null;
-
-  if (meta) {
-    for (const [id, entry] of Object.entries(meta.files)) {
-      if (entry.name === DASHBOARD_FILE_NAME) {
-        fileId = id;
-        break;
-      }
-    }
-  }
-
-  // 2. Fallback: scan all cached files for fileName match
-  if (!fileId) {
-    const allFiles = await getAllCachedFiles();
-    for (const f of allFiles) {
-      if (f.fileName === DASHBOARD_FILE_NAME) {
-        fileId = f.fileId;
-        break;
-      }
-    }
-  }
-
-  if (!fileId) return null;
-
-  let content: string;
-  try {
-    content = await readFileLocal(fileId);
-  } catch {
-    return null;
-  }
-
-  const data = parseDashboard(content);
-  if (!data) return null;
-
-  return { data, fileId };
-}
-
-/**
  * Resolve which dashboard to open on app launch.
  * Resolution order:
  *   1. settings.homeDashboard (if set and the file exists)
- *   2. Legacy home.dashboard (if it exists)
- *   3. First dashboard in the listing
- *   4. null (no dashboards — show "create" empty state)
+ *   2. First dashboard in the listing
+ *   3. null (no dashboards — show "create" empty state)
  */
 export async function resolveHomeDashboard(
   homeDashboard?: string | null,
@@ -398,13 +331,7 @@ export async function resolveHomeDashboard(
     }
   }
 
-  // 2. Legacy home.dashboard
-  const legacy = await loadDashboardFile();
-  if (legacy) {
-    return { ...legacy, fileName: DASHBOARD_FILE_NAME };
-  }
-
-  // 3. First in listing
+  // 2. First in listing
   const list = await listDashboardFiles();
   if (list.length > 0) {
     const result = await loadDashboardByPath(list[0].fileName);
@@ -413,7 +340,7 @@ export async function resolveHomeDashboard(
     }
   }
 
-  // 4. None
+  // 3. None
   return null;
 }
 
@@ -431,7 +358,7 @@ export async function saveDashboardFile(
 ): Promise<string> {
   const content = serializeDashboard(data);
   const result = await writeFileLocal(
-    fileName ?? DASHBOARD_FILE_NAME,
+    fileName ?? dashboardPath("home"),
     content,
     { existingFileId: existingFileId ?? undefined },
   );
@@ -446,7 +373,7 @@ export async function saveDashboardFile(
 
 /**
  * Create a new dashboard file with the given name.
- * Stores it as `dashboards/{name}.dashboard`.
+ * Stores it as `Dashboards/{name}.dashboard`.
  * Returns the fileId.
  */
 export async function createNewDashboard(name: string): Promise<string> {
@@ -461,7 +388,7 @@ export async function createNewDashboard(name: string): Promise<string> {
 
 /**
  * Rename a dashboard file (via existing renameFileLocal).
- * The new name is applied as `dashboards/{newName}.dashboard`.
+ * The new name is applied as `Dashboards/{newName}.dashboard`.
  */
 export async function renameDashboard(
   fileId: string,

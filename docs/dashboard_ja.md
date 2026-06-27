@@ -7,8 +7,8 @@
 ## ファイル形式と保存場所
 
 - ダッシュボードは拡張子 `.dashboard` の YAML ファイル。
-- 新規ダッシュボードは**必ず** `dashboards/` 配下に作成（`dashboards/{name}.dashboard`、空状態のスターターは `dashboards/home.dashboard`）— workflows が `workflows/` 配下にあるのと同様。レガシーの単一ダッシュボードはルートの `home.dashboard` から**読込**のみ互換維持し、新規はそこに書かない。
-- ワークフロー結果データは `dashboards/data/<dashboardFileId>.json` に**通常の同期ファイル**として保存。push/pull の同期対象で、ファイルツリーや push/pull 差分一覧にも他のファイルと同様に出る（実行していない別マシンでも Pull で結果を取得できる）。再生成可能な last-write-wins データで、ウィジェットはロード時に最新版を遅延フェッチもする（`loadCacheFile`）。
+- 新規ダッシュボードは**必ず** `Dashboards/` 配下に作成（`Dashboards/{name}.dashboard`、空状態のスターターは `Dashboards/home.dashboard`）— workflows が `workflows/` 配下にあるのと同様。
+- ワークフロー結果データは `Dashboards/Data/<dashboardFileId>.json` に**通常の同期ファイル**として保存。push/pull の同期対象で、ファイルツリーや push/pull 差分一覧にも他のファイルと同様に出る（実行していない別マシンでも Pull で結果を取得できる）。再生成可能な last-write-wins データで、ウィジェットはロード時に最新版を遅延フェッチもする（`loadCacheFile`）。
 - ゴミ箱/履歴のコピー（`trash/…`, `history/…`）は一覧から除外。
 
 スキーマ（version 1）:
@@ -181,7 +181,7 @@ config エディタはこの契約を AI ワークフロー生成プロンプト
 
 ### 実行モデルとキャッシュ
 
-結果はダッシュボードごとのファイル（`dashboards/data/<dashboardFileId>.json`）に `WorkflowCacheRecord`（`{ widgetId, ranAt, status, rows?, fields?, text?, error? }`、last-write-wins）として保存。マウント時はキャッシュを読んで描画する。これは通常の同期ファイル（上記「ファイル形式と保存場所」参照）なので、ワークフローを実行していないマシンでも最新結果を描画できる — `loadCacheFile` はローカルに無い、または remote の方が新しい場合に Drive から内容を遅延フェッチもする。
+結果はダッシュボードごとのファイル（`Dashboards/Data/<dashboardFileId>.json`）に `WorkflowCacheRecord`（`{ widgetId, ranAt, status, rows?, fields?, text?, error? }`、last-write-wins）として保存。マウント時はキャッシュを読んで描画する。これは通常の同期ファイル（上記「ファイル形式と保存場所」参照）なので、ワークフローを実行していないマシンでも最新結果を描画できる — `loadCacheFile` はローカルに無い、または remote の方が新しい場合に Drive から内容を遅延フェッチもする。
 
 実行のトリガ:
 
@@ -197,7 +197,7 @@ config エディタはこの契約を AI ワークフロー生成プロンプト
 
 **遅延登録。** プラグインは非同期ロードされ、ダッシュボード描画後に登録されることが多い。`registerWidget` は `dashboard-widgets-changed` イベントを発火し、`DashboardCanvas` がそれを購読して再描画するため、後からロードされた型は `UnknownWidget` からリロード無しで実描画に差し替わる。
 
-**`base` ウィジェット（プラグイン提供、例: Obsidian Bases）。** `.base` の読込/作成/描画はコアではなくプラグインに置く方針。規約はウィジェット `{ type: "base", config: { base: "dashboards/xx.base", view: "<view名>" } }`: プラグインが `type: "base"` を登録し、参照 `.base` の指定 view を描画する。コアに専用 import 機構は不要 — `.dashboard` は widget を保存するだけ、`WidgetContext`（size/editMode/widgetId/dashboardFileId/`onConfigChange`）が渡り、プラグイン未導入時は config を保持したまま `UnknownWidget` を表示する。（注: `drive-local.ts` の `EXCLUDED_PREFIXES` は `dashboards/` を含むため、プラグインが `.base` を発見する際は `listFiles` ではなく `readFile`/`searchFiles` を使うこと。）
+**`base` ウィジェット（プラグイン提供、例: Obsidian Bases）。** `.base` の読込/作成/描画はコアではなくプラグインに置く方針。規約はウィジェット `{ type: "base", config: { base: "Dashboards/xx.base", view: "<view名>" } }`: プラグインが `type: "base"` を登録し、参照 `.base` の指定 view を描画する。コアに専用 import 機構は不要 — `.dashboard` は widget を保存するだけ、`WidgetContext`（size/editMode/widgetId/dashboardFileId/`onConfigChange`）が渡り、プラグイン未導入時は config を保持したまま `UnknownWidget` を表示する。（注: `drive-local.ts` の `EXCLUDED_PREFIXES` は `Dashboards/` を含むため、プラグインが `.base` を発見する際は `listFiles` ではなく `readFile`/`searchFiles` を使うこと。）
 
 **ビューモードでの config 更新。** `WidgetContext.onConfigChange(config)` により、ウィジェットがビューモードから自身の config を永続化できる（`GridCell` → `DashboardCanvas` → ダッシュボード保存に配線）。Markdown ウィジェットのヘッダファイルピッカーで使用。
 

@@ -3,22 +3,17 @@
 // via the registerWidget function (extensibility point for P1+).
 
 import React from "react";
-import { FileText, List, Table, Globe, Puzzle, LayoutGrid, Workflow, Database } from "lucide-react";
+import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database } from "lucide-react";
 import type { WidgetDef } from "../types";
 import MarkdownWidget from "./MarkdownWidget";
-import FileListWidget from "./FileListWidget";
 import WebWidget from "./WebWidget";
 import UnknownWidget from "./UnknownWidget";
 import BaseWidget from "./BaseWidget";
 import { MarkdownConfigEditor } from "./config-editors/MarkdownConfigEditor";
-import { FileListConfigEditor } from "./config-editors/FileListConfigEditor";
 import { WebConfigEditor } from "./config-editors/WebConfigEditor";
 import { BaseConfigEditor } from "./config-editors/BaseConfigEditor";
-import FolderWidget from "../data-widget/FolderWidget";
 import WorkflowWidget from "../data-widget/WorkflowWidget";
 import KanbanWidget from "../data-widget/KanbanWidget";
-import { CardConfigEditor } from "../data-widget/CardConfigEditor";
-import { TableConfigEditor } from "../data-widget/TableConfigEditor";
 import { WorkflowConfigEditor } from "../data-widget/WorkflowConfigEditor";
 import { KanbanConfigEditor } from "../data-widget/KanbanConfigEditor";
 
@@ -81,39 +76,6 @@ registerWidget({
 });
 
 registerWidget({
-  type: "card",
-  label: "Card",
-  icon: React.createElement(LayoutGrid, { size: 16 }),
-  defaultConfig: {
-    folder: "",
-    sort: "-mtime",
-    limit: 50,
-    card: { title: "file.name" },
-    cols: 3,
-  },
-  render: (config, ctx) =>
-    React.createElement(FolderWidget, { config, ctx, view: "cards" }),
-  defaultSize: { w: 6, h: 5 },
-  ConfigEditor: CardConfigEditor,
-});
-
-registerWidget({
-  type: "table",
-  label: "Table",
-  icon: React.createElement(Table, { size: 16 }),
-  defaultConfig: {
-    folder: "",
-    sort: "-mtime",
-    limit: 50,
-    columns: ["file.name", "status"],
-  },
-  render: (config, ctx) =>
-    React.createElement(FolderWidget, { config, ctx, view: "table" }),
-  defaultSize: { w: 6, h: 5 },
-  ConfigEditor: TableConfigEditor,
-});
-
-registerWidget({
   type: "kanban",
   label: "Kanban",
   icon: React.createElement(LayoutGrid, { size: 16 }),
@@ -149,16 +111,6 @@ registerWidget({
   render: (config, ctx) => React.createElement(WorkflowWidget, { config, ctx }),
   defaultSize: { w: 6, h: 5 },
   ConfigEditor: WorkflowConfigEditor,
-});
-
-registerWidget({
-  type: "file-list",
-  label: "File List",
-  icon: React.createElement(List, { size: 16 }),
-  defaultConfig: { folder: "", sort: "-mtime", limit: 20 },
-  render: (config, ctx) => React.createElement(FileListWidget, { config, ctx }),
-  defaultSize: { w: 6, h: 4 },
-  ConfigEditor: FileListConfigEditor,
 });
 
 registerWidget({

@@ -13,27 +13,27 @@ function file(name: string): CachedRemoteMeta["files"][string] {
   };
 }
 
-test("collectBaseFileOptions includes .base files under dashboards", () => {
+test("collectBaseFileOptions includes .base files under Dashboards", () => {
   const files: CachedRemoteMeta["files"] = {
-    a: file("dashboards/project.base"),
+    a: file("Dashboards/project.base"),
     b: file("notes/readme.md"),
     c: file("other/Tasks.BASE"),
   };
 
   assert.deepEqual(collectBaseFileOptions(files), [
-    { id: "a", name: "dashboards/project.base" },
+    { id: "a", name: "Dashboards/project.base" },
     { id: "c", name: "other/Tasks.BASE" },
   ]);
 });
 
 test("findBaseFileOption resolves selected .base by full path", () => {
   const files: CachedRemoteMeta["files"] = {
-    a: file("dashboards/project.base"),
+    a: file("Dashboards/project.base"),
   };
 
-  assert.deepEqual(findBaseFileOption(files, "dashboards/project.base"), {
+  assert.deepEqual(findBaseFileOption(files, "Dashboards/project.base"), {
     id: "a",
-    name: "dashboards/project.base",
+    name: "Dashboards/project.base",
   });
   assert.equal(findBaseFileOption(files, "project.base"), null);
 });

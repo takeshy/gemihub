@@ -56,7 +56,7 @@ export default function WorkflowWidget({
   const output = cfg.output ?? "table";
   const isText = output === "markdown" || output === "html";
   const widgetId = ctx?.widgetId;
-  const dashboardFileId = ctx?.dashboardFileId;
+  const dashboardCacheKey = ctx?.dashboardFileName ?? ctx?.dashboardFileId;
 
   const [cacheRecord, setCacheRecord] = useState<WorkflowCacheRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +69,7 @@ export default function WorkflowWidget({
 
   // --- Load from sidecar cache (never executes) ---
   useEffect(() => {
-    if (!widgetId || !dashboardFileId) {
+    if (!widgetId || !dashboardCacheKey) {
       setLoading(false);
       setCacheRecord(null);
       return;
@@ -77,7 +77,7 @@ export default function WorkflowWidget({
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const cached = await loadWidgetCache(dashboardFileId, widgetId);
+      const cached = await loadWidgetCache(dashboardCacheKey, widgetId);
       if (cancelled) return;
       setCacheRecord(cached);
       setLoading(false);
@@ -85,15 +85,15 @@ export default function WorkflowWidget({
     return () => {
       cancelled = true;
     };
-  }, [widgetId, dashboardFileId]);
+  }, [widgetId, dashboardCacheKey]);
 
   useEffect(() => {
-    if (!widgetId || !dashboardFileId) return;
+    if (!widgetId || !dashboardCacheKey) return;
 
     const handleCacheUpdated = (event: Event) => {
       const { detail } = event as CustomEvent<WorkflowWidgetCacheUpdatedDetail>;
       if (!detail) return;
-      if (detail.dashboardFileId !== dashboardFileId || detail.widgetId !== widgetId) return;
+      if (detail.dashboardCacheKey !== dashboardCacheKey || detail.widgetId !== widgetId) return;
       setCacheRecord(detail.record);
       setLoading(false);
     };
@@ -102,7 +102,7 @@ export default function WorkflowWidget({
     return () => {
       window.removeEventListener(WORKFLOW_WIDGET_CACHE_UPDATED_EVENT, handleCacheUpdated);
     };
-  }, [widgetId, dashboardFileId]);
+  }, [widgetId, dashboardCacheKey]);
 
   // Cleanup any in-flight execution on unmount
   useEffect(() => {
@@ -113,7 +113,7 @@ export default function WorkflowWidget({
 
   // --- Execution (refresh button / test-run / interval auto-run only) ---
   const executeWorkflow = useCallback(async () => {
-    if (!widgetId || !dashboardFileId) return;
+    if (!widgetId || !dashboardCacheKey) return;
     if (executing) return;
     const workflowPath = cfg.workflow;
     if (!workflowPath) return;
@@ -157,7 +157,7 @@ export default function WorkflowWidget({
         };
       }
 
-      await saveWidgetCache(dashboardFileId, widgetId, record);
+      await saveWidgetCache(dashboardCacheKey, widgetId, record);
       setCacheRecord(record);
     } catch (err) {
       if (abortController.signal.aborted) return;
@@ -172,7 +172,7 @@ export default function WorkflowWidget({
         fields: cacheRecord?.fields,
         text: cacheRecord?.text,
       };
-      await saveWidgetCache(dashboardFileId, widgetId, record);
+      await saveWidgetCache(dashboardCacheKey, widgetId, record);
       setCacheRecord(record);
     } finally {
       if (execAbortRef.current === abortController) {
@@ -180,13 +180,13 @@ export default function WorkflowWidget({
         setExecuting(false);
       }
     }
-  }, [widgetId, dashboardFileId, executing, isText, cfg.workflow, cfg.outputVariable, cacheRecord, t]);
+  }, [widgetId, dashboardCacheKey, executing, isText, cfg.workflow, cfg.outputVariable, cacheRecord, t]);
   executeWorkflowRef.current = executeWorkflow;
 
   // --- Interval auto-run (stale-on-open + recurring timer while mounted) ---
   useEffect(() => {
     if (loading) return;
-    if (!widgetId || !dashboardFileId || !cfg.workflow) return;
+    if (!widgetId || !dashboardCacheKey || !cfg.workflow) return;
 
     const interval = cfg.refreshInterval ?? 0;
     if (interval <= 0) return;
@@ -204,7 +204,7 @@ export default function WorkflowWidget({
     // executeWorkflow/cacheRecord intentionally omitted: the timer is keyed by
     // workflow path + interval value; the ref always calls the latest callback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, widgetId, dashboardFileId, cfg.workflow, cfg.refreshInterval]);
+  }, [loading, widgetId, dashboardCacheKey, cfg.workflow, cfg.refreshInterval]);
 
   // --- Derived rows for card/table output ---
   const rows: DataRow[] = useMemo(

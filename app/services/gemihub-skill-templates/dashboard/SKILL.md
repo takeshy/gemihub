@@ -12,8 +12,8 @@ Always output valid YAML when creating or modifying a `.dashboard` file.
 ## Workflow
 
 1. **Clarify the goal** — what should the dashboard show (tasks, notes, links, metrics)?
-2. **Create the backing data first** — for a `base` widget, author a `.base` file (e.g. under `dashboards/bases/`) and note its view names. **You do not need to activate a separate skill: the full Base authoring guide is bundled here as `references/base.md`** (plus `references/base-functions.md` and `references/base-views.md`).
-3. **Create the file** — use `create_drive_file` (or `update_drive_file` to edit) with a path like `dashboards/<Name>.dashboard`. New dashboards always live under `dashboards/`.
+2. **Create the backing data first** — for a `base` widget, author a `.base` file (e.g. under `Dashboards/Bases/`) and note its view names. **You do not need to activate a separate skill: the full Base authoring guide is bundled here as `references/base.md`** (plus `references/base-functions.md` and `references/base-views.md`).
+3. **Create the file** — use `create_drive_file` (or `update_drive_file` to edit) with a path like `Dashboards/<Name>.dashboard`. New dashboards always live under `Dashboards/`.
 4. **Lay out widgets** — give each widget an `lg` layout on a 12-column grid.
 5. **Validate YAML** — valid YAML; every widget has a unique `id`, a `type`, and `layout.lg`.
 
@@ -53,7 +53,7 @@ Renders a named view of a `.base` file (table / cards / list). **Use this for an
   type: base
   layout: { lg: { x: 0, y: 0, w: 8, h: 6 } }
   config:
-    base: dashboards/bases/Tasks.base   # vault path to the .base file
+    base: Dashboards/Bases/Tasks.base   # vault path to the .base file
     view: Active                        # view name; omit/empty = the base's first view
 ```
 
@@ -172,8 +172,8 @@ Renders an existing markdown file inline (preview / wysiwyg / code). It referenc
 
 The `base` widget **is** the import mechanism: set `config.base` to the `.base` file's vault path and `config.view` to a view name. Recommended flow:
 
-1. Author `dashboards/bases/Tasks.base` (defining views such as "Active", "Done"). The full `.base` authoring reference is bundled with this skill as `references/base.md` — no separate skill needs to be activated.
-2. Add `base` widgets referencing `dashboards/bases/Tasks.base`, one per view.
+1. Author `Dashboards/Bases/Tasks.base` (defining views such as "Active", "Done"). The full `.base` authoring reference is bundled with this skill as `references/base.md` — no separate skill needs to be activated.
+2. Add `base` widgets referencing `Dashboards/Bases/Tasks.base`, one per view.
 
 ## Complete Example
 
@@ -188,7 +188,7 @@ widgets:
     type: base
     layout: { lg: { x: 0, y: 0, w: 8, h: 6 } }
     config:
-      base: dashboards/bases/Tasks.base
+      base: Dashboards/Bases/Tasks.base
       view: Active
   - id: recent-files
     type: file-list

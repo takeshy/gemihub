@@ -147,8 +147,7 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
   }, [newDashboardName, dashboards, t, refreshDashboardList]);
 
   const handleCreateDefaultFromEmpty = useCallback(async () => {
-    // Create the starter dashboard under dashboards/ (like workflows live under
-    // workflows/). New dashboards never go to the legacy root home.dashboard.
+    // Create the starter dashboard under Dashboards/ (like workflows live under workflows/).
     const defaultData = createDefaultDashboard();
     const path = dashboardPath("home");
     setData(defaultData);
@@ -234,8 +233,7 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
     );
   }, [fileName, fetcher]);
 
-  const isHomeDashboard = fileName === effectiveHomeDashboard ||
-    (!effectiveHomeDashboard && fileName === "home.dashboard");
+  const isHomeDashboard = fileName === effectiveHomeDashboard;
 
   if (loading) {
     return (
@@ -344,6 +342,7 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
         editMode={editMode}
         onEditModeChange={setEditMode}
         dashboardFileId={fileId ?? undefined}
+        dashboardFileName={fileName ?? undefined}
         toolbarLeft={
           <>
             <LayoutDashboard size={14} className="text-gray-400" />

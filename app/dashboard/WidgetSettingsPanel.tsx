@@ -1,16 +1,21 @@
 import { createPortal } from "react-dom";
+import { useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import { getWidgetDef } from "./widgets/registry";
 import type { Widget } from "./types";
 import { useI18n } from "~/i18n/context";
+import { convertLegacyFolderWidgetToBase, isLegacyFolderWidget } from "./legacyFolderWidgetConversion";
 
 interface WidgetSettingsPanelProps {
   widget: Widget;
   onChange: (config: unknown) => void;
+  onTypeChange: (nextType: string, nextConfig: Record<string, unknown>) => void;
   onClose: () => void;
   onDelete: () => void;
-  /** The .dashboard file's ID (passed to ConfigEditor for sidecar caches). */
+  /** The .dashboard file's ID (passed to ConfigEditor as a sidecar cache fallback). */
   dashboardFileId?: string;
+  /** The .dashboard file path (stable sidecar cache scope). */
+  dashboardFileName?: string;
 }
 
 /**
@@ -20,13 +25,33 @@ interface WidgetSettingsPanelProps {
 export function WidgetSettingsPanel({
   widget,
   onChange,
+  onTypeChange,
   onClose,
   onDelete,
   dashboardFileId,
+  dashboardFileName,
 }: WidgetSettingsPanelProps) {
   const { t } = useI18n();
   const def = getWidgetDef(widget.type);
   const ConfigEditor = def.ConfigEditor;
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const canConvertLegacy = !ConfigEditor && isLegacyFolderWidget(widget.type);
+
+  const handleConvertLegacy = async () => {
+    setConverting(true);
+    setConvertError(null);
+    try {
+      const converted = await convertLegacyFolderWidgetToBase(widget);
+      if (converted) {
+        onTypeChange(converted.type, converted.config);
+      }
+    } catch (e) {
+      setConvertError((e as Error).message);
+    } finally {
+      setConverting(false);
+    }
+  };
 
   const panel = (
     <div
@@ -64,14 +89,37 @@ export function WidgetSettingsPanel({
                 key={widget.id}
                 config={widget.config}
                 onChange={onChange}
+                widgetType={widget.type}
+                onTypeChange={onTypeChange}
                 widgetId={widget.id}
                 dashboardFileId={dashboardFileId}
+                dashboardFileName={dashboardFileName}
               />
             </>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-              {t("dashboard.noSettings")}
-            </p>
+            <div className="py-8 text-center">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t("dashboard.noSettings")}
+              </p>
+              {canConvertLegacy && (
+                <div className="mt-4 space-y-2">
+                  <p className="px-4 text-xs text-gray-400 dark:text-gray-500">
+                    This old widget type can be converted to a Base widget.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleConvertLegacy}
+                    disabled={converting}
+                    className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {converting ? "Converting..." : "Convert to Base"}
+                  </button>
+                  {convertError && (
+                    <p className="px-4 text-xs text-red-500">{convertError}</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

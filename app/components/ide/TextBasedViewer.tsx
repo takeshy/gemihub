@@ -197,6 +197,7 @@ export function TextBasedViewer({
         onImageChange={onImageChange}
         onDiffClick={handleDiffClick}
         onHistoryClick={handleHistoryClick}
+        initialMode={fileId.startsWith("new:") ? "wysiwyg" : "preview"}
       />
     );
   } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
