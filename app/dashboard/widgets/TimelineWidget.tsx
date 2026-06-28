@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Code, Image, Loader2, PenLine, Pencil, Pin, Plus, Search, Send, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Code, Image, Loader2, PenLine, Pencil, Pin, Plus, Search, Send, Sparkles, Trash2, X } from "lucide-react";
 import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
 import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { WikiEmbed } from "~/components/editor/WikiEmbed";
@@ -11,6 +11,7 @@ import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { slugifyHeading } from "~/utils/wiki-subpath";
 import type { WidgetContext } from "../types";
 import { FilePreviewModal } from "./FilePreviewModal";
+import { TimelineAiRewriteDialog } from "./TimelineAiRewriteDialog";
 
 const MarkdownEditor = lazy(() => import("~/components/editor/MarkdownEditor").then((mod) => ({ default: mod.MarkdownEditor })));
 
@@ -21,6 +22,8 @@ interface TimelineConfig {
   path?: string;
   latestCount?: number;
   composerMode?: ComposerMode;
+  collapseLineLimit?: number;
+  collapseCharLimit?: number;
 }
 
 interface TimelinePost {
@@ -56,6 +59,7 @@ const POST_ID_RE = /^id:\s*([A-Za-z0-9_-]+)\s*$/i;
 const PINNED_RE = /^pinned:\s*(true|false)\s*$/i;
 const COLLAPSE_LINE_LIMIT = 8;
 const COLLAPSE_CHAR_LIMIT = 520;
+const COLLAPSE_ESTIMATED_CHARS_PER_LINE = 34;
 const COLLAPSE_EMBED_LIMIT = 1;
 const DEFAULT_LATEST_COUNT = 20;
 const TIMELINE_ROOT = "Dashboards/Timeline";
@@ -240,7 +244,7 @@ function textForCollapse(content: string): string {
     .trim();
 }
 
-function shouldCollapsePost(content: string, fileList: FileListItem[]): boolean {
+function shouldCollapsePost(content: string, fileList: FileListItem[], lineLimit = COLLAPSE_LINE_LIMIT, charLimit = COLLAPSE_CHAR_LIMIT): boolean {
   const markdownEmbedCount = (content.match(/!\[\[([^\]\n]+?)\]\]/g) ?? []).filter((embed) => {
     const spec = embed.slice(3, -2);
     return isMarkdownEmbed(spec, fileList);
@@ -251,7 +255,12 @@ function shouldCollapsePost(content: string, fileList: FileListItem[]): boolean 
   if (embedCount > 0 && content.split(/\r?\n/).filter((line) => line.trim()).length > 3) return true;
   const text = textForCollapse(content);
   if (!text) return embedCount > 0 && content.split(/\r?\n/).length > 3;
-  return text.length > COLLAPSE_CHAR_LIMIT || text.split(/\r?\n/).length > COLLAPSE_LINE_LIMIT;
+  const lines = text.split(/\r?\n/).filter((line) => line.trim());
+  const estimatedLines = lines.reduce(
+    (sum, line) => sum + Math.max(1, Math.ceil(line.length / COLLAPSE_ESTIMATED_CHARS_PER_LINE)),
+    0,
+  );
+  return text.length > charLimit || lines.length > lineLimit || estimatedLines > lineLimit;
 }
 
 function embedTarget(spec: string): string {
@@ -263,12 +272,12 @@ function isMarkdownEmbed(spec: string, fileList: FileListItem[]): boolean {
   return !!file && /\.(md|markdown)$/i.test(file.name);
 }
 
-function collapsedContent(content: string, fileList: FileListItem[]): string {
+function collapsedContent(content: string, fileList: FileListItem[], lineLimit = COLLAPSE_LINE_LIMIT, charLimit = COLLAPSE_CHAR_LIMIT): string {
   const lines = content.split(/\r?\n/);
-  const byLines = lines.length > COLLAPSE_LINE_LIMIT
-    ? lines.slice(0, COLLAPSE_LINE_LIMIT).join("\n").trim()
+  const byLines = lines.length > lineLimit
+    ? lines.slice(0, lineLimit).join("\n").trim()
     : content.trim();
-  const clipped = byLines.length <= COLLAPSE_CHAR_LIMIT ? byLines : byLines.slice(0, COLLAPSE_CHAR_LIMIT).trimEnd();
+  const clipped = byLines.length <= charLimit ? byLines : byLines.slice(0, charLimit).trimEnd();
   const withoutExpandedMarkdownEmbeds = clipped.replace(/!\[\[([^\]\n]+?)\]\]/g, (match, spec: string) => {
     const target = embedTarget(spec);
     return isMarkdownEmbed(spec, fileList) ? `[[${target}]]` : match;
@@ -396,6 +405,14 @@ export default function TimelineWidget({
       ? Math.floor(cfg.latestCount)
       : DEFAULT_LATEST_COUNT;
   const composerMode: ComposerMode = cfg.composerMode === "wysiwyg" ? "wysiwyg" : "raw";
+  const collapseLineLimit =
+    typeof cfg.collapseLineLimit === "number" && Number.isFinite(cfg.collapseLineLimit) && cfg.collapseLineLimit > 0
+      ? Math.floor(cfg.collapseLineLimit)
+      : COLLAPSE_LINE_LIMIT;
+  const collapseCharLimit =
+    typeof cfg.collapseCharLimit === "number" && Number.isFinite(cfg.collapseCharLimit) && cfg.collapseCharLimit > 0
+      ? Math.floor(cfg.collapseCharLimit)
+      : COLLAPSE_CHAR_LIMIT;
 
   const [posts, setPosts] = useState<TimelinePost[]>([]);
   const [loadedCount, setLoadedCount] = useState(latestCount);
@@ -418,6 +435,7 @@ export default function TimelineWidget({
   const [wordInput, setWordInput] = useState("");
   const [filters, setFilters] = useState<TimelineFilters>({ word: "", tags: "", from: "", to: "", pinnedOnly: false });
   const [previewFile, setPreviewFile] = useState<{ fileId: string; fileName: string } | null>(null);
+  const [aiRewriteTarget, setAiRewriteTarget] = useState<"draft" | "edit" | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -726,6 +744,10 @@ export default function TimelineWidget({
     setFilters({ word: "", tags: "", from: "", to: "", pinnedOnly: false });
   }, []);
 
+  const openAiRewrite = useCallback((target: "draft" | "edit") => {
+    setAiRewriteTarget(target);
+  }, []);
+
   if (!name) {
     return (
       <div className="flex h-full items-center justify-center px-3 text-center text-sm text-gray-400">
@@ -880,8 +902,11 @@ export default function TimelineWidget({
                 editDraft={editDraft}
                 onEditDraftChange={setEditDraft}
                 editImages={editImages}
+                collapseLineLimit={collapseLineLimit}
+                collapseCharLimit={collapseCharLimit}
                 onAddEditImages={addEditImages}
                 onRemoveEditImage={removeEditImage}
+                onAiRewrite={() => openAiRewrite("edit")}
                 onEdit={() => startEditing(post)}
                 onCancelEdit={cancelEditing}
                 onSaveEdit={() => saveEditing(post)}
@@ -896,6 +921,7 @@ export default function TimelineWidget({
                 saveLabel={t("common.save")}
                 cancelLabel={t("common.cancel")}
                 attachImageLabel={t("dashboard.timelineAttachImage")}
+                aiRewriteLabel={t("dashboard.timelineAiEdit")}
               />
             ))}
           </div>
@@ -1033,6 +1059,15 @@ export default function TimelineWidget({
                 >
                   <Image size={16} />
                 </label>
+                <button
+                  type="button"
+                  onClick={() => openAiRewrite("draft")}
+                  disabled={posting || !draft.trim()}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                  title={t("dashboard.timelineAiEdit")}
+                >
+                  <Sparkles size={16} />
+                </button>
               </div>
               <div className="flex items-center gap-1.5">
                 <button
@@ -1069,6 +1104,16 @@ export default function TimelineWidget({
           onClose={() => setPreviewFile(null)}
         />
       )}
+      {aiRewriteTarget && (
+        <TimelineAiRewriteDialog
+          content={aiRewriteTarget === "draft" ? draft : editDraft}
+          onApply={(next) => {
+            if (aiRewriteTarget === "draft") setDraft(next);
+            else setEditDraft(next);
+          }}
+          onClose={() => setAiRewriteTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1085,8 +1130,11 @@ function TimelinePostViewComponent({
   editDraft,
   onEditDraftChange,
   editImages,
+  collapseLineLimit,
+  collapseCharLimit,
   onAddEditImages,
   onRemoveEditImage,
+  onAiRewrite,
   onEdit,
   onCancelEdit,
   onSaveEdit,
@@ -1101,6 +1149,7 @@ function TimelinePostViewComponent({
   saveLabel,
   cancelLabel,
   attachImageLabel,
+  aiRewriteLabel,
 }: {
   post: TimelinePost;
   fileList: FileListItem[];
@@ -1113,8 +1162,11 @@ function TimelinePostViewComponent({
   editDraft: string;
   onEditDraftChange: (value: string) => void;
   editImages: PendingImage[];
+  collapseLineLimit: number;
+  collapseCharLimit: number;
   onAddEditImages: (files: FileList | null) => void;
   onRemoveEditImage: (index: number) => void;
+  onAiRewrite: () => void;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -1129,9 +1181,10 @@ function TimelinePostViewComponent({
   saveLabel: string;
   cancelLabel: string;
   attachImageLabel: string;
+  aiRewriteLabel: string;
 }) {
-  const collapsible = shouldCollapsePost(post.content, fileList);
-  const visibleContent = collapsible && !expanded ? collapsedContent(post.content, fileList) : post.content;
+  const collapsible = shouldCollapsePost(post.content, fileList, collapseLineLimit, collapseCharLimit);
+  const visibleContent = collapsible && !expanded ? collapsedContent(post.content, fileList, collapseLineLimit, collapseCharLimit) : post.content;
   const tags = extractPostTags(post.content);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const editImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -1265,6 +1318,15 @@ function TimelinePostViewComponent({
               >
                 <Image size={16} />
               </label>
+              <button
+                type="button"
+                onClick={onAiRewrite}
+                disabled={saving || !editDraft.trim()}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                title={aiRewriteLabel}
+              >
+                <Sparkles size={16} />
+              </button>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -1336,6 +1398,8 @@ const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
     prev.fileList !== next.fileList ||
     prev.language !== next.language ||
     prev.expanded !== next.expanded ||
+    prev.collapseLineLimit !== next.collapseLineLimit ||
+    prev.collapseCharLimit !== next.collapseCharLimit ||
     prev.isEditing !== next.isEditing ||
     prev.showMoreLabel !== next.showMoreLabel ||
     prev.showLessLabel !== next.showLessLabel ||
@@ -1343,7 +1407,8 @@ const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
     prev.unpinLabel !== next.unpinLabel ||
     prev.saveLabel !== next.saveLabel ||
     prev.cancelLabel !== next.cancelLabel ||
-    prev.attachImageLabel !== next.attachImageLabel
+    prev.attachImageLabel !== next.attachImageLabel ||
+    prev.aiRewriteLabel !== next.aiRewriteLabel
   ) {
     return false;
   }

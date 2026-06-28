@@ -29,6 +29,7 @@ export default [
   route("api/workflow/history", "routes/api.workflow.history.tsx"),
   route("api/workflow/request-history", "routes/api.workflow.request-history.tsx"),
   route("api/base/ai-generate", "routes/api.base.ai-generate.tsx"),
+  route("api/timeline/ai-rewrite", "routes/api.timeline.ai-rewrite.tsx"),
   route("api/chat", "routes/api.chat.tsx"),
   route("api/chat/interactions", "routes/api.chat.interactions.tsx"),
   route("api/chat/compact", "routes/api.chat.compact.tsx"),

@@ -85,18 +85,23 @@ config:
 
 ![Timeline ウィジェット](../public/images/timeline_edit.png)
 
+![Timeline ウィジェット設定](../public/images/timeline_setting.png)
+
 ```yaml
 config:
   name: Journal            # タイムライン名 → フォルダ Dashboards/Timeline/<name>/
   latestCount: 20          # 初回ロードする最近の投稿数（古いものは追加読込）
   composerMode: raw        # raw | wysiwyg — 投稿エディタの編集モード
+  collapseLineLimit: 8     # この表示行数を超える長い投稿を折り畳む
+  collapseCharLimit: 520   # この文字数を超える長い投稿を折り畳む
 ```
 
 - **保存** — 各日が Markdown ファイル `Dashboards/Timeline/<name>/<YYYY-MM-DD>.md` になる。投稿は `---` 区切りのブロックで、`<!-- timeline-post: … -->` 形式のヘッダに ISO タイムスタンプ・`id`・任意の `pinned: true` を持つ。画像添付は `…/attachments/<date>/<postId>_NN.<ext>` にバイナリファイルとして保存し、投稿本文に Obsidian 埋め込み（`![[…]]`）で挿入する。すべての書き込みはローカルファースト（`writeFileLocal` / `saveBinaryFileLocal`）。
-- **投稿** — コンポーザはテキストと画像アップロード（base64 化して `saveBinaryFileLocal` で保存）を受け付ける。投稿は**ピン留め**・その場**編集**・削除ができる。
+- **投稿** — コンポーザはテキストと画像アップロード（base64 化して `saveBinaryFileLocal` で保存）を受け付ける。投稿は**ピン留め**・その場**編集**・削除ができる。raw エディタでは wiki-link 挿入、WYSIWYG モードでは共通 Markdown エディタによる内部リンクプレビューと埋め込みに対応する。
+- **AI 編集** — 下書きと編集フォームには **AIで編集** がある。ダイアログはワークフロー AI と同じモデル選択に寄せており、現在の API plan で使えるモデルを読み込み、ユーザーが選択したモデル・指示・現在の Markdown を `/api/timeline/ai-rewrite` に送り、適用前に編集可能な書き換え後の下書きを表示する。
 - **タグ** — 投稿本文中のインライン `#タグ` を抽出し、投稿下にクリック可能なチップとして表示する（チップが正式な表示で、二重表示を防ぐため本文の生 `#タグ` トークンは描画から除去される）。チップをクリックするとそのタグでフィードを絞り込む。
 - **絞り込み・ページング** — ヘッダ操作でフリーワード・タグ・日付範囲による絞り込みとピン留めのみ表示を切り替え、`latestCount` を超える古い投稿は必要に応じて追加読込する。
-- 投稿は `GfmMarkdownPreview` で描画（画像の wiki 埋め込みは `WikiEmbed`）。各投稿は memo 化された `TimelinePostView` なので、ある投稿の編集中にフィード全体が再描画されない。
+- **描画・折り畳み** — 投稿は `GfmMarkdownPreview` で描画（画像の wiki 埋め込みは `WikiEmbed`）。Markdown 埋め込みや長い投稿は `collapseLineLimit` / `collapseCharLimit` に従って折り畳まれる。各投稿は memo 化された `TimelinePostView` なので、ある投稿の編集中にフィード全体が再描画されない。
 
 ### 共通の構成部品
 

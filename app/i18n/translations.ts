@@ -105,6 +105,8 @@ export interface TranslationStrings {
   "dashboard.timelineName": string;
   "dashboard.timelineStorageHint": string;
   "dashboard.timelineLatestCount": string;
+  "dashboard.timelineCollapseLines": string;
+  "dashboard.timelineCollapseChars": string;
   "dashboard.timelineComposerMode": string;
   "dashboard.timelinePlaceholder": string;
   "dashboard.timelineNew": string;
@@ -113,6 +115,13 @@ export interface TranslationStrings {
   "dashboard.timelineEmpty": string;
   "dashboard.timelineLoadOlder": string;
   "dashboard.timelineDeleteConfirm": string;
+  "dashboard.timelineAiEdit": string;
+  "dashboard.timelineAiInstruction": string;
+  "dashboard.timelineAiInstructionPlaceholder": string;
+  "dashboard.timelineAiPreview": string;
+  "dashboard.timelineAiGenerating": string;
+  "dashboard.timelineAiFailed": string;
+  "dashboard.timelineAiCtrlEnter": string;
   "dashboard.timelineShowMore": string;
   "dashboard.timelineShowLess": string;
   "dashboard.timelineFilterWord": string;
@@ -1162,6 +1171,8 @@ const en: TranslationStrings = {
   "dashboard.timelineName": "Timeline name",
   "dashboard.timelineStorageHint": "Posts are stored under Dashboards/Timeline/{name}/ by date.",
   "dashboard.timelineLatestCount": "Latest posts to show",
+  "dashboard.timelineCollapseLines": "Collapse after lines",
+  "dashboard.timelineCollapseChars": "Collapse after characters",
   "dashboard.timelineComposerMode": "Editor mode",
   "dashboard.timelinePlaceholder": "What's happening?",
   "dashboard.timelineNew": "New",
@@ -1170,6 +1181,13 @@ const en: TranslationStrings = {
   "dashboard.timelineEmpty": "No posts yet",
   "dashboard.timelineLoadOlder": "Show previous",
   "dashboard.timelineDeleteConfirm": "Delete this post?",
+  "dashboard.timelineAiEdit": "Edit with AI",
+  "dashboard.timelineAiInstruction": "Instruction",
+  "dashboard.timelineAiInstructionPlaceholder": "Make it shorter, change the tone, or add a summary",
+  "dashboard.timelineAiPreview": "Rewritten draft",
+  "dashboard.timelineAiGenerating": "Generating…",
+  "dashboard.timelineAiFailed": "Failed to rewrite timeline draft.",
+  "dashboard.timelineAiCtrlEnter": "Ctrl+Enter to generate",
   "dashboard.timelineShowMore": "Show more",
   "dashboard.timelineShowLess": "Show less",
   "dashboard.timelineFilterWord": "Word",
@@ -2220,6 +2238,8 @@ const ja: TranslationStrings = {
   "dashboard.timelineName": "Timeline名",
   "dashboard.timelineStorageHint": "投稿は Dashboards/Timeline/{name}/ 配下に日付ごとに保存されます。",
   "dashboard.timelineLatestCount": "表示する最新投稿数",
+  "dashboard.timelineCollapseLines": "折り畳む行数",
+  "dashboard.timelineCollapseChars": "折り畳む文字数",
   "dashboard.timelineComposerMode": "エディタモード",
   "dashboard.timelinePlaceholder": "いまどうしてる？",
   "dashboard.timelineNew": "New",
@@ -2228,6 +2248,13 @@ const ja: TranslationStrings = {
   "dashboard.timelineEmpty": "投稿はまだありません",
   "dashboard.timelineLoadOlder": "前を見る",
   "dashboard.timelineDeleteConfirm": "この投稿を削除しますか？",
+  "dashboard.timelineAiEdit": "AIで編集",
+  "dashboard.timelineAiInstruction": "指示",
+  "dashboard.timelineAiInstructionPlaceholder": "例: 短くする、文体を変える、要約を追加する",
+  "dashboard.timelineAiPreview": "書き換え後の下書き",
+  "dashboard.timelineAiGenerating": "生成中…",
+  "dashboard.timelineAiFailed": "タイムライン下書きの書き換えに失敗しました。",
+  "dashboard.timelineAiCtrlEnter": "Ctrl+Enter で生成",
   "dashboard.timelineShowMore": "もっと見る",
   "dashboard.timelineShowLess": "閉じる",
   "dashboard.timelineFilterWord": "Word",

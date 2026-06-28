@@ -86,18 +86,23 @@ The `timeline` widget is a **personal microblog**: a reverse-chronological feed 
 
 ![Timeline widget](../public/images/timeline_edit.png)
 
+![Timeline widget settings](../public/images/timeline_setting.png)
+
 ```yaml
 config:
   name: Journal            # timeline name → folder Dashboards/Timeline/<name>/
   latestCount: 20          # how many recent posts to load initially (older load on demand)
   composerMode: raw        # raw | wysiwyg — the post composer editing mode
+  collapseLineLimit: 8     # collapse long posts after this many visual lines
+  collapseCharLimit: 520   # collapse long posts after this many characters
 ```
 
 - **Storage** — each day is a Markdown file `Dashboards/Timeline/<name>/<YYYY-MM-DD>.md`; posts are `---`-separated blocks marked with a `<!-- timeline-post: … -->`-style header carrying the ISO timestamp, `id`, and optional `pinned: true`. Image attachments are saved as binary files under `…/attachments/<date>/<postId>_NN.<ext>` and embedded in the post body as Obsidian embeds (`![[…]]`). All writes are local-first (`writeFileLocal` / `saveBinaryFileLocal`).
-- **Posting** — the composer accepts text plus image uploads (converted to base64 and saved via `saveBinaryFileLocal`). Posts can be **pinned**, **edited** in place, and deleted.
+- **Posting** — the composer accepts text plus image uploads (converted to base64 and saved via `saveBinaryFileLocal`). Posts can be **pinned**, **edited** in place, and deleted. The raw editor offers wiki-link insertion, while WYSIWYG mode uses the shared markdown editor with internal-link previews and embeds.
+- **AI rewrite** — draft and edit forms include **Edit with AI**. The dialog mirrors the workflow AI model selector: it loads the models available for the current API plan, lets the user choose one, sends the instruction and current Markdown to `/api/timeline/ai-rewrite`, then shows an editable rewritten draft before applying it.
 - **Tags** — inline `#tags` in a post body are extracted into clickable chips shown below the post (the chips are the canonical display; the raw `#tag` tokens are stripped from the rendered body so they aren't shown twice). Clicking a chip filters the feed by that tag.
 - **Filtering & paging** — header controls filter by free-text word, tags, and date range, and toggle pinned-only; older posts load on demand beyond `latestCount`.
-- Posts render through `GfmMarkdownPreview` (wiki embeds for images via `WikiEmbed`); each post is a memoized `TimelinePostView` so editing one post doesn't re-render the whole feed.
+- **Rendering & folding** — posts render through `GfmMarkdownPreview` (wiki embeds for images via `WikiEmbed`). Markdown embeds and long posts collapse according to `collapseLineLimit` / `collapseCharLimit`, and each post is a memoized `TimelinePostView` so editing one post doesn't re-render the whole feed.
 
 ### Shared building blocks
 

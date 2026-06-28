@@ -10,6 +10,8 @@ interface TimelineConfig {
   path?: string;
   latestCount?: number;
   composerMode?: ComposerMode;
+  collapseLineLimit?: number;
+  collapseCharLimit?: number;
 }
 
 function inferName(path?: string): string {
@@ -56,6 +58,42 @@ export function TimelineConfigEditor({ config, onChange }: ConfigEditorProps) {
           }}
           className="w-32 rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {t("dashboard.timelineCollapseLines")}
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={30}
+            value={cfg.collapseLineLimit ?? 8}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              update({ collapseLineLimit: Number.isFinite(value) && value > 0 ? value : 8 });
+            }}
+            className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {t("dashboard.timelineCollapseChars")}
+          </label>
+          <input
+            type="number"
+            min={40}
+            max={5000}
+            value={cfg.collapseCharLimit ?? 520}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              update({ collapseCharLimit: Number.isFinite(value) && value > 0 ? value : 520 });
+            }}
+            className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </div>
       </div>
 
       <div className="space-y-1.5">
