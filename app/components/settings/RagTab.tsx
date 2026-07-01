@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useFetcher } from "react-router";
 import {
   Database,
@@ -11,6 +11,7 @@ import {
   Copy,
   X,
   Search,
+  BookOpen,
 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { invalidateIndexCache } from "~/routes/_index";
@@ -18,6 +19,7 @@ import { StatusBanner, SectionCard, Label, inputClass } from "~/components/setti
 import { RagFilesDialog } from "~/components/settings/RagFilesDialog";
 import type { UserSettings, RagSetting } from "~/types/settings";
 import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
+import { discoverOkfBundles, type OkfBundle } from "~/services/okf-loader";
 
 export function RagTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
@@ -38,6 +40,10 @@ export function RagTab({ settings }: { settings: UserSettings }) {
   const [editingTopK, setEditingTopK] = useState(false);
   const [topKDraft, setTopKDraft] = useState(settings.ragTopK);
   const [showAutoRagModal, setShowAutoRagModal] = useState(false);
+  const [okfRoot, setOkfRoot] = useState(settings.okfRoot ?? "");
+  const [selectedOkfBundleIds, setSelectedOkfBundleIds] = useState<string[]>(settings.selectedOkfBundleIds ?? []);
+  const [okfBundles, setOkfBundles] = useState<OkfBundle[]>([]);
+  const [okfLoading, setOkfLoading] = useState(false);
 
   const settingNames = Object.keys(ragSettings).sort((a, b) => {
     if (a === DEFAULT_RAG_STORE_KEY) return -1;
@@ -75,8 +81,28 @@ export function RagTab({ settings }: { settings: UserSettings }) {
     fd.set("ragSettings", JSON.stringify(rs));
     fd.set("selectedRagSetting", sel || "");
     fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
+    fd.set("okfRoot", okfRoot.trim());
+    fd.set("selectedOkfBundleIds", JSON.stringify(selectedOkfBundleIds));
     fetcher.submit(fd, { method: "post" });
-  }, [fetcher, ragTopK, ragSettings, selectedRagSetting, t]);
+  }, [fetcher, okfRoot, ragTopK, ragSettings, selectedOkfBundleIds, selectedRagSetting, t]);
+
+  const refreshOkfBundles = useCallback(async (root = okfRoot) => {
+    const normalized = root.trim().replace(/^\/+|\/+$/g, "");
+    if (!normalized) {
+      setOkfBundles([]);
+      return;
+    }
+    setOkfLoading(true);
+    try {
+      setOkfBundles(await discoverOkfBundles(normalized));
+    } finally {
+      setOkfLoading(false);
+    }
+  }, [okfRoot]);
+
+  useEffect(() => {
+    refreshOkfBundles().catch(() => setOkfBundles([]));
+  }, [refreshOkfBundles]);
 
   const addRagSetting = useCallback(() => {
     // Auto-generate a unique name
@@ -176,6 +202,8 @@ export function RagTab({ settings }: { settings: UserSettings }) {
       fd.set("ragSettings", JSON.stringify(rs));
       fd.set("selectedRagSetting", key);
       fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
+      fd.set("okfRoot", okfRoot.trim());
+      fd.set("selectedOkfBundleIds", JSON.stringify(selectedOkfBundleIds));
       const saveRes = await fetch("/settings", { method: "POST", body: fd });
       if (!saveRes.ok) {
         setSyncMsg(t("settings.rag.syncSaveFailed"));
@@ -241,7 +269,7 @@ export function RagTab({ settings }: { settings: UserSettings }) {
     } finally {
       setSyncing(false);
     }
-  }, [ragSettings, ragTopK, settings.ragSettings, t]);
+  }, [okfRoot, ragSettings, ragTopK, selectedOkfBundleIds, settings.ragSettings, t]);
 
   const [ragFilesDialogKey, setRagFilesDialogKey] = useState<string | null>(null);
 
@@ -257,6 +285,77 @@ export function RagTab({ settings }: { settings: UserSettings }) {
   return (
     <SectionCard>
       <StatusBanner fetcher={fetcher} />
+
+      <div className="mb-6 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <BookOpen size={16} className="text-gray-500 dark:text-gray-400" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">OKF knowledge bundles</h3>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            type="text"
+            value={okfRoot}
+            onChange={(e) => setOkfRoot(e.target.value)}
+            placeholder="OKF folder path, e.g. knowledge/okf"
+            className={inputClass + " flex-1"}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              refreshOkfBundles().catch(() => setOkfBundles([]));
+              saveRagSettings();
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
+          >
+            <RefreshCw size={14} className={okfLoading ? "animate-spin" : ""} />
+            Save
+          </button>
+        </div>
+        {okfBundles.length > 0 ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {okfBundles.map((bundle) => {
+              const checked = selectedOkfBundleIds.includes(bundle.id);
+              return (
+                <label
+                  key={bundle.id}
+                  className="flex items-start gap-2 rounded border border-gray-200 px-3 py-2 text-sm dark:border-gray-700"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      setSelectedOkfBundleIds((prev) =>
+                        e.target.checked
+                          ? [...new Set([...prev, bundle.id])]
+                          : prev.filter((id) => id !== bundle.id)
+                      );
+                    }}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block font-medium text-gray-900 dark:text-gray-100">{bundle.name}</span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">{bundle.id || "(root)"}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        ) : okfRoot.trim() ? (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            No OKF bundles found. Sync Drive after adding folders that contain index.md.
+          </p>
+        ) : null}
+        {okfBundles.length > 0 && (
+          <button
+            type="button"
+            onClick={() => saveRagSettings()}
+            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            <Check size={14} />
+            Save bundle selection
+          </button>
+        )}
+      </div>
 
       {/* Search tip */}
       <div className="mb-4 flex items-start gap-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">

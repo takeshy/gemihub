@@ -443,6 +443,16 @@ export async function action({ request }: Route.ActionArgs) {
         }
         const selectedRagSetting = (formData.get("selectedRagSetting") as string) || null;
         const ragRegistrationOnPush = formData.get("ragRegistrationOnPush") === "on";
+        const okfRoot = ((formData.get("okfRoot") as string) || "").trim().replace(/^\/+|\/+$/g, "");
+        let selectedOkfBundleIds: string[];
+        try {
+          const parsed = JSON.parse((formData.get("selectedOkfBundleIds") as string) || "[]");
+          selectedOkfBundleIds = Array.isArray(parsed)
+            ? parsed.filter((value): value is string => typeof value === "string")
+            : [];
+        } catch {
+          return jsonWithCookie({ success: false, message: "Invalid OKF bundle selection JSON." });
+        }
 
         const updatedSettings: UserSettings = {
           ...currentSettings,
@@ -451,6 +461,8 @@ export async function action({ request }: Route.ActionArgs) {
           ragSettings,
           selectedRagSetting,
           ragRegistrationOnPush,
+          okfRoot,
+          selectedOkfBundleIds,
         };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
         return jsonWithCookie({ success: true, message: "RAG settings saved." });
