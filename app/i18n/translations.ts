@@ -712,6 +712,17 @@ export interface TranslationStrings {
   "plugins.previewFailed": string;
   "plugins.updateNewPermissions": string;
   "plugins.confirmUpdate": string;
+  "plugins.externalSkills.title": string;
+  "plugins.externalSkills.description": string;
+  "plugins.externalSkills.load": string;
+  "plugins.externalSkills.refresh": string;
+  "plugins.externalSkills.install": string;
+  "plugins.externalSkills.update": string;
+  "plugins.externalSkills.empty": string;
+  "plugins.externalSkills.installed": string;
+  "plugins.externalSkills.importSuccess": string;
+  "plugins.externalSkills.loadFailed": string;
+  "plugins.externalSkills.importFailed": string;
 
   // Commands tab
   "settings.tab.commands": string;
@@ -1818,6 +1829,17 @@ const en: TranslationStrings = {
   "plugins.previewFailed": "Failed to fetch plugin info",
   "plugins.updateNewPermissions": "This update adds new permissions:",
   "plugins.confirmUpdate": "Update",
+  "plugins.externalSkills.title": "External skills",
+  "plugins.externalSkills.description": "Import Agent Skills from the official llm-hub-skills repository into Drive skills/.",
+  "plugins.externalSkills.load": "Load catalog",
+  "plugins.externalSkills.refresh": "Refresh",
+  "plugins.externalSkills.install": "Install",
+  "plugins.externalSkills.update": "Reinstall",
+  "plugins.externalSkills.empty": "No compatible external skills found.",
+  "plugins.externalSkills.installed": "Installed",
+  "plugins.externalSkills.importSuccess": "Skill imported.",
+  "plugins.externalSkills.loadFailed": "Failed to load external skills.",
+  "plugins.externalSkills.importFailed": "Failed to import skill.",
 
   // Commands tab
   "settings.tab.commands": "Commands",
@@ -2924,6 +2946,17 @@ const ja: TranslationStrings = {
   "plugins.previewFailed": "プラグイン情報の取得に失敗しました",
   "plugins.updateNewPermissions": "この更新により新しい権限が追加されます:",
   "plugins.confirmUpdate": "更新",
+  "plugins.externalSkills.title": "External skills",
+  "plugins.externalSkills.description": "公式 llm-hub-skills から Agent Skill を Drive の skills/ に取り込みます。",
+  "plugins.externalSkills.load": "一覧を読み込む",
+  "plugins.externalSkills.refresh": "更新",
+  "plugins.externalSkills.install": "インストール",
+  "plugins.externalSkills.update": "再インストール",
+  "plugins.externalSkills.empty": "互換性のある外部スキルがありません。",
+  "plugins.externalSkills.installed": "インストール済み",
+  "plugins.externalSkills.importSuccess": "Skill を取り込みました。",
+  "plugins.externalSkills.loadFailed": "External skills の読み込みに失敗しました。",
+  "plugins.externalSkills.importFailed": "Skill の取り込みに失敗しました。",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

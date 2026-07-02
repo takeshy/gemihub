@@ -46,6 +46,7 @@ export default [
   route("api/settings/hubwork-provision", "routes/api.settings.hubwork-provision.tsx"),
   route("api/settings/hubwork-migrate", "routes/api.settings.hubwork-migrate.tsx"),
   route("api/settings/gemihub-skills-provision", "routes/api.settings.gemihub-skills-provision.tsx"),
+  route("api/settings/external-skills", "routes/api.settings.external-skills.tsx"),
   route("api/hubwork/webpage-review", "routes/api.hubwork.webpage-review.tsx"),
   // Admin workflow endpoint — resolves admin/api/*.yaml under the IDE
   // session's OAuth. The IDE session cookie + same-origin (validateOrigin)

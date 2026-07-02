@@ -6,6 +6,8 @@ import {
   Loader2,
   Check,
   AlertCircle,
+  BookOpen,
+  Download,
   Power,
   PowerOff,
   Settings,
@@ -21,6 +23,7 @@ import { invalidateIndexCache } from "~/routes/_index";
 import { clearPluginCache } from "~/services/plugin-loader";
 import { usePlugins } from "~/contexts/PluginContext";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
+import { cacheProvisionedSkillFiles } from "~/services/provisioned-skill-cache";
 
 const inputClass =
   "w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
@@ -58,6 +61,14 @@ interface UpdateApprovalState {
   addedPermissions: string[];
 }
 
+interface ExternalSkillEntry {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  installedVersion: string | null;
+}
+
 export function PluginsTab({ settings }: PluginsTabProps) {
   const { t, language } = useI18n();
   const { settingsTabs, getPluginAPI } = usePlugins();
@@ -73,6 +84,10 @@ export function PluginsTab({ settings }: PluginsTabProps) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openSettingsId, setOpenSettingsId] = useState<string | null>(null);
+  const [externalSkills, setExternalSkills] = useState<ExternalSkillEntry[]>([]);
+  const [externalSkillsLoaded, setExternalSkillsLoaded] = useState(false);
+  const [loadingExternalSkills, setLoadingExternalSkills] = useState(false);
+  const [importingSkillId, setImportingSkillId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -87,6 +102,50 @@ export function PluginsTab({ settings }: PluginsTabProps) {
     },
     []
   );
+
+  const loadExternalSkills = useCallback(async () => {
+    setLoadingExternalSkills(true);
+    try {
+      const res = await fetch("/api/settings/external-skills");
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showStatus("error", data.error || t("plugins.externalSkills.loadFailed"));
+        return;
+      }
+      setExternalSkills(Array.isArray(data.catalog) ? data.catalog : []);
+      setExternalSkillsLoaded(true);
+    } catch (err) {
+      showStatus("error", err instanceof Error ? err.message : t("plugins.externalSkills.loadFailed"));
+    } finally {
+      setLoadingExternalSkills(false);
+    }
+  }, [showStatus, t]);
+
+  const importExternalSkill = useCallback(async (skillId: string) => {
+    setImportingSkillId(skillId);
+    try {
+      const res = await fetch("/api/settings/external-skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skillId, force: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        showStatus("error", data.error || t("plugins.externalSkills.importFailed"));
+        return;
+      }
+      if (Array.isArray(data.files)) {
+        await cacheProvisionedSkillFiles(data.files);
+      }
+      invalidateIndexCache();
+      showStatus("success", data.skipped || t("plugins.externalSkills.importSuccess"));
+      await loadExternalSkills();
+    } catch (err) {
+      showStatus("error", err instanceof Error ? err.message : t("plugins.externalSkills.importFailed"));
+    } finally {
+      setImportingSkillId(null);
+    }
+  }, [loadExternalSkills, showStatus, t]);
 
   // Step 1: Preview — fetch manifest and show permission confirmation
   const handlePreview = useCallback(async () => {
@@ -457,6 +516,73 @@ export function PluginsTab({ settings }: PluginsTabProps) {
           </div>
         </div>
       )}
+
+      {/* External skills */}
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <BookOpen size={16} className="text-gray-500 dark:text-gray-400" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {t("plugins.externalSkills.title")}
+              </h3>
+            </div>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t("plugins.externalSkills.description")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadExternalSkills}
+            disabled={loadingExternalSkills}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            {loadingExternalSkills ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            {externalSkillsLoaded ? t("plugins.externalSkills.refresh") : t("plugins.externalSkills.load")}
+          </button>
+        </div>
+
+        {externalSkillsLoaded && externalSkills.length === 0 && (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("plugins.externalSkills.empty")}</p>
+        )}
+
+        {externalSkills.length > 0 && (
+          <div className="space-y-3">
+            {externalSkills.map((skill) => {
+              const importing = importingSkillId === skill.id;
+              return (
+                <div
+                  key={skill.id}
+                  className="flex items-start justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{skill.name}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">v{skill.version}</span>
+                      {skill.installedVersion && (
+                        <span className="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                          {t("plugins.externalSkills.installed")} v{skill.installedVersion}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{skill.description}</p>
+                    <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">skills/{skill.id}/</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => importExternalSkill(skill.id)}
+                    disabled={!!importingSkillId}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {importing ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    {skill.installedVersion ? t("plugins.externalSkills.update") : t("plugins.externalSkills.install")}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Plugin list */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
