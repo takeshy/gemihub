@@ -95,7 +95,9 @@ config:
 - **タイムラインパネル** — 古い順のエントリに編集 / 削除 / **ピン留め**、raw ⇄ WYSIWYG コンポーザ（Ctrl+Enter で投稿）、長いエントリは折りたたみ、wiki リンク/埋め込みは `GfmMarkdownPreview` 経由で解決され IDE で開く。細いレールに折りたたみ可能（ハイライトは維持。× で閉じたときだけ消える）。狭いウィジェット（4 グリッド列未満）ではパネルは自動的にレールへ折りたたまれる。
 - **保存形式** — 1 ドキュメントにつき 1 つのプレーン Markdown ファイル `Dashboards/Memos/<エンコード済みパス>.md`。ファイル名はドキュメントの Drive パスをエンコードしたもの（`_` → `_u`、`/` → `_s`、`:` → `_c`。200 バイト超は切り詰め + SHA-256 プレフィックス付与）で、frontmatter の `source:` が実際のパスを保持する。エントリは `---` 区切りのブロック: ISO タイムスタンプ行、`id:` / 任意の `pinned:` / `anchor:` / `quote-prefix:` / `quote-suffix:` メタ行、引用の `>` blockquote、本文。書き込みはすべて local-first で「書き込み直前に再読込」するため、同じドキュメントを開いた複数ウィジェットが互いの投稿を消すことはない。Drive へは Push で反映される。
 
-主要モジュール: `app/dashboard/memo/` — `memoTimeline.ts`（エントリのパース/シリアライズ）、`memoPath.ts`（ファイル名エンコード）、`textAnchor.ts`（引用マッチング + ハイライト描画）、`memoStore.ts`（local-first IO）。
+主要モジュール: `app/dashboard/memo/` — `memoTimeline.ts`（エントリのパース/シリアライズ）、`memoPath.ts`（ファイル名エンコード）、`textAnchor.ts`（引用マッチング + ハイライト描画）、`memoStore.ts`（local-first IO）、`useDocumentMemo.tsx`（共有オーケストレーションフック）。
+
+同じメモタイムラインは **IDE メインビューア**（Markdown / テキスト / PDF / 画像 / EPUB）でも使える。フローティングボタンでトグルし、状態は localStorage に記憶される — `docs/editor.md` → ドキュメントメモ参照。どちらも同じ `Dashboards/Memos/` のファイルを読み書きする。
 
 ### Base ウィジェット
 

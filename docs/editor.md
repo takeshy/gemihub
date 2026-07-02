@@ -66,8 +66,13 @@ Binary files are detected by file extension (case-insensitive), with MIME type a
 | Video | `.mp4`, `.webm`, `.ogg`, `.mov`, `.avi`, `.mkv` | `<video>` player |
 | Audio | `.mp3`, `.wav`, `.flac`, `.aac`, `.m4a`, `.opus` | `<audio>` player |
 | PDF | `.pdf` | pdf.js viewer (`PdfViewer.tsx`: canvas + selectable text layer, page navigation) |
+| EPUB | `.epub` | `EpubFileViewer`: client-side unpack to a single HTML document in a sandboxed iframe, with font-size / page-width steppers |
 
 Binary files show Temp Download / Temp Upload buttons for local editing and download.
+
+### Document Memos
+
+Markdown (preview mode), plain-text, PDF, image, and EPUB viewers include the same per-document **memo timeline** as the dashboard File widget (`docs/dashboard.md` → Memos): select text and right-click → **Add to memo**; quotes are highlighted via the CSS Custom Highlight API and jump both ways. The panel is toggled with the floating button at the bottom-right of the content area; the toggle state is remembered globally in localStorage (`gemihub-memoPanel`), so turning it on once shows the panel for every document. Memo files live under `Dashboards/Memos/` — the same files the dashboard widgets read and the Memo List widget browses. HTML files are the exception: `HtmlFileEditor`'s preview runs scripts in its sandbox, which is incompatible with memo anchoring (use a dashboard File widget for HTML memos). Shared implementation: `~/dashboard/memo/useDocumentMemo` + `IdeDocumentMemo.tsx`.
 
 ### Encrypted Files
 

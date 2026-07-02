@@ -96,7 +96,9 @@ Every File widget has a per-document **memo timeline** (toggled from the header,
 - **Timeline panel** — oldest-first entries with edit / delete / **pin**, raw ⇄ WYSIWYG composer (Ctrl+Enter posts), long entries fold, wiki links/embeds resolve through `GfmMarkdownPreview` and open in the IDE. Collapsible to a narrow rail (highlights stay on; only closing with × turns them off). On narrow widgets (< 4 grid columns) the panel auto-collapses to the rail.
 - **Storage** — one plain Markdown file per document at `Dashboards/Memos/<encoded-path>.md`. The file name encodes the document's Drive path (`_` → `_u`, `/` → `_s`, `:` → `_c`; names over 200 bytes truncate + append a SHA-256 prefix), and the frontmatter `source:` holds the real path. Entries are `---`-separated blocks: an ISO timestamp line, `id:` / optional `pinned:` / `anchor:` / `quote-prefix:` / `quote-suffix:` meta lines, a `>` blockquote with the quote, then the body. All writes are local-first with re-read-before-write, so two widgets on the same document can't clobber each other; Drive sees the changes on Push.
 
-Key modules: `app/dashboard/memo/` — `memoTimeline.ts` (entry parse/serialize), `memoPath.ts` (file-name encoding), `textAnchor.ts` (quote matching + highlight painting), `memoStore.ts` (local-first IO).
+Key modules: `app/dashboard/memo/` — `memoTimeline.ts` (entry parse/serialize), `memoPath.ts` (file-name encoding), `textAnchor.ts` (quote matching + highlight painting), `memoStore.ts` (local-first IO), `useDocumentMemo.tsx` (the shared orchestration hook).
+
+The same memo timeline is also available in the **IDE main viewers** (Markdown / text / PDF / image / EPUB) via a floating toggle whose state is remembered in localStorage — see `docs/editor.md` → Document Memos. Both surfaces read and write the same `Dashboards/Memos/` files.
 
 ### Base widget
 

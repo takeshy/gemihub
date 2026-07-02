@@ -8,6 +8,9 @@ import { performTempUpload } from "~/services/temp-upload";
 import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { guessMimeType, bytesToBase64, base64ToBytes } from "~/utils/media-utils";
+import { useEditorContext } from "~/contexts/EditorContext";
+import { IdeDocumentMemo } from "./IdeDocumentMemo";
+import type { PdfViewerHandle } from "~/components/shared/PdfViewer";
 
 // pdfjs-dist sets up its worker at module scope; keep it out of the server bundle.
 const LazyPdfViewer = lazy(() => import("~/components/shared/PdfViewer"));
@@ -15,6 +18,13 @@ const LazyPdfViewer = lazy(() => import("~/components/shared/PdfViewer"));
 export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: string; fileName: string; mediaType: "pdf" | "video" | "audio" | "image"; fileMimeType: string | null }) {
   const [src, setSrc] = useState<string | null>(null);
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+  const editorCtx = useEditorContext();
+  const pdfRef = useRef<PdfViewerHandle | null>(null);
+  const [pdfPagesTick, setPdfPagesTick] = useState(0);
+  // Memo files are keyed by the document's Drive path (same identity the
+  // dashboard File widget uses), so resolve it from the file list.
+  const fileEntry = editorCtx.fileList.find((f) => f.id === fileId);
+  const memoDrivePath = fileEntry ? fileEntry.path || fileEntry.name : fileName;
   const [error, setError] = useState<string | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const { t } = useI18n();
@@ -226,7 +236,12 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
       ) : (
         <>
           {mediaType === "pdf" && (
-            <div className="flex-1 min-h-0">
+            <IdeDocumentMemo
+              drivePath={memoDrivePath}
+              kind="pdf"
+              pdfRef={pdfRef}
+              refreshSignals={[pdfBytes, pdfPagesTick]}
+            >
               <Suspense
                 fallback={
                   <div className="flex h-full items-center justify-center">
@@ -234,9 +249,14 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
                   </div>
                 }
               >
-                <LazyPdfViewer data={pdfBytes} title={fileName} />
+                <LazyPdfViewer
+                  ref={pdfRef}
+                  data={pdfBytes}
+                  title={fileName}
+                  onTextLayerRendered={() => setPdfPagesTick((value) => value + 1)}
+                />
               </Suspense>
-            </div>
+            </IdeDocumentMemo>
           )}
           {mediaType === "video" && src && (
             <div className="flex-1 flex items-center justify-center p-4">
@@ -249,9 +269,11 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
             </div>
           )}
           {mediaType === "image" && src && (
-            <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-              <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
-            </div>
+            <IdeDocumentMemo drivePath={memoDrivePath} kind="image">
+              <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+                <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
+              </div>
+            </IdeDocumentMemo>
           )}
         </>
       )}

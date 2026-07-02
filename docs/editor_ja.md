@@ -66,8 +66,13 @@ WYSIWYG マークダウンエディタ、ワークフロービジュアルエデ
 | 動画 | `.mp4`, `.webm`, `.ogg`, `.mov`, `.avi`, `.mkv` | `<video>` プレーヤー |
 | 音声 | `.mp3`, `.wav`, `.flac`, `.aac`, `.m4a`, `.opus` | `<audio>` プレーヤー |
 | PDF | `.pdf` | pdf.js ビューア（`PdfViewer.tsx`: canvas + 選択可能なテキストレイヤー、ページ移動） |
+| EPUB | `.epub` | `EpubFileViewer`: クライアント側で展開して単一HTMLとしてsandbox iframeに表示。文字サイズ/ページ幅ステッパー付き |
 
 バイナリファイルには Temp Download / Temp Upload ボタンが表示され、ローカルでの編集やダウンロードが可能。
+
+### ドキュメントメモ
+
+Markdown（プレビュー時）・テキスト・PDF・画像・EPUB の各ビューアには、ダッシュボードの File ウィジェットと同じドキュメントごとの**メモタイムライン**が付く（`docs/dashboard.md` → メモ）: 本文を選択して右クリック → **メモに追加**。引用は CSS Custom Highlight API でハイライトされ、双方向にジャンプできる。パネルはコンテンツ右下のフローティングボタンでトグルし、状態は localStorage（`gemihub-memoPanel`）にブラウザ全体で記憶される — 一度ONにすればどのドキュメントを開いてもパネルが表示される。メモファイルは `Dashboards/Memos/` 配下で、ダッシュボードのウィジェットや Memo List ウィジェットと同じファイルを読み書きする。例外は HTML: `HtmlFileEditor` のプレビューは sandbox 内でスクリプトを実行するためメモのアンカーリングと両立しない（HTML のメモはダッシュボードの File ウィジェットで）。共有実装: `~/dashboard/memo/useDocumentMemo` + `IdeDocumentMemo.tsx`。
 
 ### 暗号化ファイル
 

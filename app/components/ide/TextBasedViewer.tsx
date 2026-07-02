@@ -10,7 +10,8 @@ import { useEditorContext } from "~/contexts/EditorContext";
 import { QuickOpenDialog } from "./QuickOpenDialog";
 import { getCachedFile } from "~/services/indexeddb-cache";
 import { EditHistoryModal } from "./EditHistoryModal";
-import { MarkdownFileEditor } from "./editors/MarkdownFileEditor";
+import { MarkdownFileEditor, type MdEditMode } from "./editors/MarkdownFileEditor";
+import { IdeDocumentMemo } from "./editors/IdeDocumentMemo";
 import { HtmlFileEditor } from "./editors/HtmlFileEditor";
 import { TextFileEditor } from "./editors/TextFileEditor";
 import { DiffEditor } from "./editors/DiffEditor";
@@ -19,6 +20,52 @@ import { BaseFileEditor } from "./editors/BaseFileEditor";
 import { DashboardFileEditor } from "./editors/DashboardFileEditor";
 import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
 import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
+
+/**
+ * Markdown editor wrapped with the per-document memo timeline. Tracks the
+ * effective edit mode (reported by MarkdownFileEditor for explicit toggles
+ * and internal resets alike) so memo anchoring knows when the preview exists.
+ */
+function MemoMarkdownEditor({
+  fileId,
+  name,
+  drivePath,
+  content,
+  saveToCache,
+  onFileSelect,
+  onImageChange,
+  onDiffClick,
+  onHistoryClick,
+}: {
+  fileId: string;
+  name: string;
+  drivePath: string;
+  content: string;
+  saveToCache: (content: string) => Promise<void>;
+  onFileSelect?: () => Promise<string | null>;
+  onImageChange?: (file: File) => Promise<string>;
+  onDiffClick: () => void;
+  onHistoryClick: () => void;
+}) {
+  const initialMode: MdEditMode = fileId.startsWith("new:") ? "wysiwyg" : "preview";
+  const [mode, setMode] = useState<MdEditMode>(initialMode);
+  return (
+    <IdeDocumentMemo drivePath={drivePath} kind="markdown" markdownMode={mode} refreshSignals={[content]}>
+      <MarkdownFileEditor
+        fileId={fileId}
+        fileName={name}
+        initialContent={content}
+        saveToCache={saveToCache}
+        onFileSelect={onFileSelect}
+        onImageChange={onImageChange}
+        onDiffClick={onDiffClick}
+        onHistoryClick={onHistoryClick}
+        initialMode={initialMode}
+        onModeChange={setMode}
+      />
+    </IdeDocumentMemo>
+  );
+}
 
 export function TextBasedViewer({
   fileId,
@@ -102,6 +149,10 @@ export function TextBasedViewer({
   const name = fileName || "";
   const lower = name.toLowerCase();
   const encryptedCandidate = name.endsWith(".encrypted") || isEncryptedFile(content);
+  // Memo files are keyed by the document's Drive path (same identity the
+  // dashboard File widget uses), so resolve it from the file list.
+  const fileEntry = editorCtx.fileList.find((f) => f.id === fileId);
+  const memoDrivePath = fileEntry ? fileEntry.path || fileEntry.name : name;
 
   if (!encryptedCandidate && binaryFallback && (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName))) {
     return <BinaryFileInfoViewer fileId={fileId} fileName={fileName} fileMimeType={fileMimeType ?? null} />;
@@ -188,16 +239,16 @@ export function TextBasedViewer({
     );
   } else if (lower.endsWith(".md")) {
     editor = (
-      <MarkdownFileEditor
+      <MemoMarkdownEditor
         fileId={fileId}
-        fileName={name}
-        initialContent={content}
+        name={name}
+        drivePath={memoDrivePath}
+        content={content}
         saveToCache={saveToCache}
         onFileSelect={onFileSelect}
         onImageChange={onImageChange}
         onDiffClick={handleDiffClick}
         onHistoryClick={handleHistoryClick}
-        initialMode={fileId.startsWith("new:") ? "wysiwyg" : "preview"}
       />
     );
   } else if (lower.endsWith(".html") || lower.endsWith(".htm")) {
@@ -213,14 +264,16 @@ export function TextBasedViewer({
     );
   } else {
     editor = (
-      <TextFileEditor
-        fileId={fileId}
-        fileName={name}
-        initialContent={content}
-        saveToCache={saveToCache}
-        onDiffClick={handleDiffClick}
-        onHistoryClick={handleHistoryClick}
-      />
+      <IdeDocumentMemo drivePath={memoDrivePath} kind="text" refreshSignals={[content]}>
+        <TextFileEditor
+          fileId={fileId}
+          fileName={name}
+          initialContent={content}
+          saveToCache={saveToCache}
+          onDiffClick={handleDiffClick}
+          onHistoryClick={handleHistoryClick}
+        />
+      </IdeDocumentMemo>
     );
   }
 

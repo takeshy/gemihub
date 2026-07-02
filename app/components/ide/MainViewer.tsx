@@ -6,6 +6,7 @@ import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils
 import { getMediaType } from "~/utils/media-utils";
 import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
 import { MediaViewer } from "./editors/MediaViewer";
+import { EpubFileViewer } from "./editors/EpubFileViewer";
 import { TextBasedViewer } from "./TextBasedViewer";
 import { GOOGLE_DOC_MIME, GOOGLE_SHEET_MIME, GoogleDocViewer, GoogleSheetViewer } from "./GoogleWorkspaceViewers";
 import DashboardHost from "~/dashboard/DashboardHost";
@@ -114,6 +115,11 @@ export function MainViewer({
         onImageChange={onImageChange}
       />
     );
+  }
+
+  // EPUB gets its own reader (client-side unpack + memo timeline).
+  if (fileName?.toLowerCase().endsWith(".epub")) {
+    return <EpubFileViewer fileId={fileId} fileName={fileName} />;
   }
 
   // Binary files (PDF, video, audio, image) - don't load via useFileWithCache

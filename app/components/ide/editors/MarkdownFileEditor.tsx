@@ -215,6 +215,15 @@ export function MarkdownFileEditor({
   );
   const [mode, setMode] = useState<MdEditMode>(initialMode);
 
+  // Report every effective mode change (explicit toggles AND internal resets
+  // like file switches / wiki-heading jumps) so hosts tracking the mode for
+  // memo anchoring never desync. Fires once on mount with the initial mode.
+  const onModeChangeRef = useRef(onModeChange);
+  onModeChangeRef.current = onModeChange;
+  useEffect(() => {
+    onModeChangeRef.current?.(mode);
+  }, [mode]);
+
   // Track whether the user has genuinely interacted with the wysiwyg editor.
   // wysimark-lite (Slate-based) normalizes markdown on load (reformatting tables,
   // code fences, image captions, etc.) and fires onChange with the normalized
@@ -423,10 +432,7 @@ export function MarkdownFileEditor({
               {modes.map((m) => (
                 <button
                   key={m.key}
-                  onClick={() => {
-                    setMode(m.key);
-                    onModeChange?.(m.key);
-                  }}
+                  onClick={() => setMode(m.key)}
                   className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
                     mode === m.key
                       ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
