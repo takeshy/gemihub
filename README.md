@@ -10,9 +10,21 @@ GemiHub is a self-hostable web application that turns Google Gemini into a perso
 
 ## Why GemiHub?
 
+### Read, Highlight, and Memo — on Any Document
+
+GemiHub turns your Drive into a reading-and-annotation workspace. Open a PDF, EPUB, Markdown, plain-text, or image file — in the main viewer or in a dashboard **File widget** — select a passage, right-click, and **Add to memo**. Every document gets its own memo timeline:
+
+- **Quote-anchored highlights** — the selected quote is captured with surrounding context and painted in the document via the CSS Custom Highlight API. Anchors are quote-first, so highlights survive document edits and EPUB reflow.
+- **Jump both ways** — click a highlight to jump to its memo; click the quote inside a memo to jump back to the exact passage (with a flash).
+- **A real timeline** — write notes in a WYSIWYG or raw Markdown composer, then edit, delete, and pin entries. Wiki links and embeds resolve and open in the IDE. The panel collapses to a narrow rail so highlights stay visible while you read.
+- **Memo List widget** — browse every annotated document on a dashboard: memo counts, the newest note at a glance (a final "done reading" is instantly visible), filtering and paging, one click to reopen the source.
+- **Plain Markdown storage** — memos are ordinary Markdown files under `Dashboards/Memos/` in your own Drive. Portable, searchable, syncable — and since they're just files, the AI chat and RAG can use them too.
+
+The built-in **pdf.js PDF viewer** (selectable text, page navigation, zoom) and **EPUB reader** (client-side unpacking, font-size and page-width controls) make GemiHub a genuinely comfortable place to read the documents you annotate.
+
 ### Your Personal Dashboard
 
-The home screen is a customizable dashboard. Arrange widgets — Markdown notes, **Base** views (Obsidian Bases), kanban boards, a **Timeline** microblog, workflow output, and embedded web pages — on a drag-and-drop grid. Toggle edit mode to add, configure, resize, and rearrange widgets, with undo/redo support. Create multiple dashboards, switch between them, and pin one as your home. **Base widgets** render a view of an Obsidian-style `.base` file — a saved query (filter/sort/limit, computed properties) over a folder of Markdown notes, shown as a table, card grid, or list; the older card/table/file-list widgets are now authored this way (legacy widgets are auto-converted to a `.base`). Kanban cards can be created from the board header or dragged between status columns, written straight back to your Drive files. The **Timeline widget** is a personal microblog: post short notes with `#tags`, wiki links, image attachments, AI-assisted rewrites with model selection, pin/edit actions, and tag/word/date filters — each day is stored as a Markdown file under `Dashboards/Timeline/`. Workflow widgets run a GemiHub workflow and render its output as cards, a table, Markdown, or HTML — with optional auto-refresh. Each dashboard is saved as a `.dashboard` file in your Drive, with both a rendered view and a raw YAML view.
+The home screen is a customizable dashboard. Arrange widgets — **File** viewers (Markdown, PDF, EPUB, HTML, text, and images, each with the per-document memos described above), a **Memo List**, **Base** views (Obsidian Bases), kanban boards, a **Timeline** microblog, workflow output, and embedded web pages — on a drag-and-drop grid. Toggle edit mode to add, configure, resize, and rearrange widgets, with undo/redo support; one-click **align** buttons tile all widgets evenly into columns or rows. Create multiple dashboards, switch between them, and pin one as your home. **Base widgets** render a view of an Obsidian-style `.base` file — a saved query (filter/sort/limit, computed properties) over a folder of Markdown notes, shown as a table, card grid, or list; the older card/table/file-list widgets are now authored this way (legacy widgets are auto-converted to a `.base`). Kanban cards can be created from the board header or dragged between status columns, written straight back to your Drive files. The **Timeline widget** is a personal microblog: post short notes with `#tags`, wiki links, image attachments, AI-assisted rewrites with model selection, pin/edit actions, and tag/word/date filters — each day is stored as a Markdown file under `Dashboards/Timeline/`. Workflow widgets run a GemiHub workflow and render its output as cards, a table, Markdown, or HTML — with optional auto-refresh. Each dashboard is saved as a `.dashboard` file in your Drive, with both a rendered view and a raw YAML view.
 
 ![Dashboard](./public/images/dashboard.png)
 
@@ -33,6 +45,8 @@ Unlike generic AI chat, GemiHub connects directly to your Google Drive. The AI c
 ### Search by Meaning, Not Just Keywords (RAG)
 
 With built-in RAG (Retrieval-Augmented Generation), you can sync your Drive files to Gemini's semantic search. Instead of matching exact keywords, the AI understands the **meaning** of your question and finds relevant information from your personal knowledge base. Store product manuals, meeting notes, or research papers — then just ask questions in natural language.
+
+You can also register **OKF (Open Knowledge Format) bundles** — Markdown-based knowledge bases on your Drive (concepts, metrics, glossaries, playbooks) — as always-on chat knowledge from the RAG settings tab. See [docs/OKF.md](./docs/OKF.md).
 
 ### Connect Any External Tool (MCP & Plugins)
 
@@ -110,13 +124,16 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 
 ## Features
 
-- **Customizable Dashboard** — Drag-and-drop widget grid as your home screen: Markdown (referencing a Drive file), **Base** widgets that render a view (table/cards/list) of an Obsidian-style `.base` query file over a folder of Markdown notes (the former card/table/file-list widgets are now authored as Bases, with legacy widgets auto-converted), kanban boards (New card creation, optional unmatched-status column, drag-to-restatus written back to `.md` files), a **Timeline** microblog widget (dated posts with `#tags`/wiki links/image attachments, AI rewrite with model selection, pin/edit, tag/word/date filtering, configurable folding, stored under `Dashboards/Timeline/`), workflow widgets that run a workflow and render its output (cards/table/Markdown/HTML, with optional auto-refresh), and web embeds. Multiple dashboards with edit mode, undo/redo, home pinning, and a rendered/raw YAML toggle
+- **Document Memos** — Per-document memo timelines on Markdown, PDF, EPUB, text, and image files, in both the IDE viewers and dashboard File widgets. Select text → right-click → Add to memo; quote-anchored highlights (CSS Custom Highlight API) jump both ways between document and memo. Pin/edit/delete, WYSIWYG or raw composer, wiki links. Stored as plain Markdown under `Dashboards/Memos/`, local-first with Push sync
+- **PDF & EPUB Viewers** — pdf.js-based PDF viewer with selectable text, page navigation, and zoom; client-side EPUB reader with font-size/page-width controls — both in the IDE and in dashboard File widgets
+- **Customizable Dashboard** — Drag-and-drop widget grid as your home screen: **File** widgets that open a Drive file — Markdown (preview/WYSIWYG/code), text, HTML, EPUB, PDF, or image — with per-document memos, a **Memo List** widget that browses all annotated documents (newest-note preview, filter/paging, jump to source), **Base** widgets that render a view (table/cards/list) of an Obsidian-style `.base` query file over a folder of Markdown notes (the former card/table/file-list widgets are now authored as Bases, with legacy widgets auto-converted), kanban boards (New card creation, optional unmatched-status column, drag-to-restatus written back to `.md` files), a **Timeline** microblog widget (dated posts with `#tags`/wiki links/image attachments, AI rewrite with model selection, pin/edit, tag/word/date filtering, configurable folding, stored under `Dashboards/Timeline/`), workflow widgets that run a workflow and render its output (cards/table/Markdown/HTML, with optional auto-refresh), and web embeds. Multiple dashboards with edit mode, undo/redo, one-click column/row alignment, home pinning, and a rendered/raw YAML toggle
 - **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments. Paid plan uses the Interactions API for simultaneous function tools + RAG + Web Search and conversation chaining
 - **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides. `/run @workflow.yaml` executes workflows directly from chat with inline streaming logs
 - **Visual Workflow Editor** — Visual node-based builder (30 node types), YAML import/export, real-time SSE execution
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
 - **Keyboard Shortcuts** — Configurable shortcuts with modifier key support (Ctrl/Cmd, Shift, Alt) via Settings
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
+- **OKF Knowledge Sources** — Register Open Knowledge Format bundles (Markdown knowledge bases on Drive) as always-on chat knowledge from the RAG settings tab
 - **MCP** — Connect external MCP servers as tools for AI chat, with OAuth support and rich UI rendering (MCP Apps)
 - **Agent Skills** — User-defined AI agent configurations with custom instructions, reference materials, and executable workflows stored on Drive. Skill workflows run as headless chat tools: return variables to chat instead of relying on dialogs
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, settings panels, custom file icons, and file extension handling
@@ -137,9 +154,11 @@ Detailed documentation is available in the [`docs/`](./docs/) directory:
 | Topic | English | 日本語 |
 |-------|---------|--------|
 | Chat & AI | [chat.md](./docs/chat.md) | [chat_ja.md](./docs/chat_ja.md) |
+| Dashboard (widgets, memos) | [dashboard.md](./docs/dashboard.md) | [dashboard_ja.md](./docs/dashboard_ja.md) |
 | Sync & Offline Cache | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
 | Workflow Node Reference | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
 | RAG | [rag.md](./docs/rag.md) | [rag_ja.md](./docs/rag_ja.md) |
+| OKF Knowledge Sources | [OKF.md](./docs/OKF.md) | [OKF_ja.md](./docs/OKF_ja.md) |
 | MCP | [mcp.md](./docs/mcp.md) | [mcp_ja.md](./docs/mcp_ja.md) |
 | Encryption | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
 | Plugins | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |

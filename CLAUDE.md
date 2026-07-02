@@ -14,6 +14,7 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 - `docs/sync.md` — Push/Pull同期とオフラインキャッシュの仕組み
 - `docs/workflow_nodes.md` — ワークフローノード全種のリファレンス
 - `docs/rag.md` — RAG（Retrieval-Augmented Generation）の設定と動作
+- `docs/OKF.md` — OKFナレッジソース（Drive上のMarkdownナレッジバンドルをチャットのシステムプロンプトに注入。設定はRAGタブ、`okf-loader.ts`）
 - `docs/mcp.md` — MCPサーバー連携
 - `docs/encryption.md` — ハイブリッド暗号化（RSA+AES）
 - `docs/plugins.md` — プラグイン開発ガイド

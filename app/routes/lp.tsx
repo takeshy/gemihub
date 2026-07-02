@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, ListTodo, Music, LayoutDashboard, GitCompare } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, ListTodo, Music, LayoutDashboard, GitCompare, Highlighter } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
@@ -99,10 +99,11 @@ interface LpStrings {
 
 const en: LpStrings = {
   tagline: "AI That Acts, Not Just Answers",
-  description: "GemiHub is an AI assistant that reads your files, finds what you need, and gets things done on its own. Connect external tools, search across your documents by meaning, and automate repetitive tasks — all while keeping your data in your own Google Drive.",
+  description: "GemiHub is an AI assistant that reads your files, finds what you need, and gets things done on its own. Read PDFs, EPUBs, and notes with quote-anchored memos, connect external tools, search across your documents by meaning, and automate repetitive tasks — all while keeping your data in your own Google Drive.",
   signIn: "Sign in with Google",
   features: [
-    { icon: LayoutDashboard, title: "Personal Dashboards", description: "Build a home screen from Markdown notes, file lists, cards, editable tables, kanban boards, workflow output, and web embeds." },
+    { icon: Highlighter, title: "Read & Memo", description: "Open PDFs, EPUBs, Markdown, and images, select a passage, and attach a memo right where you read. Quotes are highlighted and jump both ways. Notes are saved as plain Markdown in your Drive." },
+    { icon: LayoutDashboard, title: "Personal Dashboards", description: "Build a home screen from file viewers (Markdown, PDF, EPUB, images), memo lists, cards, editable tables, kanban boards, workflow output, and web embeds." },
     { icon: MessageSquare, title: "AI Chat", description: "Have a conversation with AI that can read your files, search the web, generate images, and use external tools — all on its own." },
     { icon: Search, title: "Ask Your Files", description: "Search your Drive files by meaning, not just keywords. Search for \"meeting\" and get results mentioning \"conference\" too." },
     { icon: BookOpen, title: "Notes & Editor", description: "Jot down notes in Markdown. Save ideas and meeting notes straight to Drive." },
@@ -115,7 +116,7 @@ const en: LpStrings = {
   ],
   screenshotsTitle: "See It in Action",
   screenshots: [
-    { src: "/images/dashboard.png", alt: "Personal Dashboard", description: "Create a home screen with Markdown notes, folder views, cards, tables, kanban boards, workflow output, and web embeds. Dashboards are saved as plain .dashboard files in Drive." },
+    { src: "/images/dashboard.png", alt: "Personal Dashboard", description: "Create a home screen with file viewers (Markdown, PDF, EPUB, images) with per-document memos, memo lists, cards, tables, kanban boards, workflow output, and web embeds. Dashboards are saved as plain .dashboard files in Drive." },
     { src: "/images/dashboard_edit.png", alt: "Dashboard Editing", description: "Toggle edit mode to add widgets, drag and resize panels, configure sources, undo or redo layout changes, and switch between rendered and raw YAML views." },
     { src: "/images/dashboard_workflow.png", alt: "Workflow Widgets", description: "Run a workflow from a dashboard and render the result as cards, a table, Markdown, or HTML. Optional auto-refresh keeps generated reports current." },
     { src: "/images/dashboard_kanban.png", alt: "Kanban Boards", description: "Turn Markdown files in a folder into a kanban board. Create cards from the board header or drag cards between columns to update frontmatter in Drive." },
@@ -217,10 +218,11 @@ const en: LpStrings = {
 
 const ja: LpStrings = {
   tagline: "答えるだけじゃない、動く AI",
-  description: "GemiHub は、ファイルを読んで、必要な情報を探して、作業までこなしてくれる AI アシスタントです。外部ツールとの連携、ドキュメント横断の意味検索、繰り返し作業の自動化まで。データはすべてあなたの Google Drive に保存されます。",
+  description: "GemiHub は、ファイルを読んで、必要な情報を探して、作業までこなしてくれる AI アシスタントです。PDF や EPUB を読みながら引用付きメモを残し、外部ツールとの連携、ドキュメント横断の意味検索、繰り返し作業の自動化まで。データはすべてあなたの Google Drive に保存されます。",
   signIn: "Googleでサインイン",
   features: [
-    { icon: LayoutDashboard, title: "パーソナルダッシュボード", description: "Markdown、ファイル一覧、カード、編集可能テーブル、カンバン、ワークフロー出力、Web埋め込みをホーム画面に配置できます。" },
+    { icon: Highlighter, title: "読んで、線を引いて、メモ", description: "PDF・EPUB・Markdown・画像を開いて文章を選択するだけで、その場に引用付きメモを添付。引用はハイライトされ、本文⇄メモを双方向ジャンプ。メモはプレーンな Markdown として Drive に保存されます。" },
+    { icon: LayoutDashboard, title: "パーソナルダッシュボード", description: "ファイルビューア（Markdown・PDF・EPUB・画像）、メモ一覧、カード、編集可能テーブル、カンバン、ワークフロー出力、Web埋め込みをホーム画面に配置できます。" },
     { icon: MessageSquare, title: "AIチャット", description: "AI がファイルを読み、Web を調べ、画像を作り、外部ツールまで使って回答。全部おまかせで動きます。" },
     { icon: Search, title: "ファイルに質問", description: "Drive の資料をキーワードではなく「意味」で検索。「打ち合わせ」で調べれば「ミーティング」の内容もヒット。" },
     { icon: BookOpen, title: "メモ・エディタ", description: "Markdownでさっとメモ。アイデアや議事録をそのままDriveに保存できます。" },
@@ -233,7 +235,7 @@ const ja: LpStrings = {
   ],
   screenshotsTitle: "動作イメージ",
   screenshots: [
-    { src: "/images/dashboard.png", alt: "パーソナルダッシュボード", description: "Markdown、フォルダビュー、カード、テーブル、カンバン、ワークフロー出力、Web埋め込みを組み合わせたホーム画面を作成できます。" },
+    { src: "/images/dashboard.png", alt: "パーソナルダッシュボード", description: "ファイルビューア（Markdown・PDF・EPUB・画像、ドキュメントメモ付き）、メモ一覧、カード、テーブル、カンバン、ワークフロー出力、Web埋め込みを組み合わせたホーム画面を作成できます。" },
     { src: "/images/dashboard_edit.png", alt: "ダッシュボード編集", description: "編集モードでウィジェットを追加し、ドラッグ・リサイズ・設定変更。Undo/Redo と Raw YAML 表示にも対応します。" },
     { src: "/images/dashboard_workflow.png", alt: "ワークフローウィジェット", description: "ダッシュボードからワークフローを実行し、結果をカード、テーブル、Markdown、HTMLとして表示。自動更新も設定できます。" },
     { src: "/images/dashboard_kanban.png", alt: "カンバンボード", description: "フォルダ内のMarkdownをカンバン化。ヘッダーからカードを作成し、ドラッグでステータス列を移動するとfrontmatterも更新されます。" },
