@@ -66,6 +66,7 @@ export function MarkdownFileEditor({
   onImageChange,
   onDiffClick,
   onHistoryClick,
+  toolbarExtra,
   headerLeft,
   hideHeader,
   hideToolbarActions,
@@ -80,6 +81,7 @@ export function MarkdownFileEditor({
   onImageChange?: (file: File) => Promise<string>;
   onDiffClick?: () => void;
   onHistoryClick?: () => void;
+  toolbarExtra?: React.ReactNode;
   /** Extra content for the toolbar's left side (e.g. a dashboard file picker). */
   headerLeft?: React.ReactNode;
   /** Hide the whole editor toolbar/header. */
@@ -454,6 +456,7 @@ export function MarkdownFileEditor({
               onTempUpload={handleTempUpload}
               onTempDownload={handleTempDownload}
               uploading={uploading}
+              extraActions={toolbarExtra}
             />
           )}
         </div>

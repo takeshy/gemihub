@@ -1,6 +1,6 @@
 // Wraps an IDE viewer with the per-document memo timeline (same feature as
-// the dashboard File widget). The panel toggle is a floating button at the
-// bottom-right of the content area; its state is remembered globally in
+// the dashboard File widget). The panel toggle is rendered by the hosted
+// viewer, usually in its toolbar; its state is remembered globally in
 // localStorage — turn memos on once and every document you open shows them.
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -11,6 +11,10 @@ import { getStoredMemoPanelState, setStoredMemoPanelState } from "~/dashboard/me
 import type { DocKind } from "~/dashboard/widgets/file-widget/docKind";
 import type { MdEditMode } from "./MarkdownFileEditor";
 import type { PdfViewerHandle } from "~/components/shared/PdfViewer";
+
+interface IdeDocumentMemoRenderProps {
+  memoToggle: ReactNode;
+}
 
 export function IdeDocumentMemo({
   drivePath,
@@ -30,7 +34,7 @@ export function IdeDocumentMemo({
   pdfRef?: RefObject<PdfViewerHandle | null>;
   frameLoadTick?: number;
   refreshSignals?: readonly unknown[];
-  children: ReactNode;
+  children: ReactNode | ((props: IdeDocumentMemoRenderProps) => ReactNode);
 }) {
   const { t } = useI18n();
   const contentWrapRef = useRef<HTMLDivElement | null>(null);
@@ -87,6 +91,27 @@ export function IdeDocumentMemo({
     return () => wrap.removeEventListener("contextmenu", onContextMenu);
   }, [kind, openTextareaMenu]);
 
+  const memoToggle = (
+    <button
+      type="button"
+      title={t("memo.panelToggle")}
+      onClick={() =>
+        onPanelChange(
+          panelState.open ? { open: false } : { open: true, collapsed: false },
+        )
+      }
+      className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors ${
+        panelState.open
+          ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-700 dark:bg-amber-900/70 dark:text-amber-300"
+          : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+      }`}
+    >
+      <NotebookPen size={14} />
+      <span className="hidden sm:inline">{t("memo.panelToggle")}</span>
+    </button>
+  );
+  const renderedChildren = typeof children === "function" ? children({ memoToggle }) : children;
+
   return (
     <div className="flex min-h-0 flex-1">
       {memo.rail}
@@ -96,24 +121,8 @@ export function IdeDocumentMemo({
         className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         {...memo.wrapperHandlers}
       >
-        {children}
+        {renderedChildren}
         {memo.overlays}
-        <button
-          type="button"
-          title={t("memo.panelToggle")}
-          onClick={() =>
-            onPanelChange(
-              panelState.open ? { open: false } : { open: true, collapsed: false },
-            )
-          }
-          className={`absolute bottom-3 right-3 z-20 rounded-full border p-2 shadow-md transition-opacity ${
-            panelState.open
-              ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-700 dark:bg-amber-900/70 dark:text-amber-300"
-              : "border-gray-200 bg-white/90 text-gray-400 opacity-60 hover:text-gray-600 hover:opacity-100 dark:border-gray-700 dark:bg-gray-800/90 dark:hover:text-gray-300"
-          }`}
-        >
-          <NotebookPen size={14} />
-        </button>
       </div>
       {memo.contextMenu}
     </div>

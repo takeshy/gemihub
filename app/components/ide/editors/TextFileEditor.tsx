@@ -16,6 +16,7 @@ export function TextFileEditor({
   saveToCache,
   onDiffClick,
   onHistoryClick,
+  toolbarExtra,
 }: {
   fileId: string;
   fileName: string;
@@ -23,6 +24,7 @@ export function TextFileEditor({
   saveToCache: (content: string) => Promise<void>;
   onDiffClick?: () => void;
   onHistoryClick?: () => void;
+  toolbarExtra?: React.ReactNode;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState(initialContent);
@@ -153,6 +155,7 @@ export function TextFileEditor({
           onTempUpload={handleTempUpload}
           onTempDownload={handleTempDownload}
           uploading={uploading}
+          extraActions={toolbarExtra}
         />
       </div>
       <div className="flex-1 p-4">

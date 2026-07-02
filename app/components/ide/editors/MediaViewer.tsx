@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
@@ -200,13 +200,14 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
     } catch { /* ignore */ }
   }, [tempPreview, fileId, fileName, closeTempPreview]);
 
-  return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+  const renderShell = (body: ReactNode, memoToggle?: ReactNode) => (
+    <>
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <span className="text-xs text-gray-600 dark:text-gray-400 truncate flex-1">
           {fileName}
         </span>
         <div className="flex items-center gap-1 ml-2">
+          {memoToggle}
           <button
             onClick={handleTempUpload}
             disabled={uploading || (!src && !pdfBytes)}
@@ -225,58 +226,84 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
           </button>
         </div>
       </div>
-      {error ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-sm text-red-500">{error}</p>
-        </div>
-      ) : src === null && pdfBytes === null ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 size={24} className="animate-spin text-gray-400" />
-        </div>
-      ) : (
-        <>
-          {mediaType === "pdf" && (
-            <IdeDocumentMemo
-              drivePath={memoDrivePath}
-              kind="pdf"
-              pdfRef={pdfRef}
-              refreshSignals={[pdfBytes, pdfPagesTick]}
-            >
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center">
-                    <Loader2 size={24} className="animate-spin text-gray-400" />
-                  </div>
-                }
-              >
-                <LazyPdfViewer
-                  ref={pdfRef}
-                  data={pdfBytes}
-                  title={fileName}
-                  onTextLayerRendered={() => setPdfPagesTick((value) => value + 1)}
-                />
-              </Suspense>
-            </IdeDocumentMemo>
-          )}
-          {mediaType === "video" && src && (
-            <div className="flex-1 flex items-center justify-center p-4">
-              <video src={src} controls className="max-w-full max-h-full" />
-            </div>
-          )}
-          {mediaType === "audio" && src && (
-            <div className="flex-1 flex items-center justify-center p-4">
-              <audio src={src} controls />
-            </div>
-          )}
-          {mediaType === "image" && src && (
-            <IdeDocumentMemo drivePath={memoDrivePath} kind="image">
-              <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-                <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
-              </div>
-            </IdeDocumentMemo>
-          )}
-        </>
-      )}
+      {body}
+    </>
+  );
+
+  let body: ReactNode;
+  if (error) {
+    body = (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-sm text-red-500">{error}</p>
+      </div>
+    );
+  } else if (src === null && pdfBytes === null) {
+    body = (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 size={24} className="animate-spin text-gray-400" />
+      </div>
+    );
+  } else if (mediaType === "pdf") {
+    body = (
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center">
+            <Loader2 size={24} className="animate-spin text-gray-400" />
+          </div>
+        }
+      >
+        <LazyPdfViewer
+          ref={pdfRef}
+          data={pdfBytes}
+          title={fileName}
+          onTextLayerRendered={() => setPdfPagesTick((value) => value + 1)}
+        />
+      </Suspense>
+    );
+  } else if (mediaType === "video" && src) {
+    body = (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <video src={src} controls className="max-w-full max-h-full" />
+      </div>
+    );
+  } else if (mediaType === "audio" && src) {
+    body = (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <audio src={src} controls />
+      </div>
+    );
+  } else if (mediaType === "image" && src) {
+    body = (
+      <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+        <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
+      </div>
+    );
+  } else {
+    body = null;
+  }
+
+  const viewer = mediaType === "pdf" && !error && pdfBytes ? (
+    <IdeDocumentMemo
+      drivePath={memoDrivePath}
+      kind="pdf"
+      pdfRef={pdfRef}
+      refreshSignals={[pdfBytes, pdfPagesTick]}
+    >
+      {({ memoToggle }) => renderShell(body, memoToggle)}
+    </IdeDocumentMemo>
+  ) : mediaType === "image" && !error && src ? (
+    <IdeDocumentMemo drivePath={memoDrivePath} kind="image">
+      {({ memoToggle }) => renderShell(body, memoToggle)}
+    </IdeDocumentMemo>
+  ) : (
+    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+      {renderShell(body)}
+    </div>
+  );
+
+  return (
+    <>
+      {viewer}
 
       {tempEditConfirm.visible && (
         <TempEditUrlDialog t={t} onYes={tempEditConfirm.onYes} onNo={tempEditConfirm.onNo} />
@@ -341,6 +368,6 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
         </div>,
         document.body
       )}
-    </div>
+    </>
   );
 }

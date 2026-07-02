@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Upload, Download, GitCompareArrows, History, MoreVertical } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
@@ -9,6 +9,7 @@ interface EditorToolbarActionsProps {
   onTempUpload: () => void;
   onTempDownload: () => void;
   uploading: boolean;
+  extraActions?: ReactNode;
 }
 
 export function EditorToolbarActions({
@@ -17,12 +18,14 @@ export function EditorToolbarActions({
   onTempUpload,
   onTempDownload,
   uploading,
+  extraActions,
 }: EditorToolbarActionsProps) {
   const { t } = useI18n();
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
     <div className="flex items-center gap-1 sm:gap-2">
+      {extraActions}
       {onHistoryClick && (
         <button
           onClick={onHistoryClick}

@@ -97,7 +97,7 @@ config:
 
 主要モジュール: `app/dashboard/memo/` — `memoTimeline.ts`（エントリのパース/シリアライズ）、`memoPath.ts`（ファイル名エンコード）、`textAnchor.ts`（引用マッチング + ハイライト描画）、`memoStore.ts`（local-first IO）、`useDocumentMemo.tsx`（共有オーケストレーションフック）。
 
-同じメモタイムラインは **IDE メインビューア**（Markdown / テキスト / PDF / 画像 / EPUB）でも使える。フローティングボタンでトグルし、状態は localStorage に記憶される — `docs/editor.md` → ドキュメントメモ参照。どちらも同じ `Dashboards/Memos/` のファイルを読み書きする。
+同じメモタイムラインは **IDE メインビューア**（Markdown / テキスト / PDF / 画像 / EPUB）でも使える。ツールバー/ヘッダーのボタンでトグルし、状態は localStorage に記憶される — `docs/editor.md` → ドキュメントメモ参照。どちらも同じ `Dashboards/Memos/` のファイルを読み書きする。
 
 ### Base ウィジェット
 

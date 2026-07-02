@@ -55,50 +55,53 @@ export function EpubFileViewer({ fileId, fileName }: { fileId: string; fileName:
   }, [bytes, fileName]);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
-      <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-1 dark:border-gray-800 dark:bg-gray-900">
-        <span className="min-w-0 flex-1 truncate text-xs text-gray-600 dark:text-gray-400">{fileName}</span>
-        <div className="flex shrink-0 items-center gap-2">
-          <ScaleStepper
-            value={fontScale}
-            min={FONT_SCALE_MIN}
-            max={FONT_SCALE_MAX}
-            title={t("dashboard.fileFontSize")}
-            onChange={setFontScale}
-          />
-          <ScaleStepper
-            value={widthScale}
-            min={WIDTH_SCALE_MIN}
-            max={WIDTH_SCALE_MAX}
-            title={t("dashboard.fileWidth")}
-            onChange={setWidthScale}
-          />
-        </div>
-      </div>
-      <IdeDocumentMemo
-        drivePath={memoDrivePath}
-        kind="epub"
-        frameRef={frameRef}
-        frameLoadTick={frameLoadTick}
-        refreshSignals={[epubHtml, fontScale, widthScale]}
-      >
-        {error || epubError ? (
-          <div className="flex flex-1 items-center justify-center p-4 text-sm text-red-500">{error || epubError}</div>
-        ) : loading || !epubHtml ? (
-          <div className="flex flex-1 items-center justify-center">
-            <Loader2 size={24} className="animate-spin text-gray-400" />
+    <IdeDocumentMemo
+      drivePath={memoDrivePath}
+      kind="epub"
+      frameRef={frameRef}
+      frameLoadTick={frameLoadTick}
+      refreshSignals={[epubHtml, fontScale, widthScale]}
+    >
+      {({ memoToggle }) => (
+        <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+          <div className="flex items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 py-1 dark:border-gray-800 dark:bg-gray-900">
+            <span className="min-w-0 flex-1 truncate text-xs text-gray-600 dark:text-gray-400">{fileName}</span>
+            <div className="flex shrink-0 items-center gap-2">
+              {memoToggle}
+              <ScaleStepper
+                value={fontScale}
+                min={FONT_SCALE_MIN}
+                max={FONT_SCALE_MAX}
+                title={t("dashboard.fileFontSize")}
+                onChange={setFontScale}
+              />
+              <ScaleStepper
+                value={widthScale}
+                min={WIDTH_SCALE_MIN}
+                max={WIDTH_SCALE_MAX}
+                title={t("dashboard.fileWidth")}
+                onChange={setWidthScale}
+              />
+            </div>
           </div>
-        ) : (
-          <HtmlDocumentFrame
-            content={epubHtml}
-            title={fileName}
-            fontScale={fontScale}
-            widthScale={widthScale}
-            frameRef={frameRef}
-            onFrameLoad={() => setFrameLoadTick((value) => value + 1)}
-          />
-        )}
-      </IdeDocumentMemo>
-    </div>
+          {error || epubError ? (
+            <div className="flex flex-1 items-center justify-center p-4 text-sm text-red-500">{error || epubError}</div>
+          ) : loading || !epubHtml ? (
+            <div className="flex flex-1 items-center justify-center">
+              <Loader2 size={24} className="animate-spin text-gray-400" />
+            </div>
+          ) : (
+            <HtmlDocumentFrame
+              content={epubHtml}
+              title={fileName}
+              fontScale={fontScale}
+              widthScale={widthScale}
+              frameRef={frameRef}
+              onFrameLoad={() => setFrameLoadTick((value) => value + 1)}
+            />
+          )}
+        </div>
+      )}
+    </IdeDocumentMemo>
   );
 }

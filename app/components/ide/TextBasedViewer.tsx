@@ -51,18 +51,21 @@ function MemoMarkdownEditor({
   const [mode, setMode] = useState<MdEditMode>(initialMode);
   return (
     <IdeDocumentMemo drivePath={drivePath} kind="markdown" markdownMode={mode} refreshSignals={[content]}>
-      <MarkdownFileEditor
-        fileId={fileId}
-        fileName={name}
-        initialContent={content}
-        saveToCache={saveToCache}
-        onFileSelect={onFileSelect}
-        onImageChange={onImageChange}
-        onDiffClick={onDiffClick}
-        onHistoryClick={onHistoryClick}
-        initialMode={initialMode}
-        onModeChange={setMode}
-      />
+      {({ memoToggle }) => (
+        <MarkdownFileEditor
+          fileId={fileId}
+          fileName={name}
+          initialContent={content}
+          saveToCache={saveToCache}
+          onFileSelect={onFileSelect}
+          onImageChange={onImageChange}
+          onDiffClick={onDiffClick}
+          onHistoryClick={onHistoryClick}
+          toolbarExtra={memoToggle}
+          initialMode={initialMode}
+          onModeChange={setMode}
+        />
+      )}
     </IdeDocumentMemo>
   );
 }
@@ -265,14 +268,17 @@ export function TextBasedViewer({
   } else {
     editor = (
       <IdeDocumentMemo drivePath={memoDrivePath} kind="text" refreshSignals={[content]}>
-        <TextFileEditor
-          fileId={fileId}
-          fileName={name}
-          initialContent={content}
-          saveToCache={saveToCache}
-          onDiffClick={handleDiffClick}
-          onHistoryClick={handleHistoryClick}
-        />
+        {({ memoToggle }) => (
+          <TextFileEditor
+            fileId={fileId}
+            fileName={name}
+            initialContent={content}
+            saveToCache={saveToCache}
+            onDiffClick={handleDiffClick}
+            onHistoryClick={handleHistoryClick}
+            toolbarExtra={memoToggle}
+          />
+        )}
       </IdeDocumentMemo>
     );
   }

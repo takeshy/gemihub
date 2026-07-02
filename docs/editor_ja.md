@@ -72,7 +72,7 @@ WYSIWYG マークダウンエディタ、ワークフロービジュアルエデ
 
 ### ドキュメントメモ
 
-Markdown（プレビュー時）・テキスト・PDF・画像・EPUB の各ビューアには、ダッシュボードの File ウィジェットと同じドキュメントごとの**メモタイムライン**が付く（`docs/dashboard.md` → メモ）: 本文を選択して右クリック → **メモに追加**。引用は CSS Custom Highlight API でハイライトされ、双方向にジャンプできる。パネルはコンテンツ右下のフローティングボタンでトグルし、状態は localStorage（`gemihub-memoPanel`）にブラウザ全体で記憶される — 一度ONにすればどのドキュメントを開いてもパネルが表示される。メモファイルは `Dashboards/Memos/` 配下で、ダッシュボードのウィジェットや Memo List ウィジェットと同じファイルを読み書きする。例外は HTML: `HtmlFileEditor` のプレビューは sandbox 内でスクリプトを実行するためメモのアンカーリングと両立しない（HTML のメモはダッシュボードの File ウィジェットで）。共有実装: `~/dashboard/memo/useDocumentMemo` + `IdeDocumentMemo.tsx`。
+Markdown（プレビュー時）・テキスト・PDF・画像・EPUB の各ビューアには、ダッシュボードの File ウィジェットと同じドキュメントごとの**メモタイムライン**が付く（`docs/dashboard.md` → メモ）: 本文を選択して右クリック → **メモに追加**。引用は CSS Custom Highlight API でハイライトされ、双方向にジャンプできる。パネルはビューア上部のツールバー/ヘッダーからトグルし、状態は localStorage（`gemihub-memoPanel`）にブラウザ全体で記憶される — 一度ONにすればどのドキュメントを開いてもパネルが表示される。メモファイルは `Dashboards/Memos/` 配下で、ダッシュボードのウィジェットや Memo List ウィジェットと同じファイルを読み書きする。例外は HTML: `HtmlFileEditor` のプレビューは sandbox 内でスクリプトを実行するためメモのアンカーリングと両立しない（HTML のメモはダッシュボードの File ウィジェットで）。共有実装: `~/dashboard/memo/useDocumentMemo` + `IdeDocumentMemo.tsx`。
 
 ### 暗号化ファイル
 

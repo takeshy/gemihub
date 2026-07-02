@@ -5,7 +5,7 @@
 // the host component supplies the document refs and renders the returned
 // pieces around its content.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { ChevronsRight, Copy, SquarePen } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { ContextMenu } from "~/components/ide/ContextMenu";
@@ -41,6 +41,10 @@ import { MemoTimelinePanel, memoHoverPreview, type MemoDraft } from "./MemoTimel
 
 const FLASH_MS = 1000;
 const TOAST_MS = 2500;
+
+function usesTouchSelectionUi(): boolean {
+  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+}
 
 function pageFromAnchor(anchor: string): number | null {
   const match = anchor.match(/^page=(\d+)$/);
@@ -123,6 +127,7 @@ export interface DocumentMemoApi {
     onMouseMove?: (event: ReactMouseEvent<HTMLDivElement>) => void;
     onMouseDown: () => void;
     onClick?: (event: ReactMouseEvent<HTMLDivElement>) => void;
+    onTouchEnd?: (event: ReactTouchEvent<HTMLDivElement>) => void;
     onMouseLeave: () => void;
   };
   /** Attach to the plain-text editor's textarea (kind === "text"). */
@@ -509,28 +514,77 @@ export function useDocumentMemo({
     return true;
   }, [buildSelectionDraft, viewportPointFor]);
 
+  const buildTextareaDraft = useCallback((textarea: HTMLTextAreaElement): MemoDraft | null => {
+    const { selectionStart, selectionEnd, value } = textarea;
+    if (selectionStart === selectionEnd) return null;
+    const quote = value.slice(selectionStart, selectionEnd);
+    if (!normalizeAnchorText(quote)) return null;
+    return {
+      anchor: "text",
+      quote,
+      quotePrefix: normalizeAnchorText(value.slice(Math.max(0, selectionStart - 40), selectionStart)).slice(-30),
+      quoteSuffix: normalizeAnchorText(value.slice(selectionEnd, selectionEnd + 40)).slice(0, 30),
+    };
+  }, []);
+
   const openTextareaMenu = useCallback((textarea: HTMLTextAreaElement, clientX: number, clientY: number): boolean => {
     if (!memoConfigured) return false;
-    const { selectionStart, selectionEnd, value } = textarea;
-    if (selectionStart === selectionEnd) return false;
-    const quote = value.slice(selectionStart, selectionEnd);
-    if (!normalizeAnchorText(quote)) return false;
+    const textareaDraft = buildTextareaDraft(textarea);
+    if (!textareaDraft) return false;
     setMenu({
       x: clientX,
       y: clientY + 2,
-      draft: {
-        anchor: "text",
-        quote,
-        quotePrefix: normalizeAnchorText(value.slice(Math.max(0, selectionStart - 40), selectionStart)).slice(-30),
-        quoteSuffix: normalizeAnchorText(value.slice(selectionEnd, selectionEnd + 40)).slice(0, 30),
-      },
+      draft: textareaDraft,
     });
     return true;
-  }, [memoConfigured]);
+  }, [buildTextareaDraft, memoConfigured]);
 
   const onTextareaContextMenu = useCallback((event: ReactMouseEvent<HTMLTextAreaElement>) => {
     if (openTextareaMenu(event.currentTarget, event.clientX, event.clientY)) event.preventDefault();
   }, [openTextareaMenu]);
+
+  const selectionMenuPoint = useCallback((win: Window, inFrame: boolean): { x: number; y: number } | null => {
+    const selection = win.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
+    const range = selection.getRangeAt(0);
+    const rects = Array.from(range.getClientRects());
+    const rect = rects[rects.length - 1] ?? range.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) return null;
+    const viewportPoint = viewportPointFor(rect.left + rect.width / 2, rect.top, inFrame);
+    const y = viewportPoint.y > 48 ? viewportPoint.y - 42 : viewportPoint.y + rect.height + 8;
+    return { x: Math.max(8, Math.min(viewportPoint.x - 70, window.innerWidth - 148)), y: Math.max(8, y) };
+  }, [viewportPointFor]);
+
+  const textareaMenuPoint = useCallback((textarea: HTMLTextAreaElement): { x: number; y: number } => {
+    const rect = textarea.getBoundingClientRect();
+    return {
+      x: Math.max(8, Math.min(rect.left + rect.width / 2 - 70, window.innerWidth - 148)),
+      y: Math.max(8, rect.top + 8),
+    };
+  }, []);
+
+  const showMobileSelectionMenu = useCallback((win: Window, inFrame: boolean) => {
+    if (!memoConfigured || !usesTouchSelectionUi()) return;
+    window.setTimeout(() => {
+      const selectionDraft = buildSelectionDraft(win);
+      if (!selectionDraft) return;
+      const point = selectionMenuPoint(win, inFrame);
+      if (!point) return;
+      setMenu({ ...point, draft: selectionDraft });
+    }, 180);
+  }, [buildSelectionDraft, memoConfigured, selectionMenuPoint]);
+
+  const showMobileTextareaMenu = useCallback((textarea: HTMLTextAreaElement, clientX?: number, clientY?: number) => {
+    if (!memoConfigured || !usesTouchSelectionUi()) return;
+    window.setTimeout(() => {
+      const textareaDraft = buildTextareaDraft(textarea);
+      if (!textareaDraft) return;
+      const point = clientX !== undefined && clientY !== undefined
+        ? { x: Math.max(8, Math.min(clientX - 70, window.innerWidth - 148)), y: Math.max(8, clientY + 8) }
+        : textareaMenuPoint(textarea);
+      setMenu({ ...point, draft: textareaDraft });
+    }, 180);
+  }, [buildTextareaDraft, memoConfigured, textareaMenuPoint]);
 
   const adoptDraft = useCallback(() => {
     if (!menu) return;
@@ -563,22 +617,47 @@ export function useDocumentMemo({
       if (!memoConfigured) return;
       if (handleSelectionContextMenu(event.clientX, event.clientY, win, true)) event.preventDefault();
     };
+    const onSelectionChange = () => showMobileSelectionMenu(win, true);
+    const onTouchEnd = () => showMobileSelectionMenu(win, true);
     const onMouseMove = (event: globalThis.MouseEvent) => handlePointerHover(event.clientX, event.clientY, true);
     const onClick = (event: globalThis.MouseEvent) => {
       handleHighlightClick(event.clientX, event.clientY, true, win);
     };
     const onMouseDown = () => setMenu(null);
     doc.addEventListener("contextmenu", onContextMenu);
+    doc.addEventListener("selectionchange", onSelectionChange);
+    doc.addEventListener("touchend", onTouchEnd);
     doc.addEventListener("mousemove", onMouseMove);
     doc.addEventListener("click", onClick);
     doc.addEventListener("mousedown", onMouseDown);
     return () => {
       doc.removeEventListener("contextmenu", onContextMenu);
+      doc.removeEventListener("selectionchange", onSelectionChange);
+      doc.removeEventListener("touchend", onTouchEnd);
       doc.removeEventListener("mousemove", onMouseMove);
       doc.removeEventListener("click", onClick);
       doc.removeEventListener("mousedown", onMouseDown);
     };
-  }, [kind, frameLoadTick, memoConfigured, handleSelectionContextMenu, handlePointerHover, handleHighlightClick, frameRef]);
+  }, [kind, frameLoadTick, memoConfigured, handleSelectionContextMenu, handlePointerHover, handleHighlightClick, showMobileSelectionMenu, frameRef]);
+
+  // Mobile browsers usually do not dispatch a useful contextmenu for text
+  // selections. Detect completed selections and show the same app menu.
+  useEffect(() => {
+    if (!memoConfigured) return;
+    const onSelectionChange = () => {
+      if (!usesTouchSelectionUi()) return;
+      if (kind === "text") {
+        const active = document.activeElement;
+        if (active instanceof HTMLTextAreaElement && contentWrapRef.current?.contains(active)) {
+          showMobileTextareaMenu(active);
+        }
+        return;
+      }
+      if (kind === "markdown" || kind === "pdf") showMobileSelectionMenu(window, false);
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, [kind, memoConfigured, contentWrapRef, showMobileSelectionMenu, showMobileTextareaMenu]);
 
   // ---- timeline → document jumps ---------------------------------------------
 
@@ -774,6 +853,18 @@ export function useDocumentMemo({
     onMouseMove: interactive ? (event) => handlePointerHover(event.clientX, event.clientY, false) : undefined,
     onMouseDown: () => setMenu(null),
     onClick: interactive ? (event) => handleHighlightClick(event.clientX, event.clientY, false, window) : undefined,
+    onTouchEnd: memoConfigured
+      ? (event) => {
+          const touch = event.changedTouches[0];
+          if (kind === "text") {
+            const target = event.target as HTMLElement;
+            const textarea = target instanceof HTMLTextAreaElement ? target : target.closest("textarea");
+            if (textarea) showMobileTextareaMenu(textarea, touch?.clientX, touch?.clientY);
+            return;
+          }
+          if (interactive) showMobileSelectionMenu(window, false);
+        }
+      : undefined,
     onMouseLeave: () => setHover(null),
   };
 

@@ -98,7 +98,7 @@ Every File widget has a per-document **memo timeline** (toggled from the header,
 
 Key modules: `app/dashboard/memo/` — `memoTimeline.ts` (entry parse/serialize), `memoPath.ts` (file-name encoding), `textAnchor.ts` (quote matching + highlight painting), `memoStore.ts` (local-first IO), `useDocumentMemo.tsx` (the shared orchestration hook).
 
-The same memo timeline is also available in the **IDE main viewers** (Markdown / text / PDF / image / EPUB) via a floating toggle whose state is remembered in localStorage — see `docs/editor.md` → Document Memos. Both surfaces read and write the same `Dashboards/Memos/` files.
+The same memo timeline is also available in the **IDE main viewers** (Markdown / text / PDF / image / EPUB) via a toolbar/header toggle whose state is remembered in localStorage — see `docs/editor.md` → Document Memos. Both surfaces read and write the same `Dashboards/Memos/` files.
 
 ### Base widget
 
