@@ -21,7 +21,7 @@ grid:
   gap: 8
 widgets:
   - id: <uuid>
-    type: markdown | base | kanban | timeline | workflow | web
+    type: file | base | kanban | timeline | workflow | web | memo-list
     layout:
       lg: { x: 0, y: 0, w: 6, h: 3 }
       sm: { x: 0, y: 0, w: 12, h: 3 }   # 省略時は自動導出
@@ -36,6 +36,7 @@ widgets:
 
 - 2 つのブレークポイント: `lg`（広い）と `sm`（狭い、しきい値 `BREAKPOINT_THRESHOLD = 768px`）。`sm` レイアウトが無い場合は `deriveSmLayout` が自動導出（全幅・縦積み）。
 - **編集モード**でドラッグ（移動）・リサイズ・ウィジェットごとの設定/削除、および config 編集を coalescing する undo/redo が有効。
+- **整列** — 編集モードのツールバーに 2 つのボタンがあり、全ウィジェットをラウンドロビンで最大 3 **列**（横整列）または 3 **行**（縦整列）に均等タイル配置する。おおよそ 1 画面に収まる高さになる（`equalizeLayout.ts`、mdwys から移植）。1 クリック = Undo 1 ステップ。`sm` レイアウトは破棄され `deriveSmLayout` が再導出する。
 - キャンバス（`DashboardCanvas.tsx`）がグリッドを描画。各ウィジェットはドラッグ/リサイズを担う `GridCell.tsx` に入る。`DashboardHost.tsx` がダッシュボードのライフサイクル（作成/リネーム/削除/切替、`settings.homeDashboard` による home ピン留め）とデバウンス保存を担う。
 - ウィジェット追加は `WidgetPalette` モーダルを開き、登録済みの全ウィジェット型を一覧表示する。
 
@@ -45,20 +46,56 @@ widgets:
 
 | 型 | 役割 | ソース |
 |------|---------|--------|
-| `markdown` | 既存 Drive Markdown ファイルをインライン編集（preview/wysiwyg/code） | Drive ファイル |
+| `file` | Drive ファイルを開く — Markdown（preview/wysiwyg/code）・テキスト・HTML・EPUB・PDF・画像 — ドキュメントごとのメモ付き | Drive ファイル |
 | `base` | Obsidian 風 `.base` クエリファイルのビュー（テーブル/カード/リスト）を描画 | `.base` + フォルダ |
 | `kanban` | Markdown ファイルのフォルダに対するカンバンボード | フォルダ |
 | `timeline` | 日付ごとの投稿による個人マイクロブログ（タグ・画像添付・ピン留め/編集） | timeline フォルダ |
 | `workflow` | ワークフローを実行し出力を描画 | ワークフロー |
 | `web` | 外部 URL を埋め込み（埋め込み可否チェック + フォールバックカード） | URL |
+| `memo-list` | 全メモファイルの一覧（絞り込み・ページング・最新メモのプレビュー） | `Dashboards/Memos/` |
 
-現在のコアウィジェットは `widgets/registry.ts` に登録されている: `markdown`, `base`, `kanban`, `timeline`, `workflow`, `web`。`web` は初期リリースから変更なし。それ以外を以下で説明する。
+現在のコアウィジェットは `widgets/registry.ts` に登録されている: `file`, `base`, `kanban`, `timeline`, `workflow`, `web`, `memo-list`。`web` は初期リリースから変更なし。それ以外を以下で説明する。
+
+> **Markdown ウィジェットは File ウィジェットに。** 旧 `markdown` ウィジェットは `file` に発展した（config 形状は同じで、対応フォーマットとメモ機能が増えた）。`type: markdown` を保持している既存ダッシュボードは移行なしでそのまま動く: レジストリが同じ `WidgetDef` を両方の型で登録しており（`markdown` はパレット非表示）、YAML はバイト不変でラウンドトリップする。新規作成は `type: file` で書かれる。
 
 > **フォルダ系データウィジェットは Base に統合。** 以前の `card` / `table` / `file-list` ウィジェット（フォルダソースのカードグリッド／編集可能テーブル／ファイル一覧）は **`base` ウィジェットに統合**された — 現在は `.base` ファイル（フォルダに対する cards/table/list ビュー）として作成する。これら 3 型はもう登録されておらず、`.dashboard` がまだ参照している場合はロード時に等価な `base` ウィジェットへ**自動変換**される（`legacyFolderWidgetConversion.ts`）。生成された `.base` は `Dashboards/Bases/` 配下に書き出される。共有のフォルダソースパイプライン（`data-widget/`: `folder-source.ts`, `filter.ts`, `ViewControls.tsx`, `config-parts/`）は残り、`base` ウィジェットのフィルタ/ソートやビュー時ヘッダ操作に再利用される。
 
-### Markdown ウィジェット
+### File ウィジェット
 
-**既存**の Drive Markdown ファイルをパスで参照し（インライン content は廃止）、`MarkdownFileEditor` で通常エディタと同じ **preview / wysiwyg / code** 切替・frontmatter・wiki リンク・local-first 保存（`useFileWithCache`）をインライン描画する。ツールバーは *パス + モード切替* のみに絞る（`hideToolbarActions`）。左のファイルパスは `MarkdownFilePicker`（`editorCtx.fileList` に対する @ 風検索）で、**編集モード外でも**参照ファイルを切替でき、選択は `ctx.onConfigChange({ path })` で永続化される。Obsidian Gemini Helper の dashboard schema と同じなので、`.dashboard` ファイルを手書き・同期しやすい。表示モードはセッション初回のみ **preview** が既定で、その後はセッションスコープの変数がユーザーの最後の明示的な切替を記憶し、別ファイルを開いても保持される（wysiwyg/code のまま）。config: `{ path }`。
+**既存**の Drive ファイルをパスで参照し、種別（`docKindFor`、拡張子ベース）に応じて描画する。実装は `widgets/file-widget/` 配下（mdwys から移植）。
+
+```yaml
+config:
+  path: books/go_book.pdf   # Drive パス — .md/.markdown, .txt, .html/.htm, .epub, .pdf, 画像
+  showHeader: true          # ヘッダバー（ファイルピッカー・メモトグル・スケール調整）
+  viewFontScale: 100        # 70–240: PDF ズーム / EPUB・HTML の文字サイズ (%)
+  viewWidthScale: 100       # 70–180: EPUB・HTML のコンテンツ幅 (%)
+  memoPanelOpen: false      # メモタイムラインパネルの状態（他と同様に永続化）
+  memoPanelCollapsed: false
+```
+
+種別ごとの挙動:
+
+- **Markdown** — `MarkdownFileEditor` で通常エディタと同じ **preview / wysiwyg / code** 切替・frontmatter・wiki リンク・local-first 保存（`useFileWithCache`）をインライン描画する。表示モードはセッション初回のみ **preview** が既定で、その後はセッションスコープの変数がユーザーの最後の明示的な切替を記憶する。
+- **PDF** — pdf.js（`app/components/shared/PdfViewer.tsx`）: ページごとの canvas + 選択可能なテキストレイヤー、遅延ページレンダリング（IntersectionObserver）、ページ移動、`viewFontScale` によるズーム。同じコンポーネントが IDE の `MediaViewer` の PDF 表示にも使われる。
+- **EPUB** — ZIP をクライアント側で展開（`app/utils/epub.ts`、fflate）し、1 つの自己完結 HTML ドキュメント（spine セクション `epub-chapter-N`、画像は data URL 化、script 除去）に変換して sandbox iframe（`allow-same-origin`、script なし）で表示。文字サイズとページ幅はヘッダのステッパーで調整。
+- **HTML** — 同じ sandbox iframe ＋ 文字サイズ/幅調整。
+- **画像** — local-first の blob URL で描画。
+- **テキスト** — プレーンな textarea（デバウンス付き local-first 保存）。
+
+バイナリ種別は local-first にバイト列を読み込む（`readFileBinaryLocal` → base64 キャッシュ）。20 MB 超のファイルはキャッシュせず直接ストリーム（同期の挙動と同じ）。ヘッダのファイルパスはピッカー（`editorCtx.fileList` への @ 風検索、対応種別で絞り込み）で、**編集モード外でも**参照ファイルを切替でき、選択は `ctx.onConfigChange({ path })` で永続化される。
+
+#### メモ
+
+すべての File ウィジェットにドキュメントごとの**メモタイムライン**がある（ヘッダからトグル、パネル状態は widget config に永続化）:
+
+- **引用付き投稿** — Markdown プレビュー、PDF テキストレイヤー、EPUB/HTML iframe、テキストエディタで本文を選択して右クリック → **メモに追加**。引用文・前後約 30 文字のコンテキスト・位置アンカーがコンポーザのドラフトに取り込まれる。
+- **アンカー** — `page=N`（PDF、1 始まり）、`spine=N`（EPUB、0 始まりのセクション番号）、`text`（Markdown/HTML/テキスト）。引用文字列が主アンカーで位置は補助。そのため EPUB のリフローやドキュメント編集後もハイライトが再解決される。
+- **ハイライト** — パネルが開いている間、解決済みの引用は **CSS Custom Highlight API** で描画される（DOM を変更しないので React の再レンダリングと干渉しない。ウィジェットごとの寄与を window 単位で合成し、iframe は独自レジストリを持つ）。ホバーでメモをプレビュー、クリックでタイムラインのエントリへジャンプ、エントリ内の引用クリックでドキュメント側へ戻る（フラッシュ表示）。Highlight API 非対応ブラウザ（古い Firefox）でもメモ自体は動作し、描画だけスキップされる。
+- **タイムラインパネル** — 古い順のエントリに編集 / 削除 / **ピン留め**、raw ⇄ WYSIWYG コンポーザ（Ctrl+Enter で投稿）、長いエントリは折りたたみ、wiki リンク/埋め込みは `GfmMarkdownPreview` 経由で解決され IDE で開く。細いレールに折りたたみ可能（ハイライトは維持。× で閉じたときだけ消える）。狭いウィジェット（4 グリッド列未満）ではパネルは自動的にレールへ折りたたまれる。
+- **保存形式** — 1 ドキュメントにつき 1 つのプレーン Markdown ファイル `Dashboards/Memos/<エンコード済みパス>.md`。ファイル名はドキュメントの Drive パスをエンコードしたもの（`_` → `_u`、`/` → `_s`、`:` → `_c`。200 バイト超は切り詰め + SHA-256 プレフィックス付与）で、frontmatter の `source:` が実際のパスを保持する。エントリは `---` 区切りのブロック: ISO タイムスタンプ行、`id:` / 任意の `pinned:` / `anchor:` / `quote-prefix:` / `quote-suffix:` メタ行、引用の `>` blockquote、本文。書き込みはすべて local-first で「書き込み直前に再読込」するため、同じドキュメントを開いた複数ウィジェットが互いの投稿を消すことはない。Drive へは Push で反映される。
+
+主要モジュール: `app/dashboard/memo/` — `memoTimeline.ts`（エントリのパース/シリアライズ）、`memoPath.ts`（ファイル名エンコード）、`textAnchor.ts`（引用マッチング + ハイライト描画）、`memoStore.ts`（local-first IO）。
 
 ### Base ウィジェット
 
@@ -102,6 +139,15 @@ config:
 - **タグ** — 投稿本文中のインライン `#タグ` を抽出し、投稿下にクリック可能なチップとして表示する（チップが正式な表示で、二重表示を防ぐため本文の生 `#タグ` トークンは描画から除去される）。チップをクリックするとそのタグでフィードを絞り込む。
 - **絞り込み・ページング** — ヘッダ操作でフリーワード・タグ・日付範囲による絞り込みとピン留めのみ表示を切り替え、`latestCount` を超える古い投稿は必要に応じて追加読込する。
 - **描画・折り畳み** — 投稿は `GfmMarkdownPreview` で描画（画像の wiki 埋め込みは `WikiEmbed`）。Markdown 埋め込みや長い投稿は `collapseLineLimit` / `collapseCharLimit` に従って折り畳まれる。各投稿は memo 化された `TimelinePostView` なので、ある投稿の編集中にフィード全体が再描画されない。
+
+### Memo List ウィジェット
+
+`memo-list` ウィジェットは `Dashboards/Memos/` 配下のすべてのメモファイルを一覧する（config 不要）。実装は `widgets/MemoListWidget.tsx`。
+
+- 各行にソースドキュメントの名前とパス、メモ件数、**最新**メモの冒頭（`summarizeMemoContent`）— 「読了」のような最後の一言がひと目で分かる — と最終更新日を表示。
+- ドキュメントのファイル名で絞り込み、20 件ごとのページング。サマリは表示中ページ分のみ遅延読込し、`memoPath:modifiedTime` キーでキャッシュされる。
+- ソースドキュメントは frontmatter の `source:`（またはメモファイル名のデコード）で解決し、行のクリックで **IDE メインビューア**で開く（`plugin-select-file` イベント）。
+- メモファイルがローカルで変更されたり Pull で届いたりすると自動リフレッシュする。
 
 ### 共通の構成部品
 
@@ -237,7 +283,7 @@ config エディタはこの契約を AI ワークフロー生成プロンプト
 
 > **`base` について。** 以前はこのウィジェットをプラグイン提供とする構想だったが、現在は**コアウィジェット**（`type: "base"`、Base ウィジェットの節参照）で、リポジトリ内の Obsidian Bases エンジン（`app/bases/`）が裏にある。`WidgetContext` の配線は同じで、プラグインがカスタム型に対して別の描画器を登録することも引き続き可能。
 
-**ビューモードでの config 更新。** `WidgetContext.onConfigChange(config)` により、ウィジェットがビューモードから自身の config を永続化できる（`GridCell` → `DashboardCanvas` → ダッシュボード保存に配線）。Markdown ウィジェットのヘッダファイルピッカーで使用。
+**ビューモードでの config 更新。** `WidgetContext.onConfigChange(config)` により、ウィジェットがビューモードから自身の config を永続化できる（`GridCell` → `DashboardCanvas` → ダッシュボード保存に配線）。File ウィジェットのヘッダファイルピッカー・スケール調整・メモパネル状態で使用。
 
 ## 主要ファイル
 
@@ -245,7 +291,10 @@ config エディタはこの契約を AI ワークフロー生成プロンプト
 - `app/dashboard/DashboardCanvas.tsx`, `GridCell.tsx`, `useGridLayout.ts`, `useBreakpoint.ts` — グリッドと操作。
 - `app/dashboard/dashboardFile.ts`, `types.ts` — ファイル I/O とスキーマ。
 - `app/dashboard/widgets/registry.ts`, `WidgetPalette.tsx`, `WidgetRenderer.tsx`, `WidgetSettingsPanel.tsx` — 登録と UI。
-- `app/dashboard/widgets/` — `MarkdownWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget`（レガシー）, `FilePreviewModal`, `base-file-options.ts`（+ それぞれの config エディタ、`AIBaseDialog` を含む）。
+- `app/dashboard/widgets/` — `file-widget/`（`FileWidget`, `MemoTimelinePanel`, `HtmlDocumentFrame`, `docKind.ts`）, `MemoListWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget`（レガシー）, `FilePreviewModal`, `base-file-options.ts`（+ それぞれの config エディタ、`AIBaseDialog` を含む）。
+- `app/dashboard/memo/` — メモタイムライン形式、パスエンコード、テキストアンカー/ハイライト、local-first ストア（+ テスト）。
+- `app/dashboard/equalizeLayout.ts` — 整列のタイル配置アルゴリズム（+ テスト）。
+- `app/components/shared/PdfViewer.tsx`, `app/utils/epub.ts` — IDE と共有する pdf.js ビューアと EPUB→HTML 変換。
 - `app/dashboard/legacyFolderWidgetConversion.ts` — レガシー `card`/`table`/`file-list` を `base` に変換（生成した `.base` を書き出す）。
 - `app/bases/`, `app/components/bases/` — `base` ウィジェットが使う `.base` のコンパイル/クエリエンジンとビュー描画。
 - `app/dashboard/data-widget/` — `FolderWidget`, `WorkflowWidget`, `KanbanWidget`, `CardsView`, `TableView`, `ViewControls.tsx`, `folder-source.ts`, `filter.ts`, `workflow-runner.ts`、`Card`/`Table`/`Kanban`/`Workflow` config エディタ、共有 `config-parts/`。

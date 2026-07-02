@@ -42,7 +42,7 @@ export function mimeTypeFromFileName(fileName: string): string {
     csv: "text/csv",
     png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
     gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
-    pdf: "application/pdf",
+    pdf: "application/pdf", epub: "application/epub+zip",
     mp3: "audio/mpeg", wav: "audio/wav",
     mp4: "video/mp4", webm: "video/webm",
   };

@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { resolveEpubHref, type SpineLinkTarget } from "./epub.ts";
+
+const spineByPath = new Map<string, SpineLinkTarget>([
+  ["OEBPS/chap1.xhtml", { index: 0, path: "OEBPS/chap1.xhtml" }],
+  ["OEBPS/chap2.xhtml", { index: 1, path: "OEBPS/chap2.xhtml" }],
+]);
+
+const chapter = spineByPath.get("OEBPS/chap1.xhtml")!;
+
+test("resolveEpubHref keeps same-chapter anchors inside the generated chapter id space", () => {
+  assert.equal(resolveEpubHref("#note", chapter, spineByPath), "#epub-c1-note");
+});
+
+test("resolveEpubHref maps cross-chapter anchors to generated document anchors", () => {
+  assert.equal(resolveEpubHref("chap2.xhtml#target", chapter, spineByPath), "#epub-c2-target");
+});
+
+test("resolveEpubHref maps cross-chapter links without fragments to chapter top", () => {
+  assert.equal(resolveEpubHref("chap2.xhtml", chapter, spineByPath), "#epub-chapter-2");
+});
+
+test("resolveEpubHref disables unresolved relative links instead of sending the reader to top", () => {
+  assert.equal(resolveEpubHref("missing.xhtml", chapter, spineByPath), null);
+});

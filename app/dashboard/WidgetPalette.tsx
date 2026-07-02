@@ -14,7 +14,7 @@ interface WidgetPaletteProps {
  * Selecting a type calls onSelect with the WidgetDef.
  */
 /** Leading palette entries, in display order; remaining widgets keep their order after these. */
-const PALETTE_ORDER = ["base", "markdown", "kanban"];
+const PALETTE_ORDER = ["base", "file", "kanban"];
 const paletteRank = (type: string) => {
   const i = PALETTE_ORDER.indexOf(type);
   return i === -1 ? PALETTE_ORDER.length : i;
@@ -22,7 +22,9 @@ const paletteRank = (type: string) => {
 
 export function WidgetPalette({ onSelect, onClose }: WidgetPaletteProps) {
   const { t } = useI18n();
-  const visibleDefs = [...listWidgetDefs()].sort((a, b) => paletteRank(a.type) - paletteRank(b.type));
+  const visibleDefs = listWidgetDefs()
+    .filter((def) => !def.hiddenFromPalette)
+    .sort((a, b) => paletteRank(a.type) - paletteRank(b.type));
 
   const selectDef = (def: WidgetDef) => {
     onSelect(def);

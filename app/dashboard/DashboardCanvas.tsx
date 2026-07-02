@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { Plus, Pencil, Check, Undo2, Redo2 } from "lucide-react";
+import { Plus, Pencil, Check, Undo2, Redo2, Columns3, Rows3 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { useBreakpoint } from "./useBreakpoint";
 import { useGridLayout } from "./useGridLayout";
+import { buildEqualizedLayout, type EqualizeDirection } from "./equalizeLayout";
 import GridCell from "./GridCell";
 import { WidgetPalette } from "./WidgetPalette";
 import { WidgetSettingsPanel } from "./WidgetSettingsPanel";
+import { getWidgetDef } from "./widgets/registry";
 import type { DashboardData, Widget, WidgetDef } from "./types";
 
 interface DashboardCanvasProps {
@@ -39,6 +41,7 @@ function isWidgetConfigured(widget: Widget): boolean {
   };
 
   switch (widget.type) {
+    case "file":
     case "markdown":
       return str("path").length > 0;
     case "timeline":
@@ -175,6 +178,23 @@ export function DashboardCanvas({
     onCommit: commit,
   });
 
+  // 整列: tile all widgets evenly into up to 3 columns/rows sized to roughly
+  // one screen. One commit (no coalesce key) = exactly one undo step; sm
+  // layouts are dropped so deriveSmLayout re-derives the stacked layout.
+  const handleEqualize = useCallback(
+    (direction: EqualizeDirection) => {
+      if (!data.widgets.length) return;
+      const scrollArea = containerRef.current?.parentElement;
+      const areaHeight = scrollArea?.clientHeight ?? 600;
+      const targetRows = Math.max(6, Math.floor(areaHeight / (data.grid.rowHeight + data.grid.gap)));
+      commit({
+        ...data,
+        widgets: buildEqualizedLayout(data.widgets, direction, data.grid.cols, targetRows),
+      });
+    },
+    [data, commit],
+  );
+
   const handleAddWidget = useCallback(
     (def: WidgetDef) => {
       const maxY = data.widgets.reduce(
@@ -192,9 +212,13 @@ export function DashboardCanvas({
       setShowPalette(false);
       // Stay in edit mode so the "Add widget" button remains visible for more.
       onEditModeChange(true);
-      // Open settings panel for the newly added widget.
-      setEditingWidgetId(newWidget.id);
-      setPendingNewWidgetId(newWidget.id);
+      // Open settings panel for the newly added widget — unless the type has
+      // nothing to configure (e.g. memo-list), where the panel would only show
+      // "No settings for this widget type".
+      if (def.ConfigEditor) {
+        setEditingWidgetId(newWidget.id);
+        setPendingNewWidgetId(newWidget.id);
+      }
     },
     [data, commit, onEditModeChange],
   );
@@ -308,6 +332,22 @@ export function DashboardCanvas({
                 <Redo2 size={14} />
               </button>
               <button
+                onClick={() => handleEqualize("horizontal")}
+                disabled={data.widgets.length === 0}
+                title={t("dashboard.alignHorizontal")}
+                className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
+              >
+                <Columns3 size={14} />
+              </button>
+              <button
+                onClick={() => handleEqualize("vertical")}
+                disabled={data.widgets.length === 0}
+                title={t("dashboard.alignVertical")}
+                className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
+              >
+                <Rows3 size={14} />
+              </button>
+              <button
                 onClick={() => setShowPalette(true)}
                 className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
               >
@@ -369,7 +409,7 @@ export function DashboardCanvas({
                 onResizeEnd={(newPos) => gridLayout.commitPos(widget.id, newPos)}
                 computeDragPos={gridLayout.computeDragPos}
                 computeResizePos={gridLayout.computeResizePos}
-                onSettings={editMode ? () => setEditingWidgetId(widget.id) : undefined}
+                onSettings={editMode && getWidgetDef(widget.type).ConfigEditor ? () => setEditingWidgetId(widget.id) : undefined}
                 onDelete={editMode ? () => handleDeleteWidget(widget.id) : undefined}
                 onConfigChange={(config) => handleUpdateWidgetConfig(widget.id, config)}
                 dashboardFileId={dashboardFileId}

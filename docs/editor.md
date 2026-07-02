@@ -65,7 +65,7 @@ Binary files are detected by file extension (case-insensitive), with MIME type a
 | Image | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.bmp`, `.ico` | `<img>` image display |
 | Video | `.mp4`, `.webm`, `.ogg`, `.mov`, `.avi`, `.mkv` | `<video>` player |
 | Audio | `.mp3`, `.wav`, `.flac`, `.aac`, `.m4a`, `.opus` | `<audio>` player |
-| PDF | `.pdf` | iframe preview |
+| PDF | `.pdf` | pdf.js viewer (`PdfViewer.tsx`: canvas + selectable text layer, page navigation) |
 
 Binary files show Temp Download / Temp Upload buttons for local editing and download.
 

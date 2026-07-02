@@ -455,7 +455,7 @@ export function MarkdownFileEditor({
 
       {/* Content area */}
       {mode === "preview" && (
-        <div ref={previewRef} className="flex-1 overflow-y-auto">
+        <div ref={previewRef} data-md-preview-root className="flex-1 overflow-y-auto">
           {fmParsed.hasFrontmatter && (
             <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} readOnly />
           )}

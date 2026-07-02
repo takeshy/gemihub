@@ -5,23 +5,21 @@ import type { ConfigEditorProps } from "../../types";
 import { MarkdownFilePicker } from "./MarkdownFilePicker";
 import { writeFileLocal } from "~/services/drive-local";
 import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
-
-interface MarkdownConfig {
-  path?: string;
-  showHeader?: boolean;
-}
+import { isFileWidgetFile } from "../file-widget/docKind";
+import type { FileConfig } from "../file-widget/FileWidget";
 
 type SourceMode = "create" | "import";
 
 /**
- * Markdown config editor — create a new markdown file or reference an existing
- * one. Content editing happens in the widget itself via MarkdownFileEditor.
+ * File widget config editor — create a new markdown file or reference any
+ * supported existing file (markdown / text / HTML / EPUB / PDF / image).
+ * Content viewing/editing happens in the widget itself.
  */
-export function MarkdownConfigEditor({ config, onChange, setDoneAction }: ConfigEditorProps) {
+export function FileConfigEditor({ config, onChange, setDoneAction }: ConfigEditorProps) {
   const { t } = useI18n();
-  const cfg = useMemo(() => (config ?? {}) as MarkdownConfig, [config]);
+  const cfg = useMemo(() => (config ?? {}) as FileConfig, [config]);
   const [newName, setNewName] = useState("");
-  const [sourceMode, setSourceMode] = useState<SourceMode>(cfg.path ? "import" : "create");
+  const [sourceMode, setSourceMode] = useState<SourceMode>("import");
 
   const buildNewFile = useCallback(async () => {
       const meta = await getCachedRemoteMeta();
@@ -50,8 +48,8 @@ export function MarkdownConfigEditor({ config, onChange, setDoneAction }: Config
   const sourceSwitch = (
     <div className="inline-flex rounded-md border border-gray-300 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
       {([
-        ["create", t("dashboard.baseCreate")],
         ["import", t("contextMenu.import")],
+        ["create", t("dashboard.baseCreate")],
       ] as const).map(([mode, label]) => (
         <button
           key={mode}
@@ -87,6 +85,8 @@ export function MarkdownConfigEditor({ config, onChange, setDoneAction }: Config
         <MarkdownFilePicker
           currentPath={cfg.path}
           onSelect={(path) => onChange({ ...cfg, path })}
+          fileFilter={isFileWidgetFile}
+          placeholder={t("dashboard.fileSelectFile")}
           buttonClassName="flex w-full items-center gap-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
         />
         <HeaderToggle
@@ -126,11 +126,13 @@ export function MarkdownConfigEditor({ config, onChange, setDoneAction }: Config
       ) : (
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
-            {t("dashboard.markdownImportExisting")}
+            {t("dashboard.fileImportExisting")}
           </label>
           <MarkdownFilePicker
             currentPath={undefined}
             onSelect={(path) => onChange({ ...cfg, path })}
+            fileFilter={isFileWidgetFile}
+            placeholder={t("dashboard.fileSelectFile")}
             buttonClassName="flex w-full items-center gap-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
           />
         </div>

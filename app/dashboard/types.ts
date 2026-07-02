@@ -90,6 +90,8 @@ export interface WidgetDef {
   type: string;
   /** Display name shown in the widget palette. */
   label: string;
+  /** Hide from the add-widget palette (e.g. legacy type aliases). */
+  hiddenFromPalette?: boolean;
   /** Optional icon for the palette. */
   icon?: ReactNode;
   /** Initial config inserted when a widget of this type is added. */

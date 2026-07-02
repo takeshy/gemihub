@@ -18,6 +18,7 @@ export function isSyncExcludedPath(fileName: string): boolean {
 
 const BINARY_APPLICATION_TYPES = new Set([
   "application/pdf",
+  "application/epub+zip",
   "application/zip",
   "application/gzip",
   "application/x-tar",
@@ -36,6 +37,7 @@ const BINARY_APPLICATION_PREFIXES = [
 ];
 
 const BINARY_FILE_EXTENSIONS = new Set([
+  "epub",
   "doc",
   "docx",
   "xls",

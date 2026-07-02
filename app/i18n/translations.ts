@@ -39,6 +39,40 @@ export interface TranslationStrings {
   "mainViewer.preview": string;
   "mainViewer.wysiwyg": string;
   "mainViewer.raw": string;
+  "pdf.openFailed": string;
+  "pdf.prevPage": string;
+  "pdf.nextPage": string;
+  "memo.panelTitle": string;
+  "memo.panelToggle": string;
+  "memo.post": string;
+  "memo.postFailed": string;
+  "memo.updateFailed": string;
+  "memo.loadFailed": string;
+  "memo.edit": string;
+  "memo.delete": string;
+  "memo.deleteConfirm": string;
+  "memo.pin": string;
+  "memo.unpin": string;
+  "memo.jump": string;
+  "memo.broken": string;
+  "memo.previewOnly": string;
+  "memo.copy": string;
+  "memo.copied": string;
+  "memo.copyFailed": string;
+  "memo.addToMemo": string;
+  "memo.empty": string;
+  "memo.showMore": string;
+  "memo.showLess": string;
+  "memo.collapse": string;
+  "memo.expand": string;
+  "memo.closePanel": string;
+  "memo.discardQuote": string;
+  "memo.composerPlaceholder": string;
+  "memo.countUnit": string;
+  "memoList.filterPlaceholder": string;
+  "memoList.empty": string;
+  "dashboard.alignHorizontal": string;
+  "dashboard.alignVertical": string;
   "mainViewer.diff": string;
   "mainViewer.diffTarget": string;
   "mainViewer.binaryFile": string;
@@ -176,6 +210,11 @@ export interface TranslationStrings {
   "dashboard.url": string;
   "dashboard.content": string;
   "dashboard.markdownSelectFile": string;
+  "dashboard.fileSelectFile": string;
+  "dashboard.fileImportExisting": string;
+  "dashboard.fileZoom": string;
+  "dashboard.fileFontSize": string;
+  "dashboard.fileWidth": string;
   "dashboard.markdownSelectFilePlaceholder": string;
   "dashboard.addColumnKey": string;
   "dashboard.dragToReorder": string;
@@ -1104,6 +1143,40 @@ const en: TranslationStrings = {
   "mainViewer.saving": "Saving...",
   "mainViewer.preview": "Preview",
   "mainViewer.wysiwyg": "WYSIWYG",
+  "pdf.openFailed": "Failed to open PDF",
+  "pdf.prevPage": "Previous page",
+  "pdf.nextPage": "Next page",
+  "memo.panelTitle": "Memos",
+  "memo.panelToggle": "Memos",
+  "memo.post": "Post",
+  "memo.postFailed": "Failed to post the memo",
+  "memo.updateFailed": "Failed to update the memo",
+  "memo.loadFailed": "Failed to load the memo file",
+  "memo.edit": "Edit",
+  "memo.delete": "Delete",
+  "memo.deleteConfirm": "Delete this memo?",
+  "memo.pin": "Pin",
+  "memo.unpin": "Unpin",
+  "memo.jump": "Jump to the quoted text",
+  "memo.broken": "Quoted text not found",
+  "memo.previewOnly": "Jumping works in preview mode",
+  "memo.copy": "Copy",
+  "memo.copied": "Copied",
+  "memo.copyFailed": "Copy failed",
+  "memo.addToMemo": "Add to memo",
+  "memo.empty": "No memos yet. Select text in the document and right-click to quote it.",
+  "memo.showMore": "Show more",
+  "memo.showLess": "Show less",
+  "memo.collapse": "Collapse panel",
+  "memo.expand": "Expand memo panel",
+  "memo.closePanel": "Close panel",
+  "memo.discardQuote": "Discard quote",
+  "memo.composerPlaceholder": "Write a memo... (Ctrl+Enter to post)",
+  "memo.countUnit": "memos",
+  "memoList.filterPlaceholder": "Filter by file name",
+  "memoList.empty": "No memos yet",
+  "dashboard.alignHorizontal": "Arrange in columns",
+  "dashboard.alignVertical": "Arrange in rows",
   "mainViewer.raw": "Raw",
   "mainViewer.diff": "Diff",
   "mainViewer.diffTarget": "Select file to compare",
@@ -1242,6 +1315,11 @@ const en: TranslationStrings = {
   "dashboard.url": "URL",
   "dashboard.content": "Content",
   "dashboard.markdownSelectFile": "Markdown file",
+  "dashboard.fileSelectFile": "Select file",
+  "dashboard.fileImportExisting": "Import an existing file (Markdown / text / HTML / EPUB / PDF / image)",
+  "dashboard.fileZoom": "Zoom",
+  "dashboard.fileFontSize": "Font size",
+  "dashboard.fileWidth": "Content width",
   "dashboard.markdownSelectFilePlaceholder": "Select a file...",
   "dashboard.addColumnKey": "Add column key...",
   "dashboard.dragToReorder": "Drag chips to reorder. Suggestions from cached frontmatter.",
@@ -2171,6 +2249,40 @@ const ja: TranslationStrings = {
   "mainViewer.saving": "保存中...",
   "mainViewer.preview": "プレビュー",
   "mainViewer.wysiwyg": "WYSIWYG",
+  "pdf.openFailed": "PDFを開けませんでした",
+  "pdf.prevPage": "前のページ",
+  "pdf.nextPage": "次のページ",
+  "memo.panelTitle": "メモ",
+  "memo.panelToggle": "メモ",
+  "memo.post": "投稿",
+  "memo.postFailed": "メモを投稿できませんでした",
+  "memo.updateFailed": "メモを更新できませんでした",
+  "memo.loadFailed": "メモファイルを読み込めませんでした",
+  "memo.edit": "編集",
+  "memo.delete": "削除",
+  "memo.deleteConfirm": "このメモを削除しますか？",
+  "memo.pin": "ピン留め",
+  "memo.unpin": "ピン解除",
+  "memo.jump": "引用元へ移動",
+  "memo.broken": "引用元が見つかりません",
+  "memo.previewOnly": "プレビュー表示でのみ移動できます",
+  "memo.copy": "コピー",
+  "memo.copied": "コピーしました",
+  "memo.copyFailed": "コピーできませんでした",
+  "memo.addToMemo": "メモに追加",
+  "memo.empty": "メモはまだありません。本文を選択して右クリックすると引用できます。",
+  "memo.showMore": "続きを表示",
+  "memo.showLess": "折りたたむ",
+  "memo.collapse": "パネルを折りたたむ",
+  "memo.expand": "メモパネルを展開",
+  "memo.closePanel": "パネルを閉じる",
+  "memo.discardQuote": "引用を破棄",
+  "memo.composerPlaceholder": "メモを書く…（Ctrl+Enterで投稿）",
+  "memo.countUnit": "件のメモ",
+  "memoList.filterPlaceholder": "ファイル名で絞り込み",
+  "memoList.empty": "メモはまだありません",
+  "dashboard.alignHorizontal": "横に整列",
+  "dashboard.alignVertical": "縦に整列",
   "mainViewer.raw": "Raw",
   "mainViewer.diff": "比較",
   "mainViewer.diffTarget": "比較するファイルを選択",
@@ -2309,6 +2421,11 @@ const ja: TranslationStrings = {
   "dashboard.url": "URL",
   "dashboard.content": "コンテンツ",
   "dashboard.markdownSelectFile": "Markdownファイル",
+  "dashboard.fileSelectFile": "ファイルを選択",
+  "dashboard.fileImportExisting": "既存ファイルをインポート（Markdown / テキスト / HTML / EPUB / PDF / 画像）",
+  "dashboard.fileZoom": "ズーム",
+  "dashboard.fileFontSize": "文字サイズ",
+  "dashboard.fileWidth": "コンテンツ幅",
   "dashboard.markdownSelectFilePlaceholder": "ファイルを選択...",
   "dashboard.addColumnKey": "列キーを追加...",
   "dashboard.dragToReorder": "ドラッグで並べ替え。候補はキャッシュ済みフロントマターから取得。",

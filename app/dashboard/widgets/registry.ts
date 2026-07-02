@@ -3,14 +3,15 @@
 // via the registerWidget function (extensibility point for P1+).
 
 import React from "react";
-import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database, MessageCircle } from "lucide-react";
+import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database, MessageCircle, NotebookPen } from "lucide-react";
 import type { WidgetDef } from "../types";
-import MarkdownWidget from "./MarkdownWidget";
+import FileWidget from "./file-widget/FileWidget";
+import MemoListWidget from "./MemoListWidget";
 import WebWidget from "./WebWidget";
 import UnknownWidget from "./UnknownWidget";
 import BaseWidget from "./BaseWidget";
 import TimelineWidget from "./TimelineWidget";
-import { MarkdownConfigEditor } from "./config-editors/MarkdownConfigEditor";
+import { FileConfigEditor } from "./config-editors/FileConfigEditor";
 import { WebConfigEditor } from "./config-editors/WebConfigEditor";
 import { BaseConfigEditor } from "./config-editors/BaseConfigEditor";
 import { TimelineConfigEditor } from "./config-editors/TimelineConfigEditor";
@@ -67,14 +68,29 @@ export function listWidgetDefs(): WidgetDef[] {
 
 // --- Core widget registrations ---
 
-registerWidget({
-  type: "markdown",
-  label: "Markdown",
+const fileWidgetDef: WidgetDef = {
+  type: "file",
+  label: "File",
   icon: React.createElement(FileText, { size: 16 }),
   defaultConfig: { path: "", showHeader: true },
-  render: (config, ctx) => React.createElement(MarkdownWidget, { config, ctx }),
-  defaultSize: { w: 6, h: 3 },
-  ConfigEditor: MarkdownConfigEditor,
+  render: (config, ctx) => React.createElement(FileWidget, { config, ctx }),
+  defaultSize: { w: 6, h: 4 },
+  ConfigEditor: FileConfigEditor,
+};
+
+registerWidget(fileWidgetDef);
+
+// Released dashboards persist `type: markdown`; alias it to the File widget so
+// they keep working without any YAML migration (config is forward-compatible).
+registerWidget({ ...fileWidgetDef, type: "markdown", hiddenFromPalette: true });
+
+registerWidget({
+  type: "memo-list",
+  label: "Memo List",
+  icon: React.createElement(NotebookPen, { size: 16 }),
+  defaultConfig: {},
+  render: () => React.createElement(MemoListWidget),
+  defaultSize: { w: 4, h: 5 },
 });
 
 registerWidget({

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
@@ -9,8 +9,12 @@ import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { guessMimeType, bytesToBase64, base64ToBytes } from "~/utils/media-utils";
 
+// pdfjs-dist sets up its worker at module scope; keep it out of the server bundle.
+const LazyPdfViewer = lazy(() => import("~/components/shared/PdfViewer"));
+
 export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fileId: string; fileName: string; mediaType: "pdf" | "video" | "audio" | "image"; fileMimeType: string | null }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [error, setError] = useState<string | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const { t } = useI18n();
@@ -36,6 +40,7 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
       blobUrlRef.current = null;
     }
     setSrc(null);
+    setPdfBytes(null);
     setError(null);
 
     let cancelled = false;
@@ -44,7 +49,12 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
       if (cancelled) return;
 
       // Helper: create blob URL from bytes and set as src
+      // (PDFs keep raw bytes instead — pdf.js consumes them directly)
       const showBlob = (buf: ArrayBuffer) => {
+        if (mediaType === "pdf") {
+          setPdfBytes(new Uint8Array(buf));
+          return;
+        }
         const mime = fileMimeType || guessMimeType(fileName);
         const blob = new Blob([buf], { type: mime });
         const url = URL.createObjectURL(blob);
@@ -93,7 +103,7 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
     return () => {
       cancelled = true;
     };
-  }, [fileId, fileName, fileMimeType, t]);
+  }, [fileId, fileName, fileMimeType, mediaType, t]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -189,7 +199,7 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
         <div className="flex items-center gap-1 ml-2">
           <button
             onClick={handleTempUpload}
-            disabled={uploading || !src}
+            disabled={uploading || (!src && !pdfBytes)}
             className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
             title={t("contextMenu.tempUpload")}
           >
@@ -209,26 +219,36 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
         <div className="flex-1 flex items-center justify-center">
           <p className="text-sm text-red-500">{error}</p>
         </div>
-      ) : src === null ? (
+      ) : src === null && pdfBytes === null ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 size={24} className="animate-spin text-gray-400" />
         </div>
       ) : (
         <>
           {mediaType === "pdf" && (
-            <iframe src={src} className="flex-1 w-full border-0" title={fileName} />
+            <div className="flex-1 min-h-0">
+              <Suspense
+                fallback={
+                  <div className="flex h-full items-center justify-center">
+                    <Loader2 size={24} className="animate-spin text-gray-400" />
+                  </div>
+                }
+              >
+                <LazyPdfViewer data={pdfBytes} title={fileName} />
+              </Suspense>
+            </div>
           )}
-          {mediaType === "video" && (
+          {mediaType === "video" && src && (
             <div className="flex-1 flex items-center justify-center p-4">
               <video src={src} controls className="max-w-full max-h-full" />
             </div>
           )}
-          {mediaType === "audio" && (
+          {mediaType === "audio" && src && (
             <div className="flex-1 flex items-center justify-center p-4">
               <audio src={src} controls />
             </div>
           )}
-          {mediaType === "image" && (
+          {mediaType === "image" && src && (
             <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
               <img src={src} alt={fileName} className="max-w-full max-h-full object-contain" />
             </div>

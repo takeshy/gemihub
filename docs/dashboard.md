@@ -21,7 +21,7 @@ grid:
   gap: 8
 widgets:
   - id: <uuid>
-    type: markdown | base | kanban | timeline | workflow | web
+    type: file | base | kanban | timeline | workflow | web | memo-list
     layout:
       lg: { x: 0, y: 0, w: 6, h: 3 }
       sm: { x: 0, y: 0, w: 12, h: 3 }   # auto-derived if omitted
@@ -36,6 +36,7 @@ Key files: `dashboardFile.ts` (parse/serialize/load/save/list/rename/delete), `t
 
 - Two breakpoints: `lg` (wide) and `sm` (narrow, threshold `BREAKPOINT_THRESHOLD = 768px`). Missing `sm` layouts are auto-derived (full width, stacked) by `deriveSmLayout`.
 - **Edit mode** enables drag (move), resize, per-widget Settings and Delete, plus undo/redo with config-edit coalescing.
+- **Align (整列)** — two edit-mode toolbar buttons tile all widgets evenly into up to 3 **columns** (horizontal) or 3 **rows** (vertical), round-robin, sized to roughly one screen (`equalizeLayout.ts`, ported from mdwys). One click is one undo step; `sm` layouts are dropped so `deriveSmLayout` re-derives the stacked layout.
 - The canvas (`DashboardCanvas.tsx`) renders the grid; each widget lives in a `GridCell.tsx` that owns drag/resize. `DashboardHost.tsx` owns the dashboard lifecycle (create / rename / delete / switch, home pinning via `settings.homeDashboard`) and debounced save.
 
 Adding a widget opens the `WidgetPalette` modal, which lists every registered widget type.
@@ -46,20 +47,56 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 
 | Type | Purpose | Source |
 |------|---------|--------|
-| `markdown` | Edit an existing Drive markdown file inline (preview/wysiwyg/code) | Drive file |
+| `file` | Open a Drive file — Markdown (preview/wysiwyg/code), text, HTML, EPUB, PDF, image — with per-document memos | Drive file |
 | `base` | Render a view (table/cards/list) of an Obsidian-style `.base` query file | `.base` + folder |
 | `kanban` | Kanban board over a folder of markdown files | folder |
 | `timeline` | Personal microblog of dated posts (tags, image attachments, pin/edit) | timeline folder |
 | `workflow` | Run a workflow and render its output | workflow |
 | `web` | Embed an external URL (with embeddability check + fallback card) | URL |
+| `memo-list` | Browse all memo files (filter, paging, newest-memo preview) | `Dashboards/Memos/` |
 
-The current core widget set is registered in `widgets/registry.ts`: `markdown`, `base`, `kanban`, `timeline`, `workflow`, `web`. `web` is unchanged from the initial dashboard release; the others are described below.
+The current core widget set is registered in `widgets/registry.ts`: `file`, `base`, `kanban`, `timeline`, `workflow`, `web`, `memo-list`. `web` is unchanged from the initial dashboard release; the others are described below.
+
+> **Markdown widget is now the File widget.** The earlier `markdown` widget grew into `file` (same config shape, more formats + memos). Released dashboards persisting `type: markdown` keep working without migration: the registry registers the same `WidgetDef` under both types (`markdown` is hidden from the palette), so the YAML round-trips byte-stable. New widgets are written as `type: file`.
 
 > **Folder data widgets are now Bases.** The earlier `card`, `table`, and `file-list` widgets (folder-source card grid / editable table / file list) have been **folded into the `base` widget** — they are now authored as `.base` files (a cards/table/list view over a folder). These three types are no longer registered; when a `.dashboard` still references one, it is **auto-converted** to an equivalent `base` widget on load (`legacyFolderWidgetConversion.ts`), writing a generated `.base` under `Dashboards/Bases/`. The shared folder-source pipeline (`data-widget/`: `folder-source.ts`, `filter.ts`, `ViewControls.tsx`, `config-parts/`) lives on and is reused by the `base` widget for filtering/sorting and the view-time header controls.
 
-### Markdown widget
+### File widget
 
-References an **existing** Drive markdown file by path (no inline content) and renders the normal markdown editor inline via `MarkdownFileEditor` — the same **preview / wysiwyg / code** toggle, frontmatter, and wiki links as the main editor, with local-first saving (`useFileWithCache`). The editor toolbar is trimmed to *path + mode toggle* (`hideToolbarActions`); the file path on the left is a `MarkdownFilePicker` (@-mention-style search over `editorCtx.fileList`) that switches the referenced file **even outside edit mode** — the choice is persisted as `ctx.onConfigChange({ path })`. This matches the Obsidian Gemini Helper dashboard schema and keeps `.dashboard` files hand-editable/syncable. The view mode defaults to **preview** on the first view of a session, then a session-scoped variable remembers the user's last explicit toggle across file switches (so opening another file keeps wysiwyg/code). Config: `{ path }`.
+Opens an **existing** Drive file by path (no inline content) and renders it by kind (`docKindFor`, extension-based). Implemented under `widgets/file-widget/` (ported from mdwys).
+
+```yaml
+config:
+  path: books/go_book.pdf   # Drive path — .md/.markdown, .txt, .html/.htm, .epub, .pdf, or an image
+  showHeader: true          # header bar (file picker, memo toggle, scale steppers)
+  viewFontScale: 100        # 70–240: PDF zoom / EPUB & HTML font size (%)
+  viewWidthScale: 100       # 70–180: EPUB & HTML content width (%)
+  memoPanelOpen: false      # memo timeline panel state (persisted like the rest)
+  memoPanelCollapsed: false
+```
+
+Per kind:
+
+- **Markdown** — the normal markdown editor inline via `MarkdownFileEditor` — the same **preview / wysiwyg / code** toggle, frontmatter, and wiki links as the main editor, with local-first saving (`useFileWithCache`). The view mode defaults to **preview** on the first view of a session, then a session-scoped variable remembers the user's last explicit toggle across file switches.
+- **PDF** — pdf.js (`app/components/shared/PdfViewer.tsx`): per-page canvas + selectable text layer, lazy page rendering (IntersectionObserver), page navigation, zoom via `viewFontScale`. The same component also powers the IDE's `MediaViewer` PDF display.
+- **EPUB** — the ZIP is unpacked client-side (`app/utils/epub.ts`, fflate) into one self-contained HTML document (spine sections `epub-chapter-N`, images inlined as data URLs, scripts stripped) shown in a sandboxed iframe (`allow-same-origin`, no scripts). Font size and page width adjust via the header steppers.
+- **HTML** — same sandboxed iframe with the font/width adjustments.
+- **Image** — rendered from a local-first blob URL.
+- **Text** — plain textarea with debounced local-first saves.
+
+Binary kinds load bytes local-first (`readFileBinaryLocal` → base64 cache); files over 20 MB stream directly without caching (mirrors sync behavior). The file path in the header is a picker (@-mention-style search over `editorCtx.fileList`, filtered to supported kinds) that switches the referenced file **even outside edit mode** — the choice is persisted as `ctx.onConfigChange({ path })`.
+
+#### Memos
+
+Every File widget has a per-document **memo timeline** (toggled from the header, panel state persisted in the widget config):
+
+- **Post with a quote** — select text in the Markdown preview, PDF text layer, EPUB/HTML iframe, or plain-text editor and right-click → **Add to memo**. The quote, ~30 chars of context on each side, and a position anchor are captured into the composer draft.
+- **Anchors** — `page=N` (PDF, 1-based), `spine=N` (EPUB, 0-based section index), or `text` (Markdown/HTML/text). The quote string is the primary anchor; position is auxiliary, so highlights survive EPUB reflow and document edits.
+- **Highlights** — while the panel is open, resolved quotes are painted via the **CSS Custom Highlight API** (no DOM mutation, so React re-renders are undisturbed; per-widget contributions are unioned per window, iframes get their own registry). Hover shows a memo preview; click jumps to the timeline entry; the quote in an entry jumps back to the document (with a flash). On browsers without the Highlight API (older Firefox) memos still work — only the painting is skipped.
+- **Timeline panel** — oldest-first entries with edit / delete / **pin**, raw ⇄ WYSIWYG composer (Ctrl+Enter posts), long entries fold, wiki links/embeds resolve through `GfmMarkdownPreview` and open in the IDE. Collapsible to a narrow rail (highlights stay on; only closing with × turns them off). On narrow widgets (< 4 grid columns) the panel auto-collapses to the rail.
+- **Storage** — one plain Markdown file per document at `Dashboards/Memos/<encoded-path>.md`. The file name encodes the document's Drive path (`_` → `_u`, `/` → `_s`, `:` → `_c`; names over 200 bytes truncate + append a SHA-256 prefix), and the frontmatter `source:` holds the real path. Entries are `---`-separated blocks: an ISO timestamp line, `id:` / optional `pinned:` / `anchor:` / `quote-prefix:` / `quote-suffix:` meta lines, a `>` blockquote with the quote, then the body. All writes are local-first with re-read-before-write, so two widgets on the same document can't clobber each other; Drive sees the changes on Push.
+
+Key modules: `app/dashboard/memo/` — `memoTimeline.ts` (entry parse/serialize), `memoPath.ts` (file-name encoding), `textAnchor.ts` (quote matching + highlight painting), `memoStore.ts` (local-first IO).
 
 ### Base widget
 
@@ -103,6 +140,15 @@ config:
 - **Tags** — inline `#tags` in a post body are extracted into clickable chips shown below the post (the chips are the canonical display; the raw `#tag` tokens are stripped from the rendered body so they aren't shown twice). Clicking a chip filters the feed by that tag.
 - **Filtering & paging** — header controls filter by free-text word, tags, and date range, and toggle pinned-only; older posts load on demand beyond `latestCount`.
 - **Rendering & folding** — posts render through `GfmMarkdownPreview` (wiki embeds for images via `WikiEmbed`). Markdown embeds and long posts collapse according to `collapseLineLimit` / `collapseCharLimit`, and each post is a memoized `TimelinePostView` so editing one post doesn't re-render the whole feed.
+
+### Memo List widget
+
+The `memo-list` widget browses every memo file under `Dashboards/Memos/` (config-free). Implemented by `widgets/MemoListWidget.tsx`.
+
+- Rows show the source document's name and path, the memo count, and the beginning of the **newest** memo (`summarizeMemoContent`) — a final note like "done reading" is visible at a glance — plus the last-modified date.
+- Filter by document file name; 20 rows per page with a pager. Summaries load lazily for the visible page and are cached keyed by `memoPath:modifiedTime`.
+- The source document resolves from the frontmatter `source:` (or by decoding the memo file name); clicking a row opens it in the **IDE main viewer** (`plugin-select-file` event).
+- The list refreshes automatically when memo files change locally or arrive via Pull.
 
 ### Shared building blocks
 
@@ -238,7 +284,7 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 
 > **Note on `base`.** Earlier this widget was envisioned as plugin-provided. It is now a **core widget** (`type: "base"`, see the Base widget section) backed by the in-repo Obsidian Bases engine in `app/bases/`. The same `WidgetContext` plumbing still applies, and a plugin could still register an alternative renderer for a custom type.
 
-**View-mode config.** `WidgetContext.onConfigChange(config)` lets a widget persist its own config from view mode (wired through `GridCell` → `DashboardCanvas` → the dashboard save). Used by the markdown widget's header file picker.
+**View-mode config.** `WidgetContext.onConfigChange(config)` lets a widget persist its own config from view mode (wired through `GridCell` → `DashboardCanvas` → the dashboard save). Used by the file widget's header file picker, scale steppers, and memo panel state.
 
 ## Key files
 
@@ -246,7 +292,10 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 - `app/dashboard/DashboardCanvas.tsx`, `GridCell.tsx`, `useGridLayout.ts`, `useBreakpoint.ts` — grid & interaction.
 - `app/dashboard/dashboardFile.ts`, `types.ts` — file I/O & schema.
 - `app/dashboard/widgets/registry.ts`, `WidgetPalette.tsx`, `WidgetRenderer.tsx`, `WidgetSettingsPanel.tsx` — registration & UI.
-- `app/dashboard/widgets/` — `MarkdownWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget` (legacy), `FilePreviewModal`, `base-file-options.ts` (+ their config editors, incl. `AIBaseDialog`).
+- `app/dashboard/widgets/` — `file-widget/` (`FileWidget`, `MemoTimelinePanel`, `HtmlDocumentFrame`, `docKind.ts`), `MemoListWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget` (legacy), `FilePreviewModal`, `base-file-options.ts` (+ their config editors, incl. `AIBaseDialog`).
+- `app/dashboard/memo/` — memo timeline format, path encoding, text anchoring/highlights, local-first store (+ tests).
+- `app/dashboard/equalizeLayout.ts` — the align (整列) tiling algorithm (+ tests).
+- `app/components/shared/PdfViewer.tsx`, `app/utils/epub.ts` — pdf.js viewer and EPUB→HTML converter shared with the IDE.
 - `app/dashboard/legacyFolderWidgetConversion.ts` — converts legacy `card`/`table`/`file-list` widgets to `base` (writes a generated `.base`).
 - `app/bases/`, `app/components/bases/` — `.base` compile/query engine and view renderer used by the `base` widget.
 - `app/dashboard/data-widget/` — `FolderWidget`, `WorkflowWidget`, `KanbanWidget`, `CardsView`, `TableView`, `ViewControls.tsx`, `folder-source.ts`, `filter.ts`, `workflow-runner.ts`, the `Card`/`Table`/`Kanban`/`Workflow` config editors, and shared `config-parts/`.

@@ -25,7 +25,7 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 - `docs/workflow_execution.md` — ワークフロー実行エンジン（パーサー、ローカル実行、プロンプト、AI生成）
 - `docs/search.md` — 検索機能（ローカル/Drive/RAG検索、Quick Open）
 - `docs/premium.md` — プレミアムプラン（マルチテナント、Firestore、Cloud Storage静的配信、カスタムドメイン、スケジュール実行、isolated-vm）
-- `docs/dashboard.md` — ダッシュボード（グリッド・ウィジェット: markdown/file-list/web/card/table/workflow、ワークフロー出力と更新間隔自動実行）（`dashboard_ja.md` は日本語版）
+- `docs/dashboard.md` — ダッシュボード（グリッド・ウィジェット: file(md/PDF/EPUB/画像+メモ)/base/kanban/timeline/workflow/web/memo-list、整列、ワークフロー出力と更新間隔自動実行）（`dashboard_ja.md` は日本語版）
 
 ## Commands
 

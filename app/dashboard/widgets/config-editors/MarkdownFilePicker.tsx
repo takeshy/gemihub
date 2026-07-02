@@ -16,12 +16,15 @@ export function MarkdownFilePicker({
   onSelect,
   buttonClassName,
   placeholder,
+  fileFilter,
 }: {
   /** Path/name to display on the button (falls back to placeholder). */
   currentPath?: string;
   onSelect: (path: string) => void;
   buttonClassName?: string;
   placeholder?: string;
+  /** Which files to offer; defaults to markdown files. */
+  fileFilter?: (fileName: string) => boolean;
 }) {
   const { t } = useI18n();
   const editorCtx = useEditorContext();
@@ -30,8 +33,8 @@ export function MarkdownFilePicker({
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const markdownFiles = useMemo(
-    () => editorCtx.fileList.filter((f) => isMarkdownFile(f.name)),
-    [editorCtx.fileList],
+    () => editorCtx.fileList.filter((f) => (fileFilter ?? isMarkdownFile)(f.name)),
+    [editorCtx.fileList, fileFilter],
   );
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

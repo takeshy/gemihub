@@ -65,7 +65,7 @@ WYSIWYG マークダウンエディタ、ワークフロービジュアルエデ
 | 画像 | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.bmp`, `.ico` | `<img>` による画像表示 |
 | 動画 | `.mp4`, `.webm`, `.ogg`, `.mov`, `.avi`, `.mkv` | `<video>` プレーヤー |
 | 音声 | `.mp3`, `.wav`, `.flac`, `.aac`, `.m4a`, `.opus` | `<audio>` プレーヤー |
-| PDF | `.pdf` | iframe プレビュー |
+| PDF | `.pdf` | pdf.js ビューア（`PdfViewer.tsx`: canvas + 選択可能なテキストレイヤー、ページ移動） |
 
 バイナリファイルには Temp Download / Temp Upload ボタンが表示され、ローカルでの編集やダウンロードが可能。
 
