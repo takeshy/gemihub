@@ -1,22 +1,32 @@
 steps:
-  # Step 1: Build Docker image
+  # Step 1: Pull the previous image so Docker can reuse dependency/build layers.
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        docker pull '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest' || true
+
+  # Step 2: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--cache-from'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest'
       - '.'
 
-  # Step 2: Push to Artifact Registry
+  # Step 3: Push to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
       - '--all-tags'
       - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub'
 
-  # Step 3: Deploy main service to Cloud Run
+  # Step 4: Deploy main service to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'
     args:
@@ -28,7 +38,7 @@ steps:
       - '--region'
       - '${_REGION}'
 
-  # Step 4: Deploy to all Hubwork account services (if any exist)
+  # Step 5: Deploy to all Hubwork account services (if any exist)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'bash'
     args:
@@ -47,6 +57,7 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
 
 substitutions:
   _REGION: asia-northeast1
