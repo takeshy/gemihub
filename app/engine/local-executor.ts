@@ -54,9 +54,10 @@ const SERVER_NODE_TYPES = new Set<WorkflowNodeType>([
 ]);
 
 export interface DriveEvent {
-  type: "updated" | "created" | "deleted";
+  type: "updated" | "created" | "deleted" | "renamed";
   fileId: string;
   fileName: string;
+  oldFileName?: string;
   content?: string;
   md5Checksum?: string;
   modifiedTime?: string;

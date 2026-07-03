@@ -32,6 +32,7 @@ export async function processDriveEvent(event: DriveEvent): Promise<void> {
     }
     case "created":
     case "deleted":
+    case "renamed":
       // Rebuild tree from local CachedRemoteMeta (not server) so local-only
       // files appear immediately.
       dispatchTreeRefreshFromLocalMeta();

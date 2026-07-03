@@ -13,7 +13,14 @@ import {
   findFileByNameLocal,
   getRemoteMetaFiles,
 } from "./drive-local";
-import { getCachedRemoteMeta } from "./indexeddb-cache";
+import {
+  getCachedRemoteMeta,
+  getLocalSyncMeta,
+  renameCachedFile,
+  setCachedRemoteMeta,
+  setLocalSyncMeta,
+  type CachedRemoteMeta,
+} from "./indexeddb-cache";
 import type { DriveEvent } from "~/engine/local-executor";
 
 const GEMINI_MEDIA_PREFIXES = ["image/", "audio/", "video/"];
@@ -41,6 +48,72 @@ function isTextualMimeType(mimeType: string): boolean {
 
 interface LocalDriveToolCallbacks {
   onDriveEvent?: (event: DriveEvent) => void;
+}
+
+type RenameResult =
+  | { id: string; name: string; oldName?: string; unchanged?: boolean }
+  | { error: string; fileId?: string };
+
+type BulkRenameApiResponse = {
+  results?: Array<{ fileId: string; ok: boolean }>;
+  failedFileIds?: string[];
+  meta?: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] };
+  error?: string;
+};
+
+async function applyRemoteMetaForFiles(
+  remoteMeta: BulkRenameApiResponse["meta"],
+  fileIds: string[],
+): Promise<void> {
+  if (!remoteMeta) return;
+
+  const cachedRemote = await getCachedRemoteMeta();
+  if (cachedRemote) {
+    await setCachedRemoteMeta({
+      ...cachedRemote,
+      lastUpdatedAt: remoteMeta.lastUpdatedAt,
+      files: {
+        ...cachedRemote.files,
+        ...Object.fromEntries(
+          fileIds
+            .map((fileId) => [fileId, remoteMeta.files[fileId]] as const)
+            .filter((entry): entry is readonly [string, CachedRemoteMeta["files"][string]] => !!entry[1]),
+        ),
+      },
+      cachedAt: Date.now(),
+    });
+  }
+
+  const localSyncMeta = await getLocalSyncMeta();
+  if (localSyncMeta) {
+    for (const fileId of fileIds) {
+      const entry = remoteMeta.files[fileId];
+      if (!entry) continue;
+      localSyncMeta.files[fileId] = {
+        md5Checksum: entry.md5Checksum,
+        modifiedTime: entry.modifiedTime,
+        name: entry.name,
+        size: entry.size,
+      };
+    }
+    localSyncMeta.lastUpdatedAt = remoteMeta.lastUpdatedAt;
+    await setLocalSyncMeta(localSyncMeta);
+  }
+}
+
+async function renameRemoteFiles(
+  files: Array<{ fileId: string; name: string }>,
+): Promise<BulkRenameApiResponse> {
+  const res = await fetch("/api/drive/files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "bulkRename", files }),
+  });
+  const data = await res.json().catch(() => ({})) as BulkRenameApiResponse;
+  if (!res.ok) {
+    return { error: data.error || `bulkRename failed with HTTP ${res.status}` };
+  }
+  return data;
 }
 
 const SCHEMA_FILE_PATH = "web/__gemihub/schema.md";
@@ -276,8 +349,36 @@ export async function executeLocalDriveTool(
       if (typeof newName !== "string" || !newName) {
         return { error: "rename_drive_file: 'newName' must be a non-empty string" };
       }
-      await renameFileLocal(fileId, newName);
-      return { id: fileId, name: newName };
+      const meta = await getCachedRemoteMeta();
+      const oldName = meta?.files[fileId]?.name;
+      const existing = await findFileByNameLocal(newName);
+      if (existing && existing.id !== fileId) {
+        return {
+          error: `rename_drive_file: a different file already exists at '${newName}' (fileId=${existing.id}). Choose a unique full path or update that file instead.`,
+          existingFileId: existing.id,
+        };
+      }
+      if (oldName === newName) {
+        return { id: fileId, name: newName, unchanged: true };
+      }
+      if (fileId.startsWith("new:")) {
+        await renameFileLocal(fileId, newName);
+      } else {
+        const data = await renameRemoteFiles([{ fileId, name: newName }]);
+        if (data.error) return { error: `rename_drive_file: ${data.error}` };
+        if (data.failedFileIds?.includes(fileId)) {
+          return { error: `rename_drive_file: failed to rename '${oldName ?? fileId}' to '${newName}'` };
+        }
+        await applyRemoteMetaForFiles(data.meta, [fileId]);
+        await renameCachedFile(fileId, newName);
+      }
+      callbacks?.onDriveEvent?.({
+        type: "renamed",
+        fileId,
+        fileName: newName,
+        oldFileName: oldName,
+      });
+      return { id: fileId, name: newName, oldName };
     }
 
     case "bulk_rename_drive_files": {
@@ -285,7 +386,8 @@ export async function executeLocalDriveTool(
       if (!Array.isArray(files) || files.length === 0) {
         return { error: "bulk_rename_drive_files: 'files' must be a non-empty array" };
       }
-      const results: Array<{ id: string; name: string } | { error: string }> = [];
+      const results: RenameResult[] = [];
+      const remoteRenames: Array<{ fileId: string; name: string; oldName?: string }> = [];
       for (const entry of files) {
         const { fileId, newName } = entry as { fileId?: string; newName?: string };
         if (typeof fileId !== "string" || !fileId || typeof newName !== "string" || !newName) {
@@ -293,10 +395,56 @@ export async function executeLocalDriveTool(
           continue;
         }
         try {
+          const meta = await getCachedRemoteMeta();
+          const oldName = meta?.files[fileId]?.name;
+          const existing = await findFileByNameLocal(newName);
+          if (existing && existing.id !== fileId) {
+            results.push({ error: `A different file already exists at '${newName}' (fileId=${existing.id})` });
+            continue;
+          }
+          if (oldName === newName) {
+            results.push({ id: fileId, name: newName, unchanged: true });
+            continue;
+          }
+          if (!fileId.startsWith("new:")) {
+            remoteRenames.push({ fileId, name: newName, oldName });
+            continue;
+          }
           await renameFileLocal(fileId, newName);
-          results.push({ id: fileId, name: newName });
+          callbacks?.onDriveEvent?.({
+            type: "renamed",
+            fileId,
+            fileName: newName,
+            oldFileName: oldName,
+          });
+          results.push({ id: fileId, name: newName, oldName });
         } catch (err) {
           results.push({ error: `Failed to rename ${fileId}: ${err instanceof Error ? err.message : "unknown error"}` });
+        }
+      }
+      if (remoteRenames.length > 0) {
+        const data = await renameRemoteFiles(remoteRenames.map(({ fileId, name }) => ({ fileId, name })));
+        if (data.error) {
+          for (const { fileId } of remoteRenames) {
+            results.push({ error: `Failed to rename ${fileId}: ${data.error}`, fileId });
+          }
+        } else {
+          const failed = new Set(data.failedFileIds ?? []);
+          const succeeded = remoteRenames.filter((entry) => !failed.has(entry.fileId));
+          await applyRemoteMetaForFiles(data.meta, succeeded.map((entry) => entry.fileId));
+          for (const entry of succeeded) {
+            await renameCachedFile(entry.fileId, entry.name);
+            callbacks?.onDriveEvent?.({
+              type: "renamed",
+              fileId: entry.fileId,
+              fileName: entry.name,
+              oldFileName: entry.oldName,
+            });
+            results.push({ id: entry.fileId, name: entry.name, oldName: entry.oldName });
+          }
+          for (const entry of remoteRenames.filter((item) => failed.has(item.fileId))) {
+            results.push({ error: `Failed to rename ${entry.fileId}`, fileId: entry.fileId });
+          }
         }
       }
       return { results };
