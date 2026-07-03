@@ -88,6 +88,13 @@ export function isDriveToolMediaResult(value: unknown): value is DriveToolMediaR
 export interface FunctionCallLimitOptions {
   maxFunctionCalls?: number;
   functionCallWarningThreshold?: number;
+  requestLimitExtension?: (details: {
+    used: number;
+    currentLimit: number;
+    extensionAmount: number;
+    pendingCalls: number;
+    remaining: number;
+  }) => Promise<boolean | number>;
 }
 
 export interface ChatWithToolsOptions {
@@ -102,6 +109,31 @@ const DEFAULT_MAX_FUNCTION_CALLS = 50;
 const DEFAULT_WARNING_THRESHOLD = 10;
 const DEFAULT_RAG_TOP_K = 5;
 const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
+
+async function maybeExtendFunctionCallLimit(
+  options: FunctionCallLimitOptions | undefined,
+  functionCallCount: number,
+  currentLimit: number,
+  pendingCalls: number,
+  remaining: number,
+): Promise<number> {
+  const defaultExtensionAmount = options?.maxFunctionCalls ?? DEFAULT_MAX_FUNCTION_CALLS;
+  if (!options?.requestLimitExtension || defaultExtensionAmount <= 0) {
+    return currentLimit;
+  }
+
+  const requestedExtension = await options.requestLimitExtension({
+    used: functionCallCount,
+    currentLimit,
+    extensionAmount: defaultExtensionAmount,
+    pendingCalls,
+    remaining,
+  });
+  const extensionAmount = typeof requestedExtension === "number"
+    ? Math.max(0, Math.floor(requestedExtension))
+    : requestedExtension ? defaultExtensionAmount : 0;
+  return extensionAmount > 0 ? currentLimit + extensionAmount : currentLimit;
+}
 
 function normalizeFileSearchStoreName(storeName: string | null | undefined): string | null {
   const trimmed = storeName?.trim();
@@ -449,6 +481,7 @@ export async function* chatWithToolsStream(
 
   const maxFunctionCalls =
     options?.functionCallLimits?.maxFunctionCalls ?? DEFAULT_MAX_FUNCTION_CALLS;
+  let currentFunctionCallLimit = maxFunctionCalls;
   const warningThreshold = Math.min(
     options?.functionCallLimits?.functionCallWarningThreshold ?? DEFAULT_WARNING_THRESHOLD,
     maxFunctionCalls
@@ -456,7 +489,7 @@ export async function* chatWithToolsStream(
   const rawTopK = options?.ragTopK ?? DEFAULT_RAG_TOP_K;
   const clampedTopK = Number.isFinite(rawTopK) ? Math.min(20, Math.max(1, rawTopK)) : DEFAULT_RAG_TOP_K;
   let functionCallCount = 0;
-  let warningEmitted = false;
+  let lastLimitExtensionPromptLimit: number | null = null;
   let geminiTools: Tool[] | undefined;
 
   const ragEnabled = ragStoreIds && ragStoreIds.length > 0;
@@ -645,7 +678,7 @@ export async function* chatWithToolsStream(
       }
 
       if (functionCallsToProcess.length > 0 && executeToolCall) {
-        const remainingBefore = maxFunctionCalls - functionCallCount;
+        let remainingBefore = currentFunctionCallLimit - functionCallCount;
 
         if (remainingBefore <= 0) {
           yield {
@@ -669,18 +702,30 @@ export async function* chatWithToolsStream(
           continue;
         }
 
-        const callsToExecute = functionCallsToProcess.slice(0, remainingBefore);
-        const skippedCount = functionCallsToProcess.length - callsToExecute.length;
-        const remainingAfter = remainingBefore - callsToExecute.length;
-
-        if (!warningEmitted && remainingAfter <= warningThreshold) {
-          warningEmitted = true;
-          yield {
-            type: "text",
-            content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]`,
-          };
+        if (
+          lastLimitExtensionPromptLimit !== currentFunctionCallLimit &&
+          (
+            remainingBefore <= warningThreshold ||
+            remainingBefore - Math.min(functionCallsToProcess.length, remainingBefore) <= warningThreshold ||
+            functionCallsToProcess.length > remainingBefore
+          )
+        ) {
+          lastLimitExtensionPromptLimit = currentFunctionCallLimit;
+          const extendedLimit = await maybeExtendFunctionCallLimit(
+            options?.functionCallLimits,
+            functionCallCount,
+            currentFunctionCallLimit,
+            functionCallsToProcess.length,
+            remainingBefore,
+          );
+          if (extendedLimit > currentFunctionCallLimit) {
+            currentFunctionCallLimit = extendedLimit;
+            remainingBefore = currentFunctionCallLimit - functionCallCount;
+          }
         }
 
+        const callsToExecute = functionCallsToProcess.slice(0, remainingBefore);
+        const skippedCount = functionCallsToProcess.length - callsToExecute.length;
         const functionResponseParts: Part[] = [];
 
         for (const fc of callsToExecute) {
@@ -732,7 +777,7 @@ export async function* chatWithToolsStream(
 
         functionCallCount += callsToExecute.length;
 
-        if (skippedCount > 0 || functionCallCount >= maxFunctionCalls) {
+        if (skippedCount > 0 || functionCallCount >= currentFunctionCallLimit) {
           const skippedMsg = skippedCount > 0 ? ` (${skippedCount} additional calls were skipped)` : "";
           yield {
             type: "text",
@@ -764,12 +809,6 @@ export async function* chatWithToolsStream(
           }
           continueLoop = false;
           continue;
-        }
-
-        if (warningEmitted && remainingAfter <= warningThreshold) {
-          functionResponseParts.push({
-            text: `[System: You have ${remainingAfter} function calls remaining. Please complete your task efficiently or provide a summary.]`,
-          } as Part);
         }
 
         response = await chat.sendMessageStream({

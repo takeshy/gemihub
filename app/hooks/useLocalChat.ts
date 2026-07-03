@@ -60,6 +60,24 @@ export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
   onSkillWorkflowLog?: (log: ExecutionLog) => void;
 }
 
+async function requestFunctionCallLimitExtension(details: {
+  used: number;
+  currentLimit: number;
+  extensionAmount: number;
+  remaining: number;
+}): Promise<number> {
+  const input = window.prompt(
+    [
+      `Tool calls are running low (${details.used}/${details.currentLimit} used, ${details.remaining} remaining).`,
+      "Add more tool calls for this response?",
+    ].join("\n"),
+    String(details.extensionAmount),
+  );
+  if (input === null) return 0;
+  const requested = Number.parseInt(input, 10);
+  return Number.isFinite(requested) && requested > 0 ? requested : 0;
+}
+
 export async function* executeLocalChat(
   options: LocalChatOptions,
   callbacks?: LocalChatCallbacks,
@@ -315,7 +333,7 @@ export async function* executeLocalChat(
       enableThinking,
       functionCallLimits:
         maxFunctionCalls !== undefined || functionCallWarningThreshold !== undefined
-          ? { maxFunctionCalls, functionCallWarningThreshold }
+          ? { maxFunctionCalls, functionCallWarningThreshold, requestLimitExtension: requestFunctionCallLimitExtension }
           : undefined,
       ragTopK,
     },

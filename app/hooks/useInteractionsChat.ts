@@ -311,6 +311,24 @@ function buildToolDispatcher(
 const DEFAULT_MAX_FUNCTION_CALLS = 50;
 const DEFAULT_WARNING_THRESHOLD = 10;
 
+async function requestFunctionCallLimitExtension(details: {
+  used: number;
+  currentLimit: number;
+  extensionAmount: number;
+  remaining: number;
+}): Promise<number> {
+  const input = window.prompt(
+    [
+      `Tool calls are running low (${details.used}/${details.currentLimit} used, ${details.remaining} remaining).`,
+      "Add more tool calls for this response?",
+    ].join("\n"),
+    String(details.extensionAmount),
+  );
+  if (input === null) return 0;
+  const requested = Number.parseInt(input, 10);
+  return Number.isFinite(requested) && requested > 0 ? requested : 0;
+}
+
 export async function* executeInteractionsChat(
   options: InteractionsChatOptions,
   callbacks?: LocalChatCallbacks,
@@ -406,7 +424,8 @@ export async function* executeInteractionsChat(
     maxFunctionCalls,
   );
   let functionCallCount = 0;
-  let warningEmitted = false;
+  let currentFunctionCallLimit = maxFunctionCalls;
+  let lastLimitExtensionPromptLimit: number | null = null;
   let currentInteractionId = previousInteractionId;
   let toolResults: Array<{ callId: string; name: string; result: unknown }> | undefined;
   let shouldStopAfterRound = false;
@@ -530,7 +549,7 @@ export async function* executeInteractionsChat(
     }
 
     // Execute tool calls locally
-    const remainingBefore = maxFunctionCalls - functionCallCount;
+    let remainingBefore = currentFunctionCallLimit - functionCallCount;
 
     if (remainingBefore <= 0) {
       yield {
@@ -547,18 +566,29 @@ export async function* executeInteractionsChat(
       continue;
     }
 
-    const callsToExecute = pendingToolCalls.slice(0, remainingBefore);
-    const skippedCount = pendingToolCalls.length - callsToExecute.length;
-    const remainingAfter = remainingBefore - callsToExecute.length;
-
-    if (!warningEmitted && remainingAfter <= warningThreshold) {
-      warningEmitted = true;
-      yield {
-        type: "text",
-        content: `\n\n[Note: ${remainingAfter} function calls remaining. Please work efficiently.]`,
-      };
+    if (
+      lastLimitExtensionPromptLimit !== currentFunctionCallLimit &&
+      (
+        remainingBefore <= warningThreshold ||
+        remainingBefore - Math.min(pendingToolCalls.length, remainingBefore) <= warningThreshold ||
+        pendingToolCalls.length > remainingBefore
+      )
+    ) {
+      lastLimitExtensionPromptLimit = currentFunctionCallLimit;
+      const extensionAmount = await requestFunctionCallLimitExtension({
+        used: functionCallCount,
+        currentLimit: currentFunctionCallLimit,
+        extensionAmount: maxFunctionCalls,
+        remaining: remainingBefore,
+      });
+      if (extensionAmount > 0) {
+        currentFunctionCallLimit += extensionAmount;
+        remainingBefore = currentFunctionCallLimit - functionCallCount;
+      }
     }
 
+    const callsToExecute = pendingToolCalls.slice(0, remainingBefore);
+    const skippedCount = pendingToolCalls.length - callsToExecute.length;
     const results: Array<{ callId: string; name: string; result: unknown }> = [];
 
     for (const fc of callsToExecute) {
@@ -592,7 +622,7 @@ export async function* executeInteractionsChat(
 
     functionCallCount += callsToExecute.length;
 
-    if (skippedCount > 0 || functionCallCount >= maxFunctionCalls) {
+    if (skippedCount > 0 || functionCallCount >= currentFunctionCallLimit) {
       const skippedMsg = skippedCount > 0 ? ` (${skippedCount} additional calls were skipped)` : "";
       yield {
         type: "text",
