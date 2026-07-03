@@ -776,6 +776,7 @@ export function useDocumentMemo({
   // ---- rendered pieces ---------------------------------------------------------
 
   const interactive = kind === "markdown" || kind === "pdf";
+  const highlightInteractive = interactive && panelOpen;
 
   const rail = panelOpen && !memoPanelVisible ? (
     <div className="flex shrink-0 flex-col border-r border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950">
@@ -850,9 +851,9 @@ export function useDocumentMemo({
           if (handleSelectionContextMenu(event.clientX, event.clientY, window, false)) event.preventDefault();
         }
       : undefined,
-    onMouseMove: interactive ? (event) => handlePointerHover(event.clientX, event.clientY, false) : undefined,
+    onMouseMove: highlightInteractive ? (event) => handlePointerHover(event.clientX, event.clientY, false) : undefined,
     onMouseDown: () => setMenu(null),
-    onClick: interactive ? (event) => handleHighlightClick(event.clientX, event.clientY, false, window) : undefined,
+    onClick: highlightInteractive ? (event) => handleHighlightClick(event.clientX, event.clientY, false, window) : undefined,
     onTouchEnd: memoConfigured
       ? (event) => {
           const touch = event.changedTouches[0];
@@ -865,7 +866,7 @@ export function useDocumentMemo({
           if (interactive) showMobileSelectionMenu(window, false);
         }
       : undefined,
-    onMouseLeave: () => setHover(null),
+    onMouseLeave: highlightInteractive ? () => setHover(null) : () => undefined,
   };
 
   return {

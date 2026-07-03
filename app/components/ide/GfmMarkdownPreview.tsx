@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -5,6 +6,7 @@ import { MermaidCodeBlock } from "./MermaidCodeBlock";
 import { WikiEmbed } from "~/components/editor/WikiEmbed";
 import { useI18n } from "~/i18n/context";
 import { slugifyHeading } from "~/utils/wiki-subpath";
+import { isLocalDocumentHref, localHrefHeading, resolveLocalHrefFile } from "~/utils/wiki-links";
 import type { FileListItem } from "~/contexts/EditorContext";
 
 /** Recursively extract plain text from react-markdown children. */
@@ -198,19 +200,24 @@ function preprocessEmbeds(content: string): string {
     .join("");
 }
 
-export default function GfmMarkdownPreview({
+function GfmMarkdownPreview({
   content,
   fileList,
+  currentFilePath,
   onWikiLinkClick,
   onMissingWikiLinkClick,
 }: {
   content: string;
   fileList?: FileListItem[];
+  currentFilePath?: string;
   onWikiLinkClick?: (fileId: string, fileName: string, heading?: string) => void;
   onMissingWikiLinkClick?: (target: string) => void;
 }) {
   const { t } = useI18n();
-  const processedContent = fileList ? preprocessWikiLinks(preprocessEmbeds(content)) : content;
+  const processedContent = useMemo(() => (
+    fileList ? preprocessWikiLinks(preprocessEmbeds(content)) : content
+  ), [content, fileList]);
+
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkCallouts]}
@@ -268,6 +275,24 @@ export default function GfmMarkdownPreview({
                 }}
                 className="text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
                 title={file ? file.path || file.name : `${fileName} (not found)`}
+              >
+                {children}
+              </a>
+            );
+          }
+          if (href && fileList && currentFilePath && isLocalDocumentHref(href)) {
+            const file = resolveLocalHrefFile(fileList, currentFilePath, href);
+            const heading = localHrefHeading(href);
+            return (
+              <a
+                href={href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (file && onWikiLinkClick) onWikiLinkClick(file.id, file.name, heading);
+                  if (!file && onMissingWikiLinkClick) onMissingWikiLinkClick(href);
+                }}
+                className="text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                title={file ? file.path || file.name : `${href} (not found)`}
               >
                 {children}
               </a>
@@ -339,3 +364,5 @@ export default function GfmMarkdownPreview({
     </ReactMarkdown>
   );
 }
+
+export default memo(GfmMarkdownPreview);

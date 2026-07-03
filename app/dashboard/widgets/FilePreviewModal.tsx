@@ -99,6 +99,7 @@ function TextPreviewBody({ fileId, fileName }: { fileId: string; fileName: strin
   const { t } = useI18n();
   const { fileList } = useEditorContext();
   const { content, loading } = useFileWithCache(fileId, undefined, "FileListPreview");
+  const currentFilePath = fileList.find((file) => file.id === fileId)?.path || fileName;
 
   if (loading && content == null) {
     return (
@@ -118,7 +119,7 @@ function TextPreviewBody({ fileId, fileName }: { fileId: string; fileName: strin
     const split = splitFrontmatter(content);
     return (
       <div className="prose prose-sm max-w-none dark:prose-invert">
-        <GfmMarkdownPreview content={split ? split.body : content} fileList={fileList} />
+        <GfmMarkdownPreview content={split ? split.body : content} fileList={fileList} currentFilePath={currentFilePath} />
       </div>
     );
   }

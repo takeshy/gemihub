@@ -216,6 +216,7 @@ export function MarkdownFileEditor({
     [editorCtx]
   );
   const [mode, setMode] = useState<MdEditMode>(initialMode);
+  const currentFilePath = editorCtx.fileList.find((file) => file.id === fileId)?.path || fileName;
 
   // Report every effective mode change (explicit toggles AND internal resets
   // like file switches / wiki-heading jumps) so hosts tracking the mode for
@@ -399,6 +400,19 @@ export function MarkdownFileEditor({
     [editorCtx.fileList, fileId, mode, scrollToHeadingId]
   );
 
+  const handlePreviewWikiLinkClick = useCallback((linkedFileId: string, linkedFileName: string, heading?: string) => {
+    if (heading) {
+      sessionStorage.setItem("pending-wiki-heading", slugifyHeading(heading));
+    } else {
+      sessionStorage.removeItem("pending-wiki-heading");
+    }
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: linkedFileId, fileName: linkedFileName, mimeType: "text/markdown" },
+      })
+    );
+  }, []);
+
   // After arriving via a wiki heading link, ensure we're in preview mode and
   // scroll to the pending heading once rendered. Runs on mount too, so it works
   // whether this editor instance is reused or freshly remounted per file.
@@ -474,18 +488,8 @@ export function MarkdownFileEditor({
                 <LazyGfmPreview
                   content={fmParsed.hasFrontmatter ? fmParsed.body : content}
                   fileList={editorCtx.fileList}
-                  onWikiLinkClick={(linkedFileId, linkedFileName, heading) => {
-                    if (heading) {
-                      sessionStorage.setItem("pending-wiki-heading", slugifyHeading(heading));
-                    } else {
-                      sessionStorage.removeItem("pending-wiki-heading");
-                    }
-                    window.dispatchEvent(
-                      new CustomEvent("plugin-select-file", {
-                        detail: { fileId: linkedFileId, fileName: linkedFileName, mimeType: "text/markdown" },
-                      })
-                    );
-                  }}
+                  currentFilePath={currentFilePath}
+                  onWikiLinkClick={handlePreviewWikiLinkClick}
                 />
               </Suspense>
             </div>
