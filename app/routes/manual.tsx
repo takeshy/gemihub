@@ -9,6 +9,7 @@ import { DashboardChapter } from "~/components/manual/chapters/dashboard";
 import { SetupChapter } from "~/components/manual/chapters/setup";
 import { ChatChapter } from "~/components/manual/chapters/chat";
 import { EditorChapter } from "~/components/manual/chapters/editor";
+import { MemoChapter } from "~/components/manual/chapters/memo";
 import { SyncChapter } from "~/components/manual/chapters/sync";
 import { WorkflowChapter } from "~/components/manual/chapters/workflow";
 import { SearchChapter } from "~/components/manual/chapters/search";
@@ -39,18 +40,19 @@ const CHAPTERS: ChapterDef[] = [
   { slug: "setup", num: 4, titleEn: "Initial Setup", titleJa: "初期セットアップ", descEn: "Sign in, API key configuration, and first sync.", descJa: "サインイン、APIキー設定、初回同期。", component: SetupChapter },
   { slug: "chat", num: 5, titleEn: "AI Chat", titleJa: "AIチャット", descEn: "Chat with Gemini AI: streaming, tools, file attachments, and slash commands.", descJa: "Gemini AIとのチャット：ストリーミング、ツール、ファイル添付、スラッシュコマンド。", component: ChatChapter },
   { slug: "editor", num: 6, titleEn: "File Editor", titleJa: "ファイル編集", descEn: "Markdown editing, WYSIWYG, diff view, and edit history.", descJa: "Markdownエディタ、WYSIWYG、差分表示、編集履歴。", component: EditorChapter },
-  { slug: "sync", num: 7, titleEn: "Sync: Push to Drive / Pull to Local", titleJa: "同期：ドライブ反映 / ローカル反映", descEn: "Offline-first caching, sync to Drive and local, and conflict resolution.", descJa: "オフラインファーストキャッシュ、ドライブ反映・ローカル反映、コンフリクト解決。", component: SyncChapter },
-  { slug: "workflow", num: 8, titleEn: "Workflows", titleJa: "ワークフロー", descEn: "Visual workflow builder, AI generation, execution, and node types.", descJa: "ビジュアルワークフロービルダー、AI生成、実行、ノードタイプ。", component: WorkflowChapter },
-  { slug: "search", num: 9, titleEn: "Search", titleJa: "検索", descEn: "Local, Drive, and RAG search modes plus Quick Open.", descJa: "ローカル・Drive・RAG検索モードとQuick Open。", component: SearchChapter },
-  { slug: "rag", num: 10, titleEn: "RAG", titleJa: "RAG", descEn: "Retrieval-Augmented Generation: setup, sync, and semantic search.", descJa: "RAG（検索拡張生成）：設定、同期、意味検索。", component: RagChapter },
-  { slug: "mcp", num: 11, titleEn: "MCP", titleJa: "MCP", descEn: "Model Context Protocol: connect external tools and services.", descJa: "MCP（モデルコンテキストプロトコル）：外部ツール・サービスとの連携。", component: McpChapter },
-  { slug: "encryption", num: 12, titleEn: "Encryption", titleJa: "暗号化", descEn: "Hybrid RSA+AES encryption for files, chat, and workflow history.", descJa: "ファイル、チャット、ワークフロー履歴のハイブリッドRSA+AES暗号化。", component: EncryptionChapter },
-  { slug: "plugins", num: 13, titleEn: "Plugins", titleJa: "プラグイン", descEn: "Install, manage, and develop plugins from GitHub.", descJa: "GitHubからのプラグインのインストール、管理、開発。", component: PluginsChapter },
-  { slug: "premium", num: 14, titleEn: "Premium Plan", titleJa: "プレミアムプラン", descEn: "Lite and Pro plans: Interactions API, Gmail, PDF, Sheets, hosting, scheduling, and more.", descJa: "LiteとProプラン：Interactions API、Gmail、PDF、Sheets、ホスティング、スケジュール実行など。", component: PremiumChapter },
-  { slug: "webpage-builder", num: 15, titleEn: "AI Web Builder", titleJa: "AI Webビルダー", descEn: "Build Hubwork sites end-to-end through chat: pages, workflow APIs, schema, mocks, and admin screens.", descJa: "チャットでHubworkサイトを丸ごと構築：ページ、ワークフローAPI、スキーマ、モック、管理画面まで。", component: WebpageBuilderChapter },
-  { slug: "settings-overview", num: 16, titleEn: "Settings Overview", titleJa: "設定一覧", descEn: "All settings tabs: General, MCP, RAG, Plugins, Commands, Shortcuts.", descJa: "全設定タブの概要：一般、MCP、RAG、プラグイン、コマンド、ショートカット。", component: SettingsOverviewChapter },
-  { slug: "shortcuts", num: 17, titleEn: "Keyboard Shortcuts", titleJa: "キーボードショートカット", descEn: "Built-in shortcuts and custom workflow shortcuts.", descJa: "組み込みショートカットとカスタムワークフローショートカット。", component: ShortcutsChapter },
-  { slug: "faq", num: 18, titleEn: "FAQ", titleJa: "FAQ", descEn: "Frequently asked questions and troubleshooting.", descJa: "よくある質問とトラブルシューティング。", component: FaqChapter },
+  { slug: "memo", num: 7, titleEn: "Document Memos", titleJa: "ドキュメントメモ", descEn: "Read PDFs, EPUBs, and notes with quote-anchored highlights and per-document memo timelines.", descJa: "PDF・EPUB・ノートを読みながら、引用アンカー付きハイライトとドキュメント単位のメモタイムラインを活用。", component: MemoChapter },
+  { slug: "sync", num: 8, titleEn: "Sync: Push to Drive / Pull to Local", titleJa: "同期：ドライブ反映 / ローカル反映", descEn: "Offline-first caching, sync to Drive and local, and conflict resolution.", descJa: "オフラインファーストキャッシュ、ドライブ反映・ローカル反映、コンフリクト解決。", component: SyncChapter },
+  { slug: "workflow", num: 9, titleEn: "Workflows", titleJa: "ワークフロー", descEn: "Visual workflow builder, AI generation, execution, and node types.", descJa: "ビジュアルワークフロービルダー、AI生成、実行、ノードタイプ。", component: WorkflowChapter },
+  { slug: "search", num: 10, titleEn: "Search", titleJa: "検索", descEn: "Local, Drive, and RAG search modes plus Quick Open.", descJa: "ローカル・Drive・RAG検索モードとQuick Open。", component: SearchChapter },
+  { slug: "rag", num: 11, titleEn: "RAG", titleJa: "RAG", descEn: "Retrieval-Augmented Generation: setup, sync, and semantic search.", descJa: "RAG（検索拡張生成）：設定、同期、意味検索。", component: RagChapter },
+  { slug: "mcp", num: 12, titleEn: "MCP", titleJa: "MCP", descEn: "Model Context Protocol: connect external tools and services.", descJa: "MCP（モデルコンテキストプロトコル）：外部ツール・サービスとの連携。", component: McpChapter },
+  { slug: "encryption", num: 13, titleEn: "Encryption", titleJa: "暗号化", descEn: "Hybrid RSA+AES encryption for files, chat, and workflow history.", descJa: "ファイル、チャット、ワークフロー履歴のハイブリッドRSA+AES暗号化。", component: EncryptionChapter },
+  { slug: "plugins", num: 14, titleEn: "Plugins", titleJa: "プラグイン", descEn: "Install, manage, and develop plugins from GitHub.", descJa: "GitHubからのプラグインのインストール、管理、開発。", component: PluginsChapter },
+  { slug: "premium", num: 15, titleEn: "Premium Plan", titleJa: "プレミアムプラン", descEn: "Lite and Pro plans: Interactions API, Gmail, PDF, Sheets, hosting, scheduling, and more.", descJa: "LiteとProプラン：Interactions API、Gmail、PDF、Sheets、ホスティング、スケジュール実行など。", component: PremiumChapter },
+  { slug: "webpage-builder", num: 16, titleEn: "AI Web Builder", titleJa: "AI Webビルダー", descEn: "Build Hubwork sites end-to-end through chat: pages, workflow APIs, schema, mocks, and admin screens.", descJa: "チャットでHubworkサイトを丸ごと構築：ページ、ワークフローAPI、スキーマ、モック、管理画面まで。", component: WebpageBuilderChapter },
+  { slug: "settings-overview", num: 17, titleEn: "Settings Overview", titleJa: "設定一覧", descEn: "All settings tabs: General, MCP, RAG, Plugins, Commands, Shortcuts.", descJa: "全設定タブの概要：一般、MCP、RAG、プラグイン、コマンド、ショートカット。", component: SettingsOverviewChapter },
+  { slug: "shortcuts", num: 18, titleEn: "Keyboard Shortcuts", titleJa: "キーボードショートカット", descEn: "Built-in shortcuts and custom workflow shortcuts.", descJa: "組み込みショートカットとカスタムワークフローショートカット。", component: ShortcutsChapter },
+  { slug: "faq", num: 19, titleEn: "FAQ", titleJa: "FAQ", descEn: "Frequently asked questions and troubleshooting.", descJa: "よくある質問とトラブルシューティング。", component: FaqChapter },
 ];
 
 const CHAPTER_MAP = new Map(CHAPTERS.map((ch) => [ch.slug, ch]));
