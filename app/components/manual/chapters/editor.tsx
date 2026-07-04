@@ -75,6 +75,17 @@ function EditorEn() {
           <li><strong>Encrypted (.encrypted)</strong> — Password prompt, then decrypted content editor.</li>
         </ul>
 
+        <h2>Document Memos</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/memo.png" alt="Document memo panel with quote-anchored highlight" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          Markdown, PDF, EPUB, text, and image files each get their own memo timeline. Select a passage, right-click, and choose <strong>Add to memo</strong> — the quote is captured with surrounding context and highlighted in the document. Click a highlight to jump to its memo, or click the quote inside a memo to jump back to the exact passage.
+        </p>
+        <p>
+          Memos support pin/edit/delete and a WYSIWYG or raw Markdown composer. They are stored as plain Markdown files under <code>Dashboards/Memos/</code> in your Drive, so chat and RAG can use them like any other file.
+        </p>
+
         <h2>Temp Edit (Temporary File Sharing)</h2>
         <p>
           Share files temporarily with external tools or other devices. File content is stored in the Google Drive <code>__TEMP__</code> folder.
@@ -202,6 +213,17 @@ function EditorJa() {
           <li><strong>音声 / 動画</strong> — メディアプレーヤー。</li>
           <li><strong>暗号化 (.encrypted)</strong> — パスワード入力後、復号コンテンツのエディタ。</li>
         </ul>
+
+        <h2>ドキュメントメモ</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/memo.png" alt="引用アンカー付きハイライトとドキュメントメモパネル" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          Markdown・PDF・EPUB・テキスト・画像の各ファイルに、専用のメモタイムラインが付きます。文章を選択して右クリック →<strong>メモに追加</strong>を選ぶと、引用が前後の文脈とともに記録され、ドキュメント上にハイライト表示されます。ハイライトをクリックするとメモへ、メモ内の引用をクリックすると本文の該当箇所へジャンプできます。
+        </p>
+        <p>
+          メモはピン留め・編集・削除に対応し、WYSIWYG / 生Markdownのコンポーザーで書けます。Driveの<code>Dashboards/Memos/</code>配下に普通のMarkdownファイルとして保存されるため、チャットやRAGからも他のファイルと同様に利用できます。
+        </p>
 
         <h2>Temp Edit（一時ファイル共有）</h2>
         <p>

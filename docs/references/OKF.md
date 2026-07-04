@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: OKF Knowledge Sources
-description: Documentation for the OKF Knowledge Sources feature.
+description: "OKF knowledge sources: markdown knowledge bundles on Drive, selected per chat and injected into the system prompt."
 tags:
   - okf
 ---
@@ -13,15 +13,25 @@ OKF is separate from Agent Skills. Skills define reusable behavior, references, 
 
 ## Configure OKF
 
+OKF is always enabled. The OKF folder path defaults to `Knowledge`; change it from **Settings → RAG** if your bundles live elsewhere:
+
 1. Sync the Drive files that contain your OKF bundle.
-2. Open **Settings**.
-3. Go to **RAG**.
-4. Set the OKF folder path, such as `Knowledge` or `Knowledge/okf`.
-5. Select one or more discovered bundles and save the selection.
+2. Open **Settings** and go to **RAG**.
+3. Set the OKF folder path (default `Knowledge`) and save — the Save button activates only when the path has changed. The bundles discovered under that folder are listed when the tab opens and after each save.
 
 ![OKF Settings](images/okf.png)
 
 GemiHub reads OKF from the synced Drive file cache. The folder path is relative to the GemiHub Drive root.
+
+## Select Bundles in Chat
+
+Which bundles are active is chosen in chat, not in settings. When bundles are discovered under the configured folder, an OKF selector row (book icon) appears above the chat input, next to the skill selector:
+
+- Click **+** to open the bundle list and check the bundles to activate.
+- Active bundles are shown as chips; click **×** on a chip to deactivate it.
+- The selection is per browser and persists across sessions (stored in localStorage).
+
+Active bundles are injected into the system prompt of every message sent from that chat.
 
 ## OKF Format
 
@@ -46,7 +56,7 @@ MRR is calculated from active paid subscriptions...
 
 ## Bundles
 
-A bundle is any folder that directly contains an `index.md` file. The bundle display name comes from `index.md` frontmatter `title`, falling back to the folder name.
+A bundle is any folder that directly contains an `index.md` file. The bundle display name comes from `index.md` frontmatter `title`, falling back to the folder name. Only top-level bundle folders are listed: a subdirectory `index.md` inside a bundle (a per-directory index for progressive disclosure) belongs to the parent bundle and is not discovered as a separate bundle.
 
 Recommended layout:
 
@@ -67,7 +77,7 @@ Knowledge/
 
 ## What Gets Loaded
 
-When bundles are selected, GemiHub reads Markdown files from each selected bundle and injects a compact summary into the chat system prompt. The loader includes:
+When bundles are active in a chat, GemiHub reads Markdown files from each active bundle and injects a compact summary into the chat system prompt. The loader includes:
 
 - `type`
 - `title`

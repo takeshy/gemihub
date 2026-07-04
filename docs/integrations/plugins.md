@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Plugins
-description: Documentation for the Plugins feature.
+description: "Plugin developer guide: GitHub Release installation, PluginAPI surface, views, slash commands, and storage."
 tags:
   - plugins
 ---

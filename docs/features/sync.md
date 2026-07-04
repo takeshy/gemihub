@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Sync
-description: Documentation for the Sync feature.
+description: Push/pull sync between the IndexedDB cache and Google Drive with MD5 change detection and conflict resolution.
 tags:
   - sync
 ---

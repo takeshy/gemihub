@@ -1116,6 +1116,8 @@ export interface TranslationStrings {
   "settings.general.showManagementFolders": string;
   "settings.general.showManagementFoldersDescription": string;
   "skills.selector.title": string;
+  "okf.selector.title": string;
+  "settings.okf.selectInChat": string;
 }
 
 const en: TranslationStrings = {
@@ -2233,6 +2235,8 @@ const en: TranslationStrings = {
   "settings.general.showManagementFolders": "Show management folders",
   "settings.general.showManagementFoldersDescription": "Show folders used by external tools (e.g. LocalLlmHub) in the file tree.",
   "skills.selector.title": "Agent Skills",
+  "okf.selector.title": "OKF knowledge bundles",
+  "settings.okf.selectInChat": "Which bundles to use is selected per chat, from the OKF selector above the chat input.",
 };
 
 const ja: TranslationStrings = {
@@ -3350,6 +3354,8 @@ const ja: TranslationStrings = {
   "settings.general.showManagementFolders": "管理フォルダを表示",
   "settings.general.showManagementFoldersDescription": "外部ツールが使用するフォルダ（例: LocalLlmHub）をファイルツリーに表示します。",
   "skills.selector.title": "エージェントスキル",
+  "okf.selector.title": "OKFナレッジバンドル",
+  "settings.okf.selectInChat": "どのバンドルを使うかは、チャット入力欄の上のOKFセレクタでチャットごとに選択します。",
 };
 
 const translations: Record<Language, TranslationStrings> = { en, ja };

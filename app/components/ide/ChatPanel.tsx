@@ -41,6 +41,7 @@ import { useEditorContext } from "~/contexts/EditorContext";
 import { readFileLocal, findFileByNameLocal } from "~/services/drive-local";
 import type { ReviewResult } from "~/services/ai-workflow-generation";
 import { buildOkfSystemPrompt } from "~/services/okf-loader";
+import { useOkfBundles } from "~/hooks/useOkfBundles";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -243,6 +244,7 @@ export function ChatPanel({
     getActiveSkillWorkflows,
   } = useSkills();
   const editorCtx = useEditorContext();
+  const { okfBundles, activeOkfBundleIds, toggleOkfBundle, refreshOkfBundles } = useOkfBundles(settings.okfRoot || "Knowledge");
   const [histories, setHistories] = useState<ChatHistoryItem[]>([]);
 
   // Session ID to track which chat session owns the UI; incremented on new/load chat
@@ -877,7 +879,7 @@ export function ChatPanel({
         }
         const extraSkillIds = overrides?.skillId ? [overrides.skillId] : undefined;
         const skillPrompt = await getActiveSkillsSystemPrompt(extraSkillIds, settings.hubwork?.accounts);
-        const okfPrompt = await buildOkfSystemPrompt(settings.okfRoot, settings.selectedOkfBundleIds ?? []);
+        const okfPrompt = await buildOkfSystemPrompt(settings.okfRoot, activeOkfBundleIds);
         const allSkillIds = extraSkillIds
           ? [...new Set([...activeSkillIds, ...extraSkillIds])]
           : activeSkillIds;
@@ -1222,6 +1224,7 @@ export function ChatPanel({
       getActiveSkillsSystemPrompt,
       getActiveSkillWorkflows,
       activeSkillIds,
+      activeOkfBundleIds,
       skills,
       onSkillWorkflowStart,
       onSkillWorkflowEnd,
@@ -1568,6 +1571,10 @@ export function ChatPanel({
         activeSkillIds={activeSkillIds}
         onToggleSkill={toggleSkill}
         onOpenSkill={onOpenFile ? (fileId, name) => onOpenFile(fileId, name, "text/markdown") : undefined}
+        okfBundles={okfBundles}
+        activeOkfBundleIds={activeOkfBundleIds}
+        onToggleOkfBundle={toggleOkfBundle}
+        onRefreshOkfBundles={refreshOkfBundles}
       />
 
       {showCryptoPrompt && settings.encryption.encryptedPrivateKey && (

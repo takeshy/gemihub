@@ -8,25 +8,25 @@ GemiHub is a web application that integrates Google Gemini AI with Google Drive,
 
 ## Documentation
 
-`docs/` ディレクトリに各機能の詳細ドキュメントがある（`_ja` 付きは日本語版なので参照不要）。機能の仕様や挙動を確認する際は適宜参照すること。
+`docs/` ディレクトリに各機能の詳細ドキュメントが OKF（Open Knowledge Format）バンドルとして整理されている（目次は `docs/index.md`、更新履歴は `docs/log.md`）。機能の仕様や挙動を確認する際は適宜参照すること。ドキュメントは英語版のみ（日本語ミラーは廃止済み）。
 
-- `docs/chat.md` — チャット・AI機能（ストリーミング、ファンクションコール、スラッシュコマンド等）
-- `docs/sync.md` — Push/Pull同期とオフラインキャッシュの仕組み
-- `docs/workflow_nodes.md` — ワークフローノード全種のリファレンス
-- `docs/rag.md` — RAG（Retrieval-Augmented Generation）の設定と動作
-- `docs/OKF.md` — OKFナレッジソース（Drive上のMarkdownナレッジバンドルをチャットのシステムプロンプトに注入。設定はRAGタブ、`okf-loader.ts`）
-- `docs/mcp.md` — MCPサーバー連携
-- `docs/encryption.md` — ハイブリッド暗号化（RSA+AES）
-- `docs/plugins.md` — プラグイン開発ガイド
-- `docs/skill.md` — Agent Skills（カスタム指示・参照資料・ワークフローをバンドルしたAIエージェント）
-- `docs/infrastructure.md` — インフラ構成（Cloud Run等）
-- `docs/editor.md` — エディタシステム（WYSIWYG、ワークフロー編集、ファイルタイプ別表示等）（`editor_ja.md` は日本語版）
-- `docs/history.md` — 編集履歴の仕組み
-- `docs/utils.md` — 右クリックメニュー、ゴミ箱、スラッシュコマンド等のユーティリティ
-- `docs/workflow_execution.md` — ワークフロー実行エンジン（パーサー、ローカル実行、プロンプト、AI生成）
-- `docs/search.md` — 検索機能（ローカル/Drive/RAG検索、Quick Open）
-- `docs/premium.md` — プレミアムプラン（マルチテナント、Firestore、Cloud Storage静的配信、カスタムドメイン、スケジュール実行、isolated-vm）
-- `docs/dashboard.md` — ダッシュボード（グリッド・ウィジェット: file(md/PDF/EPUB/画像+メモ)/base/kanban/timeline/workflow/web/memo-list、整列、ワークフロー出力と更新間隔自動実行）（`dashboard_ja.md` は日本語版）
+- `docs/features/chat.md` — チャット・AI機能（ストリーミング、ファンクションコール、スラッシュコマンド等）
+- `docs/features/dashboard.md` — ダッシュボード（グリッド・ウィジェット: file(md/PDF/EPUB/画像+メモ)/base/kanban/timeline/workflow/web/memo-list、整列、ワークフロー出力と更新間隔自動実行）
+- `docs/features/editor.md` — エディタシステム（WYSIWYG、ワークフロー編集、ファイルタイプ別表示等）
+- `docs/features/search.md` — 検索機能（ローカル/Drive/RAG検索、Quick Open）
+- `docs/features/sync.md` — Push/Pull同期とオフラインキャッシュの仕組み
+- `docs/features/history.md` — 編集履歴の仕組み
+- `docs/integrations/mcp.md` — MCPサーバー連携
+- `docs/integrations/plugins.md` — プラグイン開発ガイド
+- `docs/integrations/rag.md` — RAG（Retrieval-Augmented Generation）の設定と動作
+- `docs/integrations/skill.md` — Agent Skills（カスタム指示・参照資料・ワークフローをバンドルしたAIエージェント）
+- `docs/workflows/workflow_execution.md` — ワークフロー実行エンジン（パーサー、ローカル実行、プロンプト、AI生成）
+- `docs/workflows/workflow_nodes.md` — ワークフローノード全種のリファレンス
+- `docs/architecture/infrastructure.md` — インフラ構成（Cloud Run等）
+- `docs/architecture/premium.md` — プレミアムプラン（マルチテナント、Firestore、Cloud Storage静的配信、カスタムドメイン、スケジュール実行、isolated-vm）
+- `docs/architecture/encryption.md` — ハイブリッド暗号化（RSA+AES）
+- `docs/architecture/utils.md` — 右クリックメニュー、ゴミ箱、スラッシュコマンド等のユーティリティ
+- `docs/references/OKF.md` — OKFナレッジソース（Drive上のMarkdownナレッジバンドルをチャットのシステムプロンプトに注入。親フォルダの設定はRAGタブ、使用バンドルはチャット入力欄のセレクタで選択。`okf-loader.ts`, `useOkfBundles.ts`, `OkfSelector.tsx`）
 
 ## Commands
 
@@ -69,7 +69,7 @@ Requires Node.js 24+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 - **Streaming:** Free plan: chat executes locally in the browser via `executeLocalChat` (calling Gemini API directly with a cached API key). Paid plan: chat uses the Interactions API via server-side proxy (`/api/chat/interactions`), with multi-round SSE for tool calls (client executes tools locally, sends results back to server). The server-side `/api/chat` SSE endpoint exists as a legacy fallback. Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used, requires_action. Workflow execution also runs locally in the browser (22/25 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
 - **Function Calling:** Gemini calls Drive tools (read/search/list/create/update), Google Search, RAG/File Search, and dynamically-discovered MCP tools (prefixed `mcp_{server}_{tool}`). Paid plan (Interactions API) allows function tools + RAG + Web Search simultaneously — RAG is pre-retrieved via `generateContent` API and injected into the system prompt (Interactions API doesn't support `file_search` tool directly, returns 501); free plan (Chat API) has mutual exclusivity between RAG and function tools.
 - **Cache-First Sync:** Files cached in IndexedDB. MD5 hash comparison detects changes. Manual push/pull with conflict resolution dialog.
-- **Local-First File Updates:** ファイルを更新する機能（チャットの `update_drive_file`、ワークフローの `drive-save` ノード等）は、Google Driveに直接書き込まず、IndexedDB のキャッシュと editHistory のみを更新する。Drive への反映は Push フローで行う。詳細は `docs/sync.md`「Chat-Initiated File Operations」を参照。
+- **Local-First File Updates:** ファイルを更新する機能（チャットの `update_drive_file`、ワークフローの `drive-save` ノード等）は、Google Driveに直接書き込まず、IndexedDB のキャッシュと editHistory のみを更新する。Drive への反映は Push フローで行う。詳細は `docs/features/sync.md`「Chat-Initiated File Operations」を参照。
 - **Encryption:** Optional hybrid RSA+AES encryption for chat history and workflow logs (`crypto.server.ts`).
 - **Auth Flow:** Google OAuth 2.0 → session cookies (httpOnly, 30-day). Tokens stored in session, refreshed automatically.
 - **Settings:** Stored as `settings.json` in the user's Drive (`gemihub/` folder). Six tab categories: General, MCP Servers, RAG, Plugins, Commands, Encryption.
@@ -84,7 +84,7 @@ The index route (`_index.tsx`) renders the IDE with: Header (sync controls), Lef
 
 ### Plugin System
 
-Plugins extend the app via GitHub Release installation. Plugin files (`manifest.json`, `main.js`, optional `styles.css`) are stored in `gemihub/plugins/{id}/` on Drive and cached in IndexedDB. Plugins receive a `PluginAPI` with access to language, UI registration (views, slash commands, settings tabs), Gemini AI, Drive operations (local-first via IndexedDB), active file change events, Google Calendar, Gmail, and scoped storage. See `docs/plugins.md` for the full developer guide.
+Plugins extend the app via GitHub Release installation. Plugin files (`manifest.json`, `main.js`, optional `styles.css`) are stored in `gemihub/plugins/{id}/` on Drive and cached in IndexedDB. Plugins receive a `PluginAPI` with access to language, UI registration (views, slash commands, settings tabs), Gemini AI, Drive operations (local-first via IndexedDB), active file change events, Google Calendar, Gmail, and scoped storage. See `docs/integrations/plugins.md` for the full developer guide.
 
 Key files: `app/types/plugin.ts` (types), `app/services/plugin-api.ts` (API factory), `app/services/plugin-loader.ts` (loading), `app/contexts/PluginContext.tsx` (lifecycle), `app/services/plugin-manager.server.ts` (Drive storage).
 

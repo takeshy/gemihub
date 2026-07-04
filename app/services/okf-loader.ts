@@ -119,9 +119,17 @@ function refInBundle(refPath: string, bundleId: string): boolean {
 
 export async function discoverOkfBundles(root: string): Promise<OkfBundle[]> {
   const refs = await listMarkdown(root);
+  const indexRefs = refs.filter((ref) => isIndexFile(ref.path));
+  // A subdirectory index.md inside another bundle (per-directory index for
+  // progressive disclosure) is part of that bundle, not a bundle of its own —
+  // only top-level bundle folders are listed.
+  const dirs = indexRefs.map((ref) => dirOf(ref.path));
+  const topLevelRefs = indexRefs.filter((ref) => {
+    const dir = dirOf(ref.path);
+    return !dirs.some((other) => other !== dir && (other === "" || dir.startsWith(`${other}/`)));
+  });
   const bundles: OkfBundle[] = [];
-  for (const ref of refs) {
-    if (!isIndexFile(ref.path)) continue;
+  for (const ref of topLevelRefs) {
     const id = dirOf(ref.path);
     let name = id.split("/").pop() || rootBasename(root);
     const cached = await getCachedFile(ref.fileId);

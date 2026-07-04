@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Workflow Execution
-description: Documentation for the Workflow Execution feature.
+description: "Workflow execution engine: YAML parser, local browser execution, prompt nodes, and AI workflow generation."
 tags:
   - workflow_execution
 ---

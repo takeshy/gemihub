@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Edit History
-description: Documentation for the Edit History feature.
+description: "Edit history: how local file edits are recorded, browsed, and restored."
 tags:
   - history
 ---

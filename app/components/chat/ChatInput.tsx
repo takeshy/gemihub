@@ -26,6 +26,8 @@ import { useEditorContext, type FileListItem, type SelectionInfo } from "~/conte
 import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
 import { AutocompletePopup } from "./AutocompletePopup";
 import { SkillSelector } from "./SkillSelector";
+import { OkfSelector } from "./OkfSelector";
+import type { OkfBundle } from "~/services/okf-loader";
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => void;
@@ -58,6 +60,10 @@ interface ChatInputProps {
   activeSkillIds?: string[];
   onToggleSkill?: (skillId: string) => void;
   onOpenSkill?: (skillMdFileId: string, skillName: string) => void;
+  okfBundles?: OkfBundle[];
+  activeOkfBundleIds?: string[];
+  onToggleOkfBundle?: (bundleId: string) => void;
+  onRefreshOkfBundles?: () => void;
 }
 
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
@@ -183,6 +189,10 @@ export function ChatInput({
   activeSkillIds = [],
   onToggleSkill,
   onOpenSkill,
+  okfBundles = [],
+  activeOkfBundleIds = [],
+  onToggleOkfBundle,
+  onRefreshOkfBundles,
 }: ChatInputProps) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -831,6 +841,17 @@ export function ChatInput({
             activeSkillIds={activeSkillIds}
             onToggleSkill={onToggleSkill}
             onOpenSkill={onOpenSkill}
+            disabled={disabled}
+          />
+        )}
+
+        {/* OKF bundle selector row */}
+        {onToggleOkfBundle && okfBundles.length > 0 && (
+          <OkfSelector
+            bundles={okfBundles}
+            activeBundleIds={activeOkfBundleIds}
+            onToggleBundle={onToggleOkfBundle}
+            onRefreshBundles={onRefreshOkfBundles}
             disabled={disabled}
           />
         )}

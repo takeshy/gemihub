@@ -1,7 +1,7 @@
 ---
-type: Guide
+type: Reference
 title: Workflow Node Reference
-description: Documentation for the Workflow Node Reference feature.
+description: Reference for all 25 workflow node types with their properties and outputs.
 tags:
   - workflow_nodes
 ---

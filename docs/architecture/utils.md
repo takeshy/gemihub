@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Utils
-description: Documentation for the Utils feature.
+description: "Utilities: context menu, trash, slash commands, and other helpers."
 tags:
   - utils
 ---
@@ -42,7 +42,7 @@ Right-click a file or folder in the file tree (or tap the `⋯` button on mobile
 
 | Menu Item | Description |
 |-----------|-------------|
-| Cache folder (N) | Download and cache every uncached file under the folder (excluding local-only `new:` placeholders). The `(N)` suffix shows how many files will be fetched. Shown only when uncached files exist in the subtree. See [Sync → Lazy-Fetch](./sync.md#lazy-fetch-uncached-files) |
+| Cache folder (N) | Download and cache every uncached file under the folder (excluding local-only `new:` placeholders). The `(N)` suffix shows how many files will be fetched. Shown only when uncached files exist in the subtree. See [Sync → Lazy-Fetch](../features/sync.md#lazy-fetch-uncached-files) |
 | Download as ZIP | Bundle every file in the folder into a ZIP and download |
 | Clear Cache | Bulk-delete cache for all files in the folder. If any files have unsaved changes, a confirmation dialog warns that changes will be lost; confirming deletes all cached files including modified ones. Shown only when cached files exist in the folder |
 | Rename | Rename the folder |

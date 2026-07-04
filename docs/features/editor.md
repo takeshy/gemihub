@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Editor
-description: Documentation for the Editor feature.
+description: "Editor system: WYSIWYG markdown editing, workflow editing, and per-file-type viewers."
 tags:
   - editor
 ---

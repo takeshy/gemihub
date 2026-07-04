@@ -555,7 +555,6 @@ export interface UserSettings {
   ragSettings: Record<string, RagSetting>;
   selectedRagSetting: string | null;
   okfRoot: string;
-  selectedOkfBundleIds: string[];
   systemPrompt: string;
   rootFolderName: string;
   language: Language | null;
@@ -680,8 +679,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   ragTopK: 5,
   ragSettings: {},
   selectedRagSetting: null,
-  okfRoot: "",
-  selectedOkfBundleIds: [],
+  okfRoot: "Knowledge",
   systemPrompt: "",
   rootFolderName: "gemihub",
   language: null,

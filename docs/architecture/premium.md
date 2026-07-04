@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Premium Plan
-description: Documentation for the Premium Plan feature.
+description: "Premium plans: multi-tenancy with Firestore, Cloud Storage static hosting, custom domains, scheduled execution, and isolated-vm."
 tags:
   - premium
 ---
@@ -435,7 +435,7 @@ The iframe ↔ parent `postMessage` channel verifies sender identity in both dir
 
 ### Skill Templates
 
-Concrete templates (`admin/index.html`, `admin/bookings.html`, `admin/inquiries.html` and the matching YAML workflows) live in [`app/services/hubwork-skill-templates/references/admin-patterns.md`](../app/services/hubwork-skill-templates/references/admin-patterns.md) and are scaffolded via the Webpage Builder skill.
+Concrete templates (`admin/index.html`, `admin/bookings.html`, `admin/inquiries.html` and the matching YAML workflows) live in [`app/services/hubwork-skill-templates/references/admin-patterns.md`](../../app/services/hubwork-skill-templates/references/admin-patterns.md) and are scaffolded via the Webpage Builder skill.
 
 ## Authentication
 

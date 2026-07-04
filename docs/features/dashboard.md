@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Dashboard
-description: Documentation for the Dashboard feature.
+description: Grid dashboard with file/base/kanban/timeline/workflow/web/memo-list widgets, alignment, and interval-driven workflow auto-execution.
 tags:
   - dashboard
 ---
@@ -111,7 +111,7 @@ The same memo timeline is also available in the **IDE main viewers** (Markdown /
 
 The `base` widget renders a **view of an Obsidian-style `.base` file** — a saved query (filters, sort, limit, computed properties) over a folder of Markdown notes — as a **table**, **card grid**, or **list**. It replaces the old `card` / `table` / `file-list` folder widgets (which are auto-converted to Bases, see the note above). Implemented by `widgets/BaseWidget.tsx`; the `.base` parsing/query engine lives in `app/bases/` (`compileBase`, `queryView`, `createGemiHubHost`) and the view renderer in `app/components/bases/BaseViewRenderer.tsx`.
 
-![Base widget settings](../public/images/base_setting.png)
+![Base widget settings](../../public/images/base_setting.png)
 
 ```yaml
 config:
@@ -130,9 +130,9 @@ config:
 
 The `timeline` widget is a **personal microblog**: a reverse-chronological feed of short posts with `#tags` and image attachments. Implemented by `widgets/TimelineWidget.tsx`.
 
-![Timeline widget](../public/images/timeline_edit.png)
+![Timeline widget](../../public/images/timeline_edit.png)
 
-![Timeline widget settings](../public/images/timeline_setting.png)
+![Timeline widget settings](../../public/images/timeline_setting.png)
 
 ```yaml
 config:
@@ -219,7 +219,7 @@ In edit mode, frontmatter cells are editable inline; edits are written back to t
 
 The `kanban` widget reads Markdown files from a folder, groups them by a frontmatter status property, and writes status changes back to the same file when a card is dragged to another column.
 
-![Kanban board](../public/images/dashboard_kanban.png)
+![Kanban board](../../public/images/dashboard_kanban.png)
 
 ```yaml
 config:

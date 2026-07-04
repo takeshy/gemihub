@@ -1,7 +1,7 @@
 ---
 type: Architecture
 title: Infrastructure
-description: Documentation for the Infrastructure feature.
+description: "Infrastructure: Cloud Run deployment, Docker builds, and self-hosting."
 tags:
   - infrastructure
 ---

@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Chat
-description: Documentation for the Chat feature.
+description: AI chat with Gemini streaming, function calling (Drive/MCP/Google Search/RAG), slash commands, file references, attachments, and encrypted history.
 tags:
   - chat
 ---

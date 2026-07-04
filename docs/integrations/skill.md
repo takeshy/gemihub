@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Agent Skills
-description: Documentation for the Agent Skills feature.
+description: "Agent Skills: bundles of custom instructions, reference material, and workflows for the AI agent."
 tags:
   - skill
 ---
@@ -106,7 +106,7 @@ Skills load in three layers, and you should design around them:
 
 ## Workflows
 
-Skill workflows use the standard GemiHub YAML workflow format (see [Workflow Node Reference](./workflow_nodes.md)). Place `.yaml` files in the `workflows/` subfolder:
+Skill workflows use the standard GemiHub YAML workflow format (see [Workflow Node Reference](../workflows/workflow_nodes.md)). Place `.yaml` files in the `workflows/` subfolder:
 
 ```yaml
 name: Run Lint

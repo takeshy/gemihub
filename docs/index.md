@@ -4,33 +4,32 @@ Welcome to the GemiHub Open Knowledge Format bundle.
 
 ## Features
 
-* [Chat](features/chat.md) - Documentation for the Chat feature.
-* [Dashboard](features/dashboard.md) - Documentation for the Dashboard feature.
-* [Editor](features/editor.md) - Documentation for the Editor feature.
-* [Search](features/search.md) - Documentation for the Search feature.
-* [Sync](features/sync.md) - Documentation for the Sync feature.
-* [Edit History](features/history.md) - Documentation for the Edit History feature.
+* [Chat](features/chat.md) - AI chat with Gemini streaming, function calling (Drive/MCP/Google Search/RAG), slash commands, file references, attachments, and encrypted history.
+* [Dashboard](features/dashboard.md) - Grid dashboard with file/base/kanban/timeline/workflow/web/memo-list widgets, alignment, and interval-driven workflow auto-execution.
+* [Editor](features/editor.md) - Editor system: WYSIWYG markdown editing, workflow editing, and per-file-type viewers.
+* [Search](features/search.md) - Search features: local search, Drive search, RAG semantic search, and Quick Open.
+* [Sync](features/sync.md) - Push/pull sync between the IndexedDB cache and Google Drive with MD5 change detection and conflict resolution.
+* [Edit History](features/history.md) - Edit history: how local file edits are recorded, browsed, and restored.
 
 ## Integrations
 
-* [MCP (Model Context Protocol)](integrations/mcp.md) - Documentation for the MCP (Model Context Protocol) feature.
-* [Plugins](integrations/plugins.md) - Documentation for the Plugins feature.
-* [RAG (Retrieval-Augmented Generation)](integrations/rag.md) - Documentation for the RAG (Retrieval-Augmented Generation) feature.
-* [Agent Skills](integrations/skill.md) - Documentation for the Agent Skills feature.
+* [MCP (Model Context Protocol)](integrations/mcp.md) - MCP server integration; server tools are discovered dynamically and exposed to chat as mcp_{server}_{tool}.
+* [Plugins](integrations/plugins.md) - Plugin developer guide: GitHub Release installation, PluginAPI surface, views, slash commands, and storage.
+* [RAG (Retrieval-Augmented Generation)](integrations/rag.md) - RAG (Retrieval-Augmented Generation) setup and behavior using Gemini File Search.
+* [Agent Skills](integrations/skill.md) - Agent Skills: bundles of custom instructions, reference material, and workflows for the AI agent.
 
 ## Workflows
 
-* [Workflow Execution](workflows/workflow_execution.md) - Documentation for the Workflow Execution feature.
-* [Workflow Node Reference](workflows/workflow_nodes.md) - Documentation for the Workflow Node Reference feature.
+* [Workflow Execution](workflows/workflow_execution.md) - Workflow execution engine: YAML parser, local browser execution, prompt nodes, and AI workflow generation.
+* [Workflow Node Reference](workflows/workflow_nodes.md) - Reference for all 25 workflow node types with their properties and outputs.
 
 ## Architecture
 
-* [Infrastructure](architecture/infrastructure.md) - Documentation for the Infrastructure feature.
-* [Premium Plan](architecture/premium.md) - Documentation for the Premium Plan feature.
-* [Encryption](architecture/encryption.md) - Documentation for the Encryption feature.
-* [Utils](architecture/utils.md) - Documentation for the Utils feature.
+* [Infrastructure](architecture/infrastructure.md) - Infrastructure: Cloud Run deployment, Docker builds, and self-hosting.
+* [Premium Plan](architecture/premium.md) - Premium plans: multi-tenancy with Firestore, Cloud Storage static hosting, custom domains, scheduled execution, and isolated-vm.
+* [Encryption](architecture/encryption.md) - Hybrid RSA+AES encryption for chat history and workflow logs.
+* [Utils](architecture/utils.md) - Utilities: context menu, trash, slash commands, and other helpers.
 
 ## References
 
-* [OKF Knowledge Sources](references/OKF.md) - Documentation for the OKF Knowledge Sources feature.
-* [Customer Orders        # Recommended. Human-readable display name.](references/create_okf.md) - Author and maintain Open Knowledge Format (OKF) knowledge bundles — directories of markdown files with YAML frontmatter that capture curated domain knowledge (metrics, tables, datasets, playbooks, glossaries). Use when the user asks to create, generate, or update an OKF bundle, a knowledge bundle, or curated domain context for chat. Once authored, the bundle can be registered as an OKF knowledge source in supported LLM Hub ecosystem hosts.
+* [OKF Knowledge Sources](references/OKF.md) - OKF knowledge sources: markdown knowledge bundles on Drive, selected per chat and injected into the system prompt.

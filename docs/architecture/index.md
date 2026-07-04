@@ -1,6 +1,6 @@
 # Architecture
 
-* [Infrastructure](infrastructure.md) - Documentation for the Infrastructure feature.
-* [Premium Plan](premium.md) - Documentation for the Premium Plan feature.
-* [Encryption](encryption.md) - Documentation for the Encryption feature.
-* [Utils](utils.md) - Documentation for the Utils feature.
+* [Infrastructure](infrastructure.md) - Infrastructure: Cloud Run deployment, Docker builds, and self-hosting.
+* [Premium Plan](premium.md) - Premium plans: multi-tenancy with Firestore, Cloud Storage static hosting, custom domains, scheduled execution, and isolated-vm.
+* [Encryption](encryption.md) - Hybrid RSA+AES encryption for chat history and workflow logs.
+* [Utils](utils.md) - Utilities: context menu, trash, slash commands, and other helpers.

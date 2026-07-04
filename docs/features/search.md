@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Search
-description: Documentation for the Search feature.
+description: "Search features: local search, Drive search, RAG semantic search, and Quick Open."
 tags:
   - search
 ---

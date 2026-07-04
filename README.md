@@ -22,6 +22,8 @@ GemiHub turns your Drive into a reading-and-annotation workspace. Open a PDF, EP
 
 The built-in **pdf.js PDF viewer** (selectable text, page navigation, zoom) and **EPUB reader** (client-side unpacking, font-size and page-width controls) make GemiHub a genuinely comfortable place to read the documents you annotate.
 
+![Document Memos](./public/images/memo.png)
+
 ### Your Personal Dashboard
 
 The home screen is a customizable dashboard. Arrange widgets — **File** viewers (Markdown, PDF, EPUB, HTML, text, and images, each with the per-document memos described above), a **Memo List**, **Base** views (Obsidian Bases), kanban boards, a **Timeline** microblog, workflow output, and embedded web pages — on a drag-and-drop grid. Toggle edit mode to add, configure, resize, and rearrange widgets, with undo/redo support; one-click **align** buttons tile all widgets evenly into columns or rows. Create multiple dashboards, switch between them, and pin one as your home. **Base widgets** render a view of an Obsidian-style `.base` file — a saved query (filter/sort/limit, computed properties) over a folder of Markdown notes, shown as a table, card grid, or list; the older card/table/file-list widgets are now authored this way (legacy widgets are auto-converted to a `.base`). Kanban cards can be created from the board header or dragged between status columns, written straight back to your Drive files. The **Timeline widget** is a personal microblog: post short notes with `#tags`, wiki links, image attachments, AI-assisted rewrites with model selection, pin/edit actions, and tag/word/date filters — each day is stored as a Markdown file under `Dashboards/Timeline/`. Workflow widgets run a GemiHub workflow and render its output as cards, a table, Markdown, or HTML — with optional auto-refresh. Each dashboard is saved as a `.dashboard` file in your Drive, with both a rendered view and a raw YAML view.
@@ -46,11 +48,19 @@ Unlike generic AI chat, GemiHub connects directly to your Google Drive. The AI c
 
 With built-in RAG (Retrieval-Augmented Generation), you can sync your Drive files to Gemini's semantic search. Instead of matching exact keywords, the AI understands the **meaning** of your question and finds relevant information from your personal knowledge base. Store product manuals, meeting notes, or research papers — then just ask questions in natural language.
 
-You can also register **OKF (Open Knowledge Format) bundles** — Markdown-based knowledge bases on your Drive (concepts, metrics, glossaries, playbooks) — as always-on chat knowledge from the RAG settings tab. See [docs/OKF.md](./docs/OKF.md).
+You can also use **OKF (Open Knowledge Format) bundles** — Markdown-based knowledge bases on your Drive (concepts, metrics, glossaries, playbooks) — as chat knowledge: set the OKF parent folder in the RAG settings tab, then pick which bundles to use per chat from the selector above the chat input. See [docs/references/OKF.md](./docs/references/OKF.md).
+
+![OKF Knowledge Bundle in Chat](./public/images/okf_sample.png)
+
+The AI can even author bundles for you: install the **OKF Authoring** external skill and ask it to turn a folder of notes into an OKF bundle.
+
+![AI Authoring an OKF Bundle](./public/images/okf_skill.png)
 
 ### Connect Any External Tool (MCP & Plugins)
 
-Through the Model Context Protocol (MCP), GemiHub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation. You can also extend GemiHub with **plugins** — install from GitHub or develop locally — to add custom sidebar views, slash commands, and settings panels.
+Through the Model Context Protocol (MCP), GemiHub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation. You can also extend GemiHub with **plugins** — install from GitHub or develop locally — to add custom sidebar views, slash commands, and settings panels. The Plugins settings also offer **External skills**: Agent Skills installed with one click from the official catalog.
+
+![External Skills](./public/images/external_skills.png)
 
 ### No-Code Workflow Automation
 
@@ -133,7 +143,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
 - **Keyboard Shortcuts** — Configurable shortcuts with modifier key support (Ctrl/Cmd, Shift, Alt) via Settings
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses
-- **OKF Knowledge Sources** — Register Open Knowledge Format bundles (Markdown knowledge bases on Drive) as always-on chat knowledge from the RAG settings tab
+- **OKF Knowledge Sources** — Open Knowledge Format bundles (Markdown knowledge bases on Drive); set the parent folder in the RAG settings tab and pick active bundles per chat
 - **MCP** — Connect external MCP servers as tools for AI chat, with OAuth support and rich UI rendering (MCP Apps)
 - **Agent Skills** — User-defined AI agent configurations with custom instructions, reference materials, and executable workflows stored on Drive. Skill workflows run as headless chat tools: return variables to chat instead of relying on dialogs
 - **Plugins** — Install from GitHub or develop locally; API for custom views, slash commands, settings panels, custom file icons, and file extension handling
@@ -149,27 +159,27 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 
 ## Documentation
 
-Detailed documentation is available in the [`docs/`](./docs/) directory:
+Detailed documentation is available in the [`docs/`](./docs/) directory, organized as an OKF (Open Knowledge Format) bundle — see [docs/index.md](./docs/index.md) for the full table of contents:
 
-| Topic | English | 日本語 |
-|-------|---------|--------|
-| Chat & AI | [chat.md](./docs/chat.md) | [chat_ja.md](./docs/chat_ja.md) |
-| Dashboard (widgets, memos) | [dashboard.md](./docs/dashboard.md) | [dashboard_ja.md](./docs/dashboard_ja.md) |
-| Sync & Offline Cache | [sync.md](./docs/sync.md) | [sync_ja.md](./docs/sync_ja.md) |
-| Workflow Node Reference | [workflow_nodes.md](./docs/workflow_nodes.md) | [workflow_nodes_ja.md](./docs/workflow_nodes_ja.md) |
-| RAG | [rag.md](./docs/rag.md) | [rag_ja.md](./docs/rag_ja.md) |
-| OKF Knowledge Sources | [OKF.md](./docs/OKF.md) | [OKF_ja.md](./docs/OKF_ja.md) |
-| MCP | [mcp.md](./docs/mcp.md) | [mcp_ja.md](./docs/mcp_ja.md) |
-| Encryption | [encryption.md](./docs/encryption.md) | [encryption_ja.md](./docs/encryption_ja.md) |
-| Plugins | [plugins.md](./docs/plugins.md) | [plugins_ja.md](./docs/plugins_ja.md) |
-| Infrastructure | [infrastructure.md](./docs/infrastructure.md) | [infrastructure_ja.md](./docs/infrastructure_ja.md) |
-| Editor | [editor.md](./docs/editor.md) | [editor_ja.md](./docs/editor_ja.md) |
-| Edit History | [history.md](./docs/history.md) | [history_ja.md](./docs/history_ja.md) |
-| Utils (Context Menu, Trash, Commands) | [utils.md](./docs/utils.md) | [utils_ja.md](./docs/utils_ja.md) |
-| Workflow Execution Engine | [workflow_execution.md](./docs/workflow_execution.md) | [workflow_execution_ja.md](./docs/workflow_execution_ja.md) |
-| Agent Skills | [skill.md](./docs/skill.md) | — |
-| Search | [search.md](./docs/search.md) | [search_ja.md](./docs/search_ja.md) |
-| Premium Plan | [premium.md](./docs/premium.md) | [premium_ja.md](./docs/premium_ja.md) |
+| Topic | Document |
+|-------|----------|
+| Chat & AI | [features/chat.md](./docs/features/chat.md) |
+| Dashboard (widgets, memos) | [features/dashboard.md](./docs/features/dashboard.md) |
+| Editor | [features/editor.md](./docs/features/editor.md) |
+| Search | [features/search.md](./docs/features/search.md) |
+| Sync & Offline Cache | [features/sync.md](./docs/features/sync.md) |
+| Edit History | [features/history.md](./docs/features/history.md) |
+| MCP | [integrations/mcp.md](./docs/integrations/mcp.md) |
+| Plugins | [integrations/plugins.md](./docs/integrations/plugins.md) |
+| RAG | [integrations/rag.md](./docs/integrations/rag.md) |
+| Agent Skills | [integrations/skill.md](./docs/integrations/skill.md) |
+| Workflow Execution Engine | [workflows/workflow_execution.md](./docs/workflows/workflow_execution.md) |
+| Workflow Node Reference | [workflows/workflow_nodes.md](./docs/workflows/workflow_nodes.md) |
+| Infrastructure | [architecture/infrastructure.md](./docs/architecture/infrastructure.md) |
+| Premium Plan | [architecture/premium.md](./docs/architecture/premium.md) |
+| Encryption | [architecture/encryption.md](./docs/architecture/encryption.md) |
+| Utils (Context Menu, Trash, Commands) | [architecture/utils.md](./docs/architecture/utils.md) |
+| OKF Knowledge Sources | [references/OKF.md](./docs/references/OKF.md) |
 
 ## Getting Started
 
@@ -287,7 +297,7 @@ docker run -p 8080:8080 \
 
 ## Paid Plans
 
-Two paid plans extend GemiHub with Google Sheets/Gmail integration and web app builder capabilities. See [docs/premium.md](docs/premium.md) for full details.
+Two paid plans extend GemiHub with Google Sheets/Gmail integration and web app builder capabilities. See [docs/architecture/premium.md](docs/architecture/premium.md) for full details.
 
 ### Lite (¥300/month)
 

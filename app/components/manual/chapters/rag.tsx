@@ -68,6 +68,25 @@ function RagEn() {
         <p>
           Use the <strong>rag-sync</strong> node to sync files to your RAG store during workflow execution. The <strong>command</strong> node can also use RAG as a search tool.
         </p>
+
+        <h2>OKF Knowledge Bundles</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/okf_sample.png" alt="OKF bundle active in chat" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          OKF (Open Knowledge Format) bundles are Markdown knowledge bases on your Drive — folders of concept files with YAML frontmatter and an <code>index.md</code>. Unlike RAG, selected bundles are injected directly into the chat system prompt, so the AI always has your curated domain knowledge in mind.
+        </p>
+        <ol>
+          <li>Place bundles under the OKF folder (default <code>Knowledge</code>; change it in <strong>Settings &gt; RAG</strong>). The bundles discovered under that folder are listed for confirmation.</li>
+          <li>In chat, pick the active bundles from the OKF selector (book icon) above the input. The selection is per chat and persists in your browser.</li>
+        </ol>
+        <h3>Authoring Bundles with AI</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/okf_skill.png" alt="AI converting a folder into an OKF bundle" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          Install the <strong>OKF Authoring</strong> skill (<strong>Settings &gt; Plugins &gt; External skills</strong>) and ask the AI to turn a folder of notes into an OKF bundle — it generates the concept files, frontmatter, and <code>index.md</code> for you.
+        </p>
       </div>
     </>
   );
@@ -134,6 +153,25 @@ function RagJa() {
         <h2>ワークフローでのRAG</h2>
         <p>
           ワークフロー実行中に<strong>rag-sync</strong>ノードでRAGストアにファイルを同期できます。<strong>command</strong>ノードもRAGを検索ツールとして使用できます。
+        </p>
+
+        <h2>OKFナレッジバンドル</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/okf_sample.png" alt="チャットでOKFバンドルを使用" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          OKF（Open Knowledge Format）バンドルは、Drive上のMarkdown製ナレッジベースです。YAML frontmatter付きのコンセプトファイルと<code>index.md</code>を持つフォルダで構成されます。RAGと異なり、選択したバンドルはチャットのシステムプロンプトに直接注入されるため、AIは常にあなたのドメイン知識を踏まえて回答します。
+        </p>
+        <ol>
+          <li>OKFフォルダ（デフォルト<code>Knowledge</code>、<strong>設定 &gt; RAG</strong>で変更可能）の配下にバンドルを置きます。フォルダ配下で発見されたバンドルの一覧が設定画面に表示されます。</li>
+          <li>どのバンドルを使うかは、チャット入力欄の上のOKFセレクタ（本のアイコン）でチャットごとに選択します。選択はブラウザに保存されます。</li>
+        </ol>
+        <h3>AIによるバンドル作成</h3>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/okf_skill.png" alt="AIがフォルダをOKFバンドルに変換" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          <strong>OKF Authoring</strong>スキル（<strong>設定 &gt; プラグイン &gt; External skills</strong>）をインストールすれば、ノートのフォルダをOKFバンドルに変換するようAIに依頼できます。コンセプトファイル、frontmatter、<code>index.md</code>をAIが自動生成します。
         </p>
       </div>
     </>

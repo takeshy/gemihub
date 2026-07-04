@@ -21,6 +21,12 @@ import type { UserSettings, RagSetting } from "~/types/settings";
 import { DEFAULT_RAG_SETTING, DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 import { discoverOkfBundles, type OkfBundle } from "~/services/okf-loader";
 
+const DEFAULT_OKF_ROOT = "Knowledge";
+
+function normalizeOkfRoot(value: string): string {
+  return value.trim().replace(/^\/+|\/+$/g, "") || DEFAULT_OKF_ROOT;
+}
+
 export function RagTab({ settings }: { settings: UserSettings }) {
   const fetcher = useFetcher();
   const { t } = useI18n();
@@ -40,10 +46,11 @@ export function RagTab({ settings }: { settings: UserSettings }) {
   const [editingTopK, setEditingTopK] = useState(false);
   const [topKDraft, setTopKDraft] = useState(settings.ragTopK);
   const [showAutoRagModal, setShowAutoRagModal] = useState(false);
-  const [okfRoot, setOkfRoot] = useState(settings.okfRoot ?? "");
-  const [selectedOkfBundleIds, setSelectedOkfBundleIds] = useState<string[]>(settings.selectedOkfBundleIds ?? []);
+  const [okfRoot, setOkfRoot] = useState(settings.okfRoot || DEFAULT_OKF_ROOT);
+  const [savedOkfRoot, setSavedOkfRoot] = useState(normalizeOkfRoot(settings.okfRoot || DEFAULT_OKF_ROOT));
   const [okfBundles, setOkfBundles] = useState<OkfBundle[]>([]);
   const [okfLoading, setOkfLoading] = useState(false);
+  const okfDirty = normalizeOkfRoot(okfRoot) !== savedOkfRoot;
 
   const settingNames = Object.keys(ragSettings).sort((a, b) => {
     if (a === DEFAULT_RAG_STORE_KEY) return -1;
@@ -55,6 +62,7 @@ export function RagTab({ settings }: { settings: UserSettings }) {
     ragSettings?: Record<string, RagSetting>;
     selectedRagSetting?: string | null;
     ragTopK?: number;
+    okfRoot?: string;
   }) => {
     const rs = overrides?.ragSettings ?? ragSettings;
 
@@ -81,28 +89,24 @@ export function RagTab({ settings }: { settings: UserSettings }) {
     fd.set("ragSettings", JSON.stringify(rs));
     fd.set("selectedRagSetting", sel || "");
     fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
-    fd.set("okfRoot", okfRoot.trim());
-    fd.set("selectedOkfBundleIds", JSON.stringify(selectedOkfBundleIds));
+    fd.set("okfRoot", overrides?.okfRoot ?? savedOkfRoot);
     fetcher.submit(fd, { method: "post" });
-  }, [fetcher, okfRoot, ragTopK, ragSettings, selectedOkfBundleIds, selectedRagSetting, t]);
+  }, [fetcher, savedOkfRoot, ragTopK, ragSettings, selectedRagSetting, t]);
 
-  const refreshOkfBundles = useCallback(async (root = okfRoot) => {
-    const normalized = root.trim().replace(/^\/+|\/+$/g, "");
-    if (!normalized) {
-      setOkfBundles([]);
-      return;
-    }
+  const refreshOkfBundles = useCallback(async (root: string) => {
     setOkfLoading(true);
     try {
-      setOkfBundles(await discoverOkfBundles(normalized));
+      setOkfBundles(await discoverOkfBundles(root));
     } finally {
       setOkfLoading(false);
     }
-  }, [okfRoot]);
+  }, []);
 
+  // Discover bundles when the tab opens (and again on Save).
   useEffect(() => {
-    refreshOkfBundles().catch(() => setOkfBundles([]));
-  }, [refreshOkfBundles]);
+    refreshOkfBundles(savedOkfRoot).catch(() => setOkfBundles([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addRagSetting = useCallback(() => {
     // Auto-generate a unique name
@@ -202,8 +206,7 @@ export function RagTab({ settings }: { settings: UserSettings }) {
       fd.set("ragSettings", JSON.stringify(rs));
       fd.set("selectedRagSetting", key);
       fd.set("ragRegistrationOnPush", hasGemihub ? "on" : "off");
-      fd.set("okfRoot", okfRoot.trim());
-      fd.set("selectedOkfBundleIds", JSON.stringify(selectedOkfBundleIds));
+      fd.set("okfRoot", savedOkfRoot);
       const saveRes = await fetch("/settings", { method: "POST", body: fd });
       if (!saveRes.ok) {
         setSyncMsg(t("settings.rag.syncSaveFailed"));
@@ -269,7 +272,7 @@ export function RagTab({ settings }: { settings: UserSettings }) {
     } finally {
       setSyncing(false);
     }
-  }, [okfRoot, ragSettings, ragTopK, selectedOkfBundleIds, settings.ragSettings, t]);
+  }, [savedOkfRoot, ragSettings, ragTopK, settings.ragSettings, t]);
 
   const [ragFilesDialogKey, setRagFilesDialogKey] = useState<string | null>(null);
 
@@ -296,65 +299,50 @@ export function RagTab({ settings }: { settings: UserSettings }) {
             type="text"
             value={okfRoot}
             onChange={(e) => setOkfRoot(e.target.value)}
-            placeholder="OKF folder path, e.g. knowledge/okf"
+            placeholder={DEFAULT_OKF_ROOT}
             className={inputClass + " flex-1"}
           />
           <button
             type="button"
+            disabled={!okfDirty}
             onClick={() => {
-              refreshOkfBundles().catch(() => setOkfBundles([]));
-              saveRagSettings();
+              const next = normalizeOkfRoot(okfRoot);
+              setOkfRoot(next);
+              setSavedOkfRoot(next);
+              saveRagSettings({ okfRoot: next });
+              refreshOkfBundles(next).catch(() => setOkfBundles([]));
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
           >
             <RefreshCw size={14} className={okfLoading ? "animate-spin" : ""} />
             Save
           </button>
         </div>
         {okfBundles.length > 0 ? (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {okfBundles.map((bundle) => {
-              const checked = selectedOkfBundleIds.includes(bundle.id);
-              return (
-                <label
+          <>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {okfBundles.map((bundle) => (
+                <div
                   key={bundle.id}
                   className="flex items-start gap-2 rounded border border-gray-200 px-3 py-2 text-sm dark:border-gray-700"
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => {
-                      setSelectedOkfBundleIds((prev) =>
-                        e.target.checked
-                          ? [...new Set([...prev, bundle.id])]
-                          : prev.filter((id) => id !== bundle.id)
-                      );
-                    }}
-                    className="mt-0.5"
-                  />
+                  <BookOpen size={14} className="mt-0.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
                   <span>
                     <span className="block font-medium text-gray-900 dark:text-gray-100">{bundle.name}</span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400">{bundle.id || "(root)"}</span>
                   </span>
-                </label>
-              );
-            })}
-          </div>
-        ) : okfRoot.trim() ? (
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {t("settings.okf.selectInChat")}
+            </p>
+          </>
+        ) : !okfLoading ? (
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
             No OKF bundles found. Sync Drive after adding folders that contain index.md.
           </p>
         ) : null}
-        {okfBundles.length > 0 && (
-          <button
-            type="button"
-            onClick={() => saveRagSettings()}
-            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            <Check size={14} />
-            Save bundle selection
-          </button>
-        )}
       </div>
 
       {/* Search tip */}

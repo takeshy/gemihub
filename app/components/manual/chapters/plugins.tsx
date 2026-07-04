@@ -34,6 +34,20 @@ function PluginsEn() {
           <li><strong>Settings</strong> — Some plugins provide custom settings tabs.</li>
         </ul>
 
+        <h2>External Skills</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/external_skills_first.png" alt="External skills section in the Plugins tab" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          The Plugins tab also hosts <strong>External skills</strong> — Agent Skills imported from the official <code>llm-hub-skills</code> repository into your Drive <code>skills/</code> folder. Click <strong>Load catalog</strong> to fetch the list of available skills, then <strong>Install</strong> the ones you want.
+        </p>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/external_skills.png" alt="External skills catalog with the OKF Authoring skill" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          For example, the <strong>OKF Authoring</strong> skill teaches the AI to turn folders of notes into OKF knowledge bundles. Installed skills appear in the skill selector above the chat input like any other Agent Skill.
+        </p>
+
         <h2>Plugin Capabilities</h2>
         <p>Plugins can:</p>
         <ul>
@@ -89,6 +103,20 @@ function PluginsJa() {
           <li><strong>アンインストール</strong> — プラグインとそのデータをすべて削除。</li>
           <li><strong>設定</strong> — 一部のプラグインはカスタム設定タブを提供。</li>
         </ul>
+
+        <h2>External Skills（外部スキル）</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/external_skills_first.png" alt="プラグインタブのExternal skillsセクション" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          プラグインタブには<strong>External skills</strong>もあります。公式の<code>llm-hub-skills</code>リポジトリからAgent SkillsをDriveの<code>skills/</code>フォルダにインポートする機能です。<strong>Load catalog</strong>をクリックして利用可能なスキルの一覧を取得し、使いたいものを<strong>Install</strong>します。
+        </p>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/external_skills.png" alt="OKF AuthoringスキルのあるExternal skillsカタログ" className="w-full" loading="lazy" />
+        </figure>
+        <p>
+          たとえば<strong>OKF Authoring</strong>スキルをインストールすると、ノートのフォルダをOKFナレッジバンドルに変換する方法をAIが習得します。インストールしたスキルは、他のAgent Skillと同様にチャット入力欄の上のスキルセレクタに表示されます。
+        </p>
 
         <h2>プラグインの機能</h2>
         <p>プラグインは以下のことができます：</p>

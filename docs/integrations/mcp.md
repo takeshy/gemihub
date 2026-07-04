@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: MCP (Model Context Protocol)
-description: Documentation for the MCP (Model Context Protocol) feature.
+description: MCP server integration; server tools are discovered dynamically and exposed to chat as mcp_{server}_{tool}.
 tags:
   - mcp
 ---

@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Encryption
-description: Documentation for the Encryption feature.
+description: Hybrid RSA+AES encryption for chat history and workflow logs.
 tags:
   - encryption
 ---
