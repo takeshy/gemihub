@@ -1,5 +1,10 @@
 # Update Log
 
+## 2026-07-08
+* **Update**: Removed the dashboard's separate edit mode — drag/resize/settings/delete are now always available via hover-revealed cell chrome (`features/dashboard.md`).
+* **New**: Per-widget maximize/restore button in the cell chrome, ported from obsidian-gemini-helper (`features/dashboard.md`).
+* **Fix**: Hubwork/Firestore is now gated on credential availability — self-hosted/dev environments without Google Cloud ADC no longer crash the server when an unmatched URL hits the hubwork catch-all route (`architecture/premium.md`).
+
 ## 2026-07-04
 * **Update**: OKF bundle selection moved from the RAG settings tab to a per-chat selector above the chat input; settings now only configure the OKF parent folder (`references/OKF.md`, `integrations/rag.md`).
 * **Cleanup**: Removed the `create_okf.md` authoring guide (only used for the initial conversion) and the Japanese mirror docs (`*_ja.md`).

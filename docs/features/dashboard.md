@@ -7,9 +7,9 @@ tags:
 ---
 # Dashboard
 
-The dashboard is a grid of configurable **widgets** rendered on the IDE home view. It is authored visually (drag/resize/configure in edit mode) and persisted as a `.dashboard` YAML file in the user's Drive. Everything is local-first: edits update the IndexedDB cache and are reflected to Drive via the normal Push flow.
+The dashboard is a grid of configurable **widgets** rendered on the IDE home view. It is authored visually (drag/resize/configure directly on the grid, no separate edit mode) and persisted as a `.dashboard` YAML file in the user's Drive. Everything is local-first: edits update the IndexedDB cache and are reflected to Drive via the normal Push flow.
 
-> Implementation lives under `app/dashboard/`. The Japanese mirror of this doc is `dashboard_ja.md`.
+> Implementation lives under `app/dashboard/`.
 
 ## File format & storage
 
@@ -39,11 +39,12 @@ Unknown top-level keys and unknown widget config keys are **preserved on round-t
 
 Key files: `dashboardFile.ts` (parse/serialize/load/save/list/rename/delete), `types.ts` (schema types).
 
-## Layout, grid & edit mode
+## Layout & grid
 
 - Two breakpoints: `lg` (wide) and `sm` (narrow, threshold `BREAKPOINT_THRESHOLD = 768px`). Missing `sm` layouts are auto-derived (full width, stacked) by `deriveSmLayout`.
-- **Edit mode** enables drag (move), resize, per-widget Settings and Delete, plus undo/redo with config-edit coalescing.
-- **Align (整列)** — two edit-mode toolbar buttons tile all widgets evenly into up to 3 **columns** (horizontal) or 3 **rows** (vertical), round-robin, sized to roughly one screen (`equalizeLayout.ts`, ported from mdwys). One click is one undo step; `sm` layouts are dropped so `deriveSmLayout` re-derives the stacked layout.
+- **No separate edit mode.** Hovering a widget cell reveals a chrome pill centered at the top (pill mover / Maximize / Settings / drag grip / Delete) and a resize handle in the bottom-right corner — no mode toggle needed. The chrome ignores pointer events until revealed, and it floats over the top **center** because widget headers keep their own controls (filter/sort icons, memo toggle) at the left/right edges. When the pill still covers a control, its small left nub drags the pill anywhere inside the cell (session-only; the offset resets on cell resize/maximize). On touch devices (`pointer: coarse`) the chrome is always visible and interactive, since hover-reveal is unreliable there. Undo/redo supports config-edit coalescing.
+- **Maximize** — the pill's Maximize button expands one widget to fill the grid area (`absolute inset-0` overlay, ported from obsidian-gemini-helper); sibling cells stay mounted but hidden so their state survives restore. The state is ephemeral (not persisted) and clears automatically if the widget disappears (delete/undo/dashboard switch). Drag/resize handles are hidden while maximized.
+- **Align (整列)** — two toolbar buttons tile all widgets evenly into up to 3 **columns** (horizontal) or 3 **rows** (vertical), round-robin, sized to roughly one screen (`equalizeLayout.ts`, ported from mdwys). One click is one undo step; `sm` layouts are dropped so `deriveSmLayout` re-derives the stacked layout.
 - The canvas (`DashboardCanvas.tsx`) renders the grid; each widget lives in a `GridCell.tsx` that owns drag/resize. `DashboardHost.tsx` owns the dashboard lifecycle (create / rename / delete / switch, home pinning via `settings.homeDashboard`) and debounced save.
 
 Adding a widget opens the `WidgetPalette` modal, which lists every registered widget type.
@@ -75,7 +76,8 @@ Opens an **existing** Drive file by path (no inline content) and renders it by k
 ```yaml
 config:
   path: books/go_book.pdf   # Drive path — .md/.markdown, .txt, .html/.htm, .epub, .pdf, or an image
-  showHeader: true          # header bar (file picker, memo toggle, scale steppers)
+  showHeader: true          # header bar (memo toggle, file path, scale steppers)
+  showProperties: true      # frontmatter properties panel (markdown only)
   viewFontScale: 100        # 70–240: PDF zoom / EPUB & HTML font size (%)
   viewWidthScale: 100       # 70–180: EPUB & HTML content width (%)
   memoPanelOpen: false      # memo timeline panel state (persisted like the rest)
@@ -91,7 +93,7 @@ Per kind:
 - **Image** — rendered from a local-first blob URL.
 - **Text** — plain textarea with debounced local-first saves.
 
-Binary kinds load bytes local-first (`readFileBinaryLocal` → base64 cache); files over 20 MB stream directly without caching (mirrors sync behavior). The file path in the header is a picker (@-mention-style search over `editorCtx.fileList`, filtered to supported kinds) that switches the referenced file **even outside edit mode** — the choice is persisted as `ctx.onConfigChange({ path })`.
+Binary kinds load bytes local-first (`readFileBinaryLocal` → base64 cache); files over 20 MB stream directly without caching (mirrors sync behavior). The header shows the memo toggle followed by the current file path as a read-only label — switching files is done in the widget's settings panel (`FileConfigEditor`'s @-mention-style picker over `editorCtx.fileList`, persisted as `path`). Only the "no file selected" empty states still render an inline picker. Keeping the memo toggle at the header's left edge means the cell's centered chrome pill can't cover it.
 
 #### Memos
 
@@ -171,7 +173,7 @@ The `base`, `workflow`, and the (now legacy, Base-backed) folder widgets reuse a
 
 ### View-time filter & sort (header controls)
 
-`card`/`table` folder widgets and `card`/`table` workflow output show two separate header icons — a **filter** icon (opens the `FilterEditor` popover) and a **sort** icon (opens a sort-option list). These are implemented by `ViewControls.tsx` and work in **view mode without entering edit mode**:
+`card`/`table` folder widgets and `card`/`table` workflow output show two separate header icons — a **filter** icon (opens the `FilterEditor` popover) and a **sort** icon (opens a sort-option list). These are implemented by `ViewControls.tsx` and are always available directly on the widget, without opening its settings panel:
 
 - The state is **ephemeral**: the view-time filter is ANDed on top of the widget's configured `filter`, and the view-time sort overrides the configured `sort`. Nothing is written back to the `.dashboard` file, and both reset when the dashboard reloads.
 - Each icon shows a small blue dot when active; the sort popover has a "Reset" entry to clear the override.
@@ -213,7 +215,7 @@ config:
   columns: [file.name, status, tags]   # column keys (file.* attrs or frontmatter keys)
 ```
 
-In edit mode, frontmatter cells are editable inline; edits are written back to the source file with order/body preservation (`frontmatter-writeback.ts`) and broadcast via the `dashboard-data-changed` event so other widgets refresh. `file.*` attribute columns are read-only. Cells whose value is an inline data URI (`data:image/...`) render as a thumbnail image instead of text and are never editable.
+Frontmatter cells are editable inline (double-click); edits are written back to the source file with order/body preservation (`frontmatter-writeback.ts`) and broadcast via the `dashboard-data-changed` event so other widgets refresh. `file.*` attribute columns are read-only. Cells whose value is an inline data URI (`data:image/...`) render as a thumbnail image instead of text and are never editable.
 
 ## Kanban widget
 
@@ -293,7 +295,7 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 
 > **Note on `base`.** Earlier this widget was envisioned as plugin-provided. It is now a **core widget** (`type: "base"`, see the Base widget section) backed by the in-repo Obsidian Bases engine in `app/bases/`. The same `WidgetContext` plumbing still applies, and a plugin could still register an alternative renderer for a custom type.
 
-**View-mode config.** `WidgetContext.onConfigChange(config)` lets a widget persist its own config from view mode (wired through `GridCell` → `DashboardCanvas` → the dashboard save). Used by the file widget's header file picker, scale steppers, and memo panel state.
+**Config without the settings panel.** `WidgetContext.onConfigChange(config)` lets a widget persist its own config directly, without going through its Settings panel (wired through `GridCell` → `DashboardCanvas` → the dashboard save). Used by the file widget's header file picker, scale steppers, and memo panel state.
 
 ## Key files
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { Plus, Pencil, Check, Undo2, Redo2, Columns3, Rows3 } from "lucide-react";
+import { Plus, Undo2, Redo2, Columns3, Rows3 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { useBreakpoint } from "./useBreakpoint";
 import { useGridLayout } from "./useGridLayout";
@@ -14,13 +14,9 @@ interface DashboardCanvasProps {
   data: DashboardData;
   /** Called with the next data on every mutation (add/update/delete/move/resize). */
   onChange: (next: DashboardData) => void;
-  editMode: boolean;
-  onEditModeChange: (v: boolean) => void;
   /** Left side of the toolbar (e.g. dashboard switcher or file name). */
   toolbarLeft?: ReactNode;
-  /** Extra right-side buttons shown only in edit mode (e.g. rename/delete/home). */
-  toolbarEditActions?: ReactNode;
-  /** Right-side buttons always shown, placed before the edit toggle (e.g. raw toggle). */
+  /** Right side of the toolbar (e.g. rename/delete/home or raw toggle). */
   toolbarRight?: ReactNode;
   /** The .dashboard file's ID (passed to widgets as a sidecar cache fallback). */
   dashboardFileId?: string;
@@ -62,7 +58,7 @@ function isWidgetConfigured(widget: Widget): boolean {
 }
 
 /**
- * Controlled, reusable dashboard grid editor: toolbar (add widget + edit toggle),
+ * Controlled, reusable dashboard grid editor: toolbar (undo/redo, align, add widget),
  * the widget grid with drag/resize, the widget palette, and the settings panel.
  *
  * The parent owns the `data` state and persistence; this component only emits
@@ -72,10 +68,7 @@ function isWidgetConfigured(widget: Widget): boolean {
 export function DashboardCanvas({
   data,
   onChange,
-  editMode,
-  onEditModeChange,
   toolbarLeft,
-  toolbarEditActions,
   toolbarRight,
   dashboardFileId,
   dashboardFileName,
@@ -88,6 +81,17 @@ export function DashboardCanvas({
   // configured yet. If its settings panel is closed without a selection, the
   // widget is discarded rather than left empty on the grid.
   const [pendingNewWidgetId, setPendingNewWidgetId] = useState<string | null>(null);
+  // Id of the widget currently filling the whole grid area, if any. Sibling
+  // cells stay mounted (hidden) so their state survives maximize/restore.
+  const [maximizedWidgetId, setMaximizedWidgetId] = useState<string | null>(null);
+
+  // Drop the maximized state when its widget disappears (deleted, undo,
+  // dashboard switch replaced the data).
+  useEffect(() => {
+    if (maximizedWidgetId && !data.widgets.some((w) => w.id === maximizedWidgetId)) {
+      setMaximizedWidgetId(null);
+    }
+  }, [data.widgets, maximizedWidgetId]);
 
   // --- Undo/redo history ---
   // The canvas is controlled, so it tracks its own stack of data snapshots.
@@ -210,8 +214,6 @@ export function DashboardCanvas({
       };
       commit({ ...data, widgets: [...data.widgets, newWidget] });
       setShowPalette(false);
-      // Stay in edit mode so the "Add widget" button remains visible for more.
-      onEditModeChange(true);
       // Open settings panel for the newly added widget — unless the type has
       // nothing to configure (e.g. memo-list), where the panel would only show
       // "No settings for this widget type".
@@ -220,7 +222,7 @@ export function DashboardCanvas({
         setPendingNewWidgetId(newWidget.id);
       }
     },
-    [data, commit, onEditModeChange],
+    [data, commit],
   );
 
   const handleCloseSettings = useCallback(async (nextConfig?: unknown) => {
@@ -313,73 +315,63 @@ export function DashboardCanvas({
       <div className="flex items-center justify-between border-b border-gray-200 px-3 py-1.5 dark:border-gray-800">
         <div className="flex items-center gap-2">{toolbarLeft}</div>
         <div className="flex items-center gap-1">
-          {editMode && (
-            <>
-              <button
-                onClick={undo}
-                disabled={!canUndo}
-                title={t("dashboard.undo")}
-                className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
-              >
-                <Undo2 size={14} />
-              </button>
-              <button
-                onClick={redo}
-                disabled={!canRedo}
-                title={t("dashboard.redo")}
-                className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
-              >
-                <Redo2 size={14} />
-              </button>
-              <button
-                onClick={() => handleEqualize("horizontal")}
-                disabled={data.widgets.length === 0}
-                title={t("dashboard.alignHorizontal")}
-                className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
-              >
-                <Columns3 size={14} />
-              </button>
-              <button
-                onClick={() => handleEqualize("vertical")}
-                disabled={data.widgets.length === 0}
-                title={t("dashboard.alignVertical")}
-                className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
-              >
-                <Rows3 size={14} />
-              </button>
-              <button
-                onClick={() => setShowPalette(true)}
-                className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-              >
-                <Plus size={14} />
-                {t("dashboard.addWidget")}
-              </button>
-              {toolbarEditActions}
-            </>
-          )}
-          {toolbarRight}
           <button
-            onClick={() => onEditModeChange(!editMode)}
-            className={`flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${
-              editMode
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-            }`}
+            onClick={undo}
+            disabled={!canUndo}
+            title={t("dashboard.undo")}
+            className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
           >
-            {editMode ? <Check size={14} /> : <Pencil size={14} />}
-            {editMode ? t("dashboard.done") : t("dashboard.edit")}
+            <Undo2 size={14} />
           </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            title={t("dashboard.redo")}
+            className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
+          >
+            <Redo2 size={14} />
+          </button>
+          <button
+            onClick={() => handleEqualize("horizontal")}
+            disabled={data.widgets.length === 0}
+            title={t("dashboard.alignHorizontal")}
+            className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
+          >
+            <Columns3 size={14} />
+          </button>
+          <button
+            onClick={() => handleEqualize("vertical")}
+            disabled={data.widgets.length === 0}
+            title={t("dashboard.alignVertical")}
+            className="flex items-center rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent dark:text-gray-400 dark:hover:bg-gray-800"
+          >
+            <Rows3 size={14} />
+          </button>
+          <button
+            onClick={() => setShowPalette(true)}
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+          >
+            <Plus size={14} />
+            {t("dashboard.addWidget")}
+          </button>
+          {toolbarRight}
         </div>
       </div>
 
       {/* Grid container — the ref'd element must always be mounted so
           useBreakpoint can measure it. If it only mounts once widgets exist,
           the breakpoint stays null and newly added widgets never render. */}
-      <div className="flex-1 overflow-auto p-3">
+      <div className={`flex-1 p-3 ${maximizedWidgetId ? "overflow-hidden" : "overflow-auto"}`}>
         <div
           ref={containerRef}
           className="relative min-h-full"
-          style={data.widgets.length > 0 ? gridStyle : undefined}
+          style={
+            data.widgets.length > 0
+              ? maximizedWidgetId
+                ? { height: "100%" }
+                : gridStyle
+              : undefined
+          }
         >
           {data.widgets.length === 0 ? (
             <div className="flex min-h-[300px] flex-col items-center justify-center gap-4">
@@ -404,13 +396,17 @@ export function DashboardCanvas({
                 grid={grid}
                 cellW={gridLayout.cellW}
                 cellH={gridLayout.cellH}
-                editMode={editMode}
                 onDragEnd={(newPos) => gridLayout.commitPos(widget.id, newPos)}
                 onResizeEnd={(newPos) => gridLayout.commitPos(widget.id, newPos)}
                 computeDragPos={gridLayout.computeDragPos}
                 computeResizePos={gridLayout.computeResizePos}
-                onSettings={editMode && getWidgetDef(widget.type).ConfigEditor ? () => setEditingWidgetId(widget.id) : undefined}
-                onDelete={editMode ? () => handleDeleteWidget(widget.id) : undefined}
+                onSettings={getWidgetDef(widget.type).ConfigEditor ? () => setEditingWidgetId(widget.id) : undefined}
+                onDelete={() => handleDeleteWidget(widget.id)}
+                isMaximized={maximizedWidgetId === widget.id}
+                onToggleMaximize={() =>
+                  setMaximizedWidgetId((current) => (current === widget.id ? null : widget.id))
+                }
+                hidden={maximizedWidgetId !== null && maximizedWidgetId !== widget.id}
                 onConfigChange={(config) => handleUpdateWidgetConfig(widget.id, config)}
                 dashboardFileId={dashboardFileId}
                 dashboardFileName={dashboardFileName}

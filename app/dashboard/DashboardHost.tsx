@@ -40,7 +40,6 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
   const [fileId, setFileId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editMode, setEditMode] = useState(false);
   const [dashboards, setDashboards] = useState<DashboardFileEntry[]>([]);
   const [showDashboardMenu, setShowDashboardMenu] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -140,7 +139,6 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
     fileNameRef.current = path;
     setData({ version: 1, grid: { cols: 12, rowHeight: 80, gap: 8 }, widgets: [] });
     setLoading(false);
-    setEditMode(true);
     setShowCreateDialog(false);
     setNewDashboardName("");
     await refreshDashboardList();
@@ -178,7 +176,6 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
       fileIdRef.current = result.fileId;
       setFileName(entry.fileName);
       fileNameRef.current = entry.fileName;
-      setEditMode(false);
     }
     setLoading(false);
   }, [data]);
@@ -208,7 +205,6 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
     if (!fileId) return;
     if (!confirm(t("dashboard.deleteDashboardConfirm"))) return;
     await deleteDashboard(fileId);
-    setEditMode(false);
     // Switch to next available dashboard or empty state
     await refreshDashboardList();
     const homeResult = await resolveHomeDashboard(effectiveHomeDashboard);
@@ -339,8 +335,6 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
       <DashboardCanvas
         data={data}
         onChange={handleCommit}
-        editMode={editMode}
-        onEditModeChange={setEditMode}
         dashboardFileId={fileId ?? undefined}
         dashboardFileName={fileName ?? undefined}
         toolbarLeft={
@@ -369,7 +363,7 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
             )}
           </>
         }
-        toolbarEditActions={
+        toolbarRight={
           <>
             <button
               onClick={() => {

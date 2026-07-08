@@ -94,6 +94,11 @@ export function FileConfigEditor({ config, onChange, setDoneAction }: ConfigEdit
           onChange={(showHeader) => onChange({ ...cfg, showHeader })}
           label={t("dashboard.markdownShowHeader")}
         />
+        <HeaderToggle
+          checked={cfg.showProperties !== false}
+          onChange={(showProperties) => onChange({ ...cfg, showProperties })}
+          label={t("dashboard.markdownShowProperties")}
+        />
       </div>
     );
   }
@@ -105,6 +110,11 @@ export function FileConfigEditor({ config, onChange, setDoneAction }: ConfigEdit
         checked={cfg.showHeader !== false}
         onChange={(showHeader) => onChange({ ...cfg, showHeader })}
         label={t("dashboard.markdownShowHeader")}
+      />
+      <HeaderToggle
+        checked={cfg.showProperties !== false}
+        onChange={(showProperties) => onChange({ ...cfg, showProperties })}
+        label={t("dashboard.markdownShowProperties")}
       />
 
       {sourceMode === "create" ? (

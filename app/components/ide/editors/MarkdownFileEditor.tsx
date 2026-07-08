@@ -70,6 +70,7 @@ export function MarkdownFileEditor({
   headerLeft,
   hideHeader,
   hideToolbarActions,
+  hideProperties,
   initialMode = "wysiwyg",
   onModeChange,
 }: {
@@ -88,6 +89,8 @@ export function MarkdownFileEditor({
   hideHeader?: boolean;
   /** Hide the diff/history/temp-upload actions (e.g. when embedded in a widget). */
   hideToolbarActions?: boolean;
+  /** Hide the frontmatter properties panel in preview/wysiwyg (e.g. per-widget setting). */
+  hideProperties?: boolean;
   /** Default editing mode on mount / file switch (defaults to wysiwyg). */
   initialMode?: MdEditMode;
   /** Notified when the user explicitly switches mode via the toolbar. */
@@ -101,6 +104,23 @@ export function MarkdownFileEditor({
   const previewRef = useRef<HTMLDivElement>(null);
   const [showWikiLinkPicker, setShowWikiLinkPicker] = useState(false);
   const wikiLinkStartRef = useRef<number>(0);
+
+  // Compact header when the editor column itself is narrow (e.g. a dashboard
+  // file widget with the memo panel open). A viewport breakpoint can't see
+  // this — the window stays wide while the editor shrinks — so measure the
+  // header row and drop the mode-button labels below the threshold instead
+  // of letting the toggle overflow and get clipped.
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [compactHeader, setCompactHeader] = useState(false);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      setCompactHeader(el.clientWidth < 480);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hideHeader]);
 
   // Scroll the preview to a slugified heading id. Returns true if found.
   const scrollToHeadingId = useCallback((slug: string): boolean => {
@@ -440,7 +460,10 @@ export function MarkdownFileEditor({
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950" onBlur={flushOnBlur}>
       {!hideHeader && (
-        <div className="flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+        <div
+          ref={headerRef}
+          className="flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
+        >
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {headerLeft && <div className="min-w-0 flex-1">{headerLeft}</div>}
             {/* Mode selector */}
@@ -457,7 +480,7 @@ export function MarkdownFileEditor({
                   title={m.label}
                 >
                   {m.icon}
-                  <span className="hidden sm:inline">{m.label}</span>
+                  {!compactHeader && <span>{m.label}</span>}
                 </button>
               ))}
             </div>
@@ -479,7 +502,7 @@ export function MarkdownFileEditor({
       {/* Content area */}
       {mode === "preview" && (
         <div ref={previewRef} data-md-preview-root className="flex-1 overflow-y-auto">
-          {fmParsed.hasFrontmatter && (
+          {!hideProperties && fmParsed.hasFrontmatter && (
             <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} readOnly />
           )}
           <div className="p-6">
@@ -499,19 +522,20 @@ export function MarkdownFileEditor({
 
       {mode === "wysiwyg" && (
         <>
-          {fmParsed.hasFrontmatter ? (
-            <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} />
-          ) : (
-            <div className="border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
-              <button
-                onClick={addFrontmatter}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                <Plus size={ICON.SM} />
-                {t("frontmatter.addProperties")}
-              </button>
-            </div>
-          )}
+          {!hideProperties &&
+            (fmParsed.hasFrontmatter ? (
+              <FrontmatterEditor parsed={fmParsed} onFrontmatterChange={handleFrontmatterChange} />
+            ) : (
+              <div className="border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+                <button
+                  onClick={addFrontmatter}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  <Plus size={ICON.SM} />
+                  {t("frontmatter.addProperties")}
+                </button>
+              </div>
+            ))}
           <WysiwygSelectionTracker setActiveSelection={editorCtx.setActiveSelection}>
             {MarkdownEditorComponent ? (
               <div

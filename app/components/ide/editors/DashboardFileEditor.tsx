@@ -35,7 +35,6 @@ export function DashboardFileEditor({
   // (rather than re-parsing `content` each render) preserves object identity
   // across canvas commits, which the canvas relies on for its undo/redo history.
   const [data, setData] = useState<DashboardData | null>(() => parseDashboard(initialContent));
-  const [editMode, setEditMode] = useState(false);
   // Fall back to raw if the file can't be parsed (avoids a blank display view).
   const [viewMode, setViewMode] = useState<ViewMode>(data ? "display" : "raw");
 
@@ -126,8 +125,6 @@ export function DashboardFileEditor({
       <DashboardCanvas
         data={data}
         onChange={handleCanvasChange}
-        editMode={editMode}
-        onEditModeChange={setEditMode}
         dashboardFileId={fileId}
         dashboardFileName={fileName}
         toolbarLeft={

@@ -72,7 +72,7 @@ const fileWidgetDef: WidgetDef = {
   type: "file",
   label: "File",
   icon: React.createElement(FileText, { size: 16 }),
-  defaultConfig: { path: "", showHeader: true },
+  defaultConfig: { path: "", showHeader: true, showProperties: true },
   render: (config, ctx) => React.createElement(FileWidget, { config, ctx }),
   defaultSize: { w: 6, h: 4 },
   ConfigEditor: FileConfigEditor,

@@ -16,8 +16,6 @@ interface TableViewProps {
   columns: string[];
   /** True for folder sources — enables cell editing. */
   editable: boolean;
-  /** Edit mode (dashboard canvas editMode). */
-  editMode?: boolean;
   /** Folder path for dispatching data-changed events. */
   folder?: string;
   /** Field type map for locale-aware formatting (e.g. dates). */
@@ -45,7 +43,6 @@ export function TableView({
   rows,
   columns,
   editable,
-  editMode,
   folder,
   fieldTypes,
 }: TableViewProps) {
@@ -65,19 +62,18 @@ export function TableView({
     setLocalRows(rows);
   }, [rows]);
 
-  const canEditCell = (row: DataRow, column: string): boolean => {
-    if (!editable || !editMode) return false;
+  const canEditCell = (row: DataRow, column: string, value: unknown): boolean => {
+    if (!editable) return false;
     if (!isFrontmatterColumn(column)) return false;
     if (!row.fmParseable) return false;
-    const value = getCellValue(row, column);
     if (isDataImage(value)) return false; // render as image, not an editable blob
     return value === undefined || isEditableType(value);
   };
 
   const startEdit = (row: DataRow, column: string) => {
-    if (!canEditCell(row, column)) return;
-    if (pendingFileId === row.fileId) return;
     const value = getCellValue(row, column);
+    if (!canEditCell(row, column, value)) return;
+    if (pendingFileId === row.fileId) return;
     setEditingCell({ rowId: row.id, column });
     setEditValue(value == null ? "" : String(value));
     setEditError(null);
@@ -290,8 +286,8 @@ export function TableView({
               {columns.map((col) => {
                 const isEditing =
                   editingCell?.rowId === row.id && editingCell?.column === col;
-                const canEdit = canEditCell(row, col);
                 const value = getCellValue(row, col);
+                const canEdit = canEditCell(row, col, value);
                 const isReadOnly =
                   isFrontmatterColumn(col) && !isEditableType(value) && value != null;
                 const isBooleanCell = canEdit && typeof value === "boolean";
@@ -348,6 +344,11 @@ export function TableView({
                     className={`px-2 py-1.5 text-gray-700 dark:text-gray-300 ${
                       canEdit ? "cursor-text" : ""
                     } ${pendingFileId === row.fileId ? "opacity-50" : ""}`}
+                    // Editable cells swallow single clicks: the two clicks of a
+                    // double-click-to-edit would otherwise bubble to the row's
+                    // onClick and open the file mid-edit. Non-editable cells
+                    // keep the row's click-to-open behavior.
+                    onClick={canEdit ? (e) => e.stopPropagation() : undefined}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       startEdit(row, col);

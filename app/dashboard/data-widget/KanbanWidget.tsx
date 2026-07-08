@@ -421,7 +421,7 @@ export default function KanbanWidget({
                   return (
                     <article
                       key={row.id}
-                      draggable={!ctx?.editMode && row.fmParseable}
+                      draggable={row.fmParseable}
                       onDragStart={(e) => {
                         setDraggingRowId(row.id);
                         e.dataTransfer.setData("text/plain", row.id);

@@ -98,7 +98,6 @@ export interface TranslationStrings {
   "dashboard.title": string;
   "dashboard.empty": string;
   "dashboard.create": string;
-  "dashboard.edit": string;
   "dashboard.done": string;
   "dashboard.viewDisplay": string;
   "dashboard.viewRaw": string;
@@ -110,6 +109,11 @@ export interface TranslationStrings {
   "dashboard.settingsAutoSaved": string;
   "dashboard.showWidgetHeader": string;
   "dashboard.deleteWidget": string;
+  "dashboard.maximizeWidget": string;
+  "dashboard.restoreWidget": string;
+  "dashboard.dragToMove": string;
+  "dashboard.dragToResize": string;
+  "dashboard.moveToolbar": string;
   "dashboard.deleteWidgetConfirm": string;
   "dashboard.moveUp": string;
   "dashboard.moveDown": string;
@@ -135,6 +139,7 @@ export interface TranslationStrings {
   "dashboard.markdownImportExisting": string;
   "dashboard.markdownCreateOnDone": string;
   "dashboard.markdownShowHeader": string;
+  "dashboard.markdownShowProperties": string;
   "dashboard.timelineNoFile": string;
   "dashboard.timelineName": string;
   "dashboard.timelineStorageHint": string;
@@ -1216,7 +1221,6 @@ const en: TranslationStrings = {
   "dashboard.title": "Dashboard",
   "dashboard.empty": "No dashboard yet",
   "dashboard.create": "Create dashboard",
-  "dashboard.edit": "Edit",
   "dashboard.done": "Done",
   "dashboard.viewDisplay": "Display",
   "dashboard.viewRaw": "Raw",
@@ -1228,6 +1232,11 @@ const en: TranslationStrings = {
   "dashboard.settingsAutoSaved": "Changes are applied automatically.",
   "dashboard.showWidgetHeader": "Show header on dashboard",
   "dashboard.deleteWidget": "Delete Widget",
+  "dashboard.maximizeWidget": "Maximize widget",
+  "dashboard.restoreWidget": "Restore widget",
+  "dashboard.dragToMove": "Drag to move",
+  "dashboard.dragToResize": "Drag to resize",
+  "dashboard.moveToolbar": "Drag to move this toolbar",
   "dashboard.deleteWidgetConfirm": "Delete this widget?",
   "dashboard.moveUp": "Move up",
   "dashboard.moveDown": "Move down",
@@ -1253,6 +1262,7 @@ const en: TranslationStrings = {
   "dashboard.markdownImportExisting": "Or import an existing file",
   "dashboard.markdownCreateOnDone": "Created when you press Done.",
   "dashboard.markdownShowHeader": "Show header on dashboard",
+  "dashboard.markdownShowProperties": "Show properties (markdown)",
   "dashboard.timelineNoFile": "Configure a timeline file first.",
   "dashboard.timelineName": "Timeline name",
   "dashboard.timelineStorageHint": "Posts are stored under Dashboards/Timeline/{name}/ by date.",
@@ -2335,7 +2345,6 @@ const ja: TranslationStrings = {
   "dashboard.title": "ダッシュボード",
   "dashboard.empty": "ダッシュボードがありません",
   "dashboard.create": "ダッシュボードを作成",
-  "dashboard.edit": "編集",
   "dashboard.done": "完了",
   "dashboard.viewDisplay": "表示",
   "dashboard.viewRaw": "Raw",
@@ -2347,6 +2356,11 @@ const ja: TranslationStrings = {
   "dashboard.settingsAutoSaved": "変更は自動で反映されます。",
   "dashboard.showWidgetHeader": "ダッシュボード上でヘッダーを表示",
   "dashboard.deleteWidget": "ウィジェットを削除",
+  "dashboard.maximizeWidget": "ウィジェットを最大化",
+  "dashboard.restoreWidget": "ウィジェットを元に戻す",
+  "dashboard.dragToMove": "ドラッグで移動",
+  "dashboard.dragToResize": "ドラッグでサイズ変更",
+  "dashboard.moveToolbar": "ドラッグでこのツールバーを移動",
   "dashboard.deleteWidgetConfirm": "このウィジェットを削除しますか？",
   "dashboard.moveUp": "上へ移動",
   "dashboard.moveDown": "下へ移動",
@@ -2372,6 +2386,7 @@ const ja: TranslationStrings = {
   "dashboard.markdownImportExisting": "または既存ファイルをインポート",
   "dashboard.markdownCreateOnDone": "Doneで作成します。",
   "dashboard.markdownShowHeader": "ダッシュボード上でヘッダーを表示",
+  "dashboard.markdownShowProperties": "プロパティを表示（markdown）",
   "dashboard.timelineNoFile": "先にタイムラインファイルを設定してください。",
   "dashboard.timelineName": "Timeline名",
   "dashboard.timelineStorageHint": "投稿は Dashboards/Timeline/{name}/ 配下に日付ごとに保存されます。",

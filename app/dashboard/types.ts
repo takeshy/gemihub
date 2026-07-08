@@ -49,8 +49,6 @@ export const DASHBOARD_EXT = ".dashboard";
 export interface WidgetContext {
   host: "dashboard" | "canvas";
   size: { w: number; h: number };
-  /** True when the dashboard is in edit mode (enables cell editing in file-table). */
-  editMode?: boolean;
   /** The widget's own ID (for sidecar caches, events, etc.). */
   widgetId?: string;
   /** The .dashboard file's ID (fallback for sidecar caches scoped per dashboard). */

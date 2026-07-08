@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { GripVertical, Maximize2, Settings, Trash2 } from "lucide-react";
+import { GripVertical, Maximize2, Minimize2, Settings, Trash2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { Widget, LayoutPos, GridLayout, WidgetContext } from "./types";
 import WidgetRenderer from "./WidgetRenderer";
@@ -12,14 +12,17 @@ interface GridCellProps {
   grid: GridLayout;
   cellW: number;
   cellH: number;
-  editMode: boolean;
-  onDragStart?: () => void;
   onDragEnd: (pos: LayoutPos) => void;
   onResizeEnd: (pos: LayoutPos) => void;
   computeDragPos: (widgetId: string, dxPx: number, dyPx: number) => LayoutPos;
   computeResizePos: (widgetId: string, dxPx: number, dyPx: number) => LayoutPos;
   onSettings?: () => void;
   onDelete?: () => void;
+  /** Whether this cell fills the whole grid area (widget maximize). */
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
+  /** Hidden (but kept mounted, preserving widget state) while a sibling is maximized. */
+  hidden?: boolean;
   /** Persist a config change emitted by the widget itself (works in view mode). */
   onConfigChange?: (config: unknown) => void;
   /** The .dashboard file's ID (passed to WidgetContext as a sidecar cache fallback). */
@@ -34,14 +37,15 @@ export default function GridCell({
   grid,
   cellW,
   cellH,
-  editMode,
-  onDragStart,
   onDragEnd,
   onResizeEnd,
   computeDragPos,
   computeResizePos,
   onSettings,
   onDelete,
+  isMaximized,
+  onToggleMaximize,
+  hidden,
   onConfigChange,
   dashboardFileId,
   dashboardFileName,
@@ -55,6 +59,69 @@ export default function GridCell({
   const [snapPreview, setSnapPreview] = useState<LayoutPos | null>(null);
 
   const isActive = interactionMode !== null;
+  // Maximized cells aren't movable/resizable. (obsidian-gemini-helper also
+  // disables the handles while a file widget's memo panel is open, but its
+  // full-width drag tab conflicted with memo text selection — GemiHub's drag
+  // is confined to the pill grip, so no such guard is needed.)
+  const layoutHandlesEnabled = !isMaximized;
+
+  // --- Chrome pill repositioning ---
+  // The hover pill floats over widget content, so it can cover a control the
+  // user actually wants. Its left nub lets the user drag the pill anywhere
+  // inside the cell (session-only; resets when the cell is resized/maximized,
+  // since the clamped offset no longer fits the new bounds).
+  const cellRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLDivElement>(null);
+  const pillDragRef = useRef<{ startX: number; startY: number; baseDx: number; baseDy: number } | null>(null);
+  const [pillOffset, setPillOffset] = useState<{ dx: number; dy: number } | null>(null);
+  const [pillDragging, setPillDragging] = useState(false);
+
+  useEffect(() => {
+    setPillOffset(null);
+  }, [pos.w, pos.h, isMaximized]);
+
+  const handlePillPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      pillDragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        baseDx: pillOffset?.dx ?? 0,
+        baseDy: pillOffset?.dy ?? 0,
+      };
+      setPillDragging(true);
+    },
+    [pillOffset],
+  );
+
+  const handlePillPointerMove = useCallback((e: React.PointerEvent) => {
+    const start = pillDragRef.current;
+    if (!start) return;
+    let dx = start.baseDx + e.clientX - start.startX;
+    let dy = start.baseDy + e.clientY - start.startY;
+    const cell = cellRef.current?.getBoundingClientRect();
+    const pill = pillRef.current?.getBoundingClientRect();
+    if (cell && pill) {
+      // Default (offset-less) pill position: horizontally centered, 4px from
+      // the top (wrapper is `inset-x-0 top-1` + `justify-center`).
+      const maxDx = Math.max(0, (cell.width - pill.width) / 2);
+      dx = Math.min(maxDx, Math.max(-maxDx, dx));
+      dy = Math.min(Math.max(0, cell.height - pill.height - 4), Math.max(-4, dy));
+    }
+    setPillOffset({ dx, dy });
+  }, []);
+
+  const handlePillPointerUp = useCallback((e: React.PointerEvent) => {
+    if (!pillDragRef.current) return;
+    const target = e.currentTarget as HTMLElement;
+    if (target.hasPointerCapture?.(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    pillDragRef.current = null;
+    setPillDragging(false);
+  }, []);
 
   // --- Unified drag/resize pointer handling ---
   // A single effect keyed on `interactionMode` (boolean-like) so listeners
@@ -126,7 +193,6 @@ export default function GridCell({
 
   const handleDragPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!editMode) return;
       e.preventDefault();
       e.stopPropagation();
       const target = e.currentTarget as HTMLElement;
@@ -135,14 +201,12 @@ export default function GridCell({
       startRef.current = { x: e.clientX, y: e.clientY };
       setInteractionMode("drag");
       setTransform({ dx: 0, dy: 0 });
-      onDragStart?.();
     },
-    [editMode, onDragStart],
+    [],
   );
 
   const handleResizePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!editMode) return;
       e.preventDefault();
       e.stopPropagation();
       const target = e.currentTarget as HTMLElement;
@@ -158,13 +222,12 @@ export default function GridCell({
         });
       }
     },
-    [editMode, cellW, cellH, pos, grid.gap],
+    [cellW, cellH, pos, grid.gap],
   );
 
   const ctx: WidgetContext = {
     host: "dashboard",
     size: { w: pos.w, h: pos.h },
-    editMode,
     widgetId: widget.id,
     dashboardFileId,
     dashboardFileName,
@@ -191,37 +254,76 @@ export default function GridCell({
       )}
 
       <div
-        className={`group relative rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-800 overflow-hidden transition-shadow ${
-          editMode ? "border-gray-200" : "border-transparent"
-        } ${isActive ? "shadow-lg z-30 opacity-80" : ""}`}
-        style={{
-          gridColumn: `${pos.x + 1} / span ${pos.w}`,
-          gridRow: `${pos.y + 1} / span ${pos.h}`,
-          transform: transformStyle,
-          width: resizePreview ? `${resizePreview.width}px` : undefined,
-          height: resizePreview ? `${resizePreview.height}px` : undefined,
-          touchAction: interactionMode ? "none" : undefined,
-        }}
+        ref={cellRef}
+        className={`group rounded-lg border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-800 overflow-hidden transition-shadow ${
+          isActive ? "shadow-lg z-30 opacity-80" : ""
+        } ${isMaximized ? "absolute inset-0 z-40 shadow-md" : "relative"}`}
+        style={
+          isMaximized
+            ? undefined
+            : {
+                display: hidden ? "none" : undefined,
+                gridColumn: `${pos.x + 1} / span ${pos.w}`,
+                gridRow: `${pos.y + 1} / span ${pos.h}`,
+                transform: transformStyle,
+                width: resizePreview ? `${resizePreview.width}px` : undefined,
+                height: resizePreview ? `${resizePreview.height}px` : undefined,
+                touchAction: interactionMode ? "none" : undefined,
+              }
+        }
       >
         {/* Widget content */}
         <div className="h-full w-full overflow-hidden">
           <WidgetRenderer widget={widget} ctx={ctx} />
         </div>
 
-        {/* Drag handle (edit mode only) */}
-        {editMode && (
+        {/* Hover-revealed chrome pill (settings / drag grip / delete), centered
+            at the top. Widget headers keep their own controls at the left/right
+            edges, so the center is the one spot the pill can float without
+            covering them. The wrapper ignores pointer events (and the pill only
+            accepts them while the cell is hovered) so widget content stays
+            clickable everywhere else. Touch devices have no reliable hover, so
+            `pointer-coarse:` keeps the pill always visible and interactive there. */}
+        <div
+          className={`pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center transition-opacity ${
+            isActive || pillDragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
+          }`}
+        >
           <div
-            onPointerDown={handleDragPointerDown}
-            className="absolute top-0 left-0 right-0 h-7 cursor-grab active:cursor-grabbing bg-gray-50/80 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity group-hover:opacity-100"
-            style={{ touchAction: "none" }}
+            ref={pillRef}
+            className={`flex items-center rounded-md border border-gray-200 bg-gray-50/90 shadow-sm dark:border-gray-700 dark:bg-gray-800/90 ${
+              isActive || pillDragging
+                ? "pointer-events-auto"
+                : "pointer-events-none group-hover:pointer-events-auto pointer-coarse:pointer-events-auto"
+            }`}
+            style={pillOffset ? { transform: `translate(${pillOffset.dx}px, ${pillOffset.dy}px)` } : undefined}
           >
-            <GripVertical size={14} className="text-gray-400" />
-          </div>
-        )}
-
-        {/* Settings & Delete buttons (edit mode only, top-right corner) */}
-        {editMode && (
-          <div className="absolute top-1 right-1 flex items-center gap-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Pill mover — drags the pill itself out of the way when it
+                covers a widget control (the center grip moves the widget) */}
+            <div
+              onPointerDown={handlePillPointerDown}
+              onPointerMove={handlePillPointerMove}
+              onPointerUp={handlePillPointerUp}
+              onPointerCancel={handlePillPointerUp}
+              className="flex h-7 w-3.5 shrink-0 cursor-move items-center justify-center text-gray-300 dark:text-gray-600"
+              style={{ touchAction: "none" }}
+              title={t("dashboard.moveToolbar")}
+            >
+              <GripVertical size={10} />
+            </div>
+            {onToggleMaximize && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleMaximize();
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
+                title={isMaximized ? t("dashboard.restoreWidget") : t("dashboard.maximizeWidget")}
+              >
+                {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+            )}
             {onSettings && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -229,11 +331,21 @@ export default function GridCell({
                   e.stopPropagation();
                   onSettings();
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-50/90 text-gray-500 shadow-sm hover:text-gray-700 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:text-gray-100"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
                 title={t("common.settings")}
               >
-                <Settings size={16} />
+                <Settings size={14} />
               </button>
+            )}
+            {layoutHandlesEnabled && (
+              <div
+                onPointerDown={handleDragPointerDown}
+                className="flex h-7 w-9 cursor-grab items-center justify-center text-gray-400 active:cursor-grabbing"
+                style={{ touchAction: "none" }}
+                title={t("dashboard.dragToMove")}
+              >
+                <GripVertical size={14} />
+              </div>
             )}
             {onDelete && (
               <button
@@ -242,21 +354,27 @@ export default function GridCell({
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-50/90 text-gray-500 shadow-sm hover:text-red-500 dark:bg-gray-800/90 dark:text-gray-300"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:text-red-500 dark:text-gray-300"
                 title={t("dashboard.deleteWidget")}
               >
-                <Trash2 size={16} />
+                <Trash2 size={14} />
               </button>
             )}
           </div>
-        )}
+        </div>
 
-        {/* Resize handle (edit mode only) */}
-        {editMode && (
+        {/* Resize handle — hover-revealed on desktop, always on for touch
+            (`pointer-coarse:`), same reveal model as the chrome pill */}
+        {layoutHandlesEnabled && (
           <div
             onPointerDown={handleResizePointerDown}
-            className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize opacity-0 hover:opacity-100 transition-opacity group-hover:opacity-100"
+            className={`absolute bottom-0 right-0 w-5 h-5 cursor-se-resize transition-opacity ${
+              isActive
+                ? "opacity-100"
+                : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 hover:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
+            }`}
             style={{ touchAction: "none" }}
+            title={t("dashboard.dragToResize")}
           >
             <Maximize2 size={12} className="absolute bottom-1 right-1 text-gray-400" />
           </div>

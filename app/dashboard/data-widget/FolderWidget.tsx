@@ -5,7 +5,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useI18n } from "~/i18n/context";
-import type { WidgetContext } from "../types";
 import type { CardWidgetConfig, TableWidgetConfig, DataRow, FilterCondition } from "./types";
 import { loadFolderRows } from "./folder-source";
 import { applyPostSource, detectFields, fieldsToMap } from "./filter";
@@ -15,11 +14,9 @@ import { ViewControls, deriveFieldsFromRows } from "./ViewControls";
 
 export default function FolderWidget({
   config,
-  ctx,
   view,
 }: {
   config: unknown;
-  ctx?: WidgetContext;
   view: "cards" | "table";
 }) {
   const { t } = useI18n();
@@ -99,7 +96,6 @@ export default function FolderWidget({
             rows={processedRows}
             columns={cfg.columns ?? []}
             editable
-            editMode={ctx?.editMode}
             folder={folder}
             fieldTypes={fieldTypes}
           />

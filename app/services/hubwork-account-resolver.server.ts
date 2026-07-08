@@ -1,6 +1,7 @@
 import type { HubworkAccount, ResolvedAccountTokens } from "~/types/hubwork";
 import { isHubworkFeatureAvailable } from "~/types/hubwork";
 import { getAccountByDomain, getAccountByDefaultDomain, getAccountBySlug, getTokensForAccount } from "./hubwork-accounts.server";
+import { isFirestoreAvailable } from "./firestore.server";
 
 // In-memory cache: domain → account (60s TTL, max 1000 entries)
 const domainCache = new Map<string, { account: HubworkAccount; expiresAt: number }>();
@@ -27,6 +28,15 @@ export function extractAllowedSlugHost(domain: string): string | null {
 export async function resolveHubworkAccount(
   request: Request
 ): Promise<HubworkAccount> {
+  // Self-hosted / local environments have no Google Cloud credentials; treat
+  // every domain as "no Hubwork account" without touching Firestore. The
+  // Firestore client must not even be constructed in that case — its
+  // background gRPC setup throws NO_ADC_FOUND from a timer callback, outside
+  // any request try/catch, crashing the whole process.
+  if (!isFirestoreAvailable()) {
+    throw new Response("Not Found", { status: 404 });
+  }
+
   const host = request.headers.get("host");
   if (!host) {
     throw new Response("Missing Host header", { status: 400 });

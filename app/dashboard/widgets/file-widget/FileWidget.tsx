@@ -29,6 +29,8 @@ export interface FileConfig {
   path?: string;
   /** Whether to show the widget's header bar. Defaults to true. */
   showHeader?: boolean;
+  /** Whether to show frontmatter properties (markdown only). Defaults to true. */
+  showProperties?: boolean;
   /** 70–240: PDF zoom / EPUB & HTML font size (%). */
   viewFontScale?: number;
   /** 70–180: EPUB & HTML content width (%). */
@@ -124,6 +126,7 @@ export default function FileWidget({
   const cfg = useMemo(() => (config ?? {}) as FileConfig, [config]);
   const filePath = (cfg.path ?? "").trim();
   const showHeader = cfg.showHeader !== false;
+  const showProperties = cfg.showProperties !== false;
   const viewFontScale = clampScale(
     typeof cfg.viewFontScale === "number" ? cfg.viewFontScale : 100,
     FONT_SCALE_MIN,
@@ -253,6 +256,14 @@ export default function FileWidget({
     />
   );
 
+  // Read-only path label — switching files lives in the settings panel
+  // (FileConfigEditor), so the header doesn't need its own picker.
+  const pathLabel = (
+    <span className="min-w-0 truncate text-xs text-gray-600 dark:text-gray-300" title={filePath}>
+      {filePath}
+    </span>
+  );
+
   const memoToggle = (
     <button
       type="button"
@@ -314,6 +325,7 @@ export default function FileWidget({
             initialContent={content}
             saveToCache={saveToCache}
             hideHeader={!showHeader}
+            hideProperties={!showProperties}
             hideToolbarActions
             initialMode={sessionMode}
             onModeChange={(m) => {
@@ -322,8 +334,8 @@ export default function FileWidget({
             }}
             headerLeft={
               <div className="flex min-w-0 items-center gap-1">
-                {picker()}
                 {memoToggle}
+                {pathLabel}
               </div>
             }
           />
@@ -401,8 +413,8 @@ export default function FileWidget({
 
   const header = showHeader && kind !== "markdown" && (
     <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-2 py-1 dark:border-gray-800 dark:bg-gray-900">
-      {picker()}
       {memoToggle}
+      {pathLabel}
       <div className="ml-auto flex items-center gap-2">
         {(kind === "pdf" || kind === "epub" || kind === "html") && (
           <ScaleStepper
