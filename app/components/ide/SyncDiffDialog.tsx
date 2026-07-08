@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Loader2, ExternalLink, ArrowUp, ArrowDown, EyeOff, Eye } from "lucide-react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Folder, Loader2, ExternalLink, ArrowUp, ArrowDown, EyeOff, Eye } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
 import { useDraggableModal } from "~/hooks/useDraggableModal";
@@ -8,12 +8,9 @@ import { getCachedFile } from "~/services/indexeddb-cache";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
 import { isEncryptedFile } from "~/services/crypto-core";
 import { ICON } from "~/utils/icon-sizes";
+import { buildDialogRows, type DialogRow, type DialogGroupRow, type FileListItem } from "~/utils/sync-diff-grouping";
 
-export interface FileListItem {
-  id: string;
-  name: string;
-  type: "new" | "modified" | "deleted" | "editDeleted" | "conflict";
-}
+export type { FileListItem };
 
 interface SyncDiffDialogProps {
   files: FileListItem[];
@@ -64,6 +61,9 @@ export function SyncDiffDialog({
   const diffStatesRef = useRef(diffStates);
   useEffect(() => { diffStatesRef.current = diffStates; }, [diffStates]);
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
+  // Group expand/collapse, keyed by folder path. Missing key = collapsed.
+  const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({});
+  const rows = useMemo(() => buildDialogRows(files), [files]);
 
   const canIgnore = (fileType: FileListItem["type"]) =>
     type === "pull" && fileType === "modified";
@@ -171,6 +171,159 @@ export function SyncDiffDialog({
 
   const title = type === "push" ? t("sync.pushChanges") : t("sync.pullChanges");
 
+  const renderFileRow = (f: FileListItem) => {
+    const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : f.type === "editDeleted" || f.type === "conflict" ? AlertTriangle : Trash2;
+    const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : f.type === "editDeleted" || f.type === "conflict" ? "text-amber-500" : "text-red-500";
+    const ds = diffStates[f.id];
+    const diffable = canShowDiff(f.name);
+    const ignored = ignoredIds.has(f.id);
+
+    return (
+      <div
+        key={f.id}
+        className={`rounded-lg border border-gray-200 dark:border-gray-700 p-3${f.type === "conflict" ? " opacity-60" : ""}${ignored ? " opacity-50" : ""}`}
+      >
+        <div className="flex items-center gap-2">
+          <Icon size={14} className={`shrink-0 ${iconColor}`} />
+          <span className="truncate flex-1 text-sm text-gray-900 dark:text-gray-100" title={f.name}>
+            {f.name}
+            {f.type === "editDeleted" && (
+              <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                {t("conflict.deletedOnRemote")}
+              </span>
+            )}
+            {f.type === "conflict" && (
+              <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                {t("sync.conflictBadge")}
+              </span>
+            )}
+          </span>
+
+          {/* Open button (hidden in pull dialog: previewing an unpulled
+              file would let the user edit without a sync baseline) */}
+          {onSelectFile && type === "push" && (
+            <button
+              onClick={() => {
+                onClose();
+                onSelectFile(f.id, f.name, guessMimeType(f.name));
+              }}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            >
+              <ExternalLink size={12} />
+              {t("sync.openFile")}
+            </button>
+          )}
+
+          {/* Ignore toggle (pull only, not for conflict/editDeleted) */}
+          {canIgnore(f.type) && (
+            <button
+              onClick={() => toggleIgnore(f.id)}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              title={ignored ? t("sync.unignore") : t("sync.ignore")}
+            >
+              {ignored ? <Eye size={ICON.SM} /> : <EyeOff size={ICON.SM} />}
+              {ignored ? t("sync.unignore") : t("sync.ignore")}
+            </button>
+          )}
+
+          {/* Diff toggle (disabled for edit-delete: no remote content to compare) */}
+          {diffable && f.type !== "editDeleted" ? (
+            <button
+              onClick={() => handleDiffToggle(f.id, f.name, f.type)}
+              disabled={ds?.loading}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            >
+              {ds?.loading ? (
+                <Loader2 size={ICON.SM} className="animate-spin" />
+              ) : ds?.expanded && ds?.diff ? (
+                <ChevronDown size={ICON.SM} />
+              ) : (
+                <ChevronRight size={ICON.SM} />
+              )}
+              {ds?.expanded && ds?.diff ? t("conflict.hideDiff") : t("conflict.diff")}
+            </button>
+          ) : (
+            <span className="text-xs text-gray-400 italic">{t("sync.noDiff")}</span>
+          )}
+        </div>
+
+        {/* Diff panel */}
+        {ds?.expanded && (
+          <div className="mt-2">
+            {ds.loading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 size={ICON.LG} className="animate-spin text-gray-400" />
+              </div>
+            )}
+            {ds.error && (
+              <div className="px-3 py-2 text-xs text-red-500">
+                {t("conflict.diffError")}
+              </div>
+            )}
+            {ds.diff && ds.diff === "encrypted" ? (
+              <div className="px-3 py-2 text-xs text-gray-400 italic">
+                {t("sync.encryptedNoDiff")}
+              </div>
+            ) : ds.diff ? (
+              <div className="rounded border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
+                <div className="flex justify-end px-2 py-1 border-b border-gray-200 dark:border-gray-700">
+                  <DiffViewToggle viewMode={diffViewMode} onViewModeChange={setDiffViewMode} />
+                </div>
+                <DiffView diff={ds.diff} viewMode={diffViewMode} />
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderGroupRow = ({ folderPath, items, children }: DialogGroupRow) => {
+    const expanded = groupExpanded[folderPath] ?? false;
+    const typeCounts = [
+      { key: "new", Icon: Plus, color: "text-green-500", count: items.filter((i) => i.type === "new").length },
+      { key: "modified", Icon: Pencil, color: "text-blue-500", count: items.filter((i) => i.type === "modified").length },
+      { key: "deleted", Icon: Trash2, color: "text-red-500", count: items.filter((i) => i.type === "deleted").length },
+      { key: "warn", Icon: AlertTriangle, color: "text-amber-500", count: items.filter((i) => i.type === "editDeleted" || i.type === "conflict").length },
+    ];
+
+    return (
+      <div key={`group:${folderPath}`} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+        <button
+          onClick={() => setGroupExpanded((prev) => ({ ...prev, [folderPath]: !(prev[folderPath] ?? false) }))}
+          className="flex w-full items-center gap-2 text-left"
+        >
+          {expanded ? (
+            <ChevronDown size={ICON.SM} className="shrink-0 text-gray-400" />
+          ) : (
+            <ChevronRight size={ICON.SM} className="shrink-0 text-gray-400" />
+          )}
+          <Folder size={14} className="shrink-0 text-gray-400" />
+          <span className="truncate flex-1 text-sm text-gray-900 dark:text-gray-100" title={folderPath}>
+            {folderPath}
+          </span>
+          <span className="shrink-0 text-xs text-gray-400">({items.length})</span>
+          {typeCounts.map(({ key, Icon, color, count }) =>
+            count > 0 ? (
+              <span key={key} className={`flex shrink-0 items-center gap-0.5 text-xs ${color}`}>
+                <Icon size={12} />
+                {count}
+              </span>
+            ) : null,
+          )}
+        </button>
+        {expanded && (
+          <div className="pl-4 border-l border-gray-200 dark:border-gray-700 ml-1.5 mt-2 space-y-2">
+            {children.map(renderRow)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderRow = (row: DialogRow) =>
+    row.kind === "file" ? renderFileRow(row.item) : renderGroupRow(row);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/50">
       <div ref={modalRef} style={modalStyle} className="w-[min(1024px,calc(100vw-2rem))] h-[80vh] rounded-lg bg-white shadow-xl dark:bg-gray-900 flex flex-col resize overflow-auto">
@@ -193,112 +346,7 @@ export function SyncDiffDialog({
             <div className="px-3 py-2 text-xs text-gray-400">No files</div>
           ) : (
             <div className="space-y-2">
-              {files.map((f) => {
-                const Icon = f.type === "new" ? Plus : f.type === "modified" ? Pencil : f.type === "editDeleted" || f.type === "conflict" ? AlertTriangle : Trash2;
-                const iconColor = f.type === "new" ? "text-green-500" : f.type === "modified" ? "text-blue-500" : f.type === "editDeleted" || f.type === "conflict" ? "text-amber-500" : "text-red-500";
-                const ds = diffStates[f.id];
-                const diffable = canShowDiff(f.name);
-                const ignored = ignoredIds.has(f.id);
-
-                return (
-                  <div
-                    key={f.id}
-                    className={`rounded-lg border border-gray-200 dark:border-gray-700 p-3${f.type === "conflict" ? " opacity-60" : ""}${ignored ? " opacity-50" : ""}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Icon size={14} className={`shrink-0 ${iconColor}`} />
-                      <span className="truncate flex-1 text-sm text-gray-900 dark:text-gray-100" title={f.name}>
-                        {f.name}
-                        {f.type === "editDeleted" && (
-                          <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                            {t("conflict.deletedOnRemote")}
-                          </span>
-                        )}
-                        {f.type === "conflict" && (
-                          <span className="ml-1.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                            {t("sync.conflictBadge")}
-                          </span>
-                        )}
-                      </span>
-
-                      {/* Open button (hidden in pull dialog: previewing an unpulled
-                          file would let the user edit without a sync baseline) */}
-                      {onSelectFile && type === "push" && (
-                        <button
-                          onClick={() => {
-                            onClose();
-                            onSelectFile(f.id, f.name, guessMimeType(f.name));
-                          }}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                        >
-                          <ExternalLink size={12} />
-                          {t("sync.openFile")}
-                        </button>
-                      )}
-
-                      {/* Ignore toggle (pull only, not for conflict/editDeleted) */}
-                      {canIgnore(f.type) && (
-                        <button
-                          onClick={() => toggleIgnore(f.id)}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                          title={ignored ? t("sync.unignore") : t("sync.ignore")}
-                        >
-                          {ignored ? <Eye size={ICON.SM} /> : <EyeOff size={ICON.SM} />}
-                          {ignored ? t("sync.unignore") : t("sync.ignore")}
-                        </button>
-                      )}
-
-                      {/* Diff toggle (disabled for edit-delete: no remote content to compare) */}
-                      {diffable && f.type !== "editDeleted" ? (
-                        <button
-                          onClick={() => handleDiffToggle(f.id, f.name, f.type)}
-                          disabled={ds?.loading}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                        >
-                          {ds?.loading ? (
-                            <Loader2 size={ICON.SM} className="animate-spin" />
-                          ) : ds?.expanded && ds?.diff ? (
-                            <ChevronDown size={ICON.SM} />
-                          ) : (
-                            <ChevronRight size={ICON.SM} />
-                          )}
-                          {ds?.expanded && ds?.diff ? t("conflict.hideDiff") : t("conflict.diff")}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">{t("sync.noDiff")}</span>
-                      )}
-                    </div>
-
-                    {/* Diff panel */}
-                    {ds?.expanded && (
-                      <div className="mt-2">
-                        {ds.loading && (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader2 size={ICON.LG} className="animate-spin text-gray-400" />
-                          </div>
-                        )}
-                        {ds.error && (
-                          <div className="px-3 py-2 text-xs text-red-500">
-                            {t("conflict.diffError")}
-                          </div>
-                        )}
-                        {ds.diff && ds.diff === "encrypted" ? (
-                          <div className="px-3 py-2 text-xs text-gray-400 italic">
-                            {t("sync.encryptedNoDiff")}
-                          </div>
-                        ) : ds.diff ? (
-                          <div className="rounded border border-gray-200 dark:border-gray-700 overflow-x-auto max-h-64 overflow-y-auto">
-                            <div className="flex justify-end px-2 py-1 border-b border-gray-200 dark:border-gray-700">
-                              <DiffViewToggle viewMode={diffViewMode} onViewModeChange={setDiffViewMode} />
-                            </div>
-                            <DiffView diff={ds.diff} viewMode={diffViewMode} />
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {rows.map(renderRow)}
             </div>
           )}
         </div>
