@@ -228,15 +228,20 @@ export default function GridCell({
     [cellW, cellH, pos, grid.gap],
   );
 
-  // File-backed widgets (e.g. the file widget) get an Open button in the
-  // chrome pill that navigates to the file's own page in the main viewer.
-  // Resolved against the Drive file list so the button only shows for files
-  // that actually exist.
-  const backingFilePath = getWidgetDef(widget.type).filePathOf?.(widget.config);
+  // Backing targets get an Open button in the chrome pill: Drive files navigate
+  // to their main viewer page, external URLs open in a new browser tab.
+  const widgetDef = getWidgetDef(widget.type);
+  const backingFilePath = widgetDef.filePathOf?.(widget.config);
   const backingFile = backingFilePath
     ? fileList.find((f) => (f.path || f.name) === backingFilePath)
     : undefined;
-  const handleOpenFile = useCallback(() => {
+  const externalUrl = widgetDef.externalUrlOf?.(widget.config);
+  const hasOpenTarget = Boolean(backingFile || externalUrl);
+  const handleOpenTarget = useCallback(() => {
+    if (externalUrl) {
+      window.open(externalUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
     if (!backingFile) return;
     // No mimeType: like FileListWidget, let MainViewer detect the type from
     // the file name (media-utils' guessMimeType only knows media extensions
@@ -246,7 +251,7 @@ export default function GridCell({
         detail: { fileId: backingFile.id, fileName: backingFile.path || backingFile.name },
       }),
     );
-  }, [backingFile]);
+  }, [backingFile, externalUrl]);
 
   const ctx: WidgetContext = {
     host: "dashboard",
@@ -347,15 +352,15 @@ export default function GridCell({
                 {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
               </button>
             )}
-            {backingFile && (
+            {hasOpenTarget && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleOpenFile();
+                  handleOpenTarget();
                 }}
                 className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
-                title={t("dashboard.openFile")}
+                title={externalUrl ? t("workspace.openExternal") : t("dashboard.openFile")}
               >
                 <ExternalLink size={14} />
               </button>

@@ -104,4 +104,9 @@ export interface WidgetDef {
    * to that file's page in the main viewer.
    */
   filePathOf?: (config: unknown) => string | undefined;
+  /**
+   * External URL the widget is backed by, if any. When present, the dashboard
+   * cell chrome shows an Open button that opens it in a new browser tab.
+   */
+  externalUrlOf?: (config: unknown) => string | undefined;
 }

@@ -146,6 +146,11 @@ registerWidget({
   render: (config, ctx) => React.createElement(WebWidget, { config, ctx }),
   defaultSize: { w: 6, h: 4 },
   ConfigEditor: WebConfigEditor,
+  externalUrlOf: (config) => {
+    const url = ((config as { url?: string })?.url ?? "").trim();
+    if (!/^https?:\/\//i.test(url)) return undefined;
+    return url;
+  },
 });
 
 registerWidget({
