@@ -58,6 +58,7 @@ const BINARY_FILE_EXTENSIONS = new Set([
 
 const TEXT_FILE_EXTENSIONS = new Set([
   "base",
+  "kanban",
   "css",
   "csv",
   "dashboard",

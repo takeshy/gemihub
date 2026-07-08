@@ -98,4 +98,10 @@ export interface WidgetDef {
   defaultSize?: { w: number; h: number };
   /** Per-type settings form shown when editing a widget. Omit for "no settings". */
   ConfigEditor?: FC<ConfigEditorProps>;
+  /**
+   * Drive file path the widget is backed by, if any. When this resolves to a
+   * known file, the dashboard cell chrome shows an Open button that navigates
+   * to that file's page in the main viewer.
+   */
+  filePathOf?: (config: unknown) => string | undefined;
 }

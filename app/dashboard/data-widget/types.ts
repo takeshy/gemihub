@@ -68,6 +68,12 @@ export interface KanbanColumnConfig {
 }
 
 export interface KanbanWidgetConfig {
+  /**
+   * Path of a .kanban board definition file. When set, the file is the single
+   * source of truth for the board definition and the inline keys below
+   * (except cardOrder) are ignored. See kanban-file.ts.
+   */
+  kanban?: string;
   folder?: string;
   title?: string;
   statusProperty?: string;

@@ -42,7 +42,7 @@ Key files: `dashboardFile.ts` (parse/serialize/load/save/list/rename/delete), `t
 ## Layout & grid
 
 - Two breakpoints: `lg` (wide) and `sm` (narrow, threshold `BREAKPOINT_THRESHOLD = 768px`). Missing `sm` layouts are auto-derived (full width, stacked) by `deriveSmLayout`.
-- **No separate edit mode.** Hovering a widget cell reveals a chrome pill centered at the top (pill mover / Maximize / Settings / drag grip / Delete) and a resize handle in the bottom-right corner — no mode toggle needed. The chrome ignores pointer events until revealed, and it floats over the top **center** because widget headers keep their own controls (filter/sort icons, memo toggle) at the left/right edges. When the pill still covers a control, its small left nub drags the pill anywhere inside the cell (session-only; the offset resets on cell resize/maximize). On touch devices (`pointer: coarse`) the chrome is always visible and interactive, since hover-reveal is unreliable there. Undo/redo supports config-edit coalescing.
+- **No separate edit mode.** Hovering a widget cell reveals a chrome pill centered at the top (pill mover / Maximize / Open / Settings / drag grip / Delete) and a resize handle in the bottom-right corner — no mode toggle needed. The **Open** button appears only for file-backed widgets — those whose `WidgetDef.filePathOf(config)` resolves to an existing Drive file (file/markdown via `path`, workflow via `workflow`, base via `base`, kanban via `kanban`) — and navigates to that file's page in the main viewer (`plugin-select-file`). The chrome ignores pointer events until revealed, and it floats over the top **center** because widget headers keep their own controls (filter/sort icons, memo toggle) at the left/right edges. When the pill still covers a control, its small left nub drags the pill anywhere inside the cell (session-only; the offset resets on cell resize/maximize). On touch devices (`pointer: coarse`) the chrome is always visible and interactive, since hover-reveal is unreliable there. Undo/redo supports config-edit coalescing.
 - **Maximize** — the pill's Maximize button expands one widget to fill the grid area (`absolute inset-0` overlay, ported from obsidian-gemini-helper); sibling cells stay mounted but hidden so their state survives restore. The state is ephemeral (not persisted) and clears automatically if the widget disappears (delete/undo/dashboard switch). Drag/resize handles are hidden while maximized.
 - **Align (整列)** — two toolbar buttons tile all widgets evenly into up to 3 **columns** (horizontal) or 3 **rows** (vertical), round-robin, sized to roughly one screen (`equalizeLayout.ts`, ported from mdwys). One click is one undo step; `sm` layouts are dropped so `deriveSmLayout` re-derives the stacked layout.
 - The canvas (`DashboardCanvas.tsx`) renders the grid; each widget lives in a `GridCell.tsx` that owns drag/resize. `DashboardHost.tsx` owns the dashboard lifecycle (create / rename / delete / switch, home pinning via `settings.homeDashboard`) and debounced save.
@@ -57,7 +57,7 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 |------|---------|--------|
 | `file` | Open a Drive file — Markdown (preview/wysiwyg/code), text, HTML, EPUB, PDF, image — with per-document memos | Drive file |
 | `base` | Render a view (table/cards/list) of an Obsidian-style `.base` query file | `.base` + folder |
-| `kanban` | Kanban board over a folder of markdown files | folder |
+| `kanban` | Kanban board over a folder of markdown files | `.kanban` definition file + folder |
 | `timeline` | Personal microblog of dated posts (tags, image attachments, pin/edit) | timeline folder |
 | `workflow` | Run a workflow and render its output | workflow |
 | `web` | Embed an external URL (with embeddability check + fallback card) | URL |
@@ -67,7 +67,7 @@ The current core widget set is registered in `widgets/registry.ts`: `file`, `bas
 
 > **Markdown widget is now the File widget.** The earlier `markdown` widget grew into `file` (same config shape, more formats + memos). Released dashboards persisting `type: markdown` keep working without migration: the registry registers the same `WidgetDef` under both types (`markdown` is hidden from the palette), so the YAML round-trips byte-stable. New widgets are written as `type: file`.
 
-> **Folder data widgets are now Bases.** The earlier `card`, `table`, and `file-list` widgets (folder-source card grid / editable table / file list) have been **folded into the `base` widget** — they are now authored as `.base` files (a cards/table/list view over a folder). These three types are no longer registered; when a `.dashboard` still references one, it is **auto-converted** to an equivalent `base` widget on load (`legacyFolderWidgetConversion.ts`), writing a generated `.base` under `Dashboards/Bases/`. The shared folder-source pipeline (`data-widget/`: `folder-source.ts`, `filter.ts`, `ViewControls.tsx`, `config-parts/`) lives on and is reused by the `base` widget for filtering/sorting and the view-time header controls.
+> **Folder data widgets are now Bases.** The earlier `card`, `table`, and `file-list` widgets (folder-source card grid / editable table / file list) have been **folded into the `base` widget** — they are now authored as `.base` files (a cards/table/list view over a folder). These three types are no longer registered; when a `.dashboard` still references one, its widget settings panel offers a one-click **Convert** that rewrites it to an equivalent `base` widget (`legacyFolderWidgetConversion.ts`), writing a generated `.base` under `Dashboards/Bases/`. The shared folder-source pipeline (`data-widget/`: `folder-source.ts`, `filter.ts`, `ViewControls.tsx`, `config-parts/`) lives on and is reused by the `base` widget for filtering/sorting and the view-time header controls.
 
 ### File widget
 
@@ -181,7 +181,7 @@ The `base`, `workflow`, and the (now legacy, Base-backed) folder widgets reuse a
 
 ## Card & Table (legacy folder widgets)
 
-> **Legacy / superseded by `base`.** `card`, `table`, and `file-list` are no longer registered widget types — they are auto-converted to `base` widgets on load (see "Folder data widgets are now Bases" above). The implementation files (`FolderWidget`, `CardsView`, `TableView`, `FileListWidget`, and their config editors) remain in the tree as the basis of the legacy conversion and as the shared rendering pipeline reused by the `base` widget. The config shapes below document those legacy widgets and the converter's input.
+> **Legacy / superseded by `base`.** `card`, `table`, and `file-list` are no longer registered widget types — the widget settings panel converts them to `base` widgets on request (see "Folder data widgets are now Bases" above). The implementation files (`FolderWidget`, `CardsView`, `TableView`, `FileListWidget`, and their config editors) remain in the tree as the basis of the legacy conversion and as the shared rendering pipeline reused by the `base` widget. The config shapes below document those legacy widgets and the converter's input.
 
 Both read markdown files from a folder and run them through filter → sort → limit. They differ only in how rows are rendered. Implemented by a shared `FolderWidget` (the registry picks the view per type).
 
@@ -223,23 +223,38 @@ The `kanban` widget reads Markdown files from a folder, groups them by a frontma
 
 ![Kanban board](../../public/images/dashboard_kanban.png)
 
+The board definition always lives in a **`.kanban` file** (like `base` widgets and `.base` files); the widget config only references it:
+
 ```yaml
 config:
-  folder: projects
-  title: Tasks
-  statusProperty: status              # frontmatter key used for columns
-  titleProperty: title                # card title key; falls back to file name
-  columns:
-    - { value: todo, label: To Do }
-    - { value: in-progress, label: In Progress }
-    - { value: done, label: Done }
-  showUnspecified: true               # show cards with empty/unknown status
-  displayFields: [owner, due]
-  filter: [ ... ]
-  limit: 100
+  kanban: Dashboards/Kanbans/Tasks.kanban   # board definition file (source of truth)
+  cardOrder: [ ... ]                        # per-widget manual card order (optional)
 ```
 
-The board title is required when adding a new kanban widget. The header includes a **New** button that creates a Markdown note in the configured folder with the chosen column status. When `showUnspecified` is enabled, cards with empty or unknown status appear in an "Unspecified" column; dropping a card there removes the status key from frontmatter. For backward compatibility, `columns: [todo, doing, done]` is still accepted.
+```yaml
+# Tasks.kanban — YAML board definition
+version: 1
+folder: projects
+title: Tasks
+statusProperty: status              # frontmatter key used for columns
+titleProperty: title                # card title key; falls back to file name
+columns:
+  - { value: todo, label: To Do }
+  - { value: in-progress, label: In Progress }
+  - { value: done, label: Done }
+showUnspecified: true               # show cards with empty/unknown status
+displayFields: [owner, due]
+filter: [ ... ]
+limit: 100
+```
+
+Adding a kanban widget opens a create-or-import flow in the config editor (name a new board → a `.kanban` is generated under `Dashboards/Kanbans/`, or pick an existing file); once referenced, the config editor edits the `.kanban` file directly through the shared definition form (`KanbanDefinitionFields`), auto-saving with a debounce. Widgets whose config still carries a legacy inline definition keep rendering as-is and are **force-converted** to a generated `.kanban` the first time their settings panel opens.
+
+The header includes a **New** button that creates a Markdown note in the configured folder with the chosen column status and opens it in the card modal (see below) instead of navigating away. When `showUnspecified` is enabled, cards with empty or unknown status appear in an "Unspecified" column; dropping a card there removes the status key from frontmatter. For backward compatibility, `columns: [todo, doing, done]` is still accepted.
+
+File-backed widgets get the cell chrome's Open button; `.kanban` files open in a dedicated editor (`app/components/ide/editors/KanbanFileEditor.tsx`, mirroring the `.base` editor) with a **Display / Edit / Raw** toggle — Display renders the live board (same widget: drag & drop, New Card, card modal; manual order is session-only here), Edit opens a side panel over the shared definition form, Raw edits the YAML source. `.kanban` is treated as `text/yaml` throughout sync/upload/diff. Parsing/serialization live in `data-widget/kanban-file.ts`; widgets, the config editor, and the file editor sync via the `dashboard-kanban-file-updated` event (`data-widget/kanban-events.ts`).
+
+**Card modal.** Clicking a card (or creating one via **New**) opens the shared file modal (`FilePreviewModal`). For Markdown files the modal embeds the full `MarkdownFileEditor` — the same preview / wysiwyg / raw mode toggle as the file widget, frontmatter properties panel included — with local-first saves (IndexedDB + edit history; Drive on Push). Each save fires `dashboard-data-changed` for the file's folder so the board reflects title/status edits immediately. The modal's navigate icon still opens the file's own page. Non-Markdown text and media files keep the read-only preview. This applies to every `FilePreviewModal` call site (kanban, base, file list, timeline, `.base` editor).
 
 ## Workflow widget
 

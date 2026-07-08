@@ -1,16 +1,18 @@
-// A lightweight preview modal used by the File List widget: clicking a file
-// shows its content here first, with a navigate icon (open the file in the
-// editor) and a close icon in the header — instead of navigating immediately.
+// A file modal shared by the dashboard widgets (file list, kanban, base,
+// timeline): clicking a file shows it here first, with a navigate icon (open
+// the file in the editor) and a close icon in the header — instead of
+// navigating immediately. Markdown files open in the full MarkdownFileEditor
+// (preview / wysiwyg / raw modes, local-first saves); other text and media
+// stay read-only previews.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, X, Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext } from "~/contexts/EditorContext";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
 import { isMarkdownFile } from "~/utils/frontmatter";
-import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
-import { splitFrontmatter } from "../frontmatter-writeback";
+import { MarkdownFileEditor, type MdEditMode } from "~/components/ide/editors/MarkdownFileEditor";
 import { getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
 import { bytesToBase64, base64ToBytes, guessMimeType } from "~/utils/media-utils";
 
@@ -23,6 +25,11 @@ function mediaKind(name: string): MediaKind | null {
   if (/\.pdf$/i.test(name)) return "pdf";
   return null;
 }
+
+// Session-remembered mode for the modal's markdown editor (preview-first on
+// the first open, then the user's last explicit choice) — the FileWidget
+// sessionMode pattern.
+let modalSessionMode: MdEditMode = "preview";
 
 export function FilePreviewModal({
   fileId,
@@ -38,6 +45,7 @@ export function FilePreviewModal({
 }) {
   const { t } = useI18n();
   const kind = mediaKind(fileName);
+  const editable = !kind && isMarkdownFile(fileName);
 
   // Close on Escape.
   useEffect(() => {
@@ -58,7 +66,7 @@ export function FilePreviewModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className={`flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900${editable ? " h-[85vh]" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-2 dark:border-gray-700">
@@ -82,24 +90,75 @@ export function FilePreviewModal({
             <X size={16} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          {kind ? (
-            <BinaryPreviewBody fileId={fileId} fileName={fileName} kind={kind} />
-          ) : (
-            <TextPreviewBody fileId={fileId} fileName={fileName} />
-          )}
-        </div>
+        {editable ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <MarkdownEditorBody fileId={fileId} fileName={fileName} />
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+            {kind ? (
+              <BinaryPreviewBody fileId={fileId} fileName={fileName} kind={kind} />
+            ) : (
+              <TextPreviewBody fileId={fileId} />
+            )}
+          </div>
+        )}
       </div>
     </div>,
     document.body,
   );
 }
 
-function TextPreviewBody({ fileId, fileName }: { fileId: string; fileName: string }) {
+/** Editable body for Markdown files — the file widget's editor in a modal. */
+function MarkdownEditorBody({ fileId, fileName }: { fileId: string; fileName: string }) {
   const { t } = useI18n();
   const { fileList } = useEditorContext();
-  const { content, loading } = useFileWithCache(fileId, undefined, "FileListPreview");
+  const { content, loading, saveToCache } = useFileWithCache(fileId, undefined, "FilePreviewModal");
   const currentFilePath = fileList.find((file) => file.id === fileId)?.path || fileName;
+
+  // Local-first save (IndexedDB + editHistory; Drive on Push) plus a data
+  // signal so folder widgets (kanban/file list/timeline) reflect the edit.
+  const saveAndNotify = useCallback(
+    async (next: string) => {
+      await saveToCache(next);
+      const folder = currentFilePath.includes("/")
+        ? currentFilePath.slice(0, currentFilePath.lastIndexOf("/"))
+        : "";
+      window.dispatchEvent(new CustomEvent("dashboard-data-changed", { detail: { folder } }));
+    },
+    [saveToCache, currentFilePath],
+  );
+
+  if (content == null) {
+    return loading ? (
+      <div className="flex h-40 items-center justify-center text-gray-400">
+        <Loader2 size={20} className="animate-spin" />
+      </div>
+    ) : (
+      <div className="flex h-40 items-center justify-center text-sm text-gray-400">
+        {t("dashboard.fileNotFound")}
+      </div>
+    );
+  }
+  return (
+    <MarkdownFileEditor
+      key={fileId}
+      fileId={fileId}
+      fileName={currentFilePath}
+      initialContent={content}
+      saveToCache={saveAndNotify}
+      hideToolbarActions
+      initialMode={modalSessionMode}
+      onModeChange={(mode) => {
+        modalSessionMode = mode;
+      }}
+    />
+  );
+}
+
+function TextPreviewBody({ fileId }: { fileId: string }) {
+  const { t } = useI18n();
+  const { content, loading } = useFileWithCache(fileId, undefined, "FileListPreview");
 
   if (loading && content == null) {
     return (
@@ -112,14 +171,6 @@ function TextPreviewBody({ fileId, fileName }: { fileId: string; fileName: strin
     return (
       <div className="flex h-40 items-center justify-center text-sm text-gray-400">
         {t("dashboard.fileNotFound")}
-      </div>
-    );
-  }
-  if (isMarkdownFile(fileName)) {
-    const split = splitFrontmatter(content);
-    return (
-      <div className="prose prose-sm max-w-none dark:prose-invert">
-        <GfmMarkdownPreview content={split ? split.body : content} fileList={fileList} currentFilePath={currentFilePath} />
       </div>
     );
   }

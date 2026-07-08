@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import yaml from "js-yaml";
 import { getCachedFile } from "~/services/indexeddb-cache";
-import { findFileByNameLocal, writeFileLocal } from "~/services/drive-local";
+import { findFileByNameLocal, readFileLocal, writeFileLocal } from "~/services/drive-local";
 import { updateFrontmatterKey } from "../frontmatter-writeback";
+import { parseKanbanFile, type KanbanBoardDefinition } from "./kanban-file";
+import { DASHBOARD_KANBAN_FILE_UPDATED_EVENT } from "./kanban-events";
 import type { WidgetContext } from "../types";
 import type { DataRow, FilterCondition, KanbanColumnConfig, KanbanWidgetConfig } from "./types";
 import { loadFolderRows } from "./folder-source";
@@ -95,13 +97,60 @@ export default function KanbanWidget({
 }) {
   const { t, language } = useI18n();
   const cfg = (config ?? {}) as KanbanWidgetConfig;
-  const folder = cfg.folder ?? "";
-  const boardTitle = (cfg.title ?? "").trim();
-  const statusProperty = cfg.statusProperty || "status";
-  const titleProperty = cfg.titleProperty || "title";
-  const displayFields = cfg.displayFields ?? [];
-  const configuredColumns = useMemo(() => normalizeColumns(cfg.columns), [cfg.columns]);
-  const showUnspecified = cfg.showUnspecified !== false;
+  const kanbanPath = (cfg.kanban ?? "").trim();
+
+  // File-backed board definition (.kanban). When cfg.kanban is set the file is
+  // the single source of truth; inline keys (except cardOrder) are ignored.
+  const [fileDef, setFileDef] = useState<KanbanBoardDefinition | null>(null);
+  const [fileDefError, setFileDefError] = useState(false);
+  const [defRefreshKey, setDefRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!kanbanPath) {
+      setFileDef(null);
+      setFileDefError(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const found = await findFileByNameLocal(kanbanPath);
+        if (!found) throw new Error("board file not found");
+        const parsed = parseKanbanFile(await readFileLocal(found.id));
+        if (cancelled) return;
+        setFileDef(parsed);
+        setFileDefError(parsed === null);
+      } catch {
+        if (!cancelled) {
+          setFileDef(null);
+          setFileDefError(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kanbanPath, defRefreshKey]);
+
+  useEffect(() => {
+    if (!kanbanPath) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ fileName?: string }>).detail;
+      if (detail?.fileName !== kanbanPath) return;
+      setDefRefreshKey((k) => k + 1);
+    };
+    window.addEventListener(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, handler);
+    return () => window.removeEventListener(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, handler);
+  }, [kanbanPath]);
+
+  const def: KanbanBoardDefinition = kanbanPath ? (fileDef ?? {}) : cfg;
+  const folder = def.folder ?? "";
+  const boardTitle = (def.title ?? "").trim();
+  const statusProperty = def.statusProperty || "status";
+  const titleProperty = def.titleProperty || "title";
+  const displayFields = def.displayFields ?? [];
+  const configuredColumns = useMemo(() => normalizeColumns(def.columns), [def.columns]);
+  const showUnspecified = def.showUnspecified !== false;
 
   const [rows, setRows] = useState<DataRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,9 +199,9 @@ export default function KanbanWidget({
   const processedRows = useMemo(
     () => {
       const filtered = applyPostSource(rows, {
-        filter: cfg.filter as FilterCondition[] | undefined,
-        sort: cfg.sort as string | undefined,
-        limit: cfg.limit,
+        filter: def.filter as FilterCondition[] | undefined,
+        sort: def.sort as string | undefined,
+        limit: def.limit,
       });
       const orderMap = new Map(cardOrder.map((id, index) => [id, index]));
       return [...filtered].sort((a, b) => {
@@ -164,7 +213,7 @@ export default function KanbanWidget({
         return ai - bi;
       });
     },
-    [rows, cfg.filter, cfg.sort, cfg.limit, cardOrder],
+    [rows, def.filter, def.sort, def.limit, cardOrder],
   );
 
   const columns = useMemo(() => {
@@ -329,11 +378,9 @@ export default function KanbanWidget({
           detail: { folder },
         }),
       );
-      window.dispatchEvent(
-        new CustomEvent("plugin-select-file", {
-          detail: { fileId: result.fileId, fileName: path, mimeType: "text/markdown" },
-        }),
-      );
+      // Open the new card in the same modal as clicking an existing card;
+      // full-page open stays one click away via the modal's navigate icon.
+      setPreviewRow({ id: result.fileId, fileId: result.fileId, fileName: path, cells: {} });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.kanbanNewCardError"));
     }
@@ -347,10 +394,30 @@ export default function KanbanWidget({
     );
   }
 
-  if (!folder) {
+  if (kanbanPath && fileDefError) {
     return (
       <div className="flex h-full items-center justify-center px-3 text-center text-sm text-gray-400">
-        {t("dashboard.kanbanSelectFolder")}
+        {t("dashboard.kanbanFileMissing")}
+      </div>
+    );
+  }
+
+  if (kanbanPath && !fileDef) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-gray-400">
+        {t("dashboard.loading")}
+      </div>
+    );
+  }
+
+  if (!folder) {
+    // A widget with no board file and no definition at all → point at settings
+    // (pick/create a .kanban); a definition without a folder → folder prompt.
+    const hasDefinition =
+      Boolean(kanbanPath) || Boolean((def.title ?? "").trim()) || def.columns !== undefined;
+    return (
+      <div className="flex h-full items-center justify-center px-3 text-center text-sm text-gray-400">
+        {hasDefinition ? t("dashboard.kanbanSelectFolder") : t("dashboard.kanbanPickFile")}
       </div>
     );
   }

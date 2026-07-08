@@ -1,12 +1,31 @@
-// Config editor for the `kanban` widget (folder source → status board).
+// Config editor for the `kanban` widget. Boards are always defined by a
+// .kanban file (widget config: { kanban, cardOrder }); this editor edits the
+// referenced file directly, mirroring BaseConfigEditor. Legacy inline configs
+// are force-converted to a generated .kanban when the editor opens. The
+// definition form (KanbanDefinitionFields) is shared with the standalone
+// .kanban file editor (~/components/ide/editors/KanbanFileEditor).
 
-import { useCallback, useMemo } from "react";
-import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, LayoutGrid, Plus, Trash2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { ConfigEditorProps } from "../types";
 import type { KanbanColumnConfig, KanbanWidgetConfig } from "./types";
 import { FolderPicker } from "../widgets/config-editors/FolderPicker";
 import { ColumnsEditor, FilterEditor, useFolderFields } from "./config-parts";
+import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { findFileByNameLocal, readFileLocal, writeFileLocal } from "~/services/drive-local";
+import {
+  KANBAN_FILE_EXT,
+  KANBAN_FOLDER,
+  boardDefinitionFromConfig,
+  collectKanbanFileOptions,
+  kanbanFileBaseName,
+  parseKanbanFile,
+  serializeKanbanFile,
+  type KanbanBoardDefinition,
+  type KanbanFileOption,
+} from "./kanban-file";
+import { DASHBOARD_KANBAN_FILE_UPDATED_EVENT } from "./kanban-events";
 
 const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
   { value: "todo", label: "To Do" },
@@ -27,11 +46,258 @@ function normalizeColumns(columns: KanbanWidgetConfig["columns"]): KanbanColumnC
     .filter((col) => col.value.length > 0 || col.label.length > 0);
 }
 
-export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
+/** Write a definition to a fresh uniquely-named .kanban under Dashboards/Kanbans/. */
+async function writeDefinitionFile(def: KanbanBoardDefinition, widgetId: string): Promise<string> {
+  const base = kanbanFileBaseName(def, widgetId);
+  let candidate = `${KANBAN_FOLDER}/${base}${KANBAN_FILE_EXT}`;
+  let index = 2;
+  while (await findFileByNameLocal(candidate)) {
+    candidate = `${KANBAN_FOLDER}/${base} ${index++}${KANBAN_FILE_EXT}`;
+  }
+  await writeFileLocal(candidate, serializeKanbanFile(def));
+  window.dispatchEvent(
+    new CustomEvent(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, { detail: { fileName: candidate } }),
+  );
+  return candidate;
+}
+
+export function KanbanConfigEditor({ config, onChange, widgetId }: ConfigEditorProps) {
   const { t } = useI18n();
   const cfg = useMemo(() => (config ?? {}) as KanbanWidgetConfig, [config]);
-  const folder = cfg.folder ?? "";
-  const columns = useMemo(() => normalizeColumns(cfg.columns), [cfg.columns]);
+  const kanbanPath = (cfg.kanban ?? "").trim();
+
+  const [kanbanFiles, setKanbanFiles] = useState<KanbanFileOption[]>([]);
+  const [definition, setDefinition] = useState<KanbanBoardDefinition | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    (async () => {
+      const meta = await getCachedRemoteMeta();
+      setKanbanFiles(meta ? collectKanbanFileOptions(meta.files) : []);
+    })();
+  }, []);
+
+  // Legacy inline configs (pre-.kanban): force-convert to a generated file.
+  const convertedRef = useRef(false);
+  useEffect(() => {
+    if (kanbanPath || convertedRef.current) return;
+    const hasInlineDefinition = Boolean((cfg.folder ?? "").trim() || (cfg.title ?? "").trim());
+    if (!hasInlineDefinition) return;
+    convertedRef.current = true;
+    void (async () => {
+      const path = await writeDefinitionFile(boardDefinitionFromConfig(cfg), widgetId ?? "board");
+      onChangeRef.current({ kanban: path, cardOrder: cfg.cardOrder });
+    })();
+  }, [kanbanPath, cfg, widgetId]);
+
+  // Load the referenced .kanban file.
+  useEffect(() => {
+    if (!kanbanPath) {
+      setDefinition(null);
+      setFileId(null);
+      setLoadError(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const found = await findFileByNameLocal(kanbanPath);
+        if (!found) throw new Error("board file not found");
+        const parsed = parseKanbanFile(await readFileLocal(found.id));
+        if (cancelled) return;
+        setFileId(found.id);
+        setDefinition(parsed);
+        setLoadError(parsed === null);
+      } catch {
+        if (!cancelled) {
+          setDefinition(null);
+          setFileId(null);
+          setLoadError(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kanbanPath]);
+
+  // Form changes write back to the .kanban file (debounced, flush on unmount).
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendingRef = useRef<KanbanBoardDefinition | null>(null);
+  const persist = useCallback(
+    async (def: KanbanBoardDefinition) => {
+      if (!kanbanPath) return;
+      setSaving(true);
+      try {
+        await writeFileLocal(
+          kanbanPath,
+          serializeKanbanFile(def),
+          fileId ? { existingFileId: fileId } : undefined,
+        );
+        window.dispatchEvent(
+          new CustomEvent(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, {
+            detail: { fileId, fileName: kanbanPath },
+          }),
+        );
+      } finally {
+        setSaving(false);
+      }
+    },
+    [kanbanPath, fileId],
+  );
+
+  const updateDefinition = useCallback(
+    (next: KanbanBoardDefinition) => {
+      setDefinition(next);
+      pendingRef.current = next;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        const pending = pendingRef.current;
+        pendingRef.current = null;
+        if (pending) void persist(pending);
+      }, 600);
+    },
+    [persist],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (pendingRef.current) {
+        void persist(pendingRef.current);
+        pendingRef.current = null;
+      }
+    },
+    [persist],
+  );
+
+  const createNew = async () => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const def: KanbanBoardDefinition = {
+        title: newName.trim(),
+        folder: "",
+        statusProperty: "status",
+        titleProperty: "title",
+        columns: [...DEFAULT_COLUMNS],
+        showUnspecified: true,
+        displayFields: [],
+        limit: 100,
+      };
+      const path = await writeDefinitionFile(def, widgetId ?? "board");
+      setKanbanFiles((prev) =>
+        prev.some((f) => f.name === path)
+          ? prev
+          : [...prev, { id: path, name: path }].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      onChange({ kanban: path, cardOrder: cfg.cardOrder });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (!kanbanPath) {
+    return (
+      <div className="space-y-1.5">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          {t("dashboard.kanbanCreateNew")}
+        </label>
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void createNew();
+              }
+            }}
+            placeholder={t("dashboard.kanbanBoardTitlePlaceholder")}
+            className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+          />
+          <button
+            type="button"
+            onClick={() => void createNew()}
+            disabled={creating}
+            className="flex shrink-0 items-center gap-1 rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Plus size={14} />
+            {t("dashboard.baseCreate")}
+          </button>
+        </div>
+
+        {kanbanFiles.length > 0 && (
+          <div className="pt-1">
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              {t("dashboard.kanbanImportExisting")}
+            </label>
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) onChange({ kanban: e.target.value, cardOrder: cfg.cardOrder });
+              }}
+              className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+            >
+              <option value="">{t("dashboard.kanbanPickFile")}</option>
+              {kanbanFiles.map((f) => (
+                <option key={f.id} value={f.name}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <LayoutGrid size={14} className="shrink-0 text-gray-400" />
+          <span className="truncate">{kanbanPath}</span>
+        </div>
+        <span className="shrink-0 text-xs text-gray-400">{saving ? "Saving..." : "Saved"}</span>
+      </div>
+
+      {loadError && (
+        <div className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+          {t("dashboard.kanbanFileMissing")}
+        </div>
+      )}
+
+      {definition && (
+        <KanbanDefinitionFields value={definition} onChange={updateDefinition} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The board definition form (folder, title, properties, columns, filters,
+ * limit). `value` may carry extra keys (e.g. the file's version); they are
+ * passed through untouched on change.
+ */
+export function KanbanDefinitionFields({
+  value,
+  onChange,
+}: {
+  value: KanbanBoardDefinition;
+  onChange: (next: KanbanBoardDefinition) => void;
+}) {
+  const { t } = useI18n();
+  const folder = value.folder ?? "";
+  const columns = useMemo(() => normalizeColumns(value.columns), [value.columns]);
   const { fields, loading } = useFolderFields(folder);
   const fieldNames = useMemo(() => fields.map((f) => f.name), [fields]);
   const fieldTypeMap = useMemo(
@@ -40,8 +306,8 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
   );
 
   const update = useCallback(
-    (patch: Partial<KanbanWidgetConfig>) => onChange({ ...cfg, ...patch }),
-    [cfg, onChange],
+    (patch: Partial<KanbanBoardDefinition>) => onChange({ ...value, ...patch }),
+    [value, onChange],
   );
 
   const updateColumn = (index: number, patch: Partial<KanbanColumnConfig>) => {
@@ -76,7 +342,7 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
         <input
           type="text"
           required
-          value={cfg.title ?? ""}
+          value={value.title ?? ""}
           onChange={(e) => update({ title: e.target.value })}
           placeholder={t("dashboard.kanbanBoardTitlePlaceholder")}
           className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -92,7 +358,7 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
             {t("dashboard.kanbanStatusProperty")}
           </label>
           <select
-            value={cfg.statusProperty ?? "status"}
+            value={value.statusProperty ?? "status"}
             onChange={(e) => update({ statusProperty: e.target.value || "status" })}
             className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
@@ -107,7 +373,7 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
             {t("dashboard.kanbanTitleProperty")}
           </label>
           <select
-            value={cfg.titleProperty ?? "title"}
+            value={value.titleProperty ?? "title"}
             onChange={(e) => update({ titleProperty: e.target.value || "title" })}
             className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
@@ -183,7 +449,7 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
       <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
         <input
           type="checkbox"
-          checked={cfg.showUnspecified !== false}
+          checked={value.showUnspecified !== false}
           onChange={(e) => update({ showUnspecified: e.target.checked })}
           className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
@@ -191,13 +457,13 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
       </label>
 
       <ColumnsEditor
-        columns={cfg.displayFields ?? []}
+        columns={value.displayFields ?? []}
         fieldNames={fieldNames}
         onChange={(displayFields) => update({ displayFields })}
       />
 
       <FilterEditor
-        filters={cfg.filter ?? []}
+        filters={value.filter ?? []}
         fieldNames={fieldNames}
         fieldTypeMap={fieldTypeMap}
         onChange={(filter) => update({ filter })}
@@ -211,14 +477,14 @@ export function KanbanConfigEditor({ config, onChange }: ConfigEditorProps) {
           type="number"
           min={1}
           max={500}
-          value={cfg.limit ?? ""}
+          value={value.limit ?? ""}
           placeholder="100"
           onChange={(e) => {
-            const value = e.target.value;
-            update({ limit: value === "" ? undefined : Number(value) || 100 });
+            const next = e.target.value;
+            update({ limit: next === "" ? undefined : Number(next) || 100 });
           }}
           onBlur={() => {
-            if (cfg.limit == null) update({ limit: 100 });
+            if (value.limit == null) update({ limit: 100 });
           }}
           className="w-28 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         />

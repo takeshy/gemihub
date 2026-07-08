@@ -497,7 +497,7 @@ Browser (IndexedDB)          Server                Google Drive
 | `app/services/google-drive.server.ts` | Google Drive API wrapper |
 | `app/utils/parallel.ts` | Parallel processing utility (concurrency limit) |
 | `app/components/ide/SyncStatusBar.tsx` | Push/Pull badges, diff dialog trigger |
-| `app/components/ide/SyncDiffDialog.tsx` | Push/Pull file list with diff preview |
+| `app/components/ide/SyncDiffDialog.tsx` | Push/Pull file list with diff preview; files sharing an ancestor folder collapse into expandable group rows (`app/utils/sync-diff-grouping.ts`) |
 | `app/components/ide/ConflictDialog.tsx` | Conflict resolution UI |
 
 ### API Actions

@@ -1,5 +1,13 @@
 # Update Log
 
+## 2026-07-09
+* **New**: `.kanban` board definition files — kanban boards are now always defined by a YAML file (widget config is just `{ kanban, cardOrder }`); the config editor creates/imports the file and edits it directly, and legacy inline configs are force-converted when their settings open. `.kanban` is text/yaml everywhere (`features/dashboard.md`).
+* **New**: Dedicated `.kanban` file editor with Display / Edit / Raw modes (live board / definition form side panel / YAML source), mirroring the `.base` editor (`features/dashboard.md`).
+* **New**: Open button in the widget cell chrome for file-backed widgets (file/markdown, workflow, base, kanban via `WidgetDef.filePathOf`) (`features/dashboard.md`).
+* **Update**: The shared file modal (`FilePreviewModal`) now embeds the full Markdown editor (preview/wysiwyg/raw, local-first saves); kanban's New Card opens this modal instead of navigating (`features/dashboard.md`).
+* **Update**: Push/Pull confirmation dialog groups changed files sharing an ancestor folder into collapsible rows (`features/sync.md`).
+* **Docs**: Corrected the legacy folder-widget conversion description — it is a settings-panel button, not an automatic on-load conversion (`features/dashboard.md`).
+
 ## 2026-07-08
 * **Update**: Removed the dashboard's separate edit mode — drag/resize/settings/delete are now always available via hover-revealed cell chrome (`features/dashboard.md`).
 * **New**: Per-widget maximize/restore button in the cell chrome, ported from obsidian-gemini-helper (`features/dashboard.md`).

@@ -40,6 +40,7 @@ function guessMimeType(fileName: string): string {
   if (lower.endsWith(".md")) return "text/markdown";
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
   if (lower.endsWith(".base")) return "text/yaml";
+  if (lower.endsWith(".kanban")) return "text/yaml";
   if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
   if (lower.endsWith(".csv")) return "text/csv";
   if (lower.endsWith(".xml")) return "application/xml";

@@ -76,6 +76,7 @@ const fileWidgetDef: WidgetDef = {
   render: (config, ctx) => React.createElement(FileWidget, { config, ctx }),
   defaultSize: { w: 6, h: 4 },
   ConfigEditor: FileConfigEditor,
+  filePathOf: (config) => ((config as { path?: string })?.path ?? "").trim() || undefined,
 };
 
 registerWidget(fileWidgetDef);
@@ -97,23 +98,13 @@ registerWidget({
   type: "kanban",
   label: "Kanban",
   icon: React.createElement(LayoutGrid, { size: 16 }),
-  defaultConfig: {
-    folder: "",
-    title: "",
-    statusProperty: "status",
-    titleProperty: "title",
-    columns: [
-      { value: "todo", label: "To Do" },
-      { value: "in-progress", label: "In Progress" },
-      { value: "done", label: "Done" },
-    ],
-    showUnspecified: true,
-    displayFields: [],
-    limit: 100,
-  },
+  // Boards are always defined by a .kanban file; the config editor creates or
+  // picks one (legacy inline configs are converted there too).
+  defaultConfig: {},
   render: (config, ctx) => React.createElement(KanbanWidget, { config, ctx }),
   defaultSize: { w: 8, h: 5 },
   ConfigEditor: KanbanConfigEditor,
+  filePathOf: (config) => ((config as { kanban?: string })?.kanban ?? "").trim() || undefined,
 });
 
 registerWidget({
@@ -144,6 +135,7 @@ registerWidget({
   render: (config, ctx) => React.createElement(WorkflowWidget, { config, ctx }),
   defaultSize: { w: 6, h: 5 },
   ConfigEditor: WorkflowConfigEditor,
+  filePathOf: (config) => ((config as { workflow?: string })?.workflow ?? "").trim() || undefined,
 });
 
 registerWidget({
@@ -164,4 +156,5 @@ registerWidget({
   render: (config, ctx) => React.createElement(BaseWidget, { config, ctx }),
   defaultSize: { w: 6, h: 5 },
   ConfigEditor: BaseConfigEditor,
+  filePathOf: (config) => ((config as { base?: string })?.base ?? "").trim() || undefined,
 });

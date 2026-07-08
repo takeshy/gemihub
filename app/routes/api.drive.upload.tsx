@@ -11,6 +11,7 @@ function guessUploadMimeType(fileName: string, browserMimeType: string): string 
   if (browserMimeType && browserMimeType !== "application/octet-stream") return browserMimeType;
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".base")) return "text/yaml";
+  if (lower.endsWith(".kanban")) return "text/yaml";
   if (lower.endsWith(".dashboard")) return "text/yaml";
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
   return browserMimeType || "application/octet-stream";

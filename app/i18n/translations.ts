@@ -320,6 +320,10 @@ export interface TranslationStrings {
   "dashboard.kanbanSelectFolder": string;
   "dashboard.kanbanUnspecified": string;
   "dashboard.kanbanUntitled": string;
+  "dashboard.kanbanPickFile": string;
+  "dashboard.kanbanCreateNew": string;
+  "dashboard.kanbanImportExisting": string;
+  "dashboard.kanbanFileMissing": string;
 
   "workspace.openExternal": string;
   "workspace.reload": string;
@@ -1443,6 +1447,10 @@ const en: TranslationStrings = {
   "dashboard.kanbanSelectFolder": "Select a folder to show a kanban board.",
   "dashboard.kanbanUnspecified": "Unspecified",
   "dashboard.kanbanUntitled": "Untitled",
+  "dashboard.kanbanPickFile": "Select a .kanban file",
+  "dashboard.kanbanCreateNew": "Create a new board",
+  "dashboard.kanbanImportExisting": "Or import an existing board file",
+  "dashboard.kanbanFileMissing": "Board definition file not found or invalid.",
 
   "workspace.openExternal": "Open in Google",
   "workspace.reload": "Reload",
@@ -2567,6 +2575,10 @@ const ja: TranslationStrings = {
   "dashboard.kanbanSelectFolder": "フォルダを選択するとカンバンボードを表示します。",
   "dashboard.kanbanUnspecified": "未指定",
   "dashboard.kanbanUntitled": "無題",
+  "dashboard.kanbanPickFile": ".kanbanファイルを選択",
+  "dashboard.kanbanCreateNew": "新規ボードを作成",
+  "dashboard.kanbanImportExisting": "または既存のボードファイルをインポート",
+  "dashboard.kanbanFileMissing": "ボード定義ファイルが見つからないか不正です。",
 
   "workspace.openExternal": "Googleで開く",
   "workspace.reload": "再読み込み",

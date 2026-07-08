@@ -17,6 +17,7 @@ function guessMimeType(name: string): string {
   const lower = name.toLowerCase();
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
   if (lower.endsWith(".base")) return "text/yaml";
+  if (lower.endsWith(".kanban")) return "text/yaml";
   return "text/plain";
 }
 

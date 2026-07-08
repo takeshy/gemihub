@@ -1,8 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { GripVertical, Maximize2, Minimize2, Settings, Trash2 } from "lucide-react";
+import { ExternalLink, GripVertical, Maximize2, Minimize2, Settings, Trash2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
+import { useEditorContext } from "~/contexts/EditorContext";
 import type { Widget, LayoutPos, GridLayout, WidgetContext } from "./types";
 import WidgetRenderer from "./WidgetRenderer";
+import { getWidgetDef } from "./widgets/registry";
 
 type InteractionMode = "drag" | "resize" | null;
 
@@ -51,6 +53,7 @@ export default function GridCell({
   dashboardFileName,
 }: GridCellProps) {
   const { t } = useI18n();
+  const { fileList } = useEditorContext();
   const [interactionMode, setInteractionMode] = useState<InteractionMode>(null);
   const [transform, setTransform] = useState<{ dx: number; dy: number } | null>(null);
   const [resizePreview, setResizePreview] = useState<{ width: number; height: number } | null>(null);
@@ -225,6 +228,26 @@ export default function GridCell({
     [cellW, cellH, pos, grid.gap],
   );
 
+  // File-backed widgets (e.g. the file widget) get an Open button in the
+  // chrome pill that navigates to the file's own page in the main viewer.
+  // Resolved against the Drive file list so the button only shows for files
+  // that actually exist.
+  const backingFilePath = getWidgetDef(widget.type).filePathOf?.(widget.config);
+  const backingFile = backingFilePath
+    ? fileList.find((f) => (f.path || f.name) === backingFilePath)
+    : undefined;
+  const handleOpenFile = useCallback(() => {
+    if (!backingFile) return;
+    // No mimeType: like FileListWidget, let MainViewer detect the type from
+    // the file name (media-utils' guessMimeType only knows media extensions
+    // and would mark .md as binary application/octet-stream).
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: backingFile.id, fileName: backingFile.path || backingFile.name },
+      }),
+    );
+  }, [backingFile]);
+
   const ctx: WidgetContext = {
     host: "dashboard",
     size: { w: pos.w, h: pos.h },
@@ -322,6 +345,19 @@ export default function GridCell({
                 title={isMaximized ? t("dashboard.restoreWidget") : t("dashboard.maximizeWidget")}
               >
                 {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+            )}
+            {backingFile && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenFile();
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100"
+                title={t("dashboard.openFile")}
+              >
+                <ExternalLink size={14} />
               </button>
             )}
             {onSettings && (

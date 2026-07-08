@@ -16,6 +16,7 @@ export function guessMimeType(fileName: string): string {
   const map: Record<string, string> = {
     canvas: "application/json",
     base: "text/yaml",
+    kanban: "text/yaml",
     pdf: "application/pdf",
     epub: "application/epub+zip",
     mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg", mov: "video/quicktime", avi: "video/x-msvideo", mkv: "video/x-matroska",
