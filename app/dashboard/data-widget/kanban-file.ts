@@ -5,7 +5,7 @@
 
 import yaml from "js-yaml";
 import type { CachedRemoteMeta } from "~/services/indexeddb-cache";
-import type { FilterCondition, KanbanColumnConfig, KanbanWidgetConfig } from "./types";
+import type { FilterCondition, KanbanColumnConfig, KanbanDisplayFieldConfig, KanbanWidgetConfig } from "./types";
 
 /**
  * Board definition stored in a .kanban file — KanbanWidgetConfig minus the
@@ -21,7 +21,7 @@ export interface KanbanBoardDefinition {
   titleProperty?: string;
   columns?: Array<string | KanbanColumnConfig>;
   showUnspecified?: boolean;
-  displayFields?: string[];
+  displayFields?: Array<string | KanbanDisplayFieldConfig>;
   filter?: FilterCondition[];
   limit?: number;
   /** Unknown keys are preserved for round-trip safety. */

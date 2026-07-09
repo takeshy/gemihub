@@ -5,7 +5,7 @@
 // (preview / wysiwyg / raw modes, local-first saves); other text and media
 // stay read-only previews.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, X, Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
@@ -34,11 +34,14 @@ let modalSessionMode: MdEditMode = "preview";
 export function FilePreviewModal({
   fileId,
   fileName,
+  initialMode,
   onNavigate,
   onClose,
 }: {
   fileId: string;
   fileName: string;
+  /** Override the first markdown editor mode for this open. */
+  initialMode?: MdEditMode;
   /** Open the file in the editor (the actual navigation). */
   onNavigate: () => void;
   onClose: () => void;
@@ -92,7 +95,7 @@ export function FilePreviewModal({
         </div>
         {editable ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <MarkdownEditorBody fileId={fileId} fileName={fileName} />
+            <MarkdownEditorBody fileId={fileId} fileName={fileName} initialMode={initialMode} />
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-4">
@@ -110,11 +113,12 @@ export function FilePreviewModal({
 }
 
 /** Editable body for Markdown files — the file widget's editor in a modal. */
-function MarkdownEditorBody({ fileId, fileName }: { fileId: string; fileName: string }) {
+function MarkdownEditorBody({ fileId, fileName, initialMode }: { fileId: string; fileName: string; initialMode?: MdEditMode }) {
   const { t } = useI18n();
   const { fileList } = useEditorContext();
   const { content, loading, saveToCache } = useFileWithCache(fileId, undefined, "FilePreviewModal");
   const currentFilePath = fileList.find((file) => file.id === fileId)?.path || fileName;
+  const skipInitialModeNotifyRef = useRef(Boolean(initialMode));
 
   // Local-first save (IndexedDB + editHistory; Drive on Push) plus a data
   // signal so folder widgets (kanban/file list/timeline) reflect the edit.
@@ -148,8 +152,12 @@ function MarkdownEditorBody({ fileId, fileName }: { fileId: string; fileName: st
       initialContent={content}
       saveToCache={saveAndNotify}
       hideToolbarActions
-      initialMode={modalSessionMode}
+      initialMode={initialMode ?? modalSessionMode}
       onModeChange={(mode) => {
+        if (skipInitialModeNotifyRef.current) {
+          skipInitialModeNotifyRef.current = false;
+          return;
+        }
         modalSessionMode = mode;
       }}
     />

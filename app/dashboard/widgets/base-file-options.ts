@@ -13,5 +13,10 @@ export function collectBaseFileOptions(files: CachedRemoteMeta["files"]): BaseFi
 }
 
 export function findBaseFileOption(files: CachedRemoteMeta["files"], name: string): BaseFileOption | null {
-  return collectBaseFileOptions(files).find((file) => file.name === name) ?? null;
+  const options = collectBaseFileOptions(files);
+  const exact = options.find((file) => file.name === name);
+  if (exact) return exact;
+  const lowerName = name.toLowerCase();
+  const loose = options.filter((file) => file.name.toLowerCase() === lowerName);
+  return loose.length === 1 ? loose[0] : null;
 }

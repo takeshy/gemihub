@@ -67,6 +67,12 @@ export interface KanbanColumnConfig {
   label?: string;
 }
 
+export interface KanbanDisplayFieldConfig {
+  field: string;
+  label?: string;
+  maxLength?: number;
+}
+
 export interface KanbanWidgetConfig {
   /**
    * Path of a .kanban board definition file. When set, the file is the single
@@ -82,7 +88,7 @@ export interface KanbanWidgetConfig {
   showUnspecified?: boolean;
   /** Persisted visual card order by row id/file id. */
   cardOrder?: string[];
-  displayFields?: string[];
+  displayFields?: Array<string | KanbanDisplayFieldConfig>;
   filter?: FilterCondition[];
   limit?: number;
   /** Unknown keys are preserved for round-trip safety. */
@@ -126,6 +132,8 @@ export interface DataRow {
   mtime?: number;
   /** ctime in ms (folder source only). */
   ctime?: number;
+  /** Cached text content (folder source only, when available locally). */
+  fileContent?: string;
   /** True if frontmatter parsed successfully (folder source only, for editability). */
   fmParseable?: boolean;
   /** Property values keyed by name. */
@@ -165,7 +173,9 @@ export interface WorkflowTextResult {
 
 /** Built-in file attribute keys (not frontmatter — not editable). */
 export const FILE_ATTR_KEYS = new Set([
+  "file.path",
   "file.name",
+  "file.content",
   "name",
   "file.mtime",
   "mtime",
@@ -175,4 +185,4 @@ export const FILE_ATTR_KEYS = new Set([
   "file.tags",
 ]);
 
-export const BUILTIN_FILE_KEYS = ["file.name", "file.mtime", "file.ctime"];
+export const BUILTIN_FILE_KEYS = ["file.path", "file.name", "file.content", "file.mtime", "file.ctime"];

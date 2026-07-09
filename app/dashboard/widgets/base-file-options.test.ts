@@ -37,3 +37,23 @@ test("findBaseFileOption resolves selected .base by full path", () => {
   });
   assert.equal(findBaseFileOption(files, "project.base"), null);
 });
+
+test("findBaseFileOption resolves an unambiguous case-only mismatch", () => {
+  const files: CachedRemoteMeta["files"] = {
+    a: file("Dashboards/tasks.base"),
+  };
+
+  assert.deepEqual(findBaseFileOption(files, "Dashboards/Tasks.base"), {
+    id: "a",
+    name: "Dashboards/tasks.base",
+  });
+});
+
+test("findBaseFileOption rejects ambiguous case-insensitive matches", () => {
+  const files: CachedRemoteMeta["files"] = {
+    a: file("Dashboards/tasks.base"),
+    b: file("Dashboards/Tasks.base"),
+  };
+
+  assert.equal(findBaseFileOption(files, "Dashboards/TASKS.base"), null);
+});

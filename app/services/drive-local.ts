@@ -327,6 +327,29 @@ export async function findFileByNameLocal(
   return null;
 }
 
+/**
+ * Find a file by name, accepting a case-only mismatch when it is unambiguous.
+ * Google Drive permits case-distinct siblings, so exact match must win and
+ * multiple case-insensitive matches are treated as unresolved.
+ */
+export async function findFileByNameLocalLoose(
+  name: string,
+): Promise<ResolvedLocalFile | null> {
+  const exact = await findFileByNameLocal(name);
+  if (exact) return exact;
+
+  const meta = await getCachedRemoteMeta();
+  if (!meta) return null;
+  const lowerName = name.toLowerCase();
+  const matches: ResolvedLocalFile[] = [];
+  for (const [fileId, entry] of Object.entries(meta.files)) {
+    if (entry.name.toLowerCase() === lowerName) {
+      matches.push({ id: fileId, name: entry.name, mimeType: entry.mimeType });
+    }
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
 // ---------------------------------------------------------------------------
 // File writing (local-first pattern: update IndexedDB only, no Drive)
 // ---------------------------------------------------------------------------

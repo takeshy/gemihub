@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import yaml from "js-yaml";
 import { getCachedFile } from "~/services/indexeddb-cache";
-import { findFileByNameLocal, readFileLocal, writeFileLocal } from "~/services/drive-local";
+import { findFileByNameLocal, findFileByNameLocalLoose, readFileLocal, writeFileLocal } from "~/services/drive-local";
 import { updateFrontmatterKey } from "../frontmatter-writeback";
 import { parseKanbanFile, type KanbanBoardDefinition } from "./kanban-file";
 import { DASHBOARD_KANBAN_FILE_UPDATED_EVENT } from "./kanban-events";
@@ -15,6 +15,7 @@ import { loadFolderRows } from "./folder-source";
 import { applyPostSource, formatCell, getCellValue } from "./filter";
 import { useI18n } from "~/i18n/context";
 import { FilePreviewModal } from "../widgets/FilePreviewModal";
+import type { MdEditMode } from "~/components/ide/editors/MarkdownFileEditor";
 
 const UNSPECIFIED = "__unspecified__";
 const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
@@ -25,6 +26,7 @@ const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
 
 type DropPosition = "before" | "after";
 type DropTarget = { column: string; rowId: string; position: DropPosition } | null;
+type NormalizedDisplayField = { field: string; label: string | null; maxLength?: number };
 
 function scalar(value: unknown): string {
   if (value == null) return "";
@@ -48,6 +50,35 @@ function normalizeColumns(columns: KanbanWidgetConfig["columns"]): KanbanColumnC
     if (!normalized.value || seen.has(normalized.value)) continue;
     seen.add(normalized.value);
     out.push(normalized);
+  }
+  return out;
+}
+
+function normalizeDisplayFields(fields: KanbanWidgetConfig["displayFields"]): NormalizedDisplayField[] {
+  if (!Array.isArray(fields)) return [];
+  const out: NormalizedDisplayField[] = [];
+  const seen = new Set<string>();
+  for (const item of fields) {
+    const field = typeof item === "string"
+      ? item.trim()
+      : typeof item?.field === "string"
+        ? item.field.trim()
+        : "";
+    if (!field || seen.has(field)) continue;
+    const label = typeof item === "string"
+      ? field
+      : typeof item.label === "string"
+        ? item.label.trim()
+        : field;
+    const maxLength = typeof item === "string" ? undefined : item.maxLength;
+    seen.add(field);
+    out.push({
+      field,
+      label: label || null,
+      maxLength: typeof maxLength === "number" && Number.isFinite(maxLength) && maxLength > 0
+        ? Math.floor(maxLength)
+        : undefined,
+    });
   }
   return out;
 }
@@ -79,13 +110,18 @@ function buildNewCardContent(options: {
   const fm = Object.keys(frontmatter).length > 0
     ? `---\n${yaml.dump(frontmatter, { lineWidth: -1, noRefs: true })}---\n\n`
     : "";
-  return `${fm}# ${options.title}\n`;
+  return fm;
 }
 
 function fieldDisplayType(field: string): "date" | undefined {
   return field === "file.mtime" || field === "mtime" || field === "file.ctime" || field === "ctime"
     ? "date"
     : undefined;
+}
+
+function truncateText(value: string, maxLength?: number): string {
+  if (!maxLength || value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trimEnd()}...`;
 }
 
 export default function KanbanWidget({
@@ -104,26 +140,30 @@ export default function KanbanWidget({
   const [fileDef, setFileDef] = useState<KanbanBoardDefinition | null>(null);
   const [fileDefError, setFileDefError] = useState(false);
   const [defRefreshKey, setDefRefreshKey] = useState(0);
+  const [resolvedKanbanPath, setResolvedKanbanPath] = useState("");
 
   useEffect(() => {
     if (!kanbanPath) {
       setFileDef(null);
       setFileDefError(false);
+      setResolvedKanbanPath("");
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const found = await findFileByNameLocal(kanbanPath);
+        const found = await findFileByNameLocalLoose(kanbanPath);
         if (!found) throw new Error("board file not found");
         const parsed = parseKanbanFile(await readFileLocal(found.id));
         if (cancelled) return;
         setFileDef(parsed);
         setFileDefError(parsed === null);
+        setResolvedKanbanPath(found.name);
       } catch {
         if (!cancelled) {
           setFileDef(null);
           setFileDefError(true);
+          setResolvedKanbanPath("");
         }
       }
     })();
@@ -136,19 +176,20 @@ export default function KanbanWidget({
     if (!kanbanPath) return;
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ fileName?: string }>).detail;
-      if (detail?.fileName !== kanbanPath) return;
+      const current = resolvedKanbanPath || kanbanPath;
+      if (detail?.fileName?.toLowerCase() !== current.toLowerCase()) return;
       setDefRefreshKey((k) => k + 1);
     };
     window.addEventListener(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, handler);
     return () => window.removeEventListener(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, handler);
-  }, [kanbanPath]);
+  }, [kanbanPath, resolvedKanbanPath]);
 
   const def: KanbanBoardDefinition = kanbanPath ? (fileDef ?? {}) : cfg;
   const folder = def.folder ?? "";
   const boardTitle = (def.title ?? "").trim();
   const statusProperty = def.statusProperty || "status";
   const titleProperty = def.titleProperty || "title";
-  const displayFields = def.displayFields ?? [];
+  const displayFields = useMemo(() => normalizeDisplayFields(def.displayFields), [def.displayFields]);
   const configuredColumns = useMemo(() => normalizeColumns(def.columns), [def.columns]);
   const showUnspecified = def.showUnspecified !== false;
 
@@ -167,6 +208,7 @@ export default function KanbanWidget({
   const [newTitle, setNewTitle] = useState("");
   const [newStatus, setNewStatus] = useState(configuredColumns[0]?.value ?? "");
   const [previewRow, setPreviewRow] = useState<DataRow | null>(null);
+  const [previewInitialMode, setPreviewInitialMode] = useState<MdEditMode | undefined>(undefined);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -380,6 +422,7 @@ export default function KanbanWidget({
       );
       // Open the new card in the same modal as clicking an existing card;
       // full-page open stays one click away via the modal's navigate icon.
+      setPreviewInitialMode("wysiwyg");
       setPreviewRow({ id: result.fileId, fileId: result.fileId, fileName: path, cells: {} });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.kanbanNewCardError"));
@@ -531,21 +574,18 @@ export default function KanbanWidget({
                       </div>
                       {displayFields.length > 0 && (
                         <dl className="mt-1.5 space-y-1">
-                          {displayFields.map((field) => {
+                          {displayFields.map(({ field, label, maxLength }) => {
                             const value = getCellValue(row, field);
-                            const formatted = formatCell(value, fieldDisplayType(field), language);
+                            const formatted = truncateText(formatCell(value, fieldDisplayType(field), language), maxLength);
                             if (!formatted) return null;
                             return (
                               <div key={field} className="flex gap-1.5 text-[10px] leading-snug">
-                                <dt className="shrink-0 text-gray-400">{field}</dt>
+                                {label && <dt className="shrink-0 text-gray-400">{label}</dt>}
                                 <dd className="min-w-0 break-words text-gray-600 dark:text-gray-300">{formatted}</dd>
                               </div>
                             );
                           })}
                         </dl>
-                      )}
-                      {row.fileName && row.fileName !== title && (
-                        <div className="mt-1.5 break-all text-[10px] text-gray-400">{row.fileName}</div>
                       )}
                     </article>
                   );
@@ -630,11 +670,16 @@ export default function KanbanWidget({
         <FilePreviewModal
           fileId={previewRow.fileId}
           fileName={previewRow.fileName}
+          initialMode={previewInitialMode}
           onNavigate={() => {
             navigateToFile(previewRow);
             setPreviewRow(null);
+            setPreviewInitialMode(undefined);
           }}
-          onClose={() => setPreviewRow(null)}
+          onClose={() => {
+            setPreviewRow(null);
+            setPreviewInitialMode(undefined);
+          }}
         />
       )}
     </div>

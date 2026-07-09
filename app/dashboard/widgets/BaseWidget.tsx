@@ -184,7 +184,7 @@ export default function BaseWidget({
   useEffect(() => {
     const handleBaseUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ fileName?: string }>).detail;
-      if (detail?.fileName !== cfg.base) return;
+      if (detail?.fileName?.toLowerCase() !== cfg.base?.toLowerCase()) return;
       setRefreshKey((k) => k + 1);
     };
     window.addEventListener(DASHBOARD_BASE_FILE_UPDATED_EVENT, handleBaseUpdated);

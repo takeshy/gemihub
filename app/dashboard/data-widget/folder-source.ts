@@ -10,10 +10,15 @@ import type { DataRow, FieldInfo } from "./types";
 import { BUILTIN_FILE_KEYS } from "./types";
 import { inferType } from "./filter";
 
+export function contentWithoutFrontmatter(content: string): string {
+  const split = splitFrontmatter(content);
+  return split?.body ?? content;
+}
+
 /**
  * Load rows from a folder's frontmatter cache.
  * Each file becomes a DataRow with:
- *   - file.name, file.mtime, file.ctime as file attributes
+ *   - file.path, file.name, file.content, file.mtime, file.ctime as file attributes
  *   - frontmatter keys as cell properties (empty for non-markdown files)
  */
 export async function loadFolderRows(folder: string): Promise<DataRow[]> {
@@ -41,6 +46,7 @@ export async function loadFolderRows(folder: string): Promise<DataRow[]> {
         id: file.id,
         fileId: file.id,
         fileName: file.name,
+        fileContent: cached ? contentWithoutFrontmatter(cached.content) : undefined,
         mtime: file.modifiedTime ? new Date(file.modifiedTime).getTime() : 0,
         ctime: file.createdTime ? new Date(file.createdTime).getTime() : 0,
         fmParseable,
@@ -62,7 +68,10 @@ export function detectFolderFields(rows: DataRow[]): FieldInfo[] {
   for (const key of BUILTIN_FILE_KEYS) {
     const values = rows
       .map((r) => {
-        if (key === "file.name" || key === "name") return r.fileName;
+        if (key === "file.path") return r.fileName;
+        if (key === "file.name") return r.fileName?.split("/").pop() ?? r.fileName;
+        if (key === "file.content") return r.fileContent;
+        if (key === "name") return r.fileName;
         if (key === "file.mtime" || key === "mtime") return r.mtime;
         if (key === "file.ctime" || key === "ctime") return r.ctime;
         return undefined;

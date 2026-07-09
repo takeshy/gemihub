@@ -189,9 +189,16 @@ test("missing property: empty/notEmpty only", () => {
 // --- File attributes ---
 
 test("getCellValue resolves file attributes", () => {
-  const row = makeRow("1", { status: "done" }, { fileName: "test.md", mtime: 1700000000, ctime: 1600000000 });
+  const row = makeRow("1", { status: "done" }, {
+    fileName: "folder/test.md",
+    fileContent: "Body text",
+    mtime: 1700000000,
+    ctime: 1600000000,
+  });
+  assert.equal(getCellValue(row, "file.path"), "folder/test.md");
   assert.equal(getCellValue(row, "file.name"), "test.md");
-  assert.equal(getCellValue(row, "name"), "test.md");
+  assert.equal(getCellValue(row, "file.content"), "Body text");
+  assert.equal(getCellValue(row, "name"), "folder/test.md");
   assert.equal(getCellValue(row, "file.mtime"), 1700000000);
   assert.equal(getCellValue(row, "file.ctime"), 1600000000);
   assert.equal(getCellValue(row, "status"), "done");

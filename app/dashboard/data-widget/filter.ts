@@ -104,7 +104,10 @@ function toDate(v: unknown): number | null {
 // --- Cell value resolution ---
 
 export function getCellValue(row: DataRow, property: string): unknown {
-  if (property === "file.name" || property === "name") return row.fileName;
+  if (property === "file.path") return row.fileName;
+  if (property === "file.name") return row.fileName?.split("/").pop() ?? row.fileName;
+  if (property === "file.content") return row.fileContent;
+  if (property === "name") return row.fileName;
   if (property === "file.mtime" || property === "mtime") return row.mtime;
   if (property === "file.ctime" || property === "ctime") return row.ctime;
   return row.cells[property];

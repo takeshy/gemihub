@@ -108,7 +108,12 @@ export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
 
     let cancelled = false;
     (async () => {
-      const found = baseFiles.find((f) => f.name === cfg.base || f.id === cfg.baseFileId);
+      const exactByName = baseFiles.find((f) => f.name === cfg.base);
+      const exactById = baseFiles.find((f) => f.id === cfg.baseFileId);
+      const looseByName = cfg.base
+        ? baseFiles.filter((f) => f.name.toLowerCase() === cfg.base!.toLowerCase())
+        : [];
+      const found = exactByName ?? exactById ?? (looseByName.length === 1 ? looseByName[0] : null);
       if (!found) {
         setViews([]);
         setBaseContent("");
@@ -129,8 +134,13 @@ export function BaseConfigEditor({ config, onChange }: ConfigEditorProps) {
         setBaseConfig(parseEditableBase(content));
         setBaseFileId(found.id);
         setLoadError(null);
+        const patch: Partial<BaseWidgetConfig> = {};
+        if (found.name !== cfg.base) patch.base = found.name;
         if (nextViews.length > 0 && (!cfg.view || !nextViews.includes(cfg.view))) {
-          onChangeRef.current({ ...cfg, view: nextViews[0] });
+          patch.view = nextViews[0];
+        }
+        if (Object.keys(patch).length > 0) {
+          onChangeRef.current({ ...cfg, ...patch });
         }
       } catch (err) {
         if (cancelled) return;
