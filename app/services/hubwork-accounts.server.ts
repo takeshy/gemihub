@@ -210,6 +210,16 @@ export async function getAccountByRootFolderId(
   return docToAccount(snapshot.docs[0]);
 }
 
+export async function getAccountByRootFolderIdOrEmail(
+  rootFolderId: string,
+  email?: string | null
+): Promise<HubworkAccount | null> {
+  const byRootFolderId = await getAccountByRootFolderId(rootFolderId);
+  if (byRootFolderId) return byRootFolderId;
+  if (!email) return null;
+  return getAccountByEmail(email);
+}
+
 export async function getAccountByEmail(
   email: string
 ): Promise<HubworkAccount | null> {

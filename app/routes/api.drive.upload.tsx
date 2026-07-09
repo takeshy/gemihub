@@ -25,8 +25,8 @@ export async function action({ request }: Route.ActionArgs) {
   // Determine upload limit based on plan
   let maxFileSize = MAX_FILE_SIZE_FREE;
   try {
-    const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
-    const account = await getAccountByRootFolderId(validTokens.rootFolderId);
+    const { getAccountByRootFolderIdOrEmail } = await import("~/services/hubwork-accounts.server");
+    const account = await getAccountByRootFolderIdOrEmail(validTokens.rootFolderId, validTokens.email);
     if (account?.plan) {
       maxFileSize = MAX_FILE_SIZE_PAID;
     }

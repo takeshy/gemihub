@@ -82,19 +82,24 @@ export async function loader({ request }: Route.LoaderArgs) {
       updateAccount,
     } = await import("~/services/hubwork-accounts.server");
     let hubworkAccount = await getAccountByRootFolderId(rootFolderId);
+    let hubworkAccountMatchedByEmail = false;
     if (!hubworkAccount && email) {
       hubworkAccount = await getAccountByEmail(email);
+      hubworkAccountMatchedByEmail = !!hubworkAccount;
     }
 
     if (hubworkAccount?.plan) {
+      const updates: Record<string, string> = {};
+      if (hubworkAccountMatchedByEmail && rootFolderId && hubworkAccount.rootFolderId !== rootFolderId) {
+        updates.rootFolderId = rootFolderId;
+      }
+      if (!hubworkAccount.email && email) updates.email = email;
+      if (Object.keys(updates).length > 0) {
+        await updateAccount(hubworkAccount.id, updates);
+      }
+
       if (hasHubworkScopes && tokens.refreshToken) {
         await updateRefreshToken(hubworkAccount.id, tokens.refreshToken);
-        const updates: Record<string, string> = {};
-        if (!hubworkAccount.rootFolderId) updates.rootFolderId = rootFolderId;
-        if (!hubworkAccount.email && email) updates.email = email;
-        if (Object.keys(updates).length > 0) {
-          await updateAccount(hubworkAccount.id, updates);
-        }
       } else {
         const storedRefreshToken = getStoredRefreshToken(hubworkAccount);
         if (storedRefreshToken) {

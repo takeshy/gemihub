@@ -101,6 +101,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
   let hubworkAccount: Awaited<ReturnType<typeof import("~/services/hubwork-accounts.server").getAccountByRootFolderId>> = null;
+  let hubworkAccountMatchedByEmail = false;
   let hubworkLookupSucceeded = true;
   try {
     const { getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
@@ -108,6 +109,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Also try matching by email for accounts created via Stripe/admin before user enabled
     if (!hubworkAccount && validTokens.email) {
       hubworkAccount = await getAccountByEmail(validTokens.email);
+      hubworkAccountMatchedByEmail = !!hubworkAccount;
     }
   } catch (error) {
     hubworkLookupSucceeded = false;
@@ -116,20 +118,26 @@ export async function loader({ request }: Route.LoaderArgs) {
   const grantedScopes = validTokens.grantedScopes || "";
   const hasHubworkScopes = hasRequiredHubworkScopes(grantedScopes);
 
-  // Ensure refresh token for all Hubwork accounts without downgrading stored scopes.
+  // Ensure session identity and refresh token for Hubwork accounts without downgrading stored scopes.
   if (hubworkAccount?.plan) {
-    if (validTokens.refreshToken && hasHubworkScopes) {
-      import("~/services/hubwork-accounts.server").then(({ updateRefreshToken, updateAccount }) => {
+    import("~/services/hubwork-accounts.server").then(({ updateRefreshToken, updateAccount }) => {
+      const updates: Record<string, string> = {};
+      if (
+        hubworkAccountMatchedByEmail &&
+        validTokens.rootFolderId &&
+        hubworkAccount!.rootFolderId !== validTokens.rootFolderId
+      ) {
+        updates.rootFolderId = validTokens.rootFolderId;
+      }
+      if (!hubworkAccount!.email && validTokens.email) updates.email = validTokens.email;
+      if (Object.keys(updates).length > 0) {
+        updateAccount(hubworkAccount!.id, updates).catch(() => {});
+      }
+
+      if (validTokens.refreshToken && hasHubworkScopes) {
         updateRefreshToken(hubworkAccount!.id, validTokens.refreshToken).catch(() => {});
-        // Also update rootFolderId/email if missing
-        const updates: Record<string, string> = {};
-        if (!hubworkAccount!.rootFolderId && validTokens.rootFolderId) updates.rootFolderId = validTokens.rootFolderId;
-        if (!hubworkAccount!.email && validTokens.email) updates.email = validTokens.email;
-        if (Object.keys(updates).length > 0) {
-          updateAccount(hubworkAccount!.id, updates).catch(() => {});
-        }
-      });
-    }
+      }
+    });
   }
   const settings = {
     ...driveSettings,

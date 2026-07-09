@@ -32,10 +32,10 @@ function guessUploadMimeType(fileName: string, requestedMimeType: string | null 
   return requestedMimeType || "application/octet-stream";
 }
 
-async function getMaxFileSize(rootFolderId: string): Promise<number> {
+async function getMaxFileSize(rootFolderId: string, email?: string | null): Promise<number> {
   try {
-    const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
-    const account = await getAccountByRootFolderId(rootFolderId);
+    const { getAccountByRootFolderIdOrEmail } = await import("~/services/hubwork-accounts.server");
+    const account = await getAccountByRootFolderIdOrEmail(rootFolderId, email);
     if (account?.plan) return MAX_FILE_SIZE_PAID;
   } catch {
     // Treat lookup failures as free tier.
@@ -68,7 +68,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     const size = Number(formData.get("size") ?? file.size);
-    const maxFileSize = await getMaxFileSize(validTokens.rootFolderId);
+    const maxFileSize = await getMaxFileSize(validTokens.rootFolderId, validTokens.email);
     if (!Number.isFinite(size) || size < 0 || size > maxFileSize) {
       const limitMB = Math.round(maxFileSize / 1024 / 1024);
       return Response.json(

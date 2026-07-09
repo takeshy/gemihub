@@ -298,8 +298,8 @@ export async function action({ request }: Route.ActionArgs) {
     }
     case "create-markdown-pdf": {
       // PDF generation requires a paid plan
-      const { getAccountByRootFolderId } = await import("~/services/hubwork-accounts.server");
-      const pdfAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+      const { getAccountByRootFolderIdOrEmail } = await import("~/services/hubwork-accounts.server");
+      const pdfAccount = await getAccountByRootFolderIdOrEmail(validTokens.rootFolderId, validTokens.email);
       if (!pdfAccount?.plan) {
         return logAndReturn({ error: "A paid plan is required for PDF generation." }, { status: 403 });
       }
