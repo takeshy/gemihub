@@ -15,10 +15,37 @@ export function contentWithoutFrontmatter(content: string): string {
   return split?.body ?? content;
 }
 
+export function canonicalizeTag(tag: string): string {
+  let t = tag.trim();
+  if (t.startsWith("#")) t = t.slice(1);
+  t = t.normalize("NFC").replace(/\/+/g, "/");
+  if (t.endsWith("/")) t = t.slice(0, -1);
+  return t;
+}
+
+export function extractFrontmatterTags(frontmatter: Record<string, unknown>): string[] {
+  const rawTags = frontmatter.tags;
+  const values = Array.isArray(rawTags)
+    ? rawTags
+    : typeof rawTags === "string"
+      ? rawTags.split(/[\s,]+/)
+      : [];
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const tag = canonicalizeTag(value);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    tags.push(tag);
+  }
+  return tags;
+}
+
 /**
  * Load rows from a folder's frontmatter cache.
  * Each file becomes a DataRow with:
- *   - file.path, file.name, file.content, file.mtime, file.ctime as file attributes
+ *   - file.path, file.name, file.content, file.tags, file.mtime, file.ctime as file attributes
  *   - frontmatter keys as cell properties (empty for non-markdown files)
  */
 export async function loadFolderRows(folder: string): Promise<DataRow[]> {
@@ -47,6 +74,7 @@ export async function loadFolderRows(folder: string): Promise<DataRow[]> {
         fileId: file.id,
         fileName: file.name,
         fileContent: cached ? contentWithoutFrontmatter(cached.content) : undefined,
+        fileTags: extractFrontmatterTags(frontmatter),
         mtime: file.modifiedTime ? new Date(file.modifiedTime).getTime() : 0,
         ctime: file.createdTime ? new Date(file.createdTime).getTime() : 0,
         fmParseable,
@@ -71,6 +99,7 @@ export function detectFolderFields(rows: DataRow[]): FieldInfo[] {
         if (key === "file.path") return r.fileName;
         if (key === "file.name") return r.fileName?.split("/").pop() ?? r.fileName;
         if (key === "file.content") return r.fileContent;
+        if (key === "file.tags") return r.fileTags;
         if (key === "name") return r.fileName;
         if (key === "file.mtime" || key === "mtime") return r.mtime;
         if (key === "file.ctime" || key === "ctime") return r.ctime;

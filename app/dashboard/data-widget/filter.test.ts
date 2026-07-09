@@ -192,12 +192,14 @@ test("getCellValue resolves file attributes", () => {
   const row = makeRow("1", { status: "done" }, {
     fileName: "folder/test.md",
     fileContent: "Body text",
+    fileTags: ["urgent", "work"],
     mtime: 1700000000,
     ctime: 1600000000,
   });
   assert.equal(getCellValue(row, "file.path"), "folder/test.md");
   assert.equal(getCellValue(row, "file.name"), "test.md");
   assert.equal(getCellValue(row, "file.content"), "Body text");
+  assert.deepEqual(getCellValue(row, "file.tags"), ["urgent", "work"]);
   assert.equal(getCellValue(row, "name"), "folder/test.md");
   assert.equal(getCellValue(row, "file.mtime"), 1700000000);
   assert.equal(getCellValue(row, "file.ctime"), 1600000000);

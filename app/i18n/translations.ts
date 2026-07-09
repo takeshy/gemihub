@@ -324,6 +324,9 @@ export interface TranslationStrings {
   "dashboard.kanbanCreateNew": string;
   "dashboard.kanbanImportExisting": string;
   "dashboard.kanbanFileMissing": string;
+  "dashboard.kanbanTagFilter": string;
+  "dashboard.kanbanAllTags": string;
+  "dashboard.kanbanClearTagFilter": string;
 
   "workspace.openExternal": string;
   "workspace.reload": string;
@@ -1451,6 +1454,9 @@ const en: TranslationStrings = {
   "dashboard.kanbanCreateNew": "Create a new board",
   "dashboard.kanbanImportExisting": "Or import an existing board file",
   "dashboard.kanbanFileMissing": "Board definition file not found or invalid.",
+  "dashboard.kanbanTagFilter": "Filter by tag",
+  "dashboard.kanbanAllTags": "All tags",
+  "dashboard.kanbanClearTagFilter": "Clear tag filter",
 
   "workspace.openExternal": "Open in Google",
   "workspace.reload": "Reload",
@@ -2579,6 +2585,9 @@ const ja: TranslationStrings = {
   "dashboard.kanbanCreateNew": "新規ボードを作成",
   "dashboard.kanbanImportExisting": "または既存のボードファイルをインポート",
   "dashboard.kanbanFileMissing": "ボード定義ファイルが見つからないか不正です。",
+  "dashboard.kanbanTagFilter": "タグで絞り込み",
+  "dashboard.kanbanAllTags": "すべてのタグ",
+  "dashboard.kanbanClearTagFilter": "タグ絞り込みを解除",
 
   "workspace.openExternal": "Googleで開く",
   "workspace.reload": "再読み込み",

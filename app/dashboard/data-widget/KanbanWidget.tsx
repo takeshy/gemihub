@@ -124,6 +124,14 @@ function truncateText(value: string, maxLength?: number): string {
   return `${value.slice(0, maxLength).trimEnd()}...`;
 }
 
+function rowTags(row: DataRow): string[] {
+  if (Array.isArray(row.fileTags)) return row.fileTags;
+  const tags = row.cells.tags;
+  if (Array.isArray(tags)) return tags.filter((tag): tag is string => typeof tag === "string");
+  if (typeof tags === "string") return tags.split(/[\s,]+/).filter(Boolean);
+  return [];
+}
+
 export default function KanbanWidget({
   config,
   ctx,
@@ -209,6 +217,7 @@ export default function KanbanWidget({
   const [newStatus, setNewStatus] = useState(configuredColumns[0]?.value ?? "");
   const [previewRow, setPreviewRow] = useState<DataRow | null>(null);
   const [previewInitialMode, setPreviewInitialMode] = useState<MdEditMode | undefined>(undefined);
+  const [selectedTag, setSelectedTag] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -238,13 +247,35 @@ export default function KanbanWidget({
     }
   }, [configuredColumns, newStatus]);
 
-  const processedRows = useMemo(
-    () => {
-      const filtered = applyPostSource(rows, {
+  const baseFilteredRows = useMemo(
+    () =>
+      applyPostSource(rows, {
         filter: def.filter as FilterCondition[] | undefined,
         sort: def.sort as string | undefined,
         limit: def.limit,
-      });
+      }),
+    [rows, def.filter, def.sort, def.limit],
+  );
+
+  const tagOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of baseFilteredRows) {
+      for (const tag of rowTags(row)) {
+        if (tag) set.add(tag);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [baseFilteredRows]);
+
+  useEffect(() => {
+    if (selectedTag && !tagOptions.includes(selectedTag)) setSelectedTag("");
+  }, [selectedTag, tagOptions]);
+
+  const processedRows = useMemo(
+    () => {
+      const filtered = selectedTag
+        ? baseFilteredRows.filter((row) => rowTags(row).includes(selectedTag))
+        : baseFilteredRows;
       const orderMap = new Map(cardOrder.map((id, index) => [id, index]));
       return [...filtered].sort((a, b) => {
         const ai = orderMap.get(a.id);
@@ -255,7 +286,7 @@ export default function KanbanWidget({
         return ai - bi;
       });
     },
-    [rows, def.filter, def.sort, def.limit, cardOrder],
+    [baseFilteredRows, selectedTag, cardOrder],
   );
 
   const columns = useMemo(() => {
@@ -478,6 +509,33 @@ export default function KanbanWidget({
           {boardTitle}
         </span>
         {error && <span className="min-w-0 truncate text-[11px] text-red-500">{error}</span>}
+        {tagOptions.length > 0 && (
+          <div className="flex flex-shrink-0 items-center gap-1">
+            <select
+              value={selectedTag}
+              onChange={(e) => setSelectedTag(e.target.value)}
+              className="max-w-[150px] rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+              title={t("dashboard.kanbanTagFilter")}
+            >
+              <option value="">{t("dashboard.kanbanAllTags")}</option>
+              {tagOptions.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+            {selectedTag && (
+              <button
+                type="button"
+                onClick={() => setSelectedTag("")}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+                title={t("dashboard.kanbanClearTagFilter")}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        )}
         <button
           type="button"
           onClick={(e) => {

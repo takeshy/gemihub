@@ -134,6 +134,8 @@ export interface DataRow {
   ctime?: number;
   /** Cached text content (folder source only, when available locally). */
   fileContent?: string;
+  /** Canonical frontmatter tags (folder source only). */
+  fileTags?: string[];
   /** True if frontmatter parsed successfully (folder source only, for editability). */
   fmParseable?: boolean;
   /** Property values keyed by name. */
