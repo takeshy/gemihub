@@ -2,8 +2,8 @@
 // Config: { base: "path/to/file.base", view: "ViewName" }
 // Empty/omitted view means the first view in the .base file.
 
-import { useState, useEffect, useMemo, useCallback, useRef, type RefObject } from "react";
-import { ArrowUpDown, ChevronDown, Database, FileText, Filter, Folder, RefreshCw, Search, Table as TableIcon, X } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { ArrowUpDown, FileText, Filter, Folder, RefreshCw, Search, Table as TableIcon, X } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import type { WidgetContext } from "../types";
 import { compileBase, queryView, createGemiHubHost } from "~/bases/index";
@@ -12,7 +12,7 @@ import { BaseViewRenderer, entryPropertyText } from "~/components/bases/BaseView
 import { getRemoteMetaFiles, readFileLocal } from "~/services/drive-local";
 import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
-import { collectBaseFileOptions, findBaseFileOption, type BaseFileOption } from "./base-file-options";
+import { findBaseFileOption } from "./base-file-options";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { DASHBOARD_BASE_FILE_UPDATED_EVENT } from "./base-events";
 import { Popover, ViewControls, deriveFieldsFromRows } from "../data-widget/ViewControls";
@@ -23,7 +23,6 @@ import type { TranslationStrings } from "~/i18n/translations";
 
 /** Which list-header popover is open: filename search, structured filter, or sort. */
 type ListControl = "search" | "filter" | "sort" | null;
-type BaseHeaderControl = ListControl | "base";
 
 interface BaseWidgetConfig {
   base?: string;
@@ -70,8 +69,7 @@ export default function BaseWidget({
   const [viewLimit, setViewLimit] = useState<number | undefined>(undefined);
   const [listFilter, setListFilter] = useState("");
   const [listSort, setListSort] = useState<string | undefined>(undefined);
-  const [listControl, setListControl] = useState<BaseHeaderControl>(null);
-  const [baseFiles, setBaseFiles] = useState<BaseFileOption[]>([]);
+  const [listControl, setListControl] = useState<ListControl>(null);
 
   // Load vault files
   const loadVaultFiles = useCallback(async () => {
@@ -105,18 +103,12 @@ export default function BaseWidget({
     return await readFileLocal(fileId);
   }, []);
 
-  const refreshBaseFiles = useCallback(async () => {
-    const meta = await getCachedRemoteMeta();
-    setBaseFiles(meta ? collectBaseFileOptions(meta.files) : []);
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        void refreshBaseFiles();
         const files = await loadVaultFiles();
         if (cancelled) return;
         setVaultFiles(files);
@@ -141,7 +133,7 @@ export default function BaseWidget({
       }
     })();
     return () => { cancelled = true; };
-  }, [cfg.base, loadVaultFiles, loadBaseContent, refreshBaseFiles, refreshKey]);
+  }, [cfg.base, loadVaultFiles, loadBaseContent, refreshKey]);
 
   // Compile the base
   const compiled = useMemo<CompiledBase | null>(() => {
@@ -292,14 +284,6 @@ export default function BaseWidget({
     );
   }, []);
 
-  const selectBaseFile = useCallback(
-    (base: string) => {
-      ctx.onConfigChange?.({ ...cfg, base, view: "" });
-      setListControl(null);
-    },
-    [ctx, cfg],
-  );
-
   // Render
   if (loading) {
     return (
@@ -352,10 +336,7 @@ export default function BaseWidget({
         <BaseFileListHeader
           view={activeView}
           views={views}
-          baseName={cfg.base}
-          baseFiles={baseFiles}
           viewName={viewName}
-          onSelectBase={selectBaseFile}
           onSelectView={(v) => ctx.onConfigChange?.({ ...cfg, view: v })}
           filter={listFilter}
           onFilterChange={setListFilter}
@@ -368,18 +349,12 @@ export default function BaseWidget({
           onLimitChange={setViewLimit}
           openControl={listControl}
           onOpenControlChange={setListControl}
-          onRefreshBaseFiles={refreshBaseFiles}
           onRefresh={() => setRefreshKey((k) => k + 1)}
         />
       ) : (
         <div className="flex items-center justify-between border-b border-gray-200 px-2 py-1 dark:border-gray-700">
           <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-            <BaseFileSelector
-              baseName={cfg.base}
-              baseFiles={baseFiles}
-              onSelectBase={selectBaseFile}
-              onRefreshBaseFiles={refreshBaseFiles}
-            />
+            <span className="truncate font-medium">{cfg.base}</span>
             {views.length > 1 && (
               <ViewSelector
                 views={views.map((v) => v.name)}
@@ -483,10 +458,7 @@ function LimitInput({
 function BaseFileListHeader({
   view,
   views,
-  baseName,
-  baseFiles,
   viewName,
-  onSelectBase,
   onSelectView,
   filter,
   onFilterChange,
@@ -499,15 +471,11 @@ function BaseFileListHeader({
   onLimitChange,
   openControl,
   onOpenControlChange,
-  onRefreshBaseFiles,
   onRefresh,
 }: {
   view: ViewConfig;
   views: ViewConfig[];
-  baseName?: string;
-  baseFiles: BaseFileOption[];
   viewName: string;
-  onSelectBase: (base: string) => void;
   onSelectView: (view: string) => void;
   filter: string;
   onFilterChange: (filter: string) => void;
@@ -518,13 +486,11 @@ function BaseFileListHeader({
   onSortChange: (sort: string | undefined) => void;
   limit: number | undefined;
   onLimitChange: (limit: number | undefined) => void;
-  openControl: BaseHeaderControl;
-  onOpenControlChange: (next: BaseHeaderControl) => void;
-  onRefreshBaseFiles: () => void | Promise<void>;
+  openControl: ListControl;
+  onOpenControlChange: (next: ListControl) => void;
   onRefresh: () => void;
 }) {
   const { t } = useI18n();
-  const baseBtnRef = useRef<HTMLButtonElement>(null);
   const searchBtnRef = useRef<HTMLButtonElement>(null);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
@@ -548,20 +514,6 @@ function BaseFileListHeader({
   return (
     <div className="flex items-center gap-2 border-b border-gray-100 px-2 py-1 dark:border-gray-800">
       <span className="flex min-w-0 flex-1 items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400">
-        <button
-          ref={baseBtnRef}
-          type="button"
-          onClick={() => {
-            if (openControl !== "base") void onRefreshBaseFiles();
-            onOpenControlChange(openControl === "base" ? null : "base");
-          }}
-          className="flex min-w-0 max-w-[55%] items-center gap-1 rounded px-1 py-0.5 font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-          title={baseName}
-        >
-          <Database size={11} className="shrink-0" />
-          <span className="truncate">{baseName ?? ""}</span>
-          <ChevronDown size={10} className="shrink-0" />
-        </button>
         <Folder size={11} className="shrink-0" />
         <span className="truncate">{folder || "/"}</span>
         {views.length > 1 && (
@@ -572,15 +524,6 @@ function BaseFileListHeader({
           />
         )}
       </span>
-      {openControl === "base" && (
-        <BaseFilePopover
-          anchorRef={baseBtnRef}
-          files={baseFiles}
-          current={baseName}
-          onSelect={onSelectBase}
-          onClose={() => onOpenControlChange(null)}
-        />
-      )}
       <button
         ref={searchBtnRef}
         type="button"
@@ -668,87 +611,6 @@ function BaseFileListHeader({
         </Popover>
       )}
     </div>
-  );
-}
-
-function BaseFileSelector({
-  baseName,
-  baseFiles,
-  onSelectBase,
-  onRefreshBaseFiles,
-}: {
-  baseName?: string;
-  baseFiles: BaseFileOption[];
-  onSelectBase: (base: string) => void;
-  onRefreshBaseFiles: () => void | Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => {
-          if (!open) void onRefreshBaseFiles();
-          setOpen((v) => !v);
-        }}
-        className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-        title={baseName}
-      >
-        <Database size={12} className="shrink-0 text-gray-400" />
-        <span className="truncate">{baseName}</span>
-        <ChevronDown size={11} className="shrink-0" />
-      </button>
-      {open && (
-        <BaseFilePopover
-          anchorRef={buttonRef}
-          files={baseFiles}
-          current={baseName}
-          onSelect={(base) => {
-            onSelectBase(base);
-            setOpen(false);
-          }}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
-  );
-}
-
-function BaseFilePopover({
-  anchorRef,
-  files,
-  current,
-  onSelect,
-  onClose,
-}: {
-  anchorRef: RefObject<HTMLButtonElement | null>;
-  files: BaseFileOption[];
-  current?: string;
-  onSelect: (base: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Popover anchorRef={anchorRef} onClose={onClose} widthClass="w-80">
-      <div className="max-h-64 overflow-auto py-0.5">
-        {files.map((file) => (
-          <button
-            key={file.id}
-            type="button"
-            onClick={() => onSelect(file.name)}
-            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${
-              file.name === current
-                ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
-            }`}
-          >
-            <Database size={12} className="shrink-0 text-gray-400" />
-            <span className="truncate">{file.name}</span>
-          </button>
-        ))}
-      </div>
-    </Popover>
   );
 }
 

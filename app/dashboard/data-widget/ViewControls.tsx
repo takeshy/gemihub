@@ -32,21 +32,27 @@ export function Popover({
   onClose,
   children,
   widthClass = "w-72",
+  align = "right",
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   children: React.ReactNode;
   widthClass?: string;
+  align?: "left" | "right";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
 
   useLayoutEffect(() => {
     const rect = anchorRef.current?.getBoundingClientRect();
     if (rect) {
-      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+      setPos(
+        align === "left"
+          ? { top: rect.bottom + 4, left: rect.left }
+          : { top: rect.bottom + 4, right: window.innerWidth - rect.right },
+      );
     }
-  }, [anchorRef]);
+  }, [anchorRef, align]);
 
   useEffect(() => {
     const onDocPointer = (e: MouseEvent) => {
@@ -73,7 +79,7 @@ export function Popover({
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       className={`fixed z-[1000] ${widthClass} max-w-[90vw] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 shadow-lg`}
-      style={{ top: pos.top, right: pos.right }}
+      style={{ top: pos.top, left: pos.left, right: pos.right }}
     >
       {children}
     </div>,

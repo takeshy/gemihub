@@ -1,10 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Code, LayoutDashboard, GitCompareArrows, History } from "lucide-react";
+import { ChevronDown, Code, LayoutDashboard, GitCompareArrows, History } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
 import { DashboardCanvas } from "~/dashboard/DashboardCanvas";
-import { parseDashboard, serializeDashboard } from "~/dashboard/dashboardFile";
-import { dashboardDisplayName } from "~/dashboard/dashboardFile";
+import {
+  parseDashboard,
+  serializeDashboard,
+  dashboardDisplayName,
+  listDashboardFiles,
+  type DashboardFileEntry,
+} from "~/dashboard/dashboardFile";
+import { Popover } from "~/dashboard/data-widget/ViewControls";
 import type { DashboardData } from "~/dashboard/types";
 
 type ViewMode = "display" | "raw";
@@ -37,6 +43,28 @@ export function DashboardFileEditor({
   const [data, setData] = useState<DashboardData | null>(() => parseDashboard(initialContent));
   // Fall back to raw if the file can't be parsed (avoids a blank display view).
   const [viewMode, setViewMode] = useState<ViewMode>(data ? "display" : "raw");
+  const [dashboards, setDashboards] = useState<DashboardFileEntry[]>([]);
+  const [showDashboardMenu, setShowDashboardMenu] = useState(false);
+  const dashboardButtonRef = useRef<HTMLButtonElement>(null);
+
+  const refreshDashboards = useCallback(async () => {
+    const list = await listDashboardFiles();
+    setDashboards(list);
+  }, []);
+
+  const navigateToDashboard = useCallback((entry: DashboardFileEntry) => {
+    setShowDashboardMenu(false);
+    const baseName = entry.fileName.split("/").pop() ?? entry.fileName;
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: entry.fileId, fileName: baseName },
+      }),
+    );
+  }, []);
+
+  useEffect(() => {
+    void refreshDashboards();
+  }, [refreshDashboards]);
 
   // Debounced auto-save, mirroring the other file editors.
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -130,9 +158,28 @@ export function DashboardFileEditor({
         toolbarLeft={
           <>
             <LayoutDashboard size={14} className="text-gray-400" />
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">
+            <button
+              ref={dashboardButtonRef}
+              type="button"
+              onClick={() => {
+                if (!showDashboardMenu) void refreshDashboards();
+                setShowDashboardMenu((v) => !v);
+              }}
+              className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              title={fileName}
+            >
               {dashboardDisplayName(fileName)}
-            </span>
+              <ChevronDown size={12} />
+            </button>
+            {showDashboardMenu && (
+              <DashboardFilePopover
+                anchorRef={dashboardButtonRef}
+                dashboards={dashboards}
+                currentFileName={fileName}
+                onSelect={navigateToDashboard}
+                onClose={() => setShowDashboardMenu(false)}
+              />
+            )}
           </>
         }
         toolbarRight={toggle}
@@ -144,9 +191,31 @@ export function DashboardFileEditor({
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">
-          {dashboardDisplayName(fileName)}
-        </span>
+        <div className="flex min-w-0 items-center gap-2">
+          <LayoutDashboard size={14} className="text-gray-400" />
+          <button
+            ref={dashboardButtonRef}
+            type="button"
+            onClick={() => {
+              if (!showDashboardMenu) void refreshDashboards();
+              setShowDashboardMenu((v) => !v);
+            }}
+            className="flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            title={fileName}
+          >
+            {dashboardDisplayName(fileName)}
+            <ChevronDown size={12} />
+          </button>
+          {showDashboardMenu && (
+            <DashboardFilePopover
+              anchorRef={dashboardButtonRef}
+              dashboards={dashboards}
+              currentFileName={fileName}
+              onSelect={navigateToDashboard}
+              onClose={() => setShowDashboardMenu(false)}
+            />
+          )}
+        </div>
         <div className="flex items-center gap-1 sm:gap-2">
           {onHistoryClick && (
             <button
@@ -181,5 +250,41 @@ export function DashboardFileEditor({
         />
       </div>
     </div>
+  );
+}
+
+function DashboardFilePopover({
+  anchorRef,
+  dashboards,
+  currentFileName,
+  onSelect,
+  onClose,
+}: {
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  dashboards: DashboardFileEntry[];
+  currentFileName: string;
+  onSelect: (entry: DashboardFileEntry) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Popover anchorRef={anchorRef} onClose={onClose} widthClass="w-56" align="left">
+      <div className="max-h-64 overflow-auto py-0.5">
+        {dashboards.map((d) => (
+          <button
+            key={d.fileId}
+            type="button"
+            onClick={() => onSelect(d)}
+            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${
+              d.fileName === currentFileName
+                ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+            }`}
+          >
+            <LayoutDashboard size={12} className="shrink-0 text-gray-400" />
+            <span className="truncate">{d.name}</span>
+          </button>
+        ))}
+      </div>
+    </Popover>
   );
 }

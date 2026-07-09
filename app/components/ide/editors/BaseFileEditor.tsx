@@ -5,6 +5,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
+  ChevronDown,
   Code,
   Database,
   GitCompareArrows,
@@ -19,11 +20,13 @@ import { compileBase, queryView, createGemiHubHost } from "~/bases/index";
 import type { CompiledBase, QueryResult, Diagnostic } from "~/bases/types";
 import { BaseViewRenderer } from "~/components/bases/BaseViewRenderer";
 import { getRemoteMetaFiles, readFileLocal } from "~/services/drive-local";
-import { getCachedFile } from "~/services/indexeddb-cache";
+import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 import { FilePreviewModal } from "~/dashboard/widgets/FilePreviewModal";
 import { BaseConfigEditor } from "~/dashboard/widgets/config-editors/BaseConfigEditor";
 import { DASHBOARD_BASE_FILE_UPDATED_EVENT } from "~/dashboard/widgets/base-events";
+import { collectBaseFileOptions, type BaseFileOption } from "~/dashboard/widgets/base-file-options";
+import { Popover } from "~/dashboard/data-widget/ViewControls";
 
 type ViewMode = "display" | "edit" | "raw";
 
@@ -69,6 +72,24 @@ export function BaseFileEditor({
   const [vaultLoading, setVaultLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [previewFile, setPreviewFile] = useState<{ fileId: string; fileName: string } | null>(null);
+  const [baseFiles, setBaseFiles] = useState<BaseFileOption[]>([]);
+  const [showBaseMenu, setShowBaseMenu] = useState(false);
+  const baseButtonRef = useRef<HTMLButtonElement>(null);
+
+  const refreshBaseFiles = useCallback(async () => {
+    const meta = await getCachedRemoteMeta();
+    setBaseFiles(meta ? collectBaseFileOptions(meta.files) : []);
+  }, []);
+
+  const navigateToBaseFile = useCallback((file: BaseFileOption) => {
+    setShowBaseMenu(false);
+    const baseName = file.name.split("/").pop() ?? file.name;
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: file.id, fileName: baseName },
+      }),
+    );
+  }, []);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
@@ -82,6 +103,10 @@ export function BaseFileEditor({
     contentFromProps.current = true;
     setContent(initialContent);
   }, [initialContent, fileId]);
+
+  useEffect(() => {
+    void refreshBaseFiles();
+  }, [refreshBaseFiles]);
 
   useEffect(() => {
     const onBaseUpdated = (event: Event) => {
@@ -280,10 +305,29 @@ export function BaseFileEditor({
   const toolbar = (
     <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       <div className="flex items-center gap-2 min-w-0">
-        <Database size={14} className="text-gray-400 shrink-0" />
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">
-          {fileName.replace(/\.base$/i, "")}
-        </span>
+        <button
+          ref={baseButtonRef}
+          type="button"
+          onClick={() => {
+            if (!showBaseMenu) void refreshBaseFiles();
+            setShowBaseMenu((v) => !v);
+          }}
+          className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+          title={fileName}
+        >
+          <Database size={14} className="shrink-0 text-gray-400" />
+          <span className="truncate">{fileName.replace(/\.base$/i, "")}</span>
+          <ChevronDown size={12} className="shrink-0 text-gray-400" />
+        </button>
+        {showBaseMenu && (
+          <BaseFilePopover
+            anchorRef={baseButtonRef}
+            files={baseFiles}
+            current={fileName}
+            onSelect={navigateToBaseFile}
+            onClose={() => setShowBaseMenu(false)}
+          />
+        )}
         {views.length > 1 && viewMode !== "raw" && (
           <select
             value={viewName ?? ""}
@@ -477,4 +521,44 @@ function BaseEditSidePanel({
     return createPortal(panel, document.body);
   }
   return panel;
+}
+
+function baseDisplayname(fileName: string): string {
+  return fileName.replace(/\.base$/i, "");
+}
+
+function BaseFilePopover({
+  anchorRef,
+  files,
+  current,
+  onSelect,
+  onClose,
+}: {
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  files: BaseFileOption[];
+  current: string;
+  onSelect: (file: BaseFileOption) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Popover anchorRef={anchorRef} onClose={onClose} widthClass="w-80">
+      <div className="max-h-64 overflow-auto py-0.5">
+        {files.map((file) => (
+          <button
+            key={file.id}
+            type="button"
+            onClick={() => onSelect(file)}
+            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${
+              file.name === current
+                ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+            }`}
+          >
+            <Database size={12} className="shrink-0 text-gray-400" />
+            <span className="truncate">{baseDisplayname(file.name)}</span>
+          </button>
+        ))}
+      </div>
+    </Popover>
+  );
 }

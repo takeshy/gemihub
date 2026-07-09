@@ -4,18 +4,21 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Code, GitCompareArrows, History, LayoutGrid, Pencil, X } from "lucide-react";
+import { ChevronDown, Code, GitCompareArrows, History, LayoutGrid, Pencil, X } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
 import KanbanWidget from "~/dashboard/data-widget/KanbanWidget";
 import { KanbanDefinitionFields } from "~/dashboard/data-widget/KanbanConfigEditor";
 import {
+  collectKanbanFileOptions,
   parseKanbanFile,
   serializeKanbanFile,
   type KanbanBoardDefinition,
+  type KanbanFileOption,
 } from "~/dashboard/data-widget/kanban-file";
 import { DASHBOARD_KANBAN_FILE_UPDATED_EVENT } from "~/dashboard/data-widget/kanban-events";
-import { getCachedFile } from "~/services/indexeddb-cache";
+import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { Popover } from "~/dashboard/data-widget/ViewControls";
 
 type ViewMode = "display" | "edit" | "raw";
 
@@ -38,6 +41,28 @@ export function KanbanFileEditor({
   const [content, setContent] = useState(initialContent);
   const definition = useMemo(() => parseKanbanFile(content), [content]);
   const [viewMode, setViewMode] = useState<ViewMode>(definition ? "display" : "raw");
+  const [kanbanFiles, setKanbanFiles] = useState<KanbanFileOption[]>([]);
+  const [showKanbanMenu, setShowKanbanMenu] = useState(false);
+  const kanbanButtonRef = useRef<HTMLButtonElement>(null);
+
+  const refreshKanbanFiles = useCallback(async () => {
+    const meta = await getCachedRemoteMeta();
+    setKanbanFiles(meta ? collectKanbanFileOptions(meta.files) : []);
+  }, []);
+
+  const navigateToKanbanFile = useCallback((file: KanbanFileOption) => {
+    setShowKanbanMenu(false);
+    const baseName = file.name.split("/").pop() ?? file.name;
+    window.dispatchEvent(
+      new CustomEvent("plugin-select-file", {
+        detail: { fileId: file.id, fileName: baseName },
+      }),
+    );
+  }, []);
+
+  useEffect(() => {
+    void refreshKanbanFiles();
+  }, [refreshKanbanFiles]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const contentFromProps = useRef(true);
@@ -155,10 +180,29 @@ export function KanbanFileEditor({
   const toolbar = (
     <div className="flex items-center justify-between px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       <div className="flex items-center gap-2 min-w-0">
-        <LayoutGrid size={14} className="text-gray-400 shrink-0" />
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate">
-          {fileName.replace(/\.kanban$/i, "")}
-        </span>
+        <button
+          ref={kanbanButtonRef}
+          type="button"
+          onClick={() => {
+            if (!showKanbanMenu) void refreshKanbanFiles();
+            setShowKanbanMenu((v) => !v);
+          }}
+          className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+          title={fileName}
+        >
+          <LayoutGrid size={14} className="shrink-0 text-gray-400" />
+          <span className="truncate">{fileName.replace(/\.kanban$/i, "")}</span>
+          <ChevronDown size={12} className="shrink-0 text-gray-400" />
+        </button>
+        {showKanbanMenu && (
+          <KanbanFilePopover
+            anchorRef={kanbanButtonRef}
+            files={kanbanFiles}
+            current={fileName}
+            onSelect={navigateToKanbanFile}
+            onClose={() => setShowKanbanMenu(false)}
+          />
+        )}
       </div>
       <div className="flex items-center gap-1 sm:gap-2">
         {onHistoryClick && (
@@ -281,4 +325,44 @@ function KanbanEditSidePanel({
     return createPortal(panel, document.body);
   }
   return panel;
+}
+
+function kanbanDisplayName(fileName: string): string {
+  return fileName.replace(/\.kanban$/i, "");
+}
+
+function KanbanFilePopover({
+  anchorRef,
+  files,
+  current,
+  onSelect,
+  onClose,
+}: {
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  files: KanbanFileOption[];
+  current: string;
+  onSelect: (file: KanbanFileOption) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Popover anchorRef={anchorRef} onClose={onClose} widthClass="w-80">
+      <div className="max-h-64 overflow-auto py-0.5">
+        {files.map((file) => (
+          <button
+            key={file.id}
+            type="button"
+            onClick={() => onSelect(file)}
+            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${
+              file.name === current
+                ? "bg-blue-50 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+            }`}
+          >
+            <LayoutGrid size={12} className="shrink-0 text-gray-400" />
+            <span className="truncate">{kanbanDisplayName(file.name)}</span>
+          </button>
+        ))}
+      </div>
+    </Popover>
+  );
 }
