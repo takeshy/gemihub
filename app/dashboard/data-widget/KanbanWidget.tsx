@@ -1,13 +1,13 @@
 // Kanban widget: groups folder-backed Markdown files by a frontmatter status
 // property and writes status changes back to the file frontmatter on drop.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { ChevronDown, LayoutGrid, Plus, X } from "lucide-react";
 import yaml from "js-yaml";
-import { getCachedFile } from "~/services/indexeddb-cache";
+import { getCachedFile, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { findFileByNameLocal, readFileLocal, writeFileLocal } from "~/services/drive-local";
 import { updateFrontmatterKey } from "../frontmatter-writeback";
-import { parseKanbanFile, type KanbanBoardDefinition } from "./kanban-file";
+import { collectKanbanFileOptions, parseKanbanFile, type KanbanBoardDefinition, type KanbanFileOption } from "./kanban-file";
 import { DASHBOARD_KANBAN_FILE_UPDATED_EVENT } from "./kanban-events";
 import type { WidgetContext } from "../types";
 import type { DataRow, FilterCondition, KanbanColumnConfig, KanbanWidgetConfig } from "./types";
@@ -15,6 +15,7 @@ import { loadFolderRows } from "./folder-source";
 import { applyPostSource, formatCell, getCellValue } from "./filter";
 import { useI18n } from "~/i18n/context";
 import { FilePreviewModal } from "../widgets/FilePreviewModal";
+import { Popover } from "./ViewControls";
 
 const UNSPECIFIED = "__unspecified__";
 const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
@@ -104,6 +105,18 @@ export default function KanbanWidget({
   const [fileDef, setFileDef] = useState<KanbanBoardDefinition | null>(null);
   const [fileDefError, setFileDefError] = useState(false);
   const [defRefreshKey, setDefRefreshKey] = useState(0);
+  const [kanbanFiles, setKanbanFiles] = useState<KanbanFileOption[]>([]);
+  const [showKanbanMenu, setShowKanbanMenu] = useState(false);
+  const kanbanButtonRef = useRef<HTMLButtonElement>(null);
+
+  const refreshKanbanFiles = useCallback(async () => {
+    const meta = await getCachedRemoteMeta();
+    setKanbanFiles(meta ? collectKanbanFileOptions(meta.files) : []);
+  }, []);
+
+  useEffect(() => {
+    void refreshKanbanFiles();
+  }, [refreshKanbanFiles]);
 
   useEffect(() => {
     if (!kanbanPath) {
@@ -167,6 +180,14 @@ export default function KanbanWidget({
   const [newTitle, setNewTitle] = useState("");
   const [newStatus, setNewStatus] = useState(configuredColumns[0]?.value ?? "");
   const [previewRow, setPreviewRow] = useState<DataRow | null>(null);
+
+  const selectKanbanFile = useCallback(
+    (fileName: string) => {
+      ctx?.onConfigChange?.({ kanban: fileName, cardOrder: cfg.cardOrder });
+      setShowKanbanMenu(false);
+    },
+    [ctx, cfg.cardOrder],
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -431,9 +452,36 @@ export default function KanbanWidget({
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-white dark:bg-gray-950">
       <div className="flex flex-shrink-0 items-center gap-2 px-3 py-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
-          {boardTitle}
-        </span>
+        {ctx?.onConfigChange && kanbanPath ? (
+          <button
+            ref={kanbanButtonRef}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!showKanbanMenu) void refreshKanbanFiles();
+              setShowKanbanMenu((v) => !v);
+            }}
+            className="flex min-w-0 flex-1 items-center gap-1 rounded px-1 py-0.5 text-left text-sm font-semibold text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
+            title={kanbanPath}
+          >
+            <LayoutGrid size={13} className="shrink-0 text-gray-400" />
+            <span className="truncate">{boardTitle || kanbanPath}</span>
+            <ChevronDown size={12} className="shrink-0 text-gray-400" />
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {boardTitle}
+          </span>
+        )}
+        {showKanbanMenu && (
+          <KanbanFilePopover
+            anchorRef={kanbanButtonRef}
+            files={kanbanFiles}
+            current={kanbanPath}
+            onSelect={selectKanbanFile}
+            onClose={() => setShowKanbanMenu(false)}
+          />
+        )}
         {error && <span className="min-w-0 truncate text-[11px] text-red-500">{error}</span>}
         <button
           type="button"
