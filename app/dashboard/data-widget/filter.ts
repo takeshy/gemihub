@@ -12,7 +12,7 @@ import type {
 // --- Operators per type (P2 spec §6.2) ---
 
 export const OPERATORS_BY_TYPE: Record<PropertyType, FilterOp[]> = {
-  string: ["eq", "neq", "contains", "empty", "notEmpty"],
+  string: ["eq", "neq", "contains", "notContains", "empty", "notEmpty"],
   number: ["eq", "neq", "gt", "lt", "gte", "lte"],
   boolean: ["isTrue", "isFalse"],
   list: ["contains", "notContains", "empty"],

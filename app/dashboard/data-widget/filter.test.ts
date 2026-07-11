@@ -139,10 +139,12 @@ test("evaluateCondition contains for list and string", () => {
   assert.ok(!evaluateCondition(row, { property: "title", op: "contains", value: "Create" }));
 });
 
-test("evaluateCondition notContains for list", () => {
-  const row = makeRow("1", { tags: ["urgent", "bug"] });
+test("evaluateCondition notContains for list and string", () => {
+  const row = makeRow("1", { tags: ["urgent", "bug"], title: "Fix dashboard filters" });
   assert.ok(evaluateCondition(row, { property: "tags", op: "notContains", value: "feature" }));
   assert.ok(!evaluateCondition(row, { property: "tags", op: "notContains", value: "bug" }));
+  assert.ok(evaluateCondition(row, { property: "title", op: "notContains", value: "kanban" }));
+  assert.ok(!evaluateCondition(row, { property: "title", op: "notContains", value: "dashboard" }));
 });
 
 test("evaluateCondition before/after for dates", () => {
@@ -295,6 +297,7 @@ test("filter/sort/limit work identically for workflow-style rows", () => {
 test("OPERATORS_BY_TYPE has correct operators per type", () => {
   assert.ok(OPERATORS_BY_TYPE.string.includes("eq"));
   assert.ok(OPERATORS_BY_TYPE.string.includes("contains"));
+  assert.ok(OPERATORS_BY_TYPE.string.includes("notContains"));
   assert.ok(!OPERATORS_BY_TYPE.string.includes("gt"));
   assert.ok(OPERATORS_BY_TYPE.number.includes("gt"));
   assert.ok(OPERATORS_BY_TYPE.number.includes("lte"));
