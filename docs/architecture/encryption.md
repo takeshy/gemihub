@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Encryption
-description: Hybrid RSA+AES encryption for chat history and workflow logs.
+description: Hybrid RSA+AES encryption for individual files, dashboard-managed secrets, chat history, and workflow logs.
 tags:
   - encryption
 ---
@@ -26,6 +26,8 @@ Encrypted files use YAML frontmatter followed by Base64-encoded data:
 ```
 ---
 encrypted: true
+description: "Production deploy token"        # optional, unencrypted
+publicMetadata: {"email":"ops@example.com"}  # optional, unencrypted
 key: <Base64: encrypted private key (IV + AES-GCM ciphertext)>
 salt: <Base64: PBKDF2 salt (16 bytes)>
 ---
@@ -33,6 +35,8 @@ salt: <Base64: PBKDF2 salt (16 bytes)>
 ```
 
 The `key` and `salt` fields are copied from your encryption settings at the time of encryption. This makes each file self-contained — decryptable with only the password.
+
+`description` and `publicMetadata` are optional searchable metadata. They are deliberately stored outside the ciphertext so the Secret Manager can list and search files before they are unlocked. Treat them like the file name: never put a secret value in either field. `publicMetadata` accepts string values and is intended for visible identifiers such as an account email or environment name.
 
 ### Binary File Encryption
 
@@ -117,6 +121,18 @@ Click an `.encrypted` file in the tree. A password prompt appears. Enter your en
 
 The password is cached in memory for the session. Subsequent encrypted files are decrypted automatically.
 
+### Secret Manager Dashboard Widget
+
+The dashboard's `secret-manager` widget provides a local-first interface for encrypted values:
+
+- Choose a root folder in the widget settings, or leave it blank to list every `.encrypted` file.
+- Create a named secret in the root or a nested directory. The value is encrypted immediately and written to the local cache; Push sends it to Drive.
+- Browse nested folders and search across file names, descriptions, and visible metadata fields.
+- Unlock a value with the encryption password, copy it, or edit and re-encrypt it in place. A private key or password already cached during the session unlocks it automatically.
+- Duplicate names are checked against both the local tree and Drive when online.
+
+Creating or updating a secret requires encryption to be configured in Settings. The value field is encrypted; users must still avoid copying secret values into the unencrypted description or visible fields.
+
 ### Permanently Decrypt a File
 
 To permanently remove encryption from a file:
@@ -137,7 +153,9 @@ When encryption is enabled and `encryptChatHistory` / `encryptWorkflowHistory` a
 
 ### Workflow Encryption Command
 
-The `gemihub-command` workflow node supports an `encrypt` command that encrypts a Drive file programmatically. It reads the file content, encrypts it using the configured encryption keys, updates the file on Drive, and appends `.encrypted` to the filename. Encryption must be configured in settings for this command to work.
+The `gemihub-command` workflow node supports an `encrypt` command that encrypts a Drive file programmatically. It reads the file content, encrypts it using the configured encryption keys, updates the file on Drive, and appends `.encrypted` to the filename. Optional `text` becomes the searchable description; optional `metadata` accepts a JSON object of unencrypted string fields. Encryption must be configured in settings for this command to work.
+
+The `drive-read` node can set `saveMetadataTo` while reading a file. For an encrypted file, that variable receives the unencrypted description and public metadata as JSON independently of the decrypted content saved through `saveTo`.
 
 ## Security Notes
 

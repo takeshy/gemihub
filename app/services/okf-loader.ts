@@ -2,6 +2,7 @@ import yaml from "js-yaml";
 import {
   getCachedFile,
   getCachedFileTree,
+  getCachedRemoteMeta,
   type CachedTreeNode,
 } from "./indexeddb-cache";
 import { fixMarkdownBullets } from "~/utils/yaml-helpers";
@@ -93,6 +94,24 @@ function collectMarkdown(nodes: CachedTreeNode[], prefix = ""): MarkdownRef[] {
 }
 
 async function listMarkdown(root: string): Promise<MarkdownRef[]> {
+  // Remote meta also contains new local-first files (`new:` IDs), while the
+  // cached folder tree is refreshed only after Drive sync. Prefer it so an OKF
+  // update is available to the very next chat message.
+  const meta = await getCachedRemoteMeta();
+  if (meta) {
+    const normalizedRoot = normalizePath(root);
+    const prefix = normalizedRoot ? `${normalizedRoot}/` : "";
+    return Object.entries(meta.files)
+      .filter(([, entry]) => {
+        const name = normalizePath(entry.name);
+        return name.toLowerCase().endsWith(".md") && (!prefix || name.toLowerCase().startsWith(prefix.toLowerCase()));
+      })
+      .map(([fileId, entry]) => ({
+        fileId,
+        path: prefix ? normalizePath(entry.name).slice(prefix.length) : normalizePath(entry.name),
+      }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+  }
   const tree = await getCachedFileTree();
   if (!tree) return [];
   const normalizedRoot = normalizePath(root);

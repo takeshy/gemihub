@@ -33,6 +33,14 @@ Which bundles are active is chosen in chat, not in settings. When bundles are di
 
 Active bundles are injected into the system prompt of every message sent from that chat.
 
+### Managed GemiHub bundle updates
+
+When the selected bundle's display name is exactly **GemiHub**, the chat checks the official Cloud Storage distribution for a newer release. The distribution is described by a GemiHub-specific `manifest.json` containing the bundle version, immutable ZIP URL, ZIP SHA-256, and per-file SHA-256 values. This JSON file is an updater extension, not part of the OKF standard; the OKF loader continues to read Markdown only.
+
+If an update is available, GemiHub asks before changing local files. After confirmation it downloads the ZIP through the authenticated app endpoint, verifies the archive and every listed document, and stages the official documents plus the installed `manifest.json` in the local Drive cache. Extra user-authored files are preserved. The normal Push operation sends the update to Drive, while the refreshed content is available to the next chat message immediately.
+
+Production uses a private Cloud Storage bucket configured with `GEMIHUB_OKF_BUCKET` and optional `GEMIHUB_OKF_PREFIX`; the Cloud Run service account receives read-only object access. Self-hosted deployments without Google credentials can instead set `GEMIHUB_OKF_BASE_URL` to a public HTTPS prefix. If neither source is configured, selecting the GemiHub bundle behaves like any other OKF bundle and no update check is made.
+
 ## OKF Format
 
 OKF is a Markdown-based knowledge bundle format. Each concept is usually a Markdown file with YAML frontmatter:
@@ -97,5 +105,5 @@ Use OKF when you want Gemini to understand a domain consistently. Use a skill wh
 ## Limitations
 
 - OKF content is injected as prompt context, not uploaded to Gemini File Search automatically.
-- Large OKF bundles are summarized with file and character limits.
+- Each selected bundle contributes at most 24 Markdown files and 1,400 body characters per file.
 - OKF files must be available in the synced Drive cache before they can be discovered.

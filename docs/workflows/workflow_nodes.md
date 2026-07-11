@@ -411,12 +411,14 @@ Read content from a Google Drive file.
   type: drive-read
   path: "notes/config.md"
   saveTo: content
+  saveMetadataTo: metadata
 ```
 
 | Property | Required | Template | Description |
 |----------|:--------:|:--------:|-------------|
 | `path` | Yes | Yes | File path or Drive file ID |
 | `saveTo` | Yes | No | Variable to store file content |
+| `saveMetadataTo` | No | No | Variable to store unencrypted metadata as JSON. For encrypted files this contains `description` plus visible fields such as `email` |
 
 **Smart path resolution:**
 - If path looks like a Drive file ID (no extension, >20 chars): reads directly
@@ -846,13 +848,14 @@ Execute GemiHub file operations (encrypt, publish, rename, etc.) as workflow nod
 | `command` | Yes | Yes | Command name (see table below) |
 | `path` | Yes | Yes | File path, Drive file ID, or `{{variable}}` |
 | `text` | No | Yes | Additional text argument (usage depends on command) |
+| `metadata` | No | Yes | For `encrypt`: JSON object of searchable, unencrypted string fields |
 | `saveTo` | No | No | Variable to store the result |
 
 **Available commands:**
 
 | Command | `text` usage | `saveTo` result |
 |---------|-------------|-----------------|
-| `encrypt` | — | New file name (with `.encrypted` suffix) |
+| `encrypt` | Searchable description (optional) | New file name (with `.encrypted` suffix) |
 | `publish` | — | Public URL |
 | `unpublish` | — | `"ok"` |
 | `duplicate` | Custom name (optional; default: `"name (copy).ext"`) | New file name |
@@ -873,6 +876,8 @@ Execute GemiHub file operations (encrypt, publish, rename, etc.) as workflow nod
   type: gemihub-command
   command: encrypt
   path: "notes/secret.md"
+  text: "Production deploy token"
+  metadata: '{"email":"ops@example.com","environment":"production"}'
   saveTo: encryptedName
 
 # Duplicate with custom name

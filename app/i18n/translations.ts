@@ -132,6 +132,13 @@ export interface TranslationStrings {
   "dashboard.undo": string;
   "dashboard.redo": string;
   "dashboard.addWidget": string;
+  "dashboard.widgetFile": string;
+  "dashboard.widgetMemoList": string;
+  "dashboard.widgetSecretManager": string;
+  "dashboard.widgetKanban": string;
+  "dashboard.widgetTimeline": string;
+  "dashboard.widgetWebEmbed": string;
+  "dashboard.widgetBase": string;
   "dashboard.noSettings": string;
   "dashboard.settingsAutoSaved": string;
   "dashboard.showWidgetHeader": string;
@@ -1156,6 +1163,14 @@ export interface TranslationStrings {
   "settings.general.showManagementFoldersDescription": string;
   "skills.selector.title": string;
   "okf.selector.title": string;
+  "okf.update.title": string;
+  "okf.update.available": string;
+  "okf.update.unmanaged": string;
+  "okf.update.note": string;
+  "okf.update.later": string;
+  "okf.update.install": string;
+  "okf.update.updating": string;
+  "okf.update.complete": string;
   "settings.okf.selectInChat": string;
 }
 
@@ -1227,7 +1242,7 @@ const en: TranslationStrings = {
   "memo.countUnit": "memos",
   "memoList.filterPlaceholder": "Filter by file name",
   "memoList.empty": "No memos yet",
-  "secretManager.searchPlaceholder": "Search names and descriptions",
+  "secretManager.searchPlaceholder": "Search names, descriptions, and visible fields",
   "secretManager.empty": "No encrypted files found",
   "secretManager.newSecret": "New secret",
   "secretManager.name": "Name",
@@ -1241,7 +1256,7 @@ const en: TranslationStrings = {
   "secretManager.directory": "Directory",
   "secretManager.directoryPlaceholder": "e.g. Production/API",
   "secretManager.directoryHint": "Relative to the configured secrets folder. Leave blank to use its root.",
-  "secretManager.metadataHint": "Descriptions are searchable and stored unencrypted, like file names. Do not include secret values.",
+  "secretManager.metadataHint": "Descriptions and visible fields are searchable and stored unencrypted, like file names. Do not include secret values.",
   "secretManager.encryptionRequired": "Configure encryption in Settings before creating secrets.",
   "secretManager.duplicate": "A secret with this name already exists.",
   "secretManager.invalidName": "Enter a valid secret name.",
@@ -1289,6 +1304,13 @@ const en: TranslationStrings = {
   "dashboard.undo": "Undo",
   "dashboard.redo": "Redo",
   "dashboard.addWidget": "Add Widget",
+  "dashboard.widgetFile": "File",
+  "dashboard.widgetMemoList": "Memo List",
+  "dashboard.widgetSecretManager": "Secret Manager",
+  "dashboard.widgetKanban": "Kanban",
+  "dashboard.widgetTimeline": "Timeline",
+  "dashboard.widgetWebEmbed": "Web Embed",
+  "dashboard.widgetBase": "Base",
   "dashboard.noSettings": "No settings for this widget type",
   "dashboard.settingsAutoSaved": "Changes are applied automatically.",
   "dashboard.showWidgetHeader": "Show header on dashboard",
@@ -2314,6 +2336,14 @@ const en: TranslationStrings = {
   "settings.general.showManagementFoldersDescription": "Show folders used by external tools (e.g. LocalLlmHub) in the file tree.",
   "skills.selector.title": "Agent Skills",
   "okf.selector.title": "OKF knowledge bundles",
+  "okf.update.title": "Update GemiHub knowledge",
+  "okf.update.available": "GemiHub OKF {latest} is available. Installed version: {current}.",
+  "okf.update.unmanaged": "This GemiHub OKF predates managed updates. Install the official {latest} release?",
+  "okf.update.note": "Official documents are replaced after checksum verification. Extra files are kept, and the update is sent to Drive with your next Push.",
+  "okf.update.later": "Later",
+  "okf.update.install": "Update",
+  "okf.update.updating": "Updating…",
+  "okf.update.complete": "GemiHub OKF was updated to {version}.",
   "settings.okf.selectInChat": "Which bundles to use is selected per chat, from the OKF selector above the chat input.",
 };
 
@@ -2385,7 +2415,7 @@ const ja: TranslationStrings = {
   "memo.countUnit": "件のメモ",
   "memoList.filterPlaceholder": "ファイル名で絞り込み",
   "memoList.empty": "メモはまだありません",
-  "secretManager.searchPlaceholder": "名前と説明を検索",
+  "secretManager.searchPlaceholder": "名前・説明・公開フィールドを検索",
   "secretManager.empty": "暗号化ファイルがありません",
   "secretManager.newSecret": "新規シークレット",
   "secretManager.name": "名前",
@@ -2399,7 +2429,7 @@ const ja: TranslationStrings = {
   "secretManager.directory": "ディレクトリ",
   "secretManager.directoryPlaceholder": "例: Production/API",
   "secretManager.directoryHint": "設定したシークレットフォルダからの相対パスです。直下に保存する場合は空欄にします。",
-  "secretManager.metadataHint": "説明は検索用のため、ファイル名と同様に暗号化されず保存されます。秘密の値は含めないでください。",
+  "secretManager.metadataHint": "説明と公開フィールドは検索用のため、ファイル名と同様に暗号化されず保存されます。秘密の値は含めないでください。",
   "secretManager.encryptionRequired": "シークレットを作成するには、設定で暗号化を構成してください。",
   "secretManager.duplicate": "同じ名前のシークレットが既にあります。",
   "secretManager.invalidName": "有効なシークレット名を入力してください。",
@@ -2447,6 +2477,13 @@ const ja: TranslationStrings = {
   "dashboard.undo": "元に戻す",
   "dashboard.redo": "やり直し",
   "dashboard.addWidget": "ウィジェットを追加",
+  "dashboard.widgetFile": "ファイル",
+  "dashboard.widgetMemoList": "メモ一覧",
+  "dashboard.widgetSecretManager": "シークレット管理",
+  "dashboard.widgetKanban": "カンバン",
+  "dashboard.widgetTimeline": "タイムライン",
+  "dashboard.widgetWebEmbed": "Web 埋め込み",
+  "dashboard.widgetBase": "Base",
   "dashboard.noSettings": "このウィジェットタイプに設定はありません",
   "dashboard.settingsAutoSaved": "変更は自動で反映されます。",
   "dashboard.showWidgetHeader": "ダッシュボード上でヘッダーを表示",
@@ -3472,6 +3509,14 @@ const ja: TranslationStrings = {
   "settings.general.showManagementFoldersDescription": "外部ツールが使用するフォルダ（例: LocalLlmHub）をファイルツリーに表示します。",
   "skills.selector.title": "エージェントスキル",
   "okf.selector.title": "OKFナレッジバンドル",
+  "okf.update.title": "GemiHubナレッジを更新",
+  "okf.update.available": "GemiHub OKF {latest} を利用できます。現在のバージョン: {current}",
+  "okf.update.unmanaged": "このGemiHub OKFは自動更新の導入前に作成されています。公式版 {latest} をインストールしますか？",
+  "okf.update.note": "公式ドキュメントはチェックサム検証後に置き換えます。追加した独自ファイルは保持され、次回のPushでDriveへ反映されます。",
+  "okf.update.later": "後で",
+  "okf.update.install": "更新",
+  "okf.update.updating": "更新中…",
+  "okf.update.complete": "GemiHub OKFを{version}へ更新しました。",
   "settings.okf.selectInChat": "どのバンドルを使うかは、チャット入力欄の上のOKFセレクタでチャットごとに選択します。",
 };
 

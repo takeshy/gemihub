@@ -8,6 +8,11 @@ output "cloud_run_url" {
   value       = google_cloud_run_v2_service.app.uri
 }
 
+output "gemihub_okf_bucket" {
+  description = "Private Cloud Storage bucket for managed GemiHub OKF releases"
+  value       = google_storage_bucket.gemihub_okf.name
+}
+
 output "nameservers" {
   description = "Set these nameservers at your domain registrar (Onamae.com)"
   value       = var.manage_dns ? google_dns_managed_zone.primary[0].name_servers : []

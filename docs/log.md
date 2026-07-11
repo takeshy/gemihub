@@ -1,5 +1,13 @@
 # Update Log
 
+## 2026-07-11
+* **Version**: `1.0.0`
+* **New**: Encrypted Secret Manager dashboard widget — create, group, search, unlock, copy, and update `.encrypted` values with searchable descriptions and visible metadata (`features/dashboard.md`, `architecture/encryption.md`).
+* **Update**: Encrypted files can carry optional unencrypted `description` and `publicMetadata`; workflow encryption/read nodes can write and return this metadata (`architecture/encryption.md`, `workflows/workflow_nodes.md`).
+* **Update**: Kanban cards support configurable display fields and a temporary tag filter (`features/dashboard.md`).
+* **i18n**: Localized the core widget palette and corrected Secret Manager search/security guidance in English and Japanese.
+* **New**: Managed GemiHub OKF updates — selecting the GemiHub bundle checks a Cloud Storage `manifest.json`, prompts for confirmation, verifies ZIP and per-file SHA-256 values, then stages the update for Push (`references/OKF.md`, `architecture/infrastructure.md`).
+
 ## 2026-07-09
 * **New**: `.kanban` board definition files — kanban boards are now always defined by a YAML file (widget config is just `{ kanban, cardOrder }`); the config editor creates/imports the file and edits it directly, and legacy inline configs are force-converted when their settings open. `.kanban` is text/yaml everywhere (`features/dashboard.md`).
 * **New**: Dedicated `.kanban` file editor with Display / Edit / Raw modes (live board / definition form side panel / YAML source), mirroring the `.base` editor (`features/dashboard.md`).

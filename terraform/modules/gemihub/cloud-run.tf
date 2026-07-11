@@ -86,6 +86,16 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
+        name  = "GEMIHUB_OKF_BUCKET"
+        value = google_storage_bucket.gemihub_okf.name
+      }
+
+      env {
+        name  = "GEMIHUB_OKF_PREFIX"
+        value = "gemihub-okf"
+      }
+
+      env {
         name  = "HUBWORK_LB_IP"
         value = google_compute_global_address.default.address
       }

@@ -21,6 +21,7 @@ import {
 import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
 import { ChatInput } from "~/components/chat/ChatInput";
+import { OkfUpdateDialog } from "~/components/chat/OkfUpdateDialog";
 import { useI18n } from "~/i18n/context";
 import { shouldUseImageModel, shouldEnableThinking } from "~/utils/keyword-detection";
 import { isImageGenerationModel } from "~/types/settings";
@@ -244,7 +245,17 @@ export function ChatPanel({
     getActiveSkillWorkflows,
   } = useSkills();
   const editorCtx = useEditorContext();
-  const { okfBundles, activeOkfBundleIds, toggleOkfBundle, refreshOkfBundles } = useOkfBundles(settings.okfRoot || "Knowledge");
+  const {
+    okfBundles,
+    activeOkfBundleIds,
+    toggleOkfBundle,
+    refreshOkfBundles,
+    gemihubUpdate,
+    gemihubUpdating,
+    gemihubUpdateError,
+    applyGemihubUpdate,
+    dismissGemihubUpdate,
+  } = useOkfBundles(settings.okfRoot || "Knowledge");
   const [histories, setHistories] = useState<ChatHistoryItem[]>([]);
 
   // Session ID to track which chat session owns the UI; incremented on new/load chat
@@ -1583,6 +1594,16 @@ export function ChatPanel({
           salt={settings.encryption.salt}
           onUnlock={handleCryptoUnlock}
           onCancel={() => { setShowCryptoPrompt(false); setPendingEncryptedContent(null); }}
+        />
+      )}
+
+      {gemihubUpdate && (
+        <OkfUpdateDialog
+          update={gemihubUpdate}
+          updating={gemihubUpdating}
+          error={gemihubUpdateError}
+          onUpdate={() => void applyGemihubUpdate()}
+          onClose={dismissGemihubUpdate}
         />
       )}
     </div>

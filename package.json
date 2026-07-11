@@ -12,7 +12,8 @@
     "precommit": "npm run typecheck && npm run lint && npm run build",
     "test": "tsx --test 'app/**/*.test.ts'",
     "test:sync-diff": "tsx --test app/services/sync-meta.server.test.ts app/services/sync-client-utils.test.ts",
-    "test:parser": "tsx --test app/engine/parser.test.ts"
+    "test:parser": "tsx --test app/engine/parser.test.ts",
+    "okf:package": "node --import tsx scripts/package-gemihub-okf.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.3.0",

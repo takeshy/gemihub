@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Dashboard
-description: Grid dashboard with file/base/kanban/timeline/workflow/web/memo-list widgets, alignment, and interval-driven workflow auto-execution.
+description: Grid dashboard with file/base/kanban/secret-manager/timeline/workflow/web/memo-list widgets, alignment, and interval-driven workflow auto-execution.
 tags:
   - dashboard
 ---
@@ -28,7 +28,7 @@ grid:
   gap: 8
 widgets:
   - id: <uuid>
-    type: file | base | kanban | timeline | workflow | web | memo-list
+    type: file | base | kanban | secret-manager | timeline | workflow | web | memo-list
     layout:
       lg: { x: 0, y: 0, w: 6, h: 3 }
       sm: { x: 0, y: 0, w: 12, h: 3 }   # auto-derived if omitted
@@ -58,12 +58,13 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 | `file` | Open a Drive file — Markdown (preview/wysiwyg/code), text, HTML, EPUB, PDF, image — with per-document memos | Drive file |
 | `base` | Render a view (table/cards/list) of an Obsidian-style `.base` query file | `.base` + folder |
 | `kanban` | Kanban board over a folder of markdown files | `.kanban` definition file + folder |
+| `secret-manager` | Create, search, unlock, copy, and update encrypted values | `.encrypted` files |
 | `timeline` | Personal microblog of dated posts (tags, image attachments, pin/edit) | timeline folder |
 | `workflow` | Run a workflow and render its output | workflow |
 | `web` | Embed an external URL (with embeddability check + fallback card) | URL |
 | `memo-list` | Browse all memo files (filter, paging, newest-memo preview) | `Dashboards/Memos/` |
 
-The current core widget set is registered in `widgets/registry.ts`: `file`, `base`, `kanban`, `timeline`, `workflow`, `web`, `memo-list`. `web` is unchanged from the initial dashboard release; the others are described below.
+The current core widget set is registered in `widgets/registry.ts`: `file`, `base`, `kanban`, `secret-manager`, `timeline`, `workflow`, `web`, `memo-list`. `web` is unchanged from the initial dashboard release; the others are described below.
 
 > **Markdown widget is now the File widget.** The earlier `markdown` widget grew into `file` (same config shape, more formats + memos). Released dashboards persisting `type: markdown` keep working without migration: the registry registers the same `WidgetDef` under both types (`markdown` is hidden from the palette), so the YAML round-trips byte-stable. New widgets are written as `type: file`.
 
@@ -111,7 +112,7 @@ The same memo timeline is also available in the **IDE main viewers** (Markdown /
 
 ### Base widget
 
-The `base` widget renders a **view of an Obsidian-style `.base` file** — a saved query (filters, sort, limit, computed properties) over a folder of Markdown notes — as a **table**, **card grid**, or **list**. It replaces the old `card` / `table` / `file-list` folder widgets (which are auto-converted to Bases, see the note above). Implemented by `widgets/BaseWidget.tsx`; the `.base` parsing/query engine lives in `app/bases/` (`compileBase`, `queryView`, `createGemiHubHost`) and the view renderer in `app/components/bases/BaseViewRenderer.tsx`.
+The `base` widget renders a **view of an Obsidian-style `.base` file** — a saved query (filters, sort, limit, computed properties) over a folder of Markdown notes — as a **table**, **card grid**, or **list**. It replaces the old `card` / `table` / `file-list` folder widgets (which can be converted to Bases from their settings, see the note above). Implemented by `widgets/BaseWidget.tsx`; the `.base` parsing/query engine lives in `app/bases/` (`compileBase`, `queryView`, `createGemiHubHost`) and the view renderer in `app/components/bases/BaseViewRenderer.tsx`.
 
 ![Base widget settings](../../public/images/base_setting.png)
 
@@ -160,6 +161,21 @@ The `memo-list` widget browses every memo file under `Dashboards/Memos/` (config
 - Filter by document file name; 20 rows per page with a pager. Summaries load lazily for the visible page and are cached keyed by `memoPath:modifiedTime`.
 - The source document resolves from the frontmatter `source:` (or by decoding the memo file name); clicking a row opens it in the **IDE main viewer** (`plugin-select-file` event).
 - The list refreshes automatically when memo files change locally or arrive via Pull.
+
+### Secret Manager widget
+
+The `secret-manager` widget manages encrypted values as normal local-first `.encrypted` files. It is implemented by `widgets/SecretManagerWidget.tsx`; path normalization and search helpers live in `secret-manager.ts`.
+
+```yaml
+config:
+  folder: Secrets       # optional root; blank lists all encrypted files
+```
+
+- **Create and organize** — create a named secret in the configured root or a nested directory. The value is encrypted with the keys configured in Settings and written through `writeFileLocal`; it reaches Drive on the next Push. When online, duplicate paths are checked against Drive as well as the local tree.
+- **Browse and search** — `.encrypted` files are grouped by directory in collapsible rows. Search matches the file name, description, and optional visible metadata fields.
+- **Unlock and edit** — opening a secret uses the session-cached private key/password when available, otherwise it prompts for the encryption password. The unlocked value can be copied or edited and re-encrypted in place.
+- **Visible metadata** — descriptions and fields such as an account email are stored unencrypted in the file frontmatter so they can be displayed and searched before unlock. They must never contain a secret value. See `architecture/encryption.md` for the format and security model.
+- **Encryption required** — existing encrypted files can be listed without creating new keys, but creating or updating a secret is disabled until encryption is configured in Settings.
 
 ### Shared building blocks
 
@@ -252,6 +268,8 @@ Adding a kanban widget opens a create-or-import flow in the config editor (name 
 
 The header includes a **New** button that creates a Markdown note in the configured folder with the chosen column status and opens it in the card modal (see below) instead of navigating away. When `showUnspecified` is enabled, cards with empty or unknown status appear in an "Unspecified" column; dropping a card there removes the status key from frontmatter. For backward compatibility, `columns: [todo, doing, done]` is still accepted.
 
+`displayFields` controls the extra properties shown on each card. A string uses the property name as its label; an object can customize the label and, for `file.content`, truncate long text with `maxLength` (for example `{ field: owner, label: Assignee }`). When the source notes contain tags, the header also provides a **temporary tag filter**. This filter is view-only and resets when the widget remounts; it does not modify the `.kanban` definition or dashboard YAML.
+
 File-backed widgets get the cell chrome's Open button; `.kanban` files open in a dedicated editor (`app/components/ide/editors/KanbanFileEditor.tsx`, mirroring the `.base` editor) with a **Display / Edit / Raw** toggle — Display renders the live board (same widget: drag & drop, New Card, card modal; manual order is session-only here), Edit opens a side panel over the shared definition form, Raw edits the YAML source. `.kanban` is treated as `text/yaml` throughout sync/upload/diff. Parsing/serialization live in `data-widget/kanban-file.ts`; widgets, the config editor, and the file editor sync via the `dashboard-kanban-file-updated` event (`data-widget/kanban-events.ts`).
 
 **Card modal.** Clicking a card (or creating one via **New**) opens the shared file modal (`FilePreviewModal`). For Markdown files the modal embeds the full `MarkdownFileEditor` — the same preview / wysiwyg / raw mode toggle as the file widget, frontmatter properties panel included — with local-first saves (IndexedDB + edit history; Drive on Push). Each save fires `dashboard-data-changed` for the file's folder so the board reflects title/status edits immediately. The modal's navigate icon still opens the file's own page. Non-Markdown text and media files keep the read-only preview. This applies to every `FilePreviewModal` call site (kanban, base, file list, timeline, `.base` editor).
@@ -318,7 +336,7 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 - `app/dashboard/DashboardCanvas.tsx`, `GridCell.tsx`, `useGridLayout.ts`, `useBreakpoint.ts` — grid & interaction.
 - `app/dashboard/dashboardFile.ts`, `types.ts` — file I/O & schema.
 - `app/dashboard/widgets/registry.ts`, `WidgetPalette.tsx`, `WidgetRenderer.tsx`, `WidgetSettingsPanel.tsx` — registration & UI.
-- `app/dashboard/widgets/` — `file-widget/` (`FileWidget`, `MemoTimelinePanel`, `HtmlDocumentFrame`, `docKind.ts`), `MemoListWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget` (legacy), `FilePreviewModal`, `base-file-options.ts` (+ their config editors, incl. `AIBaseDialog`).
+- `app/dashboard/widgets/` — `file-widget/` (`FileWidget`, `MemoTimelinePanel`, `HtmlDocumentFrame`, `docKind.ts`), `MemoListWidget`, `SecretManagerWidget`, `BaseWidget`, `TimelineWidget`, `WebWidget`, `UnknownWidget`, `FileListWidget` (legacy), `FilePreviewModal`, `base-file-options.ts` (+ their config editors, incl. `AIBaseDialog`).
 - `app/dashboard/memo/` — memo timeline format, path encoding, text anchoring/highlights, local-first store (+ tests).
 - `app/dashboard/equalizeLayout.ts` — the align (整列) tiling algorithm (+ tests).
 - `app/components/shared/PdfViewer.tsx`, `app/utils/epub.ts` — pdf.js viewer and EPUB→HTML converter shared with the IDE.

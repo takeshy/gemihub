@@ -104,6 +104,9 @@ terraform/
 | `GOOGLE_REDIRECT_URI` | Set directly (`https://<domain>/auth/google/callback`) |
 | `GCP_PROJECT_ID` | Set directly (project ID) |
 | `ROOT_FOLDER_NAME` | Conditionally set when `root_folder_name` differs from default `"gemihub"` |
+| `GEMIHUB_OKF_BUCKET` | Private Cloud Storage bucket containing the managed GemiHub OKF distribution (set by Terraform) |
+| `GEMIHUB_OKF_PREFIX` | Object prefix within the OKF bucket (`gemihub-okf` in production) |
+| `GEMIHUB_OKF_BASE_URL` | Optional public HTTPS fallback for self-hosted deployments without Google application credentials |
 | `STRIPE_SECRET_KEY` | Secret Manager |
 | `STRIPE_WEBHOOK_SECRET` | Secret Manager |
 | `STRIPE_PRICE_ID_LITE` | Secret Manager |
@@ -228,6 +231,29 @@ gcloud run deploy gemini-hub \
   --image=<artifact-registry-image-path>:latest \
   --region=asia-northeast1
 ```
+
+### Publish the managed GemiHub OKF bundle
+
+The latest `docs/log.md` release entry must contain a `**Version**` item with a semantic version. Package the canonical OKF documents (the non-OKF `docs/examples/` subtree is excluded):
+
+```bash
+npm run okf:package
+```
+
+This creates `dist/gemihub-okf/manifest.json` and an immutable `dist/gemihub-okf/releases/<version>/gemihub-okf.zip`. Upload the release first and the mutable manifest last so clients never observe a manifest pointing to an incomplete release:
+
+```bash
+gcloud storage cp --recursive --no-clobber \
+  dist/gemihub-okf/releases/<version> \
+  gs://<okf-bucket>/gemihub-okf/releases/
+
+gcloud storage cp \
+  --cache-control=no-store \
+  dist/gemihub-okf/manifest.json \
+  gs://<okf-bucket>/gemihub-okf/manifest.json
+```
+
+Terraform creates the private `${project_id}-gemihub-okf` bucket with object versioning, grants the Cloud Run service account `roles/storage.objectViewer`, and configures `GEMIHUB_OKF_BUCKET` / `GEMIHUB_OKF_PREFIX`. App clients access objects only through the authenticated `/api/okf/gemihub` proxy; the bucket has public access prevention enforced.
 
 ### Check status
 

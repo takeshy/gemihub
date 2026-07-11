@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { listWidgetDefs } from "./widgets/registry";
 import type { WidgetDef } from "./types";
 import { useI18n } from "~/i18n/context";
+import type { TranslationStrings } from "~/i18n/translations";
 
 interface WidgetPaletteProps {
   onSelect: (def: WidgetDef) => void;
@@ -15,6 +16,16 @@ interface WidgetPaletteProps {
  */
 /** Leading palette entries, in display order; remaining widgets keep their order after these. */
 const PALETTE_ORDER = ["base", "file", "kanban"];
+const WIDGET_LABEL_KEYS: Partial<Record<string, keyof TranslationStrings>> = {
+  file: "dashboard.widgetFile",
+  "memo-list": "dashboard.widgetMemoList",
+  "secret-manager": "dashboard.widgetSecretManager",
+  kanban: "dashboard.widgetKanban",
+  timeline: "dashboard.widgetTimeline",
+  workflow: "dashboard.widgetWorkflow",
+  web: "dashboard.widgetWebEmbed",
+  base: "dashboard.widgetBase",
+};
 const paletteRank = (type: string) => {
   const i = PALETTE_ORDER.indexOf(type);
   return i === -1 ? PALETTE_ORDER.length : i;
@@ -52,20 +63,23 @@ export function WidgetPalette({ onSelect, onClose }: WidgetPaletteProps) {
         </div>
         <div className="overflow-auto p-4">
           <div className="grid grid-cols-2 gap-3">
-            {visibleDefs.map((def) => (
-              <button
-                key={def.type}
-                onClick={() => selectDef(def)}
-                className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              >
-                <div className="text-gray-600 dark:text-gray-400">
-                  {def.icon}
-                </div>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {def.label}
-                </span>
-              </button>
-            ))}
+            {visibleDefs.map((def) => {
+              const labelKey = WIDGET_LABEL_KEYS[def.type];
+              return (
+                <button
+                  key={def.type}
+                  onClick={() => selectDef(def)}
+                  className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                >
+                  <div className="text-gray-600 dark:text-gray-400">
+                    {def.icon}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {labelKey ? t(labelKey) : def.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

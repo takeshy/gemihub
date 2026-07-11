@@ -13,6 +13,7 @@ locals {
     "firestore.googleapis.com",
     "certificatemanager.googleapis.com",
     "cloudscheduler.googleapis.com",
+    "storage.googleapis.com",
   ]
 }
 

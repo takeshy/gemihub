@@ -7,6 +7,7 @@
 # React Router
 /.react-router/
 /build/
+/dist/
 
 # Server-side temp data
 /data/

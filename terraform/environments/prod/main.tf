@@ -85,6 +85,11 @@ output "cloud_run_url" {
   value       = module.gemihub.cloud_run_url
 }
 
+output "gemihub_okf_bucket" {
+  description = "Private Cloud Storage bucket for managed GemiHub OKF releases"
+  value       = module.gemihub.gemihub_okf_bucket
+}
+
 output "nameservers" {
   description = "Set these nameservers at your domain registrar"
   value       = module.gemihub.nameservers
