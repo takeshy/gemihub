@@ -14,7 +14,7 @@ resource "google_bigquery_table" "v_requests" {
   table_id   = "v_requests"
 
   view {
-    query = <<-SQL
+    query          = <<-SQL
       SELECT
         timestamp,
         jsonPayload.requestId   AS request_id,
@@ -45,7 +45,7 @@ resource "google_bigquery_table" "v_daily_summary" {
   table_id   = "v_daily_summary"
 
   view {
-    query = <<-SQL
+    query          = <<-SQL
       SELECT
         DATE(timestamp, 'Asia/Tokyo') AS date,
         COUNT(DISTINCT jsonPayload.userId) AS dau,
@@ -78,7 +78,7 @@ resource "google_bigquery_table" "v_feature_usage" {
   table_id   = "v_feature_usage"
 
   view {
-    query = <<-SQL
+    query          = <<-SQL
       SELECT
         DATE(timestamp, 'Asia/Tokyo') AS date,
         jsonPayload.route  AS route,
@@ -109,7 +109,7 @@ resource "google_bigquery_table" "v_performance" {
   table_id   = "v_performance"
 
   view {
-    query = <<-SQL
+    query          = <<-SQL
       SELECT
         DATE(timestamp, 'Asia/Tokyo') AS date,
         jsonPayload.route  AS route,
@@ -142,7 +142,7 @@ resource "google_bigquery_table" "v_errors" {
   table_id   = "v_errors"
 
   view {
-    query = <<-SQL
+    query          = <<-SQL
       SELECT
         timestamp,
         jsonPayload.requestId  AS request_id,
