@@ -2,6 +2,7 @@
 // The .dashboard YAML schema (version 1)
 
 import type { ReactNode, FC } from "react";
+import type { EncryptionSettings } from "~/types/settings";
 
 export type Breakpoint = "lg" | "sm";
 
@@ -55,6 +56,8 @@ export interface WidgetContext {
   dashboardFileId?: string;
   /** The .dashboard file path (stable sidecar cache scope, survives fileId changes). */
   dashboardFileName?: string;
+  /** Current encryption settings supplied by the dashboard host. */
+  encryptionSettings?: EncryptionSettings;
   /**
    * Persist a change to this widget's config from the widget itself — works in
    * view mode too (not just the settings panel). Used e.g. by the markdown

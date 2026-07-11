@@ -337,6 +337,7 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
         onChange={handleCommit}
         dashboardFileId={fileId ?? undefined}
         dashboardFileName={fileName ?? undefined}
+        encryptionSettings={settings.encryption}
         toolbarLeft={
           <>
             <LayoutDashboard size={14} className="text-gray-400" />

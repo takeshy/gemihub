@@ -3,6 +3,7 @@ import { ExternalLink, GripVertical, Maximize2, Minimize2, Settings, Trash2 } fr
 import { useI18n } from "~/i18n/context";
 import { useEditorContext } from "~/contexts/EditorContext";
 import type { Widget, LayoutPos, GridLayout, WidgetContext } from "./types";
+import type { EncryptionSettings } from "~/types/settings";
 import WidgetRenderer from "./WidgetRenderer";
 import { getWidgetDef } from "./widgets/registry";
 
@@ -31,6 +32,7 @@ interface GridCellProps {
   dashboardFileId?: string;
   /** The .dashboard file path (stable sidecar cache scope). */
   dashboardFileName?: string;
+  encryptionSettings?: EncryptionSettings;
 }
 
 export default function GridCell({
@@ -51,6 +53,7 @@ export default function GridCell({
   onConfigChange,
   dashboardFileId,
   dashboardFileName,
+  encryptionSettings,
 }: GridCellProps) {
   const { t } = useI18n();
   const { fileList } = useEditorContext();
@@ -259,6 +262,7 @@ export default function GridCell({
     widgetId: widget.id,
     dashboardFileId,
     dashboardFileName,
+    encryptionSettings,
     onConfigChange,
   };
 

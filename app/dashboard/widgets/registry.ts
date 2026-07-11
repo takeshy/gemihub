@@ -3,7 +3,7 @@
 // via the registerWidget function (extensibility point for P1+).
 
 import React from "react";
-import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database, MessageCircle, NotebookPen } from "lucide-react";
+import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database, MessageCircle, NotebookPen, LockKeyhole } from "lucide-react";
 import type { WidgetDef } from "../types";
 import FileWidget from "./file-widget/FileWidget";
 import MemoListWidget from "./MemoListWidget";
@@ -19,6 +19,8 @@ import WorkflowWidget from "../data-widget/WorkflowWidget";
 import KanbanWidget from "../data-widget/KanbanWidget";
 import { WorkflowConfigEditor } from "../data-widget/WorkflowConfigEditor";
 import { KanbanConfigEditor } from "../data-widget/KanbanConfigEditor";
+import SecretManagerWidget from "./SecretManagerWidget";
+import { SecretManagerConfigEditor } from "./config-editors/SecretManagerConfigEditor";
 
 const registry = new Map<string, WidgetDef>();
 
@@ -92,6 +94,19 @@ registerWidget({
   defaultConfig: {},
   render: () => React.createElement(MemoListWidget),
   defaultSize: { w: 4, h: 5 },
+});
+
+registerWidget({
+  type: "secret-manager",
+  label: "Secret Manager",
+  icon: React.createElement(LockKeyhole, { size: 16 }),
+  defaultConfig: { folder: "" },
+  render: (config, ctx) => React.createElement(SecretManagerWidget, {
+    config,
+    encryptionSettings: ctx.encryptionSettings,
+  }),
+  defaultSize: { w: 5, h: 5 },
+  ConfigEditor: SecretManagerConfigEditor,
 });
 
 registerWidget({

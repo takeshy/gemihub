@@ -8,7 +8,9 @@ import GridCell from "./GridCell";
 import { WidgetPalette } from "./WidgetPalette";
 import { WidgetSettingsPanel } from "./WidgetSettingsPanel";
 import { getWidgetDef } from "./widgets/registry";
+import { isWidgetConfigured } from "./widgetConfigured";
 import type { DashboardData, Widget, WidgetDef } from "./types";
+import type { EncryptionSettings } from "~/types/settings";
 
 interface DashboardCanvasProps {
   data: DashboardData;
@@ -22,39 +24,7 @@ interface DashboardCanvasProps {
   dashboardFileId?: string;
   /** The .dashboard file path (stable sidecar cache scope). */
   dashboardFileName?: string;
-}
-
-/**
- * Whether a widget has its primary selection set. Used to discard a just-added
- * widget that the user closed without choosing anything. Unknown/custom widget
- * types have no single required field, so they are kept.
- */
-function isWidgetConfigured(widget: Widget): boolean {
-  const c = widget.config ?? {};
-  const str = (key: string): string => {
-    const value = c[key];
-    return typeof value === "string" ? value.trim() : "";
-  };
-
-  switch (widget.type) {
-    case "file":
-    case "markdown":
-      return str("path").length > 0;
-    case "timeline":
-      return str("name").length > 0 || str("path").length > 0;
-    case "web":
-      return str("url").length > 0;
-    case "workflow":
-      return str("workflow").length > 0;
-    case "file-list":
-    case "card":
-    case "table":
-      return true;
-    case "kanban":
-      return str("folder").length > 0 && str("title").length > 0;
-    default:
-      return true;
-  }
+  encryptionSettings?: EncryptionSettings;
 }
 
 /**
@@ -72,6 +42,7 @@ export function DashboardCanvas({
   toolbarRight,
   dashboardFileId,
   dashboardFileName,
+  encryptionSettings,
 }: DashboardCanvasProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -410,6 +381,7 @@ export function DashboardCanvas({
                 onConfigChange={(config) => handleUpdateWidgetConfig(widget.id, config)}
                 dashboardFileId={dashboardFileId}
                 dashboardFileName={dashboardFileName}
+                encryptionSettings={encryptionSettings}
               />
             ))
           )}

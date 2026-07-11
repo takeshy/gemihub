@@ -71,6 +71,33 @@ export interface TranslationStrings {
   "memo.countUnit": string;
   "memoList.filterPlaceholder": string;
   "memoList.empty": string;
+  "secretManager.searchPlaceholder": string;
+  "secretManager.empty": string;
+  "secretManager.newSecret": string;
+  "secretManager.name": string;
+  "secretManager.namePlaceholder": string;
+  "secretManager.description": string;
+  "secretManager.descriptionPlaceholder": string;
+  "secretManager.value": string;
+  "secretManager.valuePlaceholder": string;
+  "secretManager.create": string;
+  "secretManager.editDescription": string;
+  "secretManager.directory": string;
+  "secretManager.directoryPlaceholder": string;
+  "secretManager.directoryHint": string;
+  "secretManager.metadataHint": string;
+  "secretManager.encryptionRequired": string;
+  "secretManager.duplicate": string;
+  "secretManager.invalidName": string;
+  "secretManager.createFailed": string;
+  "secretManager.updateFailed": string;
+  "secretManager.folder": string;
+  "secretManager.folderHint": string;
+  "secretManager.publicMetadata": string;
+  "secretManager.addField": string;
+  "secretManager.fieldName": string;
+  "secretManager.fieldValue": string;
+  "secretManager.openFailed": string;
   "dashboard.alignHorizontal": string;
   "dashboard.alignVertical": string;
   "mainViewer.diff": string;
@@ -1200,6 +1227,33 @@ const en: TranslationStrings = {
   "memo.countUnit": "memos",
   "memoList.filterPlaceholder": "Filter by file name",
   "memoList.empty": "No memos yet",
+  "secretManager.searchPlaceholder": "Search names and descriptions",
+  "secretManager.empty": "No encrypted files found",
+  "secretManager.newSecret": "New secret",
+  "secretManager.name": "Name",
+  "secretManager.namePlaceholder": "e.g. Production API token",
+  "secretManager.description": "Description",
+  "secretManager.descriptionPlaceholder": "What this secret is used for",
+  "secretManager.value": "Secret value",
+  "secretManager.valuePlaceholder": "Enter the value to encrypt",
+  "secretManager.create": "Create secret",
+  "secretManager.editDescription": "Edit description",
+  "secretManager.directory": "Directory",
+  "secretManager.directoryPlaceholder": "e.g. Production/API",
+  "secretManager.directoryHint": "Relative to the configured secrets folder. Leave blank to use its root.",
+  "secretManager.metadataHint": "Descriptions are searchable and stored unencrypted, like file names. Do not include secret values.",
+  "secretManager.encryptionRequired": "Configure encryption in Settings before creating secrets.",
+  "secretManager.duplicate": "A secret with this name already exists.",
+  "secretManager.invalidName": "Enter a valid secret name.",
+  "secretManager.createFailed": "Failed to create the secret.",
+  "secretManager.updateFailed": "Failed to update the secret.",
+  "secretManager.folder": "Secrets folder",
+  "secretManager.folderHint": "Leave blank to list all encrypted files. New secrets are created in this folder.",
+  "secretManager.publicMetadata": "Visible fields",
+  "secretManager.addField": "Add field",
+  "secretManager.fieldName": "Field (e.g. email)",
+  "secretManager.fieldValue": "Visible value",
+  "secretManager.openFailed": "Failed to open the encrypted file.",
   "dashboard.alignHorizontal": "Arrange in columns",
   "dashboard.alignVertical": "Arrange in rows",
   "mainViewer.raw": "Raw",
@@ -2331,6 +2385,33 @@ const ja: TranslationStrings = {
   "memo.countUnit": "件のメモ",
   "memoList.filterPlaceholder": "ファイル名で絞り込み",
   "memoList.empty": "メモはまだありません",
+  "secretManager.searchPlaceholder": "名前と説明を検索",
+  "secretManager.empty": "暗号化ファイルがありません",
+  "secretManager.newSecret": "新規シークレット",
+  "secretManager.name": "名前",
+  "secretManager.namePlaceholder": "例: 本番APIトークン",
+  "secretManager.description": "説明",
+  "secretManager.descriptionPlaceholder": "このシークレットの用途",
+  "secretManager.value": "シークレット値",
+  "secretManager.valuePlaceholder": "暗号化する値を入力",
+  "secretManager.create": "シークレットを作成",
+  "secretManager.editDescription": "説明を編集",
+  "secretManager.directory": "ディレクトリ",
+  "secretManager.directoryPlaceholder": "例: Production/API",
+  "secretManager.directoryHint": "設定したシークレットフォルダからの相対パスです。直下に保存する場合は空欄にします。",
+  "secretManager.metadataHint": "説明は検索用のため、ファイル名と同様に暗号化されず保存されます。秘密の値は含めないでください。",
+  "secretManager.encryptionRequired": "シークレットを作成するには、設定で暗号化を構成してください。",
+  "secretManager.duplicate": "同じ名前のシークレットが既にあります。",
+  "secretManager.invalidName": "有効なシークレット名を入力してください。",
+  "secretManager.createFailed": "シークレットを作成できませんでした。",
+  "secretManager.updateFailed": "シークレットを更新できませんでした。",
+  "secretManager.folder": "シークレットフォルダ",
+  "secretManager.folderHint": "空欄の場合はすべての暗号化ファイルを表示します。新規シークレットはこのフォルダに作成されます。",
+  "secretManager.publicMetadata": "公開フィールド",
+  "secretManager.addField": "フィールドを追加",
+  "secretManager.fieldName": "項目名（例: email）",
+  "secretManager.fieldValue": "復号前に表示する値",
+  "secretManager.openFailed": "暗号化ファイルを開けませんでした。",
   "dashboard.alignHorizontal": "横に整列",
   "dashboard.alignVertical": "縦に整列",
   "mainViewer.raw": "Raw",

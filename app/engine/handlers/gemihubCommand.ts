@@ -17,6 +17,7 @@ export async function handleGemihubCommandNode(
   const command = replaceVariables(node.properties["command"] || "", context);
   const pathRaw = node.properties["path"] || "";
   const text = replaceVariables(node.properties["text"] || "", context);
+  const metadataRaw = replaceVariables(node.properties["metadata"] || "", context);
   const saveTo = node.properties["saveTo"];
 
   if (!command) throw new Error("gemihub-command node missing 'command' property");
@@ -28,6 +29,31 @@ export async function handleGemihubCommandNode(
 
   switch (command) {
     case "encrypt": {
+      const publicMetadata: Record<string, string> = {};
+      if (metadataRaw.trim()) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(metadataRaw);
+        } catch {
+          throw new Error("gemihub-command 'encrypt' metadata must be valid JSON");
+        }
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("gemihub-command 'encrypt' metadata must be a JSON object");
+        }
+        for (const [key, value] of Object.entries(parsed)) {
+          if (typeof value !== "string") {
+            throw new Error("gemihub-command 'encrypt' metadata values must be strings");
+          }
+          const normalizedKey = key.trim();
+          if (
+            normalizedKey &&
+            !["description", "__proto__", "prototype", "constructor"].includes(normalizedKey)
+          ) {
+            publicMetadata[normalizedKey] = value;
+          }
+        }
+      }
+
       const file = await resolveExistingFile(pathRaw, context, serviceContext);
       const settings = await getSettings(accessToken, folderId);
       if (!settings.encryption.enabled || !settings.encryption.publicKey) {
@@ -58,6 +84,7 @@ export async function handleGemihubCommandNode(
         settings.encryption.publicKey,
         settings.encryption.encryptedPrivateKey,
         settings.encryption.salt,
+        { description: text.trim(), publicMetadata },
       );
       await driveService.updateFile(accessToken, file.id, encrypted, undefined, { signal: serviceContext.abortSignal });
       const renamedFile = await driveService.renameFile(accessToken, file.id, file.name + ".encrypted", { signal: serviceContext.abortSignal });

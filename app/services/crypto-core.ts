@@ -243,15 +243,84 @@ export async function verifyPassword(
 /**
  * Wrap encrypted data with YAML frontmatter format
  */
-export function wrapEncryptedFile(data: string, key: string, salt: string): string {
-  return `---\nencrypted: true\nkey: ${key}\nsalt: ${salt}\n---\n${data}`;
+export interface EncryptedFileMetadata {
+  /** Searchable metadata. Stored outside the ciphertext, like the file name. */
+  description?: string;
+  publicMetadata?: Record<string, string>;
+}
+
+function descriptionLine(description: string): string {
+  return `description: ${JSON.stringify(description)}`;
+}
+
+function normalizePublicMetadata(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: Record<string, string> = {};
+  for (const [key, entryValue] of Object.entries(value)) {
+    const normalizedKey = key.trim();
+    if (
+      !normalizedKey ||
+      typeof entryValue !== "string" ||
+      ["description", "__proto__", "prototype", "constructor"].includes(normalizedKey)
+    ) continue;
+    result[normalizedKey] = entryValue;
+  }
+  return result;
+}
+
+function publicMetadataLine(metadata: Record<string, string>): string {
+  return `publicMetadata: ${JSON.stringify(metadata)}`;
+}
+
+function parseDescription(frontmatter: string): string {
+  const match = frontmatter.match(/^description:\s*(.*)$/m);
+  if (!match) return "";
+  const raw = match[1].trim();
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "string" ? parsed : "";
+  } catch {
+    // Accept manually-authored, unquoted descriptions for compatibility.
+    return raw;
+  }
+}
+
+function parsePublicMetadata(frontmatter: string): Record<string, string> {
+  const match = frontmatter.match(/^publicMetadata:\s*(.*)$/m);
+  if (!match) return {};
+  try {
+    return normalizePublicMetadata(JSON.parse(match[1].trim()));
+  } catch {
+    return {};
+  }
+}
+
+export function wrapEncryptedFile(
+  data: string,
+  key: string,
+  salt: string,
+  metadata: EncryptedFileMetadata = {},
+): string {
+  const description = metadata.description?.trim() ?? "";
+  const descriptionField = description ? `${descriptionLine(description)}\n` : "";
+  const publicMetadata = normalizePublicMetadata(metadata.publicMetadata);
+  const publicMetadataField = Object.keys(publicMetadata).length > 0
+    ? `${publicMetadataLine(publicMetadata)}\n`
+    : "";
+  return `---\nencrypted: true\n${descriptionField}${publicMetadataField}key: ${key}\nsalt: ${salt}\n---\n${data}`;
 }
 
 /**
  * Extract encryption info from YAML frontmatter format
  * Handles both \n and \r\n line endings
  */
-export function unwrapEncryptedFile(content: string): { data: string; key: string; salt: string } | null {
+export function unwrapEncryptedFile(content: string): {
+  data: string;
+  key: string;
+  salt: string;
+  description: string;
+  publicMetadata: Record<string, string>;
+} | null {
   // Normalize line endings to \n for reliable parsing
   const normalized = content.replace(/\r\n/g, "\n");
   const frontmatter = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -265,7 +334,46 @@ export function unwrapEncryptedFile(content: string): { data: string; key: strin
     key: keyMatch[1].trim(),
     salt: saltMatch[1].trim(),
     data: frontmatter[2].trim(),
+    description: parseDescription(frontmatter[1]),
+    publicMetadata: parsePublicMetadata(frontmatter[1]),
   };
+}
+
+export function getEncryptedFileMetadata(content: string): EncryptedFileMetadata {
+  const parsed = unwrapEncryptedFile(content);
+  return parsed
+    ? { description: parsed.description, publicMetadata: parsed.publicMetadata }
+    : {};
+}
+
+export function getEncryptedFileDescription(content: string): string {
+  return unwrapEncryptedFile(content)?.description ?? "";
+}
+
+/** Update searchable metadata without decrypting or changing the ciphertext. */
+export function setEncryptedFileMetadata(content: string, metadata: EncryptedFileMetadata): string {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match || !/^encrypted:\s*true\s*$/m.test(match[1])) {
+    throw new Error("Invalid encrypted file format");
+  }
+
+  const lines = match[1].split("\n").filter((line) =>
+    !/^description\s*:/.test(line) && !/^publicMetadata\s*:/.test(line)
+  );
+  const additions: string[] = [];
+  const description = metadata.description?.trim() ?? "";
+  if (description) additions.push(descriptionLine(description));
+  const publicMetadata = normalizePublicMetadata(metadata.publicMetadata);
+  if (Object.keys(publicMetadata).length > 0) additions.push(publicMetadataLine(publicMetadata));
+  const encryptedIndex = lines.findIndex((line) => /^encrypted\s*:/.test(line));
+  lines.splice(encryptedIndex + 1, 0, ...additions);
+  return `---\n${lines.join("\n")}\n---\n${match[2]}`;
+}
+
+export function setEncryptedFileDescription(content: string, description: string): string {
+  const metadata = getEncryptedFileMetadata(content);
+  return setEncryptedFileMetadata(content, { ...metadata, description });
 }
 
 /**
@@ -276,13 +384,14 @@ export async function encryptFileContent(
   content: string,
   publicKey: string,
   encryptedPrivateKey: string,
-  salt: string
+  salt: string,
+  metadata: EncryptedFileMetadata = {},
 ): Promise<string> {
   if (isEncryptedFile(content)) {
     return content;
   }
   const encryptedData = await encryptData(content, publicKey);
-  return wrapEncryptedFile(encryptedData, encryptedPrivateKey, salt);
+  return wrapEncryptedFile(encryptedData, encryptedPrivateKey, salt, metadata);
 }
 
 /**

@@ -12,6 +12,7 @@ import {
 } from "~/dashboard/dashboardFile";
 import { Popover } from "~/dashboard/data-widget/ViewControls";
 import type { DashboardData } from "~/dashboard/types";
+import type { UserSettings } from "~/types/settings";
 
 type ViewMode = "display" | "raw";
 
@@ -24,6 +25,7 @@ export function DashboardFileEditor({
   fileId,
   fileName,
   initialContent,
+  settings,
   saveToCache,
   onDiffClick,
   onHistoryClick,
@@ -31,6 +33,7 @@ export function DashboardFileEditor({
   fileId: string;
   fileName: string;
   initialContent: string;
+  settings: UserSettings;
   saveToCache: (content: string) => Promise<void>;
   onDiffClick?: () => void;
   onHistoryClick?: () => void;
@@ -155,6 +158,7 @@ export function DashboardFileEditor({
         onChange={handleCanvasChange}
         dashboardFileId={fileId}
         dashboardFileName={fileName}
+        encryptionSettings={settings.encryption}
         toolbarLeft={
           <>
             <LayoutDashboard size={14} className="text-gray-400" />

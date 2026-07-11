@@ -82,6 +82,7 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
       return [
         { key: "path", label: "Path", required: true, placeholder: "notes/input.md" },
         { key: "saveTo", label: "Save To", required: true, placeholder: "fileContent" },
+        { key: "saveMetadataTo", label: "Save Public Metadata To", required: false, placeholder: "loginMetadata" },
       ];
     case "drive-search":
       return [
@@ -194,7 +195,8 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
       return [
         { key: "command", label: "Command", required: true, options: ["encrypt", "publish", "unpublish", "duplicate", "convert-to-pdf", "convert-to-html", "rename"] },
         { key: "path", label: "Path", required: true, placeholder: "notes/file.md" },
-        { key: "text", label: "Text", required: false, placeholder: "new-name.md (for rename)" },
+        { key: "text", label: "Text / Description", required: false, placeholder: "Description for encrypt; new name for rename" },
+        { key: "metadata", label: "Public Metadata (JSON)", required: false, multiline: true, placeholder: "{\"email\":\"ops@example.com\",\"url\":\"https://example.com/login\"}" },
         { key: "saveTo", label: "Save To", required: false, placeholder: "result" },
       ];
     // Hubwork nodes (paid feature)

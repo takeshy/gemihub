@@ -214,6 +214,7 @@ export function TextBasedViewer({
         fileId={fileId}
         fileName={name}
         initialContent={content}
+        settings={settings}
         saveToCache={saveToCache}
         onDiffClick={handleDiffClick}
         onHistoryClick={handleHistoryClick}

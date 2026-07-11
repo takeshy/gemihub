@@ -86,7 +86,7 @@ async function writeDefinitionFile(def: KanbanBoardDefinition, widgetId: string)
   return candidate;
 }
 
-export function KanbanConfigEditor({ config, onChange, widgetId }: ConfigEditorProps) {
+export function KanbanConfigEditor({ config, onChange, setDoneAction, widgetId }: ConfigEditorProps) {
   const { t } = useI18n();
   const cfg = useMemo(() => (config ?? {}) as KanbanWidgetConfig, [config]);
   const kanbanPath = (cfg.kanban ?? "").trim();
@@ -161,24 +161,31 @@ export function KanbanConfigEditor({ config, onChange, widgetId }: ConfigEditorP
   // Form changes write back to the .kanban file (debounced, flush on unmount).
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pendingRef = useRef<KanbanBoardDefinition | null>(null);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const persist = useCallback(
-    async (def: KanbanBoardDefinition) => {
-      if (!kanbanPath) return;
-      setSaving(true);
-      try {
-        await writeFileLocal(
-          kanbanPath,
-          serializeKanbanFile(def),
-          fileId ? { existingFileId: fileId } : undefined,
-        );
-        window.dispatchEvent(
-          new CustomEvent(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, {
-            detail: { fileId, fileName: kanbanPath },
-          }),
-        );
-      } finally {
-        setSaving(false);
-      }
+    (def: KanbanBoardDefinition): Promise<void> => {
+      if (!kanbanPath) return Promise.resolve();
+      // Serialize writes so an earlier, slower autosave can never overwrite a
+      // newer edit. The Done action below awaits this same chain.
+      const save = saveChainRef.current.catch(() => undefined).then(async () => {
+        setSaving(true);
+        try {
+          await writeFileLocal(
+            kanbanPath,
+            serializeKanbanFile(def),
+            fileId ? { existingFileId: fileId } : undefined,
+          );
+          window.dispatchEvent(
+            new CustomEvent(DASHBOARD_KANBAN_FILE_UPDATED_EVENT, {
+              detail: { fileId, fileName: kanbanPath },
+            }),
+          );
+        } finally {
+          setSaving(false);
+        }
+      });
+      saveChainRef.current = save;
+      return save;
     },
     [kanbanPath, fileId],
   );
@@ -196,6 +203,28 @@ export function KanbanConfigEditor({ config, onChange, widgetId }: ConfigEditorP
     },
     [persist],
   );
+
+  const flushPending = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+    }
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (pending) {
+      await persist(pending);
+    } else {
+      await saveChainRef.current;
+    }
+  }, [persist]);
+
+  // The panel's Done button must not close (and potentially be followed by a
+  // reload/navigation) until the last definition edit is safely in the cache.
+  useEffect(() => {
+    if (!setDoneAction || !kanbanPath) return;
+    setDoneAction(flushPending);
+    return () => setDoneAction(null);
+  }, [flushPending, kanbanPath, setDoneAction]);
 
   useEffect(
     () => () => {

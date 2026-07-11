@@ -236,6 +236,7 @@ Write/create file on Drive.
 Read file from Drive.
 - **path** (required): File name or Drive file ID
 - **saveTo** (required): Variable for content (string)
+- **saveMetadataTo** (optional): Variable for unencrypted public metadata JSON. For encrypted files this contains \`description\` and fields such as \`email\`.
 
 #### drive-search
 Search files on Drive.
@@ -518,11 +519,12 @@ Example — Base64 encode:
 Execute GemiHub file operations (encrypt, publish, rename, etc.).
 - **command** (required): Command name: "encrypt", "publish", "unpublish", "duplicate", "convert-to-pdf", "convert-to-html", "rename"
 - **path** (required): File path, Drive file ID, or \`{{variable}}\`
-- **text** (optional): Additional text argument (e.g., new name for "rename", custom name for "duplicate")
+- **text** (optional): Additional text argument (description for "encrypt", new name for "rename", custom name for "duplicate")
+- **metadata** (optional, encrypt only): JSON object of searchable, unencrypted string fields such as \`{"email":"ops@example.com"}\`
 - **saveTo** (optional): Variable for result
 
 Command results:
-- encrypt → new file name (with .encrypted suffix)
+- encrypt → new file name (with .encrypted suffix); optional \`text\` is stored as its searchable description
 - publish → public URL
 - unpublish → "ok"
 - duplicate → new file name

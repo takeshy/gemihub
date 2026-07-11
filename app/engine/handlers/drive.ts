@@ -4,7 +4,7 @@ import { isBinaryMimeType, resolveExistingFile, readBinaryFileAsExplorerData } f
 import * as driveService from "~/services/google-drive.server";
 import { saveEdit } from "~/services/edit-history.server";
 import { removeFileFromMeta, upsertFileInMeta } from "~/services/sync-meta.server";
-import { isEncryptedFile, decryptFileContent } from "~/services/crypto-core";
+import { isEncryptedFile, decryptFileContent, unwrapEncryptedFile } from "~/services/crypto-core";
 
 async function decryptIfEncrypted(
   content: string,
@@ -225,6 +225,7 @@ export async function handleDriveReadNode(
 ): Promise<void> {
   const pathRaw = node.properties["path"] || "";
   const saveTo = node.properties["saveTo"];
+  const saveMetadataTo = node.properties["saveMetadataTo"];
 
   if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
   if (!pathRaw.trim()) throw new Error("drive-read node missing 'path' property");
@@ -247,6 +248,13 @@ export async function handleDriveReadNode(
     const content = await driveService.readFile(accessToken, file.id, {
       signal: serviceContext.abortSignal,
     });
+    if (saveMetadataTo) {
+      const metadata = unwrapEncryptedFile(content);
+      context.variables.set(saveMetadataTo, JSON.stringify(metadata
+        ? { ...metadata.publicMetadata, description: metadata.description }
+        : {}
+      ));
+    }
     context.variables.set(saveTo, await decryptIfEncrypted(content, file.name, promptCallbacks));
   }
 }

@@ -10,6 +10,7 @@ import {
   decryptPrivateKey,
   decryptWithPrivateKey,
   encryptFileContent,
+  getEncryptedFileMetadata,
   isEncryptedFile,
   unwrapEncryptedFile,
 } from "~/services/crypto-core";
@@ -43,6 +44,10 @@ export function EncryptedFileViewer({
 
   // Is the raw content actually encrypted, or plain text with .encrypted extension?
   const contentIsEncrypted = isEncryptedFile(encryptedContent);
+  const encryptedMetadata = useMemo(
+    () => getEncryptedFileMetadata(encryptedContent),
+    [encryptedContent],
+  );
 
   const [password, setPassword] = useState("");
   // If content is plain text, skip password — go straight to editor
@@ -242,7 +247,8 @@ export function EncryptedFileViewer({
           plaintext,
           encryptionSettings.publicKey,
           encryptionSettings.encryptedPrivateKey,
-          encryptionSettings.salt
+          encryptionSettings.salt,
+          encryptedMetadata,
         );
         await saveToCache(reEncrypted);
         prevContentRef.current = reEncrypted;
@@ -250,7 +256,7 @@ export function EncryptedFileViewer({
         console.error("[EncryptedFileViewer] auto-save encrypt failed:", e);
       }
     });
-  }, [encryptionSettings, saveToCache]);
+  }, [encryptionSettings, encryptedMetadata, saveToCache]);
 
   // Debounced auto-save effect (only for decrypted text content, not binary)
   useEffect(() => {
@@ -297,7 +303,8 @@ export function EncryptedFileViewer({
         editedContent,
         encryptionSettings.publicKey,
         encryptionSettings.encryptedPrivateKey,
-        encryptionSettings.salt
+        encryptionSettings.salt,
+        encryptedMetadata,
       );
       await fetch("/api/drive/temp", {
         method: "POST",
@@ -310,7 +317,7 @@ export function EncryptedFileViewer({
     } finally {
       setUploading(false);
     }
-  }, [editedContent, fileName, fileId, encryptionSettings, saveToCache]);
+  }, [editedContent, fileName, fileId, encryptionSettings, encryptedMetadata, saveToCache]);
 
   const handleTempDownload = useCallback(async () => {
     try {
@@ -362,11 +369,12 @@ export function EncryptedFileViewer({
       tempDiffData.tempContent,
       encryptionSettings.publicKey,
       encryptionSettings.encryptedPrivateKey,
-      encryptionSettings.salt
+      encryptionSettings.salt,
+      encryptedMetadata,
     );
     await saveToCache(reEncrypted);
     setTempDiffData(null);
-  }, [tempDiffData, encryptionSettings, saveToCache]);
+  }, [tempDiffData, encryptionSettings, encryptedMetadata, saveToCache]);
 
   // Permanently decrypt: send plaintext to server, remove .encrypted extension
   const handlePermanentDecrypt = useCallback(async () => {

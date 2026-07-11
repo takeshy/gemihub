@@ -5,7 +5,7 @@
 import type { WorkflowNode, ExecutionContext, FileExplorerData, PromptCallbacks } from "../types";
 import type { DriveEvent } from "../local-executor";
 import { replaceVariables } from "../handlers/utils";
-import { isEncryptedFile, decryptFileContent } from "~/services/crypto-core";
+import { isEncryptedFile, decryptFileContent, unwrapEncryptedFile } from "~/services/crypto-core";
 import {
   resolveFileLocal,
   readFileLocal,
@@ -43,6 +43,7 @@ export async function handleDriveReadNodeLocal(
 ): Promise<void> {
   const pathRaw = node.properties["path"] || "";
   const saveTo = node.properties["saveTo"];
+  const saveMetadataTo = node.properties["saveMetadataTo"];
   if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
   if (!pathRaw.trim()) throw new Error("drive-read node missing 'path' property");
 
@@ -66,6 +67,13 @@ export async function handleDriveReadNodeLocal(
     context.variables.set(saveTo, JSON.stringify(fileData));
   } else {
     let content = await readFileLocal(file.id);
+    if (saveMetadataTo) {
+      const metadata = unwrapEncryptedFile(content);
+      context.variables.set(saveMetadataTo, JSON.stringify(metadata
+        ? { ...metadata.publicMetadata, description: metadata.description }
+        : {}
+      ));
+    }
     // Decrypt if the file is encrypted
     if (isEncryptedFile(content)) {
       if (!promptCallbacks?.promptForPassword) {
