@@ -159,6 +159,14 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   const skillVersionStatus = t("settings.hubwork.skillVersionStatus")
     .replace("{{installed}}", installedSkillVersion || "unknown")
     .replace("{{latest}}", WEBPAGE_BUILDER_SKILL_VERSION);
+  // New subscribers are priced by UI language; existing subscribers keep
+  // whatever currency their account was actually billed in (upgrades must
+  // never silently switch currency).
+  const newSubscriptionCurrency: "jpy" | "usd" = settings.language === "ja" ? "jpy" : "usd";
+  const accountCurrency: "jpy" | "usd" = hubwork?.currency === "usd" ? "usd" : "jpy";
+  const priceFor = (p: "lite" | "pro", currency: "jpy" | "usd") =>
+    currency === "usd" ? (p === "lite" ? "$2" : "$15") : (p === "lite" ? "¥300" : "¥2,000");
+
   const litePlanFeatures = [
     t("settings.hubwork.featureInteractionsApiChat"),
     t("settings.hubwork.featureGmailSend"),
@@ -230,7 +238,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
             <div>
               <div className="font-medium text-gray-900 dark:text-gray-100">{t("settings.hubwork.upgradeToPro")}</div>
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">¥2,000<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{priceFor("pro", accountCurrency)}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
               <ul className="mt-2 space-y-0.5">
                 {proPlanFeatures.map((f) => (
                   <li key={f} className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-1">
@@ -302,17 +310,17 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             <div className="grid grid-cols-2 gap-3">
               {([
                 {
-                  plan: "lite" as const, price: "¥300",
+                  plan: "lite" as const,
                   features: litePlanFeatures,
                 },
                 {
-                  plan: "pro" as const, price: "¥2,000",
+                  plan: "pro" as const,
                   features: proPlanFeatures,
                 },
-              ]).map(({ plan: p, price, features }) => (
+              ]).map(({ plan: p, features }) => (
                 <div key={p} className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
                   <div className="font-medium text-gray-900 dark:text-gray-100 capitalize">{p}</div>
-                  <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{price}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
+                  <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{priceFor(p, newSubscriptionCurrency)}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
                   <ul className="mt-2 space-y-0.5 mb-3">
                     {features.map((f) => (
                       <li key={f} className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-1">
@@ -364,6 +372,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                   >
                     <input type="hidden" name="accountSlug" value={slug} />
                     <input type="hidden" name="plan" value={p} />
+                    <input type="hidden" name="currency" value={newSubscriptionCurrency} />
                     <button
                       type="submit"
                       className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"

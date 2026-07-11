@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, ListTodo, Music, LayoutDashboard, GitCompare, Highlighter } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, ListTodo, Music, LayoutDashboard, GitCompare, Highlighter, KeyRound } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
@@ -112,6 +112,7 @@ const en: LpStrings = {
     { icon: Puzzle, title: "Plugins", description: "Add new features from GitHub. Plugins can use AI and Drive, so you can build custom tools and advanced automation." },
     { icon: Globe, title: "One-Click Publishing", description: "Turn Drive files into public pages, or use Pro features for CDN-hosted HTML pages, custom domains, and AI-assisted web building." },
     { icon: Zap, title: "Works Offline", description: "All files cached in your browser for instant access — even without internet. Edit offline, then push changes to Drive with one click. Conflicts are detected automatically." },
+    { icon: KeyRound, title: "Encrypted Secrets", description: "Store API tokens, passwords, and other secrets as RSA + AES encrypted files in your Drive, organized into folders and searchable by name or description — without ever exposing the value." },
     { icon: Shield, title: "Your Data, Your Control", description: "No external database. Everything stored in your Google Drive. Supports encryption and self-hosting." },
   ],
   screenshotsTitle: "See It in Action",
@@ -121,6 +122,7 @@ const en: LpStrings = {
     { src: "/images/dashboard_edit.png", alt: "Dashboard Editing", description: "Toggle edit mode to add widgets, drag and resize panels, configure sources, undo or redo layout changes, and switch between rendered and raw YAML views." },
     { src: "/images/dashboard_workflow.png", alt: "Workflow Widgets", description: "Run a workflow from a dashboard and render the result as cards, a table, Markdown, or HTML. Optional auto-refresh keeps generated reports current." },
     { src: "/images/dashboard_kanban.png", alt: "Kanban Boards", description: "Turn Markdown files in a folder into a kanban board. Create cards from the board header or drag cards between columns to update frontmatter in Drive." },
+    { src: "/images/secret_manager.png", alt: "Secret Manager", description: "Create, browse, unlock, copy, and update RSA + AES encrypted values from a dashboard widget. Organize secrets into folders and search by name, description, or visible metadata without ever exposing the encrypted value." },
     { src: "/images/cap.png", alt: "AI Chat & File Management", description: "Write notes in a rich editor and let AI proofread or summarize them. Chat with web search, file search by meaning, image generation, and connections to external tools." },
     { src: "/images/chat_mcp_apps.png", alt: "MCP Apps", description: "Connect external apps via MCP (Model Context Protocol). The AI discovers available tools automatically and uses them in your conversation — calendars, databases, and more." },
     { src: "/images/external_skills.png", alt: "External Skills", description: "Install Agent Skills from the official catalog with one click — like OKF Authoring, which teaches the AI to turn your notes into knowledge bundles." },
@@ -187,9 +189,9 @@ const en: LpStrings = {
   premiumFree: "Free",
   premiumLite: "Lite",
   premiumPro: "Pro",
-  premiumLitePrice: "¥300/mo (tax incl.)",
-  premiumProPrice: "¥2,000/mo (tax incl.)",
-  premiumFreeTag: "¥0",
+  premiumLitePrice: "$2/mo",
+  premiumProPrice: "$15/mo",
+  premiumFreeTag: "$0",
   premiumFeatureUpload: "Max File Size",
   premiumFeatureUploadFree: "20 MB",
   premiumFeatureUploadPaid: "5 GB",
@@ -234,6 +236,7 @@ const ja: LpStrings = {
     { icon: Puzzle, title: "プラグイン", description: "GitHubから機能を追加。AI や Drive と連携できるので、自分だけのツールや高度な自動化も構築できます。" },
     { icon: Globe, title: "ワンクリック公開", description: "Driveファイルを公開ページに。ProならCDN配信、独自ドメイン、AIによるWeb構築にも対応します。" },
     { icon: Zap, title: "オフラインでも快適", description: "すべてのファイルがブラウザにキャッシュされ、ネットがなくても即座にアクセス。オフラインで編集して、ワンクリックでDriveに同期。コンフリクトも自動検出。" },
+    { icon: KeyRound, title: "暗号化シークレット", description: "APIトークンやパスワードなどをRSA + AESで暗号化してDriveに保存。フォルダで整理でき、名前や説明で検索可能。値そのものが公開されることはありません。" },
     { icon: Shield, title: "データは自分の手に", description: "外部データベースなし。すべてあなたのGoogle Driveに保存。暗号化やセルフホストにも対応。" },
   ],
   screenshotsTitle: "動作イメージ",
@@ -243,6 +246,7 @@ const ja: LpStrings = {
     { src: "/images/dashboard_edit.png", alt: "ダッシュボード編集", description: "編集モードでウィジェットを追加し、ドラッグ・リサイズ・設定変更。Undo/Redo と Raw YAML 表示にも対応します。" },
     { src: "/images/dashboard_workflow.png", alt: "ワークフローウィジェット", description: "ダッシュボードからワークフローを実行し、結果をカード、テーブル、Markdown、HTMLとして表示。自動更新も設定できます。" },
     { src: "/images/dashboard_kanban.png", alt: "カンバンボード", description: "フォルダ内のMarkdownをカンバン化。ヘッダーからカードを作成し、ドラッグでステータス列を移動するとfrontmatterも更新されます。" },
+    { src: "/images/secret_manager.png", alt: "Secret Manager", description: "ダッシュボードウィジェットから RSA + AES 暗号化された値を作成・管理。フォルダで整理でき、名前・説明・公開メタデータで検索。暗号化された値そのものは公開しません。" },
     { src: "/images/cap.png", alt: "AIチャット＆ファイル管理", description: "エディターでメモを書いて、AI に校正や要約をおまかせ。チャットでは Web 検索、ファイルの意味検索、画像生成、外部ツール連携も。" },
     { src: "/images/chat_mcp_apps.png", alt: "MCP Apps", description: "MCP（Model Context Protocol）で外部アプリと連携。AI が利用可能なツールを自動で検出し、会話の中でカレンダーやデータベースなどを操作します。" },
     { src: "/images/external_skills.png", alt: "External Skills", description: "公式カタログから Agent Skills をワンクリックでインストール。ノートをナレッジバンドルに変換する OKF Authoring などが使えます。" },

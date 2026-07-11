@@ -5,11 +5,21 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { createAccount, getAccountByRootFolderId, getAccountBySlug } from "~/services/hubwork-accounts.server";
 import { getStripe } from "~/services/stripe.server";
 import { validateOrigin } from "~/utils/security";
+import type { HubworkCurrency } from "~/types/hubwork";
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
 
 function parseSlugList(value: string | undefined): string[] {
   return (value || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+
+/** USD prices are opt-in per plan — falls back to the JPY price if the USD price env var isn't configured. */
+function resolvePriceId(planType: "lite" | "pro", currency: HubworkCurrency): string | undefined {
+  if (currency === "usd") {
+    const usdPriceId = planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE_USD : process.env.STRIPE_PRICE_ID_PRO_USD;
+    if (usdPriceId) return usdPriceId;
+  }
+  return planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE : process.env.STRIPE_PRICE_ID_PRO;
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -20,6 +30,7 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const planType = (formData.get("plan") as string || "pro") === "lite" ? "lite" : "pro";
   const accountSlug = (formData.get("accountSlug") as string || "").toLowerCase().trim();
+  const currency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
 
   const reviewSlugs = parseSlugList(process.env.HUBWORK_REVIEW_SLUGS);
 
@@ -69,9 +80,10 @@ export async function action({ request }: Route.ActionArgs) {
       }
     }
 
-    const newPriceId = planType === "lite"
-      ? process.env.STRIPE_PRICE_ID_LITE
-      : process.env.STRIPE_PRICE_ID_PRO;
+    // Use the account's existing billing currency, not a resubmitted form
+    // value, so an upgrade can't silently switch a subscriber's currency.
+    const existingCurrency: HubworkCurrency = existing.currency === "usd" ? "usd" : "jpy";
+    const newPriceId = resolvePriceId(planType, existingCurrency);
     if (!newPriceId) {
       throw new Response("Stripe is not configured for this plan", { status: 500 });
     }
@@ -119,9 +131,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
-  const priceId = planType === "lite"
-    ? process.env.STRIPE_PRICE_ID_LITE
-    : process.env.STRIPE_PRICE_ID_PRO;
+  const priceId = resolvePriceId(planType, currency);
   if (!priceId) {
     throw new Response("Stripe is not configured for this plan", { status: 500 });
   }
@@ -137,6 +147,7 @@ export async function action({ request }: Route.ActionArgs) {
       rootFolderId: tokens.rootFolderId,
       accountSlug,
       plan: planType,
+      currency,
     },
   });
 

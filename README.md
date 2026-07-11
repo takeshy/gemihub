@@ -4,6 +4,8 @@
 
 GemiHub is a self-hostable web application that turns Google Gemini into a personal AI assistant deeply integrated with your Google Drive. Chat with AI that can read, search, and write your files. Build automated workflows with a visual editor. All your data stays in your own Google Drive — no external database required.
 
+**[Try GemiHub now at gemihub.net →](https://gemihub.net)**
+
 [日本語版 README](./README_ja.md)
 
 ![GemiHub](./public/images/cap.png)

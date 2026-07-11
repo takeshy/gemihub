@@ -40,3 +40,11 @@ data "google_secret_manager_secret" "stripe_price_id_lite" {
 data "google_secret_manager_secret" "stripe_price_id_pro" {
   secret_id = "stripe-price-id-pro"
 }
+
+data "google_secret_manager_secret" "stripe_price_id_lite_usd" {
+  secret_id = "stripe-price-id-lite-usd"
+}
+
+data "google_secret_manager_secret" "stripe_price_id_pro_usd" {
+  secret_id = "stripe-price-id-pro-usd"
+}

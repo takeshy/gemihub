@@ -146,6 +146,7 @@ export async function loader({ request }: Route.LoaderArgs) {
           ...driveSettings.hubwork,
           accountId: hubworkAccount.id,
           plan: hubworkAccount.plan,
+          currency: hubworkAccount.currency,
           accountSlug: hubworkAccount.accountSlug,
           defaultDomain: hubworkAccount.defaultDomain,
           customDomain: hubworkAccount.customDomain || driveSettings.hubwork?.customDomain,
@@ -161,10 +162,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (hubworkAccount?.plan && driveSettings.hubwork) {
     const drivePlan = driveSettings.hubwork.plan;
     const driveBilling = driveSettings.hubwork.billingStatus;
-    if (drivePlan !== hubworkAccount.plan || driveBilling !== hubworkAccount.billingStatus) {
+    const driveCurrency = driveSettings.hubwork.currency;
+    if (drivePlan !== hubworkAccount.plan || driveBilling !== hubworkAccount.billingStatus || driveCurrency !== hubworkAccount.currency) {
       const updatedHubwork = {
         ...driveSettings.hubwork,
         plan: hubworkAccount.plan,
+        currency: hubworkAccount.currency,
         billingStatus: hubworkAccount.billingStatus,
       };
       saveSettings(validTokens.accessToken, validTokens.rootFolderId, {

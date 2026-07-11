@@ -47,7 +47,7 @@ Cloud Scheduler (single job)
 
 ## Plans
 
-| Feature | Free | Lite (¥300/mo) | Pro (¥2,000/mo) |
+| Feature | Free | Lite (¥300/$2 mo) | Pro (¥2,000/$15 mo) |
 |---------|:----:|:--------------:|:---------------:|
 | Upload limit | 20MB | 5GB | 5GB |
 | Gmail Send node | - | Yes | Yes |
@@ -80,7 +80,8 @@ hubwork-accounts/{accountId}
   customDomain?: string              — e.g. "app.acme.com"
   rootFolderName: string
   rootFolderId: string
-  plan: "lite" | "pro" | "granted"   — lite = ¥300/month, pro = ¥2,000/month, granted = admin-created free
+  plan: "lite" | "pro" | "granted"   — lite = ¥300/$2/month, pro = ¥2,000/$15/month, granted = admin-created free
+  currency?: "jpy" | "usd"           — which Price the account was billed with; missing = "jpy" (legacy)
   stripeCustomerId?: string          — Stripe customer ID (set by webhook)
   stripeSubscriptionId?: string      — Stripe subscription ID (set by webhook)
   billingStatus: "active" | "past_due" | "canceled"   — granted accounts always set to "active"
@@ -139,8 +140,8 @@ This ensures "billing active but DNS pending" accounts can still use scheduled w
 
 | Plan | How Created | Description |
 |------|-------------|-------------|
-| `lite` | Stripe Checkout → webhook | ¥300/month. Gmail node, PDF, no upload limit. |
-| `pro` | Stripe Checkout → webhook | ¥2,000/month. All Lite features + Sheets nodes, web builder, subdomain, auth, scheduled workflows. |
+| `lite` | Stripe Checkout → webhook | ¥300/$2 a month. Gmail node, PDF, no upload limit. |
+| `pro` | Stripe Checkout → webhook | ¥2,000/$15 a month. All Lite features + Sheets nodes, web builder, subdomain, auth, scheduled workflows. |
 | `granted` | Admin panel | Free account created by admin. Has Pro-level access. |
 
 The `plan` field is required — accounts without a plan cannot use paid features. `granted` accounts have full Pro access.
@@ -730,12 +731,12 @@ Send an email via Gmail API.
 
 ### Stripe Integration
 
-¥2,000/month subscription via Stripe Checkout. The flow:
+¥300/¥2,000-a-month (Lite/Pro) subscription via Stripe Checkout — or $2/$15 for accounts billed in USD (see **Currency** below). The flow:
 
 1. User clicks "Subscribe" in **Settings > Premium Plan** tab
-2. `POST /hubwork/api/stripe/checkout` creates a Stripe Checkout Session with `metadata: { rootFolderId }`
+2. `POST /hubwork/api/stripe/checkout` creates a Stripe Checkout Session with `metadata: { rootFolderId, accountSlug, plan, currency }`
 3. User completes payment on Stripe's hosted page
-4. Stripe webhook (`checkout.session.completed`) → creates/updates Firestore account with `plan: "lite"` or `"pro"`, `billingStatus: "active"`
+4. Stripe webhook (`checkout.session.completed`) → creates/updates Firestore account with `plan: "lite"` or `"pro"`, `currency`, `billingStatus: "active"`
 5. User returns to Settings — Premium features are automatically enabled (no separate toggle needed)
 
 Subscription lifecycle:
@@ -743,6 +744,15 @@ Subscription lifecycle:
 - `customer.subscription.updated` → `billingStatus` set based on Stripe status (`active`/`trialing` → `"active"`, `past_due` → `"past_due"`, else → `"canceled"`)
 
 Users manage their subscription (cancel, update payment) via Stripe Billing Portal (`POST /hubwork/api/stripe/portal`).
+
+#### Currency
+
+`HubworkAccount.currency` (`"jpy" | "usd"`, missing = `"jpy"` for legacy accounts) records which Stripe Price a subscriber was actually charged with, independent of their current UI language:
+
+- **New subscriptions** (`hubwork.api.stripe.checkout.tsx`): the checkout form (`HubworkTab.tsx`) submits a hidden `currency` field derived from `settings.language` (`ja` → `jpy`, else `usd`). `resolvePriceId(plan, currency)` picks `STRIPE_PRICE_ID_{LITE,PRO}_USD` when `currency === "usd"` and the env var is configured, falling back to the JPY price otherwise — so USD support is opt-in and a missing env var never breaks checkout.
+- **Upgrades** (Lite → Pro on an existing subscription): use the account's *stored* `currency`, never a resubmitted form value — otherwise a subscriber could switch currency (and therefore price) on upgrade just by tampering with the form.
+- **Settings display**: `HubworkTab.tsx`'s `priceFor(plan, currency)` shows ¥300/¥2,000 or $2/$15 depending on which currency applies (UI language for the new-subscription cards, the account's stored currency for the upgrade card) — this stays independent of the price text baked into `lp.tsx`'s marketing copy.
+- Currency is synced from Firestore into `settings.hubwork.currency` in `settings.tsx`'s loader (same pattern as `plan`/`billingStatus`), and mirrored into Drive `settings.json` so it survives without a Firestore round-trip on every load.
 
 ### Admin Panel
 
@@ -816,8 +826,10 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
 | `HUBWORK_URL_MAP_NAME` | LB URL map name (default: `gemini-hub-https`) |
 | `STRIPE_SECRET_KEY` | Stripe API secret key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
-| `STRIPE_PRICE_ID_LITE` | Stripe Price ID for the Lite plan (¥300/month) |
-| `STRIPE_PRICE_ID_PRO` | Stripe Price ID for the Pro plan (¥2,000/month) |
+| `STRIPE_PRICE_ID_LITE` | Stripe Price ID for the Lite plan, JPY (¥300/month) |
+| `STRIPE_PRICE_ID_PRO` | Stripe Price ID for the Pro plan, JPY (¥2,000/month) |
+| `STRIPE_PRICE_ID_LITE_USD` | Optional. Stripe Price ID for the Lite plan, USD ($2/month) — omit to keep USD-locale checkout on the JPY price |
+| `STRIPE_PRICE_ID_PRO_USD` | Optional. Stripe Price ID for the Pro plan, USD ($15/month) — omit to keep USD-locale checkout on the JPY price |
 | `HUBWORK_ADMIN_CREDENTIALS` | Basic Auth credentials (`user:password` format, Secret Manager) |
 | `HUBWORK_ADMIN_EMAILS` | Comma-separated admin emails (Secret Manager) |
 

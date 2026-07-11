@@ -37,6 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
       const rootFolderId = session.metadata?.rootFolderId || "";
       const accountSlug = session.metadata?.accountSlug || "";
       const planType = (session.metadata?.plan === "lite" ? "lite" : "pro") as "lite" | "pro";
+      const currency = (session.metadata?.currency === "usd" ? "usd" : "jpy") as "jpy" | "usd";
       const email = session.customer_details?.email || "";
       const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id || "";
       const subscriptionId = typeof session.subscription === "string" ? session.subscription : "";
@@ -50,6 +51,7 @@ export async function action({ request }: Route.ActionArgs) {
       if (account) {
         await updateAccount(account.id, {
           plan: planType,
+          currency,
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
           billingStatus: "active",
@@ -64,6 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
           rootFolderName: "",
           rootFolderId: rootFolderId || "",
           plan: planType,
+          currency,
           accountSlug: accountSlug || undefined,
         });
         if (customerId) {

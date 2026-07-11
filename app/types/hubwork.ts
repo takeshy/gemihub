@@ -6,6 +6,8 @@ export type HubworkAccountPlan = "lite" | "pro" | "granted";
 export type HubworkBillingStatus = "active" | "past_due" | "canceled";
 export type HubworkAccountStatus = "enabled" | "disabled";
 export type HubworkDomainStatus = "none" | "pending_dns" | "provisioning_cert" | "active" | "failed";
+/** Billing currency for lite/pro subscriptions. Missing on legacy accounts and treated as "jpy". */
+export type HubworkCurrency = "jpy" | "usd";
 
 export interface HubworkAccount {
   id: string;
@@ -19,6 +21,7 @@ export interface HubworkAccount {
   rootFolderId: string;
   spreadsheetId?: string;
   plan: HubworkAccountPlan;
+  currency?: HubworkCurrency;
   billingStatus: HubworkBillingStatus;
   accountStatus: HubworkAccountStatus;
   domainStatus: HubworkDomainStatus;

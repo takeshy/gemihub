@@ -5,6 +5,7 @@ import { getFirestore, HUBWORK_ACCOUNTS } from "./firestore.server";
 import type {
   HubworkAccount,
   HubworkAccountPlan,
+  HubworkCurrency,
   HubworkScheduleDoc,
   HubworkScheduleRuntime,
   ResolvedAccountTokens,
@@ -83,6 +84,7 @@ export async function createAccount(params: {
   rootFolderId: string;
   spreadsheetId?: string;
   plan?: HubworkAccountPlan;
+  currency?: HubworkCurrency;
   accountSlug?: string;
 }): Promise<string> {
   const db = getFirestore();
@@ -113,6 +115,7 @@ export async function createAccount(params: {
     rootFolderId: params.rootFolderId,
     spreadsheetId: params.spreadsheetId || null,
     plan: params.plan || "granted",
+    currency: params.currency || "jpy",
     billingStatus: "active",
     accountStatus: "enabled",
     domainStatus: params.customDomain ? "pending_dns" : "none",
@@ -279,6 +282,7 @@ export async function updateAccount(
       | "accountStatus"
       | "domainStatus"
       | "plan"
+      | "currency"
       | "stripeCustomerId"
       | "stripeSubscriptionId"
       | "activeScheduleRevision"

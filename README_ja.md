@@ -4,6 +4,8 @@
 
 GemiHub は、Google Gemini を Google Drive と深く統合したセルフホスト対応の Web アプリケーションです。AI があなたのファイルを読み・検索し・書き込める。ビジュアルエディタでワークフローを自動化できる。すべてのデータはあなた自身の Google Drive に保存され、外部データベースは不要です。
 
+**[gemihub.net で今すぐ試す →](https://gemihub.net)**
+
 [English README](./README.md)
 
 ![GemiHub](./public/images/cap.png)

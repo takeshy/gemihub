@@ -662,6 +662,8 @@ export interface HubworkSettings {
   customDomain?: string;
   accountId?: string;
   plan?: "lite" | "pro" | "granted";
+  /** Billing currency for lite/pro plans. Missing means "jpy" (legacy accounts). */
+  currency?: "jpy" | "usd";
   accountSlug?: string;
   defaultDomain?: string;
   billingStatus?: string;
