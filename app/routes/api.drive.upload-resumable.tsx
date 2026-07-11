@@ -7,7 +7,8 @@ import {
   uploadResumableFile,
   updateResumableUploadSession,
 } from "~/services/google-drive.server";
-import { upsertFileInMeta } from "~/services/sync-meta.server";
+import { upsertFileInMeta, upsertFilesInMeta } from "~/services/sync-meta.server";
+import { parallelProcess } from "~/utils/parallel";
 
 const MAX_FILE_SIZE_FREE = 20 * 1024 * 1024; // 20MB per file (free)
 const MAX_FILE_SIZE_PAID = 5 * 1024 * 1024 * 1024; // 5GB per file (Drive API limit)
@@ -118,7 +119,12 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
 
-      await upsertFileInMeta(validTokens.accessToken, targetFolderId, uploadedFile);
+      // Multi-file uploads defer this read-modify-write operation until every
+      // parallel content upload has finished. Otherwise concurrent requests can
+      // overwrite each other's _sync-meta entries.
+      if (formData.get("deferMeta") !== "true") {
+        await upsertFileInMeta(validTokens.accessToken, targetFolderId, uploadedFile);
+      }
       return Response.json({ file: uploadedFile }, { headers: responseHeaders });
     } catch (error) {
       return Response.json(
@@ -130,7 +136,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const body = await request.json().catch(() => null) as
     | {
-        intent?: "create-session" | "complete";
+        intent?: "create-session" | "complete" | "complete-batch";
         folderId?: string;
         namePrefix?: string;
         clientPath?: string;
@@ -139,6 +145,7 @@ export async function action({ request }: Route.ActionArgs) {
         size?: number;
         replaceFileId?: string;
         fileId?: string;
+        fileIds?: string[];
       }
     | null;
 
@@ -147,6 +154,31 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const targetFolderId = body.folderId || validTokens.rootFolderId;
+
+  if (body.intent === "complete-batch") {
+    const submittedFileIds = Array.isArray(body.fileIds) ? body.fileIds : [];
+    const fileIds = Array.from(new Set(submittedFileIds.filter((id): id is string =>
+      typeof id === "string" && id.length > 0
+    )));
+    if (fileIds.length === 0 || fileIds.length > 1000) {
+      return Response.json({ error: "Missing or invalid fileIds" }, { status: 400, headers: responseHeaders });
+    }
+
+    const files = await parallelProcess(
+      fileIds,
+      (fileId) => getFileMetadata(validTokens.accessToken, fileId),
+      5,
+    );
+    if (files.some((file) => !file.parents?.includes(targetFolderId))) {
+      return Response.json(
+        { error: "An uploaded file does not belong to target folder" },
+        { status: 400, headers: responseHeaders }
+      );
+    }
+
+    await upsertFilesInMeta(validTokens.accessToken, targetFolderId, files);
+    return Response.json({ files }, { headers: responseHeaders });
+  }
 
   if (body.intent === "create-session") {
     const clientPath = body.clientPath || body.fileName || "";
