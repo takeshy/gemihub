@@ -39,37 +39,63 @@ export async function handleDriveSaveNode(
   const accessToken = serviceContext.driveAccessToken;
   const folderId = serviceContext.driveRootFolderId;
 
-  // Create or update the file
+  // Create or update the file. Drive permits duplicate names, so an
+  // unconditional create would make paid/scheduled workflows behave
+  // differently from local workflows and accumulate duplicate paths.
   const content = fileData.contentType === "binary"
     ? fileData.data  // Base64 encoded
     : fileData.data;
 
+  const existing = await driveService.findFileByExactName(
+    accessToken,
+    fileName,
+    folderId,
+    { signal: serviceContext.abortSignal },
+  );
   const driveFile = fileData.contentType === "binary"
-    ? await driveService.createFileBinary(
-      accessToken,
-      fileName,
-      Buffer.from(content, "base64"),
-      folderId,
-      fileData.mimeType,
-      { signal: serviceContext.abortSignal }
-    )
-    : await driveService.createFile(
-      accessToken,
-      fileName,
-      content,
-      folderId,
-      fileData.mimeType,
-      { signal: serviceContext.abortSignal }
-    );
+    ? existing
+      ? await driveService.updateFileBinary(
+        accessToken,
+        existing.id,
+        Buffer.from(content, "base64"),
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal },
+      )
+      : await driveService.createFileBinary(
+        accessToken,
+        fileName,
+        Buffer.from(content, "base64"),
+        folderId,
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal },
+      )
+    : existing
+      ? await driveService.updateFile(
+        accessToken,
+        existing.id,
+        content,
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal },
+      )
+      : await driveService.createFile(
+        accessToken,
+        fileName,
+        content,
+        folderId,
+        fileData.mimeType,
+        { signal: serviceContext.abortSignal },
+      );
 
   await upsertFileInMeta(accessToken, folderId, driveFile, { signal: serviceContext.abortSignal });
-  serviceContext.onDriveFileCreated?.({
+  const driveEvent = {
     fileId: driveFile.id,
     fileName: driveFile.name,
     content: fileData.contentType === "binary" ? "" : content,
     md5Checksum: driveFile.md5Checksum || "",
     modifiedTime: driveFile.modifiedTime || "",
-  });
+  };
+  if (existing) serviceContext.onDriveFileUpdated?.(driveEvent);
+  else serviceContext.onDriveFileCreated?.(driveEvent);
 
   if (savePathTo) {
     context.variables.set(savePathTo, driveFile.name);
