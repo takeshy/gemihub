@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   compareOkfVersions,
+  isGemihubOkfBundleName,
   parseGemihubOkfManifest,
 } from "./gemihub-okf-manifest";
 
@@ -29,6 +30,14 @@ test("parseGemihubOkfManifest rejects paths outside the bundle", () => {
     }),
     /file path/,
   );
+});
+
+test("isGemihubOkfBundleName matches the exact name and legacy folder-name fallbacks", () => {
+  assert.equal(isGemihubOkfBundleName("GemiHub"), true);
+  assert.equal(isGemihubOkfBundleName(" gemihub "), true);
+  assert.equal(isGemihubOkfBundleName("gemihub-okf"), true);
+  assert.equal(isGemihubOkfBundleName("My GemiHub Notes"), true);
+  assert.equal(isGemihubOkfBundleName("Knowledge"), false);
 });
 
 test("compareOkfVersions compares semantic versions and prereleases", () => {

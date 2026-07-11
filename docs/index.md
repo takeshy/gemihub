@@ -1,3 +1,11 @@
+---
+title: GemiHub
+description: "GemiHub Open Knowledge Format bundle index: chat, dashboard, editor, search, sync, workflows, integrations, and architecture."
+tags:
+  - index
+  - okf
+---
+
 # GemiHub Knowledge Bundle
 
 Welcome to the GemiHub Open Knowledge Format bundle.

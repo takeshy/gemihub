@@ -118,5 +118,13 @@ export function compareOkfVersions(left: string, right: string): number {
 }
 
 export function isGemihubOkfBundleName(name: string): boolean {
-  return name.trim().toLowerCase() === GEMIHUB_OKF_NAME.toLowerCase();
+  const normalized = name.trim().toLowerCase();
+  const target = GEMIHUB_OKF_NAME.toLowerCase();
+  // Exact match covers the official display name (from index.md's `title`,
+  // set by an update once installed). The substring match bootstraps legacy
+  // installs whose index.md predates that frontmatter, where the displayed
+  // name falls back to the Drive folder name (e.g. "gemihub-okf") — without
+  // it, such installs could never pass the identity check to discover an
+  // update in the first place.
+  return normalized === target || normalized.includes(target);
 }

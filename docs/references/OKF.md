@@ -35,7 +35,7 @@ Active bundles are injected into the system prompt of every message sent from th
 
 ### Managed GemiHub bundle updates
 
-When the selected bundle's display name is exactly **GemiHub**, the chat checks the official Cloud Storage distribution for a newer release. The distribution is described by a GemiHub-specific `manifest.json` containing the bundle version, immutable ZIP URL, ZIP SHA-256, and per-file SHA-256 values. This JSON file is an updater extension, not part of the OKF standard; the OKF loader continues to read Markdown only.
+When the selected bundle's display name is exactly **GemiHub**, or contains "gemihub" (case-insensitive, e.g. a legacy install whose `index.md` predates the official `title: GemiHub` frontmatter and so falls back to its Drive folder name), the chat checks the official Cloud Storage distribution for a newer release. The distribution is described by a GemiHub-specific `manifest.json` containing the bundle version, immutable ZIP URL, ZIP SHA-256, and per-file SHA-256 values. This JSON file is an updater extension, not part of the OKF standard; the OKF loader continues to read Markdown only.
 
 If an update is available, GemiHub asks before changing local files. After confirmation it downloads the ZIP through the authenticated app endpoint, verifies the archive and every listed document, and stages the official documents plus the installed `manifest.json` in the local Drive cache. Extra user-authored files are preserved. The normal Push operation sends the update to Drive, while the refreshed content is available to the next chat message immediately.
 
