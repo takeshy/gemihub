@@ -24,6 +24,10 @@ import { mimeTypeFromFileName } from "./drive-local";
 let inFlight: Promise<void> | null = null;
 let pendingRetrigger = false;
 
+export function pendingFileTargetName(file: { fileId: string; fileName?: string }): string {
+  return file.fileName?.trim() || file.fileId.slice("new:".length);
+}
+
 async function runOnce(): Promise<void> {
   // Every create call hits Drive; skip entirely when offline so per-file
   // fetches don't fail and spam retries on every "pending-files-created" event.
@@ -36,31 +40,60 @@ async function runOnce(): Promise<void> {
 
   for (const pf of pendingFiles) {
     try {
-      const fullName = pf.fileId.slice("new:".length);
-      const mimeType = mimeTypeFromFileName(fullName);
+      let latest = await getCachedFile(pf.fileId);
+      if (!latest) continue;
+      // The cache filename may have changed after creation. The new: id is an
+      // identity token, not the authoritative destination path.
+      let fullName = pendingFileTargetName(latest);
+      let mimeType = mimeTypeFromFileName(fullName);
+      let file: {
+        id: string;
+        name: string;
+        mimeType: string;
+        md5Checksum?: string;
+        modifiedTime?: string;
+        createdTime?: string;
+      };
 
-      // Create file on Drive; cached content is uploaded immediately after
-      // the placeholder is resolved to a real Drive file ID.
-      // dedup: true handles the case where a prior session's create succeeded
-      // on Drive but the client reloaded before finishing the migration.
-      const createRes = await fetch("/api/drive/files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          name: fullName,
-          content: "",
-          mimeType,
-          dedup: true,
-        }),
-      });
-      if (!createRes.ok) continue;
+      if (latest.pendingRemoteFileId) {
+        const metaRes = await fetch(
+          `/api/drive/files?action=metadata&fileId=${encodeURIComponent(latest.pendingRemoteFileId)}`,
+        );
+        if (!metaRes.ok) {
+          const { pendingRemoteFileId: _pending, ...withoutPending } = latest;
+          await setCachedFile(withoutPending);
+          pendingRetrigger = true;
+          continue;
+        }
+        const remoteMeta = await metaRes.json();
+        file = { id: latest.pendingRemoteFileId, ...remoteMeta };
+      } else {
+        // Persist the exact placeholder id before uploading content. This is
+        // the idempotency marker for reloads and avoids name-based dedup from
+        // overwriting an unrelated remote file.
+        const createRes = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "create",
+            name: fullName,
+            content: "",
+            mimeType,
+          }),
+        });
+        if (!createRes.ok) continue;
+        const createData = await createRes.json();
+        file = createData.file;
+        latest = await getCachedFile(pf.fileId);
+        if (latest) {
+          // A rename can complete while the placeholder request is in flight.
+          fullName = pendingFileTargetName(latest);
+          mimeType = mimeTypeFromFileName(fullName);
+          latest = { ...latest, pendingRemoteFileId: file.id };
+          await setCachedFile(latest);
+        }
+      }
 
-      const createData = await createRes.json();
-      let file = createData.file;
-
-      // Re-read cache — user may have edited since we started
-      const latest = await getCachedFile(pf.fileId);
       if (!latest) {
         // The local draft was deleted while the Drive create request was in flight.
         // Remove the just-created remote placeholder so a deleted local PNG/binary
@@ -71,6 +104,17 @@ async function runOnce(): Promise<void> {
           body: JSON.stringify({ action: "delete", fileId: file.id, permanent: true }),
         }).catch(() => {});
         continue;
+      }
+
+      if (file.name !== fullName) {
+        const renameRes = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "rename", fileId: file.id, name: fullName }),
+        });
+        if (!renameRes.ok) continue;
+        const renameData = await renameRes.json();
+        file = renameData.file ?? file;
       }
 
       const currentContent = latest.content;
@@ -109,6 +153,26 @@ async function runOnce(): Promise<void> {
       if (updateRes) {
         const updateData = await updateRes.json();
         file = updateData.file ?? file;
+      }
+
+      // A delete or another edit may have happened while Drive was updating.
+      // Never resurrect a deleted draft or mark a newer edit as synchronized.
+      const afterUpdate = await getCachedFile(pf.fileId);
+      if (!afterUpdate) {
+        await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "delete", fileId: file.id, permanent: true }),
+        }).catch(() => {});
+        continue;
+      }
+      if (
+        afterUpdate.content !== currentContent
+        || afterUpdate.fileName !== latest.fileName
+        || afterUpdate.encoding !== latest.encoding
+      ) {
+        pendingRetrigger = true;
+        continue;
       }
 
       const currentMd5 = file.md5Checksum ?? "";

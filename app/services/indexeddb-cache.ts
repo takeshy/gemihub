@@ -18,6 +18,8 @@ export interface CachedFile {
   cachedAt: number;
   fileName?: string;
   encoding?: "base64"; // present for binary files stored as base64
+  /** Remote placeholder created while a new: file migration is in progress. */
+  pendingRemoteFileId?: string;
   frontmatter?: Record<string, unknown>; // parsed frontmatter for .md files
   fmParsedMtime?: number; // epoch ms of the modifiedTime when frontmatter was parsed
 }

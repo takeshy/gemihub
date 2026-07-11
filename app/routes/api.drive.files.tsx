@@ -235,6 +235,17 @@ export async function action({ request }: Route.ActionArgs) {
   logCtx.details = { fileId };
 
   switch (actionType) {
+    case "findByName": {
+      if (typeof name !== "string" || !name) {
+        return logAndReturn({ error: "Missing name" }, { status: 400 });
+      }
+      const file = await findFileByExactName(
+        validTokens.accessToken,
+        name,
+        validTokens.rootFolderId,
+      );
+      return logAndReturn({ file });
+    }
     case "create": {
       // When dedup is true, check for existing file with same name to avoid duplicates
       // (used by usePendingFileMigration to handle reload-during-migration)

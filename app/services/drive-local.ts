@@ -10,6 +10,9 @@ import {
   getCachedRemoteMeta,
   setCachedRemoteMeta,
   renameCachedFile,
+  deleteCachedFile,
+  deleteEditHistoryEntry,
+  removeLocalSyncMetaEntry,
   setEditHistoryEntry,
   getEditHistoryForFile,
   type CachedRemoteMeta,
@@ -456,22 +459,60 @@ export async function deleteFileLocal(fileId: string): Promise<void> {
 
   if (!entry) return; // File not in cache — nothing to delete
 
-  // Soft delete: move to trash/ in CachedRemoteMeta (matches server behavior)
-  const baseName = entry.name.includes("/")
-    ? entry.name.slice(entry.name.lastIndexOf("/") + 1)
-    : entry.name;
-  const trashName = `trash/${baseName}`;
-  entry.name = trashName;
-  await setCachedRemoteMeta(meta);
+  if (fileId.startsWith("new:")) {
+    // Cancel a not-yet-migrated creation completely. If migration already
+    // created its remote placeholder, its in-flight cache re-check sees the
+    // missing record and removes that placeholder as well.
+    const cached = await getCachedFile(fileId);
+    if (cached?.pendingRemoteFileId) {
+      const deletePendingRes = await fetch("/api/drive/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          fileId: cached.pendingRemoteFileId,
+          permanent: true,
+        }),
+      });
+      if (!deletePendingRes.ok) {
+        throw new Error(`Failed to cancel pending file creation: ${entry.name}`);
+      }
+    }
+    delete meta.files[fileId];
+    await setCachedRemoteMeta(meta);
+  } else {
+    const res = await fetch("/api/drive/files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", fileId }),
+    });
+    if (!res.ok) throw new Error(`Failed to delete file: ${entry.name}`);
+    const data = await res.json() as {
+      meta?: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] };
+    };
+    if (data.meta) {
+      const pendingEntries = Object.fromEntries(
+        Object.entries(meta.files).filter(([id]) => id.startsWith("new:")),
+      );
+      await setCachedRemoteMeta({
+        ...meta,
+        lastUpdatedAt: data.meta.lastUpdatedAt,
+        files: { ...data.meta.files, ...pendingEntries },
+        cachedAt: Date.now(),
+      });
+    } else {
+      delete meta.files[fileId];
+      await setCachedRemoteMeta(meta);
+    }
+  }
 
-  // Rename the cached file as well
-  await renameCachedFile(fileId, trashName);
-
-  // NOTE: We intentionally do NOT record editHistory here.
-  // The push sync flow doesn't support delete propagation — it would
-  // push empty content instead of trashing the file on Drive.
-  // The local cache state (trash/ prefix) is sufficient for the current
-  // session. Actual Drive deletion should be done via the UI delete action.
+  await deleteCachedFile(fileId);
+  await deleteEditHistoryEntry(fileId);
+  await removeLocalSyncMetaEntry(fileId);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("tree-meta-updated"));
+    window.dispatchEvent(new Event("sync-complete"));
+  }
 }
 
 // ---------------------------------------------------------------------------

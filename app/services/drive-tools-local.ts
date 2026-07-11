@@ -286,6 +286,31 @@ export async function executeLocalDriveTool(
         };
       }
 
+      // CachedRemoteMeta can lag another device. Confirm against Drive before
+      // creating so the migration's retry logic never adopts and overwrites an
+      // unrelated same-name file. Offline creates remain queued locally.
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        const remoteCheck = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "findByName", name }),
+          signal: abortSignal,
+        });
+        if (remoteCheck.ok) {
+          const remoteData = await remoteCheck.json() as {
+            file?: { id: string; name: string } | null;
+          };
+          if (remoteData.file) {
+            return {
+              error: `create_drive_file: a file already exists at '${name}' (fileId=${remoteData.file.id}). Use update_drive_file with that fileId instead — create_drive_file is for new paths only.`,
+              existingFileId: remoteData.file.id,
+            };
+          }
+        } else {
+          return { error: "create_drive_file: failed to verify that the remote path is available" };
+        }
+      }
+
       const result = await writeFileLocal(name, content);
 
       callbacks?.onDriveEvent?.({
