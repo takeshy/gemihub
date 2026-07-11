@@ -18,7 +18,11 @@ import {
   listFiles,
   findFileByExactName,
 } from "~/services/google-drive.server";
-import { isBinaryMimeType, LARGE_FILE_CACHE_THRESHOLD } from "~/services/sync-client-utils";
+import {
+  isTextFileName,
+  LARGE_FILE_CACHE_THRESHOLD,
+  shouldTreatAsBinaryFile,
+} from "~/services/sync-client-utils";
 import {
   readRemoteSyncMeta,
   writeRemoteSyncMeta,
@@ -32,6 +36,7 @@ import { parallelProcess } from "~/utils/parallel";
 import { saveEdit } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
+import { remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
 
 function guessMimeType(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -41,6 +46,7 @@ function guessMimeType(fileName: string): string {
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
   if (lower.endsWith(".base")) return "text/yaml";
   if (lower.endsWith(".kanban")) return "text/yaml";
+  if (lower.endsWith(".dashboard")) return "text/yaml";
   if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
   if (lower.endsWith(".csv")) return "text/csv";
   if (lower.endsWith(".xml")) return "application/xml";
@@ -136,8 +142,9 @@ export async function action({ request }: Route.ActionArgs) {
       // Download file contents only — no meta read/write on server
       const fileIds = body.fileIds as string[];
       const mimeTypes = (body.mimeTypes ?? {}) as Record<string, string>;
+      const fileNames = (body.fileNames ?? {}) as Record<string, string>;
       const files = await parallelProcess(fileIds, async (fileId) => {
-        if (isBinaryMimeType(mimeTypes[fileId])) {
+        if (shouldTreatAsBinaryFile(fileNames[fileId], mimeTypes[fileId])) {
           const content = await readFileBase64(validTokens.accessToken, fileId);
           return { fileId, content, encoding: "base64" as const };
         }
@@ -209,7 +216,7 @@ export async function action({ request }: Route.ActionArgs) {
           // Normal conflict: local wins — remote content is the loser, back it up
           const existingMeta = metaSnapshot.files[fileId];
           const fileName = existingMeta?.name || fileId;
-          const remoteBinary = isBinaryMimeType(existingMeta?.mimeType);
+          const remoteBinary = shouldTreatAsBinaryFile(fileName, existingMeta?.mimeType);
           try {
             const remoteContent = remoteBinary
               ? await readFileBase64(validTokens.accessToken, fileId)
@@ -296,7 +303,7 @@ export async function action({ request }: Route.ActionArgs) {
       // Return file metadata so the client can update its cache
       if (choice === "remote" && !isEditDelete) {
         const entry = remoteMeta.files[fileId];
-        const remoteBinary = isBinaryMimeType(entry?.mimeType);
+        const remoteBinary = shouldTreatAsBinaryFile(entry?.name, entry?.mimeType);
         const content = remoteBinary
           ? await readFileBase64(validTokens.accessToken, fileId)
           : await readFile(validTokens.accessToken, fileId);
@@ -341,14 +348,14 @@ export async function action({ request }: Route.ActionArgs) {
       // Skip files where local hash matches remote, binary content on mobile, or large files
       const toDownload = fileEntries.filter(
         ([id, f]) => {
-          if (skipBinaryContent && isBinaryMimeType(f.mimeType)) return false;
+          if (skipBinaryContent && shouldTreatAsBinaryFile(f.name, f.mimeType)) return false;
           if (skipLargeFiles && f.size && Number(f.size) > LARGE_FILE_CACHE_THRESHOLD) return false;
           return !skipHashes[id] || skipHashes[id] !== f.md5Checksum;
         }
       );
 
       const files = await parallelProcess(toDownload, async ([fileId, fileMeta]) => {
-        const binary = isBinaryMimeType(fileMeta.mimeType);
+        const binary = shouldTreatAsBinaryFile(fileMeta.name, fileMeta.mimeType);
         const [content, meta] = await Promise.all([
           binary
             ? readFileBase64(validTokens.accessToken, fileId)
@@ -591,7 +598,7 @@ export async function action({ request }: Route.ActionArgs) {
         const removedIds: string[] = [];
         for (const fileId of fileIds) {
           const meta = await getFileMetadata(validTokens.accessToken, fileId);
-          const isBinary = isBinaryMimeType(meta.mimeType);
+          const isBinary = shouldTreatAsBinaryFile(meta.name, meta.mimeType);
           const content = isBinary
             ? await readFileBase64(validTokens.accessToken, fileId)
             : await readFile(validTokens.accessToken, fileId);
@@ -658,19 +665,37 @@ export async function action({ request }: Route.ActionArgs) {
       const isNotFoundError = (err: unknown) =>
         err instanceof Error && /\b404\b/.test(err.message);
 
-      // Use client-provided remoteMeta/syncMetaFileId to avoid redundant Drive API calls
-      // When forceRecreate, start from empty meta so it gets fully rebuilt from push results
+      // Full Push overwrites cached files, but must retain remote-only/uncached
+      // entries in the registry so they do not disappear from the file tree.
       const clientRemoteMeta = body.remoteMeta as SyncMeta | undefined;
-      const syncMetaFileId = (body.syncMetaFileId as string) ?? null;
-      let pushRemoteMeta: SyncMeta = forceRecreate
-        ? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] }
-        : clientRemoteMeta
-          ?? (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
-          ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
+      let pushRemoteMeta: SyncMeta = clientRemoteMeta
+        ?? (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
+        ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
 
       // Update files in parallel: read old content, skip upload if unchanged
       const pushResults = await parallelProcess(files, async ({ fileId, content, fileName, encoding }) => {
         const isBinary = encoding === "base64";
+
+        // The client already checked for conflicts, but another device can
+        // update the file before this request reaches Drive. Revalidate the
+        // snapshot immediately before uploading and leave the file dirty when
+        // it changed. Full Push is explicitly authoritative and bypasses this.
+        if (!forceRecreate) {
+          const expected = clientRemoteMeta?.files[fileId];
+          if (expected) {
+            try {
+              const current = await getFileMetadata(validTokens.accessToken, fileId);
+              if (remoteChangedSincePushSnapshot(expected, current)) {
+                return { ok: false as const, fileId, reason: "remote-changed" as const };
+              }
+            } catch (err) {
+              if (isNotFoundError(err)) {
+                return { ok: false as const, fileId, reason: "remote-deleted" as const };
+              }
+              throw err;
+            }
+          }
+        }
 
         // --- Binary file path: decode base64 → use binary upload/create ---
         if (isBinary) {
@@ -750,7 +775,11 @@ export async function action({ request }: Route.ActionArgs) {
         }
 
         const existingMeta = pushRemoteMeta.files[fileId];
-        const mimeType = existingMeta?.mimeType || (fileName ? guessMimeType(fileName) : "text/plain");
+        // Prefer the extension for known text formats. This also repairs old
+        // dashboard/base entries that were recorded as octet-stream.
+        const mimeType = fileName && isTextFileName(fileName)
+          ? guessMimeType(fileName)
+          : existingMeta?.mimeType || (fileName ? guessMimeType(fileName) : "text/plain");
         try {
           const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
           return {
@@ -823,6 +852,7 @@ export async function action({ request }: Route.ActionArgs) {
       // For recreated files, use the newFileId as the meta key
       for (const r of actuallyUploaded) {
         const metaFileId = r.newFileId ?? r.fileId;
+        if (r.newFileId) delete pushRemoteMeta.files[r.fileId];
         const existing = pushRemoteMeta.files[metaFileId];
         pushRemoteMeta.files[metaFileId] = {
           ...existing,
@@ -838,11 +868,12 @@ export async function action({ request }: Route.ActionArgs) {
         // Re-read latest _sync-meta.json to merge entries added by concurrent operations
         // (e.g. usePendingFileMigration creating files while push was in progress)
         const latestMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
-        if (latestMeta && !forceRecreate) {
+        if (latestMeta) {
           // Merge only files updated by this push. Re-applying the entire client
           // snapshot would resurrect stale entries after concurrent deletes/edits.
           for (const r of actuallyUploaded) {
             const metaFileId = r.newFileId ?? r.fileId;
+            if (r.newFileId) delete latestMeta.files[r.fileId];
             const existing = latestMeta.files[metaFileId];
             latestMeta.files[metaFileId] = {
               ...existing,
@@ -854,30 +885,31 @@ export async function action({ request }: Route.ActionArgs) {
             };
           }
           latestMeta.lastUpdatedAt = new Date().toISOString();
-          if (syncMetaFileId) {
-            await updateFile(validTokens.accessToken, syncMetaFileId,
-              JSON.stringify(latestMeta, null, 2), "application/json");
-          } else {
-            await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, latestMeta);
-          }
+          await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, latestMeta);
           // Return merged meta so client has the complete picture
           pushRemoteMeta = latestMeta;
         } else {
           pushRemoteMeta.lastUpdatedAt = new Date().toISOString();
-          if (syncMetaFileId && !forceRecreate) {
-            await updateFile(validTokens.accessToken, syncMetaFileId,
-              JSON.stringify(pushRemoteMeta, null, 2), "application/json");
-          } else {
-            await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
-          }
+          await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, pushRemoteMeta);
         }
+      }
+
+      // A pre-upload conflict leaves the file untouched. Return a fresh meta
+      // snapshot so the client can immediately surface it as a pull/conflict
+      // instead of waiting for the next background poll.
+      if (skippedFileIds.length > 0) {
+        const refreshedMeta = await readRemoteSyncMeta(
+          validTokens.accessToken,
+          validTokens.rootFolderId,
+        );
+        if (refreshedMeta) pushRemoteMeta = refreshedMeta;
       }
 
       // Save remote edit history in background (best-effort, does not block response)
       // Skip binary files — they have no meaningful text diff
       const historyEntries = successful.filter(
         (r) => r.oldContent != null && r.newContent != null && r.oldContent !== r.newContent
-          && !isBinaryMimeType(r.mimeType)
+          && !shouldTreatAsBinaryFile(r.name, r.mimeType)
       );
       if (historyEntries.length > 0) {
         (async () => {

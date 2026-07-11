@@ -50,6 +50,8 @@ export function ConflictDialog({
       try {
         await onResolve(fileId, choice, isEditDelete);
         resolvedIds.current.add(fileId);
+      } catch {
+        // useSync exposes the error; leave this id retryable in the dialog.
       } finally {
         setResolving(null);
       }

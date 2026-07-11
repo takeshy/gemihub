@@ -23,6 +23,7 @@ import { UntrackedFilesDialog } from "~/components/settings/UntrackedFilesDialog
 import { TrashDialog } from "~/components/settings/TrashDialog";
 import { ConflictsDialog } from "~/components/settings/ConflictsDialog";
 import type { UserSettings } from "~/types/settings";
+import { fullPullCacheRecord, type FullPullFilePayload } from "~/services/full-pull-cache";
 
 export function SyncTab({ settings }: { settings: UserSettings }) {
   const { t } = useI18n();
@@ -70,7 +71,8 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
         setCachedFile,
         deleteCachedFile,
         getCachedRemoteMeta,
-        clearAllEditHistory,
+        setCachedRemoteMeta,
+        deleteEditHistoryEntry,
       } = await import("~/services/indexeddb-cache");
       const { ragRegisterInBackground } = await import("~/services/rag-sync");
       const allCached = await getAllCachedFiles();
@@ -105,8 +107,10 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
           : 0;
 
         const pushedResultIds = new Set<string>();
+        const driveIdByPushedId = new Map<string, string>();
         for (const r of data.results as Array<{ fileId: string; newFileId?: string; md5Checksum: string; modifiedTime: string }>) {
           pushedResultIds.add(r.fileId);
+          driveIdByPushedId.set(r.fileId, r.newFileId ?? r.fileId);
           if (r.newFileId) {
             // File was recreated with a new ID — remove old cache entry, create new one
             const oldCached = await getCachedFile(r.fileId);
@@ -134,13 +138,15 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
         }
 
         if (data.remoteMeta) {
-          const files: Record<string, { md5Checksum: string; modifiedTime: string }> = {};
+          const files: Record<string, { md5Checksum: string; modifiedTime: string; name?: string; size?: string }> = {};
           for (const [id, f] of Object.entries(
-            data.remoteMeta.files as Record<string, { md5Checksum?: string; modifiedTime?: string }>
+            data.remoteMeta.files as Record<string, { md5Checksum?: string; modifiedTime?: string; name?: string; size?: string }>
           )) {
             files[id] = {
               md5Checksum: f.md5Checksum ?? "",
               modifiedTime: f.modifiedTime ?? "",
+              name: f.name,
+              size: f.size,
             };
           }
           await setLocalSyncMeta({
@@ -148,13 +154,24 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
             lastUpdatedAt: data.remoteMeta.lastUpdatedAt,
             files,
           });
+          await setCachedRemoteMeta({
+            id: "current",
+            rootFolderId: cachedRemote?.rootFolderId ?? "",
+            lastUpdatedAt: data.remoteMeta.lastUpdatedAt,
+            files: data.remoteMeta.files,
+            cachedAt: Date.now(),
+          });
           setLastUpdatedAt(data.remoteMeta.lastUpdatedAt);
         } else {
           setLastUpdatedAt(new Date().toISOString());
         }
-        // Full push covers all cached files — clear all edit history
-        await clearAllEditHistory();
-        const successfulFiles = pushedFiles.filter((f) => pushedResultIds.has(f.fileId));
+        // Keep failed/excluded files dirty so they remain retryable.
+        for (const fileId of pushedResultIds) {
+          await deleteEditHistoryEntry(fileId);
+        }
+        const successfulFiles = pushedFiles
+          .filter((f) => pushedResultIds.has(f.fileId))
+          .map((f) => ({ ...f, fileId: driveIdByPushedId.get(f.fileId) ?? f.fileId }));
         ragRegisterInBackground(successfulFiles);
         const fullPushCompletion = getSyncCompletionStatus(skippedCount, "Full push");
         if (fullPushCompletion.error) {
@@ -163,7 +180,6 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
           setNotifyDialog({ message: t("settings.sync.fullPushCompleted"), variant: "info" });
         }
       } else if (allCached.length === 0) {
-        await clearAllEditHistory();
         setNotifyDialog({ message: t("settings.sync.noCachedFiles"), variant: "info" });
       } else {
         setNotifyDialog({ message: t("settings.sync.noSyncEligibleFiles"), variant: "info" });
@@ -181,16 +197,21 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
     setActionLoading("fullPull");
     setActionMsg(null);
     try {
-      const { getAllCachedFiles, getAllCachedFileIds, setCachedFile, deleteCachedFile, setLocalSyncMeta, clearAllEditHistory } = await import("~/services/indexeddb-cache");
-      const cachedFiles = await getAllCachedFiles();
-      const skipHashes: Record<string, string> = {};
-      for (const f of cachedFiles) {
-        if (f.md5Checksum) skipHashes[f.fileId] = f.md5Checksum;
-      }
+      const {
+        getAllCachedFileIds,
+        setCachedFile,
+        deleteCachedFile,
+        setLocalSyncMeta,
+        clearAllEditHistory,
+        getCachedRemoteMeta,
+        setCachedRemoteMeta,
+      } = await import("~/services/indexeddb-cache");
       const res = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "fullPull", skipHashes }),
+        // Full Pull is authoritative: always download remote content. Cached
+        // checksums may describe the pre-edit baseline rather than cache bytes.
+        body: JSON.stringify({ action: "fullPull" }),
       });
       if (!res.ok) throw new Error(t("settings.sync.fullPullFailed"));
       const data = await res.json();
@@ -198,23 +219,18 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
       const updatedMeta = {
         id: "current" as const,
         lastUpdatedAt: new Date().toISOString(),
-        files: {} as Record<string, { md5Checksum: string; modifiedTime: string }>,
+        files: {} as Record<string, { md5Checksum: string; modifiedTime: string; name?: string; size?: string }>,
       };
-      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { md5Checksum: string; modifiedTime: string }>)) {
+      for (const [fileId, fileMeta] of Object.entries(data.remoteMeta.files as Record<string, { md5Checksum: string; modifiedTime: string; name?: string; size?: string }>)) {
         updatedMeta.files[fileId] = {
           md5Checksum: fileMeta.md5Checksum,
           modifiedTime: fileMeta.modifiedTime,
+          name: fileMeta.name,
+          size: fileMeta.size,
         };
       }
-      for (const file of data.files) {
-        await setCachedFile({
-          fileId: file.fileId,
-          content: file.content,
-          md5Checksum: file.md5Checksum,
-          modifiedTime: file.modifiedTime,
-          cachedAt: Date.now(),
-          fileName: file.fileName,
-        });
+      for (const file of data.files as FullPullFilePayload[]) {
+        await setCachedFile(fullPullCacheRecord(file));
       }
 
       // Delete cached files that no longer exist on remote
@@ -230,6 +246,14 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
       await clearAllEditHistory();
 
       await setLocalSyncMeta(updatedMeta);
+      const cachedRemote = await getCachedRemoteMeta();
+      await setCachedRemoteMeta({
+        id: "current",
+        rootFolderId: cachedRemote?.rootFolderId ?? "",
+        lastUpdatedAt: data.remoteMeta.lastUpdatedAt,
+        files: data.remoteMeta.files,
+        cachedAt: Date.now(),
+      });
       setLastUpdatedAt(updatedMeta.lastUpdatedAt);
       window.dispatchEvent(new Event("sync-complete"));
       const pulledIds = (data.files as { fileId: string }[]).map((f) => f.fileId);

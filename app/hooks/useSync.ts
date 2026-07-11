@@ -5,7 +5,6 @@ import {
   getCachedFile,
   setCachedFile,
   deleteCachedFile,
-  getAllCachedFiles,
   getAllCachedFileIds,
   clearAllEditHistory,
   getLocallyModifiedFileIds,
@@ -19,9 +18,10 @@ import {
 import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
 import { awaitPendingMigrations } from "~/services/pending-file-migration";
 import { ragRegisterInBackground } from "~/services/rag-sync";
+import { fullPullCacheRecord, type FullPullFilePayload } from "~/services/full-pull-cache";
 import {
   isSyncExcludedPath,
-  isBinaryMimeType,
+  shouldTreatAsBinaryFile,
   isLargeFile,
   getSyncCompletionStatus,
   SYNC_EXCLUDED_FILE_NAMES,
@@ -275,7 +275,6 @@ export function useSync() {
       if (!syncRes.ok) throw new Error("Failed to fetch remote meta");
       const syncData = await syncRes.json();
       const remoteMeta = syncData.remoteMeta as SyncMeta | null;
-      const syncMetaFileId = syncData.syncMetaFileId as string | null;
 
       // 2. Get local state
       const localMeta = (await getLocalSyncMeta()) ?? null;
@@ -360,9 +359,13 @@ export function useSync() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "pushFiles",
-            files: filesToPush.map(({ fileId, content, fileName, encoding }) => ({ fileId, content, ...(encoding ? { encoding, fileName } : {}) })),
+            files: filesToPush.map(({ fileId, content, fileName, encoding }) => ({
+              fileId,
+              content,
+              fileName,
+              ...(encoding ? { encoding } : {}),
+            })),
             remoteMeta,
-            syncMetaFileId,
           }),
         });
         if (!pushRes.ok) throw new Error("Failed to push files");
@@ -551,15 +554,17 @@ export function useSync() {
         const filesToDownload = filesToPull.filter((id) => {
           if (remoteOnlySet.has(id)) return false;
           if (metadataOnlyIds.has(id)) return false;
-          if (isMobile && isBinaryMimeType(remoteFiles[id]?.mimeType)) return false;
+          if (isMobile && shouldTreatAsBinaryFile(remoteFiles[id]?.name, remoteFiles[id]?.mimeType)) return false;
           if (isLargeFile(remoteFiles[id]?.size)) return false;
           return true;
         });
 
         // Build mimeTypes map so server can use readFileBase64 for binary files
         const mimeTypes: Record<string, string> = {};
+        const fileNames: Record<string, string> = {};
         for (const id of filesToDownload) {
           if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
+          if (remoteFiles[id]?.name) fileNames[id] = remoteFiles[id].name;
         }
 
         // Track metadata-only entries (new remote files, mobile binary, large
@@ -567,7 +572,7 @@ export function useSync() {
         for (const id of filesToPull) {
           const rm = remoteFiles[id];
           const isNewRemote = remoteOnlySet.has(id);
-          const skippedMobile = isMobile && isBinaryMimeType(rm?.mimeType);
+          const skippedMobile = isMobile && shouldTreatAsBinaryFile(rm?.name, rm?.mimeType);
           const skippedLarge = isLargeFile(rm?.size);
           if (isNewRemote || skippedMobile || skippedLarge || metadataOnlyIds.has(id)) {
             updatedMeta.files[id] = {
@@ -583,7 +588,7 @@ export function useSync() {
           const pullRes = await fetch("/api/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "pullDirect", fileIds: filesToDownload, mimeTypes }),
+            body: JSON.stringify({ action: "pullDirect", fileIds: filesToDownload, mimeTypes, fileNames }),
           });
           if (!pullRes.ok) throw new Error("Failed to pull changes");
           const pullData = await pullRes.json();
@@ -677,7 +682,9 @@ export function useSync() {
 
   const resolveConflict = useCallback(
     async (fileId: string, choice: "local" | "remote", isEditDelete?: boolean) => {
-      if (syncLockRef.current) { console.warn("[useSync] resolveConflict skipped: sync already in progress"); return; }
+      if (syncLockRef.current) {
+        throw new Error("Sync already in progress");
+      }
       syncLockRef.current = true;
       setError(null);
       try {
@@ -809,6 +816,7 @@ export function useSync() {
       } catch (err) {
         setError(err instanceof Error ? err.message : "Resolve failed");
         setSyncStatus("error");
+        throw err;
       } finally {
         syncLockRef.current = false;
       }
@@ -822,15 +830,6 @@ export function useSync() {
     setSyncStatus("pulling");
     setError(null);
     try {
-      // Build skipHashes from all cached files
-      const cachedFiles = await getAllCachedFiles();
-      const skipHashes: Record<string, string> = {};
-      for (const f of cachedFiles) {
-        if (f.md5Checksum) {
-          skipHashes[f.fileId] = f.md5Checksum;
-        }
-      }
-
       const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
       const res = await fetch("/api/sync", {
@@ -838,7 +837,9 @@ export function useSync() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "fullPull",
-          skipHashes,
+          // Full Pull is authoritative. A cached checksum is the last remote
+          // baseline and can still match after the local bytes were edited.
+          // Always fetch eligible remote content before clearing edit history.
           skipBinaryContent: isMobile,
           skipLargeFiles: true,
         }),
@@ -866,28 +867,26 @@ export function useSync() {
         };
       }
 
-      for (const file of data.files as Array<{ fileId: string; content: string; md5Checksum: string; modifiedTime: string; fileName: string; encoding?: "base64" }>) {
+      for (const file of data.files as FullPullFilePayload[]) {
         if (!file.encoding) await addCommitBoundary(file.fileId);
-        await setCachedFile({
-          fileId: file.fileId,
-          content: file.content,
-          md5Checksum: file.md5Checksum,
-          modifiedTime: file.modifiedTime,
-          cachedAt: Date.now(),
-          fileName: file.fileName,
-          ...(file.encoding ? { encoding: file.encoding } : {}),
-        });
+        await setCachedFile(fullPullCacheRecord(file));
       }
 
       // Delete cached files that no longer exist on remote,
       // or binary files that should not be cached on mobile
-      const remoteMetaFiles = data.remoteMeta.files as Record<string, { mimeType?: string; size?: string }>;
+      const remoteMetaFiles = data.remoteMeta.files as Record<string, { name?: string; mimeType?: string; size?: string }>;
       const remoteFileIds = new Set(Object.keys(remoteMetaFiles));
       const allCachedIds = await getAllCachedFileIds();
       for (const cachedId of allCachedIds) {
         if (!remoteFileIds.has(cachedId)) {
           await deleteCachedFile(cachedId);
-        } else if (isMobile && isBinaryMimeType(remoteMetaFiles[cachedId]?.mimeType)) {
+        } else if (
+          isMobile
+          && shouldTreatAsBinaryFile(
+            remoteMetaFiles[cachedId]?.name,
+            remoteMetaFiles[cachedId]?.mimeType,
+          )
+        ) {
           await deleteCachedFile(cachedId);
         } else if (isLargeFile(remoteMetaFiles[cachedId]?.size)) {
           await deleteCachedFile(cachedId);
@@ -944,7 +943,7 @@ export function useSync() {
     const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
     const targets = fileIds.filter((id) => {
-      if (isMobile && isBinaryMimeType(remoteFiles[id]?.mimeType)) return false;
+      if (isMobile && shouldTreatAsBinaryFile(remoteFiles[id]?.name, remoteFiles[id]?.mimeType)) return false;
       if (isLargeFile(remoteFiles[id]?.size)) return false;
       return true;
     });
@@ -960,13 +959,15 @@ export function useSync() {
       for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
         const chunk = targets.slice(i, i + CHUNK_SIZE);
         const mimeTypes: Record<string, string> = {};
+        const fileNames: Record<string, string> = {};
         for (const id of chunk) {
           if (remoteFiles[id]?.mimeType) mimeTypes[id] = remoteFiles[id].mimeType;
+          if (remoteFiles[id]?.name) fileNames[id] = remoteFiles[id].name;
         }
         const res = await fetch("/api/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "pullDirect", fileIds: chunk, mimeTypes }),
+          body: JSON.stringify({ action: "pullDirect", fileIds: chunk, mimeTypes, fileNames }),
         });
         if (!res.ok) throw new Error("Failed to cache files");
         const data = await res.json();
