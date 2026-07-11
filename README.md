@@ -46,6 +46,10 @@ Add a **Secret Manager widget** to create, browse, unlock, copy, and update encr
 
 Secret values are protected by GemiHub's RSA + AES encryption. Names, descriptions, and visible fields are intentionally stored outside the ciphertext so they can be listed and searched before unlocking; do not put secret values in those fields. Configure encryption in Settings before creating a secret.
 
+![Secret Manager Widget](./public/images/secret_manager.png)
+
+![New Secret Dialog](./public/images/secret_manager_new.png)
+
 ### AI That Knows Your Data
 
 Unlike generic AI chat, GemiHub connects directly to your Google Drive. The AI can read your files, search across them, create new documents, and update existing ones — all through natural conversation. Ask questions about your notes, generate summaries of your documents, or have the AI organize your files for you.

@@ -166,6 +166,10 @@ The `memo-list` widget browses every memo file under `Dashboards/Memos/` (config
 
 The `secret-manager` widget manages encrypted values as normal local-first `.encrypted` files. It is implemented by `widgets/SecretManagerWidget.tsx`; path normalization and search helpers live in `secret-manager.ts`.
 
+![Secret Manager widget](../../public/images/secret_manager.png)
+
+![New secret dialog](../../public/images/secret_manager_new.png)
+
 ```yaml
 config:
   folder: Secrets       # optional root; blank lists all encrypted files
