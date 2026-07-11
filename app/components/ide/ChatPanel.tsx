@@ -20,8 +20,11 @@ import {
 } from "~/types/settings";
 import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
-import { ChatInput } from "~/components/chat/ChatInput";
+import { ChatInput, type ChatInputHandle } from "~/components/chat/ChatInput";
 import { OkfUpdateDialog } from "~/components/chat/OkfUpdateDialog";
+import { createNewDashboard, dashboardPath, listDashboardFiles } from "~/dashboard/dashboardFile";
+import { requestOpenDashboard } from "~/dashboard/pendingDashboardOpen";
+import { isGemihubOkfBundleName } from "~/services/gemihub-okf-manifest";
 import { useI18n } from "~/i18n/context";
 import { shouldUseImageModel, shouldEnableThinking } from "~/utils/keyword-detection";
 import { isImageGenerationModel } from "~/types/settings";
@@ -221,6 +224,8 @@ interface ChatPanelProps {
   onSkillWorkflowLog?: (log: import("~/engine/types").ExecutionLog) => void;
   /** Open a file in the main viewer (used for clickable skill chips). */
   onOpenFile?: (fileId: string, fileName: string, mimeType: string) => void;
+  /** Navigate the main viewer back to the Dashboard (shown as an entry point on the empty chat state). */
+  onGoToDashboard?: () => void;
 }
 
 export function ChatPanel({
@@ -233,6 +238,7 @@ export function ChatPanel({
   onSkillWorkflowEnd,
   onSkillWorkflowLog,
   onOpenFile,
+  onGoToDashboard,
 }: ChatPanelProps) {
   const { t, language: uiLanguage } = useI18n();
   const {
@@ -325,6 +331,8 @@ export function ChatPanel({
   const handleSendRef = useRef<
     ((content: string, attachments?: Attachment[], overrides?: ChatOverrides) => Promise<void>) | null
   >(null);
+  const chatInputRef = useRef<ChatInputHandle>(null);
+  const creatingDashboardRef = useRef(false);
   const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
@@ -1456,6 +1464,41 @@ export function ChatPanel({
     }
   }, [messages, isStreaming, isCompacting, saveChat, selectedModel, settings.apiPlan, t]);
 
+  // Draft (not send) a question about GemiHub itself, enabling the installed
+  // GemiHub OKF help bundle if one is present, for the empty-chat "Ask about
+  // GemiHub" entry point.
+  const handleAskAboutGemihub = useCallback(() => {
+    const helpBundle = okfBundles.find((bundle) => isGemihubOkfBundleName(bundle.name));
+    if (helpBundle && !activeOkfBundleIds.includes(helpBundle.id)) {
+      toggleOkfBundle(helpBundle.id);
+    }
+    chatInputRef.current?.setDraft(t("chat.askAboutGemihubDraft"));
+  }, [okfBundles, activeOkfBundleIds, toggleOkfBundle, t]);
+
+  // Create a new dashboard and navigate to it, for the empty-chat "New
+  // Dashboard" entry point.
+  const handleCreateDashboardFromChat = useCallback(async () => {
+    // window.prompt blocks the page while open, but nothing disables this
+    // button while the async work below runs — guard against a second click
+    // (e.g. a slow connection) creating a genuine duplicate dashboard.
+    if (creatingDashboardRef.current) return;
+    const name = window.prompt(t("chat.newDashboardPrompt"))?.trim();
+    if (!name) return;
+    creatingDashboardRef.current = true;
+    try {
+      const existing = await listDashboardFiles();
+      if (existing.some((entry) => entry.fileName === dashboardPath(name))) {
+        alert(t("dashboard.dashboardNameExists"));
+        return;
+      }
+      await createNewDashboard(name);
+      requestOpenDashboard(dashboardPath(name));
+      onGoToDashboard?.();
+    } finally {
+      creatingDashboardRef.current = false;
+    }
+  }, [onGoToDashboard, t]);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Chat history selector */}
@@ -1540,10 +1583,14 @@ export function ChatPanel({
         alwaysThink={getThinkingToggle(selectedModel) === true}
         isPro={settings.hubwork?.plan === "pro" || settings.hubwork?.plan === "granted"}
         onBuildWebApp={() => handleSend("", undefined, { skillId: "webpage-builder" })}
+        onGoToDashboard={onGoToDashboard}
+        onCreateDashboard={() => void handleCreateDashboardFromChat()}
+        onAskAboutGemihub={handleAskAboutGemihub}
       />
 
       {/* Input */}
       <ChatInput
+        ref={chatInputRef}
         onSend={handleSend}
         disabled={!hasApiKey && !getCachedApiKey()}
         models={availableModels}

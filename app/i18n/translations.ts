@@ -98,6 +98,10 @@ export interface TranslationStrings {
   "secretManager.fieldName": string;
   "secretManager.fieldValue": string;
   "secretManager.openFailed": string;
+  "secretManager.delete": string;
+  "secretManager.deleteConfirm": string;
+  "secretManager.deleteFailed": string;
+  "secretManager.openFile": string;
   "dashboard.alignHorizontal": string;
   "dashboard.alignVertical": string;
   "mainViewer.diff": string;
@@ -432,6 +436,15 @@ export interface TranslationStrings {
   "chat.welcomeBuilderLogin": string;
   "chat.welcomeBuilderCalendar": string;
   "chat.welcomeBuilderApi": string;
+  "chat.helpTitle": string;
+  "chat.helpDescription": string;
+  "chat.askAboutGemihub": string;
+  "chat.askAboutGemihubDraft": string;
+  "chat.dashboardTitle": string;
+  "chat.dashboardDescription": string;
+  "chat.openCurrentDashboard": string;
+  "chat.createDashboard": string;
+  "chat.newDashboardPrompt": string;
 
   // Message usage
   "message.tokens": string;
@@ -1269,6 +1282,10 @@ const en: TranslationStrings = {
   "secretManager.fieldName": "Field (e.g. email)",
   "secretManager.fieldValue": "Visible value",
   "secretManager.openFailed": "Failed to open the encrypted file.",
+  "secretManager.delete": "Delete",
+  "secretManager.deleteConfirm": "Delete \"{name}\"? This moves the file to trash.",
+  "secretManager.deleteFailed": "Failed to delete the secret.",
+  "secretManager.openFile": "Open this file",
   "dashboard.alignHorizontal": "Arrange in columns",
   "dashboard.alignVertical": "Arrange in rows",
   "mainViewer.raw": "Raw",
@@ -1604,6 +1621,15 @@ const en: TranslationStrings = {
   "chat.welcomeBuilderLogin": "User login via Google Sheets — add emails to a spreadsheet to manage access",
   "chat.welcomeBuilderCalendar": "Booking system — let logged-in users reserve your available Google Calendar slots",
   "chat.welcomeBuilderApi": "Custom APIs — build endpoints that interact with Google Sheets, Calendar, and more",
+  "chat.helpTitle": "GemiHub help",
+  "chat.helpDescription": "Enable the GemiHub OKF help bundle (if installed) and ask about features, settings, workflows, search, and dashboards.",
+  "chat.askAboutGemihub": "Ask about GemiHub",
+  "chat.askAboutGemihubDraft": "How do I use GemiHub?",
+  "chat.dashboardTitle": "Dashboards",
+  "chat.dashboardDescription": "Dashboards collect files, workflows, and widgets into one editable workspace.",
+  "chat.openCurrentDashboard": "Open Dashboard",
+  "chat.createDashboard": "New Dashboard",
+  "chat.newDashboardPrompt": "Name for the new dashboard",
 
   // Message usage
   "message.tokens": "Tokens",
@@ -2442,6 +2468,10 @@ const ja: TranslationStrings = {
   "secretManager.fieldName": "項目名（例: email）",
   "secretManager.fieldValue": "復号前に表示する値",
   "secretManager.openFailed": "暗号化ファイルを開けませんでした。",
+  "secretManager.delete": "削除",
+  "secretManager.deleteConfirm": "「{name}」を削除しますか？ゴミ箱に移動します。",
+  "secretManager.deleteFailed": "シークレットを削除できませんでした。",
+  "secretManager.openFile": "このファイルを開く",
   "dashboard.alignHorizontal": "横に整列",
   "dashboard.alignVertical": "縦に整列",
   "mainViewer.raw": "Raw",
@@ -2777,6 +2807,15 @@ const ja: TranslationStrings = {
   "chat.welcomeBuilderLogin": "Google Sheetsでユーザーログイン — スプレッドシートにメールアドレスを追加してアクセス管理",
   "chat.welcomeBuilderCalendar": "予約システム — ログインしたユーザーがGoogleカレンダーの空き時間を予約",
   "chat.welcomeBuilderApi": "カスタムAPI — Google Sheets、Calendar等と連携するエンドポイントを構築",
+  "chat.helpTitle": "GemiHubのヘルプ",
+  "chat.helpDescription": "GemiHub OKFヘルプバンドル（導入済みの場合）を有効にして、機能・設定・ワークフロー・検索・ダッシュボードについて質問できます。",
+  "chat.askAboutGemihub": "GemiHubについて質問する",
+  "chat.askAboutGemihubDraft": "GemiHubの使い方を教えて",
+  "chat.dashboardTitle": "ダッシュボード",
+  "chat.dashboardDescription": "ダッシュボードはファイル・ワークフロー・ウィジェットを1つの編集可能なワークスペースにまとめます。",
+  "chat.openCurrentDashboard": "ダッシュボードを開く",
+  "chat.createDashboard": "新規ダッシュボード",
+  "chat.newDashboardPrompt": "新しいダッシュボードの名前",
 
   // Message usage
   "message.tokens": "トークン",

@@ -1117,6 +1117,7 @@ function IDEContent({
             setSilentExecLogs((prev) => [...prev, { nodeId: log.nodeId, nodeType: log.nodeType, message: log.message, status: log.status, timestamp: log.timestamp.toISOString(), input: log.input, output: log.output }]);
           }}
           onOpenFile={handleSelectFile}
+          onGoToDashboard={clearActiveFile}
         />
       </div>
       {rightPanel === "workflow" && !activePluginSidebarView ? (

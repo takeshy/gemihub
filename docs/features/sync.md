@@ -387,6 +387,12 @@ Chat → Server (createFile on Drive + upsertFileInMeta)
 - Diff result: `localChanged = false`, `remoteChanged = false` → **already synced**
 - No push needed
 
+### New-File Migration (`new:` Placeholder IDs)
+
+Widgets/editors that create a file via `writeFileLocal(fileName, content)` with no `existingFileId` get a local-only `new:${fileName}` placeholder id immediately; `app/services/pending-file-migration.ts` uploads it to Drive in the background (on `pending-files-created`, on mount, or when coming back online) and swaps the cache/`CachedRemoteMeta`/`LocalSyncMeta` entries from the placeholder id to the real Drive id, dispatching `file-id-migrated` (`{ oldId, newId, fileName, mimeType }`) so open-file state elsewhere (`useActiveFile.ts`, `DashboardHost.tsx`) can follow the swap.
+
+If a caller edits the file again (via `writeFileLocal(fileName, content, { existingFileId })`) using the stale placeholder id **after** migration has already deleted that cache entry — a real race when the edit happens moments after creation — `writeFileLocal` resolves the current id by name (`findFileByNameLocal`) instead of resurrecting a cache entry under the dead `new:` id. Without this, the resurrected entry has no `CachedRemoteMeta` record but `getPendingNewFiles()` scans the raw cache directly, so the next migration pass would re-upload it as a genuine second Drive file with the same name — visible as two duplicate entries (the original, and one carrying whatever was written during the race).
+
 ---
 
 ## File Recovery

@@ -383,6 +383,10 @@ export async function createNewDashboard(name: string): Promise<string> {
   window.dispatchEvent(
     new CustomEvent("file-modified", { detail: { fileId: result.fileId } }),
   );
+  // writeFileLocal alone doesn't rebuild the sidebar file tree (only the
+  // "modified" indicator badges) — dispatch tree-meta-updated so the new
+  // dashboard shows up there immediately instead of only after a reload.
+  window.dispatchEvent(new CustomEvent("tree-meta-updated"));
   return result.fileId;
 }
 

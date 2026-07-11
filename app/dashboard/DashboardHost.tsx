@@ -26,6 +26,7 @@ import {
   dashboardDisplayName,
   type DashboardFileEntry,
 } from "./dashboardFile";
+import { OPEN_DASHBOARD_EVENT, consumePendingDashboardOpen } from "./pendingDashboardOpen";
 import type { DashboardData } from "./types";
 
 interface DashboardHostProps {
@@ -56,10 +57,15 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
   fileIdRef.current = fileId;
   fileNameRef.current = fileName;
 
-  // Load home dashboard + dashboard list on mount
+  // Load home dashboard + dashboard list on mount. A pending path (set by
+  // requestOpenDashboard before DashboardHost mounts, e.g. from the chat
+  // panel's "New Dashboard" button) takes priority over the home dashboard.
   const loadAll = useCallback(async () => {
+    const pendingPath = consumePendingDashboardOpen();
     const [homeResult, dashboardList] = await Promise.all([
-      resolveHomeDashboard(settings.homeDashboard),
+      pendingPath
+        ? loadDashboardByPath(pendingPath).then((result) => result ? { ...result, fileName: pendingPath } : null)
+        : resolveHomeDashboard(settings.homeDashboard),
       listDashboardFiles(),
     ]);
     setDashboards(dashboardList);
@@ -81,6 +87,50 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle requestOpenDashboard while already mounted (the pending-path check
+  // in loadAll only fires on mount, so a request that arrives afterward
+  // needs a live listener instead).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const path = (event as CustomEvent<{ path: string }>).detail?.path;
+      if (!path) return;
+      void (async () => {
+        const [result, list] = await Promise.all([loadDashboardByPath(path), listDashboardFiles()]);
+        setDashboards(list);
+        if (result) {
+          setData(result.data);
+          setFileId(result.fileId);
+          setFileName(path);
+        }
+        setLoading(false);
+      })();
+    };
+    window.addEventListener(OPEN_DASHBOARD_EVENT, handler);
+    return () => window.removeEventListener(OPEN_DASHBOARD_EVENT, handler);
+  }, []);
+
+  // A freshly created dashboard is cached under a `new:` id until the
+  // background migration to Drive completes. Without this, fileIdRef stays
+  // stale after migration: the next debounced save (handleCommit) targets the
+  // old `new:` id, whose cache entry migration already deleted, so
+  // writeFileLocal silently re-creates an orphaned `new:` cache entry with no
+  // CachedRemoteMeta counterpart. A later migration pass can then pick that
+  // orphan back up and upload it as a second, genuinely duplicate Drive file.
+  // Refreshing the dashboard list here also self-heals the switcher without
+  // requiring a manual reload.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const { oldId, newId } = (event as CustomEvent<{ oldId: string; newId: string }>).detail ?? {};
+      if (oldId && oldId === fileIdRef.current) {
+        setFileId(newId);
+        fileIdRef.current = newId;
+      }
+      void listDashboardFiles().then(setDashboards);
+    };
+    window.addEventListener("file-id-migrated", handler);
+    return () => window.removeEventListener("file-id-migrated", handler);
   }, []);
 
   // Cleanup pending save timer on unmount

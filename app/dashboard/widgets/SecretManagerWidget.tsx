@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  ExternalLink,
   FileKey2,
   Folder,
   Loader2,
@@ -11,13 +12,16 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import {
+  deleteFileLocal,
   findFileByNameLocal,
   listFilesLocal,
   readFileLocal,
+  renameFileLocal,
   writeFileLocal,
 } from "~/services/drive-local";
 import {
@@ -28,14 +32,14 @@ import {
   isEncryptedFile,
 } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
-import type { SecretManagerConfig } from "../secret-manager";
+import type { SecretManagerConfig, SecretTreeDir, SecretTreeNode } from "../secret-manager";
 import {
+  buildSecretTree,
   matchesSecretSearch,
   normalizeSecretFolder,
   secretFilePath,
 } from "../secret-manager";
 import { parallelProcess } from "~/utils/parallel";
-import { buildDialogRows, type DialogGroupRow, type DialogRow } from "~/utils/sync-diff-grouping";
 import type { EncryptionSettings } from "~/types/settings";
 
 interface SecretEntry {
@@ -100,6 +104,9 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
   const [error, setError] = useState("");
   const [viewing, setViewing] = useState<SecretEntry | null>(null);
   const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({});
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState("");
 
   const refresh = useCallback(async () => {
     const result = await listFilesLocal(folder || undefined, {
@@ -151,20 +158,42 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
     ),
     [entries, query],
   );
+  const tree = useMemo(
+    () => buildSecretTree(filtered, (entry) => relativeSecretPath(entry.name, folder)),
+    [filtered, folder],
+  );
   const entryById = useMemo(
     () => new Map(filtered.map((entry) => [entry.id, entry])),
     [filtered],
   );
-  const groupedRows = useMemo(
-    () => buildDialogRows(filtered.map((entry) => ({
-      id: entry.id,
-      name: relativeSecretPath(entry.name, folder),
-      type: "modified" as const,
-    }))),
-    [filtered, folder],
-  );
 
   const openSecret = useCallback((entry: SecretEntry) => setViewing(entry), []);
+
+  const moveSecret = useCallback(async (entry: SecretEntry, targetDirectory: string) => {
+    setMoveError("");
+    try {
+      const newPath = secretFilePath(folder, displayName(entry.name), targetDirectory);
+      if (newPath === entry.name) return;
+      if (await findFileByNameLocal(newPath)) {
+        setMoveError(t("secretManager.duplicate"));
+        return;
+      }
+      await renameFileLocal(entry.id, newPath);
+      await refresh();
+    } catch {
+      setMoveError(t("secretManager.updateFailed"));
+    }
+  }, [folder, refresh, t]);
+
+  const deleteSecret = useCallback(async (entry: SecretEntry) => {
+    if (!window.confirm(t("secretManager.deleteConfirm").replace("{name}", displayName(entry.name)))) return;
+    try {
+      await deleteFileLocal(entry.id);
+      await refresh();
+    } catch {
+      setMoveError(t("secretManager.deleteFailed"));
+    }
+  }, [refresh, t]);
 
   const resetCreate = () => {
     setName("");
@@ -229,11 +258,20 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
       key={entry.id}
       role="button"
       tabIndex={0}
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/plain", entry.id);
+        event.dataTransfer.effectAllowed = "move";
+        setDraggingId(entry.id);
+      }}
+      onDragEnd={() => setDraggingId(null)}
       onClick={() => openSecret(entry)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") openSecret(entry);
       }}
-      className="group flex cursor-pointer items-start gap-2 border-b border-gray-100 px-3 py-2 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60"
+      className={`group flex cursor-pointer items-start gap-2 border-b border-gray-100 px-3 py-2 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60 ${
+        draggingId === entry.id ? "opacity-50" : ""
+      }`}
     >
       <FileKey2 size={16} className="mt-0.5 shrink-0 text-amber-500" />
       <div className="min-w-0 flex-1">
@@ -254,49 +292,75 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
             ))}
           </div>
         )}
-        <div className="mt-0.5 truncate text-[10px] text-gray-400">{entry.name}</div>
+        {entry.modifiedTime && (
+          <div className="mt-0.5 truncate text-[10px] text-gray-400">
+            {new Date(entry.modifiedTime).toLocaleString()}
+          </div>
+        )}
       </div>
+      <button
+        type="button"
+        title={t("secretManager.delete")}
+        onClick={(event) => { event.stopPropagation(); void deleteSecret(entry); }}
+        className="shrink-0 rounded p-1 text-gray-300 opacity-0 hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:text-gray-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+      >
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 
-  const renderGroupRow = ({ folderPath, items, children }: DialogGroupRow): ReactNode => {
-    const expanded = query.trim() !== "" || (groupExpanded[folderPath] ?? false);
+  const countFiles = (node: SecretTreeNode<SecretEntry>): number =>
+    node.kind === "file" ? 1 : node.children.reduce((sum, child) => sum + countFiles(child), 0);
+
+  const renderDirNode = (dir: SecretTreeDir<SecretEntry>): ReactNode => {
+    const expanded = query.trim() !== "" || (groupExpanded[dir.path] ?? false);
+    const isDragOver = dragOverPath === dir.path;
     return (
-      <div key={`group:${folderPath}`} className="border-b border-amber-100 dark:border-amber-900/40">
+      <div key={`dir:${dir.path}`} className="border-b border-amber-100 dark:border-amber-900/40">
         <button
           type="button"
           aria-expanded={expanded}
           onClick={() => setGroupExpanded((previous) => ({
             ...previous,
-            [folderPath]: !(previous[folderPath] ?? false),
+            [dir.path]: !(previous[dir.path] ?? false),
           }))}
-          className="flex w-full items-center gap-2 border-l-4 border-amber-400 bg-amber-50 px-3 py-2.5 text-left transition-colors hover:border-amber-500 hover:bg-amber-100 dark:border-amber-500 dark:bg-amber-950/35 dark:hover:bg-amber-900/40"
+          onDragOver={(event) => { if (draggingId) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+          onDragEnter={() => { if (draggingId) setDragOverPath(dir.path); }}
+          onDragLeave={() => setDragOverPath((current) => current === dir.path ? null : current)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragOverPath(null);
+            const id = event.dataTransfer.getData("text/plain");
+            const entry = entryById.get(id);
+            setDraggingId(null);
+            if (entry) void moveSecret(entry, dir.path);
+          }}
+          className={`flex w-full items-center gap-2 border-l-4 border-amber-400 bg-amber-50 px-3 py-2.5 text-left transition-colors hover:border-amber-500 hover:bg-amber-100 dark:border-amber-500 dark:bg-amber-950/35 dark:hover:bg-amber-900/40 ${
+            isDragOver ? "ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""
+          }`}
         >
           {expanded
             ? <ChevronDown size={17} className="shrink-0 text-amber-600 dark:text-amber-400" />
             : <ChevronRight size={17} className="shrink-0 text-amber-600 dark:text-amber-400" />}
           <Folder size={18} className="shrink-0 fill-amber-200 text-amber-600 dark:fill-amber-800 dark:text-amber-400" />
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-amber-950 dark:text-amber-100" title={folderPath}>
-            {folderPath}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-amber-950 dark:text-amber-100" title={dir.name}>
+            {dir.name}
           </span>
           <span className="min-w-6 shrink-0 rounded-full bg-amber-200 px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-amber-800 dark:bg-amber-800 dark:text-amber-100">
-            {items.length}
+            {countFiles(dir)}
           </span>
         </button>
         {expanded && (
           <div className="ml-5 border-l-2 border-amber-200 dark:border-amber-800/70">
-            {children.map(renderRow)}
+            {dir.children.map(renderNode)}
           </div>
         )}
       </div>
     );
   };
 
-  const renderRow = (row: DialogRow): ReactNode => {
-    if (row.kind === "group") return renderGroupRow(row);
-    const entry = entryById.get(row.item.id);
-    return entry ? renderSecretEntry(entry) : null;
-  };
+  const renderNode = (node: SecretTreeNode<SecretEntry>): ReactNode =>
+    node.kind === "dir" ? renderDirNode(node) : renderSecretEntry(node.entry);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white dark:bg-gray-900">
@@ -330,7 +394,28 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {moveError && (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+          {moveError}
+          <button type="button" onClick={() => setMoveError("")} className="shrink-0 rounded p-0.5 hover:bg-red-100 dark:hover:bg-red-900/40"><X size={12} /></button>
+        </div>
+      )}
+
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto ${dragOverPath === "" ? "bg-blue-50/60 dark:bg-blue-950/20" : ""}`}
+        onDragOver={(event) => { if (draggingId) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+        onDragEnter={(event) => { if (draggingId && event.target === event.currentTarget) setDragOverPath(""); }}
+        onDragLeave={(event) => { if (event.target === event.currentTarget) setDragOverPath((current) => current === "" ? null : current); }}
+        onDrop={(event) => {
+          if (event.target !== event.currentTarget) return;
+          event.preventDefault();
+          setDragOverPath(null);
+          const id = event.dataTransfer.getData("text/plain");
+          const entry = entryById.get(id);
+          setDraggingId(null);
+          if (entry) void moveSecret(entry, "");
+        }}
+      >
         {entries === null && (
           <div className="flex justify-center p-5"><Loader2 size={17} className="animate-spin text-gray-400" /></div>
         )}
@@ -340,7 +425,7 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
             {t("secretManager.empty")}
           </div>
         )}
-        {groupedRows.map(renderRow)}
+        {tree.map(renderNode)}
       </div>
 
       {createOpen && (
@@ -368,6 +453,7 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
       {viewing && (
         <SecretViewDialog
           entry={viewing}
+          folder={folder}
           encryptionSettings={encryption}
           onClose={() => setViewing(null)}
           onSaved={async () => {
@@ -380,13 +466,21 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
   );
 }
 
+function currentDirectoryOf(entryName: string, folder: string): string {
+  const relative = relativeSecretPath(entryName, folder);
+  const idx = relative.lastIndexOf("/");
+  return idx === -1 ? "" : relative.slice(0, idx);
+}
+
 function SecretViewDialog({
   entry,
+  folder,
   encryptionSettings,
   onClose,
   onSaved,
 }: {
   entry: SecretEntry;
+  folder: string;
   encryptionSettings?: EncryptionSettings;
   onClose: () => void;
   onSaved: () => Promise<void>;
@@ -402,6 +496,7 @@ function SecretViewDialog({
   const [copied, setCopied] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [draftDirectory, setDraftDirectory] = useState(() => currentDirectoryOf(entry.name, folder));
   const [draftDescription, setDraftDescription] = useState(entry.description);
   const [draftMetadataFields, setDraftMetadataFields] = useState<MetadataField[]>(
     () => metadataFields(entry.publicMetadata),
@@ -478,6 +573,7 @@ function SecretViewDialog({
 
   const beginEdit = () => {
     if (secretValue === null) return;
+    setDraftDirectory(currentDirectoryOf(entry.name, folder));
     setDraftDescription(entry.description);
     setDraftMetadataFields(metadataFields(entry.publicMetadata));
     setDraftValue(secretValue);
@@ -498,6 +594,14 @@ function SecretViewDialog({
     setSaving(true);
     setError("");
     try {
+      const newPath = secretFilePath(folder, displayName(entry.name), draftDirectory);
+      if (newPath !== entry.name) {
+        if (await findFileByNameLocal(newPath)) {
+          setError(t("secretManager.duplicate"));
+          return;
+        }
+        await renameFileLocal(entry.id, newPath);
+      }
       const encrypted = await encryptFileContent(
         draftValue,
         encryptionSettings.publicKey,
@@ -508,7 +612,7 @@ function SecretViewDialog({
           publicMetadata: metadataRecord(draftMetadataFields),
         },
       );
-      await writeFileLocal(entry.name, encrypted, { existingFileId: entry.id });
+      await writeFileLocal(newPath, encrypted, { existingFileId: entry.id });
       await onSaved();
     } catch {
       setError(t("secretManager.updateFailed"));
@@ -518,9 +622,30 @@ function SecretViewDialog({
   };
 
   return (
-    <SecretDialog title={displayName(entry.name)} onClose={onClose}>
+    <SecretDialog
+      title={displayName(entry.name)}
+      onClose={onClose}
+      headerActions={
+        <button
+          type="button"
+          title={t("secretManager.openFile")}
+          onClick={() => {
+            window.dispatchEvent(
+              new CustomEvent("plugin-select-file", { detail: { fileId: entry.id, fileName: entry.name } }),
+            );
+            onClose();
+          }}
+          className="cursor-pointer rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+        >
+          <ExternalLink size={15} />
+        </button>
+      }
+    >
       {editMode && secretValue !== null ? (
         <form onSubmit={saveSecret} className="space-y-3">
+          <SecretField label={t("secretManager.directory")} hint={t("secretManager.directoryHint")}>
+            <input value={draftDirectory} onChange={(event) => setDraftDirectory(event.target.value)} placeholder={t("secretManager.directoryPlaceholder")} className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
+          </SecretField>
           <SecretField label={t("secretManager.description")} hint={t("secretManager.metadataHint")}>
             <textarea rows={3} value={draftDescription} onChange={(event) => setDraftDescription(event.target.value)} className="w-full resize-y rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
           </SecretField>
@@ -618,7 +743,7 @@ function PublicMetadataEditor({ fields, onChange }: { fields: MetadataField[]; o
   );
 }
 
-function SecretDialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function SecretDialog({ title, headerActions, onClose, children }: { title: string; headerActions?: ReactNode; onClose: () => void; children: ReactNode }) {
   const modalRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -675,8 +800,11 @@ function SecretDialog({ title, onClose, children }: { title: string; onClose: ()
           onPointerCancel={stopDrag}
           className="flex shrink-0 cursor-move touch-none select-none items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700"
         >
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
-          <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={onClose} className="cursor-pointer rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><X size={15} /></button>
+          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+          <div className="flex shrink-0 items-center gap-1" onPointerDown={(event) => event.stopPropagation()}>
+            {headerActions}
+            <button type="button" onClick={onClose} className="cursor-pointer rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"><X size={15} /></button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>
       </div>

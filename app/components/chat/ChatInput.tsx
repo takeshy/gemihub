@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
 import {
   Send,
   Square,
@@ -28,6 +28,11 @@ import { AutocompletePopup } from "./AutocompletePopup";
 import { SkillSelector } from "./SkillSelector";
 import { OkfSelector } from "./OkfSelector";
 import type { OkfBundle } from "~/services/okf-loader";
+
+export interface ChatInputHandle {
+  /** Fills the composer with draft text and focuses it, without sending. */
+  setDraft: (text: string) => void;
+}
 
 interface ChatInputProps {
   onSend: (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => void;
@@ -158,7 +163,7 @@ async function resolveFileReferences(
   return result;
 }
 
-export function ChatInput({
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
   onSend,
   disabled,
   models,
@@ -193,7 +198,7 @@ export function ChatInput({
   activeOkfBundleIds = [],
   onToggleOkfBundle,
   onRefreshOkfBundles,
-}: ChatInputProps) {
+}: ChatInputProps, ref) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -212,6 +217,13 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    setDraft: (text: string) => {
+      setContent(text);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    },
+  }), []);
 
   const { t } = useI18n();
 
@@ -925,4 +937,4 @@ export function ChatInput({
       </div>
     </div>
   );
-}
+});

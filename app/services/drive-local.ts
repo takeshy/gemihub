@@ -368,13 +368,27 @@ export async function writeFileLocal(
   content: string,
   options?: { existingFileId?: string },
 ): Promise<{ fileId: string; isNew: boolean }> {
-  const existingId = options?.existingFileId;
+  let existingId = options?.existingFileId;
 
   if (existingId) {
+    let cached = await getCachedFile(existingId);
+    if (!cached && existingId.startsWith("new:")) {
+      // The `new:` placeholder was already migrated to a real Drive id in the
+      // background (pending-file-migration.ts deletes its cache entry as part
+      // of the id swap). Resolve the current id by name instead of blindly
+      // resurrecting a cache entry under the stale `new:` id — an orphan like
+      // that has no CachedRemoteMeta entry, but getPendingNewFiles() scans the
+      // raw cache directly, so it would get picked up by the next migration
+      // pass and re-uploaded as a genuine duplicate file.
+      const resolved = await findFileByNameLocal(fileName);
+      if (resolved) {
+        existingId = resolved.id;
+        cached = await getCachedFile(existingId);
+      }
+    }
     // Update existing file
     await addCommitBoundary(existingId);
     await saveLocalEdit(existingId, fileName, content);
-    const cached = await getCachedFile(existingId);
     await setCachedFile({
       fileId: existingId,
       content,
