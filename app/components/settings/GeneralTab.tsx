@@ -55,6 +55,7 @@ export function GeneralTab({
 
   // Sensitive field state (controlled to survive re-renders after fetcher submission)
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [apiKeyEdited, setApiKeyEdited] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -88,6 +89,7 @@ export function GeneralTab({
     if (fetcherData.success) {
       // Clear sensitive fields on success
       setGeminiApiKey("");
+      setApiKeyEdited(false);
       setPassword("");
       setConfirmPassword("");
       setCurrentPassword("");
@@ -123,6 +125,7 @@ export function GeneralTab({
 
       <fetcher.Form method="post">
         <input type="hidden" name="_action" value="saveGeneral" />
+        <input type="hidden" name="apiKeyEdited" value={apiKeyEdited ? "true" : "false"} />
 
         {/* API Key & Password Section */}
         <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
@@ -161,7 +164,11 @@ export function GeneralTab({
             id="geminiApiKey"
             name="geminiApiKey"
             value={geminiApiKey}
-            onChange={(e) => setGeminiApiKey(e.target.value)}
+            onChange={(e) => {
+              setGeminiApiKey(e.target.value);
+              setApiKeyEdited(true);
+            }}
+            autoComplete="off"
             placeholder={hasApiKey ? t("settings.general.apiKeyKeep") : t("settings.general.apiKeyPlaceholder")}
             className={inputClass}
           />
@@ -182,6 +189,7 @@ export function GeneralTab({
                 name="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
                 placeholder={t("settings.general.password")}
                 className={inputClass}
               />
@@ -200,6 +208,7 @@ export function GeneralTab({
                 name="confirmPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
                 placeholder={t("settings.general.confirmPassword")}
                 className={inputClass}
               />
@@ -222,6 +231,7 @@ export function GeneralTab({
                 name="currentPassword"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
                 placeholder={t("settings.general.currentPassword")}
                 className={inputClass}
               />
@@ -247,6 +257,7 @@ export function GeneralTab({
                     name="newPassword"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
                     placeholder={t("settings.general.newPassword")}
                     className={inputClass}
                   />
@@ -259,6 +270,7 @@ export function GeneralTab({
                     name="confirmPassword"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
                     placeholder={t("settings.general.confirmPassword")}
                     className={inputClass}
                   />

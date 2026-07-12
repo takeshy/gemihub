@@ -58,6 +58,7 @@ import { HubworkTab } from "~/components/settings/HubworkTab";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { PluginProvider } from "~/contexts/PluginContext";
 import { isActivePremiumAccount } from "~/types/hubwork";
+import { resolveSubmittedGeminiApiKey } from "~/utils/settings-api-key";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -238,7 +239,16 @@ export async function action({ request }: Route.ActionArgs) {
         const apiPlan = (formData.get("apiPlan") as ApiPlan) || currentSettings.apiPlan;
         const selectedModel = normalizeDeprecatedModelName(formData.get("selectedModel")) ?? null;
         const systemPrompt = (formData.get("systemPrompt") as string) || "";
-        const geminiApiKey = (formData.get("geminiApiKey") as string)?.trim() || "";
+        // Password managers may autofill the API-key password input when the user
+        // only intends to save another setting (for example, the default model).
+        // For an existing setup, only treat the field as an API-key change after
+        // the user explicitly edited it in this form.
+        const apiKeyEdited = formData.get("apiKeyEdited") === "true";
+        const geminiApiKey = resolveSubmittedGeminiApiKey(
+          formData.get("geminiApiKey"),
+          !!currentSettings.encryptedApiKey,
+          apiKeyEdited,
+        );
         const language = (formData.get("language") as Language) || currentSettings.language;
         const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
         const theme = (formData.get("theme") as Theme) || currentSettings.theme || "system";
