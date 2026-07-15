@@ -22,6 +22,7 @@ import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/c
 import { isDriveToolMediaResult } from "~/services/gemini-chat-core";
 import type { LocalChatCallbacks } from "./useLocalChat";
 import { executeSkillWorkflowTool, type SkillWorkflowEntry } from "./skillWorkflowTool";
+import { buildOkfDocumentTool, executeReadOkfDocumentTool } from "./okfDocumentTool";
 import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
 
 export interface InteractionsChatOptions {
@@ -43,6 +44,8 @@ export interface InteractionsChatOptions {
   requirePlanApproval?: boolean;
   geminiApiKey?: string;
   settings?: UserSettings;
+  okfRoot?: string;
+  activeOkfBundleIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +106,8 @@ function buildToolDispatcher(
     canUseProxy?: boolean;
     geminiApiKey?: string;
     settings?: UserSettings;
+    okfRoot?: string;
+    activeOkfBundleIds?: string[];
   },
 ): {
   executeToolCall: (name: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -158,6 +163,19 @@ function buildToolDispatcher(
     if (name === "get_workflow_spec") {
       const nodeTypes = Array.isArray(args.nodeTypes) ? (args.nodeTypes as string[]) : undefined;
       return { spec: getWorkflowNodeSpec(nodeTypes) };
+    }
+
+    // OKF document fetch — on-demand full body for one document referenced
+    // in an active bundle's index.md.
+    if (name === "read_okf_document") {
+      const bundleId = typeof args.bundleId === "string" ? args.bundleId : "";
+      const path = typeof args.path === "string" ? args.path : "";
+      return executeReadOkfDocumentTool(
+        options?.okfRoot || "Knowledge",
+        options?.activeOkfBundleIds,
+        bundleId,
+        path,
+      );
     }
 
     // JavaScript sandbox
@@ -352,6 +370,8 @@ export async function* executeInteractionsChat(
     requirePlanApproval,
     geminiApiKey,
     settings,
+    okfRoot,
+    activeOkfBundleIds,
   } = options;
 
   // Image generation models should not use Interactions API
@@ -367,11 +387,12 @@ export async function* executeInteractionsChat(
     skillWorkflows,
     callbacks,
     abortSignal,
-    { requirePlanApproval, canUseProxy, geminiApiKey, settings },
+    { requirePlanApproval, canUseProxy, geminiApiKey, settings, okfRoot, activeOkfBundleIds },
   );
 
   // Build extra tool definitions (client-only tools) to send to server
   const extraToolDefinitions: ToolDefinition[] = [];
+  extraToolDefinitions.push(...buildOkfDocumentTool(activeOkfBundleIds));
   extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
   extraToolDefinitions.push({
     name: "get_workflow_spec",

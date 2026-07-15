@@ -32,6 +32,7 @@ import {
   type SkillWorkflowCallbacks,
   type SkillWorkflowEntry,
 } from "./skillWorkflowTool";
+import { buildOkfDocumentTool, executeReadOkfDocumentTool } from "./okfDocumentTool";
 import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
 
 export interface LocalChatOptions {
@@ -52,6 +53,8 @@ export interface LocalChatOptions {
   skillWorkflows?: SkillWorkflowEntry[];
   requirePlanApproval?: boolean;
   settings?: UserSettings;
+  okfRoot?: string;
+  activeOkfBundleIds?: string[];
 }
 
 export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
@@ -100,6 +103,8 @@ export async function* executeLocalChat(
     skillWorkflows,
     requirePlanApproval,
     settings,
+    okfRoot,
+    activeOkfBundleIds,
   } = options;
 
   // Image generation model
@@ -180,6 +185,8 @@ export async function* executeLocalChat(
       },
     });
   }
+
+  tools.push(...buildOkfDocumentTool(activeOkfBundleIds));
 
   tools.push(EXECUTE_JAVASCRIPT_TOOL);
 
@@ -268,6 +275,14 @@ export async function* executeLocalChat(
     if (name === "get_workflow_spec") {
       const nodeTypes = Array.isArray(args.nodeTypes) ? (args.nodeTypes as string[]) : undefined;
       return { spec: getWorkflowNodeSpec(nodeTypes) };
+    }
+
+    // OKF document fetch — on-demand full body for one document referenced
+    // in an active bundle's index.md.
+    if (name === "read_okf_document") {
+      const bundleId = typeof args.bundleId === "string" ? args.bundleId : "";
+      const path = typeof args.path === "string" ? args.path : "";
+      return executeReadOkfDocumentTool(okfRoot || "Knowledge", activeOkfBundleIds, bundleId, path);
     }
 
     // JavaScript sandbox tool

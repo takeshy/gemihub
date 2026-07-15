@@ -1016,6 +1016,8 @@ export function ChatPanel({
                 requirePlanApproval: needsPlanApproval,
                 geminiApiKey: localApiKey ?? undefined,
                 settings,
+                okfRoot: settings.okfRoot,
+                activeOkfBundleIds,
               },
               chatCallbacks,
             )
@@ -1038,6 +1040,8 @@ export function ChatPanel({
                 abortSignal: abortController.signal,
                 requirePlanApproval: needsPlanApproval,
                 settings,
+                okfRoot: settings.okfRoot,
+                activeOkfBundleIds,
               },
               chatCallbacks,
             );

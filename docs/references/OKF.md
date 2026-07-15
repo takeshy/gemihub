@@ -31,7 +31,7 @@ Which bundles are active is chosen in chat, not in settings. When bundles are di
 - Active bundles are shown as chips; click **×** on a chip to deactivate it.
 - The selection is per browser and persists across sessions (stored in localStorage).
 
-Active bundles are injected into the system prompt of every message sent from that chat.
+Only each active bundle's `index.md` is injected into the system prompt of every message sent from that chat — see [What Gets Loaded](#what-gets-loaded) for how the rest of a bundle's documents reach the model.
 
 ### Managed GemiHub bundle updates
 
@@ -85,16 +85,11 @@ Knowledge/
 
 ## What Gets Loaded
 
-When bundles are active in a chat, GemiHub reads Markdown files from each active bundle and injects a compact summary into the chat system prompt. The loader includes:
+When a bundle is active in a chat, GemiHub injects only that bundle's **`index.md`** into the system prompt — its title, description, and full body (the table of contents), not the whole bundle. Every other document in the bundle stays out of the prompt until the model actually needs it.
 
-- `type`
-- `title`
-- `description`
-- `tags`
-- file path
-- a short body excerpt
+To read a specific document, the model calls the `read_okf_document` tool with the `bundleId` shown next to the bundle's heading in the system prompt and a document path referenced in `index.md` (leading slashes are stripped automatically). The tool returns that one document's full content. This mirrors how a Skill's `SKILL.md` is read on demand with `read_drive_file` rather than being inlined for every skill up front — the model is expected to consult the index, then fetch only the specific documents relevant to the current question.
 
-The loader uses conservative file and character limits so large OKF bundles do not overwhelm the model context.
+Because of this, a bundle's `index.md` is the single most important file: it should read like a proper table of contents (organized by topic, with an accurate one-line description and path for every document), since it's the only thing the model reliably sees without asking for more.
 
 ## OKF With Skills
 
@@ -105,5 +100,7 @@ Use OKF when you want Gemini to understand a domain consistently. Use a skill wh
 ## Limitations
 
 - OKF content is injected as prompt context, not uploaded to Gemini File Search automatically.
-- Each selected bundle contributes at most 24 Markdown files and 1,400 body characters per file.
+- Only a bundle's `index.md` is inlined automatically; other documents cost a `read_okf_document` tool call each, so a poorly organized index can cause the model to miss or skip relevant documents.
+- A document fetched via `read_okf_document` is capped at 20,000 body characters so an unexpectedly large Drive file can't dominate a single tool result.
+- `log.md` is never returned, even if explicitly requested by path.
 - OKF files must be available in the synced Drive cache before they can be discovered.

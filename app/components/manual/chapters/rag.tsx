@@ -74,7 +74,7 @@ function RagEn() {
           <img src="/images/okf_sample.png" alt="OKF bundle active in chat" className="w-full" loading="lazy" />
         </figure>
         <p>
-          OKF (Open Knowledge Format) bundles are Markdown knowledge bases on your Drive — folders of concept files with YAML frontmatter and an <code>index.md</code>. Unlike RAG, selected bundles are injected directly into the chat system prompt, so the AI always has your curated domain knowledge in mind.
+          OKF (Open Knowledge Format) bundles are Markdown knowledge bases on your Drive — folders of concept files with YAML frontmatter and an <code>index.md</code>. Unlike RAG, a selected bundle's <code>index.md</code> is injected directly into the chat system prompt, so the AI always has your table of contents in mind; it fetches any specific concept file's full content on demand only when it needs the detail.
         </p>
         <ol>
           <li>Place bundles under the OKF folder (default <code>Knowledge</code>; change it in <strong>Settings &gt; RAG</strong>). The bundles discovered under that folder are listed for confirmation.</li>
@@ -160,7 +160,7 @@ function RagJa() {
           <img src="/images/okf_sample.png" alt="チャットでOKFバンドルを使用" className="w-full" loading="lazy" />
         </figure>
         <p>
-          OKF（Open Knowledge Format）バンドルは、Drive上のMarkdown製ナレッジベースです。YAML frontmatter付きのコンセプトファイルと<code>index.md</code>を持つフォルダで構成されます。RAGと異なり、選択したバンドルはチャットのシステムプロンプトに直接注入されるため、AIは常にあなたのドメイン知識を踏まえて回答します。
+          OKF（Open Knowledge Format）バンドルは、Drive上のMarkdown製ナレッジベースです。YAML frontmatter付きのコンセプトファイルと<code>index.md</code>を持つフォルダで構成されます。RAGと異なり、選択したバンドルの<code>index.md</code>がチャットのシステムプロンプトに直接注入されるため、AIは常にあなたの目次を踏まえて回答します。個々のコンセプトファイルの全文は、AIが詳細を必要としたときだけ都度取得されます。
         </p>
         <ol>
           <li>OKFフォルダ（デフォルト<code>Knowledge</code>、<strong>設定 &gt; RAG</strong>で変更可能）の配下にバンドルを置きます。フォルダ配下で発見されたバンドルの一覧が設定画面に表示されます。</li>
