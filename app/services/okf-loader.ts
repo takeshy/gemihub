@@ -27,7 +27,9 @@ interface MarkdownRef {
 }
 
 const MAX_DOCS_PER_BUNDLE = 24;
-const MAX_BODY_CHARS = 1400;
+// OKF documents should normally reach the model in full. Keep only a generous
+// per-file guard so an unexpectedly large Drive file cannot dominate a prompt.
+const MAX_BODY_CHARS = 20_000;
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 
 function normalizePath(path: string): string {
