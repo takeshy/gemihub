@@ -235,6 +235,43 @@ export async function action({ request }: Route.ActionArgs) {
   logCtx.details = { fileId };
 
   switch (actionType) {
+    case "upsertChecked": {
+      if (typeof name !== "string" || !name || typeof content !== "string") {
+        return logAndReturn({ error: "Missing name or content" }, { status: 400 });
+      }
+      const expectedFileId = typeof body.expectedFileId === "string" ? body.expectedFileId : null;
+      const expectedMd5Checksum = typeof body.expectedMd5Checksum === "string" ? body.expectedMd5Checksum : "";
+      let file: DriveFile;
+      if (expectedFileId) {
+        const current = await getFileMetadata(validTokens.accessToken, expectedFileId);
+        if ((current.md5Checksum ?? "") !== expectedMd5Checksum) {
+          return logAndReturn({ error: "Remote file changed", conflict: true }, { status: 409 });
+        }
+        file = await updateFile(
+          validTokens.accessToken,
+          expectedFileId,
+          content,
+          mimeType || "text/markdown",
+        );
+      } else {
+        const existing = await findFileByExactName(validTokens.accessToken, name, validTokens.rootFolderId);
+        if (existing) {
+          return logAndReturn({ error: "Remote file was created", conflict: true }, { status: 409 });
+        }
+        file = await createFile(
+          validTokens.accessToken,
+          name,
+          content,
+          validTokens.rootFolderId,
+          mimeType || "text/markdown",
+        );
+      }
+      const updatedMeta = await upsertFileInMeta(validTokens.accessToken, validTokens.rootFolderId, file);
+      return logAndReturn({
+        file,
+        meta: { lastUpdatedAt: updatedMeta.lastUpdatedAt, files: updatedMeta.files },
+      });
+    }
     case "findByName": {
       if (typeof name !== "string" || !name) {
         return logAndReturn({ error: "Missing name" }, { status: 400 });

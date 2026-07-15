@@ -36,6 +36,8 @@ The home screen is a customizable dashboard. Arrange widgets — **File** viewer
 
 ![Dashboard Kanban Board](./public/images/dashboard_kanban.png)
 
+Timeline changes read the latest remote file before updating Drive immediately, retry checksum conflicts, and can be refreshed manually from the widget header.
+
 ![Timeline Widget](./public/images/timeline_edit.png)
 
 ![Timeline Widget Settings](./public/images/timeline_setting.png)

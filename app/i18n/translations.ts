@@ -187,6 +187,8 @@ export interface TranslationStrings {
   "dashboard.timelineComposerMode": string;
   "dashboard.timelinePlaceholder": string;
   "dashboard.timelineNew": string;
+  "dashboard.timelineLoadFromDrive": string;
+  "dashboard.timelineLoadFailed": string;
   "dashboard.timelineAttachImage": string;
   "dashboard.timelinePost": string;
   "dashboard.timelineEmpty": string;
@@ -1372,6 +1374,8 @@ const en: TranslationStrings = {
   "dashboard.timelineComposerMode": "Editor mode",
   "dashboard.timelinePlaceholder": "What's happening?",
   "dashboard.timelineNew": "New",
+  "dashboard.timelineLoadFromDrive": "Load latest from Drive",
+  "dashboard.timelineLoadFailed": "Failed to load the Timeline from Drive.",
   "dashboard.timelineAttachImage": "Attach images",
   "dashboard.timelinePost": "Post",
   "dashboard.timelineEmpty": "No posts yet",
@@ -2558,6 +2562,8 @@ const ja: TranslationStrings = {
   "dashboard.timelineComposerMode": "エディタモード",
   "dashboard.timelinePlaceholder": "いまどうしてる？",
   "dashboard.timelineNew": "New",
+  "dashboard.timelineLoadFromDrive": "Driveから最新を読み込む",
+  "dashboard.timelineLoadFailed": "Driveからタイムラインを読み込めませんでした。",
   "dashboard.timelineAttachImage": "画像を添付",
   "dashboard.timelinePost": "投稿",
   "dashboard.timelineEmpty": "投稿はまだありません",

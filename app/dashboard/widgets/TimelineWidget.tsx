@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Code, Image, Loader2, PenLine, Pencil, Pin, Plus, Search, Send, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Code, Image, Loader2, PenLine, Pencil, Pin, Plus, RefreshCw, Search, Send, Sparkles, Trash2, X } from "lucide-react";
 import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
 import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { WikiEmbed } from "~/components/editor/WikiEmbed";
@@ -8,6 +8,8 @@ import { useEditorContext, type FileListItem } from "~/contexts/EditorContext";
 import { useI18n } from "~/i18n/context";
 import { findFileByNameLocal, readFileLocal, saveBinaryFileLocal, writeFileLocal } from "~/services/drive-local";
 import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { migratePendingFiles } from "~/services/pending-file-migration";
+import { loadTimelineFromDrive, mutateTimelineFile } from "~/services/timeline-drive";
 import { slugifyHeading } from "~/utils/wiki-subpath";
 import type { WidgetContext } from "../types";
 import { FilePreviewModal } from "./FilePreviewModal";
@@ -314,6 +316,11 @@ async function savePostImage(name: string, date: Date, postId: string, file: Fil
     candidate = `${base}-${suffix++}.${imageExt(file)}`;
   }
   await saveBinaryFileLocal(candidate, await imageToBase64(file), file.type || "image/png");
+  if (typeof navigator === "undefined" || navigator.onLine) {
+    await migratePendingFiles();
+    const saved = await findFileByNameLocal(candidate);
+    if (!saved || saved.id.startsWith("new:")) throw new Error("Failed to upload Timeline image");
+  }
   return candidate;
 }
 
@@ -419,6 +426,7 @@ export default function TimelineWidget({
   const [hasOlderPosts, setHasOlderPosts] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [loadingFromDrive, setLoadingFromDrive] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -514,6 +522,20 @@ export default function TimelineWidget({
       setLoadingOlder(false);
     }
   }, [name, loadingOlder, loadedCount, latestCount, filters, t]);
+
+  const loadFromDrive = useCallback(async () => {
+    if (!name || loadingFromDrive) return;
+    setLoadingFromDrive(true);
+    setError(null);
+    try {
+      await loadTimelineFromDrive(timelineDir(name));
+      await refresh();
+    } catch {
+      setError(t("dashboard.timelineLoadFailed"));
+    } finally {
+      setLoadingFromDrive(false);
+    }
+  }, [name, loadingFromDrive, refresh, t]);
 
   useEffect(() => {
     imagesRef.current = images;
@@ -648,16 +670,16 @@ export default function TimelineWidget({
     try {
       const file = await findFileByNameLocal(post.sourcePath);
       if (!file) throw new Error("file not found");
-      const current = await readFileLocal(file.id);
       const imageLines: string[] = [];
       for (const [index, pending] of editImages.entries()) {
         const imagePath = await savePostImage(name, new Date(post.createdAt), post.id, pending.file, index);
         imageLines.push(`![[${imagePath}]]`);
       }
       const nextBody = [body, ...imageLines].filter(Boolean).join("\n\n");
-      const nextContent = replacePostContent(current, post.sourcePath, post.id, nextBody);
-      if (nextContent == null) throw new Error("post not found");
-      await writeFileLocal(post.sourcePath, nextContent, { existingFileId: file.id });
+      await mutateTimelineFile(
+        post.sourcePath,
+        (current) => replacePostContent(current, post.sourcePath, post.id, nextBody),
+      );
       cancelEditing();
       await refresh();
     } catch {
@@ -674,10 +696,10 @@ export default function TimelineWidget({
     try {
       const file = await findFileByNameLocal(post.sourcePath);
       if (!file) throw new Error("file not found");
-      const current = await readFileLocal(file.id);
-      const nextContent = deletePostContent(current, post.sourcePath, post.id);
-      if (nextContent == null) throw new Error("post not found");
-      await writeFileLocal(post.sourcePath, nextContent, { existingFileId: file.id });
+      await mutateTimelineFile(
+        post.sourcePath,
+        (current) => deletePostContent(current, post.sourcePath, post.id),
+      );
       await refresh();
     } catch {
       setError(t("dashboard.writeFailed"));
@@ -695,17 +717,17 @@ export default function TimelineWidget({
     try {
       const now = new Date();
       const path = dayFilePath(name, now);
-      const existing = await findFileByNameLocal(path);
-      const current = existing ? await readFileLocal(existing.id) : "";
-      const postId = uniquePostId(now, current, path);
+      const postId = postIdFromDate(now);
       const imageLines: string[] = [];
       for (const [index, pending] of images.entries()) {
         const imagePath = await savePostImage(name, now, postId, pending.file, index);
         imageLines.push(`![[${imagePath}]]`);
       }
       const postBody = [body, ...imageLines].filter(Boolean).join("\n\n");
-      const nextContent = appendPost(current, `${now.toISOString()}\nid: ${postId}\n\n${postBody}`);
-      await writeFileLocal(path, nextContent, existing ? { existingFileId: existing.id } : undefined);
+      await mutateTimelineFile(path, (current) => {
+        const uniqueId = uniquePostId(now, current, path);
+        return appendPost(current, `${now.toISOString()}\nid: ${uniqueId}\n\n${postBody}`);
+      });
       closeComposer();
       await refresh();
       window.dispatchEvent(new CustomEvent("dashboard-data-changed", { detail: { folder: timelineDir(name) } }));
@@ -722,10 +744,10 @@ export default function TimelineWidget({
     try {
       const file = await findFileByNameLocal(post.sourcePath);
       if (!file) throw new Error("file not found");
-      const current = await readFileLocal(file.id);
-      const nextContent = setPostPinnedContent(current, post.sourcePath, post.id, !post.pinned);
-      if (nextContent == null) throw new Error("post not found");
-      await writeFileLocal(post.sourcePath, nextContent, { existingFileId: file.id });
+      await mutateTimelineFile(
+        post.sourcePath,
+        (current) => setPostPinnedContent(current, post.sourcePath, post.id, !post.pinned),
+      );
       await refresh();
     } catch {
       setError(t("dashboard.writeFailed"));
@@ -764,6 +786,15 @@ export default function TimelineWidget({
         <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-500 dark:text-gray-400">
           {name}
         </span>
+        <button
+          type="button"
+          onClick={loadFromDrive}
+          disabled={loadingFromDrive}
+          title={t("dashboard.timelineLoadFromDrive")}
+          className="flex items-center rounded px-1 py-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:hover:text-gray-200"
+        >
+          <RefreshCw size={12} className={loadingFromDrive ? "animate-spin" : ""} />
+        </button>
         <button
           type="button"
           onClick={() => setShowFilters((value) => !value)}
