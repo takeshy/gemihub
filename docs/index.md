@@ -40,4 +40,4 @@ Welcome to the GemiHub Open Knowledge Format bundle.
 
 ## References
 
-* [OKF Knowledge Sources](references/OKF.md) - OKF knowledge sources: markdown knowledge bundles on Drive, selected per chat and injected into the system prompt.
+* [OKF Knowledge Sources](references/OKF.md) - OKF knowledge sources: inject each selected bundle's index and fetch referenced documents on demand.

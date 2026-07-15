@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: OKF Knowledge Sources
-description: "OKF knowledge sources: markdown knowledge bundles on Drive, selected per chat and injected into the system prompt."
+description: "OKF knowledge sources: inject each selected bundle's index and fetch referenced documents on demand."
 tags:
   - okf
 ---

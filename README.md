@@ -60,7 +60,7 @@ Unlike generic AI chat, GemiHub connects directly to your Google Drive. The AI c
 
 With built-in RAG (Retrieval-Augmented Generation), you can sync your Drive files to Gemini's semantic search. Instead of matching exact keywords, the AI understands the **meaning** of your question and finds relevant information from your personal knowledge base. Store product manuals, meeting notes, or research papers — then just ask questions in natural language.
 
-You can also use **OKF (Open Knowledge Format) bundles** — Markdown-based knowledge bases on your Drive (concepts, metrics, glossaries, playbooks) — as chat knowledge: set the OKF parent folder in the RAG settings tab, then pick which bundles to use per chat from the selector above the chat input. See [docs/references/OKF.md](./docs/references/OKF.md).
+You can also use **OKF (Open Knowledge Format) bundles** — Markdown-based knowledge bases on your Drive (concepts, metrics, glossaries, playbooks) — as chat knowledge: set the OKF parent folder in the RAG settings tab, then pick which bundles to use per chat from the selector above the chat input. GemiHub keeps each selected bundle's `index.md` in the chat context and lets the AI fetch referenced documents in full, on demand, with the built-in `read_okf_document` tool. See [docs/references/OKF.md](./docs/references/OKF.md).
 
 ![OKF Knowledge Bundle in Chat](./public/images/okf_sample.png)
 
