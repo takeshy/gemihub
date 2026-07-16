@@ -320,10 +320,12 @@ export function DashboardCanvas({
           </button>
           <button
             onClick={() => setShowPalette(true)}
-            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+            title={t("dashboard.addWidget")}
+            aria-label={t("dashboard.addWidget")}
+            className="flex items-center gap-1.5 rounded p-1 text-xs font-medium text-blue-600 hover:bg-blue-50 sm:px-2 dark:text-blue-400 dark:hover:bg-blue-900/30"
           >
-            <Plus size={14} />
-            {t("dashboard.addWidget")}
+            <Plus size={16} className="sm:size-3.5" />
+            <span className="hidden sm:inline">{t("dashboard.addWidget")}</span>
           </button>
           {toolbarRight}
         </div>
