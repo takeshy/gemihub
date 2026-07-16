@@ -6,7 +6,9 @@ import type {
   PropertyConfig, Diagnostic,
 } from "./types";
 
-const VALID_ROOT_KEYS = new Set(["filters", "formulas", "properties", "summaries", "views"]);
+// Older llm-hub Base files included a top-level version marker. It is not
+// needed by the engine, but accepting it keeps those files queryable.
+const VALID_ROOT_KEYS = new Set(["version", "filters", "formulas", "properties", "summaries", "views"]);
 const BUILTIN_SUMMARY_NAMES = new Set([
   "Average", "Min", "Max", "Sum", "Range", "Median", "Stddev",
   "Earliest", "Latest", "Checked", "Unchecked", "Empty", "Filled", "Unique",
