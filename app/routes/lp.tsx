@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, ListTodo, Music, LayoutDashboard, GitCompare, Highlighter, KeyRound } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, Music, LayoutDashboard, GitCompare, Highlighter, KeyRound } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
@@ -159,13 +159,6 @@ const en: LpStrings = {
       image: "/images/accounting.png",
     },
     {
-      icon: ListTodo,
-      name: "TaskNotes",
-      repo: "takeshy/hub-tasknotes",
-      description: "Task management where every task is a Markdown note. List, Kanban, Calendar, and Agenda views. Create tasks from natural language with AI.",
-      image: "/images/task_notes.png",
-    },
-    {
       icon: Music,
       name: "Audio Score",
       repo: "takeshy/hub-audio-score",
@@ -281,13 +274,6 @@ const ja: LpStrings = {
       repo: "takeshy/hub-accounting",
       description: "Beancount形式の複式簿記プラグイン。勘定科目の管理、仕訳の記録、貸借対照表・損益計算書の生成までプレーンテキストでDriveに保存。",
       image: "/images/accounting.png",
-    },
-    {
-      icon: ListTodo,
-      name: "TaskNotes",
-      repo: "takeshy/hub-tasknotes",
-      description: "タスクをMarkdownノートで管理。リスト・カンバン・カレンダー・アジェンダの4ビュー。自然言語からAIでタスクを自動生成。",
-      image: "/images/task_notes.png",
     },
     {
       icon: Music,
