@@ -62,7 +62,9 @@ Text node content is Markdown. Use `\n` inside JSON strings for line breaks.
 }
 ```
 
-Use workspace-relative paths for `file`. Optional `subpath` can point to a heading or block-like fragment.
+Use workspace-relative paths for `file`. Optional `subpath` is preserved and can
+point to a heading or block-like fragment, but the Canvas preview currently opens
+the whole file rather than navigating to that fragment.
 
 ### Link Node
 
@@ -93,7 +95,9 @@ Use workspace-relative paths for `file`. Optional `subpath` can point to a headi
 }
 ```
 
-Optional group fields: `label`, `background`, `backgroundStyle`. `backgroundStyle` is `cover`, `ratio`, or `repeat`.
+Optional group fields: `label`, `background`, `backgroundStyle`. `backgroundStyle`
+is `cover`, `ratio`, or `repeat`. Background fields can be edited and are preserved,
+but the Canvas currently does not render the background image.
 
 ## Edges
 

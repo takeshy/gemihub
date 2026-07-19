@@ -54,9 +54,10 @@ Use callouts for highlighted blocks in reading and preview mode.
 > [!warning] Custom Title
 > Callout with a custom title.
 
-> [!question]- Collapsed by default
-> Foldable callout. Use `-` for closed and `+` for open.
 ```
+
+The `-` marker renders a callout collapsed and `+` renders it expanded, but the
+preview does not currently provide an interactive control to toggle that state.
 
 Supported types: `note`, `abstract`, `info`, `todo`, `tip`, `success`, `question`, `warning`, `failure`, `danger`, `bug`, `example`, `quote`.
 
