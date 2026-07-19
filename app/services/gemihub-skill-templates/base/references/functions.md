@@ -1,159 +1,100 @@
-# Bases Functions Reference
+# GemiHub Base Expression Reference
 
-Functions and methods available in `.base` filter statements, formulas, and summaries. GemiHub implements the Obsidian Bases expression language.
+This reference documents functions implemented by GemiHub's Base evaluator. It is a capability list for authoring GemiHub-compatible files, not a description of another application's internals.
 
 ## Global Functions
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `date()` | `date(date: string): date` | Parse `YYYY-MM-DD HH:mm:ss` to a date |
-| `duration()` | `duration(value: string): duration` | Parse a duration string |
-| `escapeHTML()` | `escapeHTML(html: string): string` | Escape HTML special characters |
-| `file()` | `file(path: string \| file \| url): file` | Get a file object from a path/link/url |
-| `html()` | `html(html: string): html` | Render a string as HTML |
-| `icon()` | `icon(name: string): icon` | Lucide icon for display |
-| `if()` | `if(condition, trueResult, falseResult?): any` | Conditional; `false` branch defaults to null |
-| `image()` | `image(path: string \| file \| url): image` | Image object for rendering |
-| `link()` | `link(path: string, display?: value): Link` | Create a Link object |
-| `list()` | `list(element: any): List` | Wrap a single value in a list |
-| `max()` | `max(value1, value2, ...): number` | Largest of the provided numbers |
-| `min()` | `min(value1, value2, ...): number` | Smallest of the provided numbers |
-| `now()` | `now(): date` | Current date and time |
-| `number()` | `number(input: any): number` | Convert to number |
-| `random()` | `random(): number` | Random number in [0, 1) |
-| `today()` | `today(): date` | Current date at midnight |
+| Name | Typical use |
+|------|-------------|
+| `date(text)` | Parse a date or date-time |
+| `duration(text)` | Parse a duration |
+| `if(test, yes, no?)` | Conditional value |
+| `now()` / `today()` | Current date-time / current day |
+| `number(value)` | Convert to a number |
+| `list(value)` | Wrap one value as a list |
+| `min(...numbers)` / `max(...numbers)` | Numeric extrema |
+| `random()` | Number from zero up to, but not including, one |
+| `file(path)` | Resolve a workspace file |
+| `link(path, label?)` | Create a link value |
+| `image(value)` | Create a renderable image value |
+| `icon(name)` | Create a Lucide icon value |
+| `html(text)` / `escapeHTML(text)` | Explicit HTML / escaped text |
 
-## Date Functions
+## Strings
 
-### Fields
+String values expose `length` plus these methods:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `.year` | number | Year |
-| `.month` | number | Month (1–12) |
-| `.day` | number | Day of the month |
-| `.hour` | number | Hour (0–23) |
-| `.minute` | number | Minute (0–59) |
-| `.second` | number | Second (0–59) |
-| `.millisecond` | number | Millisecond (0–999) |
+- Search: `contains`, `containsAll`, `containsAny`, `startsWith`, `endsWith`
+- Transform: `lower`, `upper`, `title`, `trim`, `reverse`, `repeat`
+- Extract: `slice`, `split`
+- Replace: `replace`
+- State: `isEmpty`
 
-### Methods
-
-| Function | Description |
-|----------|-------------|
-| `.date()` | Date with time removed |
-| `.format(format)` | Format using a Moment.js-style pattern |
-| `.time()` | Time portion as a string |
-| `.relative()` | Human-readable relative time (e.g. "3 days ago") |
-| `.isEmpty()` | Returns false (a date is never empty) |
-
-### Date Arithmetic
+Example:
 
 ```
-now() + "1 day"                          # Tomorrow
-today() + "7d"                           # A week from today
-now() - file.ctime                       # Milliseconds since created (duration)
-file.mtime > now() - "1 week"            # Modified within the last week
-date("2024-12-01") + "1M" + "4h" + "3m"  # 2025-01-01 04:03:00
+note.customer.trim().lower().contains("studio")
 ```
 
-Duration units: `y`/`year`/`years`, `M`/`month`/`months`, `d`/`day`/`days`, `w`/`week`/`weeks`, `h`/`hour`/`hours`, `m`/`minute`/`minutes`, `s`/`second`/`seconds`.
+## Numbers
 
-## String Functions
+Available numeric methods are `abs()`, `ceil()`, `floor()`, `round(digits?)`, `toFixed(precision)`, and `isEmpty()`.
 
-### Fields
+```
+(note.completed / note.total * 100).round(1)
+```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `.length` | number | Character count |
+## Dates and Durations
 
-### Methods
+Date fields: `year`, `month`, `day`, `hour`, `minute`, `second`, and `millisecond`.
 
-| Function | Description |
-|----------|-------------|
-| `.contains(value)` | Substring check |
-| `.containsAll(...values)` | Contains all substrings |
-| `.containsAny(...values)` | Contains at least one substring |
-| `.startsWith(query)` | Prefix check |
-| `.endsWith(query)` | Suffix check |
-| `.isEmpty()` | True if empty |
-| `.lower()` | To lowercase |
-| `.upper()` | To uppercase |
-| `.title()` | Title case (first letter of each word) |
-| `.replace(pattern, replacement)` | Replace (string or Regexp; `$1`, `$2` for capture groups) |
-| `.repeat(count)` | Repeat the string |
-| `.reverse()` | Reverse the string |
-| `.split(separator)` | Split into a list |
-| `.slice(start, end?)` | Substring |
-| `.trim()` | Remove surrounding whitespace |
+Date methods: `date()`, `time()`, `format(pattern)`, `relative()`, and `isEmpty()`.
 
-## Number Functions
+Duration strings accept years, months, weeks, days, hours, minutes, and seconds in long or abbreviated form:
 
-| Function | Description |
-|----------|-------------|
-| `.abs()` | Absolute value |
-| `.ceil()` | Round up |
-| `.floor()` | Round down |
-| `.round(digits?)` | Round to digits |
-| `.toFixed(precision)` | Fixed-point notation |
-| `.isEmpty()` | True if the number is not present |
+```
+file.mtime >= now() - "48 hours"
+date(note.deadline) < today() + "1 week"
+```
 
-## List Functions
+Subtracting two dates yields an elapsed duration represented by the evaluator. Check the rendered result when combining it with numeric operations.
 
-| Function | Description |
-|----------|-------------|
-| `[index]` | Access an element (0-based) |
-| `.length` | List length (field) |
-| `.contains(value)` | List contains the value |
-| `.containsAll(...values)` | Contains all values |
-| `.containsAny(...values)` | Contains at least one value |
-| `.mean()` | Average of a numeric list |
-| `.filter(expression)` | Filter by condition (uses `value`, `index`) |
-| `.map(expression)` | Transform elements (uses `value`, `index`) |
-| `.reduce(expression, acc)` | Reduce to a single value (uses `value`, `index`, `acc`) |
-| `.flat()` | Flatten nested lists |
-| `.join(separator)` | Join into a string |
-| `.reverse()` | Reverse the list |
-| `.slice(start, end?)` | Sublist [start, end) |
-| `.sort()` | Sort the list |
-| `.unique()` | Remove duplicates |
-| `.isEmpty()` | True if the list has no elements |
+## Lists
 
-## Any-Type Functions
+Lists support indexed access and a `length` field. Methods include:
 
-| Function | Description |
-|----------|-------------|
-| `.isTruthy()` | Coerce to boolean |
-| `.isType(type)` | Type check (e.g. `"string"`) |
-| `.toString()` | String representation |
+- Membership: `contains`, `containsAll`, `containsAny`
+- Reshaping: `flat`, `reverse`, `slice`, `sort`, `unique`
+- Output: `join`
+- Numeric aggregation: `mean`
+- Expression transforms: `filter`, `map`, `reduce`
+- State: `isEmpty`
 
-## File Functions
+Callbacks used by `filter`, `map`, and `reduce` can refer to `value` and `index`; `reduce` also exposes `acc`.
 
-| Function | Description |
-|----------|-------------|
-| `file.hasTag(...tags)` | Has any of the tags |
-| `file.hasLink(otherFile)` | Has a link to the file |
-| `file.hasProperty(name)` | Has the property |
-| `file.inFolder(folder)` | In the folder or a subfolder |
-| `file.asLink(display?)` | Convert the file to a Link |
+## Files
 
-## Link Functions
+The active file is available through `file`. Supported helpers:
 
-| Function | Description |
-|----------|-------------|
-| `link.asFile()` | File object if the link refers to a valid local file |
-| `link.linksTo(file)` | True if the link's file links to the given file |
+| Method | Result |
+|--------|--------|
+| `hasTag(...tags)` | Whether any requested tag is present |
+| `hasLink(other)` | Whether the file links to another file |
+| `hasProperty(name)` | Whether metadata contains the named property |
+| `inFolder(path)` | Whether the file is inside the folder tree |
+| `asLink(label?)` | Link value for display |
 
-## Object Functions
+## Links, Objects, and Regular Expressions
 
-| Function | Description |
-|----------|-------------|
-| `object.isEmpty()` | True if the object has no own properties |
-| `object.keys()` | List of keys |
-| `object.values()` | List of values |
+- Links: `asFile()`, `linksTo(file)`
+- Objects: `keys()`, `values()`, `isEmpty()`
+- Regular expressions: `matches(value)`
 
-## Regular Expression Functions
+All value types also support `isTruthy()`, `isType(name)`, and `toString()`.
 
-| Function | Description |
-|----------|-------------|
-| `regexp.matches(value)` | True if the regexp matches the value string |
+## Authoring Advice
+
+- Guard optional metadata with `if()`.
+- Quote YAML expressions containing colons, hashes, or nested quotes.
+- Prefer short formulas and give them descriptive names.
+- Test file resolution and date arithmetic in Display mode before reusing a formula broadly.

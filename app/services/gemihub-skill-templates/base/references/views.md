@@ -1,105 +1,105 @@
-# Bases Views Reference
+# GemiHub Base View Reference
 
-## View Types
+## Supported Layouts
 
-| Type | Description |
-|------|-------------|
-| `table` | Rows in a table; columns come from `order` / properties |
-| `cards` | Grid of cards, gallery-like (supports a cover image property) |
-| `list` | Bulleted or numbered list |
+| `type` | Presentation |
+|----------|--------------|
+| `table` | One result per row; `order` selects columns |
+| `cards` | Grid presentation suited to covers and summaries |
+| `list` | Compact textual list |
 
-> The Obsidian `map` view is **not** supported in GemiHub. An unknown `type` falls back to `table`.
+Other view types are retained in the YAML but render using the table fallback.
 
-## View Configuration
+## Common View Keys
 
-| Field | Description |
-|-------|-------------|
-| `type` | View layout type (`table` / `cards` / `list`) |
-| `name` | Display name (required, unique); the first view in the list loads by default |
-| `limit` | Max number of rows |
-| `filters` | View-level filters, concatenated with `AND` alongside global filters |
-| `groupBy` | Object with `property` and `direction` (`ASC`/`DESC`); only one group property is supported |
-| `order` | List of property names — **column display order only** (does not sort) |
-| `sort` | List of `{ property, direction }` — the actual **sort keys** (`direction` = `ASC`/`DESC`) |
-| `summaries` | Map of property name → summary name (built-in or custom) |
+| Key | GemiHub behavior |
+|-----|------------------|
+| `name` | Unique label used by editors and dashboard widgets |
+| `filters` | Additional scope combined with global filters |
+| `order` | Displayed property sequence |
+| `sort` | Ordered list of property/direction rules |
+| `groupBy` | One property and direction used to form groups |
+| `limit` | Maximum result count |
+| `summaries` | Property-to-summary mapping |
 
-## Sort and Group
+## Sorting Is Separate from Display Order
 
-- **Sort:** use `sort` with one or more `{ property, direction }` entries. (`order` only sets the column order — it does not sort.)
-- **Group:** `groupBy` organizes rows into sections by a single property.
-
-Sort direction by property type:
-- Text: A→Z (`ASC`) or Z→A (`DESC`)
-- Number: low→high (`ASC`) or high→low (`DESC`)
-- Date: old→new (`ASC`) or new→old (`DESC`)
+GemiHub does not overload `order` as a sort instruction:
 
 ```yaml
 views:
   - type: table
-    name: "By due date"
+    name: "Work queue"
     order:
       - file.name
-      - note.due
-      - note.status
+      - note.priority
+      - note.assignee
     sort:
-      - property: note.due
+      - property: note.priority
+        direction: DESC
+      - property: file.name
         direction: ASC
-    groupBy:
-      property: note.status
-      direction: ASC
 ```
 
-## Cards View — Cover Image
+Sort and group directions must be `ASC` or `DESC`.
 
-The `cards` view can show a cover image. Map a property to the image via a view option (e.g. `image: cover`). The value may be:
-- An internal embed/link: `![[folder/cover.png]]` or `[[cover.png]]`
-- A Drive path: `folder/cover.png`
-- A full URL: `https://…`
-- An inline data URI: `data:image/png;base64,…`
+## Grouped Results
 
-GemiHub resolves vault file names/paths to the cached file and fetches it; external URLs and data URIs are used directly.
+```yaml
+groupBy:
+  property: note.assignee
+  direction: ASC
+```
+
+Only one grouping property is used. Summaries are calculated for the full result and for each group where the renderer supports group footers.
+
+## Card Images
+
+A cards view may name an image property:
+
+```yaml
+views:
+  - type: cards
+    name: "Reference library"
+    image: note.cover
+    order:
+      - file.name
+      - note.author
+      - note.topic
+```
+
+GemiHub accepts workspace paths, wiki-style embeds or links, HTTP(S) URLs, and image data URIs. Prefer workspace-relative paths for portable files.
 
 ## Summaries
 
-A view's `summaries` maps a property to a summary name; the value appears in the view's footer (and per-group when `groupBy` is set).
+Built-in names:
 
-### Built-in Summary Names
+- Numeric: `Average`, `Min`, `Max`, `Sum`, `Range`, `Median`, `Stddev`
+- Date: `Earliest`, `Latest`, `Range`
+- Boolean: `Checked`, `Unchecked`
+- General: `Empty`, `Filled`, `Unique`
 
-| Name | Input Type | Description |
-|------|-----------|-------------|
-| `Average` | Number | Mathematical mean |
-| `Min` | Number | Smallest value |
-| `Max` | Number | Largest value |
-| `Sum` | Number | Sum of all numbers |
-| `Range` | Number | Max − Min |
-| `Range` | Date | Latest − Earliest (a duration) |
-| `Median` | Number | Median |
-| `Stddev` | Number | Population standard deviation |
-| `Earliest` | Date | Earliest date |
-| `Latest` | Date | Latest date |
-| `Checked` | Boolean | Count of `true` values |
-| `Unchecked` | Boolean | Count of `false` values |
-| `Empty` | Any | Count of empty values |
-| `Filled` | Any | Count of non-empty values |
-| `Unique` | Any | Count of unique values |
-
-### Custom Summaries
-
-Define custom summaries at the top level under `summaries:` and reference them by name in a view. In a custom summary formula, `values` is the list of all values for that property across the result set:
+A custom summary is declared once and then assigned to a view property:
 
 ```yaml
 summaries:
-  customAverage: 'values.mean().round(3)'
+  rounded_mean: 'values.mean().round(1)'
+
 views:
   - type: table
-    name: "Stats"
+    name: "Effort report"
+    order:
+      - file.name
+      - note.hours
     summaries:
-      note.price: customAverage
+      note.hours: rounded_mean
 ```
 
-A custom summary name must not collide with a built-in name.
+Do not reuse a built-in summary name for a custom definition.
 
-## Using a Base
+## Opening and Embedding
 
-- Open the `.base` file in GemiHub to see its rendered views (Display / Raw toggle; a view switcher appears when there are multiple views).
-- Embed a view in a dashboard with the `base` widget: set `config.base` to the `.base` file's vault path and `config.view` to a view name (see the dashboard skill).
+- Opening a `.base` file shows Display mode, Raw mode, and a view selector.
+- A Dashboard Base widget selects the file with `config.base` and the view with `config.view`.
+- Leaving `config.view` empty selects the first declared view.
+- Multiple widgets can reuse one file with different views.

@@ -27,6 +27,7 @@ import {
   FONT_SIZE_OPTIONS,
   THEME_OPTIONS,
 } from "~/types/settings";
+import { THIRD_PARTY_NOTICES } from "~/third-party-notices";
 
 export function GeneralTab({
   settings,
@@ -454,6 +455,14 @@ export function GeneralTab({
 
         <SaveButton loading={loading} />
       </fetcher.Form>
+      <details className="mt-6 rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-800 dark:text-gray-200">
+          {language === "ja" ? "第三者ライセンス通知" : "Third-party notices"}
+        </summary>
+        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+          {THIRD_PARTY_NOTICES}
+        </pre>
+      </details>
     </SectionCard>
   );
 }

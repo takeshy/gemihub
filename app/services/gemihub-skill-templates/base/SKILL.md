@@ -1,370 +1,199 @@
 ---
 name: base
-description: Create and edit GemiHub Bases (.base files) with views, filters, formulas, and summaries. Use when working with .base files, building database-like views of notes, or when the user mentions Bases, table/card/list views, filters, or formulas.
+description: Author and maintain GemiHub .base compatibility files for filtered table, card, and list views over workspace files.
 ---
 
-# GemiHub Bases Skill
+# GemiHub Base Authoring
 
-Create GemiHub Bases (`.base`) files that display dynamic, filtered views of vault content. A `.base` file is YAML. GemiHub renders it in a dedicated editor (Display / Raw toggle) and it can also be embedded in a dashboard via the `base` widget.
+Use this skill to create or edit a `.base` YAML file consumed by GemiHub. The format is GemiHub's portable query-and-view interchange format and is designed to remain compatible with the supported subset of Base files.
 
-Always output valid YAML when creating or modifying a `.base` file.
+## Authoring Contract
 
-## Workflow
+- Produce valid YAML, never tabs.
+- Preserve keys you do not understand when editing an existing file.
+- Keep file paths relative to the workspace.
+- Use `order` to choose displayed fields and `sort` to order rows.
+- Limit new views to `table`, `cards`, or `list`.
+- Validate expressions and referenced formula names before saving.
 
-1. **Clarify the use case** — what notes to show, how to filter, and how to group/sort.
-2. **Create the file** — use `create_drive_file` (or `update_drive_file` to edit) with a path like `Dashboards/Bases/<Name>.base`. Any folder works; `Dashboards/Bases/` mirrors how dashboards live under `Dashboards/`.
-3. **Define filters** — narrow down which notes appear (by tag, folder, property, or date).
-4. **Add formulas** (optional) — compute derived values in the `formulas` section.
-5. **Configure views** — add one or more views (`table`, `cards`, or `list`).
-6. **Validate YAML** — valid YAML, no tabs, proper quoting.
+## Recommended Workflow
 
-## File Structure
+1. Identify the files that should participate in the result.
+2. Add global filters only when every view shares the same scope.
+3. Define reusable computed values under `formulas`.
+4. Give each view a unique name and its own presentation settings.
+5. Save the file, open Display mode, and resolve every diagnostic.
 
-A `.base` file is YAML with these top-level sections (all optional):
+Create files with `create_drive_file`; update existing files with `update_drive_file`. `Dashboards/Bases/` is the conventional location, but any workspace folder is valid.
 
-```yaml
-filters:    # Global filters applied to all views
-formulas:   # Computed properties reusable across views
-properties: # Display configuration per property
-summaries:  # Custom summary formula definitions
-views:      # List of view configurations
-```
+## Minimal Example
 
-## Complete Example
+This example lists active project notes and gives the same data two presentations:
 
-```yaml
-filters:
-  or:
-    - file.hasTag("tag")
-    - and:
-        - file.hasTag("book")
-        - file.hasLink("Textbook")
-    - not:
-        - file.hasTag("book")
-        - file.inFolder("Required Reading")
-formulas:
-  formatted_price: 'if(price, price.toFixed(2) + " dollars")'
-  ppu: "(price / age).toFixed(2)"
-properties:
-  status:
-    displayName: Status
-  formula.formatted_price:
-    displayName: "Price"
-  file.ext:
-    displayName: Extension
-summaries:
-  customAverage: 'values.mean().round(3)'
-views:
-  - type: table
-    name: "My table"
-    limit: 10
-    groupBy:
-      property: note.age
-      direction: DESC
-    filters:
-      and:
-        - 'status != "done"'
-        - or:
-            - "formula.ppu > 5"
-            - "price > 2.1"
-    order:
-      - file.name
-      - file.ext
-      - note.age
-      - formula.ppu
-    sort:
-      - property: note.age
-        direction: DESC
-    summaries:
-      formula.ppu: Average
-```
-
-## Filters
-
-By default a base includes **every file in the vault** (there is no `from`/`source` like SQL or Dataview). Use `filters` to narrow down.
-
-Filters can be applied at two levels:
-1. **Global `filters`** — apply to all views in the base.
-2. **View-level `filters`** — apply only to a specific view.
-
-Both are concatenated with `AND` when evaluating a view.
-
-### Filter Structure
-
-A filter is either a single string statement, or a recursively defined object with `and`, `or`, or `not` keys containing lists of filter objects or string statements.
-
-```yaml
-# Simple
-filters:
-  and:
-    - file.hasTag("tag")
-
-# Complex nested
-filters:
-  or:
-    - file.hasTag("tag")
-    - and:
-        - file.hasTag("book")
-        - file.hasLink("Textbook")
-    - not:
-        - file.hasTag("book")
-        - file.inFolder("Required Reading")
-```
-
-### Filter Statements
-
-A filter statement is a string that evaluates to truthy/falsey. It can be:
-- A basic comparison using arithmetic/comparison operators.
-- A function call (e.g., `file.hasTag("book")`).
-
-## Formulas
-
-Formula properties are computed values displayed across views. Stored as strings in YAML; output type depends on data and functions used.
-
-```yaml
-formulas:
-  formatted_price: 'if(price, price.toFixed(2) + " dollars")'
-  ppu: "(price / age).toFixed(2)"
-```
-
-### Property References
-
-| Kind | Prefix | Example |
-|------|--------|---------|
-| Note properties (frontmatter) | `note.` or none | `note.price`, `price` |
-| File properties | `file.` | `file.size`, `file.ext` |
-| Formula properties | `formula.` | `formula.formatted_price` |
-
-- Formulas can reference other formulas as long as there is no circular reference.
-- Use nested quotes for text literals: `'if(status, "Done")'`.
-
-## Properties
-
-Stores display configuration per property. Used by views (e.g., table column headers use `displayName`).
-
-```yaml
-properties:
-  status:
-    displayName: Status
-  formula.formatted_price:
-    displayName: "Price"
-  file.ext:
-    displayName: Extension
-```
-
-Display names are NOT used in filters or formulas.
-
-## Summaries
-
-### Custom Summary Formulas
-
-```yaml
-summaries:
-  customAverage: 'values.mean().round(3)'
-```
-
-In a summary formula, `values` is a list of all values for that property across every note in the result set. The formula returns a single value. A custom summary name must NOT collide with a built-in name.
-
-### Built-in Summary Names
-
-`Average`, `Min`, `Max`, `Sum`, `Range`, `Median`, `Stddev`, `Earliest`, `Latest`, `Checked`, `Unchecked`, `Empty`, `Filled`, `Unique`. See `references/views.md` for the full table.
-
-## Views
-
-Each entry in `views` defines a separate view of the same data. The **first** view loads by default.
-
-```yaml
-views:
-  - type: table
-    name: "My table"
-    limit: 10
-    groupBy:
-      property: note.age
-      direction: DESC
-    filters:
-      and:
-        - 'status != "done"'
-    order:
-      - file.name
-      - note.age
-    sort:
-      - property: note.age
-        direction: DESC
-    summaries:
-      formula.ppu: Average
-```
-
-### View Fields
-
-| Field | Description |
-|-------|-------------|
-| `type` | View layout: `table`, `cards`, or `list` |
-| `name` | Display name (required, unique); first view in the list loads by default |
-| `limit` | Max number of rows |
-| `filters` | View-level filters (same syntax as global, concatenated with AND) |
-| `groupBy` | Object with `property` and `direction` (`ASC`/`DESC`) |
-| `order` | List of property names — the **column display order** (does not sort) |
-| `sort` | List of `{ property, direction }` objects — the actual **sort keys** (`direction` is `ASC` or `DESC`) |
-| `summaries` | Map of property name → summary name (built-in or custom) |
-
-> **GemiHub note:** `order` only controls which columns appear and their order — it does **not** sort. To sort, use `sort` with `{ property, direction }` entries. (Obsidian's Bases overloads `order` for sorting; GemiHub separates the two.)
-
-### View Types
-
-| Type | Description |
-|------|-------------|
-| `table` | Rows in a table, columns from `order`/properties |
-| `cards` | Grid of cards, gallery-like (supports a cover image property) |
-| `list` | Bulleted or numbered list |
-
-> Obsidian's `map` view is **not** supported in GemiHub; an unknown `type` falls back to `table`.
-
-## File Properties
-
-Available for all file types:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `file.backlinks` | List | Files linking to this note |
-| `file.ctime` | Date | Created time |
-| `file.embeds` | List | Embeds in the note |
-| `file.ext` | String | File extension |
-| `file.folder` | String | Path of the file's folder |
-| `file.links` | List | Internal links in the note |
-| `file.mtime` | Date | Modified time |
-| `file.name` | String | File name (with extension) |
-| `file.basename` | String | File name without extension |
-| `file.path` | String | Full path of the file |
-| `file.properties` | Object | All frontmatter properties |
-| `file.size` | Number | File size |
-| `file.tags` | List | Tags from frontmatter |
-
-### The `this` Object
-
-`this` refers to the display context — when a base is shown standalone it is the `.base` file itself; when embedded it is the embedding context. Use case: `file.hasLink(this.file)` replicates a backlinks pane.
-
-## Operators
-
-### Arithmetic
-`+` plus · `-` minus · `*` multiply · `/` divide · `%` modulo · `( )` grouping
-
-### Date Arithmetic
-
-Add/subtract durations using `+`/`-` with duration strings:
-
-| Unit | Duration |
-|------|----------|
-| `y`, `year`, `years` | year |
-| `M`, `month`, `months` | month |
-| `d`, `day`, `days` | day |
-| `w`, `week`, `weeks` | week |
-| `h`, `hour`, `hours` | hour |
-| `m`, `minute`, `minutes` | minute |
-| `s`, `second`, `seconds` | second |
-
-Examples:
-- `now() + "1 day"` — 24 hours from now
-- `file.mtime > now() - "1 week"` — modified within the last week
-- `date("2024-12-01") + "1M" + "4h" + "3m"` — 2025-01-01 04:03:00
-- `now() - file.ctime` — millisecond difference (a duration)
-
-### Comparison
-`==` · `!=` · `>` · `<` · `>=` · `<=`
-
-### Boolean
-`!` not · `&&` and · `||` or
-
-## Types
-
-- **Strings**: `"message"` (single or double quotes)
-- **Numbers**: `1`, `2.5`
-- **Booleans**: `true` / `false` (no quotes)
-- **Dates**: `date("2025-01-01 12:00:00")`, `now()`, `today()`
-- **Lists**: `list()` function, access via `[index]`
-- **Objects**: access via `.prop` or `["prop"]`
-- **Links**: auto-recognized from wikilinks in frontmatter; `link("filename")`
-- **Files**: via `file()`; `file.asLink()` to convert
-
-## Common Patterns
-
-**Active tasks** (notes tagged `task`, grouped by status):
 ```yaml
 filters:
   and:
-    - file.hasTag("task")
-    - 'status != "done"'
+    - 'file.inFolder("Projects")'
+    - 'note.archived != true'
+
+formulas:
+  age_days: '((today() - file.mtime) / 86400000).round(0)'
+
+properties:
+  note.owner:
+    displayName: Owner
+  formula.age_days:
+    displayName: "Days since update"
+
 views:
   - type: table
-    name: "Active tasks"
+    name: "Active projects"
     order:
       - file.name
-      - note.priority
-      - note.due
+      - note.owner
+      - note.stage
+      - formula.age_days
     sort:
-      - property: note.due
-        direction: ASC
+      - property: file.mtime
+        direction: DESC
+
+  - type: cards
+    name: "Project cards"
+    order:
+      - file.name
+      - note.owner
+      - note.summary
     groupBy:
-      property: note.status
+      property: note.stage
       direction: ASC
 ```
 
-**Recently modified notes**:
+## Top-Level Sections
+
+| Key | Purpose |
+|-----|---------|
+| `filters` | Scope shared by every view |
+| `formulas` | Named computed properties |
+| `properties` | Labels and display metadata for properties |
+| `summaries` | Named aggregate expressions |
+| `views` | One or more rendered views |
+
+All sections are optional, though a useful file normally has at least one view.
+
+## Filters
+
+A filter may be a quoted expression or a recursive object containing one logical key:
+
 ```yaml
 filters:
-  and:
-    - 'file.mtime > now() - "7 days"'
-    - 'file.ext == "md"'
+  or:
+    - 'file.hasTag("priority")'
+    - and:
+        - 'file.inFolder("Clients")'
+        - 'note.status == "active"'
+    - not:
+        - 'file.hasTag("hidden")'
+```
+
+Global filters and view filters are combined with AND. Supported comparison operators are `==`, `!=`, `>`, `<`, `>=`, and `<=`; boolean expressions use `&&`, `||`, and `!`.
+
+Quote expressions containing punctuation or nested string literals. Prefer single-quoted YAML strings around expressions that contain double quotes.
+
+## Property Names
+
+| Namespace | Example | Meaning |
+|-----------|---------|---------|
+| `note` | `note.status` | Markdown frontmatter property |
+| `file` | `file.mtime` | Workspace file metadata |
+| `formula` | `formula.age_days` | Value declared in `formulas` |
+
+A bare name such as `status` is treated as a note property. Explicit `note.status` is clearer in generated files.
+
+Common file fields include `name`, `basename`, `path`, `folder`, `ext`, `size`, `ctime`, `mtime`, `tags`, `links`, `backlinks`, `embeds`, and `properties`.
+
+## Formulas
+
+Formula values are expressions stored as YAML strings:
+
+```yaml
+formulas:
+  estimate_label: 'if(note.hours, note.hours.toString() + " h", "Unestimated")'
+  stale: 'file.mtime < today() - "30 days"'
+```
+
+Reference them as `formula.estimate_label` and `formula.stale`. Do not create circular dependencies. See `references/functions.md` for the supported function surface.
+
+## Display Metadata
+
+Use `properties` to rename fields without changing expression identifiers:
+
+```yaml
+properties:
+  note.stage:
+    displayName: Stage
+  formula.stale:
+    displayName: Needs review
+```
+
+## Views
+
+Every view should have a unique `name`. GemiHub supports:
+
+- `table`: rows with selected columns.
+- `cards`: a responsive card grid with optional image selection.
+- `list`: a compact list.
+
+The first view is used when no view name is selected. Key distinction:
+
+- `order` selects fields and their display order.
+- `sort` controls row ordering.
+
+```yaml
 views:
-  - type: table
-    name: "Recently modified"
+  - type: list
+    name: "Recently changed"
+    filters: 'file.ext == "md"'
     order:
       - file.name
       - file.mtime
     sort:
       - property: file.mtime
         direction: DESC
-    limit: 20
+    limit: 25
 ```
 
-**Library cards by progress**:
+See `references/views.md` for grouping, card images, and summaries.
+
+## Dashboard Use
+
+A dashboard Base widget references the file and optionally a named view:
+
 ```yaml
-filters:
-  and:
-    - file.hasTag("book")
-formulas:
-  progress: '(pages_read / pages * 100).round(1)'
-properties:
-  formula.progress:
-    displayName: "Progress %"
-views:
-  - type: cards
-    name: "Library"
-    order:
-      - file.name
-      - note.author
-      - formula.progress
+widgets:
+  - id: project-index
+    type: base
+    config:
+      base: Dashboards/Bases/projects.base
+      view: "Active projects"
 ```
 
-## YAML Quoting Rules
+The same `.base` file can back several widgets. Older inline `card`, `table`, and `file-list` widgets can be migrated to this file-backed representation.
 
-- Use single quotes for formulas/filter statements containing double quotes: `'if(done, "Yes", "No")'`.
-- Use double quotes for simple strings: `"My View Name"`.
-- Strings containing `:`, `{`, `}`, `[`, `]`, `#`, etc. must be quoted.
-- No tabs — use consistent spaces for indentation.
+## Compatibility Boundaries
 
-## Reference Files
+GemiHub deliberately implements a supported compatibility subset:
 
-- `references/functions.md` — full function/method reference (global, date, string, number, list, file, link, object, regexp).
-- `references/views.md` — view types, configuration fields, sort/group behavior, and the built-in summaries table.
+- Supported view types: `table`, `cards`, `list`.
+- GemiHub uses an explicit `sort` list; `order` remains display order.
+- Unsupported view types fall back to table rendering.
+- Unknown configuration keys should be retained during edits so another application can still use them.
 
-## Validation Checklist
+## Final Checks
 
-- [ ] Valid YAML (no tabs, consistent indentation)
-- [ ] Filter statements are quoted strings
-- [ ] Formula strings properly quoted with nested quotes for literals
-- [ ] Property references use the correct prefix (`note.`, `file.`, `formula.`)
-- [ ] Each view has a unique non-empty `name` and a `type` of `table`/`cards`/`list`
-- [ ] `sort` entries are `{ property, direction }` with `direction` = `ASC`/`DESC` (use `sort`, not `order`, to actually sort)
-- [ ] `groupBy.direction` is `ASC` or `DESC`
-- [ ] No circular formula references
-- [ ] Custom summary names don't collide with built-in names
+- YAML parses without errors.
+- Each view has a distinct name.
+- Every `formula.X` reference has a matching formula.
+- Every summary name is built in or declared under `summaries`.
+- Sort and group directions are `ASC` or `DESC`.
+- Filters are placed at the intended global or per-view scope.
+- Dashboard widgets reference the exact file path and view name.

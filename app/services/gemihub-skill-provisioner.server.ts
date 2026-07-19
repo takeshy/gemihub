@@ -4,6 +4,11 @@ import {
   type SkillFile,
 } from "./hubwork-skill-provisioner-core";
 
+// The Markdown, Base, and Canvas skill documentation was initially adapted
+// from kepano/obsidian-skills under the MIT License. The Base guide is now an
+// independent description of GemiHub's compatibility layer. See
+// THIRD_PARTY_NOTICES.md.
+
 import MARKDOWN_SKILL_MD from "./gemihub-skill-templates/markdown/SKILL.md?raw";
 import MARKDOWN_REF_PREVIEW from "./gemihub-skill-templates/markdown/references/preview.md?raw";
 import CANVAS_SKILL_MD from "./gemihub-skill-templates/canvas/SKILL.md?raw";

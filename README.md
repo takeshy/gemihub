@@ -397,6 +397,14 @@ Firestore
 | Infrastructure | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Certificate Manager, Cloud Scheduler, Global HTTPS LB + CDN |
 | Editor | wysimark-lite (Slate-based WYSIWYG) |
 
+## Acknowledgments
+
+GemiHub's built-in Markdown, Base, and Canvas Agent Skills were initially informed by [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills). The corresponding file-format support was independently implemented from publicly described formats and behavior and does not incorporate Obsidian source code. Base is described as a compatibility format rather than an independently standardized open format; Canvas follows the open [JSON Canvas specification](https://jsoncanvas.org/).
+
+The WYSIWYG Markdown editor uses [takeshy/wysimark-lite](https://github.com/takeshy/wysimark-lite), a lightweight fork of [portive/wysimark](https://github.com/portive/wysimark). We are grateful to Steph Ango (@kepano), the Wysimark authors and contributors, and the maintainers of JSON Canvas. See [Third-Party Notices](THIRD_PARTY_NOTICES.md) for copyright and license details.
+
+GemiHub is an independent project and is not affiliated with, endorsed by, or sponsored by Obsidian.
+
 ## License
 
 MIT
