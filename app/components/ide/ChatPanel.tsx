@@ -885,6 +885,7 @@ export function ChatPanel({
       let accumulatedToolResults: Message["toolResults"] = [];
       let ragUsed = false;
       let webSearchUsed = false;
+      let webSearchSources: NonNullable<Message["webSearchSources"]> = [];
       let ragSources: string[] = [];
       let generatedImages: GeneratedImage[] = [];
       let mcpApps: McpAppInfo[] = [];
@@ -1103,6 +1104,7 @@ export function ChatPanel({
               if (isActive()) setStreamingContent(accumulatedContent);
               break;
             case "done": {
+              webSearchSources = chunk.webSearchSources ?? webSearchSources;
               const assistantMessage: Message = {
                 role: "assistant",
                 content: accumulatedContent,
@@ -1121,6 +1123,7 @@ export function ChatPanel({
                     : undefined,
                 ragUsed: ragUsed || undefined,
                 webSearchUsed: webSearchUsed || undefined,
+                webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
                 ragSources:
                   ragSources.length > 0 ? ragSources : undefined,
                 generatedImages:

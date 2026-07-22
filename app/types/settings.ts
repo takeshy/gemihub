@@ -163,7 +163,9 @@ export function isGemma4(model: string): boolean {
 export function normalizeDeprecatedModelName(model: unknown): ModelType | null | undefined {
   if (model === null || model === undefined) return model;
   if (model === "gemini-3-pro-preview") return "gemini-3.1-pro-preview";
-  if (model === "gemini-3.1-flash-lite-preview") return "gemini-3.1-flash-lite";
+  if (model === "gemini-3.1-flash-lite-preview" || model === "gemini-3.1-flash-lite") {
+    return "gemini-3.5-flash-lite";
+  }
   if (model === "gemini-2.5-flash-image") return "gemini-3.1-flash-image-preview";
   if (model === "gemma-3-27b-it") return "gemma-4-31b-it";
   if (
@@ -181,8 +183,8 @@ export function supportsWebSearch(model: string): boolean {
   return !isGemma4(model);
 }
 
-export function mustUseWebSearchOnly(model: string): boolean {
-  return model.toLowerCase() === "gemini-3.1-flash-lite";
+export function mustUseWebSearchOnly(_model: string): boolean {
+  return false;
 }
 
 export function getDriveToolModeConstraint(
@@ -232,10 +234,11 @@ export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
 
 // Model types
 export type ModelType =
+  | "gemini-3.6-flash"
   | "gemini-3.5-flash"
   | "gemini-3.1-pro-preview"
   | "gemini-3.1-pro-preview-customtools"
-  | "gemini-3.1-flash-lite"
+  | "gemini-3.5-flash-lite"
   | "gemini-3-pro-image-preview"
   | "gemini-3.1-flash-image-preview"
   | "gemma-4-31b-it"
@@ -249,6 +252,11 @@ export interface ModelInfo {
 }
 
 export const PAID_MODELS: ModelInfo[] = [
+  {
+    name: "gemini-3.6-flash",
+    displayName: "Gemini 3.6 Flash",
+    description: "Latest fast model with 1M context (recommended)",
+  },
   {
     name: "gemini-3.1-pro-preview",
     displayName: "Gemini 3.1 Pro Preview",
@@ -265,9 +273,9 @@ export const PAID_MODELS: ModelInfo[] = [
     description: "Latest high-speed Flash model with 1M context",
   },
   {
-    name: "gemini-3.1-flash-lite",
-    displayName: "Gemini 3.1 Flash Lite",
-    description: "Stable low-latency, cost-effective model with 1M context",
+    name: "gemini-3.5-flash-lite",
+    displayName: "Gemini 3.5 Flash Lite",
+    description: "Latest fast, low-cost model with 1M context",
   },
   {
     name: "gemini-3-pro-image-preview",
@@ -295,14 +303,19 @@ export const PAID_MODELS: ModelInfo[] = [
 
 export const FREE_MODELS: ModelInfo[] = [
   {
+    name: "gemini-3.6-flash",
+    displayName: "Gemini 3.6 Flash",
+    description: "Latest fast model with 1M context (recommended)",
+  },
+  {
     name: "gemini-3.5-flash",
     displayName: "Gemini 3.5 Flash",
     description: "Free tier latest high-speed Flash model",
   },
   {
-    name: "gemini-3.1-flash-lite",
-    displayName: "Gemini 3.1 Flash Lite",
-    description: "Free tier stable cost-effective model",
+    name: "gemini-3.5-flash-lite",
+    displayName: "Gemini 3.5 Flash Lite",
+    description: "Free tier latest lightweight model",
   },
   {
     name: "gemma-4-31b-it",
@@ -347,7 +360,7 @@ export function isImageGenerationModel(modelName: ModelType): boolean {
 
 // Default models by plan
 export const DEFAULT_MODEL_FREE: ModelType = "gemma-4-31b-it";
-export const DEFAULT_MODEL_PAID: ModelType = "gemini-3.1-pro-preview";
+export const DEFAULT_MODEL_PAID: ModelType = "gemini-3.6-flash";
 
 export function getDefaultModelForPlan(plan: ApiPlan): ModelType {
   return plan === "paid" ? DEFAULT_MODEL_PAID : DEFAULT_MODEL_FREE;

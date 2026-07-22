@@ -48,6 +48,11 @@ export interface StreamChunkUsage {
   totalCost?: number; // USD
 }
 
+export interface WebSearchSource {
+  title: string;
+  url: string;
+}
+
 // Chat message
 export interface Message {
   role: "user" | "assistant";
@@ -60,6 +65,7 @@ export interface Message {
   ragUsed?: boolean;
   ragSources?: string[];
   webSearchUsed?: boolean;
+  webSearchSources?: WebSearchSource[];
   thinking?: string;
   generatedImages?: GeneratedImage[];
   mcpApps?: McpAppInfo[];
@@ -89,6 +95,7 @@ export interface StreamChunk {
   toolResult?: ToolResult;
   error?: string;
   ragSources?: string[];
+  webSearchSources?: WebSearchSource[];
   generatedImage?: GeneratedImage;
   mcpApp?: McpAppInfo;
   updatedFile?: { fileId: string; fileName: string; content: string };

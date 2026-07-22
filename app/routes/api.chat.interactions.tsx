@@ -178,7 +178,20 @@ export async function action({ request }: Route.ActionArgs) {
   const rawTopK = validData.settings?.ragTopK;
   const clampedTopK = rawTopK != null && Number.isFinite(rawTopK) ? Math.min(20, Math.max(1, rawTopK)) : undefined;
 
-  const interactionsTools = buildInteractionsTools(tools, webSearchEnabled, model);
+  if (webSearchEnabled && ragStoreIds && ragStoreIds.length > 0) {
+    return new Response(
+      JSON.stringify({ error: "RAG and Web Search cannot be used at the same time. Select one search source." }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const interactionsTools = buildInteractionsTools(
+    tools,
+    webSearchEnabled,
+    model,
+    ragStoreIds,
+    clampedTopK,
+  );
   const interactionModel = getInteractionModel(model, hasFunctionTools(interactionsTools));
 
   const input = toolResults

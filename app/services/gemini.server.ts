@@ -36,7 +36,7 @@ export async function generateWorkflow(
   const ai = new GoogleGenAI({ apiKey });
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.5-flash",
+    model: "gemini-3.6-flash",
     contents: userPrompt,
     config: {
       systemInstruction: systemPrompt,
@@ -65,7 +65,7 @@ export async function* generateWorkflowStream(
   userPrompt: string,
   systemPrompt: string,
   apiKey: string,
-  model: ModelType = "gemini-3.5-flash",
+  model: ModelType = "gemini-3.6-flash",
   history?: Array<{ role: "user" | "model"; text: string }>
 ): AsyncGenerator<WorkflowStreamChunk> {
   try {

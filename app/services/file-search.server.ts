@@ -77,6 +77,10 @@ interface RawFileSearchStore {
   display_name?: string;
   embeddingModel?: string;
   embedding_model?: string;
+  updateTime?: string;
+  update_time?: string;
+  createTime?: string;
+  create_time?: string;
 }
 
 function rawStoreDisplayName(store: RawFileSearchStore): string | undefined {
@@ -192,15 +196,21 @@ export async function getOrCreateStore(
     throw new Error("Execution cancelled");
   }
   const stores = await listRawFileSearchStores(apiKey);
-  for (const store of stores) {
+  const matchingStores = stores.filter((store) =>
+    rawStoreDisplayName(store) === displayName &&
+    rawStoreEmbeddingModel(store) === FILE_SEARCH_EMBEDDING_MODEL &&
+    !!store.name
+  );
+  matchingStores.sort((a, b) => {
+    const aTime = Date.parse(a.updateTime ?? a.update_time ?? a.createTime ?? a.create_time ?? "") || 0;
+    const bTime = Date.parse(b.updateTime ?? b.update_time ?? b.createTime ?? b.create_time ?? "") || 0;
+    return bTime - aTime;
+  });
+  for (const store of matchingStores) {
     if (options.signal?.aborted) {
       throw new Error("Execution cancelled");
     }
-    if (
-      rawStoreDisplayName(store) === displayName &&
-      rawStoreEmbeddingModel(store) === FILE_SEARCH_EMBEDDING_MODEL &&
-      store.name
-    ) {
+    if (store.name) {
       const normalized = normalizeFileSearchStoreName(store.name);
       if (normalized) {
         return normalized;

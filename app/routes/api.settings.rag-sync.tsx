@@ -96,6 +96,15 @@ export async function action({ request }: Route.ActionArgs) {
           ragSetting.storeId = storeName;
           ragSetting.embeddingModel = FILE_SEARCH_EMBEDDING_MODEL;
           ragSetting.files = {};
+
+          // Persist the new store before uploading. If a long sync is interrupted,
+          // the next run must reuse this store instead of orphaning it.
+          settings.ragSettings[settingName] = { ...ragSetting };
+          await saveSettings(
+            validTokens.accessToken,
+            validTokens.rootFolderId,
+            settings
+          );
         }
 
         sendEvent("progress", {

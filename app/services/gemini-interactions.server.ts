@@ -14,13 +14,39 @@ import {
   type Part,
   type Tool,
 } from "@google/genai";
-import type { Message, StreamChunk, StreamChunkUsage, ToolCall, Attachment } from "~/types/chat";
+import type { Message, StreamChunk, StreamChunkUsage, ToolCall, Attachment, WebSearchSource } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
 import { mustUseWebSearchOnly, supportsWebSearch } from "~/types/settings";
 import { formatFileSearchSource, MODEL_PRICING, SEARCH_GROUNDING_COST } from "./gemini-chat-core";
 import { DEFAULT_SAFETY_SETTINGS } from "./gemini.server";
 
 const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
+
+function collectWebSources(value: unknown, sources: WebSearchSource[]): void {
+  if (typeof value === "string") {
+    const anchorPattern = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    for (const match of value.matchAll(anchorPattern)) {
+      const url = match[1].replace(/&amp;/g, "&");
+      const title = match[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim() || url;
+      if (/^https?:\/\//i.test(url) && !sources.some((source) => source.url === url)) sources.push({ title, url });
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectWebSources(item, sources);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  const url = [record.url, record.uri, record.link].find((candidate) => typeof candidate === "string");
+  if (typeof url === "string" && /^https?:\/\//i.test(url) && !sources.some((source) => source.url === url)) {
+    const title = [record.title, record.name].find((candidate) => typeof candidate === "string");
+    sources.push({ title: typeof title === "string" ? title : url, url });
+  }
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === "object") collectWebSources(nested, sources);
+  }
+}
 
 function normalizeFileSearchStoreName(storeName: string | null | undefined): string | null {
   const trimmed = storeName?.trim();
@@ -165,14 +191,15 @@ function toJsonSchema(params: ToolDefinition["parameters"]): Record<string, unkn
 
 /**
  * Convert GemiHub ToolDefinition[] + search flags into Interactions API Tool_2[].
- * The Interactions API does not support the file_search tool (returns 501
- * not_implemented). RAG retrieval is handled separately via retrieveRagContext()
- * as a pre-processing step, so only function tools and google_search are included here.
+ * Function tools, File Search, and Google Search are represented as native
+ * Interactions API tools.
  */
 export function buildInteractionsTools(
   tools: ToolDefinition[],
   webSearchEnabled?: boolean,
   model?: ModelType,
+  ragStoreIds?: string[],
+  ragTopK?: number,
 ): Interactions.Tool[] {
   const result: Interactions.Tool[] = [];
   const effectiveWebSearch = webSearchEnabled && (!model || supportsWebSearch(model));
@@ -187,6 +214,17 @@ export function buildInteractionsTools(
         parameters: toJsonSchema(tool.parameters),
       } as Interactions.Tool);
     }
+  }
+
+  const normalizedStoreIds = ragStoreIds
+    ?.map((id) => normalizeFileSearchStoreName(id))
+    .filter((id): id is string => !!id);
+  if (normalizedStoreIds && normalizedStoreIds.length > 0 && (!model || !model.toLowerCase().includes("gemma"))) {
+    result.push({
+      type: "file_search" as const,
+      file_search_store_names: normalizedStoreIds,
+      top_k: ragTopK,
+    } as Interactions.Tool);
   }
 
   if (effectiveWebSearch) {
@@ -364,6 +402,8 @@ export function buildGenerationConfig(
 
   if (thinkingRequired) {
     thinkingLevel = "high";
+  } else if (modelLower.includes("gemini-3.6-flash") || modelLower.includes("gemini-3.5-flash-lite")) {
+    thinkingLevel = enableThinking ? "high" : "low";
   } else if (!enableThinking) {
     thinkingLevel = "minimal";
   } else {
@@ -489,39 +529,7 @@ export async function* streamInteraction(
 ): AsyncGenerator<StreamChunk> {
   const ai = new GoogleGenAI({ apiKey: params.apiKey });
 
-  // RAG pre-retrieval via generateContent API.
-  // The Interactions API does not support the file_search tool (returns 501
-  // not_implemented), so we retrieve relevant contexts beforehand using
-  // the generateContent API and inject them into the system prompt.
-  let ragSystemPrompt = params.systemPrompt;
   let ragEmitted = false;
-  const modelLower = params.model.toLowerCase();
-  const isGemma = modelLower.includes("gemma");
-  if (params.ragStoreIds && params.ragStoreIds.length > 0 && params.ragUserMessage && !isGemma) {
-    try {
-      const ragResult = await retrieveRagContext(
-        params.apiKey,
-        params.model,
-        params.ragUserMessage,
-        params.ragStoreIds,
-        params.ragTopK ?? 5,
-        params.ragAttachments,
-      );
-      if (ragResult.sources.length > 0) {
-        ragEmitted = true;
-        yield { type: "rag_used", ragSources: ragResult.sources };
-      }
-      if (ragResult.contexts.length > 0) {
-        const contextBlock = ragResult.contexts
-          .map((c) => `--- Source: ${c.source} ---\n${c.text}`)
-          .join("\n\n");
-        ragSystemPrompt = (params.systemPrompt || "") +
-          `\n\n[Semantic search results — use these retrieved passages as reference context]\n${contextBlock}`;
-      }
-    } catch {
-      // RAG retrieval failed — continue without RAG context
-    }
-  }
 
   const createParams: Record<string, unknown> = {
     model: params.model,
@@ -529,8 +537,8 @@ export async function* streamInteraction(
     stream: true,
     store: true,
   };
-  if (ragSystemPrompt) {
-    createParams.system_instruction = ragSystemPrompt;
+  if (params.systemPrompt) {
+    createParams.system_instruction = params.systemPrompt;
   }
   if (params.tools && params.tools.length > 0) {
     createParams.tools = params.tools;
@@ -547,6 +555,8 @@ export async function* streamInteraction(
   const functionCallByIndex = new Map<number, { id: string; name: string; args: Record<string, unknown> }>();
   const argumentsBufferByIndex = new Map<number, string>();
   const accumulatedSources: string[] = [];
+  const webSearchSources: WebSearchSource[] = [];
+  let fileSearchUsed = false;
   let webSearchEmitted = false;
   let finalUsage: StreamChunkUsage | undefined;
 
@@ -580,6 +590,8 @@ export async function* streamInteraction(
               webSearchEmitted = true;
               yield { type: "web_search_used", ragSources: [] };
             }
+          } else if (step?.type === "file_search_call") {
+            fileSearchUsed = true;
           }
           break;
         }
@@ -613,6 +625,7 @@ export async function* streamInteraction(
               break;
 
             case "file_search_result":
+              fileSearchUsed = true;
               if ("result" in delta && Array.isArray(delta.result)) {
                 for (const r of delta.result as Array<{
                   title?: string;
@@ -641,6 +654,7 @@ export async function* streamInteraction(
               break;
 
             case "google_search_result":
+              collectWebSources(delta, webSearchSources);
               if (!webSearchEmitted) {
                 webSearchEmitted = true;
                 yield { type: "web_search_used", ragSources: [] };
@@ -698,9 +712,8 @@ export async function* streamInteraction(
       functionCallsToProcess.push({ id: fc.id, name: fc.name, args: fc.args });
     }
 
-    // Emit accumulated RAG sources (fallback — primary RAG sources are
-    // pre-retrieved via generateContent API before the Interactions call)
-    if (accumulatedSources.length > 0 && !ragEmitted) {
+    // Emit RAG usage even when File Search returned no matching sources.
+    if (fileSearchUsed && !ragEmitted) {
       ragEmitted = true;
       yield { type: "rag_used", ragSources: accumulatedSources };
     }
@@ -712,12 +725,14 @@ export async function* streamInteraction(
         interactionId: currentInteractionId,
         pendingToolCalls: functionCallsToProcess,
         usage: finalUsage,
+        webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
       };
     } else {
       yield {
         type: "done",
         interactionId: currentInteractionId,
         usage: finalUsage,
+        webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
       };
     }
   } catch (error) {

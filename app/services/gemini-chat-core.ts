@@ -19,7 +19,7 @@ import {
   type Schema,
   type Chat,
 } from "@google/genai";
-import type { Message, StreamChunk, StreamChunkUsage, ToolCall, GeneratedImage } from "~/types/chat";
+import type { Message, StreamChunk, StreamChunkUsage, ToolCall, GeneratedImage, WebSearchSource } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
 
 // Default safety settings per Gemini best practices
@@ -326,8 +326,9 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
 // Model pricing per token (USD)
 // Source: https://ai.google.dev/pricing
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  "gemini-3.6-flash":       { input: 1.50 / 1e6, output: 7.50 / 1e6 },
   "gemini-3.5-flash":       { input: 0.50 / 1e6, output: 3.00 / 1e6 },
-  "gemini-3.1-flash-lite": { input: 0.25 / 1e6, output: 1.50 / 1e6 },
+  "gemini-3.5-flash-lite": { input: 0.30 / 1e6, output: 2.50 / 1e6 },
   "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3-pro-image-preview": { input: 2.00 / 1e6, output: 120.00 / 1e6 },
@@ -336,13 +337,19 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
 
 // Grounding with Google Search cost per prompt (USD)
 export const SEARCH_GROUNDING_COST: Record<string, number> = {
+  "gemini-3.6-flash": 14 / 1000,
   "gemini-3.5-flash": 14 / 1000,
   "gemini-3.1-pro-preview": 14 / 1000,
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
   "gemini-3-pro-image-preview": 14 / 1000,
   "gemini-3.1-flash-image-preview": 14 / 1000,
-  "gemini-3.1-flash-lite": 14 / 1000,
+  "gemini-3.5-flash-lite": 14 / 1000,
 };
+
+function addWebSource(sources: WebSearchSource[], url?: string, title?: string): void {
+  if (!url || !/^https?:\/\//i.test(url) || sources.some((source) => source.url === url)) return;
+  sources.push({ title: title?.trim() || url, url });
+}
 
 interface ExtractedUsage {
   input?: number;
@@ -399,9 +406,13 @@ export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   // Gemma 4: thinking is built-in (always on), config parameters not supported
   if (modelLower.includes("gemma")) return undefined;
-  // gemini-3.1-flash-lite: uses thinkingLevel instead of thinkingBudget
-  // Default is "minimal" (no thinking). thinkingBudget: 0 is invalid for this model.
-  if (modelLower.includes("gemini-3.1-flash-lite")) {
+  // Gemini 3.6+ and 3.5 Flash Lite use thinkingLevel; thinkingBudget is unsupported.
+  if (modelLower.includes("gemini-3.6-flash")) {
+    return enableThinking
+      ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
+      : { thinkingLevel: ThinkingLevel.LOW };
+  }
+  if (modelLower.includes("gemini-3.5-flash-lite")) {
     if (!enableThinking) return undefined;
     return { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH };
   }
@@ -543,6 +554,7 @@ export async function* chatWithToolsStream(
   let groundingEmitted = false;
   let searchCostAdded = false;
   const accumulatedSources: string[] = [];
+  const webSearchSources: WebSearchSource[] = [];
   const messageParts: Part[] = [];
   const totalUsage: ExtractedUsage = { input: 0, output: 0, total: 0 };
 
@@ -633,6 +645,7 @@ export async function* chatWithToolsStream(
                 const ctx = gc.retrievedContext;
                 const web = (gc as { web?: { uri?: string; title?: string } }).web;
                 const source = ctx ? formatFileSearchSource(ctx) : web?.title || web?.uri;
+                if (web) addWebSource(webSearchSources, web.uri, web.title);
                 if (source && !accumulatedSources.includes(source)) {
                   accumulatedSources.push(source);
                 }
@@ -819,7 +832,11 @@ export async function* chatWithToolsStream(
       }
     }
 
-    yield { type: "done", usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined) };
+    yield {
+      type: "done",
+      usage: toStreamChunkUsage(totalUsage.total ? totalUsage : undefined),
+      webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
+    };
   } catch (error) {
     yield {
       type: "error",

@@ -2,7 +2,7 @@ import { useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { ChevronDown, ChevronRight, Download, HardDrive, Loader2, Check, Paperclip, FileText, Wrench, BookOpen, Globe, Plug, Music, FolderOpen, Sparkles } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
-import type { Message, Attachment, GeneratedImage, ToolCall, ToolResult, StreamChunkUsage } from "~/types/chat";
+import type { Message, Attachment, GeneratedImage, ToolCall, ToolResult, StreamChunkUsage, WebSearchSource } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
 import { useSkills } from "~/contexts/SkillContext";
 import { McpAppRenderer } from "./McpAppRenderer";
@@ -336,21 +336,24 @@ function RagSourcesList({ sources }: { sources: string[] }) {
   );
 }
 
-function WebSearchIndicator({ sources }: { sources?: string[] }) {
+function WebSearchIndicator({ sources }: { sources?: WebSearchSource[] }) {
   return (
     <div className="mb-2 flex flex-wrap items-center gap-1">
       <span className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-blue-700">
         <Globe size={10} />
         Web Search
       </span>
-      {sources && sources.map((source, i) => (
-        <span
-          key={i}
+      {sources?.map((source) => (
+        <a
+          key={source.url}
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-          title={source}
+          title={source.url}
         >
-          {source.split("/").pop() || source}
-        </span>
+          {source.title}
+        </a>
       ))}
     </div>
   );
@@ -596,7 +599,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
 
           {/* Web search indicator (assistant only) */}
           {!isUser && message.webSearchUsed && (
-            <WebSearchIndicator sources={message.ragSources} />
+            <WebSearchIndicator sources={message.webSearchSources} />
           )}
 
           {/* Message content */}

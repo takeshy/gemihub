@@ -110,7 +110,7 @@ export function createPluginAPI(
                 ? { attachments: m.attachments }
                 : {}),
             })),
-            model: chatOpts?.model || "gemini-3.5-flash",
+            model: chatOpts?.model || "gemini-3.6-flash",
             systemPrompt: chatOpts?.systemPrompt,
           }),
         });

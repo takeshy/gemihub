@@ -453,6 +453,7 @@ export async function* executeInteractionsChat(
 
   // Accumulate usage across rounds
   const totalUsage: StreamChunkUsage = {};
+  const webSearchSources: NonNullable<StreamChunk["webSearchSources"]> = [];
 
   function accumulateUsage(roundUsage: StreamChunkUsage | undefined) {
     if (!roundUsage) return;
@@ -531,6 +532,9 @@ export async function* executeInteractionsChat(
       if (abortSignal?.aborted) break;
 
       if (chunk.type === "requires_action") {
+        for (const source of chunk.webSearchSources ?? []) {
+          if (!webSearchSources.some((existing) => existing.url === source.url)) webSearchSources.push(source);
+        }
         requiresAction = true;
         pendingToolCalls = chunk.pendingToolCalls ?? [];
         currentInteractionId = chunk.interactionId;
@@ -539,6 +543,9 @@ export async function* executeInteractionsChat(
       }
 
       if (chunk.type === "done") {
+        for (const source of chunk.webSearchSources ?? []) {
+          if (!webSearchSources.some((existing) => existing.url === source.url)) webSearchSources.push(source);
+        }
         accumulateUsage(chunk.usage);
         currentInteractionId = chunk.interactionId;
         // Yield done with accumulated total usage
@@ -546,6 +553,7 @@ export async function* executeInteractionsChat(
           type: "done",
           interactionId: currentInteractionId,
           usage: totalUsage.totalTokens ? totalUsage : chunk.usage,
+          webSearchSources: webSearchSources.length > 0 ? webSearchSources : undefined,
         };
         return;
       }
