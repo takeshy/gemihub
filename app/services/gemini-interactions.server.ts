@@ -542,6 +542,14 @@ export async function* streamInteraction(
   }
   if (params.tools && params.tools.length > 0) {
     createParams.tools = params.tools;
+
+    const hasFunctionTools = params.tools.some((tool) => tool.type === "function");
+    const hasBuiltInTools = params.tools.some((tool) => tool.type !== "function");
+    if (hasFunctionTools && hasBuiltInTools) {
+      createParams.tool_config = {
+        include_server_side_tool_invocations: true,
+      };
+    }
   }
   if (params.previousInteractionId) {
     createParams.previous_interaction_id = params.previousInteractionId;
