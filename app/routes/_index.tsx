@@ -8,7 +8,7 @@ import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
 import { resolveLanguage } from "~/i18n/resolve-language";
-import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, FilePlus, WifiOff, AlertTriangle, Loader2, Check, AlertCircle } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, WifiOff, AlertTriangle, Loader2, Check, AlertCircle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
@@ -1186,6 +1186,7 @@ function IDEContent({
         pullDialogTrigger={pullDialogTrigger}
         onLogoClick={isMobile ? () => setMobileView("files") : clearActiveFile}
         onOpenLauncher={() => openLauncher(null)}
+        onCreateFile={() => window.dispatchEvent(new CustomEvent("create-file-requested"))}
         onOpenSecretManager={() => openLauncher("secret-manager")}
         onOpenHome={() => {
           setRightPanel("chat");
@@ -1291,13 +1292,6 @@ function IDEContent({
               {/* Panel 1: Editor */}
               <div className="relative flex h-full flex-col overflow-hidden" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>
                 {mainViewerContent}
-                <button
-                  onClick={() => window.dispatchEvent(new CustomEvent("create-file-requested"))}
-                  className="absolute bottom-4 right-4 z-10 rounded-full bg-blue-600 p-3 text-white shadow-lg hover:bg-blue-700 active:bg-blue-800"
-                  title={t("fileTree.newFile")}
-                >
-                  <FilePlus size={ICON.LG} />
-                </button>
               </div>
               {/* Panel 2: Right panel (chat / workflow / plugin) */}
               <div className="flex h-full flex-col overflow-hidden bg-white dark:bg-gray-900" style={{ width: `${100 / MOBILE_PANEL_COUNT}%` }}>

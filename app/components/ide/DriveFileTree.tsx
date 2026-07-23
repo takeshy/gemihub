@@ -604,7 +604,7 @@ export function DriveFileTree({
     [handleImportClick, handleImportGoogleWorkspaceClick, handleImportGoogleWorkspacePickerClick, t]
   );
 
-  // Listen for create-file-requested event (from mobile editor FAB)
+  // Listen for create-file-requested event (from the mobile header)
   useEffect(() => {
     const handler = () => handleCreateFile();
     window.addEventListener("create-file-requested", handler);
@@ -1098,10 +1098,10 @@ export function DriveFileTree({
         <span className="truncate">{item.name}</span>
         {isMobile && (
           <span
-            className="ml-auto flex-shrink-0 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="ml-auto flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             onClick={(e) => { e.stopPropagation(); handleContextMenu(e as unknown as React.MouseEvent, item); }}
           >
-            <MoreHorizontal size={ICON.MD} />
+            <MoreHorizontal size={ICON.XL} />
           </span>
         )}
         {remoteMeta[item.id]?.shared && (
@@ -1121,6 +1121,10 @@ export function DriveFileTree({
       </button>
     );
   };
+
+  const toolbarIconSize = isMobile ? ICON.XL : ICON.MD;
+  const toolbarButtonPadding = isMobile ? "px-2 py-1" : "p-0.5";
+  const toolbarButtonClass = `${toolbarButtonPadding} rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300`;
 
   return (
     <div
@@ -1161,44 +1165,44 @@ export function DriveFileTree({
           {selectedIds.size > 0 && (
             <button
               onClick={async () => { if (await handleDeleteMultiple([...selectedIds])) setSelectedIds(new Set()); }}
-              className="rounded p-0.5 text-red-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+              className={`${toolbarButtonPadding} rounded text-red-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400`}
               title={t("trash.tabTrash")}
             >
-              <Trash2 size={ICON.MD} />
+              <Trash2 size={toolbarIconSize} />
             </button>
           )}
           {onSearchOpen && (
             <button
               onClick={onSearchOpen}
-              className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              className={toolbarButtonClass}
               title="Search"
             >
-              <Search size={ICON.MD} />
+              <Search size={toolbarIconSize} />
             </button>
           )}
           <button
             onClick={handleCreateFile}
-            className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            className={toolbarButtonClass}
             title="New File"
           >
-            <FilePlus size={ICON.MD} />
+            <FilePlus size={toolbarIconSize} />
           </button>
           <button
             onClick={handleCreateFolder}
-            className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            className={toolbarButtonClass}
             title="New Folder"
           >
-            <FolderPlus size={ICON.MD} />
+            <FolderPlus size={toolbarIconSize} />
           </button>
           <button
             onClick={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
               setToolbarImportMenu({ x: rect.left, y: rect.bottom + 4 });
             }}
-            className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            className={toolbarButtonClass}
             title={t("contextMenu.import")}
           >
-            <Upload size={ICON.MD} />
+            <Upload size={toolbarIconSize} />
           </button>
           {(() => {
             const allIds = filteredTreeItems.flatMap((node) => collectFileIds(node));
@@ -1211,7 +1215,7 @@ export function DriveFileTree({
                   cacheFilesByIds(uncachedIds).catch(() => {});
                 }}
                 disabled={disabled}
-                className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400 dark:disabled:hover:bg-transparent"
+                className={`${toolbarButtonClass} disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400 dark:disabled:hover:bg-transparent`}
                 title={
                   cachingProgress
                     ? `${t("fileTree.cacheAll")} (${cachingProgress.done}/${cachingProgress.total})`
@@ -1220,7 +1224,7 @@ export function DriveFileTree({
                       : t("fileTree.cacheAll")
                 }
               >
-                <Database size={ICON.MD} />
+                <Database size={toolbarIconSize} />
               </button>
             );
           })()}

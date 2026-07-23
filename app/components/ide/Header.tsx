@@ -12,6 +12,8 @@ import {
   House,
   LockKeyhole,
   Rocket,
+  Menu,
+  FilePlus,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
@@ -47,6 +49,7 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenSecretManager?: () => void;
   onOpenHome?: () => void;
+  onCreateFile?: () => void;
 }
 
 export function Header({
@@ -74,10 +77,13 @@ export function Header({
   onOpenLauncher,
   onOpenSecretManager,
   onOpenHome,
+  onCreateFile,
 }: HeaderProps) {
   const { t } = useI18n();
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pluginMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close plugin menu on click outside
   useEffect(() => {
@@ -90,6 +96,18 @@ export function Header({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [pluginMenuOpen]);
+
+  // Close the mobile navigation menu when tapping outside it.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [mobileMenuOpen]);
 
   // Hide main views whose plugin already has a sidebar view (they auto-activate)
   const standaloneMainViews = pluginMainViews.filter(
@@ -152,6 +170,103 @@ export function Header({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        {isMobile && onOpenLauncher && (
+          <button
+            type="button"
+            onClick={onOpenLauncher}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            title={t("header.launcher")}
+            aria-label={t("header.launcher")}
+          >
+            <Rocket size={ICON.MD} />
+          </button>
+        )}
+        {isMobile && onCreateFile && (
+          <button
+            type="button"
+            onClick={onCreateFile}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            title={t("fileTree.newFile")}
+            aria-label={t("fileTree.newFile")}
+          >
+            <FilePlus size={ICON.MD} />
+          </button>
+        )}
+        {isMobile && (
+          <div className="relative" ref={mobileMenuRef}>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              title={t("header.menu")}
+              aria-label={t("header.menu")}
+              aria-expanded={mobileMenuOpen}
+              aria-haspopup="menu"
+            >
+              <Menu size={ICON.MD} />
+            </button>
+            {mobileMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+              >
+                {onOpenHome && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setMobileMenuOpen(false); onOpenHome(); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    <House size={ICON.MD} />
+                    {t("header.home")}
+                  </button>
+                )}
+                {onOpenSecretManager && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setMobileMenuOpen(false); onOpenSecretManager(); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    <LockKeyhole size={ICON.MD} />
+                    {t("header.secretManager")}
+                  </button>
+                )}
+                <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+                <Link
+                  to="/settings"
+                  role="menuitem"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <Settings size={ICON.MD} />
+                  {t("common.settings")}
+                </Link>
+                <a
+                  href="/manual"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  role="menuitem"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <HelpCircle size={ICON.MD} />
+                  {t("header.manual")}
+                </a>
+                <a
+                  href="/auth/logout"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  <LogOut size={ICON.MD} />
+                  {t("common.logout")}
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+        {!isMobile && (
+          <>
         {onOpenHome && (
           <button
             onClick={onOpenHome}
@@ -276,6 +391,8 @@ export function Header({
         >
           <LogOut size={ICON.MD} />
         </a>
+          </>
+        )}
       </div>
     </header>
 
