@@ -4,7 +4,7 @@ import { parseMemoFile } from "~/dashboard/memo/memoTimeline";
 import { useI18n } from "~/i18n/context";
 import { readFileLocal } from "~/services/drive-local";
 import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
-import { appendSystemTimeline, deleteSystemTimelineEntry, localDateKey, SYSTEM_TIMELINE_ROOT, updateSystemTimelineEntry } from "~/services/system-timeline";
+import { appendSystemTimeline, deleteSystemTimelineEntry, localDateKey, moveSystemTimelineEntry, SYSTEM_TIMELINE_ROOT, updateSystemTimelineEntry } from "~/services/system-timeline";
 
 const EVENT_RE = /<!--\s*calendar-event:\s*(\d{4}-\d{2}-\d{2})\s*-->/i;
 
@@ -50,6 +50,8 @@ export default function CalendarWidget() {
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDate, setEditingDate] = useState("");
+  const [editDate, setEditDate] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -104,16 +106,28 @@ export default function CalendarWidget() {
   const locale = ja ? "ja-JP" : "en-US";
 
   const save = async () => {
-    if (!content.trim() || saving) return;
+    if (!content.trim() || saving || (editingId && !editDate)) return;
     setSaving(true);
     try {
+      const savedDate = editingId ? editDate : selected;
       const body = eventBody(selected, time, content);
-      if (editingId) await updateSystemTimelineEntry(selected, editingId, body);
-      else await appendSystemTimeline(body, new Date(`${selected}T12:00:00`));
+      if (editingId) {
+        const nextBody = eventBody(editDate, time, content);
+        if (editDate === editingDate) await updateSystemTimelineEntry(editingDate, editingId, nextBody);
+        else await moveSystemTimelineEntry(editingDate, editDate, editingId, nextBody);
+      } else {
+        await appendSystemTimeline(body, new Date(`${selected}T12:00:00`));
+      }
       setContent("");
       setTime("");
       setEditingId(null);
+      setEditingDate("");
       setShowForm(false);
+      if (savedDate !== selected) {
+        setSelected(savedDate);
+        const nextMonth = new Date(`${savedDate}T12:00:00`);
+        setMonth(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1));
+      }
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -124,6 +138,8 @@ export default function CalendarWidget() {
 
   const edit = (item: CalendarItem) => {
     setEditingId(item.id);
+    setEditingDate(item.date);
+    setEditDate(item.date);
     setTime(item.time);
     setContent(item.content);
     setShowForm(true);
@@ -133,9 +149,10 @@ export default function CalendarWidget() {
     if (!window.confirm(ja ? `「${item.content}」を削除しますか？` : `Delete “${item.content}”?`)) return;
     setSaving(true);
     try {
-      await deleteSystemTimelineEntry(selected, item.id);
+      await deleteSystemTimelineEntry(item.date, item.id);
       if (editingId === item.id) {
         setEditingId(null);
+        setEditingDate("");
         setShowForm(false);
         setContent("");
         setTime("");
@@ -168,12 +185,13 @@ export default function CalendarWidget() {
       </div>
       <div className="flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-700">
         <strong className="text-sm">{new Intl.DateTimeFormat(locale, { dateStyle: "full" }).format(new Date(`${selected}T12:00:00`))}</strong>
-        <button onClick={() => { setEditingId(null); setContent(""); setTime(""); setShowForm((value) => !value); }} className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"><Plus size={14} />{ja ? "予定を追加" : "Add event"}</button>
+        <button onClick={() => { setEditingId(null); setEditingDate(""); setEditDate(selected); setContent(""); setTime(""); setShowForm((value) => !value); }} className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"><Plus size={14} />{ja ? "予定を追加" : "Add event"}</button>
       </div>
-      {showForm && <div className="flex gap-2 rounded border border-gray-200 p-2 dark:border-gray-700">
+      {showForm && <div className="flex flex-wrap gap-2 rounded border border-gray-200 p-2 dark:border-gray-700">
+        {editingId && <input type="date" required value={editDate} onChange={(event) => setEditDate(event.target.value)} aria-label={ja ? "日付" : "Date"} className="rounded border border-gray-300 bg-transparent px-2 text-sm dark:border-gray-600" />}
         <input type="time" value={time} onChange={(event) => setTime(event.target.value)} className="rounded border border-gray-300 bg-transparent px-2 text-sm dark:border-gray-600" />
         <input value={content} onChange={(event) => setContent(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void save(); }} autoFocus placeholder={ja ? "予定の内容" : "Event details"} className="min-w-0 flex-1 rounded border border-gray-300 bg-transparent px-2 text-sm dark:border-gray-600" />
-        <button disabled={saving || !content.trim()} onClick={() => void save()} className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40">{editingId ? (ja ? "更新" : "Update") : (ja ? "保存" : "Save")}</button>
+        <button disabled={saving || !content.trim() || Boolean(editingId && !editDate)} onClick={() => void save()} className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40">{editingId ? (ja ? "更新" : "Update") : (ja ? "保存" : "Save")}</button>
       </div>}
       {error && <div className="text-xs text-red-600">{error}</div>}
       <div className="space-y-1">

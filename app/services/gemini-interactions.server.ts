@@ -569,8 +569,10 @@ export async function* streamInteraction(
   let finalUsage: StreamChunkUsage | undefined;
 
   try {
+    // @google/genai 2.13's exported streaming alias omits the `stream: true`
+    // discriminant. Restore it so TypeScript selects the streaming overload.
     const stream = await ai.interactions.create(
-      createParams as unknown as Interactions.CreateModelInteractionParamsStreaming,
+      createParams as unknown as Interactions.CreateModelInteractionParamsStreaming & { stream: true },
     );
 
     for await (const event of stream) {

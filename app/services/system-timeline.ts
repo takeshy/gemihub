@@ -55,6 +55,74 @@ export async function updateSystemTimelineEntry(date: string, id: string, body: 
   await mutateTimelineFile(systemTimelinePath(date), (current) => replaceEntryBody(current, id, body.trim()));
 }
 
+export function prepareTimelineEntryMove(
+  content: string,
+  id: string,
+  body: string,
+): { remaining: string; movedBlock: string; originalBlock: string } | null {
+  const entry = parseMemoFile(content).entries.find((candidate) => candidate.id === id && candidate.parsed);
+  if (!entry) return null;
+  const remaining = deleteEntry(content, id);
+  if (remaining === null) return null;
+  return {
+    remaining,
+    originalBlock: entry.raw,
+    movedBlock: buildEntryBlock({
+      createdAt: entry.createdAt,
+      id: entry.id,
+      pinned: entry.pinned,
+      anchor: entry.anchor,
+      quotePrefix: entry.quotePrefix,
+      quoteSuffix: entry.quoteSuffix,
+      quote: entry.quote,
+      body: body.trim(),
+    }),
+  };
+}
+
+/** Move an entry to another daily Timeline file while preserving its identity and timestamp. */
+export async function moveSystemTimelineEntry(
+  sourceDate: string,
+  targetDate: string,
+  id: string,
+  body: string,
+): Promise<void> {
+  if (!isDateKey(sourceDate) || !isDateKey(targetDate)) {
+    throw new Error("date must be YYYY-MM-DD");
+  }
+  if (sourceDate === targetDate) {
+    await updateSystemTimelineEntry(sourceDate, id, body);
+    return;
+  }
+
+  let movedBlock = "";
+  let originalBlock = "";
+  await mutateTimelineFile(systemTimelinePath(sourceDate), (current) => {
+    const prepared = prepareTimelineEntryMove(current, id, body);
+    movedBlock = prepared?.movedBlock ?? "";
+    originalBlock = prepared?.originalBlock ?? "";
+    return prepared?.remaining ?? null;
+  });
+
+  if (!movedBlock) throw new Error("Timeline entry no longer exists");
+  try {
+    await mutateTimelineFile(systemTimelinePath(targetDate), (current) => {
+      if (parseMemoFile(current).entries.some((candidate) => candidate.id === id)) {
+        throw new Error("Timeline entry already exists on the target date");
+      }
+      return appendEntryBlock(current, "timeline:Timeline", movedBlock);
+    });
+  } catch (error) {
+    // Keep the operation recoverable if writing the destination fails after
+    // the source was updated.
+    await mutateTimelineFile(systemTimelinePath(sourceDate), (current) => {
+      if (parseMemoFile(current).entries.some((candidate) => candidate.id === id)) return current;
+      return appendEntryBlock(current, "timeline:Timeline", originalBlock);
+    });
+    throw error;
+  }
+}
+
 export async function deleteSystemTimelineEntry(date: string, id: string): Promise<void> {
   if (!isDateKey(date)) throw new Error("date must be YYYY-MM-DD");
   await mutateTimelineFile(systemTimelinePath(date), (current) => deleteEntry(current, id));
