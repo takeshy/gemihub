@@ -3,6 +3,7 @@
 
 import {
   listUserFiles,
+  getFileMetadata,
   readFile,
   createFile,
   createFileBinary,
@@ -11,6 +12,7 @@ import {
   deleteFile,
   ensureSubFolder,
   type DriveFile,
+  DriveApiError,
 } from "./google-drive.server";
 import { SYNC_META_FILE_NAME } from "./sync-diff";
 
@@ -184,6 +186,62 @@ export async function readRemoteSyncMeta(
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether a Drive file that disappeared from the root listing was actually
+ * deleted, trashed, or moved outside the flat sync root.
+ */
+export function isFileRemovedFromSyncRoot(file: DriveFile, rootFolderId: string): boolean {
+  return file.trashed === true || !(file.parents ?? []).includes(rootFolderId);
+}
+
+/**
+ * Read sync metadata and reconcile entries against the actual Drive root.
+ *
+ * listUserFiles intentionally excludes trashed files. A missing entry is
+ * therefore verified by ID before it is removed from _sync-meta.json, so a
+ * partial or inconsistent list response cannot manufacture remote deletions.
+ */
+export async function readReconciledRemoteSyncMeta(
+  accessToken: string,
+  rootFolderId: string,
+  options: SyncMetaOperationOptions = {}
+): Promise<SyncMeta> {
+  const remoteMeta = await readRemoteSyncMeta(accessToken, rootFolderId, options);
+  if (!remoteMeta) {
+    return rebuildSyncMeta(accessToken, rootFolderId, options);
+  }
+
+  const driveFiles = await listUserFiles(accessToken, rootFolderId, options);
+  const driveFileIds = new Set(driveFiles.map((file) => file.id));
+  const staleIds = Object.keys(remoteMeta.files).filter((id) => !driveFileIds.has(id));
+  const removedIds: string[] = [];
+
+  for (const id of staleIds) {
+    try {
+      const file = await getFileMetadata(accessToken, id, options);
+      if (isFileRemovedFromSyncRoot(file, rootFolderId)) {
+        removedIds.push(id);
+      }
+    } catch (error) {
+      if (error instanceof DriveApiError && error.status === 404) {
+        removedIds.push(id);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  if (removedIds.length > 0) {
+    for (const id of removedIds) {
+      delete remoteMeta.files[id];
+    }
+    remoteMeta.lastUpdatedAt = new Date().toISOString();
+    await writeRemoteSyncMeta(accessToken, rootFolderId, remoteMeta, options);
+  }
+
+  return remoteMeta;
 }
 
 /**

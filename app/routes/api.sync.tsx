@@ -20,11 +20,13 @@ import {
 } from "~/services/google-drive.server";
 import {
   isTextFileName,
+  isGoogleWorkspaceMimeType,
   LARGE_FILE_CACHE_THRESHOLD,
   shouldTreatAsBinaryFile,
 } from "~/services/sync-client-utils";
 import {
   readRemoteSyncMeta,
+  readReconciledRemoteSyncMeta,
   writeRemoteSyncMeta,
   rebuildSyncMeta,
   saveConflictBackup,
@@ -75,20 +77,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     return Response.json(data, { ...init, headers });
   };
 
-  // Read existing sync meta (snapshot of last sync), fallback to rebuild if missing
+  // Reconcile the sync snapshot with Drive so external deletes/moves appear as
+  // pull changes instead of leaving stale metadata behind.
   const syncMetaFile = await findFileByExactName(
     validTokens.accessToken, SYNC_META_FILE_NAME, validTokens.rootFolderId
   );
-  let remoteMeta: SyncMeta | null = null;
-  if (syncMetaFile) {
-    try {
-      const content = await readFile(validTokens.accessToken, syncMetaFile.id);
-      remoteMeta = JSON.parse(content) as SyncMeta;
-    } catch { /* fall through to rebuild */ }
-  }
-  if (!remoteMeta) {
-    remoteMeta = await rebuildSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
-  }
+  const remoteMeta = await readReconciledRemoteSyncMeta(
+    validTokens.accessToken,
+    validTokens.rootFolderId
+  );
 
   logCtx.details = { fileCount: Object.keys(remoteMeta.files).length };
   emitLog(logCtx, 200);
@@ -341,7 +338,8 @@ export async function action({ request }: Route.ActionArgs) {
         ([_id, f]) =>
           f.name !== SYNC_META_FILE_NAME &&
           f.name !== SETTINGS_FILE_NAME &&
-          f.name !== ENCRYPTED_AUTH_FILE_NAME
+          f.name !== ENCRYPTED_AUTH_FILE_NAME &&
+          !isGoogleWorkspaceMimeType(f.mimeType)
       );
 
       const skipLargeFiles = body.skipLargeFiles === true;

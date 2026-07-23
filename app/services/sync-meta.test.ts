@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeSyncMetaSnapshots, pickSyncMetaToKeep } from "./sync-meta.server";
+import {
+  isFileRemovedFromSyncRoot,
+  mergeSyncMetaSnapshots,
+  pickSyncMetaToKeep,
+} from "./sync-meta.server";
 import type { DriveFile } from "./google-drive.server";
 import type { SyncMeta } from "./sync-diff";
 
@@ -119,4 +123,34 @@ test("mergeSyncMetaSnapshots keeps the newer file metadata while preserving opti
     shared: true,
     webViewLink: "https://example.com/report",
   });
+});
+
+test("isFileRemovedFromSyncRoot recognizes trashed files", () => {
+  const driveFile = {
+    ...file("trashed", "2025-01-01T00:00:00.000Z"),
+    parents: ["root"],
+    trashed: true,
+  };
+
+  assert.equal(isFileRemovedFromSyncRoot(driveFile, "root"), true);
+});
+
+test("isFileRemovedFromSyncRoot recognizes files moved outside the sync root", () => {
+  const driveFile = {
+    ...file("moved", "2025-01-01T00:00:00.000Z"),
+    parents: ["somewhere-else"],
+    trashed: false,
+  };
+
+  assert.equal(isFileRemovedFromSyncRoot(driveFile, "root"), true);
+});
+
+test("isFileRemovedFromSyncRoot preserves files still in the sync root", () => {
+  const driveFile = {
+    ...file("present", "2025-01-01T00:00:00.000Z"),
+    parents: ["root"],
+    trashed: false,
+  };
+
+  assert.equal(isFileRemovedFromSyncRoot(driveFile, "root"), false);
 });

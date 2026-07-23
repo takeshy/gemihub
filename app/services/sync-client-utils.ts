@@ -10,6 +10,10 @@ export const SYNC_EXCLUDED_PREFIXES = [
   "plugins/",
 ];
 
+export function isGoogleWorkspaceMimeType(mimeType: string | undefined | null): boolean {
+  return Boolean(mimeType?.startsWith("application/vnd.google-apps."));
+}
+
 export function isSyncExcludedPath(fileName: string): boolean {
   const normalized = fileName.replace(/^\/+/, "");
   if (SYNC_EXCLUDED_FILE_NAMES.has(normalized)) return true;

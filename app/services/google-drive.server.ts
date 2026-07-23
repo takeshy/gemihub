@@ -23,6 +23,7 @@ export interface DriveFile {
   modifiedTime?: string;
   createdTime?: string;
   parents?: string[];
+  trashed?: boolean;
   webViewLink?: string;
   md5Checksum?: string;
   size?: string;
@@ -37,7 +38,7 @@ interface DriveOperationOptions {
   signal?: AbortSignal;
 }
 
-class DriveApiError extends Error {
+export class DriveApiError extends Error {
   constructor(
     public status: number,
     public responseText: string
@@ -314,7 +315,7 @@ export async function getFileMetadata(
   options: DriveOperationOptions = {}
 ): Promise<DriveFile> {
   const res = await driveRequest(
-    `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,parents,webViewLink,md5Checksum,size`,
+    `${DRIVE_API}/files/${fileId}?fields=id,name,mimeType,modifiedTime,createdTime,parents,trashed,webViewLink,md5Checksum,size`,
     accessToken,
     { signal: options.signal }
   );

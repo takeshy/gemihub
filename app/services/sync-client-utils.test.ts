@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isSyncExcludedPath, getSyncCompletionStatus, shouldTreatAsBinaryFile } from "./sync-client-utils.ts";
+import { getSyncCompletionStatus, isGoogleWorkspaceMimeType, isSyncExcludedPath, shouldTreatAsBinaryFile } from "./sync-client-utils.ts";
 
 test("isSyncExcludedPath excludes system file names", () => {
   assert.equal(isSyncExcludedPath("_sync-meta.json"), true);
@@ -60,4 +60,11 @@ test("shouldTreatAsBinaryFile keeps dashboard-like text files textual despite oc
 test("shouldTreatAsBinaryFile still treats real binary extensions as binary", () => {
   assert.equal(shouldTreatAsBinaryFile("archive.zip", "application/octet-stream"), true);
   assert.equal(shouldTreatAsBinaryFile("cover.png", ""), true);
+});
+
+test("isGoogleWorkspaceMimeType distinguishes native files from exported files", () => {
+  assert.equal(isGoogleWorkspaceMimeType("application/vnd.google-apps.document"), true);
+  assert.equal(isGoogleWorkspaceMimeType("application/vnd.google-apps.spreadsheet"), true);
+  assert.equal(isGoogleWorkspaceMimeType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"), false);
+  assert.equal(isGoogleWorkspaceMimeType("application/pdf"), false);
 });
