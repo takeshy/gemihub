@@ -3,7 +3,7 @@
 // via the registerWidget function (extensibility point for P1+).
 
 import React from "react";
-import { FileText, Globe, Puzzle, LayoutGrid, Workflow, Database, MessageCircle, NotebookPen, LockKeyhole } from "lucide-react";
+import { CalendarDays, FileText, Globe, Puzzle, LayoutGrid, Workflow, Database, MessageCircle, NotebookPen, LockKeyhole } from "lucide-react";
 import type { WidgetDef } from "../types";
 import FileWidget from "./file-widget/FileWidget";
 import MemoListWidget from "./MemoListWidget";
@@ -20,6 +20,7 @@ import KanbanWidget from "../data-widget/KanbanWidget";
 import { WorkflowConfigEditor } from "../data-widget/WorkflowConfigEditor";
 import { KanbanConfigEditor } from "../data-widget/KanbanConfigEditor";
 import SecretManagerWidget from "./SecretManagerWidget";
+import CalendarWidget from "./CalendarWidget";
 import { SecretManagerConfigEditor } from "./config-editors/SecretManagerConfigEditor";
 
 const registry = new Map<string, WidgetDef>();
@@ -134,6 +135,15 @@ registerWidget({
   render: (config, ctx) => React.createElement(TimelineWidget, { config, ctx }),
   defaultSize: { w: 6, h: 6 },
   ConfigEditor: TimelineConfigEditor,
+});
+
+registerWidget({
+  type: "calendar",
+  label: "Calendar",
+  icon: React.createElement(CalendarDays, { size: 16 }),
+  defaultConfig: {},
+  render: () => React.createElement(CalendarWidget),
+  defaultSize: { w: 7, h: 6 },
 });
 
 registerWidget({

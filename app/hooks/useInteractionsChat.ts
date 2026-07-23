@@ -24,6 +24,7 @@ import type { LocalChatCallbacks } from "./useLocalChat";
 import { executeSkillWorkflowTool, type SkillWorkflowEntry } from "./skillWorkflowTool";
 import { buildOkfDocumentTool, executeReadOkfDocumentTool } from "./okfDocumentTool";
 import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
+import { executeTimelineTool, TIMELINE_TOOL_DEFINITIONS } from "~/services/system-timeline";
 
 export interface InteractionsChatOptions {
   model: ModelType;
@@ -122,6 +123,7 @@ function buildToolDispatcher(
       ? DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name))
       : DRIVE_TOOL_DEFINITIONS;
   const driveToolNames = new Set(driveTools.map(t => t.name));
+  const timelineToolNames = new Set(TIMELINE_TOOL_DEFINITIONS.map((tool) => tool.name));
 
   // MCP tool names are resolved dynamically (names come from server tool definitions)
   // We don't have the names here, so we route unknown tools to MCP if mcpServerIds is non-empty
@@ -157,6 +159,10 @@ function buildToolDispatcher(
         return rest;
       }
       return result;
+    }
+
+    if (timelineToolNames.has(name)) {
+      return executeTimelineTool(name, args);
     }
 
     // Workflow spec lookup (full spec when nodeTypes omitted)
@@ -393,6 +399,7 @@ export async function* executeInteractionsChat(
   // Build extra tool definitions (client-only tools) to send to server
   const extraToolDefinitions: ToolDefinition[] = [];
   extraToolDefinitions.push(...buildOkfDocumentTool(activeOkfBundleIds));
+  extraToolDefinitions.push(...TIMELINE_TOOL_DEFINITIONS);
   extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
   extraToolDefinitions.push({
     name: "get_workflow_spec",

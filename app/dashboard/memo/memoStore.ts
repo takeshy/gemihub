@@ -6,6 +6,7 @@ import { readFileLocal, writeFileLocal, findFileByNameLocal } from "~/services/d
 import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { memoFilePathFor } from "./memoPath";
 import { appendEntryBlock, buildEntryBlock, uniqueEntryId } from "./memoTimeline";
+import { appendSystemTimeline } from "~/services/system-timeline";
 
 export const MEMO_DIR = "Dashboards/Memos";
 
@@ -58,6 +59,10 @@ export async function postMemoEntry(
   });
   const next = appendEntryBlock(current.content, drivePath, block);
   await writeFileLocal(memoPath, next, current.fileId ? { existingFileId: current.fileId } : undefined);
+  const fileName = drivePath.split("/").pop() ?? drivePath;
+  void appendSystemTimeline(
+    `> [!quote] Memo · ${fileName}\n> [[${drivePath}|${fileName}]]${draft?.quote ? `\n> ${draft.quote.trim().replace(/\n/g, "\n> ")}` : ""}${body.trim() ? `\n\n${body.trim()}` : ""}`,
+  ).catch((error) => console.error("Failed to record memo in Timeline", error));
 }
 
 /**

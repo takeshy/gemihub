@@ -34,6 +34,7 @@ import {
 } from "./skillWorkflowTool";
 import { buildOkfDocumentTool, executeReadOkfDocumentTool } from "./okfDocumentTool";
 import { getWorkflowNodeSpec } from "~/engine/workflowSpec";
+import { executeTimelineTool, TIMELINE_TOOL_DEFINITIONS } from "~/services/system-timeline";
 
 export interface LocalChatOptions {
   apiKey: string;
@@ -128,6 +129,7 @@ export async function* executeLocalChat(
       tools.push(...DRIVE_TOOL_DEFINITIONS);
     }
   }
+  tools.push(...TIMELINE_TOOL_DEFINITIONS);
 
   // MCP tools (fetch definitions via proxy)
   let mcpToolDefs: ToolDefinition[] = [];
@@ -209,6 +211,7 @@ export async function* executeLocalChat(
 
   // Build tool dispatcher
   const driveToolNames = new Set(DRIVE_TOOL_DEFINITIONS.map((t) => t.name));
+  const timelineToolNames = new Set(TIMELINE_TOOL_DEFINITIONS.map((tool) => tool.name));
   const mcpToolNames = new Set(mcpToolDefs.map((t) => t.name));
   const executedSkillWorkflowIds = new Set<string>();
   let skillWorkflowFailed = false;
@@ -244,6 +247,10 @@ export async function* executeLocalChat(
       }
 
       return result;
+    }
+
+    if (timelineToolNames.has(name)) {
+      return executeTimelineTool(name, args);
     }
 
     if (mcpToolNames.has(name) && mcpServerIds.length > 0) {

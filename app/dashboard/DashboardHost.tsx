@@ -26,7 +26,7 @@ import {
   dashboardDisplayName,
   type DashboardFileEntry,
 } from "./dashboardFile";
-import { OPEN_DASHBOARD_EVENT, consumePendingDashboardOpen } from "./pendingDashboardOpen";
+import { OPEN_DASHBOARD_EVENT, OPEN_HOME_DASHBOARD_EVENT, consumePendingDashboardOpen } from "./pendingDashboardOpen";
 import type { DashboardData } from "./types";
 
 interface DashboardHostProps {
@@ -250,6 +250,31 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
 
   const effectiveHomeDashboard =
     localHomeDashboard !== undefined ? localHomeDashboard : settings.homeDashboard;
+
+  useEffect(() => {
+    const openHome = () => {
+      void (async () => {
+        setLoading(true);
+        const [homeResult, dashboardList] = await Promise.all([
+          resolveHomeDashboard(effectiveHomeDashboard),
+          listDashboardFiles(),
+        ]);
+        setDashboards(dashboardList);
+        if (homeResult) {
+          setData(homeResult.data);
+          setFileId(homeResult.fileId);
+          setFileName(homeResult.fileName);
+        } else {
+          setData(null);
+          setFileId(null);
+          setFileName(null);
+        }
+        setLoading(false);
+      })();
+    };
+    window.addEventListener(OPEN_HOME_DASHBOARD_EVENT, openHome);
+    return () => window.removeEventListener(OPEN_HOME_DASHBOARD_EVENT, openHome);
+  }, [effectiveHomeDashboard]);
 
   const handleDeleteDashboard = useCallback(async () => {
     if (!fileId) return;

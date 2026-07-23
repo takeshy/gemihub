@@ -43,6 +43,8 @@ import { useSyncUI } from "~/hooks/useSyncUI";
 import { useAIWorkflowDialog, type AIDialogState } from "~/hooks/useAIWorkflowDialog";
 import { ICON } from "~/utils/icon-sizes";
 import { PluginIcon } from "~/components/shared/PluginIcon";
+import { ToolLauncher, type LauncherTool } from "~/components/ide/ToolLauncher";
+import { requestOpenHomeDashboard } from "~/dashboard/pendingDashboardOpen";
 
 // ---------------------------------------------------------------------------
 // Loader
@@ -482,6 +484,12 @@ function IDEContent({
   const { sidebarViews, mainViews, getPluginAPI } = usePlugins();
   const { fileList } = useEditorContext();
   const shownSkillUpdateToastRef = useRef<string | null>(null);
+  const [launcherOpen, setLauncherOpen] = useState(false);
+  const [launcherTool, setLauncherTool] = useState<LauncherTool | null>(null);
+  const openLauncher = useCallback((tool: LauncherTool | null = null) => {
+    setLauncherTool(tool);
+    setLauncherOpen(true);
+  }, []);
 
   useEffect(() => {
     const installedSkillVersion = settings.hubwork?.skillVersion;
@@ -1177,6 +1185,21 @@ function IDEContent({
         isOffline={isOffline}
         pullDialogTrigger={pullDialogTrigger}
         onLogoClick={isMobile ? () => setMobileView("files") : clearActiveFile}
+        onOpenLauncher={() => openLauncher(null)}
+        onOpenSecretManager={() => openLauncher("secret-manager")}
+        onOpenHome={() => {
+          setRightPanel("chat");
+          clearActiveFile();
+          if (isMobile) setMobileView("editor");
+          requestOpenHomeDashboard();
+        }}
+      />
+
+      <ToolLauncher
+        open={launcherOpen}
+        initialTool={launcherTool}
+        encryptionSettings={settings.encryption}
+        onClose={() => setLauncherOpen(false)}
       />
 
       {!hasGeminiApiKey && (

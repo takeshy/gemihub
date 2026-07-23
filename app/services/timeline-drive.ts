@@ -1,4 +1,5 @@
 import {
+  applyPushedFileMetadata,
   deleteEditHistoryEntry,
   getCachedRemoteMeta,
   getLocalSyncMeta,
@@ -97,49 +98,158 @@ async function readRemote(file: RemoteFile): Promise<{ content: string; md5Check
   return response.json() as Promise<{ content: string; md5Checksum: string }>;
 }
 
-/** Read-modify-write a Timeline Markdown file, retrying when another client wins the race. */
+interface TimelinePushJob {
+  name: string;
+  baseContent: string;
+  nextContent: string;
+}
+
+const timelinePushQueues = new Map<string, Promise<void>>();
+
+/**
+ * Apply the metadata returned by a background Timeline push without replacing
+ * the locally rendered content. A newer local edit may already exist by the
+ * time Drive responds; only clear its dirty marker when the pushed snapshot is
+ * still the latest one.
+ */
+async function applyTimelinePushResult(
+  file: RemoteFile,
+  pushedContent: string,
+  meta?: RemoteMetaResponse,
+): Promise<void> {
+  const local = await findFileByNameLocal(file.name);
+  const modifiedTime = file.modifiedTime ?? new Date().toISOString();
+
+  if (local) {
+    await applyPushedFileMetadata(local.id, pushedContent, {
+      md5Checksum: file.md5Checksum ?? "",
+      modifiedTime,
+    });
+  }
+
+  const cachedRemote = await getCachedRemoteMeta();
+  if (cachedRemote) {
+    await setCachedRemoteMeta({
+      ...cachedRemote,
+      lastUpdatedAt: meta?.lastUpdatedAt ?? cachedRemote.lastUpdatedAt,
+      files: {
+        ...cachedRemote.files,
+        [file.id]: meta?.files[file.id] ?? {
+          name: file.name,
+          mimeType: file.mimeType,
+          md5Checksum: file.md5Checksum ?? "",
+          modifiedTime,
+          createdTime: file.createdTime ?? modifiedTime,
+          size: file.size,
+        },
+      },
+      cachedAt: Date.now(),
+    });
+  }
+
+  const localMeta = await getLocalSyncMeta();
+  if (localMeta) {
+    const entry = meta?.files[file.id];
+    localMeta.files[file.id] = {
+      md5Checksum: entry?.md5Checksum ?? file.md5Checksum ?? "",
+      modifiedTime: entry?.modifiedTime ?? modifiedTime,
+      name: entry?.name ?? file.name,
+      size: entry?.size ?? file.size,
+    };
+    localMeta.lastUpdatedAt = meta?.lastUpdatedAt ?? localMeta.lastUpdatedAt;
+    await setLocalSyncMeta(localMeta);
+  }
+  window.dispatchEvent(new Event("sync-complete"));
+}
+
+export function canPushTimelineUpdate(baseContent: string, remoteContent: string): boolean {
+  return baseContent === remoteContent;
+}
+
+async function pushTimelineUpdate(job: TimelinePushJob): Promise<void> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+  // New daily files are created by the existing pending-file migration. It is
+  // already local-first and uploads only that file, so join it before deciding
+  // whether an additional update is necessary.
+  await migratePendingFiles();
+  const remote = await findRemoteByName(job.name);
+  const snapshot = remote ? await readRemote(remote) : { content: "", md5Checksum: "" };
+
+  // A migration or an earlier queued job may already have uploaded this exact
+  // snapshot. Nothing else needs to be pushed.
+  if (snapshot.content === job.nextContent) {
+    if (remote) {
+      await applyTimelinePushResult(
+        { ...remote, md5Checksum: snapshot.md5Checksum || remote.md5Checksum },
+        job.nextContent,
+      );
+    }
+    return;
+  }
+
+  // Never fold a remote change into the local cache during realtime Push.
+  // Leave the local edit dirty so the normal conflict-aware Push/Pull flow can
+  // resolve it explicitly.
+  if (!canPushTimelineUpdate(job.baseContent, snapshot.content)) {
+    window.dispatchEvent(new CustomEvent("timeline-push-conflict", { detail: { path: job.name } }));
+    return;
+  }
+
+  const response = await fetch("/api/drive/files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "upsertChecked",
+      name: job.name,
+      content: job.nextContent,
+      mimeType: "text/markdown",
+      expectedFileId: remote?.id,
+      expectedMd5Checksum: snapshot.md5Checksum,
+    }),
+  });
+  if (response.status === 409) {
+    window.dispatchEvent(new CustomEvent("timeline-push-conflict", { detail: { path: job.name } }));
+    return;
+  }
+  if (!response.ok) throw new Error("Failed to update Timeline file on Drive");
+  const data = await response.json() as { file: RemoteFile; meta?: RemoteMetaResponse };
+  await applyTimelinePushResult(data.file, job.nextContent, data.meta);
+}
+
+function scheduleTimelinePush(job: TimelinePushJob): void {
+  const previous = timelinePushQueues.get(job.name) ?? Promise.resolve();
+  const queued = previous
+    .catch(() => {})
+    .then(() => pushTimelineUpdate(job))
+    .catch((error) => {
+      console.error("Timeline realtime Push failed", error);
+      window.dispatchEvent(new CustomEvent("timeline-push-error", { detail: { path: job.name } }));
+    });
+  timelinePushQueues.set(job.name, queued);
+  void queued.finally(() => {
+    if (timelinePushQueues.get(job.name) === queued) timelinePushQueues.delete(job.name);
+  });
+}
+
+/**
+ * Update Timeline locally and return immediately after IndexedDB is current.
+ * The matching Drive file is pushed in a per-file background queue; no Pull or
+ * workspace-wide Push is started here.
+ */
 export async function mutateTimelineFile(
   name: string,
   mutate: (current: string) => string | null,
 ): Promise<string> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    const local = await findFileByNameLocal(name);
-    const current = local ? await readFileLocal(local.id) : "";
-    const next = mutate(current);
-    if (next == null) throw new Error("Timeline entry no longer exists");
-    await writeFileLocal(name, next, local ? { existingFileId: local.id } : undefined);
-    return next;
+  const local = await findFileByNameLocal(name);
+  const current = local ? await readFileLocal(local.id) : "";
+  const next = mutate(current);
+  if (next == null) throw new Error("Timeline entry no longer exists");
+  await writeFileLocal(name, next, local ? { existingFileId: local.id } : undefined);
+  if (typeof navigator === "undefined" || navigator.onLine) {
+    scheduleTimelinePush({ name, baseContent: current, nextContent: next });
   }
-
-  // Flush a Timeline file created while offline before resolving the remote
-  // snapshot. This prevents a second file with the same path from being
-  // created when connectivity returns.
-  await migratePendingFiles();
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const remote = await findRemoteByName(name);
-    const snapshot = remote ? await readRemote(remote) : { content: "", md5Checksum: "" };
-    const next = mutate(snapshot.content);
-    if (next == null) throw new Error("Timeline entry no longer exists");
-    const response = await fetch("/api/drive/files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "upsertChecked",
-        name,
-        content: next,
-        mimeType: "text/markdown",
-        expectedFileId: remote?.id,
-        expectedMd5Checksum: snapshot.md5Checksum,
-      }),
-    });
-    if (response.status === 409) continue;
-    if (!response.ok) throw new Error("Failed to update Timeline file on Drive");
-    const data = await response.json() as { file: RemoteFile; meta?: RemoteMetaResponse };
-    await applyRemoteFile(data.file, next, data.meta);
-    return next;
-  }
-  throw new Error("Timeline file kept changing on Drive");
+  return next;
 }
 
 /** Pull the latest Markdown files for one Timeline directory into the local cache. */

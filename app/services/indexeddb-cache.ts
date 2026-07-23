@@ -395,6 +395,43 @@ export async function deleteEditHistoryEntry(fileId: string): Promise<void> {
   }
 }
 
+/**
+ * Atomically apply metadata from a completed background Push while preserving
+ * whatever content is currently cached. The dirty marker is removed only when
+ * no newer local write replaced the snapshot that was pushed.
+ */
+export async function applyPushedFileMetadata(
+  fileId: string,
+  pushedContent: string,
+  metadata: { md5Checksum: string; modifiedTime: string },
+): Promise<boolean> {
+  if (typeof indexedDB === "undefined") return false;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(["files", "editHistory"], "readwrite");
+    const files = tx.objectStore("files");
+    const history = tx.objectStore("editHistory");
+    let matched = false;
+    const request = files.get(fileId);
+    request.onsuccess = () => {
+      const cached = request.result as CachedFile | undefined;
+      if (!cached) return;
+      matched = cached.content === pushedContent;
+      files.put({
+        ...cached,
+        md5Checksum: metadata.md5Checksum,
+        modifiedTime: metadata.modifiedTime,
+        cachedAt: Date.now(),
+      });
+      if (matched) history.delete(fileId);
+    };
+    request.onerror = () => tx.abort();
+    tx.oncomplete = () => resolve(matched);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
+  });
+}
+
 export async function getLocallyModifiedFileIds(): Promise<Set<string>> {
   if (typeof indexedDB === "undefined") return new Set();
   try {

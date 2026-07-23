@@ -16,6 +16,7 @@ import { applyPostSource, formatCell, getCellValue } from "./filter";
 import { useI18n } from "~/i18n/context";
 import { FilePreviewModal } from "../widgets/FilePreviewModal";
 import type { MdEditMode } from "~/components/ide/editors/MarkdownFileEditor";
+import { appendSystemTimeline } from "~/services/system-timeline";
 
 const UNSPECIFIED = "__unspecified__";
 const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
@@ -400,6 +401,10 @@ export default function KanbanWidget({
       await writeFileLocal(cached.fileName ?? row.fileName!, result.content, {
         existingFileId: row.fileId,
       });
+      const cardTitle = scalar(getCellValue(row, titleProperty)) || row.fileName || t("dashboard.kanbanUntitled");
+      void appendSystemTimeline(
+        `> [!kanban] Kanban · ${cardTitle}\n> [[${cached.fileName ?? row.fileName}|${cardTitle}]]\n\n${oldColumn || t("dashboard.kanbanUnspecified")} → ${nextValue || t("dashboard.kanbanUnspecified")}`,
+      ).catch((timelineError) => console.error("Failed to record Kanban move in Timeline", timelineError));
       flashLanded(row.id);
       window.dispatchEvent(
         new CustomEvent("dashboard-data-changed", {
@@ -443,6 +448,9 @@ export default function KanbanWidget({
           status: newStatus,
         }),
       );
+      void appendSystemTimeline(
+        `> [!kanban] Kanban · ${title}\n> [[${path}|${title}]]\n\n${t("dashboard.kanbanNewCardCreate")}: ${newStatus}`,
+      ).catch((timelineError) => console.error("Failed to record Kanban card in Timeline", timelineError));
       setShowNewCard(false);
       setNewTitle("");
       await loadData();

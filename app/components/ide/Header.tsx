@@ -9,6 +9,9 @@ import {
   Search,
   WifiOff,
   HelpCircle,
+  House,
+  LockKeyhole,
+  Rocket,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
@@ -41,6 +44,9 @@ interface HeaderProps {
   isOffline?: boolean;
   pullDialogTrigger?: number;
   onLogoClick?: () => void;
+  onOpenLauncher?: () => void;
+  onOpenSecretManager?: () => void;
+  onOpenHome?: () => void;
 }
 
 export function Header({
@@ -65,6 +71,9 @@ export function Header({
   isOffline = false,
   pullDialogTrigger = 0,
   onLogoClick,
+  onOpenLauncher,
+  onOpenSecretManager,
+  onOpenHome,
 }: HeaderProps) {
   const { t } = useI18n();
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
@@ -143,6 +152,33 @@ export function Header({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
+        {onOpenHome && (
+          <button
+            onClick={onOpenHome}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            title={t("header.home")}
+          >
+            <House size={ICON.MD} />
+          </button>
+        )}
+        {onOpenLauncher && (
+          <button
+            onClick={onOpenLauncher}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            title={t("header.launcher")}
+          >
+            <Rocket size={ICON.MD} />
+          </button>
+        )}
+        {onOpenSecretManager && (
+          <button
+            onClick={onOpenSecretManager}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+            title={t("header.secretManager")}
+          >
+            <LockKeyhole size={ICON.MD} />
+          </button>
+        )}
         {/* Right panel tab toggles - hidden on mobile (bottom nav handles this) */}
         {!isMobile && (
           <>

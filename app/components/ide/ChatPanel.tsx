@@ -46,6 +46,7 @@ import { readFileLocal, findFileByNameLocal } from "~/services/drive-local";
 import type { ReviewResult } from "~/services/ai-workflow-generation";
 import { buildOkfSystemPrompt } from "~/services/okf-loader";
 import { useOkfBundles } from "~/hooks/useOkfBundles";
+import { TIMELINE_AI_INSTRUCTION } from "~/services/system-timeline";
 
 export interface ChatOverrides {
   model?: ModelType | null;
@@ -949,7 +950,7 @@ export function ChatPanel({
               "",
               "**IMPORTANT: Write all natural-language output in English.** This applies to every turn's output — plans, confirmations, questions, verification results, error/status messages, and skill-managed files (`web/__gemihub/spec.md`, `web/__gemihub/history.md`). Preserve technical tokens such as code, file paths, URL paths, identifiers, sheet names, and column names as-is; translate only the prose. Even if the user writes in another language or the surrounding context (sheet contents, prior files) is in another language, continue responding in English.",
             ].join("\n");
-        const fullSystemPrompt = [settings.systemPrompt, planInstruction, skillPrompt, okfPrompt, langInstruction]
+        const fullSystemPrompt = [settings.systemPrompt, planInstruction, skillPrompt, okfPrompt, TIMELINE_AI_INSTRUCTION, langInstruction]
           .filter(Boolean)
           .join("\n\n") || undefined;
         const skillWorkflows = getActiveSkillWorkflows(extraSkillIds);

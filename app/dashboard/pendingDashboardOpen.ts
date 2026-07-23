@@ -12,6 +12,7 @@
  */
 
 export const OPEN_DASHBOARD_EVENT = "gemihub-open-dashboard";
+export const OPEN_HOME_DASHBOARD_EVENT = "gemihub-open-home-dashboard";
 
 let pendingPath: string | null = null;
 
@@ -24,4 +25,8 @@ export function consumePendingDashboardOpen(): string | null {
   const path = pendingPath;
   pendingPath = null;
   return path;
+}
+
+export function requestOpenHomeDashboard(): void {
+  window.dispatchEvent(new Event(OPEN_HOME_DASHBOARD_EVENT));
 }
