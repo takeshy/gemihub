@@ -206,12 +206,14 @@ function GfmMarkdownPreview({
   currentFilePath,
   onWikiLinkClick,
   onMissingWikiLinkClick,
+  openLinksInNewTab = false,
 }: {
   content: string;
   fileList?: FileListItem[];
   currentFilePath?: string;
   onWikiLinkClick?: (fileId: string, fileName: string, heading?: string) => void;
   onMissingWikiLinkClick?: (target: string) => void;
+  openLinksInNewTab?: boolean;
 }) {
   const { t } = useI18n();
   const processedContent = useMemo(() => (
@@ -299,7 +301,12 @@ function GfmMarkdownPreview({
             );
           }
           return (
-            <a href={href} {...props}>
+            <a
+              href={href}
+              {...props}
+              target={openLinksInNewTab ? "_blank" : props.target}
+              rel={openLinksInNewTab ? "noopener noreferrer" : props.rel}
+            >
               {children}
             </a>
           );

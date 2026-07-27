@@ -450,6 +450,7 @@ export default function TimelineWidget({
   const imagesRef = useRef<PendingImage[]>([]);
   const editImagesRef = useRef<PendingImage[]>([]);
   const wikiLinkStartRef = useRef(0);
+  const preserveScrollOnNextPostsChangeRef = useRef(false);
 
   const scrollToLatest = useCallback(() => {
     const el = listRef.current;
@@ -464,12 +465,12 @@ export default function TimelineWidget({
     return Array.from(byPath.values());
   }, [editorCtx.fileList, resolvedFiles]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (count: number) => {
     if (!name) return;
     setLoading(true);
     setError(null);
     try {
-      const loaded = await loadTimelineFiles(name, loadedCount, 0, filters);
+      const loaded = await loadTimelineFiles(name, count, 0, filters);
       setPosts(loaded.posts);
       setResolvedFiles(loaded.fileList);
       setHasOlderPosts(loaded.hasMore);
@@ -478,11 +479,7 @@ export default function TimelineWidget({
     } finally {
       setLoading(false);
     }
-  }, [name, loadedCount, filters, t]);
-
-  useEffect(() => {
-    setLoadedCount(latestCount);
-  }, [name, latestCount, filters]);
+  }, [name, filters, t]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -495,26 +492,29 @@ export default function TimelineWidget({
   }, [wordInput]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    setLoadedCount(latestCount);
+    void refresh(latestCount);
+  }, [latestCount, refresh]);
 
   const loadOlder = useCallback(async () => {
     if (!name || loadingOlder) return;
     const el = listRef.current;
     const prevHeight = el?.scrollHeight ?? 0;
+    const prevScrollTop = el?.scrollTop ?? 0;
     setLoadingOlder(true);
     setError(null);
     try {
       const nextCount = loadedCount + latestCount;
       const loaded = await loadTimelineFiles(name, nextCount, 0, filters);
+      preserveScrollOnNextPostsChangeRef.current = true;
       setLoadedCount(nextCount);
       setPosts(loaded.posts);
       setResolvedFiles(loaded.fileList);
       setHasOlderPosts(loaded.hasMore);
       requestAnimationFrame(() => {
         const nextEl = listRef.current;
-        if (!nextEl) return;
-        nextEl.scrollTop = nextEl.scrollHeight - prevHeight + nextEl.scrollTop;
+        if (nextEl) nextEl.scrollTop = prevScrollTop + nextEl.scrollHeight - prevHeight;
+        preserveScrollOnNextPostsChangeRef.current = false;
       });
     } catch {
       setError(t("dashboard.fileNotFound"));
@@ -529,13 +529,13 @@ export default function TimelineWidget({
     setError(null);
     try {
       await loadTimelineFromDrive(timelineDir(name));
-      await refresh();
+      await refresh(loadedCount);
     } catch {
       setError(t("dashboard.timelineLoadFailed"));
     } finally {
       setLoadingFromDrive(false);
     }
-  }, [name, loadingFromDrive, refresh, t]);
+  }, [name, loadingFromDrive, loadedCount, refresh, t]);
 
   useEffect(() => {
     imagesRef.current = images;
@@ -554,6 +554,7 @@ export default function TimelineWidget({
 
   useEffect(() => {
     if (editingPostId) return;
+    if (preserveScrollOnNextPostsChangeRef.current) return;
     requestAnimationFrame(scrollToLatest);
     const timers = [80, 240, 600].map((delay) => window.setTimeout(scrollToLatest, delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
@@ -681,7 +682,7 @@ export default function TimelineWidget({
         (current) => replacePostContent(current, post.sourcePath, post.id, nextBody),
       );
       cancelEditing();
-      await refresh();
+      await refresh(loadedCount);
     } catch {
       setError(t("dashboard.writeFailed"));
     } finally {
@@ -700,7 +701,7 @@ export default function TimelineWidget({
         post.sourcePath,
         (current) => deletePostContent(current, post.sourcePath, post.id),
       );
-      await refresh();
+      await refresh(loadedCount);
     } catch {
       setError(t("dashboard.writeFailed"));
     } finally {
@@ -729,7 +730,7 @@ export default function TimelineWidget({
         return appendPost(current, `${now.toISOString()}\nid: ${uniqueId}\n\n${postBody}`);
       });
       closeComposer();
-      await refresh();
+      await refresh(loadedCount);
       window.dispatchEvent(new CustomEvent("dashboard-data-changed", { detail: { folder: timelineDir(name) } }));
     } catch {
       setError(t("dashboard.writeFailed"));
@@ -748,7 +749,7 @@ export default function TimelineWidget({
         post.sourcePath,
         (current) => setPostPinnedContent(current, post.sourcePath, post.id, !post.pinned),
       );
-      await refresh();
+      await refresh(loadedCount);
     } catch {
       setError(t("dashboard.writeFailed"));
     } finally {
@@ -888,7 +889,7 @@ export default function TimelineWidget({
       )}
       <div
         ref={listRef}
-        className="min-h-0 flex-1 overflow-auto"
+        className="min-h-0 flex-1 overflow-auto [overflow-anchor:none]"
       >
         {loading ? (
           <div className="flex h-full items-center justify-center text-sm text-gray-400">
@@ -1388,6 +1389,7 @@ function TimelinePostViewComponent({
               fileList={fileList}
               onWikiLinkClick={onWikiLinkClick}
               onMissingWikiLinkClick={onMissingWikiLinkClick}
+              openLinksInNewTab
             />
           </div>
           {tags.length > 0 && (
