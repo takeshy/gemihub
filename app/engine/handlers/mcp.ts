@@ -71,7 +71,6 @@ export async function handleMcpNode(
   }
 
   try {
-    await client.initialize(serviceContext.abortSignal);
     const callResult = await client.callToolWithUi(
       toolName,
       args,
@@ -84,7 +83,11 @@ export async function handleMcpNode(
       ?.filter((c) => c.type === "text" && c.text)
       .map((c) => c.text)
       .join("\n");
-    const resultText = textParts || JSON.stringify(callResult.content);
+    const resultText = textParts
+      || (callResult.structuredContent !== undefined
+        ? JSON.stringify(callResult.structuredContent)
+        : null)
+      || JSON.stringify(callResult.content);
 
     if (saveTo) {
       context.variables.set(saveTo, resultText);
@@ -98,6 +101,7 @@ export async function handleMcpNode(
       const resourceUri = callResult._meta.ui.resourceUri;
       const toolResult: McpAppResult = {
         content: callResult.content || [],
+        structuredContent: callResult.structuredContent,
         _meta: { ui: { resourceUri } },
       };
 
@@ -122,7 +126,6 @@ export async function handleMcpNode(
 
     return mcpAppInfo;
   } finally {
-    // Only close if we created the client ourselves; shared clients are cached
     if (!isSharedClient) {
       await client.close();
     }

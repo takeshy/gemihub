@@ -28,22 +28,39 @@ GemiHub uses the **Streamable HTTP transport** variant of MCP.
 | Parameter | Value |
 |-----------|-------|
 | Transport | HTTP POST (JSON-RPC 2.0) |
-| Protocol Version | `2024-11-05` |
-| Session Management | `Mcp-Session-Id` header |
-| Session Close | HTTP DELETE with session header |
+| Protocol Version | `2026-07-28` |
+| Session Management | None for 2026; `Mcp-Session-Id` for negotiated legacy servers |
+| Session Close | None for 2026; HTTP DELETE for negotiated legacy sessions |
 | Response Formats | `application/json` or `text/event-stream` (auto-detected) |
+| Version Header | `MCP-Protocol-Version: 2026-07-28` on 2026 requests; negotiated version on legacy requests |
+| Routing Headers | `Mcp-Method` on every request; `Mcp-Name` when applicable |
 | Request Timeout | 30s (standard), 10s (notifications), 60s (workflow tool calls) |
 
 ### Lifecycle
 
 ```
-1. initialize      → Server returns capabilities + serverInfo
-2. notifications/initialized  → Client confirms init (notification, no response)
-3. tools/list      → Server returns available tools (pagination via cursor supported)
-4. tools/call      → Execute a tool (repeatable)
-5. resources/read  → Fetch UI resource (optional)
-6. DELETE          → Close session
+1. server/discover → Negotiate the newest mutually supported revision
+2. tools/list      → Server returns available tools (pagination via cursor supported)
+3. tools/call      → Execute a tool (repeatable)
+4. resources/read  → Fetch UI resource (optional)
 ```
+
+The 2026 revision removes the `initialize` / `notifications/initialized`
+handshake and session-affinity headers. GemiHub also does not advertise or call
+the deprecated Roots, Sampling, or MCP Logging capabilities. Operational logs
+remain in the application's normal logging infrastructure.
+
+Every 2026 request carries the protocol version and client declaration in
+`params._meta`, along with the required Streamable HTTP routing headers. If
+`server/discover` is unavailable or reports only an older revision, GemiHub
+falls back to the legacy `initialize` / `notifications/initialized` lifecycle
+and retains its session ID until the client is closed.
+
+Tool `inputSchema` values are retained as JSON Schema objects, including a
+`$schema` declaration and JSON Schema 2020-12 keywords. Tool results preserve
+both content blocks and `structuredContent`. MCP Apps continue to be discovered
+through UI resource metadata and rendered using the Apps iframe bridge described
+below.
 
 ---
 
@@ -64,8 +81,9 @@ MCP servers are configured in **Settings > MCP Servers**.
 
 The "Test" button calls `POST /api/settings/mcp-test` which:
 1. Validates the URL for SSRF protection
-2. Initializes an MCP session
-3. Lists available tools
+2. Negotiates the protocol revision, using `server/discover` for 2026 servers
+   and the legacy initialization lifecycle when necessary
+3. Calls `tools/list`
 4. Returns tool definitions (cached in server config)
 
 If the server returns 401, OAuth discovery is triggered automatically.
@@ -93,7 +111,7 @@ All OAuth discovery URLs are validated for SSRF protection before fetching.
 ### Authorization Flow
 
 1. Generate PKCE code verifier and challenge
-2. Open popup window to authorization URL with PKCE parameters
+2. Open popup window with PKCE parameters and the RFC 8707 `resource` indicator
 3. User authorizes in popup
 4. Callback exchanges authorization code for tokens via `POST /api/settings/mcp-oauth-token`
 5. Tokens stored in server config (`oauthTokens`)
@@ -105,7 +123,7 @@ All OAuth discovery URLs are validated for SSRF protection before fetching.
 |---------|-------------|
 | Auto-inject | Bearer token added to requests via `Authorization` header |
 | Expiry check | 5-minute buffer before expiration |
-| Auto-refresh | Refresh token used to obtain new access token (on test and during chat tool calls) |
+| Auto-refresh | Refresh token and discovered `resource` used to obtain a new access token |
 | Storage | Tokens persisted in `settings.json` on Drive |
 
 ---
@@ -218,12 +236,11 @@ The `mcp` workflow node calls an MCP server tool directly.
 
 When a matching server config is found in settings, the handler uses a cached client via `getOrCreateClient()` (with OAuth support). Otherwise, a dedicated `McpClient` is created per execution:
 
-1. Initialize MCP session (handshake + `notifications/initialized`)
+1. Negotiate the protocol revision (cached clients do this only once)
 2. Call `tools/call` via `McpClient` (60s timeout)
-3. Extract text content from result
+3. Extract text or structured content from the result
 4. If `_meta.ui.resourceUri` present, call `resources/read` (30s timeout)
 5. Return `McpAppInfo` for display in execution log
-6. Close session (only for non-shared clients; cached clients remain open)
 
 ### Command Node
 

@@ -12,7 +12,7 @@ import type {
 } from "~/types/settings";
 import type { McpAppInfo } from "~/types/chat";
 
-// Cache of MCP clients per session
+// Cache clients to reuse negotiated protocol state (and legacy sessions when needed).
 const mcpClients = new Map<string, McpClient>();
 
 function getClientKey(config: McpServerConfig): string {
@@ -40,9 +40,8 @@ export async function getOrCreateClient(config: McpServerConfig): Promise<McpCli
   if (!client) {
     // Evict stale client for the same URL+headers but different (old) token
     const baseKey = `${config.url}:${JSON.stringify(config.headers || {})}:`;
-    for (const [k, old] of mcpClients) {
+    for (const [k] of mcpClients) {
       if (k.startsWith(baseKey) && k !== key) {
-        old.close().catch((e: unknown) => console.warn("MCP client close error:", e));
         mcpClients.delete(k);
       }
     }
@@ -275,7 +274,10 @@ async function executeToolOnServer(
       .map((c) => c.text)
       .join("\n");
 
-    const textResult = textParts || JSON.stringify(appResult.content);
+    const textResult = textParts
+      || (appResult.structuredContent !== undefined
+        ? appResult.structuredContent
+        : appResult.content);
 
     // Check for MCP App UI metadata - check result first, then tool definition as fallback
     let resourceUri = appResult._meta?.ui?.resourceUri;

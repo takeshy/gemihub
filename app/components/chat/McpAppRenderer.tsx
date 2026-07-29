@@ -219,6 +219,7 @@ export function McpAppRenderer({
         params: {
           content: toolResult.content,
           isError: toolResult.isError,
+          structuredContent: toolResult.structuredContent,
         },
       },
       "*"
