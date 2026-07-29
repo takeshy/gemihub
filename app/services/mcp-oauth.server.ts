@@ -142,6 +142,7 @@ export async function discoverOAuth(serverUrl: string): Promise<OAuthDiscoveryRe
       authorizationUrl: authServerMeta.authorization_endpoint,
       tokenUrl: authServerMeta.token_endpoint,
       scopes: authServerMeta.scopes_supported || [],
+      resource: protectedResource.resource,
     },
     registrationUrl: authServerMeta.registration_endpoint,
   };
@@ -236,6 +237,10 @@ export async function refreshAccessToken(
     refresh_token: refreshToken,
     client_id: config.clientId,
   });
+
+  if (config.resource) {
+    params.set("resource", config.resource);
+  }
 
   if (config.clientSecret) {
     params.set("client_secret", config.clientSecret);

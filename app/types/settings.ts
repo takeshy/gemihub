@@ -6,6 +6,8 @@ export interface OAuthConfig {
   authorizationUrl: string;
   tokenUrl: string;
   scopes: string[];
+  /** RFC 8707 resource indicator discovered from RFC 9728 metadata. */
+  resource?: string;
   clientSecret?: string;
 }
 
@@ -114,7 +116,7 @@ export interface McpToolInfo {
 
 // MCP Apps types
 export interface McpAppContent {
-  type: "text" | "image" | "resource";
+  type: string;
   text?: string;
   data?: string;
   mimeType?: string;
@@ -125,9 +127,19 @@ export interface McpAppContent {
   };
 }
 
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 export interface McpAppResult {
   content: McpAppContent[];
   isError?: boolean;
+  /** Machine-readable tool output introduced by newer MCP revisions. */
+  structuredContent?: JsonValue;
   _meta?: {
     ui?: {
       resourceUri: string;

@@ -9,38 +9,22 @@ test("handleMcpNode propagates serverHeaders into returned MCP app info", async 
 
   globalThis.fetch = async (_url, options) => {
     requestCount += 1;
-    const method = options?.method || "GET";
-
-    if (method === "DELETE") {
-      return new Response("", { status: 200 });
-    }
-
     const bodyText = typeof options?.body === "string" ? options.body : "";
     const body = bodyText ? JSON.parse(bodyText) as { method?: string; id?: number } : {};
 
-    if (body.method === "initialize") {
+    if (body.method === "server/discover") {
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2024-11-05",
-            capabilities: { tools: {} },
+            supportedVersions: ["2026-07-28"],
+            capabilities: { tools: {}, resources: {} },
             serverInfo: { name: "mock", version: "1.0.0" },
           },
         }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Mcp-Session-Id": "session-1",
-          },
-        }
+        { status: 200, headers: { "Content-Type": "application/json" } }
       );
-    }
-
-    if (body.method === "notifications/initialized") {
-      return new Response("", { status: 202 });
     }
 
     if (body.method === "tools/call") {
@@ -49,7 +33,8 @@ test("handleMcpNode propagates serverHeaders into returned MCP app info", async 
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            content: [{ type: "text", text: "ok" }],
+            content: [],
+            structuredContent: false,
             _meta: { ui: { resourceUri: "ui://resource" } },
           },
         }),
@@ -116,15 +101,14 @@ test("handleMcpNode propagates serverHeaders into returned MCP app info", async 
       driveHistoryFolderId: "",
     });
 
-    assert.equal(context.variables.get("toolOutput"), "ok");
+    assert.equal(context.variables.get("toolOutput"), "false");
     assert.ok(result);
     assert.equal(result?.serverUrl, "https://mcp.example/server");
     assert.deepEqual(result?.serverHeaders, {
       Authorization: "Bearer secret-token",
     });
-    assert.ok(requestCount >= 4);
+    assert.equal(requestCount, 3);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
-

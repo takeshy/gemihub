@@ -74,10 +74,7 @@ export async function action({ request }: Route.ActionArgs) {
   });
 
   try {
-    await client.initialize();
     const tools = await client.listTools();
-
-    await client.close();
 
     const result: Record<string, unknown> = {
       success: true,
@@ -91,12 +88,6 @@ export async function action({ request }: Route.ActionArgs) {
 
     return Response.json(result);
   } catch (error) {
-    try {
-      await client.close();
-    } catch {
-      // Ignore close errors
-    }
-
     // Check if this is a 401 — attempt OAuth discovery
     const errorMsg = error instanceof Error ? error.message : "Connection failed";
     const is401 = error instanceof McpHttpError && error.statusCode === 401;
@@ -152,5 +143,7 @@ export async function action({ request }: Route.ActionArgs) {
       },
       { status: 500 }
     );
+  } finally {
+    await client.close();
   }
 }

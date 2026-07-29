@@ -281,6 +281,9 @@ export function McpTab({ settings }: { settings: UserSettings }) {
     if (oauthConfig.scopes.length > 0) {
       params.set("scope", oauthConfig.scopes.join(" "));
     }
+    if (oauthConfig.resource) {
+      params.set("resource", oauthConfig.resource);
+    }
 
     const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
 
@@ -496,6 +499,9 @@ export function McpTab({ settings }: { settings: UserSettings }) {
     });
     if (oauthConfig.scopes.length > 0) {
       params.set("scope", oauthConfig.scopes.join(" "));
+    }
+    if (oauthConfig.resource) {
+      params.set("resource", oauthConfig.resource);
     }
 
     const authUrl = `${oauthConfig.authorizationUrl}?${params.toString()}`;
