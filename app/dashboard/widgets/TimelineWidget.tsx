@@ -399,9 +399,11 @@ function wikiTargetPath(target: string): string {
 
 export default function TimelineWidget({
   config,
+  initialComposerOpen = false,
 }: {
   config: unknown;
   ctx?: WidgetContext;
+  initialComposerOpen?: boolean;
 }) {
   const { t, language } = useI18n();
   const editorCtx = useEditorContext();
@@ -429,7 +431,7 @@ export default function TimelineWidget({
   const [loadingFromDrive, setLoadingFromDrive] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
   const [draft, setDraft] = useState("");
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");

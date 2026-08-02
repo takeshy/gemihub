@@ -252,7 +252,12 @@ export async function mutateTimelineFile(
   return next;
 }
 
-/** Pull the latest Markdown files for one Timeline directory into the local cache. */
+function localDateKey(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** Pull today's Markdown file for one Timeline directory into the local cache. */
 export async function loadTimelineFromDrive(directory: string): Promise<void> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     throw new Error("Cannot load Timeline while offline");
@@ -261,9 +266,9 @@ export async function loadTimelineFromDrive(directory: string): Promise<void> {
   const response = await fetch("/api/drive/files?action=list", { cache: "no-store" });
   if (!response.ok) throw new Error("Failed to list Timeline files on Drive");
   const data = await response.json() as { files: RemoteFile[]; meta?: RemoteMetaResponse };
-  const prefix = `${directory.replace(/\/+$/, "")}/`;
-  const files = data.files.filter((file) => file.name.startsWith(prefix) && file.name.toLowerCase().endsWith(".md"));
-  for (const file of files) {
+  const todayPath = `${directory.replace(/\/+$/, "")}/${localDateKey(new Date())}.md`;
+  const file = data.files.find((candidate) => candidate.name === todayPath);
+  if (file) {
     const remote = await readRemote(file);
     await applyRemoteFile({ ...file, md5Checksum: remote.md5Checksum }, remote.content, data.meta, false);
   }

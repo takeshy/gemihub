@@ -18,6 +18,7 @@ export interface TranslationStrings {
   "header.manual": string;
   "header.menu": string;
   "header.launcher": string;
+  "header.quickTimeline": string;
   "header.secretManager": string;
   "header.home": string;
 
@@ -1211,6 +1212,7 @@ const en: TranslationStrings = {
   "header.manual": "Manual",
   "header.menu": "Menu",
   "header.launcher": "Open launcher",
+  "header.quickTimeline": "Write to Timeline",
   "header.secretManager": "Open Secret Manager",
   "header.home": "Open Home dashboard",
 
@@ -2403,6 +2405,7 @@ const ja: TranslationStrings = {
   "header.manual": "マニュアル",
   "header.menu": "メニュー",
   "header.launcher": "ランチャーを開く",
+  "header.quickTimeline": "タイムラインにさっと書く",
   "header.secretManager": "シークレット管理を開く",
   "header.home": "Homeダッシュボードを開く",
 

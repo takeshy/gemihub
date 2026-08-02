@@ -10,9 +10,10 @@ import { useI18n } from "~/i18n/context";
 
 export type LauncherTool = "secret-manager" | "memo-list" | "timeline" | "calendar" | "kanban";
 
-export function ToolLauncher({ open, initialTool, encryptionSettings, onClose }: {
+export function ToolLauncher({ open, initialTool, timelineComposerOpen = false, encryptionSettings, onClose }: {
   open: boolean;
   initialTool?: LauncherTool | null;
+  timelineComposerOpen?: boolean;
   encryptionSettings: EncryptionSettings;
   onClose: () => void;
 }) {
@@ -55,7 +56,7 @@ export function ToolLauncher({ open, initialTool, encryptionSettings, onClose }:
         </div>}
         {tool === "secret-manager" && <SecretManagerWidget config={{ folder: "" }} encryptionSettings={encryptionSettings} />}
         {tool === "memo-list" && <MemoListWidget />}
-        {tool === "timeline" && <TimelineWidget config={{ name: "Timeline", latestCount: 20, composerMode: "raw" }} />}
+        {tool === "timeline" && <TimelineWidget config={{ name: "Timeline", latestCount: 20, composerMode: "raw" }} initialComposerOpen={timelineComposerOpen} />}
         {tool === "calendar" && <CalendarWidget />}
         {tool === "kanban" && <KanbanWidget config={{ title: "Tasks", folder: "Tasks", statusProperty: "status", titleProperty: "title", columns: [{ value: "todo", label: ja ? "未着手" : "To Do" }, { value: "in-progress", label: ja ? "進行中" : "In Progress" }, { value: "done", label: ja ? "完了" : "Done" }] }} />}
       </div>
