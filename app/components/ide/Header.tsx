@@ -14,6 +14,7 @@ import {
   Rocket,
   Menu,
   FilePlus,
+  PenLine,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { SyncStatusBar } from "./SyncStatusBar";
@@ -47,6 +48,7 @@ interface HeaderProps {
   pullDialogTrigger?: number;
   onLogoClick?: () => void;
   onOpenLauncher?: () => void;
+  onOpenTimelineComposer?: () => void;
   onOpenSecretManager?: () => void;
   onOpenHome?: () => void;
   onCreateFile?: () => void;
@@ -75,6 +77,7 @@ export function Header({
   pullDialogTrigger = 0,
   onLogoClick,
   onOpenLauncher,
+  onOpenTimelineComposer,
   onOpenSecretManager,
   onOpenHome,
   onCreateFile,
@@ -181,6 +184,17 @@ export function Header({
             <Rocket size={ICON.MD} />
           </button>
         )}
+        {isMobile && onOpenTimelineComposer && (
+          <button
+            type="button"
+            onClick={onOpenTimelineComposer}
+            className="rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
+            title={t("header.quickTimeline")}
+            aria-label={t("header.quickTimeline")}
+          >
+            <PenLine size={ICON.MD} />
+          </button>
+        )}
         {isMobile && onCreateFile && (
           <button
             type="button"
@@ -283,6 +297,16 @@ export function Header({
             title={t("header.launcher")}
           >
             <Rocket size={ICON.MD} />
+          </button>
+        )}
+        {onOpenTimelineComposer && (
+          <button
+            onClick={onOpenTimelineComposer}
+            className="flex items-center gap-1 rounded px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
+            title={t("header.quickTimeline")}
+          >
+            <PenLine size={ICON.MD} />
+            {t("dashboard.timelineNew")}
           </button>
         )}
         {onOpenSecretManager && (

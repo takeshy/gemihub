@@ -486,8 +486,10 @@ function IDEContent({
   const shownSkillUpdateToastRef = useRef<string | null>(null);
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [launcherTool, setLauncherTool] = useState<LauncherTool | null>(null);
-  const openLauncher = useCallback((tool: LauncherTool | null = null) => {
+  const [timelineComposerOpen, setTimelineComposerOpen] = useState(false);
+  const openLauncher = useCallback((tool: LauncherTool | null = null, openComposer = false) => {
     setLauncherTool(tool);
+    setTimelineComposerOpen(openComposer);
     setLauncherOpen(true);
   }, []);
 
@@ -1186,6 +1188,7 @@ function IDEContent({
         pullDialogTrigger={pullDialogTrigger}
         onLogoClick={isMobile ? () => setMobileView("files") : clearActiveFile}
         onOpenLauncher={() => openLauncher(null)}
+        onOpenTimelineComposer={() => openLauncher("timeline", true)}
         onCreateFile={() => window.dispatchEvent(new CustomEvent("create-file-requested"))}
         onOpenSecretManager={() => openLauncher("secret-manager")}
         onOpenHome={() => {
@@ -1199,6 +1202,7 @@ function IDEContent({
       <ToolLauncher
         open={launcherOpen}
         initialTool={launcherTool}
+        timelineComposerOpen={timelineComposerOpen}
         encryptionSettings={settings.encryption}
         onClose={() => setLauncherOpen(false)}
       />
