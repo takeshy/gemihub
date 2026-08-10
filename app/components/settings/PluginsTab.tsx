@@ -24,6 +24,7 @@ import { clearPluginCache } from "~/services/plugin-loader";
 import { usePlugins } from "~/contexts/PluginContext";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { cacheProvisionedSkillFiles } from "~/services/provisioned-skill-cache";
+import { AgentPluginsSection } from "./AgentPluginsSection";
 
 const inputClass =
   "w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";
@@ -518,6 +519,8 @@ export function PluginsTab({ settings }: PluginsTabProps) {
       )}
 
       {/* External skills */}
+      <AgentPluginsSection initialPlugins={settings.agentPlugins || []} />
+
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

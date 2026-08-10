@@ -72,7 +72,7 @@ The AI can even author bundles for you: install the **OKF Authoring** external s
 
 ### Connect Any External Tool (MCP & Plugins)
 
-Through the Model Context Protocol (MCP), GemiHub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation. You can also extend GemiHub with **plugins** — install from GitHub or develop locally — to add custom sidebar views, slash commands, and settings panels. The Plugins settings also offer **External skills**: Agent Skills installed with one click from the official catalog.
+Through the Model Context Protocol (MCP), GemiHub can talk to external services. Connect web search, databases, APIs, or any MCP-compatible server — and the AI automatically discovers and uses these tools during conversation. You can also extend GemiHub with **plugins** — install from GitHub or develop locally — to add custom sidebar views, slash commands, and settings panels. GemiHub additionally supports portable [Agent Plugins v1.0.0](https://agent-plugins.org/) packages containing Agent Skills and Streamable HTTP MCP servers. The Plugins settings also offer **External skills**: Agent Skills installed with one click from the official catalog.
 
 ![External Skills](./public/images/external_skills.png)
 

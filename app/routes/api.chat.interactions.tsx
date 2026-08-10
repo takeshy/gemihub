@@ -6,7 +6,7 @@ import { getSettings } from "~/services/user-settings.server";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions } from "~/services/mcp-tools.server";
 import { HUBWORK_TOOL_DEFINITIONS, HUBWORK_TOOL_DEFINITIONS_EXTRA } from "~/services/hubwork-tool-definitions";
-import { supportsWebSearch } from "~/types/settings";
+import { getEnabledMcpServers, supportsWebSearch } from "~/types/settings";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 import { createLogContext, emitLog } from "~/services/logger.server";
@@ -139,7 +139,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (requestedMcpServerIds.length > 0) {
     try {
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-      const byId = new Map(settings.mcpServers.map((s) => [s.id || "", s] as const));
+      const byId = new Map(getEnabledMcpServers(settings).map((s) => [s.id || "", s] as const));
       const selected: McpServerConfig[] = [];
       const seen = new Set<string>();
       for (const id of requestedMcpServerIds) {

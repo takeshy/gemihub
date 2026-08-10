@@ -8,7 +8,7 @@ import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings } from "~/services/user-settings.server";
 import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.server";
-import type { McpServerConfig } from "~/types/settings";
+import { getEnabledMcpServers, type McpServerConfig } from "~/types/settings";
 
 export async function action({ request }: Route.ActionArgs) {
   const tokens = await requireAuth(request);
@@ -36,7 +36,7 @@ export async function action({ request }: Route.ActionArgs) {
         return Response.json({ error: "mcpServerIds required" }, { status: 400, headers: responseHeaders });
       }
 
-      const enabledServers = (settings?.mcpServers || []).filter(
+      const enabledServers = getEnabledMcpServers(settings).filter(
         (s: McpServerConfig) => mcpServerIds.includes(s.id || "")
       );
 
@@ -61,7 +61,7 @@ export async function action({ request }: Route.ActionArgs) {
         return Response.json({ error: "toolName required" }, { status: 400, headers: responseHeaders });
       }
 
-      const enabledServers = (settings?.mcpServers || []).filter(
+      const enabledServers = getEnabledMcpServers(settings).filter(
         (s: McpServerConfig) => (mcpServerIds || []).includes(s.id || "")
       );
 

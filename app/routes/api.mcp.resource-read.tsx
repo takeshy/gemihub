@@ -5,7 +5,7 @@ import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { getOrCreateClient } from "~/services/mcp-tools.server";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
 import { resolveMcpServerForProxy } from "~/services/mcp-proxy-server-resolver";
-import type { McpServerConfig } from "~/types/settings";
+import { getEnabledMcpServers, type McpServerConfig } from "~/types/settings";
 import { createLogContext, emitLog } from "~/services/logger.server";
 
 /**
@@ -53,7 +53,7 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
     const resolved = resolveMcpServerForProxy({
-      servers: settings.mcpServers,
+      servers: getEnabledMcpServers(settings),
       serverId,
       serverUrl,
       serverHeaders,

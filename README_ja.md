@@ -72,7 +72,7 @@ GemiHub は Drive を「読んで、線を引いて、メモを残す」ワー�
 
 ### 外部ツールを自由に接続（MCP & プラグイン）
 
-Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと連携できます。Web 検索、データベース、API、MCP 対応サーバーを接続すれば、AI が会話中にこれらのツールを自動的に発見し活用します。さらに**プラグイン**で機能を拡張可能 — GitHub からインストールまたはローカル開発で、カスタムサイドバービュー、スラッシュコマンド、設定パネルを追加できます。プラグイン設定には **External skills** もあり、公式カタログから Agent Skills をワンクリックでインストールできます。
+Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと連携できます。Web 検索、データベース、API、MCP 対応サーバーを接続すれば、AI が会話中にこれらのツールを自動的に発見し活用します。さらに**プラグイン**で機能を拡張可能 — GitHub からインストールまたはローカル開発で、カスタムサイドバービュー、スラッシュコマンド、設定パネルを追加できます。Agent Skills と Streamable HTTP MCP を含むポータブルな [Agent Plugins v1.0.0](https://agent-plugins.org/) にも対応しています。プラグイン設定には **External skills** もあり、公式カタログから Agent Skills をワンクリックでインストールできます。
 
 ![External Skills](./public/images/external_skills.png)
 

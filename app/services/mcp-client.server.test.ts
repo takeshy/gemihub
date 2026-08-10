@@ -139,3 +139,29 @@ test("falls back to the legacy initialize lifecycle and closes its session", asy
   const legacyListParams = requests[3].body?.params as Record<string, unknown> | undefined;
   assert.equal(legacyListParams?._meta, undefined);
 });
+
+test("does not forward configured headers across an MCP redirect origin", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; headers: Headers }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    const headers = new Headers(init?.headers);
+    requests.push({ url, headers });
+    if (url.startsWith("https://source.example.com")) {
+      return new Response(null, { status: 307, headers: { Location: "https://target.example.com/mcp" } });
+    }
+    const body = JSON.parse(String(init?.body)) as { id: number; method: string };
+    const result = body.method === "server/discover"
+      ? { supportedVersions: [MCP_PROTOCOL_VERSION], capabilities: {}, serverInfo: { name: "redirect", version: "1" } }
+      : { tools: [] };
+    return Response.json({ jsonrpc: "2.0", id: body.id, result });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const client = new McpClient({ name: "Redirect", url: "https://source.example.com/mcp", headers: { "X-Package": "literal" } });
+  await client.listTools();
+
+  assert.equal(requests[0].headers.get("X-Package"), "literal");
+  assert.equal(requests[1].headers.get("X-Package"), null);
+  assert.equal(requests[1].headers.get("Content-Type"), "application/json");
+});

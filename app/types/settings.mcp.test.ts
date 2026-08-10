@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeSelectedMcpServerIds, type McpServerConfig } from "./settings";
+import { getEnabledMcpServers, normalizeSelectedMcpServerIds, type McpServerConfig } from "./settings";
 
 const baseServers: McpServerConfig[] = [
   {
@@ -42,3 +42,10 @@ test("normalizeSelectedMcpServerIds drops legacy name when ambiguous", () => {
   assert.deepEqual(ids, []);
 });
 
+test("Agent Plugin MCP servers remain unavailable until connection testing populates tools", () => {
+  const unverified: McpServerConfig = { name: "Plugin API", url: "https://plugin.example/mcp", agentPlugin: { pluginName: "demo", serverName: "api" } };
+  const settings = { agentPlugins: [{ name: "demo", enabled: true }], mcpServers: [baseServers[0], unverified] };
+  assert.deepEqual(getEnabledMcpServers(settings).map((server) => server.name), ["Alpha"]);
+  settings.mcpServers[1] = { ...unverified, tools: [] };
+  assert.deepEqual(getEnabledMcpServers(settings).map((server) => server.name), ["Alpha", "Plugin API"]);
+});

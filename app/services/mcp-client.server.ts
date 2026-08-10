@@ -185,12 +185,32 @@ export class McpClient {
       headers["Mcp-Session-Id"] = this.sessionId;
     }
 
-    const response = await fetch(this.config.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(request),
-      signal: this.createRequestSignal(timeoutMs ?? 30_000, abortSignal),
-    });
+    const body = JSON.stringify(request);
+    const signal = this.createRequestSignal(timeoutMs ?? 30_000, abortSignal);
+    let requestUrl = new URL(this.config.url);
+    let requestHeaders = headers;
+    let response: Response | null = null;
+    for (let redirects = 0; redirects <= 5; redirects += 1) {
+      response = await fetch(requestUrl, {
+        method: "POST",
+        headers: requestHeaders,
+        body,
+        signal,
+        redirect: "manual",
+      });
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      if (redirects === 5) throw new Error("MCP redirect limit exceeded");
+      const location = response.headers.get("location");
+      if (!location) throw new Error("MCP redirect response is missing Location");
+      const nextUrl = new URL(location, requestUrl);
+      validateMcpServerUrl(nextUrl.toString());
+      if (nextUrl.origin !== requestUrl.origin) {
+        const configured = new Set(Object.keys(this.config.headers || {}).map((key) => key.toLowerCase()));
+        requestHeaders = Object.fromEntries(Object.entries(headers).filter(([key]) => !configured.has(key.toLowerCase())));
+      }
+      requestUrl = nextUrl;
+    }
+    if (!response) throw new Error("MCP request did not produce a response");
 
     if (!response.ok) {
       const text = await response.text();

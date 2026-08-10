@@ -6,7 +6,7 @@ import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat.server";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES, executeDriveTool } from "~/services/drive-tools.server";
 import { getMcpToolDefinitions, executeMcpTool } from "~/services/mcp-tools.server";
-import { getDriveToolModeConstraint, isImageGenerationModel, supportsWebSearch } from "~/types/settings";
+import { getDriveToolModeConstraint, getEnabledMcpServers, isImageGenerationModel, supportsWebSearch } from "~/types/settings";
 import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 import { createLogContext, emitLog } from "~/services/logger.server";
@@ -122,7 +122,7 @@ export async function action({ request }: Route.ActionArgs) {
     try {
       const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
       settingsForMcpPersistence = settings;
-      const byId = new Map(settings.mcpServers.map((s) => [s.id || "", s] as const));
+      const byId = new Map(getEnabledMcpServers(settings).map((s) => [s.id || "", s] as const));
       const selected: McpServerConfig[] = [];
       const seen = new Set<string>();
       for (const id of requestedMcpServerIds) {
@@ -299,7 +299,7 @@ export async function action({ request }: Route.ActionArgs) {
               );
               for (const server of resolvedMcpServers!) {
                 const key = server.id || server.name;
-                const target = freshSettings.mcpServers.find(
+                const target = getEnabledMcpServers(freshSettings).find(
                   (s) => (s.id || s.name) === key
                 );
                 if (target) {

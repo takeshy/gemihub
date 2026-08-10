@@ -2,7 +2,7 @@ import type { Route } from "./+types/api.workflow.ai-prompt";
 import { requireAuth } from "~/services/session.server";
 import { getWorkflowSpecification, buildWorkflowUserPrompt } from "~/engine/workflowSpec";
 import { getSettings } from "~/services/user-settings.server";
-import type { ApiPlan } from "~/types/settings";
+import { getEnabledMcpServers, type ApiPlan } from "~/types/settings";
 import type { ExecutionStep } from "~/engine/types";
 
 export async function action({ request }: Route.ActionArgs) {
@@ -45,7 +45,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const systemPrompt = getWorkflowSpecification({
     apiPlan,
-    mcpServers: settings?.mcpServers,
+    mcpServers: settings ? getEnabledMcpServers(settings) : undefined,
     ragSettingNames: settings?.ragSettings
       ? Object.keys(settings.ragSettings)
       : undefined,

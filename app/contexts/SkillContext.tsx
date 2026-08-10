@@ -14,6 +14,7 @@ import {
   buildSkillSystemPrompt,
 } from "~/services/skill-loader";
 import { cacheProvisionedSkillFiles } from "~/services/provisioned-skill-cache";
+import type { AgentPluginConfig } from "~/types/settings";
 
 interface SkillContextValue {
   skills: SkillMetadata[];
@@ -53,9 +54,11 @@ function getPendingSkillActivationKey(rootFolderId?: string): string {
 export function SkillProvider({
   children,
   rootFolderId,
+  agentPlugins = [],
 }: {
   children: ReactNode;
   rootFolderId?: string;
+  agentPlugins?: AgentPluginConfig[];
 }) {
   const [skills, setSkills] = useState<SkillMetadata[]>([]);
   const [activeSkillIds, setActiveSkillIds] = useState<string[]>(() => {
@@ -73,7 +76,7 @@ export function SkillProvider({
   const discover = useCallback(async () => {
     setLoading(true);
     try {
-      const found = await discoverSkills();
+      const found = await discoverSkills(agentPlugins);
       setSkills(found);
       try {
         const pendingSkillId = localStorage.getItem(pendingSkillActivationKey);
@@ -89,7 +92,7 @@ export function SkillProvider({
     } finally {
       setLoading(false);
     }
-  }, [pendingSkillActivationKey]);
+  }, [pendingSkillActivationKey, agentPlugins]);
 
   // Discover on mount
   useEffect(() => {

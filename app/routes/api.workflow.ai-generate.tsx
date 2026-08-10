@@ -4,7 +4,7 @@ import { generateWorkflowStream } from "~/services/gemini.server";
 import { getWorkflowSpecification, buildWorkflowUserPrompt } from "~/engine/workflowSpec";
 import { getSettings } from "~/services/user-settings.server";
 import type { ModelType, ApiPlan, Language } from "~/types/settings";
-import { getDefaultModelForPlan } from "~/types/settings";
+import { getDefaultModelForPlan, getEnabledMcpServers } from "~/types/settings";
 import type { ExecutionStep } from "~/engine/types";
 import {
   buildPlanSystemPrompt,
@@ -87,7 +87,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const spec = getWorkflowSpecification({
     apiPlan,
-    mcpServers: settings?.mcpServers,
+    mcpServers: settings ? getEnabledMcpServers(settings) : undefined,
     ragSettingNames: settings?.ragSettings
       ? Object.keys(settings.ragSettings)
       : undefined,

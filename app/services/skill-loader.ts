@@ -17,6 +17,7 @@ import type {
   LoadedSkill,
 } from "~/types/skill";
 import { SKILLS_FOLDER_NAME } from "~/types/settings";
+import type { AgentPluginConfig } from "~/types/settings";
 import { fixMarkdownBullets } from "~/utils/yaml-helpers";
 
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
@@ -24,12 +25,42 @@ const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/;
 interface SkillFrontmatter {
   name?: string;
   description?: string;
+  license?: unknown;
+  compatibility?: unknown;
+  metadata?: unknown;
+  "allowed-tools"?: unknown;
   workflows?: Array<{
     path: string;
     name?: string;
     description?: string;
     inputVariables?: string[];
   }>;
+}
+
+const PORTABLE_SKILL_NAME_RE = /^(?!.*--)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+
+function isValidPortableSkillFrontmatter(frontmatter: SkillFrontmatter, directoryName: string): boolean {
+  if (
+    frontmatter.name !== directoryName ||
+    !PORTABLE_SKILL_NAME_RE.test(directoryName) ||
+    typeof frontmatter.description !== "string" ||
+    frontmatter.description.length < 1 ||
+    frontmatter.description.length > 1024
+  ) return false;
+  if (frontmatter.license !== undefined && typeof frontmatter.license !== "string") return false;
+  if (frontmatter.compatibility !== undefined && (
+    typeof frontmatter.compatibility !== "string" ||
+    frontmatter.compatibility.length < 1 ||
+    frontmatter.compatibility.length > 500
+  )) return false;
+  if (frontmatter["allowed-tools"] !== undefined && typeof frontmatter["allowed-tools"] !== "string") return false;
+  if (frontmatter.metadata !== undefined && (
+    typeof frontmatter.metadata !== "object" ||
+    frontmatter.metadata === null ||
+    Array.isArray(frontmatter.metadata) ||
+    !Object.values(frontmatter.metadata as Record<string, unknown>).every((value) => typeof value === "string")
+  )) return false;
+  return true;
 }
 
 export function parseFrontmatter(content: string): {
@@ -145,7 +176,7 @@ function warnOnce(key: string, message: string): void {
  * <prose body>
  * ```
  */
-export async function discoverSkills(): Promise<SkillMetadata[]> {
+export async function discoverSkills(agentPlugins: AgentPluginConfig[] = []): Promise<SkillMetadata[]> {
   let tree = await getCachedFileTree();
   if (!tree) {
     const remoteMeta = await getCachedRemoteMeta();
@@ -154,21 +185,41 @@ export async function discoverSkills(): Promise<SkillMetadata[]> {
     tree = { id: "current", rootFolderId: remoteMeta.rootFolderId, items, cachedAt: Date.now() };
   }
 
-  const skillsFolder = findChildByName(tree.items, SKILLS_FOLDER_NAME);
-  if (!skillsFolder || !skillsFolder.isFolder || !skillsFolder.children) return [];
-
   const results: SkillMetadata[] = [];
+  const roots: Array<{ folder: CachedTreeNode; namespace?: string; validSkillNames?: Set<string> }> = [];
+  const skillsFolder = findChildByName(tree.items, SKILLS_FOLDER_NAME);
+  if (skillsFolder?.isFolder && skillsFolder.children) roots.push({ folder: skillsFolder });
 
-  for (const subFolder of skillsFolder.children) {
+  const agentPluginsFolder = findChildByName(tree.items, "agent-plugins");
+  if (agentPluginsFolder?.isFolder && agentPluginsFolder.children) {
+    for (const plugin of agentPlugins.filter((item) => item.enabled)) {
+      const packageFolder = agentPluginsFolder.children.find((item) => item.isFolder && item.name === plugin.name);
+      const packageSkills = packageFolder?.children?.find((item) => item.isFolder && item.name === "skills");
+      if (packageSkills?.children) roots.push({
+        folder: packageSkills,
+        namespace: plugin.name,
+        validSkillNames: plugin.skillNames ? new Set(plugin.skillNames) : undefined,
+      });
+    }
+  }
+
+  for (const { folder, namespace, validSkillNames } of roots) for (const subFolder of folder.children || []) {
     if (!subFolder.isFolder || !subFolder.children) continue;
 
-    const skillMdNode = findChildByName(subFolder.children, "SKILL.md");
+    try {
+    const skillMdNode = namespace
+      ? subFolder.children.find((item) => !item.isFolder && item.name === "SKILL.md")
+      : findChildByName(subFolder.children, "SKILL.md");
     if (!skillMdNode) continue;
 
     const cached = await getCachedFile(skillMdNode.id);
     if (!cached) continue;
 
     const { frontmatter, body } = parseFrontmatter(cached.content);
+    if (namespace && (
+      (validSkillNames && !validSkillNames.has(subFolder.name)) ||
+      !isValidPortableSkillFrontmatter(frontmatter, subFolder.name)
+    )) continue;
     const skillLabel = frontmatter.name || subFolder.name;
 
     let capabilities = extractCapabilitiesBlock(body);
@@ -206,13 +257,16 @@ export async function discoverSkills(): Promise<SkillMetadata[]> {
     }
 
     results.push({
-      id: subFolder.name,
+      id: namespace ? `${namespace}.${subFolder.name}` : subFolder.name,
       folderId: subFolder.id,
       skillMdFileId: skillMdNode.id,
       name: skillLabel,
       description: frontmatter.description || "",
       workflows,
     });
+    } catch (error) {
+      console.error(`[skills] Failed to load ${namespace ? `${namespace}.` : ""}${subFolder.name}:`, error);
+    }
   }
 
   return results;

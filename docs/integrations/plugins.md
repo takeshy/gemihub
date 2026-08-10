@@ -7,6 +7,28 @@ tags:
 ---
 # Plugins
 
+## Portable Agent Plugins
+
+GemiHub also loads portable [Agent Plugins v1.0.0](https://agent-plugins.org/). This is additive to the GemiHub-specific `manifest.json` + `main.js` plugin format documented below.
+
+Open **Settings > Plugins > Agent Plugins**, enter a GitHub repository (`owner/repo`), and preview the package before installing it. GemiHub uses the latest GitHub Release tag when one exists and otherwise uses the repository's default branch. The resolved commit SHA is stored so updates are reproducible.
+
+Self-hosted deployments should set the optional server-side `AGENT_PLUGINS_GITHUB_TOKEN` environment variable to a fine-grained GitHub token with read-only access to the repositories being installed. The token is never sent to the browser or stored in Drive; it only raises the GitHub API rate limit for server-side discovery requests.
+
+Supported portable components:
+
+| Component | Support |
+|---|---|
+| Agent Skills in `skills/<name>/SKILL.md` | Yes |
+| `streamable-http` servers in root `mcp.json` | Yes |
+| `stdio` MCP servers | No (reported and skipped) |
+| Legacy `sse` MCP servers | No (reported and skipped) |
+| Client extension namespaces | Ignored unless GemiHub adds explicit support |
+
+The repository root must contain `plugin.json` using the canonical v1.0.0 schema identifier. Skills appear in chat under an internal `{plugin-name}.{skill-name}` ID, which prevents collisions with Drive-native skills. Imported MCP URLs and literal headers remain package-managed; OAuth credentials discovered or configured by GemiHub are preserved across plugin updates.
+
+Agent Plugin packages are stored separately under `gemihub/agent-plugins/{plugin-name}/`. Disabling a package hides its skills and MCP servers without deleting it. Uninstalling removes the package and only the MCP entries owned by that package.
+
 Extend Gemini Hub with community plugins installed from GitHub Releases. Inspired by Obsidian + BRAT.
 
 ## Features

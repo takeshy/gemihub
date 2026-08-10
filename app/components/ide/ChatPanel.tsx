@@ -15,6 +15,7 @@ import {
   getAvailableModels,
   getDefaultModelForPlan,
   getDriveToolModeConstraint,
+  getEnabledMcpServers,
   normalizeSelectedMcpServerIds,
   supportsWebSearch,
 } from "~/types/settings";
@@ -339,6 +340,7 @@ export function ChatPanel({
   const [isCompacting, setIsCompacting] = useState(false);
 
   const availableModels = getAvailableModels(settings.apiPlan);
+  const availableMcpServers = useMemo(() => getEnabledMcpServers(settings), [settings]);
   const defaultModel =
     settings.selectedModel || getDefaultModelForPlan(settings.apiPlan);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultModel);
@@ -388,7 +390,7 @@ export function ChatPanel({
   // Migrate legacy name-based selections to ID-based selections and drop stale entries.
   useEffect(() => {
     setEnabledMcpServerIds((prev) => {
-      const normalized = normalizeSelectedMcpServerIds(prev, settings.mcpServers);
+      const normalized = normalizeSelectedMcpServerIds(prev, availableMcpServers);
       if (
         normalized.length === prev.length &&
         normalized.every((id, i) => id === prev[i])
@@ -397,7 +399,7 @@ export function ChatPanel({
       }
       return normalized;
     });
-  }, [settings.mcpServers]);
+  }, [availableMcpServers]);
 
   // Detach the currently running stream so it continues in the background.
   const detachActiveStream = useCallback(() => {
@@ -876,7 +878,7 @@ export function ChatPanel({
       const effectiveMcpIds = functionToolsForcedOff
         ? []
         : mcpOverride
-        ? normalizeSelectedMcpServerIds(mcpOverride, settings.mcpServers)
+        ? normalizeSelectedMcpServerIds(mcpOverride, availableMcpServers)
         : isWebSearch ? [] : enabledMcpServerIds;
 
       const sendStartTime = Date.now();
@@ -1244,6 +1246,7 @@ export function ChatPanel({
       selectedRagSetting,
       driveToolMode,
       enabledMcpServerIds,
+      availableMcpServers,
       settings,
       createStreamSession,
       getThinkingToggle,
@@ -1611,7 +1614,7 @@ export function ChatPanel({
         isStreaming={isStreaming}
         driveToolMode={driveToolMode}
         onDriveToolModeChange={setDriveToolMode}
-        mcpServers={settings.mcpServers}
+        mcpServers={availableMcpServers}
         enabledMcpServerIds={enabledMcpServerIds}
         onEnabledMcpServerIdsChange={setEnabledMcpServerIds}
         slashCommands={[

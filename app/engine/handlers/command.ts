@@ -13,6 +13,7 @@ import {
 import {
   getDefaultModelForPlan,
   getDriveToolModeConstraint,
+  getEnabledMcpServers,
   isImageGenerationModel,
   type ToolDefinition,
   type ModelType,
@@ -123,7 +124,7 @@ export async function handleCommandNode(
     ? mcpServersProp.split(",").map(s => s.trim()).filter(Boolean)
     : [];
   const enabledMcpServers = !functionToolsForcedOff && mcpServerIds.length > 0 && settings?.mcpServers
-    ? settings.mcpServers.filter(
+    ? getEnabledMcpServers(settings).filter(
         (s) => mcpServerIds.includes(s.id || "")
       )
     : [];

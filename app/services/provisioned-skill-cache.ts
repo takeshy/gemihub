@@ -82,3 +82,36 @@ export async function cacheProvisionedSkillFiles(files: ProvisionedSkillFileForC
   });
   window.dispatchEvent(new Event("tree-cached"));
 }
+
+/** Remove a server-managed package subtree from the browser cache. */
+export async function removeCachedFilesByPrefix(prefix: string): Promise<void> {
+  const {
+    deleteCachedFile,
+    getCachedRemoteMeta,
+    setCachedRemoteMeta,
+    getLocalSyncMeta,
+    setLocalSyncMeta,
+    setCachedFileTree,
+  } = await import("~/services/indexeddb-cache");
+  const { buildTreeFromMeta } = await import("~/utils/file-tree-operations");
+  const normalized = prefix.endsWith("/") ? prefix : `${prefix}/`;
+  const remote = await getCachedRemoteMeta();
+  const local = await getLocalSyncMeta();
+  if (!remote) return;
+  for (const [id, entry] of Object.entries(remote.files)) {
+    if (entry.name?.startsWith(normalized)) {
+      delete remote.files[id];
+      if (local) delete local.files[id];
+      await deleteCachedFile(id);
+    }
+  }
+  await setCachedRemoteMeta(remote);
+  if (local) await setLocalSyncMeta(local);
+  await setCachedFileTree({
+    id: "current",
+    rootFolderId: remote.rootFolderId,
+    items: buildTreeFromMeta(remote, local?.files),
+    cachedAt: Date.now(),
+  });
+  window.dispatchEvent(new Event("tree-cached"));
+}

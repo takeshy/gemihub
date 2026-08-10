@@ -28,6 +28,11 @@ export interface McpServerConfig {
   tools?: McpToolInfo[];
   oauth?: OAuthConfig;
   oauthTokens?: OAuthTokens;
+  /** Package ownership for servers imported from an Agent Plugin. */
+  agentPlugin?: {
+    pluginName: string;
+    serverName: string;
+  };
 }
 
 export function sanitizeMcpIdentifier(input: string): string {
@@ -72,6 +77,22 @@ export function normalizeMcpServers(servers: McpServerConfig[]): McpServerConfig
     if (server.id === id) return server;
     return { ...server, id };
   });
+}
+
+/** Exclude MCP servers owned by disabled, removed, or not-yet-tested Agent Plugins. */
+export function getEnabledMcpServers(
+  settings: Pick<UserSettings, "mcpServers" | "agentPlugins">
+): McpServerConfig[] {
+  const enabledPlugins = new Set(
+    (settings.agentPlugins || [])
+      .filter((plugin) => plugin.enabled)
+      .map((plugin) => plugin.name)
+  );
+  return (settings.mcpServers || []).filter(
+    (server) => !server.agentPlugin || (
+      enabledPlugins.has(server.agentPlugin.pluginName) && Array.isArray(server.tools)
+    )
+  );
 }
 
 export function normalizeSelectedMcpServerIds(
@@ -509,6 +530,19 @@ export interface PluginConfig {
   permissions?: string[];
 }
 
+/** Portable Agent Plugin installation stored in settings.json. */
+export interface AgentPluginConfig {
+  name: string;
+  repo: string;
+  version: string;
+  sourceType: "release" | "branch";
+  sourceRef: string;
+  commitSha: string;
+  enabled: boolean;
+  /** Agent Skills that passed validation for this installed commit. */
+  skillNames?: string[];
+}
+
 // Slash command for chat
 export interface SlashCommand {
   id: string;
@@ -587,6 +621,7 @@ export interface UserSettings {
   theme: Theme;
   slashCommands: SlashCommand[];
   plugins: PluginConfig[];
+  agentPlugins: AgentPluginConfig[];
   ragRegistrationOnPush: boolean;
   syncConflictFolder: string;
   encryptedApiKey: string;
@@ -714,6 +749,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   theme: "system",
   slashCommands: [],
   plugins: [],
+  agentPlugins: [],
   ragRegistrationOnPush: false,
   syncConflictFolder: "sync_conflicts",
   encryptedApiKey: "",

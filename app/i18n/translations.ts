@@ -789,6 +789,19 @@ export interface TranslationStrings {
   "plugins.externalSkills.importSuccess": string;
   "plugins.externalSkills.loadFailed": string;
   "plugins.externalSkills.importFailed": string;
+  "plugins.agent.title": string;
+  "plugins.agent.description": string;
+  "plugins.agent.preview": string;
+  "plugins.agent.previewFailed": string;
+  "plugins.agent.installed": string;
+  "plugins.agent.uninstalled": string;
+  "plugins.agent.toggled": string;
+  "plugins.agent.operationFailed": string;
+  "plugins.agent.confirmUninstall": string;
+  "plugins.agent.empty": string;
+  "plugins.agent.none": string;
+  "plugins.agent.upToDate": string;
+  "plugins.agent.confirmUpdate": string;
 
   // Commands tab
   "settings.tab.commands": string;
@@ -1982,6 +1995,19 @@ const en: TranslationStrings = {
   "plugins.externalSkills.importSuccess": "Skill imported.",
   "plugins.externalSkills.loadFailed": "Failed to load external skills.",
   "plugins.externalSkills.importFailed": "Failed to import skill.",
+  "plugins.agent.title": "Agent Plugins",
+  "plugins.agent.description": "Install portable Agent Plugins v1.0.0 from GitHub. GemiHub loads Agent Skills and Streamable HTTP MCP servers.",
+  "plugins.agent.preview": "Preview",
+  "plugins.agent.previewFailed": "Failed to inspect the Agent Plugin.",
+  "plugins.agent.installed": "Agent Plugin installed.",
+  "plugins.agent.uninstalled": "Agent Plugin uninstalled.",
+  "plugins.agent.toggled": "Agent Plugin state updated.",
+  "plugins.agent.operationFailed": "Agent Plugin operation failed.",
+  "plugins.agent.confirmUninstall": "Uninstall this Agent Plugin and its imported MCP servers?",
+  "plugins.agent.empty": "No Agent Plugins installed.",
+  "plugins.agent.none": "None",
+  "plugins.agent.upToDate": "This Agent Plugin is already up to date.",
+  "plugins.agent.confirmUpdate": "Install the reviewed update? Version:",
 
   // Commands tab
   "settings.tab.commands": "Commands",
@@ -3175,6 +3201,19 @@ const ja: TranslationStrings = {
   "plugins.externalSkills.importSuccess": "Skill を取り込みました。",
   "plugins.externalSkills.loadFailed": "External skills の読み込みに失敗しました。",
   "plugins.externalSkills.importFailed": "Skill の取り込みに失敗しました。",
+  "plugins.agent.title": "Agent Plugins",
+  "plugins.agent.description": "GitHubからポータブルなAgent Plugins v1.0.0を導入します。Agent SkillsとStreamable HTTP MCPに対応します。",
+  "plugins.agent.preview": "確認",
+  "plugins.agent.previewFailed": "Agent Pluginの確認に失敗しました。",
+  "plugins.agent.installed": "Agent Pluginをインストールしました。",
+  "plugins.agent.uninstalled": "Agent Pluginをアンインストールしました。",
+  "plugins.agent.toggled": "Agent Pluginの状態を更新しました。",
+  "plugins.agent.operationFailed": "Agent Pluginの操作に失敗しました。",
+  "plugins.agent.confirmUninstall": "このAgent Pluginと取り込まれたMCPサーバーを削除しますか？",
+  "plugins.agent.empty": "Agent Pluginはインストールされていません。",
+  "plugins.agent.none": "なし",
+  "plugins.agent.upToDate": "このAgent Pluginは最新です。",
+  "plugins.agent.confirmUpdate": "確認した更新をインストールしますか？ バージョン:",
 
   // Commands tab
   "settings.tab.commands": "コマンド",

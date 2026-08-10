@@ -8,7 +8,7 @@ import type {
   ModelType,
   DriveToolMode,
 } from "~/types/settings";
-import { getAvailableModels, normalizeSelectedMcpServerIds } from "~/types/settings";
+import { getAvailableModels, getEnabledMcpServers, normalizeSelectedMcpServerIds } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 
 const inputClass =
@@ -59,7 +59,7 @@ function commandToForm(cmd: SlashCommand, settings: UserSettings): CommandFormDa
     driveToolMode: cmd.driveToolMode || "",
     enabledMcpServers: normalizeSelectedMcpServerIds(
       cmd.enabledMcpServers,
-      settings.mcpServers
+      getEnabledMcpServers(settings)
     ),
   };
 }
@@ -87,7 +87,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
       ...cmd,
       enabledMcpServers: normalizeSelectedMcpServerIds(
         cmd.enabledMcpServers,
-        settings.mcpServers
+        getEnabledMcpServers(settings)
       ),
     }))
   );
@@ -96,7 +96,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
   const [form, setForm] = useState<CommandFormData>({ ...emptyForm });
 
   const availableModels = getAvailableModels(settings.apiPlan);
-  const enabledMcpServers = settings.mcpServers;
+  const enabledMcpServers = getEnabledMcpServers(settings);
 
   const data = fetcher.data as { success?: boolean; message?: string } | undefined;
 

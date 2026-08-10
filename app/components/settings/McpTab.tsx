@@ -707,23 +707,28 @@ export function McpTab({ settings }: { settings: UserSettings }) {
         return;
       }
 
+      const connected = res.ok && data.success === true && Array.isArray(data.tools);
       setTestResults((prev) => ({
         ...prev,
-        [idx]: { ok: res.ok, msg: data.message || (res.ok ? "Connected" : "Failed") },
+        [idx]: { ok: connected, msg: data.message || (connected ? "Connected" : "Failed") },
       }));
-      if (res.ok && data.tools) {
+      if (connected) {
         const updated = servers.map((s, i) => i === idx ? { ...s, tools: data.tools as McpToolInfo[] } : s);
         setServers(updated);
         saveServers(updated);
-      } else if (!res.ok) {
-        setServers((prev) => prev.map((s, i) => i === idx ? { ...s, tools: undefined } : s));
+      } else {
+        const updated = servers.map((s, i) => i === idx ? { ...s, tools: undefined } : s);
+        setServers(updated);
+        saveServers(updated);
       }
     } catch (err) {
       setTestResults((prev) => ({
         ...prev,
         [idx]: { ok: false, msg: err instanceof Error ? err.message : "Network error" },
       }));
-      setServers((prev) => prev.map((s, i) => i === idx ? { ...s, tools: undefined } : s));
+      const updated = servers.map((s, i) => i === idx ? { ...s, tools: undefined } : s);
+      setServers(updated);
+      saveServers(updated);
     }
   }, [servers, startOAuthFlow, saveServers, t]);
 
@@ -777,6 +782,11 @@ export function McpTab({ settings }: { settings: UserSettings }) {
                     {t("settings.mcp.oauthAuthenticated")}
                   </span>
                 )}
+                {server.agentPlugin && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                    Agent Plugin: {server.agentPlugin.pluginName}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{server.url}</p>
               {server.tools && server.tools.length > 0 && (
@@ -813,14 +823,16 @@ export function McpTab({ settings }: { settings: UserSettings }) {
               >
                 <TestTube size={16} />
               </button>
-              <button
-                type="button"
-                onClick={() => removeServer(idx)}
-                className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
-                title="Remove"
-              >
-                <Trash2 size={16} />
-              </button>
+              {!server.agentPlugin && (
+                <button
+                  type="button"
+                  onClick={() => removeServer(idx)}
+                  className="p-1.5 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                  title="Remove"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </div>
           </div>
         ))}

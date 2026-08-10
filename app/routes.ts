@@ -73,6 +73,8 @@ export default [
   route("public/file/:fileId/:fileName", "routes/public.file.$fileId.$fileName.tsx"),
   route("api/plugins", "routes/api.plugins.tsx"),
   route("api/plugins/:id", "routes/api.plugins.$id.tsx"),
+  route("api/agent-plugins", "routes/api.agent-plugins.tsx"),
+  route("api/agent-plugins/:name", "routes/api.agent-plugins.$name.tsx"),
   route("api/obsidian/token", "routes/api.obsidian.token.tsx"),
   // Hubwork routes
   route("hubwork/api/domain", "routes/hubwork.api.domain.tsx"),
