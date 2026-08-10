@@ -8,6 +8,7 @@ import {
   installAgentPluginPackage,
   mergeAgentPluginMcpServers,
 } from "~/services/agent-plugin.server";
+import { hydrateAgentPluginMcpTools } from "~/services/mcp-tools.server";
 
 function publicPreview(preview: Awaited<ReturnType<typeof fetchAgentPlugin>>) {
   const { files: _files, ...result } = preview;
@@ -46,8 +47,16 @@ export async function action({ request }: Route.ActionArgs) {
     config.enabled = existing?.enabled ?? true;
     const agentPlugins = [...(settings.agentPlugins || []).filter((plugin) => plugin.name !== config.name), config];
     const mcpServers = mergeAgentPluginMcpServers(settings.mcpServers, preview);
+    const mcpWarnings = await hydrateAgentPluginMcpTools(mcpServers, config.name);
     await saveSettings(tokens.accessToken, tokens.rootFolderId, { ...settings, agentPlugins, mcpServers });
-    return Response.json({ success: true, config, cacheFiles: installed.cacheFiles, ...publicPreview(preview) }, { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined });
+    const result = publicPreview(preview);
+    return Response.json({
+      success: true,
+      config,
+      cacheFiles: installed.cacheFiles,
+      ...result,
+      warnings: [...result.warnings, ...mcpWarnings],
+    }, { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent Plugin operation failed";
     return Response.json({ error: message }, { status: error instanceof AgentPluginClientError ? 400 : 500 });

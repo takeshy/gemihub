@@ -9,6 +9,7 @@ import {
   mergeAgentPluginMcpServers,
   uninstallAgentPluginPackage,
 } from "~/services/agent-plugin.server";
+import { hydrateAgentPluginMcpTools } from "~/services/mcp-tools.server";
 
 function validName(name: string): boolean {
   return /^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(name);
@@ -60,8 +61,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       config.enabled = current.enabled;
       const agentPlugins = settings.agentPlugins.map((plugin) => plugin.name === current.name ? config : plugin);
       const mcpServers = mergeAgentPluginMcpServers(settings.mcpServers, preview);
+      const mcpWarnings = await hydrateAgentPluginMcpTools(mcpServers, config.name);
       await saveSettings(tokens.accessToken, tokens.rootFolderId, { ...settings, agentPlugins, mcpServers });
-      return Response.json({ success: true, config, cacheFiles: installed.cacheFiles, warnings: preview.warnings }, { headers });
+      return Response.json({ success: true, config, cacheFiles: installed.cacheFiles, warnings: [...preview.warnings, ...mcpWarnings] }, { headers });
     }
     return Response.json({ error: "Unknown action" }, { status: 400, headers });
   } catch (error) {

@@ -29,6 +29,13 @@ The repository root must contain `plugin.json` using the canonical v1.0.0 schema
 
 Agent Plugin packages are stored separately under `gemihub/agent-plugins/{plugin-name}/`. Disabling a package hides its skills and MCP servers without deleting it. Uninstalling removes the package and only the MCP entries owned by that package.
 
+Install and update call `tools/list` for each bundled MCP server and cache its
+tool definitions. A discovery failure produces a warning without discarding the
+package; retry with **Test** in **Settings > MCP Servers** after correcting the
+connection or credentials. Enabled Agent Plugin MCP servers are selected in
+chat once by default when this behavior is first introduced. Later updates do
+not overwrite the user's explicit selection stored in `localStorage`.
+
 Extend Gemini Hub with community plugins installed from GitHub Releases. Inspired by Obsidian + BRAT.
 
 ## Features

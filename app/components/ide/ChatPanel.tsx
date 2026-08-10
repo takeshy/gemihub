@@ -60,6 +60,9 @@ export interface ChatOverrides {
 const WEBPAGE_REVIEW_MAX_ITERATIONS = 1;
 const WEBPAGE_BUILDER_SKILL_ID = "webpage-builder";
 const FILE_CONTEXT_SKILL_IDS = ["markdown", "base", "dashboard"];
+const MCP_SELECTION_STORAGE_KEY = "gemihub:enabledMcpServers";
+const MCP_PLUGIN_DEFAULTS_STORAGE_KEY = "gemihub:mcpPluginDefaults";
+const MCP_PLUGIN_DEFAULTS_VERSION = "1";
 
 type T = (key: keyof TranslationStrings) => string;
 
@@ -358,11 +361,21 @@ export function ChatPanel({
   );
   const [enabledMcpServerIds, setEnabledMcpServerIds] = useState<string[]>(() => {
     try {
-      const stored = localStorage.getItem("gemihub:enabledMcpServers");
+      const stored = localStorage.getItem(MCP_SELECTION_STORAGE_KEY);
+      const defaultsApplied = localStorage.getItem(MCP_PLUGIN_DEFAULTS_STORAGE_KEY) === MCP_PLUGIN_DEFAULTS_VERSION;
+      let selected: string[] = [];
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) selected = parsed;
       }
+      if (!defaultsApplied) {
+        for (const server of availableMcpServers) {
+          if (!server.agentPlugin) continue;
+          const id = server.id || server.name;
+          if (!selected.includes(id)) selected.push(id);
+        }
+      }
+      return selected;
     } catch { /* ignore */ }
     return [];
   });
@@ -382,7 +395,8 @@ export function ChatPanel({
   // Persist MCP selection to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem("gemihub:enabledMcpServers", JSON.stringify(enabledMcpServerIds));
+      localStorage.setItem(MCP_SELECTION_STORAGE_KEY, JSON.stringify(enabledMcpServerIds));
+      localStorage.setItem(MCP_PLUGIN_DEFAULTS_STORAGE_KEY, MCP_PLUGIN_DEFAULTS_VERSION);
     } catch { /* ignore */ }
   }, [enabledMcpServerIds]);
 
@@ -1099,6 +1113,11 @@ export function ChatPanel({
             case "image_generated":
               if (chunk.generatedImage) {
                 generatedImages = [...generatedImages, chunk.generatedImage];
+              }
+              break;
+            case "mcp_app":
+              if (chunk.mcpApp) {
+                mcpApps = [...mcpApps, chunk.mcpApp];
               }
               break;
             case "error":

@@ -134,6 +134,10 @@ All OAuth discovery URLs are validated for SSRF protection before fetching.
 
 In the chat input tool dropdown, each MCP server appears as a checkbox. Users enable/disable servers per chat session. Selection is persisted to `localStorage` as MCP server IDs.
 
+Enabled MCP servers installed by Agent Plugins are selected once by default
+when this behavior is first introduced. Install and update automatically call
+`tools/list`; failed discovery can be retried from **Settings > MCP Servers**.
+
 ### Tool Naming
 
 MCP tools are exposed to Gemini with prefixed names:
@@ -157,7 +161,8 @@ Gemini calls mcp_server_tool(args)
         → Extract text content → return to Gemini as tool result
         → If resourceUri present → fetch UI resource
           → Send mcp_app SSE chunk to client
-            → McpAppRenderer displays in sandboxed iframe
+            → ChatPanel stores the MCP App on the new assistant message
+              → McpAppRenderer displays it in a sandboxed iframe
 ```
 
 ### Incompatibilities
@@ -172,6 +177,10 @@ Gemini calls mcp_server_tool(args)
 ## MCP Apps (Rich UI)
 
 When an MCP tool returns UI metadata (`_meta.ui.resourceUri`), the result is rendered as an interactive MCP App.
+
+The app payload is attached to and persisted with the newly generated assistant
+message. Previously saved messages are not retroactively populated after a
+deployment; run the MCP tool again to create a new message with the card.
 
 ### Resource Loading
 

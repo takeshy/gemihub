@@ -61,6 +61,31 @@ export async function getOrCreateClient(config: McpServerConfig): Promise<McpCli
 }
 
 /**
+ * Populate the cached tool list for MCP servers imported by an Agent Plugin.
+ * Installation remains successful if an endpoint is temporarily unavailable;
+ * the returned warnings tell the caller that discovery can be retried later.
+ */
+export async function hydrateAgentPluginMcpTools(
+  mcpServers: McpServerConfig[],
+  pluginName: string,
+): Promise<string[]> {
+  const warnings: string[] = [];
+
+  for (const server of mcpServers) {
+    if (server.agentPlugin?.pluginName !== pluginName || (server.tools?.length ?? 0) > 0) continue;
+    try {
+      const client = await getOrCreateClient(server);
+      server.tools = await client.listTools();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Connection failed";
+      warnings.push(`Could not discover MCP tools for ${server.name}: ${message}`);
+    }
+  }
+
+  return warnings;
+}
+
+/**
  * Get tool definitions from all enabled MCP servers, formatted for Gemini Function Calling.
  * Tool names are prefixed with mcp_{serverName}_ to avoid collisions.
  */
