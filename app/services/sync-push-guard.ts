@@ -4,17 +4,17 @@ export interface PushSnapshotEntry {
   modifiedTime?: string;
 }
 
-export interface FullPushDriveFileState {
-  parents?: string[];
-  trashed?: boolean;
-}
-
-/** Full Push may only reuse files that are still active children of the sync root. */
-export function canReuseFileForFullPush(
-  file: FullPushDriveFileState,
-  rootFolderId: string,
-): boolean {
-  return file.trashed !== true && (file.parents ?? []).includes(rootFolderId);
+export function indexUniqueRemotePaths<T extends { id: string; name: string }>(files: T[]): {
+  byPath: Map<string, T>;
+  duplicates: string[];
+} {
+  const byPath = new Map<string, T>();
+  const duplicates = new Set<string>();
+  for (const file of files) {
+    if (byPath.has(file.name)) duplicates.add(file.name);
+    else byPath.set(file.name, file);
+  }
+  return { byPath, duplicates: [...duplicates].sort((a, b) => a.localeCompare(b)) };
 }
 
 /** True when Drive changed after the client performed its push preflight. */

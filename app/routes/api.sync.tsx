@@ -38,7 +38,7 @@ import { parallelProcess } from "~/utils/parallel";
 import { saveEdit } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
-import { canReuseFileForFullPush, remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
+import { indexUniqueRemotePaths, remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
 
 function guessMimeType(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -670,6 +670,24 @@ export async function action({ request }: Route.ActionArgs) {
         ?? (await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId))
         ?? { lastUpdatedAt: new Date().toISOString(), files: {} as SyncMeta["files"] };
 
+      // One root listing is shared by normal Push conflict checks and Full Push
+      // stale-ID checks. The query itself guarantees parents=root and
+      // trashed=false, avoiding one getFileMetadata request per uploaded file.
+      const currentRootFiles = await listUserFiles(validTokens.accessToken, validTokens.rootFolderId);
+      const currentRootFilesById = new Map(currentRootFiles.map((file) => [file.id, file]));
+      const userRootFiles = currentRootFiles.filter((file) =>
+        file.name !== SYNC_META_FILE_NAME
+        && file.name !== SETTINGS_FILE_NAME
+        && file.name !== ENCRYPTED_AUTH_FILE_NAME
+      );
+      const { byPath: currentRootFilesByPath, duplicates } = indexUniqueRemotePaths(userRootFiles);
+      if (duplicates.length > 0) {
+        return logAndReturn(
+          { error: `Google Drive contains duplicate file paths: ${duplicates.join(", ")}` },
+          { status: 409 },
+        );
+      }
+
       // Update files in parallel: read old content, skip upload if unchanged
       const pushResults = await parallelProcess(files, async ({ fileId, content, fileName, encoding }) => {
         const isBinary = encoding === "base64";
@@ -677,16 +695,9 @@ export async function action({ request }: Route.ActionArgs) {
         // A cached ID can still address a trashed file or a file moved outside
         // the sync root. Drive permits updating it, but that does not restore it
         // to the root. Full Push must recreate such files with a new ID.
-        let recreateForFullPush = false;
-        if (forceRecreate) {
-          try {
-            const current = await getFileMetadata(validTokens.accessToken, fileId);
-            recreateForFullPush = !canReuseFileForFullPush(current, validTokens.rootFolderId);
-          } catch (err) {
-            if (isNotFoundError(err)) recreateForFullPush = true;
-            else throw err;
-          }
-        }
+        const replacement = forceRecreate && fileName ? currentRootFilesByPath.get(fileName) : undefined;
+        const driveFileId = currentRootFilesById.has(fileId) ? fileId : replacement?.id ?? fileId;
+        const recreateForFullPush = forceRecreate && !currentRootFilesById.has(driveFileId);
 
         // The client already checked for conflicts, but another device can
         // update the file before this request reaches Drive. Revalidate the
@@ -695,16 +706,12 @@ export async function action({ request }: Route.ActionArgs) {
         if (!forceRecreate) {
           const expected = clientRemoteMeta?.files[fileId];
           if (expected) {
-            try {
-              const current = await getFileMetadata(validTokens.accessToken, fileId);
-              if (remoteChangedSincePushSnapshot(expected, current)) {
-                return { ok: false as const, fileId, reason: "remote-changed" as const };
-              }
-            } catch (err) {
-              if (isNotFoundError(err)) {
-                return { ok: false as const, fileId, reason: "remote-deleted" as const };
-              }
-              throw err;
+            const current = currentRootFilesById.get(fileId);
+            if (!current) {
+              return { ok: false as const, fileId, reason: "remote-deleted" as const };
+            }
+            if (remoteChangedSincePushSnapshot(expected, current)) {
+              return { ok: false as const, fileId, reason: "remote-changed" as const };
             }
           }
         }
@@ -733,12 +740,12 @@ export async function action({ request }: Route.ActionArgs) {
             };
           }
           try {
-            const updated = await updateFileBinary(validTokens.accessToken, fileId, buf, mimeType);
+            const updated = await updateFileBinary(validTokens.accessToken, driveFileId, buf, mimeType);
             return {
               ok: true as const,
               uploaded: true,
               fileId,
-              newFileId: undefined,
+              newFileId: driveFileId !== fileId ? driveFileId : undefined,
               md5Checksum: updated.md5Checksum ?? "",
               modifiedTime: updated.modifiedTime ?? "",
               name: updated.name,
@@ -781,7 +788,7 @@ export async function action({ request }: Route.ActionArgs) {
         // --- Text file path ---
         let oldContent: string | null = null;
         try {
-          oldContent = await readFile(validTokens.accessToken, fileId);
+          oldContent = await readFile(validTokens.accessToken, driveFileId);
         } catch {
           // File might be new or unreadable, skip history
         }
@@ -831,12 +838,12 @@ export async function action({ request }: Route.ActionArgs) {
           };
         }
         try {
-          const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
+          const updated = await updateFile(validTokens.accessToken, driveFileId, content, mimeType);
           return {
             ok: true as const,
             uploaded: true,
             fileId,
-            newFileId: undefined,
+            newFileId: driveFileId !== fileId ? driveFileId : undefined,
             md5Checksum: updated.md5Checksum ?? "",
             modifiedTime: updated.modifiedTime ?? "",
             name: updated.name,
