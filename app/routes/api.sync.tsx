@@ -38,7 +38,7 @@ import { parallelProcess } from "~/utils/parallel";
 import { saveEdit } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
-import { remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
+import { canReuseFileForFullPush, remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
 
 function guessMimeType(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -674,6 +674,20 @@ export async function action({ request }: Route.ActionArgs) {
       const pushResults = await parallelProcess(files, async ({ fileId, content, fileName, encoding }) => {
         const isBinary = encoding === "base64";
 
+        // A cached ID can still address a trashed file or a file moved outside
+        // the sync root. Drive permits updating it, but that does not restore it
+        // to the root. Full Push must recreate such files with a new ID.
+        let recreateForFullPush = false;
+        if (forceRecreate) {
+          try {
+            const current = await getFileMetadata(validTokens.accessToken, fileId);
+            recreateForFullPush = !canReuseFileForFullPush(current, validTokens.rootFolderId);
+          } catch (err) {
+            if (isNotFoundError(err)) recreateForFullPush = true;
+            else throw err;
+          }
+        }
+
         // The client already checked for conflicts, but another device can
         // update the file before this request reaches Drive. Revalidate the
         // snapshot immediately before uploading and leave the file dirty when
@@ -699,6 +713,25 @@ export async function action({ request }: Route.ActionArgs) {
         if (isBinary) {
           const buf = Buffer.from(content, "base64");
           const mimeType = fileName ? guessMimeType(fileName) : "application/octet-stream";
+          if (recreateForFullPush && fileName) {
+            const created = await createFileBinary(
+              validTokens.accessToken, fileName, buf,
+              validTokens.rootFolderId, mimeType,
+            );
+            return {
+              ok: true as const,
+              uploaded: true,
+              fileId,
+              newFileId: created.id,
+              md5Checksum: created.md5Checksum ?? "",
+              modifiedTime: created.modifiedTime ?? "",
+              name: created.name,
+              mimeType: created.mimeType,
+              size: created.size,
+              oldContent: null,
+              newContent: null,
+            };
+          }
           try {
             const updated = await updateFileBinary(validTokens.accessToken, fileId, buf, mimeType);
             return {
@@ -778,6 +811,25 @@ export async function action({ request }: Route.ActionArgs) {
         const mimeType = fileName && isTextFileName(fileName)
           ? guessMimeType(fileName)
           : existingMeta?.mimeType || (fileName ? guessMimeType(fileName) : "text/plain");
+        if (recreateForFullPush && fileName) {
+          const created = await createFile(
+            validTokens.accessToken, fileName, content,
+            validTokens.rootFolderId, guessMimeType(fileName),
+          );
+          return {
+            ok: true as const,
+            uploaded: true,
+            fileId,
+            newFileId: created.id,
+            md5Checksum: created.md5Checksum ?? "",
+            modifiedTime: created.modifiedTime ?? "",
+            name: created.name,
+            mimeType: created.mimeType,
+            size: created.size,
+            oldContent: null,
+            newContent: content,
+          };
+        }
         try {
           const updated = await updateFile(validTokens.accessToken, fileId, content, mimeType);
           return {

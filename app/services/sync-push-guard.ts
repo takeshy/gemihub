@@ -4,6 +4,19 @@ export interface PushSnapshotEntry {
   modifiedTime?: string;
 }
 
+export interface FullPushDriveFileState {
+  parents?: string[];
+  trashed?: boolean;
+}
+
+/** Full Push may only reuse files that are still active children of the sync root. */
+export function canReuseFileForFullPush(
+  file: FullPushDriveFileState,
+  rootFolderId: string,
+): boolean {
+  return file.trashed !== true && (file.parents ?? []).includes(rootFolderId);
+}
+
 /** True when Drive changed after the client performed its push preflight. */
 export function remoteChangedSincePushSnapshot(
   expected: PushSnapshotEntry | undefined,

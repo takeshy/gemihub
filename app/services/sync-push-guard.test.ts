@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { remoteChangedSincePushSnapshot } from "./sync-push-guard";
+import { canReuseFileForFullPush, remoteChangedSincePushSnapshot } from "./sync-push-guard";
 
 test("push guard detects content changed after preflight", () => {
   assert.equal(
@@ -37,4 +37,11 @@ test("push guard allows files missing from a snapshot", () => {
     remoteChangedSincePushSnapshot(undefined, { name: "note.md", md5Checksum: "new" }),
     false,
   );
+});
+
+test("full push only reuses active files in the sync root", () => {
+  assert.equal(canReuseFileForFullPush({ parents: ["root"] }, "root"), true);
+  assert.equal(canReuseFileForFullPush({ parents: ["root"], trashed: true }, "root"), false);
+  assert.equal(canReuseFileForFullPush({ parents: ["elsewhere"] }, "root"), false);
+  assert.equal(canReuseFileForFullPush({}, "root"), false);
 });
