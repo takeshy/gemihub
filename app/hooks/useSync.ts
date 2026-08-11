@@ -11,7 +11,6 @@ import {
   getCachedRemoteMeta,
   setCachedRemoteMeta,
   deleteEditHistoryEntry,
-  setEditHistoryEntry,
   pruneOrphanedEditHistory,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
@@ -534,7 +533,8 @@ export function useSync() {
         }
       }
 
-      // Separate ignored modified files — metadata only, no download
+      // Separate ignored modified files. Ignore means leave the local baseline
+      // untouched so the remote change remains pending for a later pull.
       const ignoredModifiedIds = new Set(
         ignoredIds ? diff.toPull.filter(id => ignoredIds.has(id)) : []
       );
@@ -615,30 +615,11 @@ export function useSync() {
           }
         }
 
-        // 7b. Handle ignored modified files — metadata only, no download, mark for push
-        for (const fid of ignoredModifiedIds) {
-          const rm = remoteFiles[fid];
-          updatedMeta.files[fid] = {
-            md5Checksum: rm?.md5Checksum ?? "",
-            modifiedTime: rm?.modifiedTime ?? "",
-            name: rm?.name,
-          };
-          // Synthetic marker diff — reverse-apply inserts a phantom line,
-          // making reconstructed content differ from cache → hasNetContentChange returns true
-          await setEditHistoryEntry({
-            fileId: fid,
-            filePath: rm?.name ?? fid,
-            diffs: [{
-              timestamp: new Date().toISOString(),
-              diff: "@@ -1,1 +1,0 @@\n-__PULL_IGNORED__",
-              stats: { additions: 0, deletions: 1 },
-            }],
-          });
-        }
       }
 
-      // 8. Save localMeta (once for all changes: toPull and ignored)
-      if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
+      // 8. Save localMeta only for applied pulls. Ignored entries deliberately
+      // retain their old checksum/name and therefore remain pending.
+      if (filesToPull.length > 0) {
         updatedMeta.lastUpdatedAt = new Date().toISOString();
         await setLocalSyncMeta(updatedMeta);
         baseMeta = updatedMeta;
