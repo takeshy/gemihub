@@ -5,7 +5,7 @@ import { isEncryptedFile } from "./crypto-core";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 
 const DB_NAME = "gemihub-cache";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 // --- Store types ---
 
@@ -75,6 +75,15 @@ export interface CachedLoaderData {
   cachedAt: number;
 }
 
+export interface ConflictBackup {
+  id: string;
+  fileId: string;
+  fileName: string;
+  content: string;
+  encoding?: "base64";
+  createdAt: number;
+}
+
 // --- Singleton DB connection ---
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -114,6 +123,9 @@ function getDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains("loaderData")) {
         db.createObjectStore("loaderData", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("conflictBackups")) {
+        db.createObjectStore("conflictBackups", { keyPath: "id" });
       }
     };
 
@@ -261,6 +273,16 @@ export async function deleteCachedFile(fileId: string): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+export async function saveLocalConflictBackup(
+  backup: Omit<ConflictBackup, "id" | "createdAt">
+): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const db = await getDB();
+  const createdAt = Date.now();
+  const id = `${createdAt}-${crypto.randomUUID()}`;
+  await txPut(db, "conflictBackups", { ...backup, id, createdAt });
 }
 
 export async function getAllCachedFiles(): Promise<CachedFile[]> {
@@ -584,7 +606,7 @@ export async function clearAllCache(): Promise<void> {
   try {
     const db = await getDB();
     const tx = db.transaction(
-      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta", "loaderData"],
+      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta", "loaderData", "conflictBackups"],
       "readwrite"
     );
     tx.objectStore("files").clear();
@@ -593,6 +615,7 @@ export async function clearAllCache(): Promise<void> {
     tx.objectStore("fileTree").clear();
     tx.objectStore("remoteMeta").clear();
     tx.objectStore("loaderData").clear();
+    tx.objectStore("conflictBackups").clear();
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

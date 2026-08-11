@@ -12,6 +12,7 @@ import {
   setCachedRemoteMeta,
   deleteEditHistoryEntry,
   pruneOrphanedEditHistory,
+  saveLocalConflictBackup,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
@@ -682,6 +683,17 @@ export function useSync() {
           fileName = cached.fileName;
         }
 
+        // The browser owns conflict backups. For remote-wins the losing local
+        // value is already available, so persist it before changing anything.
+        if (choice === "remote" && localContent != null) {
+          await saveLocalConflictBackup({
+            fileId,
+            fileName: fileName || fileId,
+            content: localContent,
+            ...(cached?.encoding ? { encoding: cached.encoding } : {}),
+          });
+        }
+
         const res = await fetch("/api/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -703,6 +715,12 @@ export function useSync() {
 
         if (!res.ok) throw new Error("Failed to resolve conflict");
         const data = await res.json();
+
+        // For local-wins the server returns the overwritten remote value; keep
+        // it only in IndexedDB rather than creating a Drive conflict folder.
+        if (choice === "local" && data.backup) {
+          await saveLocalConflictBackup(data.backup);
+        }
 
         // If remote wins, update local cache with remote content
         if (choice === "remote" && data.file) {

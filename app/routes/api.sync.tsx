@@ -167,9 +167,6 @@ export async function action({ request }: Route.ActionArgs) {
         return logAndReturn({ error: "Missing localContent" }, { status: 400 });
       }
 
-      const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-      const conflictFolder = settings.syncConflictFolder || "sync_conflicts";
-
       // Snapshot for name/mimeType lookups only. The final meta write below
       // re-reads the latest _sync-meta.json so entries written by concurrent
       // pushes are not clobbered (same strategy as pushFiles).
@@ -186,6 +183,7 @@ export async function action({ request }: Route.ActionArgs) {
       // Apply the resolution to Drive, collecting the single meta entry to merge
       let resolvedFileId = fileId;
       let resolvedEntry: SyncMeta["files"][string] | null = null;
+      let backup: { fileId: string; fileName: string; content: string; encoding?: "base64" } | undefined;
 
       if (choice === "local") {
         if (isEditDelete) {
@@ -214,21 +212,11 @@ export async function action({ request }: Route.ActionArgs) {
           const existingMeta = metaSnapshot.files[fileId];
           const fileName = existingMeta?.name || fileId;
           const remoteBinary = shouldTreatAsBinaryFile(fileName, existingMeta?.mimeType);
-          try {
-            const remoteContent = remoteBinary
-              ? await readFileBase64(validTokens.accessToken, fileId)
-              : await readFile(validTokens.accessToken, fileId);
-            await saveConflictBackup(
-              validTokens.accessToken,
-              validTokens.rootFolderId,
-              conflictFolder,
-              fileName,
-              remoteContent,
-              remoteBinary ? { encoding: "base64", mimeType: existingMeta?.mimeType } : {}
-            );
-          } catch {
-            // Backup failure shouldn't block conflict resolution
-          }
+          const remoteContent = remoteBinary
+            ? await readFileBase64(validTokens.accessToken, fileId)
+            : await readFile(validTokens.accessToken, fileId);
+          backup = { fileId, fileName, content: remoteContent,
+            ...(remoteBinary ? { encoding: "base64" as const } : {}) };
           // Update the Drive file with local content (binary cache content is base64)
           const mimeType = existingMeta?.mimeType || guessMimeType(fileName);
           const updated = isLocalBinary
@@ -245,24 +233,7 @@ export async function action({ request }: Route.ActionArgs) {
           };
         }
       } else {
-        // Remote wins (or edit-delete discard): local content is the loser, back it up
-        if (localContent) {
-          const backupName = isEditDelete
-            ? (clientFileName || fileId)
-            : (metaSnapshot.files[fileId]?.name || fileId);
-          try {
-            await saveConflictBackup(
-              validTokens.accessToken,
-              validTokens.rootFolderId,
-              conflictFolder,
-              backupName,
-              localContent,
-              isLocalBinary ? { encoding: "base64", mimeType: guessMimeType(backupName) } : {}
-            );
-          } catch {
-            // Backup failure shouldn't block conflict resolution
-          }
-        }
+        // Remote-wins backup is persisted by the browser before this request.
         if (!isEditDelete) {
           // Normal conflict: refresh the meta entry from the current Drive file
           const meta = await getFileMetadata(validTokens.accessToken, fileId);
@@ -306,6 +277,7 @@ export async function action({ request }: Route.ActionArgs) {
           : await readFile(validTokens.accessToken, fileId);
         return logAndReturn({
           remoteMeta,
+          backup,
           file: {
             fileId,
             content,
@@ -319,6 +291,7 @@ export async function action({ request }: Route.ActionArgs) {
 
       return logAndReturn({
         remoteMeta,
+        backup,
         file: resolvedEntry ? {
           fileId: resolvedFileId,
           md5Checksum: resolvedEntry.md5Checksum,
