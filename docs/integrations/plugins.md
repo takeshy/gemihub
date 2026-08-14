@@ -204,7 +204,7 @@ const response = await api.gemini.chat(
     { role: "user", content: "Hello" },
   ],
   {
-    model: "gemini-3.5-flash",      // optional
+    model: "gemini-3.7-flash",      // optional
     systemPrompt: "You are helpful", // optional
   }
 );

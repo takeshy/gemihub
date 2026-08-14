@@ -402,7 +402,7 @@ export function buildGenerationConfig(
 
   if (thinkingRequired) {
     thinkingLevel = "high";
-  } else if (modelLower.includes("gemini-3.6-flash") || modelLower.includes("gemini-3.5-flash-lite")) {
+  } else if (modelLower.includes("gemini-3.7-flash") || modelLower.includes("gemini-3.5-flash-lite")) {
     thinkingLevel = enableThinking ? "high" : "low";
   } else if (!enableThinking) {
     thinkingLevel = "minimal";

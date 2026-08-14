@@ -168,7 +168,7 @@ Push/Pull の sync API 内に RAG 関連の4アクションがある:
 | `"drive"` | Google Drive API でフルテキスト検索 |
 
 **RAG モードの詳細**:
-- API プランに応じたモデル選択: paid → `gemini-3.1-pro-preview` / `gemini-3.5-flash`, free → `gemini-3.5-flash` / `gemini-3.1-flash-lite`
+- API プランに応じたモデル選択: paid → `gemini-3.7-flash` / `gemini-3.1-pro-preview`, free → `gemini-3.7-flash` / `gemini-3.5-flash-lite`
 - 指定モデルで `fileSearch` ツールが非対応の場合、同プラン内の別モデルにフォールバック
 - システム指示: `"Search files and answer the query concisely in the query's language."`
 - `groundingMetadata.groundingChunks.retrievedContext` からファイル名・URI を抽出
@@ -331,8 +331,8 @@ Gemini の応答に含まれる `groundingMetadata.groundingChunks` から RAG �
 - **複数行テキストエリア** (3行、リサイズ可能) でクエリ入力
 - 送信: **Ctrl+Enter** (Mac は Cmd+Enter)
 - API プランに応じたモデル選択ボタンが表示される
-  - paid: `gemini-3.1-pro-preview`, `gemini-3.5-flash`
-  - free: `gemini-3.5-flash`, `gemini-3.1-flash-lite`
+  - paid: `gemini-3.7-flash`, `gemini-3.1-pro-preview`
+  - free: `gemini-3.7-flash`, `gemini-3.5-flash-lite`
 - 結果: `groundingChunks` からファイルリスト（バイナリ除外、タイトル重複排除）
 - **AI テキスト** (`aiText`) はファイルリストの下に別ブロックとして表示
 - 結果クリックでファイルを開く（`fileList` から ID を解決）

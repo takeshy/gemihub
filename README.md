@@ -168,7 +168,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **Offline Cache & Sync** — Offline-first with IndexedDB caching. Edit files without internet, then Push/Pull to sync with Drive. Automatic conflict detection and resolution with backup. Soft delete with trash recovery. Temp UP/DL lets you preserve specific files across a Pull — upload before pulling, then download to restore. External sync token for tools like Obsidian
 - **Encryption** — Optional hybrid RSA + AES encryption for individual files, chat history, and workflow logs
 - **Edit History** — Unified diff-based change tracking for workflows and Drive files
-- **Multi-Model Support** — Curated Gemini and Gemma model lists including Gemini 3.1 Pro, Gemini 3.5 Flash, Gemini 3.1 Flash Lite, Gemini image models, and Gemma 4
+- **Multi-Model Support** — Curated Gemini and Gemma model lists including Gemini 3.1 Pro, Gemini 3.7 Flash, Gemini 3.5 Flash Lite, Gemini image models, and Gemma 4
 - **Image Generation** — Generate images via Gemini image models
 - **i18n** — English and Japanese UI
 

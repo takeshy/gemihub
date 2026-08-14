@@ -326,8 +326,7 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
 // Model pricing per token (USD)
 // Source: https://ai.google.dev/pricing
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "gemini-3.6-flash":       { input: 1.50 / 1e6, output: 7.50 / 1e6 },
-  "gemini-3.5-flash":       { input: 0.50 / 1e6, output: 3.00 / 1e6 },
+  "gemini-3.7-flash":       { input: 1.50 / 1e6, output: 7.50 / 1e6 },
   "gemini-3.5-flash-lite": { input: 0.30 / 1e6, output: 2.50 / 1e6 },
   "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
@@ -337,8 +336,7 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
 
 // Grounding with Google Search cost per prompt (USD)
 export const SEARCH_GROUNDING_COST: Record<string, number> = {
-  "gemini-3.6-flash": 14 / 1000,
-  "gemini-3.5-flash": 14 / 1000,
+  "gemini-3.7-flash": 14 / 1000,
   "gemini-3.1-pro-preview": 14 / 1000,
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
   "gemini-3-pro-image-preview": 14 / 1000,
@@ -406,8 +404,8 @@ export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   // Gemma 4: thinking is built-in (always on), config parameters not supported
   if (modelLower.includes("gemma")) return undefined;
-  // Gemini 3.6+ and 3.5 Flash Lite use thinkingLevel; thinkingBudget is unsupported.
-  if (modelLower.includes("gemini-3.6-flash")) {
+  // Gemini 3.7+ and 3.5 Flash Lite use thinkingLevel; thinkingBudget is unsupported.
+  if (modelLower.includes("gemini-3.7-flash")) {
     return enableThinking
       ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
       : { thinkingLevel: ThinkingLevel.LOW };
