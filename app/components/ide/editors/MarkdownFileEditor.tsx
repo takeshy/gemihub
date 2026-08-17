@@ -311,11 +311,25 @@ export function MarkdownFileEditor({
   }, [initialContent, fileId, initialMode]);
 
   useEffect(() => {
-    if (mode === "wysiwyg" && !MarkdownEditorComponent) {
-      import("~/components/editor/MarkdownEditor").then((mod) => {
-        setMarkdownEditorComponent(() => mod.MarkdownEditor);
+    if (mode !== "wysiwyg" || MarkdownEditorComponent) return;
+
+    let active = true;
+    import("~/components/editor/MarkdownEditor")
+      .then((mod) => {
+        if (active) setMarkdownEditorComponent(() => mod.MarkdownEditor);
+      })
+      .catch((error) => {
+        if (!active) return;
+        // A stale deployment chunk or a browser/module loading error must not
+        // leave a newly-created Markdown file behind an endless spinner. Raw
+        // mode remains fully usable and lets the user keep editing the file.
+        console.error("Failed to load the WYSIWYG Markdown editor", error);
+        setMode("raw");
       });
-    }
+
+    return () => {
+      active = false;
+    };
   }, [mode, MarkdownEditorComponent]);
 
   const flushOnBlur = useCallback(() => {

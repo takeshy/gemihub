@@ -36,7 +36,14 @@ export function useFileWithCache(
     setPrevFileId(fileId);
     currentFileId.current = fileId;
     if (wasMigration) {
-      skipFetchRef.current = true;
+      // Keep already-rendered content across a new: -> Drive ID migration.  If
+      // the initial cache read for the new: ID was still pending when the
+      // migration event arrived, however, content is still null and that read
+      // will now be ignored because currentFileId points at the real ID.  In
+      // that race we must fetch the newly-seeded real-ID cache instead of
+      // suppressing the effect, otherwise the viewer can remain loading
+      // forever.
+      skipFetchRef.current = content !== null;
       migratingRef.current = false;
     } else {
       skipFetchRef.current = false;
