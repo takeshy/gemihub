@@ -17,6 +17,7 @@ GemiHub supports standard Markdown and GitHub Flavored Markdown. Keep files port
 4. Use fenced code blocks with language identifiers.
 5. Prefer simple, stable Markdown over HTML.
 6. Keep generated tables valid GFM tables.
+7. Put a single space outside both sides of bold spans when they are embedded in prose. This is especially important around Japanese text or punctuation: write `次は **「変化の検知」** と **「自動化」** に進みます。`, not `次は**「変化の検知」**と**「自動化」**に進みます。` Never put spaces inside the `**` delimiters.
 
 ## Frontmatter
 
