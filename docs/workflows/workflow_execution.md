@@ -11,7 +11,7 @@ Workflow execution engine with YAML parsing, handler-based node dispatch, client
 
 ## Opt-in (advanced feature)
 
-Workflows are **off by default**. `UserSettings.workflowEnabled` (Settings > General > "Optional advanced features") gates the UI surfaces: the Workflow tab in the header and the mobile tab bar, the automatic right-panel switch when a `.yaml`/`.yml` file is opened, the `executeWorkflow` shortcut binding, and the workflow view in the main viewer (a notice linking to the feature settings is shown instead). The engine itself is unchanged.
+Workflows are **off by default**. `UserSettings.workflowEnabled` (Settings > General > "Optional advanced features") gates the UI surfaces: the Workflow tab in the header and the mobile tab bar, the automatic right-panel switch when a `.yaml`/`.yml` file is opened, the `executeWorkflow` shortcut binding, and the `WorkflowEditor` in `TextBasedViewer`. The engine itself is unchanged, and YAML files stay editable — with the feature off they open in the plain text editor like any other text file, so ordinary configs (Kubernetes manifests, OpenAPI documents, CI configs) are unaffected.
 
 ## Features
 

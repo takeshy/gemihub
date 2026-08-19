@@ -17,7 +17,10 @@ import {
   requireProjectAccess,
 } from "~/services/project-acl.server";
 import { getOrgMember, removeOrgMember } from "~/services/organizations.server";
-import { removeProjectMember } from "~/services/projects.server";
+import {
+  removeAllProjectMembershipsInOrg,
+  removeProjectMember,
+} from "~/services/projects.server";
 import { getTokens } from "~/services/session.server";
 import { isSuperAdmin } from "~/services/super-admin.server";
 import { auditFromRoute } from "~/services/audit-log.server";
@@ -77,6 +80,10 @@ export async function action({ request }: Route.ActionArgs) {
         { status: 403 },
       );
     }
+    // Org membership is the access gate, so drop the now-orphaned project
+    // memberships too — otherwise re-adding the user would silently restore
+    // their old project roles.
+    await removeAllProjectMembershipsInOrg(orgId, uid);
     await removeOrgMember(orgId, uid);
     auditFromRoute({
       orgId,

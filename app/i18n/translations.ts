@@ -38,8 +38,6 @@ export interface TranslationStrings {
   "mainViewer.welcomeDescription": string;
   "mainViewer.dashboardDisabled": string;
   "mainViewer.dashboardDisabledDescription": string;
-  "mainViewer.workflowDisabled": string;
-  "mainViewer.workflowDisabledDescription": string;
   "mainViewer.openFeatureSettings": string;
   "gettingStarted.eyebrow": string;
   "gettingStarted.title": string;
@@ -1143,6 +1141,7 @@ export interface TranslationStrings {
   "enterprise.inviteMember": string;
   "enterprise.invite": string;
   "enterprise.inviteSent": string;
+  "enterprise.inviteEmailFailed": string;
   "enterprise.superOwnerAddOwner": string;
   "enterprise.superOwnerAddOwnerDesc": string;
   "enterprise.addAsOwner": string;
@@ -1386,8 +1385,6 @@ const en: TranslationStrings = {
   "mainViewer.welcomeDescription": "Select a file from the file tree to start editing, or create a new workflow or file using the buttons above.",
   "mainViewer.dashboardDisabled": "Dashboard is turned off",
   "mainViewer.dashboardDisabledDescription": "Dashboard is an optional advanced feature. Enable it under Settings > General when you are ready to use it.",
-  "mainViewer.workflowDisabled": "Workflow is turned off",
-  "mainViewer.workflowDisabledDescription": "Workflow is an optional advanced feature. Enable it under Settings > General when you are ready to build automated processes.",
   "mainViewer.openFeatureSettings": "Open feature settings",
   "gettingStarted.eyebrow": "Your workspace, with AI by your side",
   "gettingStarted.title": "Welcome to GemiHub",
@@ -2492,6 +2489,7 @@ const en: TranslationStrings = {
   "enterprise.inviteMember": "Invite a member",
   "enterprise.invite": "Invite",
   "enterprise.inviteSent": "Invitation sent",
+  "enterprise.inviteEmailFailed": "The invitation was created, but the email could not be sent. Check the Google connection, or share this URL directly: {url}",
   "enterprise.superOwnerAddOwner": "SuperOwner: add an Owner directly",
   "enterprise.superOwnerAddOwnerDesc": "Registers the address as this organization's Owner immediately, without an invitation email.",
   "enterprise.addAsOwner": "Add as Owner",
@@ -2735,8 +2733,6 @@ const ja: TranslationStrings = {
   "mainViewer.welcomeDescription": "ファイルツリーからファイルを選択して編集を開始するか、上のボタンから新しいワークフローやファイルを作成してください。",
   "mainViewer.dashboardDisabled": "ダッシュボードは現在OFFです",
   "mainViewer.dashboardDisabledDescription": "ダッシュボードは任意の上級機能です。使用するときは設定 > 一般からONにしてください。",
-  "mainViewer.workflowDisabled": "ワークフローは現在OFFです",
-  "mainViewer.workflowDisabledDescription": "ワークフローは任意の上級機能です。自動処理を作成するときは設定 > 一般からONにしてください。",
   "mainViewer.openFeatureSettings": "機能設定を開く",
   "gettingStarted.eyebrow": "AIと一緒に仕事を進める場所",
   "gettingStarted.title": "GemiHubへようこそ",
@@ -3841,6 +3837,7 @@ const ja: TranslationStrings = {
   "enterprise.inviteMember": "メンバーを招待",
   "enterprise.invite": "招待",
   "enterprise.inviteSent": "招待を送信しました",
+  "enterprise.inviteEmailFailed": "招待は作成されましたが、メールを送信できませんでした。Google連携を確認するか、次のURLを直接お渡しください: {url}",
   "enterprise.superOwnerAddOwner": "SuperOwner：Ownerを直接追加",
   "enterprise.superOwnerAddOwnerDesc": "招待メールを使わず、この組織のOwnerとして直ちに登録します。",
   "enterprise.addAsOwner": "Ownerとして直接追加",

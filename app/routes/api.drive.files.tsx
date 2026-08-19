@@ -57,11 +57,19 @@ export async function loader({ request }: Route.LoaderArgs) {
     const { resolveProjectMountFromSession } = await import("~/services/storage/resolve-mount.server");
     const { handleProjectFilesLoader } = await import("~/services/storage/drive-compat.server");
     const requestUrl = new URL(request.url);
-    const projectMount = await resolveProjectMountFromSession(
-      request,
-      "viewer",
-      requestUrl.searchParams.get("mount"),
-    );
+    let projectMount;
+    try {
+      projectMount = await resolveProjectMountFromSession(
+        request,
+        "viewer",
+        requestUrl.searchParams.get("mount"),
+      );
+    } catch (err) {
+      // Access denied / infrastructure failure on the selected project: never
+      // silently fall through to the user's personal Drive.
+      const { errorResponse } = await import("~/services/storage-route-utils.server");
+      return errorResponse(err);
+    }
     if (projectMount) return handleProjectFilesLoader(projectMount, requestUrl);
   }
   const tokens = await requireAuth(request);
@@ -165,11 +173,17 @@ export async function action({ request }: Route.ActionArgs) {
     const { resolveProjectMountFromSession } = await import("~/services/storage/resolve-mount.server");
     const { handleProjectFilesAction } = await import("~/services/storage/drive-compat.server");
     const requestUrl = new URL(request.url);
-    const projectMount = await resolveProjectMountFromSession(
-      request,
-      "editor",
-      requestUrl.searchParams.get("mount"),
-    );
+    let projectMount;
+    try {
+      projectMount = await resolveProjectMountFromSession(
+        request,
+        "editor",
+        requestUrl.searchParams.get("mount"),
+      );
+    } catch (err) {
+      const { errorResponse } = await import("~/services/storage-route-utils.server");
+      return errorResponse(err);
+    }
     if (projectMount) {
       const projectBody = await request.json();
       return handleProjectFilesAction(projectMount, projectBody);

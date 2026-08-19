@@ -6,7 +6,7 @@ import {
   HUBWORK_SCOPES,
   refreshAccessToken,
 } from "~/services/google-auth.server";
-import { getSession, setTokens, commitSession } from "~/services/session.server";
+import { getSession, setTokens, commitSession, safeReturnTo } from "~/services/session.server";
 import { ensureRootFolder } from "~/services/google-drive.server";
 import { ensureSettingsFile } from "~/services/user-settings.server";
 
@@ -70,7 +70,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   } catch { /* non-critical */ }
 
   // Read returnTo before setTokens (which creates a new session)
-  const returnTo = stateSession.get("oauthReturnTo") || "/";
+  const returnTo = safeReturnTo(stateSession.get("oauthReturnTo"));
 
   const hasHubworkScopes = hasRequiredHubworkScopes(scope);
   try {

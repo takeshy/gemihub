@@ -17,6 +17,7 @@ import {
   createOrganization,
   emailToUid,
   getOrganization,
+  getOrgMember,
   listOrganizationsForUser,
   setOrganizationAiSettings,
 } from "./organizations.server";
@@ -46,9 +47,19 @@ export async function provisionBusinessOrganization(params: {
   try {
     const uid = emailToUid(email);
 
-    // Reuse an existing membership rather than creating a second org.
+    // Reuse an organization the buyer ADMINISTERS rather than creating a
+    // second one. Reusing any membership would provision the plan they paid
+    // for inside somebody else's organization when they happen to be a plain
+    // member there.
     const existing = await listOrganizationsForUser(uid);
-    let org = existing[0] ?? null;
+    let org = null;
+    for (const candidate of existing) {
+      const membership = await getOrgMember(candidate.id, uid);
+      if (membership?.role === "owner" || membership?.role === "admin") {
+        org = candidate;
+        break;
+      }
+    }
 
     if (!org) {
       let orgId = deriveOrgId(params.accountSlug, uid);

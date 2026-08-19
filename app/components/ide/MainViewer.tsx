@@ -35,7 +35,6 @@ export function MainViewer({
   const { mainViews, getPluginAPI } = usePlugins();
   const { t } = useI18n();
   const dashboardEnabled = settings.dashboardEnabled ?? false;
-  const workflowEnabled = settings.workflowEnabled ?? false;
 
   // No file selected — the dashboard is an advanced, opt-in feature, so the
   // default home screen is the getting-started guide.
@@ -55,16 +54,6 @@ export function MainViewer({
       <FeatureDisabledNotice
         title={t("mainViewer.dashboardDisabled")}
         description={t("mainViewer.dashboardDisabledDescription")}
-        actionLabel={t("mainViewer.openFeatureSettings")}
-      />
-    );
-  }
-
-  if (/\.ya?ml$/i.test(fileName ?? "") && !workflowEnabled) {
-    return (
-      <FeatureDisabledNotice
-        title={t("mainViewer.workflowDisabled")}
-        description={t("mainViewer.workflowDisabledDescription")}
         actionLabel={t("mainViewer.openFeatureSettings")}
       />
     );

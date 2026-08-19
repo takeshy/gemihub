@@ -102,15 +102,15 @@ export async function action({ request }: Route.ActionArgs) {
       setCookieHeader ? { headers: { "Set-Cookie": setCookieHeader } } : undefined,
     );
   } catch (err) {
+    // The invite itself is already persisted and valid. Reporting an error
+    // status here makes admins retry, minting another live token each time,
+    // so this is a 200 carrying a warning plus the URL to hand over manually.
     console.warn("[api.members.invite] notify failed:", err);
-    return Response.json(
-      {
-        invite,
-        inviteUrl,
-        emailSent: false,
-        warning: "招待は作成されましたが、メールを送信できませんでした。Google連携を確認してください。",
-      },
-      { status: 502 },
-    );
+    return Response.json({
+      invite,
+      inviteUrl,
+      emailSent: false,
+      warning: "invite_email_failed",
+    });
   }
 }

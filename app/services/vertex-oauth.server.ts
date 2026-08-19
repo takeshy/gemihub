@@ -135,7 +135,10 @@ export async function saveOrganizationVertexOAuthClient(
 }
 
 export async function clearOrganizationVertexOAuth(orgId: string) {
-  await orgRef(orgId).update({ vertexOAuth: null });
+  // `update` rejects with NOT_FOUND when the org document is missing, which
+  // would turn a disconnect into a 500. Disconnecting must be idempotent, and
+  // the write side already uses set/merge.
+  await orgRef(orgId).set({ vertexOAuth: null }, { merge: true });
 }
 
 export async function disconnectOrganizationVertexOAuth(orgId: string) {

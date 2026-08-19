@@ -82,10 +82,15 @@ function applySettingsMigrations(parsed: Partial<UserSettings>): UserSettings {
 }
 
 /**
- * Load user settings from the tenant bucket. Returns DEFAULT_USER_SETTINGS
- * when the file doesn't exist yet — first-write happens on saveSettingsForTenant.
+ * Load user settings from the tenant bucket, throwing when the stored file
+ * exists but cannot be read.
+ *
+ * Only a genuine 404 yields DEFAULT_USER_SETTINGS (first write happens on
+ * saveSettingsForTenant). Every read-modify-write caller MUST use this
+ * variant: treating a transient read failure as "no settings" and saving the
+ * result would overwrite the project's real settings.json with defaults.
  */
-export async function getSettingsForTenant(
+export async function getSettingsForTenantStrict(
   ctx: ProjectAccessContext,
 ): Promise<UserSettings> {
   const key = tenantCacheKey(ctx);
@@ -105,8 +110,24 @@ export async function getSettingsForTenant(
       tenantSettingsCache.set(key, { settings: DEFAULT_USER_SETTINGS, cachedAt: Date.now() });
       return DEFAULT_USER_SETTINGS;
     }
-    // Network / permission glitch — prefer expired cache over defaults.
+    throw err;
+  }
+}
+
+/**
+ * Read-only variant: degrades to the expired cache, then to defaults, so a
+ * transient storage glitch does not break the IDE. Never use it as the base
+ * of a save — see getSettingsForTenantStrict.
+ */
+export async function getSettingsForTenant(
+  ctx: ProjectAccessContext,
+): Promise<UserSettings> {
+  try {
+    return await getSettingsForTenantStrict(ctx);
+  } catch (err) {
+    const cached = tenantSettingsCache.get(tenantCacheKey(ctx));
     if (cached) return cached.settings;
+    console.warn("[user-settings-tenant] read failed, serving defaults:", err);
     return DEFAULT_USER_SETTINGS;
   }
 }

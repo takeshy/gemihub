@@ -143,18 +143,25 @@ export async function requireProjectAccess(
     throw new ProjectAccessError(404, `project not found: ${orgId}/${projectId}`);
   }
 
-  // 1. Direct project membership wins.
   let role: ProjectRole | null = null;
-  const projectMember = await getProjectMember(orgId, projectId, identity.uid);
   if (isSuperAdmin(identity.email)) {
     // Service administrators may administer every shared workspace.
     role = "admin";
-  } else if (projectMember) {
-    role = projectMember.role;
   } else {
-    // 2. Org owner/admin auto-promote to project.admin.
+    const projectMember = await getProjectMember(orgId, projectId, identity.uid);
     const orgMember = await getOrgMember(orgId, identity.uid);
-    if (orgMember) role = orgRoleAutoProjectRole(orgMember.role, project.id);
+    if (orgMember) {
+      // 1. Direct project membership wins. 2. Org owner/admin (and members on
+      //    the stable default project) auto-promote.
+      role = projectMember
+        ? projectMember.role
+        : orgRoleAutoProjectRole(orgMember.role, project.id);
+    } else if (projectMember?.isExternal) {
+      // Outside collaborators are deliberately project-scoped and hold no org
+      // membership. An INTERNAL project member document without a matching org
+      // membership is a leftover from an org removal and grants nothing.
+      role = projectMember.role;
+    }
   }
   if (!role) {
     throw new ProjectAccessError(

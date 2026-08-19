@@ -261,6 +261,23 @@ export async function removeProjectMember(
   await memberDocRef(orgId, projectId, uid).delete();
 }
 
+/**
+ * Drop every project membership the user holds inside the organization.
+ *
+ * Called when someone is removed from the org: `requireProjectAccess` already
+ * gates on org membership, but leaving the documents behind would silently
+ * restore the old roles if the user is ever re-added.
+ */
+export async function removeAllProjectMembershipsInOrg(
+  orgId: string,
+  uid: string,
+): Promise<void> {
+  const projects = await listProjectsInOrg(orgId);
+  await Promise.all(
+    projects.map((project) => memberDocRef(orgId, project.id, uid).delete()),
+  );
+}
+
 export async function updateProjectMemberRole(
   orgId: string,
   projectId: string,

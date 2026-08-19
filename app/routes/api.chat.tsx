@@ -51,8 +51,14 @@ export async function action({ request }: Route.ActionArgs) {
   // Project-mount chat: a body with projectId runs on the org tenant's
   // Vertex AI (no user API key). Everything else stays on the legacy
   // key-based path below. Parse once and hand the body through.
-  const rawBody = await request.json();
-  if (rawBody && typeof rawBody === "object" && typeof (rawBody as { projectId?: unknown }).projectId === "string") {
+  const rawBody = await request.json().catch(() => null);
+  if (rawBody === null) {
+    return new Response(
+      JSON.stringify({ error: "Invalid request body" }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if (typeof rawBody === "object" && typeof (rawBody as { projectId?: unknown }).projectId === "string") {
     const { handleVertexChatAction } = await import("~/services/ai/vertex-chat-route.server");
     return handleVertexChatAction(request, rawBody);
   }

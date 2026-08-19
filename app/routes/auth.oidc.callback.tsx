@@ -26,6 +26,7 @@ import {
 import {
   commitSession,
   getSession,
+  safeReturnTo,
   setTokens,
 } from "~/services/session.server";
 
@@ -51,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const expectedState = stateSession.get("oidcState");
   const codeVerifier = stateSession.get("oidcCodeVerifier");
   const orgId = stateSession.get("oidcOrgId") as string | undefined;
-  const returnTo = (stateSession.get("oidcReturnTo") as string | undefined) ?? "/";
+  const returnTo = safeReturnTo(stateSession.get("oidcReturnTo"));
   if (state !== expectedState || !codeVerifier || !orgId) {
     throw new Response("invalid OIDC state", { status: 400 });
   }

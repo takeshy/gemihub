@@ -85,8 +85,13 @@ export async function resolveMount(
 /**
  * Resolve the session's currently-selected org project into a MountContext,
  * or null when no project is selected, Firestore is unavailable, or the
- * selection no longer grants access (callers then fall back to Drive, which
- * matches what the IDE shell shows for a broken selection).
+ * selection points at a project that no longer exists (callers then fall back
+ * to Drive, which matches what the IDE shell shows for a stale selection).
+ *
+ * Anything else — a 403 denial, an infrastructure failure — is rethrown. A
+ * blanket fallback would serve the caller's PERSONAL Drive using project
+ * paths as Drive file ids, silently writing project content into their own
+ * Drive instead of returning 403/503.
  *
  * An explicit `mount` query/body parameter overrides the session:
  * "drive" forces the Drive path even with a selection; "project:{id}" is
@@ -107,8 +112,11 @@ export async function resolveProjectMountFromSession(
   if (!tokens?.currentOrgId || !tokens.currentProjectId) return null;
   try {
     return await resolveMount(request, `project:${tokens.currentProjectId}`, requiredRole);
-  } catch {
-    return null;
+  } catch (err) {
+    // Stale selection (project deleted or moved) → Drive. Everything else
+    // must surface to the caller.
+    if (err instanceof ProjectAccessError && err.status === 404) return null;
+    throw err;
   }
 }
 

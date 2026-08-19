@@ -16,7 +16,7 @@ import {
   generatePkce,
   OidcConfigError,
 } from "~/services/oidc-auth.server";
-import { commitSession, getSession } from "~/services/session.server";
+import { commitSession, getSession, safeReturnTo } from "~/services/session.server";
 
 function callbackUrl(request: Request): string {
   const url = new URL(request.url);
@@ -27,7 +27,8 @@ function callbackUrl(request: Request): string {
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const orgId = url.searchParams.get("orgId");
-  const returnTo = url.searchParams.get("returnTo") || "/";
+  // Only same-origin paths — a raw returnTo would make this an open redirect.
+  const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
 
   if (!orgId) {
     throw new Response("missing orgId", { status: 400 });

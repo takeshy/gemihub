@@ -6,7 +6,11 @@
 import { z } from "zod";
 import { requireAuth } from "../session.server";
 import { getValidTokens } from "../google-auth.server";
-import { getSettingsForTenant, saveSettingsForTenant } from "../user-settings-tenant.server";
+import {
+  getSettingsForTenant,
+  getSettingsForTenantStrict,
+  saveSettingsForTenant,
+} from "../user-settings-tenant.server";
 import { streamWithTools } from "../gemini-vertex.server";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES, executeStorageTool } from "../storage-tools.server";
 import { getMcpToolDefinitions, executeMcpTool } from "../mcp-tools.server";
@@ -385,7 +389,9 @@ export async function handleVertexChatAction(
           );
           if (tokenChanged) {
             try {
-              const freshSettings = await getSettingsForTenant(ctx);
+              // Strict: the refreshed OAuth tokens are merged into the stored
+              // settings and written back — defaults here would wipe them.
+              const freshSettings = await getSettingsForTenantStrict(ctx);
               for (const server of resolvedMcpServers!) {
                 const key = server.id || server.name;
                 const target = getEnabledMcpServers(freshSettings).find(

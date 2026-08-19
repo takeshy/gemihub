@@ -45,7 +45,7 @@ export function EnterpriseTab() {
   const [ai, setAi] = useState<AiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ kind: "success" | "warning" | "error"; text: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [isSuperOwner, setIsSuperOwner] = useState(false);
 
@@ -106,8 +106,11 @@ export function EnterpriseTab() {
   async function run(task: () => Promise<unknown>, success: string) {
     setBusy(true); setMessage(null);
     try {
-      await task();
-      setMessage({ kind: "success", text: success });
+      // A task may report partial success (e.g. the invite was created but the
+      // notification email could not be sent) by returning { warning }.
+      const result = await task();
+      const warning = (result as { warning?: string } | undefined)?.warning;
+      setMessage(warning ? { kind: "warning", text: warning } : { kind: "success", text: success });
       setReloadKey((key) => key + 1);
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : t("enterprise.opFailed") });
@@ -158,7 +161,7 @@ export function EnterpriseTab() {
         <p className="mt-1 text-sm text-gray-500">{t("enterprise.subtitle")}</p>
       </div>
 
-      {message && <div className={`rounded-lg border p-3 text-sm ${message.kind === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-green-200 bg-green-50 text-green-700"}`}>{message.text}</div>}
+      {message && <div className={`rounded-lg border p-3 text-sm ${message.kind === "error" ? "border-red-200 bg-red-50 text-red-700" : message.kind === "warning" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-green-200 bg-green-50 text-green-700"}`}>{message.text}</div>}
 
       {orgs.length > 1 && <section className={cardClass}>
         <label className="text-sm font-medium">{t("enterprise.orgSelectLabel")}</label>
@@ -326,7 +329,14 @@ function MembersSection({ orgId, members, ai, busy, run, isSuperOwner }: { orgId
   return <div className="space-y-4">
     <section className={cardClass}>
       <h3 className="font-semibold">{t("enterprise.inviteMember")}</h3>
-      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_160px_auto]"><input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" /><select className={inputClass} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as OrgRole)}><option value="member">{t("enterprise.roleMember")}</option><option value="admin">{t("enterprise.roleAdmin")}</option></select><button className={primaryButton} disabled={busy || !email} onClick={() => void run(() => api("/api/members/invite", { method: "POST", body: { orgId, email, role: inviteRole } }), t("enterprise.inviteSent"))}>{t("enterprise.invite")}</button></div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_160px_auto]"><input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" /><select className={inputClass} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as OrgRole)}><option value="member">{t("enterprise.roleMember")}</option><option value="admin">{t("enterprise.roleAdmin")}</option></select><button className={primaryButton} disabled={busy || !email} onClick={() => void run(async () => {
+        const result = await api<{ emailSent?: boolean; inviteUrl?: string }>("/api/members/invite", { method: "POST", body: { orgId, email, role: inviteRole } });
+        // The invite exists either way — never make the admin retry (and mint
+        // another live token) just because the email bounced.
+        return result.emailSent === false
+          ? { warning: t("enterprise.inviteEmailFailed").replace("{url}", result.inviteUrl ?? "") }
+          : undefined;
+      }, t("enterprise.inviteSent"))}>{t("enterprise.invite")}</button></div>
     </section>
     {isSuperOwner && <details className={cardClass}><summary className="cursor-pointer text-sm font-medium text-gray-600 dark:text-gray-300">{t("enterprise.superOwnerAddOwner")}</summary><p className="mt-3 text-xs leading-5 text-gray-500">{t("enterprise.superOwnerAddOwnerDesc")}</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><input className={inputClass} type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="owner@example.com" /><button className={primaryButton} disabled={busy || !ownerEmail} onClick={() => void run(async () => { await api("/api/members/add", { method: "POST", body: { orgId, email: ownerEmail, role: "owner" } }); setOwnerEmail(""); }, t("enterprise.ownerAdded"))}>{t("enterprise.addAsOwner")}</button></div></details>}
     <section className={`${cardClass} overflow-x-auto`}><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b"><th className="p-2">{t("enterprise.colEmail")}</th><th className="p-2">{t("enterprise.colRole")}</th><th className="p-2">{t("enterprise.colUsage")}</th><th className="p-2">{t("enterprise.colActions")}</th></tr></thead><tbody>{members.map((member) => <MemberRow key={member.uid} orgId={orgId} member={member} ai={ai} busy={busy} run={run} />)}</tbody></table></section>

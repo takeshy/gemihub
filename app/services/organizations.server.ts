@@ -97,7 +97,10 @@ export async function createOrganization(input: {
   await memberDoc(input.orgId, input.ownerUid).set({
     uid: input.ownerUid,
     email: input.ownerEmail,
-    role: "admin" as OrgRole,
+    // The creator is the Owner. Nothing else writes this role, and the
+    // "only a service administrator may remove/demote an owner" guards in
+    // api.members.{remove,update-role} depend on it existing.
+    role: "owner" as OrgRole,
     joinedAt: now,
   } satisfies OrgMemberDoc);
   return toOrganization(stub);

@@ -13,6 +13,7 @@
 import type {
   EnterpriseSelectionView,
   EnterpriseSessionContext,
+  ProjectRole,
 } from "~/types/enterprise";
 import {
   emailToUid,
@@ -78,13 +79,17 @@ export async function resolveEnterpriseContext(
     };
   }
 
-  // Resolve role: direct project membership first, then organization
-  // owner/admin auto-promotion.
+  // Resolve role the same way requireProjectAccess does: organization
+  // membership is the gate (direct project role first, then owner/admin
+  // auto-promotion); only an explicitly external collaborator may hold a
+  // project role without belonging to the org.
   const directMember = await getProjectMember(currentOrgId, currentProjectId, uid);
-  let role = directMember?.role ?? null;
-  if (!role) {
-    const orgMember = await getOrgMember(currentOrgId, uid);
-    if (orgMember) role = orgRoleAutoProjectRole(orgMember.role, project.id);
+  const orgMember = await getOrgMember(currentOrgId, uid);
+  let role: ProjectRole | null = null;
+  if (orgMember) {
+    role = directMember?.role ?? orgRoleAutoProjectRole(orgMember.role, project.id);
+  } else if (directMember?.isExternal) {
+    role = directMember.role;
   }
   if (!role) {
     return {

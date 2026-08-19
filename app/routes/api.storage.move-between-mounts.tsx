@@ -112,19 +112,48 @@ export async function action({ request }: Route.ActionArgs) {
       return Response.json({ ok: true, objects: objects.map(gcsObjectToMeta) });
     }
 
-    // Cross-provider (Drive ↔ GCS): explicit byte transfer.
+    // Cross-provider (Drive ↔ GCS): explicit byte transfer. Copy EVERYTHING
+    // first and only then delete the sources — same all-or-nothing shape as
+    // the GCS→GCS path. A failure half-way must not leave some files deleted
+    // from the source and others untouched, with the caller unable to tell
+    // which is which.
     const objects: ObjectMeta[] = [];
-    for (const move of moves) {
-      const { meta, bytes } = await readObject(sourceCtx, move.from);
-      const written = await writeObject(targetCtx, move.to, bytes, {
-        ifRevisionMatch: 0,
-        contentType: meta.contentType,
-        updatedBy: targetCtx.gcs?.uid,
-      });
-      await deleteObject(sourceCtx, move.from);
-      objects.push(written);
+    try {
+      for (const move of moves) {
+        const { meta, bytes } = await readObject(sourceCtx, move.from);
+        objects.push(
+          await writeObject(targetCtx, move.to, bytes, {
+            ifRevisionMatch: 0,
+            contentType: meta.contentType,
+            updatedBy: targetCtx.gcs?.uid,
+          }),
+        );
+      }
+    } catch (err) {
+      // Nothing was deleted yet: drop the partial copies so the move is a
+      // no-op from the caller's point of view.
+      await Promise.all(
+        objects.map((object) =>
+          deleteObject(targetCtx, object.relativePath).catch(() => {}),
+        ),
+      );
+      throw err;
     }
-    return Response.json({ ok: true, objects });
+    // Best-effort source cleanup; a failure here leaves a duplicate, never a
+    // lost file, so it is reported rather than rolled back.
+    const notDeleted: string[] = [];
+    for (const move of moves) {
+      try {
+        await deleteObject(sourceCtx, move.from);
+      } catch {
+        notDeleted.push(move.from);
+      }
+    }
+    return Response.json({
+      ok: true,
+      objects,
+      ...(notDeleted.length > 0 ? { sourcesNotDeleted: notDeleted } : {}),
+    });
   } catch (err) {
     return badRequestResponse(err) ?? errorResponse(err);
   }

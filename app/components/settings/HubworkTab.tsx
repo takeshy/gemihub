@@ -203,7 +203,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             </h3>
             {(plan === "lite" || plan === "business") && (
               <p className="text-sm text-green-600 dark:text-green-400 mt-0.5">
-                {plan === "lite" ? "Lite" : "Pro"} — {t("settings.hubwork.subscriptionActive")}
+                {plan === "lite" ? "Lite" : "Business"} — {t("settings.hubwork.subscriptionActive")}
               </p>
             )}
             {plan === "granted" && (

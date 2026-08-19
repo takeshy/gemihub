@@ -211,9 +211,32 @@ export async function setCachedFile(file: CachedFile): Promise<void> {
 }
 
 export async function renameCachedFile(fileId: string, newFileName: string): Promise<void> {
+  const mountKey = activeProjectMountKey();
+  if (!mountKey) return;
   const cached = await getCachedFile(fileId);
   if (!cached) return;
-  await setCachedFile({ ...cached, fileName: newFileName });
+  // On a project mount the path IS the identity, so a rename MOVES the cache
+  // record to a new key. Writing the new name under the old key would leave
+  // the editor's next read (and pushObject) looking at a key that no longer
+  // exists — the renamed file would silently never sync.
+  if (newFileName === fileId) {
+    await setCachedFile({ ...cached, fileName: newFileName });
+    return;
+  }
+  await setCachedFile({ ...cached, fileId: newFileName, fileName: newFileName });
+  const oldObjectPath = objectPathForCachedFile(mountKey, fileId);
+  await deleteCachedObject(mountKey, oldObjectPath);
+  await deleteLocalSyncEntry(mountKey, oldObjectPath);
+  const history = await getEditHistory(mountKey, fileId);
+  if (history) {
+    await setEditHistory({
+      mountKey,
+      fileId: newFileName,
+      filePath: newFileName,
+      diffs: history.diffs,
+    });
+    await deleteEditHistory(mountKey, fileId).catch(() => {});
+  }
 }
 
 export async function deleteCachedFile(fileId: string): Promise<void> {

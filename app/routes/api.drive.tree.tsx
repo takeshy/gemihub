@@ -92,11 +92,17 @@ export async function loader({ request }: Route.LoaderArgs) {
     const { resolveProjectMountFromSession } = await import("~/services/storage/resolve-mount.server");
     const { handleProjectTreeLoader } = await import("~/services/storage/drive-compat.server");
     const requestUrl = new URL(request.url);
-    const projectMount = await resolveProjectMountFromSession(
-      request,
-      "viewer",
-      requestUrl.searchParams.get("mount"),
-    );
+    let projectMount;
+    try {
+      projectMount = await resolveProjectMountFromSession(
+        request,
+        "viewer",
+        requestUrl.searchParams.get("mount"),
+      );
+    } catch (err) {
+      const { errorResponse } = await import("~/services/storage-route-utils.server");
+      return errorResponse(err);
+    }
     if (projectMount) return handleProjectTreeLoader(projectMount);
   }
   const tokens = await requireAuth(request);

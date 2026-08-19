@@ -1,7 +1,9 @@
 # Update Log
 
 ## 2026-08-19
-* **Update**: Dashboard, Workflow, and RAG became opt-in "advanced features" — all three default to off (`dashboardEnabled` / `workflowEnabled` / `ragFeatureEnabled` in Settings > General), and the IDE home view shows a Getting Started guide while the dashboard is off (`features/dashboard.md`, `workflows/workflow_execution.md`, `integrations/rag.md`).
+* **Update**: Dashboard, Workflow, and RAG became opt-in "advanced features" — all three default to off (`dashboardEnabled` / `workflowEnabled` / `ragFeatureEnabled` in Settings > General), and the IDE home view shows a Getting Started guide while the dashboard is off. YAML files still open in the plain text editor when Workflow is off (`features/dashboard.md`, `workflows/workflow_execution.md`, `integrations/rag.md`).
+* **Fix**: Organization membership is now required for project access — a leftover project member document no longer grants GCS/Vertex access after the user is removed from the org (explicitly external collaborators are unaffected), and org removal deletes the user's project memberships (`architecture/mounts.md`).
+* **Fix**: Post-login `returnTo` is restricted to same-origin paths in both the Google and OIDC callbacks (open redirect).
 * **Add**: `architecture/mounts.md` — storage mounts (Drive default / GCS org project) and AI providers (genai-key / Vertex) coexistence model, route dispatch, My Drive shelf, and the `lite | business | granted` plan model.
 
 ## 2026-07-11

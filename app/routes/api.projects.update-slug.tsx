@@ -3,7 +3,7 @@ import {
   ProjectAccessError,
   requireProjectAccess,
 } from "~/services/project-acl.server";
-import { getSettingsForTenant, saveSettingsForTenant } from "~/services/user-settings-tenant.server";
+import { getSettingsForTenantStrict, saveSettingsForTenant } from "~/services/user-settings-tenant.server";
 import { getTokens } from "~/services/session.server";
 import { auditFromRoute } from "~/services/audit-log.server";
 import {
@@ -70,7 +70,9 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   try {
-    const settings = await getSettingsForTenant(ctx);
+    // Strict: this is a read-modify-write; defaults from a failed read would
+    // wipe the project's settings.json.
+    const settings = await getSettingsForTenantStrict(ctx);
     const existingSlug = settings.hubwork?.accountSlug;
     if (existingSlug && existingSlug !== slug) {
       return Response.json(

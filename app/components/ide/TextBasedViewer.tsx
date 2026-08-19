@@ -196,7 +196,9 @@ export function TextBasedViewer({
         onClose={() => setDiffTarget(null)}
       />
     );
-  } else if (lower.endsWith(".yaml") || lower.endsWith(".yml")) {
+  } else if ((lower.endsWith(".yaml") || lower.endsWith(".yml")) && (settings.workflowEnabled ?? false)) {
+    // Workflow is opt-in. With it off, YAML (Kubernetes manifests, OpenAPI
+    // documents, CI configs, …) still opens in the plain text editor.
     editor = (
       <WorkflowEditor
         fileId={fileId}

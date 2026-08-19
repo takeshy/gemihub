@@ -25,16 +25,23 @@
 import type { Route } from "./+types/api.storage.upload";
 import { writeObject } from "~/services/storage/provider.server";
 import { resolveMount } from "~/services/storage/resolve-mount.server";
+import { cleanRelativePath } from "~/services/storage/types";
 import { errorResponse } from "~/services/storage-route-utils.server";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB practical ceiling
 
+/**
+ * Normalize a client-supplied path the same way every other storage route
+ * does. `cleanRelativePath` rejects "." / ".." segments outright instead of
+ * stripping them — a strip pass is bypassable ("....//x" → "../x") and would
+ * let a caller write objects that never appear in the tree.
+ */
 function sanitizePathSegment(segment: string): string {
-  // Strip ../ traversal and leading slashes; collapse repeats.
-  return segment
-    .replace(/\.\.\//g, "")
-    .replace(/^\/+/, "")
-    .replace(/\/{2,}/g, "/");
+  try {
+    return cleanRelativePath(segment);
+  } catch {
+    return "";
+  }
 }
 
 export async function action({ request }: Route.ActionArgs) {

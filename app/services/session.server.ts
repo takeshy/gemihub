@@ -202,6 +202,21 @@ export async function setGeminiApiKey(request: Request, apiKey: string) {
   return session;
 }
 
+/**
+ * Sanitize a post-login `returnTo` value.
+ *
+ * Only same-origin absolute paths are allowed: anything else (an absolute URL,
+ * a protocol-relative `//evil.example`, a backslash variant that some browsers
+ * normalize to `//`) would turn the login flow into an open redirect.
+ */
+export function safeReturnTo(value: unknown, fallback = "/"): string {
+  if (typeof value !== "string" || value === "") return fallback;
+  if (!value.startsWith("/")) return fallback;
+  // "//host" and "/\host" are treated as protocol-relative URLs by browsers.
+  if (value.startsWith("//") || value.startsWith("/\\")) return fallback;
+  return value;
+}
+
 export async function requireAuth(request: Request): Promise<SessionTokens> {
   const tokens = await getTokens(request);
   if (!tokens) {
