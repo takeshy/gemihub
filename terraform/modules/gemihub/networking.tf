@@ -100,3 +100,51 @@ resource "google_certificate_manager_certificate_map_entry" "primary_wildcard" {
   certificates = [google_certificate_manager_certificate.primary_wildcard.id]
 }
 
+
+# --- Load balancer front end ---
+# Restored: the Business merge deleted the tail of this file to drop the
+# retired gemihub.online certificates and took the front end with it, which a
+# plan would have destroyed — that is the public entry point for gemihub.net.
+
+# HTTPS proxy (uses Certificate Map for dynamic custom domain certs)
+resource "google_compute_target_https_proxy" "default" {
+  name            = "gemini-hub-https-proxy"
+  url_map         = google_compute_url_map.https.id
+  certificate_map = "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.default.id}"
+}
+
+# HTTPS forwarding rule (port 443)
+resource "google_compute_global_forwarding_rule" "https" {
+  name                  = "gemini-hub-https-rule"
+  target                = google_compute_target_https_proxy.default.id
+  port_range            = "443"
+  ip_address            = google_compute_global_address.default.id
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+}
+
+# --- HTTP → HTTPS redirect ---
+
+resource "google_compute_url_map" "http_redirect" {
+  name = "gemini-hub-http-redirect"
+
+  default_url_redirect {
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_compute_target_http_proxy" "redirect" {
+  name    = "gemini-hub-http-proxy"
+  url_map = google_compute_url_map.http_redirect.id
+}
+
+resource "google_compute_global_forwarding_rule" "http" {
+  name                  = "gemini-hub-http-rule"
+  target                = google_compute_target_http_proxy.redirect.id
+  port_range            = "80"
+  ip_address            = google_compute_global_address.default.id
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+}
