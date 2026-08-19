@@ -16,6 +16,7 @@ interface OrganizationDoc {
   tenantProject?: TenantInfo;
   aiSettings?: Partial<OrganizationAiSettings>;
   storageAddons?: Record<string, number>;
+  budgetAnchorDay?: number;
   createdAt: number;
 }
 
@@ -59,6 +60,7 @@ function toOrganization(doc: OrganizationDoc): Organization {
     },
     aiSettings: { ...DEFAULT_AI_SETTINGS, ...doc.aiSettings },
     storageAddons: doc.storageAddons ?? {},
+    ...(typeof doc.budgetAnchorDay === "number" ? { budgetAnchorDay: doc.budgetAnchorDay } : {}),
     createdAt: doc.createdAt,
   };
 }
@@ -286,6 +288,15 @@ export async function setOrgMemberMonthlyBudgetOverride(
   const member = await getOrgMember(orgId, uid);
   if (!member) throw new Error(`${uid} is not a member of this organization`);
   await memberDoc(orgId, uid).set({ monthlyBudgetUsdOverride }, { merge: true });
+}
+
+/**
+ * Pin the organization's AI budget window to its billing cycle. Called when a
+ * subscription starts; `day` is the renewal day of month (1–31).
+ */
+export async function setOrgBudgetAnchorDay(orgId: string, day: number): Promise<void> {
+  if (!Number.isInteger(day) || day < 1 || day > 31) return;
+  await orgDoc(orgId).set({ budgetAnchorDay: day }, { merge: true });
 }
 
 export async function removeOrgMember(orgId: string, uid: string): Promise<void> {

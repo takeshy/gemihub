@@ -722,6 +722,7 @@ export interface TranslationStrings {
   "settings.sync.restoreSelected": string;
   "settings.sync.save": string;
   "settings.sync.pushRejected": string;
+  "settings.sync.storageQuotaExceeded": string;
   "settings.sync.rebuildTree": string;
   "settings.sync.rebuildTreeDescription": string;
   "settings.sync.rebuild": string;
@@ -1101,6 +1102,8 @@ export interface TranslationStrings {
   "enterprise.storageUsage": string;
   "enterprise.storageIncluded": string;
   "enterprise.storageAddonActive": string;
+  "enterprise.storageAddonMaxed": string;
+  "enterprise.storageFull": string;
   "enterprise.buyStorage": string;
   "enterprise.storageJpy": string;
   "enterprise.storageUsd": string;
@@ -1123,6 +1126,9 @@ export interface TranslationStrings {
   "enterprise.budgetUsage": string;
   "enterprise.budgetIncluded": string;
   "enterprise.budgetIncludedWithTopUp": string;
+  "enterprise.budgetPeriod": string;
+  "enterprise.topUpExpiry": string;
+  "enterprise.topUpCarriedOver": string;
   "enterprise.usageThisMonth": string;
   "enterprise.topUpBalance": string;
   "enterprise.buyTopUp": string;
@@ -2071,6 +2077,7 @@ const en: TranslationStrings = {
   "settings.sync.restoreSelected": "Restore Selected",
   "settings.sync.save": "Save Sync Settings",
   "settings.sync.pushRejected": "Remote is newer. Pull first.",
+  "settings.sync.storageQuotaExceeded": "Storage is full. Sync is paused until space is freed (delete permanently — trashed files still count) or the storage add-on is purchased in Settings > Organization.",
   "settings.sync.rebuildTree": "Rebuild File Tree",
   "settings.sync.rebuildTreeDescription": "Re-scan Google Drive and rebuild the sync metadata. Use this if the file tree is out of sync.",
   "settings.sync.rebuild": "Rebuild",
@@ -2450,6 +2457,8 @@ const en: TranslationStrings = {
   "enterprise.storageUsage": "Used {used} GB / {quota} GB",
   "enterprise.storageIncluded": "The Business plan includes {included} GB. Add capacity in 500 GB units (¥5,000 / $30 per month; cancel any time from the Stripe customer portal).",
   "enterprise.storageAddonActive": "Active add-ons: {units} × 500 GB",
+  "enterprise.storageAddonMaxed": "The 500 GB add-on is active. Storage tops out at 600 GB per organization.",
+  "enterprise.storageFull": "Storage is full: sync is paused. Deleting still works — but a trashed file keeps using space, so empty the trash (delete permanently) to free it.",
   "enterprise.buyStorage": "Add 500 GB units",
   "enterprise.storageJpy": "JPY (¥5,000/mo per unit)",
   "enterprise.storageUsd": "USD ($30/mo per unit)",
@@ -2469,10 +2478,13 @@ const en: TranslationStrings = {
   "enterprise.opFailed": "Operation failed",
   "enterprise.orgSelectFailed": "Failed to select the organization",
   "enterprise.budgetTitle": "Vertex AI & monthly budget",
-  "enterprise.budgetUsage": "Used ${used} / ${limit} this month",
+  "enterprise.budgetUsage": "Used ${used} / ${limit} this period",
   "enterprise.budgetIncluded": "(includes ${included} with the plan)",
   "enterprise.budgetIncludedWithTopUp": "(includes ${included} with the plan + ${topUp} purchased)",
-  "enterprise.usageThisMonth": "Estimated usage this month: ",
+  "enterprise.budgetPeriod": "Current period: {start} – {end}",
+  "enterprise.topUpExpiry": "Top-ups purchased in this period remain usable until {date}.",
+  "enterprise.topUpCarriedOver": "Includes ${amount} carried over from the previous period, expiring at the end of this one.",
+  "enterprise.usageThisMonth": "Estimated usage this period: ",
   "enterprise.topUpBalance": "Purchased top-up: ",
   "enterprise.buyTopUp": "Buy additional budget for this month",
   "enterprise.budgetAdvanced": "Advanced: set the project and spending limits manually",
@@ -3420,6 +3432,7 @@ const ja: TranslationStrings = {
   "settings.sync.restoreSelected": "選択を復元",
   "settings.sync.save": "同期設定を保存",
   "settings.sync.pushRejected": "リモートが新しいです。先にPullしてください。",
+  "settings.sync.storageQuotaExceeded": "ストレージ容量の上限に達しました。完全削除で空き容量を確保する（ゴミ箱内も容量に含まれます）か、設定 > 組織管理 から容量を追加するまで同期を停止します。",
   "settings.sync.rebuildTree": "ファイルツリーの再構築",
   "settings.sync.rebuildTreeDescription": "Google Driveを再スキャンして同期メタデータを再構築します。ファイルツリーが実際のDrive内容とズレた場合に使用してください。",
   "settings.sync.rebuild": "再構築",
@@ -3799,6 +3812,8 @@ const ja: TranslationStrings = {
   "enterprise.storageUsage": "使用量 {used} GB / {quota} GB",
   "enterprise.storageIncluded": "Businessプランには {included} GB が含まれます。500GB単位（月額 ¥5,000 / $30）で追加でき、Stripeカスタマーポータルからいつでも解約できます。",
   "enterprise.storageAddonActive": "追加契約中: {units} × 500GB",
+  "enterprise.storageAddonMaxed": "500GB追加を利用中です。1組織あたりの上限は600GBです。",
+  "enterprise.storageFull": "容量の上限に達しました。同期を停止しています。削除は上限に関係なく行えますが、ゴミ箱内のファイルも容量に含まれるため、完全削除するまで空き容量は増えません。",
   "enterprise.buyStorage": "500GB単位で追加購入",
   "enterprise.storageJpy": "JPY（¥5,000/月・単位）",
   "enterprise.storageUsd": "USD（$30/月・単位）",
@@ -3818,9 +3833,12 @@ const ja: TranslationStrings = {
   "enterprise.opFailed": "操作に失敗しました",
   "enterprise.orgSelectFailed": "組織の選択に失敗しました",
   "enterprise.budgetTitle": "Vertex AIと月次予算",
-  "enterprise.budgetUsage": "今月の使用額 ${used} / ${limit}",
+  "enterprise.budgetUsage": "今期の使用額 ${used} / ${limit}",
   "enterprise.budgetIncluded": "（プラン込み ${included}）",
   "enterprise.budgetIncludedWithTopUp": "（プラン込み ${included} ＋ 追加購入 ${topUp}）",
+  "enterprise.budgetPeriod": "対象期間: {start} 〜 {end}",
+  "enterprise.topUpExpiry": "今期に購入した追加分は {date} まで利用できます。",
+  "enterprise.topUpCarriedOver": "うち ${amount} は前期からの繰越で、今期末で失効します。",
   "enterprise.usageThisMonth": "今月の概算利用額: ",
   "enterprise.topUpBalance": "追加購入済み枠: ",
   "enterprise.buyTopUp": "今月の利用枠を追加購入",

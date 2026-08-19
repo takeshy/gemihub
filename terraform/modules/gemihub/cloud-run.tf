@@ -136,16 +136,6 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
-        name = "HUBWORK_ADMIN_CREDENTIALS"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.hubwork_admin_credentials.secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
         name = "STRIPE_PRICE_ID_LITE"
         value_source {
           secret_key_ref {
@@ -180,16 +170,6 @@ resource "google_cloud_run_v2_service" "app" {
         value_source {
           secret_key_ref {
             secret  = data.google_secret_manager_secret.stripe_price_id_pro_usd.secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "HUBWORK_ADMIN_EMAILS"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.hubwork_admin_emails.secret_id
             version = "latest"
           }
         }
@@ -234,8 +214,6 @@ resource "google_cloud_run_v2_service" "app" {
     google_secret_manager_secret_iam_member.cloud_run_session_secret,
     google_secret_manager_secret_iam_member.cloud_run_stripe_secret_key,
     google_secret_manager_secret_iam_member.cloud_run_stripe_webhook_secret,
-    google_secret_manager_secret_iam_member.cloud_run_hubwork_admin_credentials,
-    google_secret_manager_secret_iam_member.cloud_run_hubwork_admin_emails,
     google_secret_manager_secret_iam_member.cloud_run_stripe_price_id_lite,
     google_secret_manager_secret_iam_member.cloud_run_stripe_price_id_pro,
     google_secret_manager_secret_iam_member.cloud_run_stripe_price_id_lite_usd,

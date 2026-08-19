@@ -85,6 +85,10 @@ export async function provisionBusinessOrganization(params: {
       // Business plan ($50/mo per organization) includes a Vertex budget;
       // owners can top it up in $10 units or adjust it later.
       const { BUSINESS_INCLUDED_AI_BUDGET_USD } = await import("./ai-budget.server");
+      // The AI budget window follows the subscription cycle, so a mid-month
+      // start does not hand out the tail of this month plus the whole next one.
+      const { setOrgBudgetAnchorDay } = await import("./organizations.server");
+      await setOrgBudgetAnchorDay(org.id, new Date().getUTCDate());
       await setOrganizationAiSettings(org.id, {
         ...org.aiSettings,
         monthlyBudgetUsd: BUSINESS_INCLUDED_AI_BUDGET_USD,

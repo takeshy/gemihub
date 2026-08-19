@@ -56,18 +56,6 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_webhook_sec
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "cloud_run_hubwork_admin_credentials" {
-  secret_id = data.google_secret_manager_secret.hubwork_admin_credentials.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
-resource "google_secret_manager_secret_iam_member" "cloud_run_hubwork_admin_emails" {
-  secret_id = data.google_secret_manager_secret.hubwork_admin_emails.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
 resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_lite" {
   secret_id = data.google_secret_manager_secret.stripe_price_id_lite.id
   role      = "roles/secretmanager.secretAccessor"

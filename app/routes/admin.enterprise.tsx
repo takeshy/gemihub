@@ -35,7 +35,23 @@ interface OrgVertexStatus extends VertexStatus {
   serviceDefault: VertexStatus;
 }
 
+interface AccountItem {
+  id: string;
+  email: string;
+  accountSlug: string;
+  defaultDomain: string;
+  customDomain?: string;
+  plan: "lite" | "business" | "granted";
+  billingStatus: "active" | "past_due" | "canceled";
+  accountStatus: "enabled" | "disabled";
+  domainStatus: "none" | "pending_dns" | "provisioning_cert" | "active" | "failed";
+  orgId?: string;
+  projectId?: string;
+}
+
 type Message = { kind: "error" | "success"; text: string };
+
+type Tab = "orgs" | "accounts";
 
 const input =
   "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100";
@@ -78,6 +94,16 @@ async function vertexApi(body: object, method: "POST" | "DELETE" = "POST"): Prom
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 }
 
+async function accountApi(body: object, method: "POST" | "DELETE" = "POST"): Promise<void> {
+  const res = await fetch("/api/admin/accounts", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({})) as { error?: string };
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+}
+
 function StatusLines({ status }: { status: VertexStatus | null }) {
   return (
     <div className="rounded-lg border border-gray-200 p-4 text-sm">
@@ -99,6 +125,7 @@ function StatusLines({ status }: { status: VertexStatus | null }) {
 
 export default function AdminEnterprise() {
   const { email } = useLoaderData<typeof loader>();
+  const [tab, setTab] = useState<Tab>("orgs");
   const [view, setView] = useState<{ name: "list" } | { name: "new" } | { name: "edit"; org: OrgItem }>({ name: "list" });
 
   const [orgs, setOrgs] = useState<OrgItem[]>([]);
@@ -136,7 +163,25 @@ export default function AdminEnterprise() {
     }
   }, []);
 
+  const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+
+  const loadAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    try {
+      const res = await fetch("/api/admin/accounts");
+      const data = await res.json() as { accounts?: AccountItem[]; error?: string };
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setAccounts(data.accounts ?? []);
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "アカウント一覧を取得できませんでした" });
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
   useEffect(() => { void loadOrgs(); void loadDefaultStatus(); }, [loadOrgs, loadDefaultStatus]);
+  useEffect(() => { if (tab === "accounts") void loadAccounts(); }, [tab, loadAccounts]);
 
   async function run(task: () => Promise<void>, success: string, after?: () => Promise<void>) {
     setBusy(true);
@@ -156,22 +201,39 @@ export default function AdminEnterprise() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 text-gray-900">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-blue-600">サービス管理</p>
             <h1 className="mt-1 text-2xl font-bold">
-              {view.name === "new" ? "組織を登録" : view.name === "edit" ? view.org.name : "組織"}
+              {tab === "accounts"
+                ? "アカウント"
+                : view.name === "new" ? "組織を登録" : view.name === "edit" ? view.org.name : "組織"}
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              {view.name === "edit"
-                ? `組織ID: ${view.org.id}`
-                : "この画面はサービス管理者専用です。組織の登録と、AI実行に使うVertex AI接続を管理します。"}
+              {tab === "accounts"
+                ? "課金・公開に使うアカウント（プラン、サブドメイン、カスタムドメイン）を管理します。"
+                : view.name === "edit"
+                  ? `組織ID: ${view.org.id}`
+                  : "この画面はサービス管理者専用です。組織の登録と、AI実行に使うVertex AI接続を管理します。"}
             </p>
           </div>
-          {view.name === "list"
+          {tab === "orgs" && (view.name === "list"
             ? <button type="button" className={primaryButton} onClick={() => { setMessage(null); setView({ name: "new" }); }}>New</button>
-            : <button type="button" className={secondaryButton} onClick={() => { setMessage(null); setView({ name: "list" }); }}>← 一覧へ</button>}
+            : <button type="button" className={secondaryButton} onClick={() => { setMessage(null); setView({ name: "list" }); }}>← 一覧へ</button>)}
         </div>
+
+        <nav className="mb-6 flex gap-1 border-b border-gray-200" aria-label="サービス管理">
+          {([["orgs", "組織"], ["accounts", "アカウント"]] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => { setMessage(null); setTab(id); }}
+              className={`border-b-2 px-4 py-2 text-sm font-medium ${tab === id ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
 
         {message && (
           <div className={`mb-4 rounded-lg border p-3 text-sm ${message.kind === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-green-200 bg-green-50 text-green-800"}`}>
@@ -179,7 +241,7 @@ export default function AdminEnterprise() {
           </div>
         )}
 
-        {view.name === "list" && (
+        {tab === "orgs" && view.name === "list" && (
           <OrganizationList
             orgs={orgs}
             loading={orgsLoading}
@@ -191,19 +253,29 @@ export default function AdminEnterprise() {
           />
         )}
 
-        {view.name === "new" && (
+        {tab === "orgs" && view.name === "new" && (
           <CreateOrganization
             onCreated={async () => { await loadOrgs(); setView({ name: "list" }); }}
             setMessage={setMessage}
           />
         )}
 
-        {view.name === "edit" && (
+        {tab === "orgs" && view.name === "edit" && (
           <EditOrganization
             org={view.org}
             busy={busy}
             callbackUrl={callbackUrl}
             run={run}
+          />
+        )}
+
+        {tab === "accounts" && (
+          <AccountsPanel
+            accounts={accounts}
+            loading={accountsLoading}
+            busy={busy}
+            run={run}
+            reload={loadAccounts}
           />
         )}
 
@@ -522,5 +594,199 @@ function EditOrganization({
         </div>
       )}
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Accounts (Hubwork billing / publishing records)
+// ---------------------------------------------------------------------------
+
+const PLAN_LABELS: Record<AccountItem["plan"], string> = {
+  lite: "Lite",
+  business: "Business",
+  granted: "Granted（無償付与）",
+};
+
+function AccountsPanel({
+  accounts,
+  loading,
+  busy,
+  run,
+  reload,
+}: {
+  accounts: AccountItem[];
+  loading: boolean;
+  busy: boolean;
+  run: (task: () => Promise<void>, success: string, after?: () => Promise<void>) => Promise<void>;
+  reload: () => Promise<void>;
+}) {
+  const [newEmail, setNewEmail] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-6">
+      <section className={cardClass}>
+        <h2 className="text-lg font-bold">無償付与アカウントを作成</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          決済を通さずに Business 相当の機能を付与します（plan: granted）。作成後、本人がGoogleでログインするとDrive情報が紐づきます。
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <input
+            className={`${input} sm:max-w-sm`}
+            type="email"
+            value={newEmail}
+            onChange={(event) => setNewEmail(event.target.value)}
+            placeholder="user@example.com"
+          />
+          <button
+            type="button"
+            className={primaryButton}
+            disabled={busy || !newEmail}
+            onClick={() => void run(
+              async () => { await accountApi({ email: newEmail }); setNewEmail(""); },
+              "アカウントを作成しました",
+              reload,
+            )}
+          >
+            作成
+          </button>
+        </div>
+      </section>
+
+      <section className={cardClass}>
+        <h2 className="text-lg font-bold">アカウント一覧</h2>
+        {loading ? (
+          <p className="mt-4 text-sm text-gray-500">読み込み中…</p>
+        ) : accounts.length === 0 ? (
+          <p className="mt-4 text-sm text-gray-500">アカウントがありません。</p>
+        ) : (
+          <ul className="mt-4 divide-y divide-gray-100">
+            {accounts.map((account) => (
+              <li key={account.id} className="py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{account.email || "(メール未設定)"}</p>
+                    <p className="truncate text-xs text-gray-500">
+                      {PLAN_LABELS[account.plan] ?? account.plan} · {account.accountStatus === "enabled" ? "有効" : "停止中"} ·{" "}
+                      {account.customDomain || account.defaultDomain || account.accountSlug || "ドメイン未設定"}
+                      {account.orgId && <> · 組織 {account.orgId}</>}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={secondaryButton}
+                    onClick={() => setOpenId((prev) => (prev === account.id ? null : account.id))}
+                  >
+                    {openId === account.id ? "閉じる" : "編集"}
+                  </button>
+                </div>
+                {openId === account.id && (
+                  <AccountEditor account={account} busy={busy} run={run} reload={reload} />
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function AccountEditor({
+  account,
+  busy,
+  run,
+  reload,
+}: {
+  account: AccountItem;
+  busy: boolean;
+  run: (task: () => Promise<void>, success: string, after?: () => Promise<void>) => Promise<void>;
+  reload: () => Promise<void>;
+}) {
+  const [email, setEmail] = useState(account.email);
+  const [plan, setPlan] = useState(account.plan);
+  const [billingStatus, setBillingStatus] = useState(account.billingStatus);
+  const [accountStatus, setAccountStatus] = useState(account.accountStatus);
+  const [domainStatus, setDomainStatus] = useState(account.domainStatus);
+
+  return (
+    <div className="mt-4 rounded-lg border border-gray-200 p-4">
+      <dl className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+        <div><dt className="inline font-medium">アカウントID: </dt><dd className="inline font-mono">{account.id}</dd></div>
+        <div><dt className="inline font-medium">サブドメイン: </dt><dd className="inline">{account.accountSlug || "—"}</dd></div>
+        <div><dt className="inline font-medium">既定ドメイン: </dt><dd className="inline">{account.defaultDomain || "—"}</dd></div>
+        <div><dt className="inline font-medium">カスタムドメイン: </dt><dd className="inline">{account.customDomain || "—"}</dd></div>
+      </dl>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">メールアドレス</span>
+          <input className={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">プラン</span>
+          <select className={input} value={plan} onChange={(e) => setPlan(e.target.value as AccountItem["plan"])}>
+            {(Object.keys(PLAN_LABELS) as AccountItem["plan"][]).map((value) => (
+              <option key={value} value={value}>{PLAN_LABELS[value]}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">課金状態</span>
+          <select className={input} value={billingStatus} onChange={(e) => setBillingStatus(e.target.value as AccountItem["billingStatus"])}>
+            <option value="active">active</option>
+            <option value="past_due">past_due</option>
+            <option value="canceled">canceled</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">アカウント状態</span>
+          <select className={input} value={accountStatus} onChange={(e) => setAccountStatus(e.target.value as AccountItem["accountStatus"])}>
+            <option value="enabled">enabled</option>
+            <option value="disabled">disabled</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">ドメイン状態</span>
+          <select className={input} value={domainStatus} onChange={(e) => setDomainStatus(e.target.value as AccountItem["domainStatus"])}>
+            <option value="none">none</option>
+            <option value="pending_dns">pending_dns</option>
+            <option value="provisioning_cert">provisioning_cert</option>
+            <option value="active">active</option>
+            <option value="failed">failed</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          type="button"
+          className={primaryButton}
+          disabled={busy}
+          onClick={() => void run(
+            () => accountApi({ accountId: account.id, email, plan, billingStatus, accountStatus, domainStatus }),
+            "アカウントを更新しました",
+            reload,
+          )}
+        >
+          保存
+        </button>
+        <button
+          type="button"
+          className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+          disabled={busy}
+          onClick={() => {
+            if (!confirm(`${account.email || account.id} を削除しますか？カスタムドメインも解除されます。`)) return;
+            void run(
+              () => accountApi({ accountId: account.id }, "DELETE"),
+              "アカウントを削除しました",
+              reload,
+            );
+          }}
+        >
+          削除
+        </button>
+      </div>
+    </div>
   );
 }

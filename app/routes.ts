@@ -48,6 +48,7 @@ export default [
   route("api/storage/write", "routes/api.storage.write.tsx"),
   route("api/storage/delete", "routes/api.storage.delete.tsx"),
   route("api/storage/list", "routes/api.storage.list.tsx"),
+  route("api/storage/quota", "routes/api.storage.quota.tsx"),
   route("api/storage/tree", "routes/api.storage.tree.tsx"),
   route("api/storage/rename", "routes/api.storage.rename.tsx"),
   route("api/storage/upload", "routes/api.storage.upload.tsx"),
@@ -89,6 +90,7 @@ export default [
   // are the auth boundary; admin/ being outside the public Hubwork serving
   // layer keeps these workflows off the custom domain but is not by itself
   // an authorization check.
+  route("api/admin/accounts", "routes/api.admin.accounts.tsx"),
   route("api/hubwork/admin/*", "routes/api.hubwork.admin.$.tsx"),
   route("api/calendar", "routes/api.calendar.tsx"),
   route("api/gmail", "routes/api.gmail.tsx"),
@@ -125,9 +127,6 @@ export default [
   route("api/workflow/execute-full", "routes/api.workflow.execute-full.tsx"),
   route("hubwork/api/workflow/scheduled", "routes/hubwork.api.workflow.scheduled.tsx"),
   // Hubwork admin
-  route("hubwork/admin", "routes/hubwork.admin.tsx"),
-  route("hubwork/admin/accounts/:accountId", "routes/hubwork.admin.account.tsx"),
-  route("hubwork/admin/accounts/create", "routes/hubwork.admin.account-create.tsx"),
   // Hubwork Stripe
   route("hubwork/api/stripe/checkout", "routes/hubwork.api.stripe.checkout.tsx"),
   route("hubwork/api/stripe/webhook", "routes/hubwork.api.stripe.webhook.tsx"),

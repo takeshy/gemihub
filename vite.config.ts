@@ -6,38 +6,6 @@ import { createLogger, defineConfig, type Logger, type Plugin } from "vite";
 import type { LogLevel, RollupLog } from "rollup";
 import tsconfigPaths from "vite-tsconfig-paths";
 
-/** Basic Auth gate for /hubwork/admin routes (runs before React Router). */
-function adminBasicAuth(): Plugin {
-  return {
-    name: "admin-basic-auth",
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const url = req.url || "";
-        if (!url.startsWith("/hubwork/admin")) return next();
-
-        const creds = process.env.HUBWORK_ADMIN_CREDENTIALS;
-        if (!creds || !creds.includes(":")) return next();
-        const sep = creds.indexOf(":");
-        const user = creds.slice(0, sep);
-        const pass = creds.slice(sep + 1);
-
-        const header = req.headers.authorization || "";
-        if (header.startsWith("Basic ")) {
-          const decoded = Buffer.from(header.slice(6), "base64").toString();
-          const sep = decoded.indexOf(":");
-          if (sep !== -1 && decoded.slice(0, sep) === user && decoded.slice(sep + 1) === pass) {
-            return next();
-          }
-        }
-
-        res.statusCode = 401;
-        res.setHeader("WWW-Authenticate", 'Basic realm="Hubwork Admin"');
-        res.end("Unauthorized");
-      });
-    },
-  };
-}
-
 /** Serve .wasm plugin assets directly, bypassing Vite's ESM transform. */
 function serveWasmAssets(): Plugin {
   return {
@@ -126,7 +94,7 @@ const customLogger: Logger = {
 
 export default defineConfig({
   customLogger,
-  plugins: [adminBasicAuth(), hubworkRootPage(), serveWasmAssets(), tailwindcss(), reactRouter(), tsconfigPaths()],
+  plugins: [hubworkRootPage(), serveWasmAssets(), tailwindcss(), reactRouter(), tsconfigPaths()],
   build: {
     chunkSizeWarningLimit: 2000,
     rollupOptions: {

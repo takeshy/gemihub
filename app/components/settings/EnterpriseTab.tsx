@@ -12,7 +12,18 @@ interface AiPayload {
   settings: OrganizationAiSettings;
   usage?: { organization?: UsageSummary; users?: Record<string, UsageSummary> };
   oauthStatus?: { connected: boolean; connectedEmail: string | null; connectedAt: number | null; clientConfigured: boolean; projectId: string | null };
-  budget?: { includedUsd: number; configuredUsd: number | null; topUpUsd: number; limitUsd: number | null };
+  budget?: {
+    periodStart?: string;
+    periodEnd?: string;
+    followsBillingCycle?: boolean;
+    includedUsd: number;
+    configuredUsd: number | null;
+    topUpUsd: number;
+    topUpPurchasedThisMonthUsd?: number;
+    topUpCarriedOverUsd?: number;
+    topUpExpiresOn?: string;
+    limitUsd: number | null;
+  };
   storage?: { usedBytes: number | null; quotaGb: number; includedGb: number; addonUnits: number };
 }
 type SectionId = "ai" | "members" | "projects";
@@ -27,6 +38,9 @@ async function api<T>(url: string, options?: { method?: string; body?: object })
   if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
   return result;
 }
+
+/** Keep in step with VERTEX_TOPUP_UNIT_USD in ai-budget.server.ts. */
+const VERTEX_TOPUP_UNIT_USD = 30;
 
 const inputClass = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900";
 const cardClass = "rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900";
@@ -234,6 +248,21 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
           </span>
         )}
       </p>
+      {budget?.periodStart && budget?.periodEnd && (
+        <p className="mt-1 text-xs text-gray-500">
+          {t("enterprise.budgetPeriod")
+            .replace("{start}", budget.periodStart)
+            .replace("{end}", budget.periodEnd)}
+        </p>
+      )}
+      {topUp > 0 && budget?.topUpExpiresOn && (
+        <p className="mt-1 text-xs text-gray-500">
+          {t("enterprise.topUpExpiry").replace("{date}", budget.topUpExpiresOn)}
+          {(budget.topUpCarriedOverUsd ?? 0) > 0 && (
+            <>{" "}{t("enterprise.topUpCarriedOver").replace("{amount}", (budget.topUpCarriedOverUsd ?? 0).toFixed(2))}</>
+          )}
+        </p>
+      )}
       {budgetLimit != null && budgetLimit > 0 && (
         <div className="mt-2 h-2 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-800">
           <div
@@ -246,7 +275,7 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
         <input type="hidden" name="plan" value="vertex-topup" />
         <input type="hidden" name="orgId" value={orgId} />
         <select name="units" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="1">
-          {[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>{`+$${n * 10}`}</option>)}
+          {[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>{`+$${n * VERTEX_TOPUP_UNIT_USD}`}</option>)}
         </select>
         <select name="currency" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="jpy">
           <option value="jpy">{t("enterprise.topUpJpy")}</option>
@@ -288,21 +317,29 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
             />
           </div>
         )}
+        {storageUsedGb != null && storageUsedGb >= storage.quotaGb && (
+          <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs leading-5 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+            {t("enterprise.storageFull")}
+          </p>
+        )}
         <p className="mt-3 text-xs leading-5 text-gray-500">
           {t("enterprise.storageIncluded").replace("{included}", String(storage.includedGb))}
         </p>
+        {storage.addonUnits > 0 ? (
+          <p className="mt-3 text-xs leading-5 text-gray-500">{t("enterprise.storageAddonMaxed")}</p>
+        ) : (
         <form method="POST" action="/hubwork/api/stripe/checkout" className="mt-3 flex flex-wrap items-center gap-2">
           <input type="hidden" name="plan" value="storage-addon" />
           <input type="hidden" name="orgId" value={orgId} />
-          <select name="units" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="1">
-            {[1, 2, 4, 8].map((n) => <option key={n} value={n}>{`+${n * 500} GB`}</option>)}
-          </select>
+          {/* One add-on per organization, so there is no quantity to choose. */}
+          <input type="hidden" name="units" value="1" />
           <select name="currency" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="jpy">
             <option value="jpy">{t("enterprise.storageJpy")}</option>
             <option value="usd">{t("enterprise.storageUsd")}</option>
           </select>
           <button type="submit" className={secondaryButton} disabled={busy}>{t("enterprise.buyStorage")}</button>
         </form>
+        )}
       </section>
     )}
   </div>;

@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-08-19
+* **Update**: The AI budget window follows the subscription cycle. An organization provisioned by a Business purchase records the renewal day (`budgetAnchorDay`) and its usage documents are keyed by billing period, so a mid-month start no longer grants the tail of that month plus the whole next one — which could cost more Vertex budget than the subscription earns. Organizations without an anchor keep calendar months, so existing usage stays addressable. Top-ups are usable through the end of the following period, carrying only the unused part (`architecture/premium.md`).
+* **Update**: Vertex top-ups are $30 (¥4,500) per unit, and project storage can be expanded once by 500 GB (600 GB maximum per organization).
+* **New**: Sync refuses to start when the organization is over its storage quota — push and pull both stop with a message instead of failing part-way through. Deleting still works, but trashed files keep occupying space until they are permanently deleted.
 * **Update**: The web app builder is an opt-in advanced feature (`webpageBuilderEnabled`) — the chat "Build a web app" action and the Webpage Builder skill-update prompt appear only after it is turned on (Business plan still required).
 * **Update**: Dragging between the My Drive shelf and an org project now COPIES in both directions (`mode: "copy"` on `/api/storage/move-between-mounts`) — the source keeps its file, so a drag can never delete from a shared project. Two drag bugs are fixed alongside it: the tree's drop handler swallowed the shelf payload, and its dragover answered `copy` to a `move`-only drag, which made the browser reject the drop outright.
 * **Fix**: The built-in `dashboard` skill is hidden while the dashboard feature is off, and the shelf's confusing "Open" button — which switched the whole workspace mount — is gone.

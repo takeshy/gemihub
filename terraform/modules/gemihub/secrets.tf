@@ -25,14 +25,6 @@ data "google_secret_manager_secret" "stripe_webhook_secret" {
   secret_id = "stripe-webhook-secret"
 }
 
-data "google_secret_manager_secret" "hubwork_admin_credentials" {
-  secret_id = "hubwork-admin-credentials"
-}
-
-data "google_secret_manager_secret" "hubwork_admin_emails" {
-  secret_id = "hubwork-admin-emails"
-}
-
 data "google_secret_manager_secret" "stripe_price_id_lite" {
   secret_id = "stripe-price-id-lite"
 }
@@ -52,3 +44,8 @@ data "google_secret_manager_secret" "stripe_price_id_lite_usd" {
 data "google_secret_manager_secret" "stripe_price_id_pro_usd" {
   secret_id = "stripe-price-id-pro-usd"
 }
+
+# The hubwork-admin-credentials / hubwork-admin-emails secrets are no longer
+# read: /hubwork/admin was folded into /admin/enterprise, which authorizes on
+# SUPER_ADMIN_EMAILS. The secrets themselves are left in Secret Manager for
+# manual cleanup.

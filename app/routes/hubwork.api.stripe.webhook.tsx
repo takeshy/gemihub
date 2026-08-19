@@ -39,7 +39,8 @@ export async function action({ request }: Route.ActionArgs) {
       // the organization, keyed by subscription id (idempotent).
       if (session.metadata?.type === "storage-addon") {
         const orgId = session.metadata.orgId || "";
-        const units = Math.max(1, Math.min(8, parseInt(session.metadata.units || "1", 10) || 1));
+        // One add-on per organization; quantity is fixed at 1 (100 + 500 GB).
+        const units = 1;
         const subscriptionId = typeof session.subscription === "string"
           ? session.subscription
           : session.subscription?.id || "";
@@ -50,15 +51,15 @@ export async function action({ request }: Route.ActionArgs) {
         break;
       }
 
-      // Vertex budget top-up (one-time payment): extend the org's
-      // current-month AI budget by $10 per purchased unit. Idempotent via
-      // the checkout session id.
+      // Vertex budget top-up (one-time payment): extend the org's AI budget
+      // for the current billing period by one unit's worth per purchased
+      // unit. Idempotent via the checkout session id.
       if (session.metadata?.type === "vertex-topup") {
         const orgId = session.metadata.orgId || "";
         const units = Math.max(1, Math.min(20, parseInt(session.metadata.units || "1", 10) || 1));
         if (orgId) {
-          const { addAiBudgetTopUp } = await import("~/services/ai-budget.server");
-          await addAiBudgetTopUp(orgId, units * 10, session.id);
+          const { addAiBudgetTopUp, VERTEX_TOPUP_UNIT_USD } = await import("~/services/ai-budget.server");
+          await addAiBudgetTopUp(orgId, units * VERTEX_TOPUP_UNIT_USD, session.id);
         }
         break;
       }
@@ -164,7 +165,7 @@ export async function action({ request }: Route.ActionArgs) {
           const { setOrgStorageAddon, removeOrgStorageAddon } = await import("~/services/organizations.server");
           const active = subscription.status === "active" || subscription.status === "trialing";
           const quantity = subscription.items.data[0]?.quantity ?? 1;
-          if (active) await setOrgStorageAddon(orgId, subscription.id, Math.max(1, Math.min(8, quantity)));
+          if (active) await setOrgStorageAddon(orgId, subscription.id, Math.max(1, Math.min(1, quantity)));
           else await removeOrgStorageAddon(orgId, subscription.id).catch(() => {});
         }
         break;

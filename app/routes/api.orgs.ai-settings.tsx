@@ -6,6 +6,7 @@ import type { OrganizationAiSettings } from "~/types/enterprise";
 import {
   BUSINESS_INCLUDED_AI_BUDGET_USD,
   getOrganizationAiUsage,
+  resolveOrgTopUp,
 } from "~/services/ai-budget.server";
 import { getOrganizationVertexOAuthStatus } from "~/services/vertex-oauth.server";
 import {
@@ -90,15 +91,26 @@ export async function loader({ request }: Route.LoaderArgs) {
     // with nothing to compare it against.
     const includedBudgetUsd = BUSINESS_INCLUDED_AI_BUDGET_USD;
     const configuredBudgetUsd = org.aiSettings.monthlyBudgetUsd;
-    const topUpUsd = usage.organization.topUpUsd ?? 0;
+    // Top-ups stay usable through the end of the month after purchase, so the
+    // usable balance includes last month's leftovers.
+    const topUp = await resolveOrgTopUp(orgId, configuredBudgetUsd, usage.period);
+    const topUpUsd = topUp.availableUsd;
     return Response.json({
       settings: org.aiSettings,
       usage,
       oauthStatus,
       budget: {
+        // The window spend is measured over: a billing cycle once the org has
+        // an anchor, a calendar month otherwise.
+        periodStart: new Date(usage.period.startMs).toISOString().slice(0, 10),
+        periodEnd: new Date(usage.period.endMs - 86_400_000).toISOString().slice(0, 10),
+        followsBillingCycle: usage.period.anchorDay != null,
         includedUsd: includedBudgetUsd,
         configuredUsd: configuredBudgetUsd,
         topUpUsd,
+        topUpPurchasedThisMonthUsd: topUp.purchasedThisMonthUsd,
+        topUpCarriedOverUsd: topUp.carriedOverUsd,
+        topUpExpiresOn: topUp.expiresOn,
         // null = unlimited (no configured ceiling).
         limitUsd:
           configuredBudgetUsd != null && configuredBudgetUsd > 0

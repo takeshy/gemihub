@@ -53,6 +53,13 @@ export interface Organization {
    * 500 GB units. Effective quota = 100 GB + sum(units) × 500 GB.
    */
   storageAddons?: Record<string, number>;
+  /**
+   * Day of month the subscription renews on (1–31), captured when the
+   * organization is provisioned. The AI budget window follows the billing
+   * cycle rather than the calendar, so one paid period grants exactly one
+   * budget. Unset = legacy calendar months.
+   */
+  budgetAnchorDay?: number;
   createdAt: number;
 }
 

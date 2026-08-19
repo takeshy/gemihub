@@ -78,14 +78,22 @@ export async function action({ request }: Route.ActionArgs) {
   // cancelled independently from the Stripe customer portal.
   if (requestedPlan === "storage-addon") {
     const orgId = (formData.get("orgId") as string || "").trim();
-    const unitsRaw = Number(formData.get("units") || 1);
-    const units = Number.isInteger(unitsRaw) && unitsRaw >= 1 && unitsRaw <= 8 ? unitsRaw : 1;
+    // One add-on per organization: the quota tops out at 100 + 500 GB.
+    const units = 1;
     const addonCurrency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
     if (!orgId) throw new Response("Missing orgId", { status: 400 });
     const { requireOrgAccess } = await import("~/services/project-acl.server");
     const access = await requireOrgAccess(request, orgId);
     if (access.role !== "owner" && access.role !== "admin") {
       throw new Response("Only organization administrators can purchase storage add-ons", { status: 403 });
+    }
+    {
+      const { getOrganization } = await import("~/services/organizations.server");
+      const { storageAddonUnits, MAX_STORAGE_ADDON_UNITS } = await import("~/services/storage-quota.server");
+      const org = await getOrganization(orgId);
+      if (org && storageAddonUnits(org) >= MAX_STORAGE_ADDON_UNITS) {
+        throw new Response("This organization already has the storage add-on", { status: 409 });
+      }
     }
     const addonPriceId = addonCurrency === "usd"
       ? process.env.STRIPE_PRICE_ID_STORAGE_ADDON_USD ?? process.env.STRIPE_PRICE_ID_STORAGE_ADDON

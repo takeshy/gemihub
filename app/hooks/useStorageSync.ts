@@ -50,6 +50,7 @@ export interface CachingProgress {
 }
 
 const NOT_SELECTED_ERROR = "No enterprise project selected";
+const STORAGE_QUOTA_ERROR = "settings.sync.storageQuotaExceeded";
 
 export function useStorageSync() {
   const selection = useEnterpriseSelection();
@@ -78,6 +79,27 @@ export function useStorageSync() {
     setError(null);
     if (syncStatus === "error") setSyncStatus("idle");
   }, [syncStatus]);
+
+  /**
+   * True when the organization is at (or over) its storage quota.
+   *
+   * Sync is refused in that state: a push would fail per-object at the write
+   * choke point after doing partial work, and pulling into a project that
+   * cannot accept writes only hides the problem. The admin resolves it by
+   * deleting files or buying storage — neither is blocked by this check.
+   */
+  const storageQuotaExceeded = useCallback(async (): Promise<boolean> => {
+    if (!mount) return false;
+    try {
+      const res = await fetch(`/api/storage/quota?${new URLSearchParams({ mount })}`);
+      if (!res.ok) return false;
+      const data = await res.json() as { exceeded?: boolean };
+      return data.exceeded === true;
+    } catch {
+      // Never let an accounting hiccup block sync.
+      return false;
+    }
+  }, [mount]);
 
   /**
    * Recompute push/pull counts + conflicts from the current diff. `freshRemote`
@@ -157,6 +179,10 @@ export function useStorageSync() {
       return;
     }
     if (syncLockRef.current) return;
+    if (await storageQuotaExceeded()) {
+      fail(STORAGE_QUOTA_ERROR);
+      return;
+    }
     syncLockRef.current = true;
     setSyncStatus("pushing");
     setError(null);
@@ -173,6 +199,12 @@ export function useStorageSync() {
         try {
           await pushObject(mount, mountKey, path);
         } catch (err) {
+          if (err instanceof StorageSyncError && err.status === 413) {
+            // Storage quota reached mid-push (another member wrote too).
+            await refreshCounts(true);
+            fail(STORAGE_QUOTA_ERROR);
+            return;
+          }
           if (err instanceof StorageSyncError && err.status === 412) {
             // ifRevisionMatch failed: server changed under us. Surface as a
             // conflict and stop the push.
@@ -198,7 +230,7 @@ export function useStorageSync() {
       syncLockRef.current = false;
       setCachingProgress(null);
     }
-  }, [mount, mountKey, syncStatus, refreshCounts, fail]);
+  }, [mount, mountKey, syncStatus, refreshCounts, fail, storageQuotaExceeded]);
 
   // ---------------------------------------------------------------------------
   // pull
@@ -210,6 +242,10 @@ export function useStorageSync() {
         return;
       }
       if (syncLockRef.current) return;
+      if (await storageQuotaExceeded()) {
+        fail(STORAGE_QUOTA_ERROR);
+        return;
+      }
       syncLockRef.current = true;
       setSyncStatus("pulling");
       setError(null);
@@ -246,7 +282,7 @@ export function useStorageSync() {
         setCachingProgress(null);
       }
     },
-    [mount, mountKey, syncStatus, refreshCounts, fail],
+    [mount, mountKey, syncStatus, refreshCounts, fail, storageQuotaExceeded],
   );
 
   // ---------------------------------------------------------------------------
@@ -372,6 +408,10 @@ export function useStorageSync() {
       return;
     }
     if (syncLockRef.current) return;
+    if (await storageQuotaExceeded()) {
+      fail(STORAGE_QUOTA_ERROR);
+      return;
+    }
     syncLockRef.current = true;
     setSyncStatus("pulling");
     setError(null);
@@ -389,7 +429,7 @@ export function useStorageSync() {
       syncLockRef.current = false;
       setCachingProgress(null);
     }
-  }, [mount, mountKey, refreshCounts, fail]);
+  }, [mount, mountKey, refreshCounts, fail, storageQuotaExceeded]);
 
   // ---------------------------------------------------------------------------
   // cacheFilesByIds — bulk pull a set of relativePaths into the local cache.

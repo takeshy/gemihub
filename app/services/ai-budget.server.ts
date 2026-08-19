@@ -34,6 +34,13 @@ type Price = { input: number; output: number };
  */
 export const BUSINESS_INCLUDED_AI_BUDGET_USD = 30;
 
+/**
+ * USD credited per purchased top-up unit. Must match the Stripe price behind
+ * STRIPE_PRICE_ID_VERTEX_TOPUP{,_USD} — the webhook credits this amount per
+ * unit, so a mismatch would hand out budget that was never paid for.
+ */
+export const VERTEX_TOPUP_UNIT_USD = 30;
+
 const DEFAULT_PRICES_PER_MILLION: Record<string, Price> = {
   "gemini-3.1-pro-preview": { input: 2, output: 12 },
   "gemini-3.1-pro-preview-customtools": { input: 2, output: 12 },
@@ -76,15 +83,210 @@ export function currentAiUsageMonth(now = new Date()): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function usageRefs(orgId: string, uid: string, month = currentAiUsageMonth()) {
+/** The month key preceding `month` ("2026-01" → "2025-12"). */
+export function previousAiUsageMonth(month = currentAiUsageMonth()): string {
+  const [year, index] = month.split("-").map(Number);
+  return index > 1
+    ? `${year}-${String(index - 1).padStart(2, "0")}`
+    : `${year - 1}-12`;
+}
+
+/**
+ * One budget window: the span whose spend counts against the monthly limit.
+ *
+ * With a billing anchor the window follows the subscription cycle (the 28th
+ * to the 28th, say), so a single paid month grants exactly one budget — under
+ * calendar months a subscription starting late in a month would get the tail
+ * of that month AND the whole next one, which can cost more than the
+ * subscription earns. Organizations without an anchor keep calendar months,
+ * so existing usage documents stay addressable.
+ */
+export interface BudgetPeriod {
+  /** Firestore document id: "YYYY-MM" (calendar) or "YYYY-MM-DD" (billing). */
+  key: string;
+  startMs: number;
+  endMs: number;
+  anchorDay: number | null;
+}
+
+function daysInUtcMonth(year: number, monthIndex: number): number {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+/** The anchor day clamped into a month, matching Stripe's short-month rule. */
+function anchoredDay(anchorDay: number, year: number, monthIndex: number): number {
+  return Math.min(anchorDay, daysInUtcMonth(year, monthIndex));
+}
+
+function calendarPeriod(now: Date): BudgetPeriod {
+  const year = now.getUTCFullYear();
+  const monthIndex = now.getUTCMonth();
+  return {
+    key: currentAiUsageMonth(now),
+    startMs: Date.UTC(year, monthIndex, 1),
+    endMs: Date.UTC(year, monthIndex + 1, 1),
+    anchorDay: null,
+  };
+}
+
+/** The budget window containing `now`. */
+export function resolveBudgetPeriod(
+  anchorDay: number | null | undefined,
+  now = new Date(),
+): BudgetPeriod {
+  if (anchorDay == null || !Number.isInteger(anchorDay) || anchorDay < 1 || anchorDay > 31) {
+    return calendarPeriod(now);
+  }
+  const year = now.getUTCFullYear();
+  const monthIndex = now.getUTCMonth();
+  const thisMonthAnchor = Date.UTC(year, monthIndex, anchoredDay(anchorDay, year, monthIndex));
+  // Before this month's anchor day the window started in the previous month.
+  const startsThisMonth = now.getTime() >= thisMonthAnchor;
+  const startYear = startsThisMonth ? year : (monthIndex === 0 ? year - 1 : year);
+  const startMonth = startsThisMonth ? monthIndex : (monthIndex === 0 ? 11 : monthIndex - 1);
+  return periodStartingAt(anchorDay, startYear, startMonth);
+}
+
+function periodStartingAt(anchorDay: number, year: number, monthIndex: number): BudgetPeriod {
+  const startDay = anchoredDay(anchorDay, year, monthIndex);
+  const startMs = Date.UTC(year, monthIndex, startDay);
+  const nextYear = monthIndex === 11 ? year + 1 : year;
+  const nextMonth = monthIndex === 11 ? 0 : monthIndex + 1;
+  const endMs = Date.UTC(nextYear, nextMonth, anchoredDay(anchorDay, nextYear, nextMonth));
+  return {
+    key: new Date(startMs).toISOString().slice(0, 10),
+    startMs,
+    endMs,
+    anchorDay,
+  };
+}
+
+/** The window immediately before `period`. */
+export function previousBudgetPeriod(period: BudgetPeriod): BudgetPeriod {
+  if (period.anchorDay == null) {
+    const key = previousAiUsageMonth(period.key);
+    const [year, month] = key.split("-").map(Number);
+    return {
+      key,
+      startMs: Date.UTC(year, month - 1, 1),
+      endMs: Date.UTC(year, month, 1),
+      anchorDay: null,
+    };
+  }
+  const start = new Date(period.startMs);
+  const monthIndex = start.getUTCMonth();
+  return monthIndex === 0
+    ? periodStartingAt(period.anchorDay, start.getUTCFullYear() - 1, 11)
+    : periodStartingAt(period.anchorDay, start.getUTCFullYear(), monthIndex - 1);
+}
+
+/** The window after `period` — where this period's top-ups stop being usable. */
+export function nextBudgetPeriod(period: BudgetPeriod): BudgetPeriod {
+  if (period.anchorDay == null) {
+    const [year, month] = period.key.split("-").map(Number);
+    const nextIndex = month; // 0-based index of the following month
+    const nextYear = nextIndex > 11 ? year + 1 : year;
+    const normalized = nextIndex > 11 ? 0 : nextIndex;
+    return {
+      key: `${nextYear}-${String(normalized + 1).padStart(2, "0")}`,
+      startMs: Date.UTC(nextYear, normalized, 1),
+      endMs: Date.UTC(nextYear, normalized + 1, 1),
+      anchorDay: null,
+    };
+  }
+  const start = new Date(period.endMs);
+  return periodStartingAt(period.anchorDay, start.getUTCFullYear(), start.getUTCMonth());
+}
+
+/** Last day a top-up bought in `period` can be used (end of the next window). */
+export function topUpExpiryDate(period: BudgetPeriod): string {
+  // endMs is exclusive, so step back a day to name the last usable date.
+  return new Date(nextBudgetPeriod(period).endMs - 86_400_000).toISOString().slice(0, 10);
+}
+
+// The anchor is read on every usage write; cache it briefly instead of
+// fetching the organization document each time.
+const anchorCache = new Map<string, { anchorDay: number | null; cachedAt: number }>();
+const ANCHOR_TTL_MS = 5 * 60 * 1000;
+
+async function budgetAnchorDay(orgId: string): Promise<number | null> {
+  const cached = anchorCache.get(orgId);
+  if (cached && Date.now() - cached.cachedAt < ANCHOR_TTL_MS) return cached.anchorDay;
+  const org = await getOrganization(orgId);
+  const anchorDay = typeof org?.budgetAnchorDay === "number" ? org.budgetAnchorDay : null;
+  anchorCache.set(orgId, { anchorDay, cachedAt: Date.now() });
+  return anchorDay;
+}
+
+export function _resetBudgetAnchorCacheForTests(): void {
+  anchorCache.clear();
+}
+
+/** The current window for an organization. */
+export async function currentBudgetPeriod(orgId: string, now = new Date()): Promise<BudgetPeriod> {
+  return resolveBudgetPeriod(await budgetAnchorDay(orgId), now);
+}
+
+function usageRefs(orgId: string, uid: string, periodKey: string) {
   const orgUsage = getFirestore()
     .collection(ORGANIZATIONS).doc(orgId)
-    .collection("aiUsage").doc(month);
-  return { orgUsage, userUsage: orgUsage.collection("users").doc(uid), month };
+    .collection("aiUsage").doc(periodKey);
+  return { orgUsage, userUsage: orgUsage.collection("users").doc(uid) };
 }
 
 function microsToUsd(value: unknown): number {
   return (typeof value === "number" && Number.isFinite(value) ? value : 0) / 1_000_000;
+}
+
+export interface TopUpState {
+  /** Usable this month: purchased this month plus what carried over. */
+  availableUsd: number;
+  purchasedThisMonthUsd: number;
+  /** Unused part of last month's purchases; expires at the end of this month. */
+  carriedOverUsd: number;
+  /** Date the top-ups purchased THIS month stop being usable. */
+  expiresOn: string;
+}
+
+/**
+ * Resolve an organization's usable top-up balance.
+ *
+ * A top-up is valid through the end of the month AFTER it was purchased, so
+ * the balance is this month's purchases plus whatever was left of last
+ * month's. Spend is charged to the included budget first and to top-ups only
+ * beyond it, which is what makes "left over" meaningful.
+ *
+ * Carry-over is computed from the two most recent months rather than tracked
+ * as a running balance: it needs no write-path changes, and it can only ever
+ * err in the customer's favour (a month that also spent an older carry-over
+ * attributes that spend to its own purchases first).
+ */
+export async function resolveOrgTopUp(
+  orgId: string,
+  baseLimitUsd: number | null | undefined,
+  period?: BudgetPeriod,
+): Promise<TopUpState> {
+  const usage = getFirestore().collection(ORGANIZATIONS).doc(orgId).collection("aiUsage");
+  const current = period ?? (await currentBudgetPeriod(orgId));
+  const previous = previousBudgetPeriod(current);
+  const [currentSnap, previousSnap] = await Promise.all([
+    usage.doc(current.key).get(),
+    usage.doc(previous.key).get(),
+  ]);
+
+  const purchasedThisMonthUsd = microsToUsd(currentSnap.data()?.topUpMicros);
+  const purchasedLastMonthUsd = microsToUsd(previousSnap.data()?.topUpMicros);
+  const spentLastMonthUsd = microsToUsd(previousSnap.data()?.estimatedCostMicros);
+  const base = baseLimitUsd != null && baseLimitUsd > 0 ? baseLimitUsd : 0;
+  const topUpSpentLastMonth = Math.max(0, spentLastMonthUsd - base);
+  const carriedOverUsd = Math.max(0, purchasedLastMonthUsd - topUpSpentLastMonth);
+
+  return {
+    availableUsd: purchasedThisMonthUsd + carriedOverUsd,
+    purchasedThisMonthUsd,
+    carriedOverUsd,
+    expiresOn: topUpExpiryDate(current),
+  };
 }
 
 export async function assertAiBudgetAvailable(context: AiBillingContext): Promise<void> {
@@ -93,13 +295,15 @@ export async function assertAiBudgetAvailable(context: AiBillingContext): Promis
     getOrgMember(context.orgId, context.uid),
   ]);
   if (!org) throw new Error("AI billing context is not accessible");
-  const { orgUsage, userUsage } = usageRefs(context.orgId, context.uid);
+  const period = resolveBudgetPeriod(org.budgetAnchorDay ?? null);
+  const { orgUsage, userUsage } = usageRefs(context.orgId, context.uid, period.key);
   const [orgSnap, userSnap] = await Promise.all([orgUsage.get(), userUsage.get()]);
   const orgSpent = microsToUsd(orgSnap.data()?.estimatedCostMicros);
   const userSpent = microsToUsd(userSnap.data()?.estimatedCostMicros);
-  // Purchased top-ups extend the organization limit for the current month.
-  const topUpUsd = microsToUsd(orgSnap.data()?.topUpMicros);
   const orgLimit = org.aiSettings.monthlyBudgetUsd;
+  // Purchased top-ups extend the limit; they stay usable through the end of
+  // the month after purchase, so last month's unused balance counts too.
+  const { availableUsd: topUpUsd } = await resolveOrgTopUp(context.orgId, orgLimit, period);
   const effectiveOrgLimit = orgLimit != null && orgLimit > 0 ? orgLimit + topUpUsd : orgLimit;
   // Project-only external collaborators inherit the organization default.
   const userLimit = member?.monthlyBudgetUsdOverride ?? org.aiSettings.defaultUserMonthlyBudgetUsd;
@@ -121,9 +325,10 @@ export async function recordAiUsage(
   const estimatedCostMicros = Math.max(0, Math.ceil(estimatedCostUsd * 1_000_000));
   const inputTokens = Math.max(0, usage.inputTokens ?? 0);
   const outputTokens = Math.max(0, usage.outputTokens ?? 0) + Math.max(0, usage.thinkingTokens ?? 0);
-  const { orgUsage, userUsage, month } = usageRefs(context.orgId, context.uid);
+  const period = await currentBudgetPeriod(context.orgId);
+  const { orgUsage, userUsage } = usageRefs(context.orgId, context.uid, period.key);
   const increment = {
-    month,
+    month: period.key,
     estimatedCostMicros: FieldValue.increment(estimatedCostMicros),
     inputTokens: FieldValue.increment(inputTokens),
     outputTokens: FieldValue.increment(outputTokens),
@@ -148,9 +353,9 @@ export async function addAiBudgetTopUp(
   eventId: string,
 ): Promise<boolean> {
   if (!(usd > 0)) return false;
-  const month = currentAiUsageMonth();
+  const period = await currentBudgetPeriod(orgId);
   const fs = getFirestore();
-  const usageRef = fs.collection(ORGANIZATIONS).doc(orgId).collection("aiUsage").doc(month);
+  const usageRef = fs.collection(ORGANIZATIONS).doc(orgId).collection("aiUsage").doc(period.key);
   const eventRef = usageRef.collection("topupEvents").doc(eventId);
   return fs.runTransaction(async (tx) => {
     const seen = await tx.get(eventRef);
@@ -158,7 +363,7 @@ export async function addAiBudgetTopUp(
     tx.set(eventRef, { usd, createdAt: Date.now() });
     tx.set(
       usageRef,
-      { month, topUpMicros: FieldValue.increment(Math.round(usd * 1_000_000)), updatedAt: Date.now() },
+      { month: period.key, topUpMicros: FieldValue.increment(Math.round(usd * 1_000_000)), updatedAt: Date.now() },
       { merge: true },
     );
     return true;
@@ -175,17 +380,19 @@ function toSummary(month: string, data: Record<string, unknown> | undefined): Ai
 }
 
 export async function getOrganizationAiUsage(orgId: string): Promise<{
+  period: BudgetPeriod;
   organization: AiUsageSummary;
   users: Record<string, AiUsageSummary>;
 }> {
-  const month = currentAiUsageMonth();
-  const orgUsage = getFirestore().collection(ORGANIZATIONS).doc(orgId).collection("aiUsage").doc(month);
+  const period = await currentBudgetPeriod(orgId);
+  const orgUsage = getFirestore().collection(ORGANIZATIONS).doc(orgId).collection("aiUsage").doc(period.key);
   const [orgSnap, usersSnap] = await Promise.all([orgUsage.get(), orgUsage.collection("users").get()]);
   return {
+    period,
     organization: {
-      ...toSummary(month, orgSnap.data()),
+      ...toSummary(period.key, orgSnap.data()),
       topUpUsd: microsToUsd(orgSnap.data()?.topUpMicros),
     },
-    users: Object.fromEntries(usersSnap.docs.map((doc) => [doc.id, toSummary(month, doc.data())])),
+    users: Object.fromEntries(usersSnap.docs.map((doc) => [doc.id, toSummary(period.key, doc.data())])),
   };
 }

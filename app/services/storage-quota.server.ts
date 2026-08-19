@@ -44,11 +44,20 @@ export class StorageQuotaExceededError extends Error {
   }
 }
 
+/**
+ * At most one 500 GB add-on per organization, so the quota tops out at
+ * 100 + 500 GB. Capped on read as well as on purchase: a duplicate
+ * subscription (webhook retry, manual Stripe edit) must not raise the quota
+ * beyond what the product offers.
+ */
+export const MAX_STORAGE_ADDON_UNITS = 1;
+
 export function storageAddonUnits(org: Organization): number {
-  return Object.values(org.storageAddons ?? {}).reduce(
+  const total = Object.values(org.storageAddons ?? {}).reduce(
     (sum, units) => sum + (Number.isFinite(units) ? Number(units) : 0),
     0,
   );
+  return Math.min(total, MAX_STORAGE_ADDON_UNITS);
 }
 
 export function storageQuotaGbForOrg(org: Organization): number {
