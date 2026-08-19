@@ -315,6 +315,7 @@ export async function action({ request }: Route.ActionArgs) {
         const dashboardEnabled = formData.get("dashboardEnabled") === "on";
         const workflowEnabled = formData.get("workflowEnabled") === "on";
         const ragFeatureEnabled = formData.get("ragFeatureEnabled") === "on";
+        const webpageBuilderEnabled = formData.get("webpageBuilderEnabled") === "on";
 
         // Encryption-related fields
         const password = (formData.get("password") as string)?.trim() || "";
@@ -357,6 +358,7 @@ export async function action({ request }: Route.ActionArgs) {
           dashboardEnabled,
           workflowEnabled,
           ragFeatureEnabled,
+          webpageBuilderEnabled,
         };
 
         // Update file encryption toggles

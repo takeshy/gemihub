@@ -53,6 +53,7 @@ export function GeneralTab({
   const [dashboardEnabled, setDashboardEnabled] = useState(settings.dashboardEnabled ?? false);
   const [workflowEnabled, setWorkflowEnabled] = useState(settings.workflowEnabled ?? false);
   const [ragFeatureEnabled, setRagFeatureEnabled] = useState(settings.ragFeatureEnabled ?? false);
+  const [webpageBuilderEnabled, setWebpageBuilderEnabled] = useState(settings.webpageBuilderEnabled ?? false);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
@@ -420,6 +421,22 @@ export function GeneralTab({
                 <Label htmlFor="ragFeatureEnabled">{t("settings.general.enableRag")}</Label>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {t("settings.general.enableRagDescription")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="webpageBuilderEnabled"
+                name="webpageBuilderEnabled"
+                checked={webpageBuilderEnabled}
+                onChange={(e) => setWebpageBuilderEnabled(e.target.checked)}
+                className={checkboxClass}
+              />
+              <div>
+                <Label htmlFor="webpageBuilderEnabled">{t("settings.general.enableWebpageBuilder")}</Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("settings.general.enableWebpageBuilderDescription")}
                 </p>
               </div>
             </div>

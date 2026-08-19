@@ -2,8 +2,9 @@
  * My Drive shelf — shown above the project FileTree while an org project is
  * selected. Presents the user's own Google Drive in the slot the fork used
  * for "personal projects": glance at Drive files, drag them into the
- * project, or drag project files out to Drive
- * (/api/storage/move-between-mounts does the byte transfer).
+ * project, or drag project files out to Drive. Both directions COPY
+ * (/api/storage/move-between-mounts with mode "copy"): the source keeps its
+ * file, so a drag can never delete anything.
  *
  * Converted from the fork's PersonalStorageShelf; the personal project is
  * replaced by the "drive" mount.
@@ -13,11 +14,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, File, FolderOpen, HardDrive, Loader2 } from "lucide-react";
 import { useEnterpriseContext } from "~/contexts/EnterpriseContext";
 import { useI18n } from "~/i18n/context";
-import {
-  deleteCachedObject,
-  deleteLocalSyncEntry,
-  objectPathForCachedFile,
-} from "~/services/storage-cache";
 import type { CachedTreeNode } from "~/types/tree";
 import {
   parseStorageDragPayload,
@@ -52,7 +48,6 @@ export function DriveShelf() {
   const [error, setError] = useState<string | null>(null);
   const [driveUnavailable, setDriveUnavailable] = useState(false);
 
-  const projectMountKey = selection ? `gcs:${selection.orgId}/${selection.projectId}` : null;
   // The shelf only renders on a project mount; never fetch Drive otherwise.
   const shelfActive = !!(currentOrgId && currentProjectId && selection);
 
@@ -131,27 +126,20 @@ export function DriveShelf() {
           sourceMount: payload.sourceMount,
           targetMount: "drive",
           moves: payload.moves,
+          // Copy: the project keeps its file. Dragging out of a shared project
+          // must never be a one-gesture deletion.
+          mode: "copy",
         }),
       });
       if (!response.ok) {
         const result = await response.json().catch(() => null) as { error?: string } | null;
         throw new Error(result?.error ?? `HTTP ${response.status}`);
       }
-      // Drop the moved files from the project mount's local cache.
-      if (projectMountKey && payload.sourceMount.startsWith("project:")) {
-        await Promise.all(payload.moves.flatMap((move) => {
-          const objectPath = objectPathForCachedFile(projectMountKey, move.from);
-          return [
-            deleteCachedObject(projectMountKey, objectPath).catch(() => {}),
-            deleteLocalSyncEntry(projectMountKey, objectPath).catch(() => {}),
-          ];
-        }));
-      }
+      // The source project keeps its files, so its cache stays as it is.
       await load();
       window.dispatchEvent(new Event("drive-shelf-changed"));
-      window.dispatchEvent(new Event("project-storage-changed"));
-    } catch (moveError) {
-      setError(moveError instanceof Error ? moveError.message : t("driveShelf.moveFailed"));
+    } catch (copyError) {
+      setError(copyError instanceof Error ? copyError.message : t("driveShelf.copyFailed"));
     }
   }
 
@@ -212,15 +200,6 @@ export function DriveShelf() {
           )}
         </button>
         {loading && <Loader2 size={ICON.SM} className="animate-spin text-amber-600" />}
-        {!driveUnavailable && (
-          <button
-            type="button"
-            onClick={() => void openDrive()}
-            className="rounded px-1.5 py-0.5 text-[11px] text-amber-800 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/50"
-          >
-            {t("driveShelf.open")}
-          </button>
-        )}
       </div>
       {dragOver && (
         <div className="px-2 pb-1 text-center text-[11px] font-medium text-amber-800 dark:text-amber-200">

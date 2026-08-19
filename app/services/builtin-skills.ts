@@ -103,8 +103,25 @@ function instructionBody(source: string): string {
     : source;
 }
 
-export function getBuiltinSkills(): SkillMetadata[] {
-  return DEFINITIONS.map(({ metadata }) => metadata);
+export interface BuiltinSkillOptions {
+  /** Settings > General > advanced features. Off hides the dashboard skill. */
+  dashboardEnabled?: boolean;
+}
+
+/** Skills that only make sense while their feature is turned on. */
+const FEATURE_GATED: Record<string, keyof BuiltinSkillOptions> = {
+  dashboard: "dashboardEnabled",
+};
+
+function enabledDefinitions(options?: BuiltinSkillOptions): BuiltinSkillDefinition[] {
+  return DEFINITIONS.filter(({ metadata }) => {
+    const gate = FEATURE_GATED[metadata.id];
+    return gate ? options?.[gate] === true : true;
+  });
+}
+
+export function getBuiltinSkills(options?: BuiltinSkillOptions): SkillMetadata[] {
+  return enabledDefinitions(options).map(({ metadata }) => metadata);
 }
 
 export function loadBuiltinSkill(skillId: string): LoadedSkill | null {

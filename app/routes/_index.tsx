@@ -473,7 +473,11 @@ function IDELayout({
     <I18nProvider language={settings.language ?? "en"}>
       <EditorContextProvider>
       <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language ?? "en"} hasPremium={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}>
-      <SkillProvider rootFolderId={rootFolderId} agentPlugins={settings.agentPlugins || []}>
+      <SkillProvider
+        rootFolderId={rootFolderId}
+        agentPlugins={settings.agentPlugins || []}
+        dashboardEnabled={settings.dashboardEnabled ?? false}
+      >
       <IDEContent
         settings={settings}
         hasGeminiApiKey={hasGeminiApiKey}
@@ -640,6 +644,9 @@ function IDEContent({
   }, []);
 
   useEffect(() => {
+    // Web app builder is opt-in (Settings > General): with it off, do not nag
+    // about skill updates for a feature the user is not using.
+    if (!(settings.webpageBuilderEnabled ?? false)) return;
     const installedSkillVersion = settings.hubwork?.skillVersion;
     if (!installedSkillVersion) return;
     if (compareSkillVersions(installedSkillVersion, WEBPAGE_BUILDER_SKILL_VERSION) >= 0) return;
@@ -658,7 +665,7 @@ function IDEContent({
       }));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [settings.hubwork?.skillVersion, t]);
+  }, [settings.hubwork?.skillVersion, settings.webpageBuilderEnabled, t]);
 
   // On iOS Safari the layout viewport (and 100dvh) does NOT shrink when the
   // virtual keyboard appears.  Override the root container height with the
@@ -1206,6 +1213,8 @@ function IDEContent({
           sourceMount: "drive",
           targetMount: `project:${projectSelection.projectId}`,
           moves: payload.moves,
+          // Copy: the file stays in the user's own Drive as well.
+          mode: "copy",
         }),
       });
       if (!response.ok) {
@@ -1216,7 +1225,7 @@ function IDEContent({
       window.dispatchEvent(new Event("sync-complete"));
     } catch (err) {
       console.error("[drive-shelf] import failed:", err);
-      alert(err instanceof Error ? err.message : "移動に失敗しました");
+      alert(err instanceof Error ? err.message : t("driveShelf.copyFailed"));
     }
   };
   const fileTreeContent = (

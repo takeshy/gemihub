@@ -1190,12 +1190,11 @@ export interface TranslationStrings {
   "enterprise.topUpUsd": string;
   "driveShelf.title": string;
   "driveShelf.personalOnly": string;
-  "driveShelf.open": string;
   "driveShelf.openHint": string;
   "driveShelf.dropHere": string;
   "driveShelf.dropPrompt": string;
   "driveShelf.loadFailed": string;
-  "driveShelf.moveFailed": string;
+  "driveShelf.copyFailed": string;
   "driveShelf.connectPrompt": string;
   "driveShelf.signInGoogle": string;
   "mount.switcherTitle": string;
@@ -1345,6 +1344,8 @@ export interface TranslationStrings {
   "settings.general.enableWorkflowDescription": string;
   "settings.general.enableRag": string;
   "settings.general.enableRagDescription": string;
+  "settings.general.enableWebpageBuilder": string;
+  "settings.general.enableWebpageBuilderDescription": string;
   "settings.general.showManagementFolders": string;
   "settings.general.showManagementFoldersDescription": string;
   "skills.selector.title": string;
@@ -2549,13 +2550,12 @@ const en: TranslationStrings = {
   "enterprise.topUpUsd": "USD ($10)",
   "driveShelf.title": "My Drive",
   "driveShelf.personalOnly": "personal · {count}",
-  "driveShelf.open": "Open",
   "driveShelf.openHint": "Double-click to open My Drive",
-  "driveShelf.dropHere": "Drop to move here",
+  "driveShelf.dropHere": "Drop to copy here",
   "driveShelf.dropPrompt": "Drop files here",
   "driveShelf.loadFailed": "Failed to load My Drive",
-  "driveShelf.moveFailed": "Move failed",
-  "driveShelf.connectPrompt": "Sign in with a Google account (Drive permission) to move files to and from My Drive.",
+  "driveShelf.copyFailed": "Copy from My Drive failed",
+  "driveShelf.connectPrompt": "Sign in with a Google account (Drive permission) to copy files to and from My Drive.",
   "driveShelf.signInGoogle": "Sign in with Google",
   "mount.switcherTitle": "Switch workspace (My Drive / organization projects)",
   "settings.hubwork.title": "Premium Plan",
@@ -2704,6 +2704,8 @@ const en: TranslationStrings = {
   "settings.general.enableWorkflowDescription": "Show the workflow panel and allow YAML workflows to be edited and executed.",
   "settings.general.enableRag": "Enable RAG",
   "settings.general.enableRagDescription": "Show the RAG settings tab and the RAG selector in chat.",
+  "settings.general.enableWebpageBuilder": "Enable Web app builder",
+  "settings.general.enableWebpageBuilderDescription": "Show the \"Build a web app\" action in chat and keep the Webpage Builder skill up to date. Requires a Business plan.",
   "settings.general.showManagementFolders": "Show management folders",
   "settings.general.showManagementFoldersDescription": "Show folders used by external tools (e.g. LocalLlmHub) in the file tree.",
   "skills.selector.title": "Agent Skills",
@@ -3908,13 +3910,12 @@ const ja: TranslationStrings = {
   "enterprise.topUpUsd": "USD（$10）",
   "driveShelf.title": "マイドライブ",
   "driveShelf.personalOnly": "自分専用 · {count}",
-  "driveShelf.open": "開く",
   "driveShelf.openHint": "ダブルクリックでマイドライブを開く",
-  "driveShelf.dropHere": "ここに移動",
+  "driveShelf.dropHere": "ここにコピー",
   "driveShelf.dropPrompt": "ファイルをここへドロップ",
   "driveShelf.loadFailed": "マイドライブの読込に失敗しました",
-  "driveShelf.moveFailed": "移動に失敗しました",
-  "driveShelf.connectPrompt": "Googleアカウント（Drive権限）でログインすると、マイドライブとの間でファイルを移動できます。",
+  "driveShelf.copyFailed": "マイドライブからのコピーに失敗しました",
+  "driveShelf.connectPrompt": "Googleアカウント（Drive権限）でログインすると、マイドライブとの間でファイルをコピーできます。",
   "driveShelf.signInGoogle": "Googleでログイン",
   "mount.switcherTitle": "ワークスペース切替（マイドライブ / 組織プロジェクト）",
   "settings.hubwork.title": "プレミアムプラン",
@@ -4063,6 +4064,8 @@ const ja: TranslationStrings = {
   "settings.general.enableWorkflowDescription": "ワークフローパネルを表示し、YAMLワークフローの編集・実行を有効にします。",
   "settings.general.enableRag": "RAGを使用する",
   "settings.general.enableRagDescription": "設定のRAGタブと、チャットのRAGセレクタを表示します。",
+  "settings.general.enableWebpageBuilder": "Webアプリ構築を使用する",
+  "settings.general.enableWebpageBuilderDescription": "チャットの「Webアプリを構築する」導線を表示し、Webページビルダースキルの更新案内を有効にします（Businessプランが必要です）。",
   "settings.general.showManagementFolders": "管理フォルダを表示",
   "settings.general.showManagementFoldersDescription": "外部ツールが使用するフォルダ（例: LocalLlmHub）をファイルツリーに表示します。",
   "skills.selector.title": "エージェントスキル",

@@ -630,6 +630,7 @@ export interface UserSettings {
   dashboardEnabled: boolean;
   workflowEnabled: boolean;
   ragFeatureEnabled: boolean;
+  webpageBuilderEnabled: boolean;
   /** Path of the dashboard to open on app launch (e.g. "Dashboards/home.dashboard"). */
   homeDashboard?: string | null;
   // Hubwork (paid feature) - web app builder with Sheets/Gmail
@@ -761,6 +762,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   dashboardEnabled: false,
   workflowEnabled: false,
   ragFeatureEnabled: false,
+  webpageBuilderEnabled: false,
   homeDashboard: null,
 };
 

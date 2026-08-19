@@ -187,14 +187,17 @@ function isBuiltinSkillFileId(fileId: string): boolean {
  * <prose body>
  * ```
  */
-export async function discoverSkills(agentPlugins: AgentPluginConfig[] = []): Promise<SkillMetadata[]> {
+export async function discoverSkills(
+  agentPlugins: AgentPluginConfig[] = [],
+  builtinOptions?: { dashboardEnabled?: boolean },
+): Promise<SkillMetadata[]> {
   // Built-in skills ship with the app. They are listed first and shadow any
   // leftover Drive folder of the same name (installs provisioned before the
   // skills moved into the bundle still have skills/markdown/ and friends).
   // Imported lazily: builtin-skills.ts uses Vite `?raw` imports, which only the
   // bundler can resolve — a static import would break every plain-node consumer.
   const { getBuiltinSkills } = await import("./builtin-skills");
-  const builtins = getBuiltinSkills();
+  const builtins = getBuiltinSkills(builtinOptions);
   const builtinIds = new Set(builtins.map((skill) => skill.id));
   let tree = await getCachedFileTree();
   if (!tree) {

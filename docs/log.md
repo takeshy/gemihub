@@ -1,6 +1,9 @@
 # Update Log
 
 ## 2026-08-19
+* **Update**: The web app builder is an opt-in advanced feature (`webpageBuilderEnabled`) — the chat "Build a web app" action and the Webpage Builder skill-update prompt appear only after it is turned on (Business plan still required).
+* **Update**: Dragging between the My Drive shelf and an org project now COPIES in both directions (`mode: "copy"` on `/api/storage/move-between-mounts`) — the source keeps its file, so a drag can never delete from a shared project. Two drag bugs are fixed alongside it: the tree's drop handler swallowed the shelf payload, and its dragover answered `copy` to a `move`-only drag, which made the browser reject the drop outright.
+* **Fix**: The built-in `dashboard` skill is hidden while the dashboard feature is off, and the shelf's confusing "Open" button — which switched the whole workspace mount — is gone.
 * **Update**: The built-in `markdown` / `canvas` / `base` / `dashboard` skills are embedded in the app bundle instead of being provisioned into `skills/` on Drive — they no longer appear in the file tree or sync, and their instructions are inlined into the system prompt (`integrations/skill.md`).
 * **Update**: Organization membership is granted directly from Settings > Organization (immediate add + notification email) instead of a token invitation, and members always authenticate with Google — the sign-in now requests the Gmail/Calendar scopes up front so invitation mail works without a second consent round.
 * **Update**: Dashboard, Workflow, and RAG became opt-in "advanced features" — all three default to off (`dashboardEnabled` / `workflowEnabled` / `ragFeatureEnabled` in Settings > General), and the IDE home view shows a Getting Started guide while the dashboard is off. YAML files still open in the plain text editor when Workflow is off (`features/dashboard.md`, `workflows/workflow_execution.md`, `integrations/rag.md`).

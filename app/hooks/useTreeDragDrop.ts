@@ -11,6 +11,7 @@ import {
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit } from "~/services/edit-history-local";
+import { STORAGE_DRAG_MIME } from "~/types/storage-drag";
 import { shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
 import { migrateNewFileId, findFileByPath } from "~/utils/file-tree-operations";
 import {
@@ -368,14 +369,26 @@ export function useTreeDragDrop({
 
   const handleDrop = useCallback(
     async (e: React.DragEvent, folderId: string) => {
+      const resetDragState = () => {
+        setDragOverTree(false);
+        setDragOverFolderId(null);
+        setDraggingItem(null);
+        document.body.classList.remove("tree-dragging");
+        dragCounterRef.current = 0;
+        folderDragCounterRef.current.clear();
+      };
+
+      // A payload dragged from the My Drive shelf is a cross-mount import that
+      // the IDE shell handles. Let it bubble: swallowing it here (the drop
+      // below stops propagation) made the drop look like it did nothing.
+      if (e.dataTransfer.types.includes(STORAGE_DRAG_MIME)) {
+        resetDragState();
+        return;
+      }
+
       e.preventDefault();
       e.stopPropagation();
-      setDragOverTree(false);
-      setDragOverFolderId(null);
-      setDraggingItem(null);
-      document.body.classList.remove("tree-dragging");
-      dragCounterRef.current = 0;
-      folderDragCounterRef.current.clear();
+      resetDragState();
 
       // Internal tree node move — multi-select first
       const multiNodeIds = e.dataTransfer.getData("application/x-tree-node-ids");
@@ -578,7 +591,12 @@ export function useTreeDragDrop({
   const handleTreeDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const isInternal = e.dataTransfer.types.includes("application/x-tree-node-id") || e.dataTransfer.types.includes("application/x-tree-node-ids");
-    e.dataTransfer.dropEffect = isInternal ? "move" : "copy";
+    // A My Drive shelf payload starts with effectAllowed = "move"; answering
+    // "copy" is not an allowed effect, so the browser cancels the drop and no
+    // drop event ever fires. Only OS file drags (effectAllowed "all") get
+    // "copy".
+    const isMountTransfer = e.dataTransfer.types.includes(STORAGE_DRAG_MIME);
+    e.dataTransfer.dropEffect = isInternal || isMountTransfer ? "move" : "copy";
 
     // Auto-scroll when dragging near edges of the scroll container
     const container = scrollContainerRef.current;

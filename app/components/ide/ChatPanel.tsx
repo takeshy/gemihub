@@ -1737,7 +1737,11 @@ export function ChatPanel({
         isStreaming={isStreaming}
         alwaysThink={getThinkingToggle(selectedModel) === true}
         isPro={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}
-        onBuildWebApp={() => handleSend("", undefined, { skillId: "webpage-builder" })}
+        {...((settings.webpageBuilderEnabled ?? false)
+          ? { onBuildWebApp: () => handleSend("", undefined, { skillId: "webpage-builder" }) }
+          : // Opt-in advanced feature (Settings > General). The Business plan
+            // check in MessageList still applies on top of it.
+            {})}
         {...((settings.dashboardEnabled ?? false)
           ? {
               onGoToDashboard,

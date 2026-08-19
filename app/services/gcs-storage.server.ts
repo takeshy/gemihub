@@ -302,6 +302,7 @@ export async function moveObjectsBetweenProjects(
   sourceCtx: ProjectAccessContext,
   targetCtx: ProjectAccessContext,
   moves: Array<{ from: string; to: string }>,
+  options: { keepSource?: boolean } = {},
 ): Promise<StoredObject[]> {
   const sourceStorage = await getStorageForTenant(sourceCtx.tenant);
   const targetStorage = sourceCtx.tenant.gcsBucket === targetCtx.tenant.gcsBucket
@@ -332,7 +333,10 @@ export async function moveObjectsBetweenProjects(
     throw err;
   }
 
-  await Promise.all(copied.map(({ source }) => source.delete()));
+  // keepSource = a copy: every destination exists, leave the originals alone.
+  if (!options.keepSource) {
+    await Promise.all(copied.map(({ source }) => source.delete()));
+  }
   return copied.map(({ object }) => object);
 }
 

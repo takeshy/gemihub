@@ -54,10 +54,13 @@ export function SkillProvider({
   children,
   rootFolderId,
   agentPlugins = [],
+  dashboardEnabled = false,
 }: {
   children: ReactNode;
   rootFolderId?: string;
   agentPlugins?: AgentPluginConfig[];
+  /** Advanced feature flag — the dashboard skill is hidden while it is off. */
+  dashboardEnabled?: boolean;
 }) {
   const [skills, setSkills] = useState<SkillMetadata[]>([]);
   const [activeSkillIds, setActiveSkillIds] = useState<string[]>(() => {
@@ -74,7 +77,7 @@ export function SkillProvider({
   const discover = useCallback(async () => {
     setLoading(true);
     try {
-      const found = await discoverSkills(agentPlugins);
+      const found = await discoverSkills(agentPlugins, { dashboardEnabled });
       setSkills(found);
       try {
         const pendingSkillId = localStorage.getItem(pendingSkillActivationKey);
@@ -90,7 +93,7 @@ export function SkillProvider({
     } finally {
       setLoading(false);
     }
-  }, [pendingSkillActivationKey, agentPlugins]);
+  }, [pendingSkillActivationKey, agentPlugins, dashboardEnabled]);
 
   // Discover on mount
   useEffect(() => {

@@ -4,16 +4,18 @@
  * Body: {
  *   sourceMount: string,               // "drive" | "project:{id}"
  *   targetMount: string,               // "drive" | "project:{id}"
- *   moves: Array<{ from: string, to: string }>
+ *   moves: Array<{ from: string, to: string }>,
+ *   mode?: "copy" | "move"             // default "move"
  * }
  *
- * Moves files across storage mounts. Within GCS (two projects of the same
+ * Transfers files across storage mounts. Within GCS (two projects of the same
  * org) this is a native server-side copy; Drive ↔ GCS is an explicit byte
- * transfer (read → write → delete source). Destinations must not exist.
+ * transfer. Destinations must not exist. With mode "copy" the source is left
+ * in place; with "move" it is removed once every destination exists.
  *
- * The primary use is the My Drive shelf: bring a file into an org project,
- * or take one back out. Editor access is required on both sides (moving
- * removes data from the source).
+ * The primary use is the My Drive shelf: bring a file into an org project, or
+ * take one back out. Editor access is required on both sides (a move removes
+ * data from the source, and a copy writes into the target).
  *
  * Response: { ok: true, objects: ObjectMeta[] }
  */
@@ -40,6 +42,7 @@ interface MoveBody {
   sourceMount?: unknown;
   targetMount?: unknown;
   moves?: unknown;
+  mode?: unknown;
 }
 
 const MAX_FILES_PER_MOVE = 500;
@@ -72,6 +75,7 @@ export async function action({ request }: Route.ActionArgs) {
     if (!Array.isArray(body.moves) || body.moves.length === 0 || body.moves.length > MAX_FILES_PER_MOVE) {
       throw new BadRequestError(`moves must contain 1-${MAX_FILES_PER_MOVE} files`);
     }
+    const keepSource = body.mode === "copy";
     const moves = body.moves.map((entry) => {
       if (!entry || typeof entry !== "object") throw new BadRequestError("invalid move entry");
       const value = entry as { from?: unknown; to?: unknown };
@@ -108,7 +112,9 @@ export async function action({ request }: Route.ActionArgs) {
 
     // GCS → GCS: native server-side copy (no byte round-trip).
     if (sourceCtx.kind === "gcs-project" && targetCtx.kind === "gcs-project" && sourceCtx.gcs && targetCtx.gcs) {
-      const objects = await moveObjectsBetweenProjects(sourceCtx.gcs, targetCtx.gcs, moves);
+      const objects = await moveObjectsBetweenProjects(sourceCtx.gcs, targetCtx.gcs, moves, {
+        keepSource,
+      });
       return Response.json({ ok: true, objects: objects.map(gcsObjectToMeta) });
     }
 
@@ -140,13 +146,15 @@ export async function action({ request }: Route.ActionArgs) {
       throw err;
     }
     // Best-effort source cleanup; a failure here leaves a duplicate, never a
-    // lost file, so it is reported rather than rolled back.
+    // lost file, so it is reported rather than rolled back. A copy skips it.
     const notDeleted: string[] = [];
-    for (const move of moves) {
-      try {
-        await deleteObject(sourceCtx, move.from);
-      } catch {
-        notDeleted.push(move.from);
+    if (!keepSource) {
+      for (const move of moves) {
+        try {
+          await deleteObject(sourceCtx, move.from);
+        } catch {
+          notDeleted.push(move.from);
+        }
       }
     }
     return Response.json({
