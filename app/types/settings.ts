@@ -622,6 +622,14 @@ export interface UserSettings {
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
   showManagementFolders: boolean;
+  /**
+   * Advanced features, opt-in from Settings > General. The default experience
+   * stays deliberately simple: dashboards, workflows, and RAG only appear once
+   * the user turns them on.
+   */
+  dashboardEnabled: boolean;
+  workflowEnabled: boolean;
+  ragFeatureEnabled: boolean;
   /** Path of the dashboard to open on app launch (e.g. "Dashboards/home.dashboard"). */
   homeDashboard?: string | null;
   // Hubwork (paid feature) - web app builder with Sheets/Gmail
@@ -750,6 +758,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   apiKeySalt: "",
   shortcutKeys: [],
   showManagementFolders: false,
+  dashboardEnabled: false,
+  workflowEnabled: false,
+  ragFeatureEnabled: false,
   homeDashboard: null,
 };
 

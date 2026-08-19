@@ -1,5 +1,6 @@
 .DS_Store
 .env
+client_secret_*.apps.googleusercontent.com.json
 .codex
 /node_modules/
 .claude

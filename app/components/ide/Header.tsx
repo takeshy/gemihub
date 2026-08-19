@@ -53,6 +53,8 @@ interface HeaderProps {
   onOpenSecretManager?: () => void;
   onOpenHome?: () => void;
   onCreateFile?: () => void;
+  /** Workflow is an advanced, opt-in feature (Settings > General). */
+  workflowEnabled?: boolean;
 }
 
 export function Header({
@@ -82,6 +84,7 @@ export function Header({
   onOpenSecretManager,
   onOpenHome,
   onCreateFile,
+  workflowEnabled = false,
 }: HeaderProps) {
   const { t } = useI18n();
   const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
@@ -330,13 +333,15 @@ export function Header({
               <MessageSquare size={ICON.MD} />
               {t("header.chat")}
             </button>
-            <button
-              onClick={() => setRightPanel("workflow")}
-              className={tabButtonClass(rightPanel === "workflow")}
-            >
-              <GitBranch size={ICON.MD} />
-              {t("header.workflow")}
-            </button>
+            {workflowEnabled && (
+              <button
+                onClick={() => setRightPanel("workflow")}
+                className={tabButtonClass(rightPanel === "workflow")}
+              >
+                <GitBranch size={ICON.MD} />
+                {t("header.workflow")}
+              </button>
+            )}
 
             {/* Plugin dropdown */}
             {allPluginViews.length > 0 && (

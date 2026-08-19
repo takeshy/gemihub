@@ -36,6 +36,46 @@ export interface TranslationStrings {
   // MainViewer
   "mainViewer.welcome": string;
   "mainViewer.welcomeDescription": string;
+  "mainViewer.dashboardDisabled": string;
+  "mainViewer.dashboardDisabledDescription": string;
+  "mainViewer.workflowDisabled": string;
+  "mainViewer.workflowDisabledDescription": string;
+  "mainViewer.openFeatureSettings": string;
+  "gettingStarted.eyebrow": string;
+  "gettingStarted.title": string;
+  "gettingStarted.description": string;
+  "gettingStarted.capabilitiesTitle": string;
+  "gettingStarted.capabilitiesDescription": string;
+  "gettingStarted.capability1Title": string;
+  "gettingStarted.capability1Description": string;
+  "gettingStarted.capability2Title": string;
+  "gettingStarted.capability2Description": string;
+  "gettingStarted.capability3Title": string;
+  "gettingStarted.capability3Description": string;
+  "gettingStarted.capability4Title": string;
+  "gettingStarted.capability4Description": string;
+  "gettingStarted.stepsTitle": string;
+  "gettingStarted.stepsDescription": string;
+  "gettingStarted.step1Title": string;
+  "gettingStarted.step1Description": string;
+  "gettingStarted.step2Title": string;
+  "gettingStarted.step2Description": string;
+  "gettingStarted.step3Title": string;
+  "gettingStarted.step3Description": string;
+  "gettingStarted.savingTitle": string;
+  "gettingStarted.savingDescription": string;
+  "gettingStarted.driveTitle": string;
+  "gettingStarted.driveDescription": string;
+  "gettingStarted.localTitle": string;
+  "gettingStarted.localDescription": string;
+  "gettingStarted.savingNote": string;
+  "gettingStarted.launcherTitle": string;
+  "gettingStarted.launcherDescription": string;
+  "gettingStarted.timelineTitle": string;
+  "gettingStarted.timelineDescription": string;
+  "gettingStarted.timelineExample": string;
+  "gettingStarted.openManual": string;
+  "gettingStarted.optionalFeatures": string;
   "mainViewer.retry": string;
   "mainViewer.loadError": string;
   "mainViewer.offlineNoCache": string;
@@ -1287,6 +1327,14 @@ export interface TranslationStrings {
   "frontmatter.paste": string;
 
   // Skills
+  "settings.general.advancedFeatures": string;
+  "settings.general.advancedFeaturesDescription": string;
+  "settings.general.enableDashboard": string;
+  "settings.general.enableDashboardDescription": string;
+  "settings.general.enableWorkflow": string;
+  "settings.general.enableWorkflowDescription": string;
+  "settings.general.enableRag": string;
+  "settings.general.enableRagDescription": string;
   "settings.general.showManagementFolders": string;
   "settings.general.showManagementFoldersDescription": string;
   "skills.selector.title": string;
@@ -1336,6 +1384,46 @@ const en: TranslationStrings = {
   // MainViewer
   "mainViewer.welcome": "Welcome to GemiHub",
   "mainViewer.welcomeDescription": "Select a file from the file tree to start editing, or create a new workflow or file using the buttons above.",
+  "mainViewer.dashboardDisabled": "Dashboard is turned off",
+  "mainViewer.dashboardDisabledDescription": "Dashboard is an optional advanced feature. Enable it under Settings > General when you are ready to use it.",
+  "mainViewer.workflowDisabled": "Workflow is turned off",
+  "mainViewer.workflowDisabledDescription": "Workflow is an optional advanced feature. Enable it under Settings > General when you are ready to build automated processes.",
+  "mainViewer.openFeatureSettings": "Open feature settings",
+  "gettingStarted.eyebrow": "Your workspace, with AI by your side",
+  "gettingStarted.title": "Welcome to GemiHub",
+  "gettingStarted.description": "GemiHub is a workspace on top of your Google Drive where you can write documents, keep information organized, and ask AI for help. Start with something familiar such as writing a note — no technical knowledge is required.",
+  "gettingStarted.capabilitiesTitle": "What you can do here",
+  "gettingStarted.capabilitiesDescription": "Use only what you need. You can turn on more features later as you become comfortable.",
+  "gettingStarted.capability1Title": "Create and improve documents",
+  "gettingStarted.capability1Description": "Write meeting notes, plans, and instructions in Markdown. AI can summarize them, make them easier to read, or help you find the right wording.",
+  "gettingStarted.capability2Title": "Keep your information organized",
+  "gettingStarted.capability2Description": "Your files live in the gemihub folder on your Google Drive, so the latest version is always where you and your devices expect it.",
+  "gettingStarted.capability3Title": "Ask AI in everyday language",
+  "gettingStarted.capability3Description": "Ask questions such as “Explain this simply” or “What should I do next?” You do not need to learn special commands.",
+  "gettingStarted.capability4Title": "Make repeated work easier",
+  "gettingStarted.capability4Description": "When you are ready, turn on Workflow and let GemiHub run routine steps in the same order every time.",
+  "gettingStarted.stepsTitle": "Start with these three steps",
+  "gettingStarted.stepsDescription": "It is fine to learn one step at a time. Your work is saved in this browser first, then pushed to Drive.",
+  "gettingStarted.step1Title": "Open or create a file",
+  "gettingStarted.step1Description": "Your Drive files appear in the left sidebar. Open one, or create a new note from the file tree.",
+  "gettingStarted.step2Title": "Write and edit",
+  "gettingStarted.step2Description": "Markdown files open in the editor. Switch between preview, WYSIWYG, and raw text whenever you like.",
+  "gettingStarted.step3Title": "Ask Chat for help",
+  "gettingStarted.step3Description": "Use Chat on the right when you want a summary, a rewrite, an explanation, or help with the next step.",
+  "gettingStarted.savingTitle": "How your changes are saved and shared",
+  "gettingStarted.savingDescription": "Editing and sharing are separate steps. This lets you review your work before sending it to Drive.",
+  "gettingStarted.driveTitle": "Push to Drive: share your changes",
+  "gettingStarted.driveDescription": "Your edits are saved in this browser first. Choose “Push to Drive” when they are ready for other devices. Review the change list, then confirm the push.",
+  "gettingStarted.localTitle": "Pull to Local: receive newer changes",
+  "gettingStarted.localDescription": "Choose “Pull to Local” to bring changes made on Drive or another device into this browser. Pull before starting work if the files may have been updated elsewhere.",
+  "gettingStarted.savingNote": "If the same file changed both locally and on Drive, GemiHub reports a conflict instead of silently overwriting either version. Compare them and choose which version to keep.",
+  "gettingStarted.launcherTitle": "Open useful tools from the Launcher",
+  "gettingStarted.launcherDescription": "The Launcher opens focused tools without making you search through folders. It includes Memos, Timeline, Calendar, Kanban, and encrypted credential management.",
+  "gettingStarted.timelineTitle": "Timeline: your date-by-date work journal",
+  "gettingStarted.timelineDescription": "Record progress, decisions, conversations, and things to remember as short posts. Entries are organized by date, searchable by word or tag, and can be pinned. You can also ask Chat what happened on a particular day, or tell it to add a note to your Timeline.",
+  "gettingStarted.timelineExample": "Examples: “Sent the revised estimate to the customer,” “Decided to launch on Friday,” or “Remember to confirm the venue tomorrow.”",
+  "gettingStarted.openManual": "Open the beginner guide",
+  "gettingStarted.optionalFeatures": "Optional feature settings",
   "mainViewer.retry": "Retry",
   "mainViewer.loadError": "Failed to load file",
   "mainViewer.offlineNoCache": "This file is not available offline. Please sync while online to cache it.",
@@ -2588,6 +2676,14 @@ const en: TranslationStrings = {
   "frontmatter.paste": "Paste",
 
   // Skills
+  "settings.general.advancedFeatures": "Optional advanced features",
+  "settings.general.advancedFeaturesDescription": "These features are off by default to keep the workspace simple. Enable only what you need.",
+  "settings.general.enableDashboard": "Enable Dashboard",
+  "settings.general.enableDashboardDescription": "Show dashboard files and use the dashboard as the home screen.",
+  "settings.general.enableWorkflow": "Enable Workflow",
+  "settings.general.enableWorkflowDescription": "Show the workflow panel and allow YAML workflows to be edited and executed.",
+  "settings.general.enableRag": "Enable RAG",
+  "settings.general.enableRagDescription": "Show the RAG settings tab and the RAG selector in chat.",
   "settings.general.showManagementFolders": "Show management folders",
   "settings.general.showManagementFoldersDescription": "Show folders used by external tools (e.g. LocalLlmHub) in the file tree.",
   "skills.selector.title": "Agent Skills",
@@ -2637,6 +2733,46 @@ const ja: TranslationStrings = {
   // MainViewer
   "mainViewer.welcome": "GemiHubへようこそ",
   "mainViewer.welcomeDescription": "ファイルツリーからファイルを選択して編集を開始するか、上のボタンから新しいワークフローやファイルを作成してください。",
+  "mainViewer.dashboardDisabled": "ダッシュボードは現在OFFです",
+  "mainViewer.dashboardDisabledDescription": "ダッシュボードは任意の上級機能です。使用するときは設定 > 一般からONにしてください。",
+  "mainViewer.workflowDisabled": "ワークフローは現在OFFです",
+  "mainViewer.workflowDisabledDescription": "ワークフローは任意の上級機能です。自動処理を作成するときは設定 > 一般からONにしてください。",
+  "mainViewer.openFeatureSettings": "機能設定を開く",
+  "gettingStarted.eyebrow": "AIと一緒に仕事を進める場所",
+  "gettingStarted.title": "GemiHubへようこそ",
+  "gettingStarted.description": "GemiHubは、Google Drive上の資料を作成・整理し、必要なときにAIの手を借りられる仕事場です。まずはメモを書くような、いつもの作業から始められます。特別な知識や操作は必要ありません。",
+  "gettingStarted.capabilitiesTitle": "GemiHubでできること",
+  "gettingStarted.capabilitiesDescription": "すべてを一度に使う必要はありません。必要になった機能から、少しずつONにできます。",
+  "gettingStarted.capability1Title": "文章を作る・読みやすく整える",
+  "gettingStarted.capability1Description": "会議メモ、計画書、手順書などをMarkdownで作れます。AIに要約や言い換えを頼み、伝わりやすい文章に整えることもできます。",
+  "gettingStarted.capability2Title": "資料を整理して保管する",
+  "gettingStarted.capability2Description": "ファイルはGoogle Driveのgemihubフォルダに保存されます。最新版がどこにあるか迷わず、別の端末からも同じ内容を扱えます。",
+  "gettingStarted.capability3Title": "普段の言葉でAIに相談する",
+  "gettingStarted.capability3Description": "「簡単に説明して」「次に何をすればいい？」のように、そのまま質問できます。特別な命令文を覚える必要はありません。",
+  "gettingStarted.capability4Title": "繰り返し作業を楽にする",
+  "gettingStarted.capability4Description": "慣れてきたらワークフローをONにして、いつも同じ順番で行う作業をGemiHubに任せられます。",
+  "gettingStarted.stepsTitle": "最初の3ステップ",
+  "gettingStarted.stepsDescription": "一つずつ試せば大丈夫です。編集内容はまずこのブラウザに保存され、ドライブ反映で共有されます。",
+  "gettingStarted.step1Title": "ファイルを開く・作る",
+  "gettingStarted.step1Description": "左のサイドバーにドライブのファイルが表示されます。開くか、ファイルツリーから新しいメモを作成してください。",
+  "gettingStarted.step2Title": "書く・編集する",
+  "gettingStarted.step2Description": "Markdownファイルはエディタで開きます。プレビュー・WYSIWYG・ソース表示はいつでも切り替えられます。",
+  "gettingStarted.step3Title": "Chatに相談する",
+  "gettingStarted.step3Description": "要約、書き直し、内容の説明、次の操作が分からないときは右側のChatへ質問できます。",
+  "gettingStarted.savingTitle": "変更を保存・共有する仕組み",
+  "gettingStarted.savingDescription": "GemiHubでは「この端末で編集すること」と「ドライブへ共有すること」を分けています。内容を確認してから共有できるため、作業途中の変更が意図せず反映されません。",
+  "gettingStarted.driveTitle": "ドライブ反映：自分の変更を共有する",
+  "gettingStarted.driveDescription": "編集内容は、まずこのブラウザ内に保存されます。別の端末でも使える状態にするときは「ドライブ反映」を押します。表示された変更一覧を確認してから反映してください。",
+  "gettingStarted.localTitle": "ローカル反映：新しい変更を受け取る",
+  "gettingStarted.localDescription": "ドライブ側や別の端末で行った変更を、このブラウザへ取り込む操作です。他で更新した可能性があるときは、作業を始める前に「ローカル反映」を行うと安心です。",
+  "gettingStarted.savingNote": "同じファイルがローカルとドライブの両方で変更されていた場合は、片方を勝手に上書きせず「コンフリクト」としてお知らせします。内容を見比べ、残す版を選べます。",
+  "gettingStarted.launcherTitle": "ランチャーから便利な道具を開く",
+  "gettingStarted.launcherDescription": "ランチャーは、フォルダからファイルを探さなくても、よく使う道具をすぐ開ける入口です。メモ、タイムライン、カレンダー、カンバン、暗号化した認証情報の管理を開けます。",
+  "gettingStarted.timelineTitle": "タイムライン：日付ごとに残す仕事の記録",
+  "gettingStarted.timelineDescription": "仕事の経過、決まったこと、会話の要点、あとで思い出したいことを短い投稿として残します。日付順に整理され、キーワードやタグで検索でき、大切な投稿はピン留めできます。Chatに「今日何をした？」と聞いたり、「これをタイムラインに記録して」と頼んだりすることもできます。",
+  "gettingStarted.timelineExample": "記録例：「見積書の修正版をお客様へ送付」「金曜日に公開することを決定」「明日、会場へ確認する」",
+  "gettingStarted.openManual": "初心者向けガイドを開く",
+  "gettingStarted.optionalFeatures": "任意機能の設定",
   "mainViewer.retry": "再試行",
   "mainViewer.loadError": "ファイルの読み込みに失敗しました",
   "mainViewer.offlineNoCache": "このファイルはオフラインでは利用できません。オンライン時に同期してキャッシュしてください。",
@@ -3889,6 +4025,14 @@ const ja: TranslationStrings = {
   "frontmatter.paste": "貼り付け",
 
   // Skills
+  "settings.general.advancedFeatures": "任意の上級機能",
+  "settings.general.advancedFeaturesDescription": "画面を分かりやすく保つため、初期状態ではOFFです。必要になった機能だけONにしてください。",
+  "settings.general.enableDashboard": "ダッシュボードを使用する",
+  "settings.general.enableDashboardDescription": "ダッシュボードファイルを表示し、ホーム画面として利用します。",
+  "settings.general.enableWorkflow": "ワークフローを使用する",
+  "settings.general.enableWorkflowDescription": "ワークフローパネルを表示し、YAMLワークフローの編集・実行を有効にします。",
+  "settings.general.enableRag": "RAGを使用する",
+  "settings.general.enableRagDescription": "設定のRAGタブと、チャットのRAGセレクタを表示します。",
   "settings.general.showManagementFolders": "管理フォルダを表示",
   "settings.general.showManagementFoldersDescription": "外部ツールが使用するフォルダ（例: LocalLlmHub）をファイルツリーに表示します。",
   "skills.selector.title": "エージェントスキル",

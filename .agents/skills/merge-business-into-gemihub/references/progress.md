@@ -1,5 +1,73 @@
 # Merge progress log
 
+## Fork catch-up round (fork HEAD 21d847c re-audit) — DONE (2026-08-19)
+
+Audited every fork commit from `5b4f257`..`21d847c` (plus `f4cbe03`/`435bf7b`)
+against this repo. Most were already absorbed by the bulk port; the gaps found
+and closed:
+
+- `google-auth.server.getValidTokens` skipped nothing for tokenless sessions —
+  an OIDC/email session (expiryTime 0, no refresh token) hit the refresh path,
+  got a 401 and had its session destroyed. **Adapted, not copied**: the fork
+  returns early on `authMethod !== "google"`, which would break every legacy
+  Drive session here (Google sessions predate the field and store no
+  `authMethod`), so the guard tests for `"oidc" | "email"` explicitly.
+- `root.tsx`: added the fork's `vite:preloadError` handler (one reload per
+  60 s, sessionStorage-throttled) so a stale deploy chunk cannot strand the
+  editor (fork `fc5e9f4`, itself a port of this repo's `eb61e17`).
+- `.gitignore`: `client_secret_*.apps.googleusercontent.com.json` (fork
+  `3430c79`) — the Vertex OAuth client JSON is downloaded into the repo root
+  during setup.
+- `terraform/modules/gemihub/apis.tf`: enabled `drive`, `gmail`,
+  `calendar-json`, and `aiplatform` APIs (fork `d650194`; this repo calls all
+  four but only enabled Firestore/Storage).
+- `terraform/modules/gemihub/firestore.tf` (new): `google_firestore_field` for
+  the `invites.token` COLLECTION_GROUP index that `findInviteByToken` requires
+  (fork `abac9fb`). Gated behind `manage_firestore_indexes` (default false,
+  `firestore_database_id` default `"(default)"`) because self-hosted installs
+  may have no Firestore database and existing deployments own theirs.
+- `useTreeFileCreate`: the generated `daily/YYYY/MM/DD_...` default name is an
+  absolute path and is no longer nested under the selected folder (fork
+  `5b4f257`).
+
+Deliberately NOT ported: fork `9fd9899` (removes the welcome page's first-steps
+section and manual link — this repo keeps its manual), fork `5b4f257`'s removal
+of owner protections in `api.members.{remove,update-role}` (this repo's
+super-admin gating is stricter, known-defects 6b), fork `f4cbe03`'s
+`default-project.server.test.ts` (covers `defaultOrgIdFromName` /
+`personalProjectId`, neither of which exists here), the fork's `installed`-JSON
+error string hardcoding `gemihub.online`, and the fork's SkillContext
+builtin-skills refactor.
+
+### Advanced-feature opt-in (fork f4cbe03 + 435bf7b) — DONE (2026-08-19)
+
+User decisions: gate **dashboard, workflow, RAG** (not webpage-builder — it is
+Hubwork-plan provisioned here and would double-gate), and default all three to
+**false for everyone** (fork parity; no migration for existing settings.json).
+
+- `UserSettings.{dashboardEnabled,workflowEnabled,ragFeatureEnabled}` +
+  defaults false; persisted by the settings `general` action.
+- `GeneralTab`: "Optional advanced features" card with the three toggles.
+- `MainViewer`: home view falls back to a new `GettingStartedPage` while the
+  dashboard is off; `.dashboard` and `.yaml`/`.yml` files render a
+  `FeatureDisabledNotice` linking to Settings > General.
+- `Header` / `_index` / `useActiveFile`: workflow tab (desktop + mobile),
+  yaml auto-panel-switch, `gemihub:open-workflow-tab`, and the
+  `executeWorkflow` shortcut are all gated; an open workflow panel falls back
+  to chat when the flag turns off.
+- RAG: settings tab hidden (tab list + render branch), `ChatPanel` stops
+  passing `ragSettings`/resolving a RAG store, `CommandsTab` drops the RAG
+  options. Web search shares the chat selector and stays available, so a
+  stored `__websearch__` selection survives while a stored RAG name is ignored.
+- i18n: 40 `gettingStarted.*`/`mainViewer.*` keys + 8
+  `settings.general.*` keys in en and ja (GemiBiz→GemiHub, Drive-mount wording,
+  first-steps + manual link kept per user decision).
+- Docs: `features/dashboard.md`, `workflows/workflow_execution.md`,
+  `integrations/rag.md` gained an "Opt-in (advanced feature)" section; logged in
+  `docs/log.md`.
+- Verified: typecheck + lint + build green, 484 tests pass, `terraform fmt`
+  and `terraform validate` clean.
+
 ## Storage quota round — DONE (2026-08-19)
 
 User decision: Business includes **100 GB** project storage per org,

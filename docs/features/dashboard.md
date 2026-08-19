@@ -11,6 +11,13 @@ The dashboard is a grid of configurable **widgets** rendered on the IDE home vie
 
 > Implementation lives under `app/dashboard/`.
 
+## Opt-in (advanced feature)
+
+The dashboard is **off by default**. `UserSettings.dashboardEnabled` (Settings > General > "Optional advanced features") controls it:
+
+- Disabled: the IDE home view (no file selected) shows the Getting Started guide instead of `DashboardHost`, and opening a `.dashboard` file shows a notice linking to the feature settings.
+- Enabled: behaves as described below.
+
 ## File format & storage
 
 - A dashboard is a YAML file with the `.dashboard` extension.

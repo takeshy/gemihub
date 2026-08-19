@@ -9,6 +9,10 @@ tags:
 
 Workflow execution engine with YAML parsing, handler-based node dispatch, client-side local execution, interactive prompts, and AI-powered workflow generation.
 
+## Opt-in (advanced feature)
+
+Workflows are **off by default**. `UserSettings.workflowEnabled` (Settings > General > "Optional advanced features") gates the UI surfaces: the Workflow tab in the header and the mobile tab bar, the automatic right-panel switch when a `.yaml`/`.yml` file is opened, the `executeWorkflow` shortcut binding, and the workflow view in the main viewer (a notice linking to the feature settings is shown instead). The engine itself is unchanged.
+
 ## Features
 
 - **YAML Parser**: Converts YAML workflow definitions into an executable AST

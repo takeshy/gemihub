@@ -293,6 +293,9 @@ export async function action({ request }: Route.ActionArgs) {
         const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
         const theme = (formData.get("theme") as Theme) || currentSettings.theme || "system";
         const showManagementFolders = formData.get("showManagementFolders") === "on";
+        const dashboardEnabled = formData.get("dashboardEnabled") === "on";
+        const workflowEnabled = formData.get("workflowEnabled") === "on";
+        const ragFeatureEnabled = formData.get("ragFeatureEnabled") === "on";
 
         // Encryption-related fields
         const password = (formData.get("password") as string)?.trim() || "";
@@ -334,6 +337,9 @@ export async function action({ request }: Route.ActionArgs) {
           fontSize,
           theme,
           showManagementFolders,
+          dashboardEnabled,
+          workflowEnabled,
+          ragFeatureEnabled,
         };
 
         // Update file encryption toggles
@@ -907,7 +913,12 @@ function SettingsInner({
   const { t } = useI18n();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const orgFilteredTabs = TABS.filter((tab) => tab.id !== "enterprise" || hasOrganizations);
+  const orgFilteredTabs = TABS.filter((tab) => {
+    if (tab.id === "enterprise") return hasOrganizations;
+    // RAG is an advanced, opt-in feature (Settings > General).
+    if (tab.id === "rag") return settings.ragFeatureEnabled ?? false;
+    return true;
+  });
   const visibleTabs = isMobile ? orgFilteredTabs.filter((tab) => !tab.desktopOnly) : orgFilteredTabs;
 
   return (
@@ -967,7 +978,7 @@ function SettingsInner({
         {activeTab === "enterprise" && hasOrganizations && <EnterpriseTab />}
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
-        {activeTab === "rag" && <RagTab settings={settings} />}
+        {activeTab === "rag" && (settings.ragFeatureEnabled ?? false) && <RagTab settings={settings} />}
         {activeTab === "commands" && <CommandsTab settings={settings} />}
         {activeTab === "plugins" && <PluginsTab settings={settings} />}
         {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}

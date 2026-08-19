@@ -121,6 +121,14 @@ export async function getValidTokens(
   request: Request,
   tokens: SessionTokens
 ): Promise<{ tokens: SessionTokens; setCookieHeader?: string }> {
+  // Email-link and org OIDC sessions deliberately carry no Google
+  // access/refresh token — they are already valid application sessions, and
+  // attempting a refresh would destroy them. Google sessions predate the
+  // `authMethod` field, so only the explicitly tokenless methods are skipped.
+  if (tokens.authMethod === "oidc" || tokens.authMethod === "email") {
+    return { tokens };
+  }
+
   // Check if token expires within 5 minutes
   const FIVE_MINUTES = 5 * 60 * 1000;
   if (tokens.expiryTime - Date.now() > FIVE_MINUTES) {

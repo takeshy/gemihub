@@ -49,6 +49,18 @@ variable "hubwork_review_slugs" {
   default     = []
 }
 
+variable "manage_firestore_indexes" {
+  description = "Whether to manage the Firestore indexes required by the organization features."
+  type        = bool
+  default     = false
+}
+
+variable "firestore_database_id" {
+  description = "Firestore database the app uses (matches FIRESTORE_DATABASE_ID)."
+  type        = string
+  default     = "(default)"
+}
+
 # --------------- Module ---------------
 
 module "gemihub" {
@@ -62,6 +74,8 @@ module "gemihub" {
   cpu_idle                       = false
   hubwork_review_slugs           = var.hubwork_review_slugs
   hubwork_stripe_allowed_slugs   = ["takeshy"]
+  manage_firestore_indexes       = var.manage_firestore_indexes
+  firestore_database_id          = var.firestore_database_id
 }
 
 # --------------- Outputs ---------------

@@ -383,10 +383,14 @@ export function ChatPanel({
     }
   }, [availableModels, selectedModel]);
 
+  // RAG is an advanced, opt-in feature. Web search shares this selector and
+  // stays available regardless.
+  const ragFeatureEnabled = settings.ragFeatureEnabled ?? false;
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(() => {
     try {
       const stored = localStorage.getItem("gemihub:selectedRagSetting");
-      if (stored !== null) return stored || null;
+      if (stored === "__websearch__") return stored;
+      if (stored !== null) return (settings.ragFeatureEnabled ?? false) ? stored || null : null;
     } catch { /* ignore */ }
     return null;
   });
@@ -959,7 +963,7 @@ export function ChatPanel({
       const isWebSearch = effectiveRagSetting === "__websearch__" && supportsWebSearch(effectiveModel);
 
       const ragSetting =
-        effectiveRagSetting && !isWebSearch
+        ragFeatureEnabled && effectiveRagSetting && !isWebSearch
           ? settings.ragSettings[effectiveRagSetting]
           : null;
       const ragStoreIds =
@@ -1368,6 +1372,7 @@ export function ChatPanel({
     [
       hasEncryptedApiKey,
       onNeedUnlock,
+      ragFeatureEnabled,
       messages,
       selectedModel,
       selectedRagSetting,
@@ -1739,7 +1744,7 @@ export function ChatPanel({
         models={availableModels}
         selectedModel={selectedModel}
         onModelChange={handleModelChange}
-        ragSettings={Object.keys(settings.ragSettings ?? {}).length > 0 ? settings.ragSettings : undefined}
+        ragSettings={ragFeatureEnabled && Object.keys(settings.ragSettings ?? {}).length > 0 ? settings.ragSettings : undefined}
         selectedRagSetting={selectedRagSetting}
         onRagSettingChange={handleRagSettingChange}
         onStop={handleStop}

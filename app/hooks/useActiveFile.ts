@@ -11,9 +11,12 @@ import type { RightPanelId } from "~/components/ide/Header";
 export function useActiveFile({
   rightPanel,
   setRightPanel,
+  workflowEnabled = false,
 }: {
   rightPanel: RightPanelId;
   setRightPanel: (panel: RightPanelId) => void;
+  /** Workflow is an advanced, opt-in feature (Settings > General). */
+  workflowEnabled?: boolean;
 }) {
   const [searchParams] = useSearchParams();
 
@@ -46,7 +49,7 @@ export function useActiveFile({
         setActiveFileName(name);
         setActiveFileMimeType(mimeType || null);
         if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
-          if (name.endsWith(".yaml") || name.endsWith(".yml")) {
+          if (workflowEnabled && (name.endsWith(".yaml") || name.endsWith(".yml"))) {
             setRightPanel("workflow");
           } else {
             setRightPanel("chat");
@@ -68,7 +71,7 @@ export function useActiveFile({
         }
       }).catch(() => {});
     }
-  }, [activeFileId, activeFileName, rightPanel, setRightPanel]);
+  }, [activeFileId, activeFileName, rightPanel, setRightPanel, workflowEnabled]);
 
   // When a new: file is migrated to a real Drive ID, update active file state + URL
   useEffect(() => {
@@ -129,7 +132,7 @@ export function useActiveFile({
       setActiveFileMimeType(mimeType);
       // Auto-switch right panel based on file type, but keep plugin views open
       if (!rightPanel.startsWith("plugin:") && !rightPanel.startsWith("main-plugin:")) {
-        if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
+        if (workflowEnabled && (fileName.endsWith(".yaml") || fileName.endsWith(".yml"))) {
           setRightPanel("workflow");
         } else {
           setRightPanel("chat");
@@ -141,7 +144,7 @@ export function useActiveFile({
       window.history.pushState({}, "", url.toString());
       window.dispatchEvent(new CustomEvent("active-file-changed", { detail: { fileId, fileName, mimeType } }));
     },
-    [rightPanel, setRightPanel]
+    [rightPanel, setRightPanel, workflowEnabled]
   );
 
   // Listen for in-preview navigation (HTML preview iframe posts this event

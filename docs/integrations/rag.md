@@ -9,6 +9,10 @@ tags:
 
 Gemini File Search を利用したナレッジベース機能。Google Drive 上のファイルを Gemini の File Search Store に登録し、チャットやワークフローで意味検索を行う。
 
+## Opt-in (advanced feature)
+
+RAG is **off by default**. `UserSettings.ragFeatureEnabled` (Settings > General > "Optional advanced features") hides the RAG settings tab, the RAG selector in the chat input, and the RAG options in slash-command overrides while it is off. Web search shares the chat selector and stays available regardless.
+
 ## 概要
 
 - **Internal RAG**: Drive 上のファイルを自動的に File Search Store へ同期

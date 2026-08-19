@@ -1,6 +1,7 @@
 # Update Log
 
 ## 2026-08-19
+* **Update**: Dashboard, Workflow, and RAG became opt-in "advanced features" — all three default to off (`dashboardEnabled` / `workflowEnabled` / `ragFeatureEnabled` in Settings > General), and the IDE home view shows a Getting Started guide while the dashboard is off (`features/dashboard.md`, `workflows/workflow_execution.md`, `integrations/rag.md`).
 * **Add**: `architecture/mounts.md` — storage mounts (Drive default / GCS org project) and AI providers (genai-key / Vertex) coexistence model, route dispatch, My Drive shelf, and the `lite | business | granted` plan model.
 
 ## 2026-07-11

@@ -50,6 +50,9 @@ export function GeneralTab({
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
   const [showManagementFolders, setShowManagementFolders] = useState(settings.showManagementFolders ?? false);
+  const [dashboardEnabled, setDashboardEnabled] = useState(settings.dashboardEnabled ?? false);
+  const [workflowEnabled, setWorkflowEnabled] = useState(settings.workflowEnabled ?? false);
+  const [ragFeatureEnabled, setRagFeatureEnabled] = useState(settings.ragFeatureEnabled ?? false);
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
@@ -363,6 +366,66 @@ export function GeneralTab({
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {t("settings.general.showManagementFoldersDescription")}
             </p>
+          </div>
+        </div>
+
+        {/* Optional advanced features */}
+        <div className="mb-6 rounded-md border border-gray-200 p-4 dark:border-gray-700">
+          <h3 className="mb-1 text-sm font-semibold text-gray-800 dark:text-gray-200">
+            {t("settings.general.advancedFeatures")}
+          </h3>
+          <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+            {t("settings.general.advancedFeaturesDescription")}
+          </p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="dashboardEnabled"
+                name="dashboardEnabled"
+                checked={dashboardEnabled}
+                onChange={(e) => setDashboardEnabled(e.target.checked)}
+                className={checkboxClass}
+              />
+              <div>
+                <Label htmlFor="dashboardEnabled">{t("settings.general.enableDashboard")}</Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("settings.general.enableDashboardDescription")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="workflowEnabled"
+                name="workflowEnabled"
+                checked={workflowEnabled}
+                onChange={(e) => setWorkflowEnabled(e.target.checked)}
+                className={checkboxClass}
+              />
+              <div>
+                <Label htmlFor="workflowEnabled">{t("settings.general.enableWorkflow")}</Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("settings.general.enableWorkflowDescription")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="ragFeatureEnabled"
+                name="ragFeatureEnabled"
+                checked={ragFeatureEnabled}
+                onChange={(e) => setRagFeatureEnabled(e.target.checked)}
+                className={checkboxClass}
+              />
+              <div>
+                <Label htmlFor="ragFeatureEnabled">{t("settings.general.enableRag")}</Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {t("settings.general.enableRagDescription")}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

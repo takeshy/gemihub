@@ -406,16 +406,25 @@ function IDELayout({
   const [rightPanel, setRightPanel] = useState<RightPanelId>("chat");
 
   // Active file state (synced with URL, migration events, decryption events)
+  // Workflow is an advanced, opt-in feature (Settings > General).
+  const workflowEnabled = settings.workflowEnabled ?? false;
   const { activeFileId, activeFileName, activeFileMimeType, handleSelectFile, clearActiveFile } =
-    useActiveFile({ rightPanel, setRightPanel });
+    useActiveFile({ rightPanel, setRightPanel, workflowEnabled });
 
   // Listen for the failed-workflow "Open workflow" button, which opens the file
   // via plugin-select-file and then asks us to switch the right sidebar to the workflow tab.
   useEffect(() => {
+    if (!workflowEnabled) return;
     const handler = () => setRightPanel("workflow");
     window.addEventListener("gemihub:open-workflow-tab", handler);
     return () => window.removeEventListener("gemihub:open-workflow-tab", handler);
-  }, []);
+  }, [workflowEnabled]);
+
+  // Turning the feature off while the workflow panel is open must not leave the
+  // user stuck on a hidden tab.
+  useEffect(() => {
+    if (!workflowEnabled && rightPanel === "workflow") setRightPanel("chat");
+  }, [workflowEnabled, rightPanel]);
 
   // Workflow version for refreshing MainViewer after sidebar edits
   const [workflowVersion, setWorkflowVersion] = useState(0);
@@ -614,6 +623,8 @@ function IDEContent({
 }) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
+  // Workflow is an advanced, opt-in feature (Settings > General).
+  const workflowEnabled = settings.workflowEnabled ?? false;
   const { sidebarViews, mainViews, getPluginAPI } = usePlugins();
   const { fileList } = useEditorContext();
   const shownSkillUpdateToastRef = useRef<string | null>(null);
@@ -915,7 +926,7 @@ function IDEContent({
 
         if (keyMatch && ctrlMatch && shiftMatch && altMatch) {
           e.preventDefault();
-          if (binding.action === "executeWorkflow") {
+          if (binding.action === "executeWorkflow" && workflowEnabled) {
             const targetId = binding.targetFileId;
             const targetName = binding.targetFileName;
             if (binding.silent && targetId) {
@@ -940,7 +951,7 @@ function IDEContent({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [shortcutKeys, handleSelectFile, executeSilentWorkflow, isMobile]);
+  }, [shortcutKeys, handleSelectFile, executeSilentWorkflow, isMobile, workflowEnabled]);
 
   // Mobile view state: which panel is shown full-screen
   const [mobileView, setMobileView] = useState<MobileView>("editor");
@@ -1345,6 +1356,7 @@ function IDEContent({
       <Header
         rightPanel={rightPanel}
         setRightPanel={setRightPanel}
+        workflowEnabled={workflowEnabled}
         activeFileId={activeFileId}
         syncStatus={syncStatus}
         lastSyncTime={lastSyncTime}
@@ -1504,13 +1516,15 @@ function IDEContent({
               <MessageSquare size={ICON.LG} />
               {t("header.chat")}
             </button>
-            <button
-              onClick={() => { setRightPanel("workflow"); setMobileView("workflow"); }}
-              className={mobileTabClass(mobileView === "workflow")}
-            >
-              <GitBranch size={ICON.LG} />
-              {t("header.workflow")}
-            </button>
+            {workflowEnabled && (
+              <button
+                onClick={() => { setRightPanel("workflow"); setMobileView("workflow"); }}
+                className={mobileTabClass(mobileView === "workflow")}
+              >
+                <GitBranch size={ICON.LG} />
+                {t("header.workflow")}
+              </button>
+            )}
             {allPluginViews.length > 0 && (
               <div className="relative flex flex-1" ref={pluginMenuRef}>
                 <button

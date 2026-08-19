@@ -55,6 +55,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
         <script
           dangerouslySetInnerHTML={{
+            __html: `(function(){window.addEventListener("vite:preloadError",function(e){try{e.preventDefault();var k="gemihub-chunk-reload-at";var n=Date.now();var p=Number(sessionStorage.getItem(k)||"0");if(n-p>60000){sessionStorage.setItem(k,String(n));window.location.reload();}}catch(x){}});})();`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
             __html: [
               // Register SW only on main app domains (skip hubwork custom domains).
               'var _h=location.hostname;',

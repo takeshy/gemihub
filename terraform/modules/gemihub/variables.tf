@@ -62,3 +62,14 @@ variable "hubwork_stripe_allowed_slugs" {
   default     = []
 }
 
+variable "manage_firestore_indexes" {
+  description = "Whether to manage the Firestore indexes required by the organization features (requires an existing Firestore database)."
+  type        = bool
+  default     = false
+}
+
+variable "firestore_database_id" {
+  description = "Firestore database the app uses (matches FIRESTORE_DATABASE_ID; \"(default)\" when unset)."
+  type        = string
+  default     = "(default)"
+}

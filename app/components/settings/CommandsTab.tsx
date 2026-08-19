@@ -291,7 +291,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
             >
               <option value="">{t("settings.commands.noOverride")}</option>
               <option value="__websearch__">Web Search</option>
-              {Object.keys(settings.ragSettings).map((name) => (
+              {(settings.ragFeatureEnabled ? Object.keys(settings.ragSettings) : []).map((name) => (
                 <option key={name} value={name}>
                   RAG: {name}
                 </option>
