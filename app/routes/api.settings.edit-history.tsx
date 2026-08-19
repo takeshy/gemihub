@@ -4,6 +4,13 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getHistory, clearHistory } from "~/services/edit-history.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  {
+    const requestUrl = new URL(request.url);
+    if (requestUrl.searchParams.get("projectId")) {
+      const { tenantLoader } = await import("~/services/ai/tenant-edit-history-route.server");
+      return tenantLoader(request);
+    }
+  }
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
@@ -31,6 +38,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  {
+    const peek = (await request.clone().json().catch(() => null)) as { projectId?: unknown } | null;
+    if (peek && typeof peek.projectId === "string" && peek.projectId) {
+      const { tenantAction } = await import("~/services/ai/tenant-edit-history-route.server");
+      return tenantAction(request);
+    }
+  }
   if (request.method !== "DELETE") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }

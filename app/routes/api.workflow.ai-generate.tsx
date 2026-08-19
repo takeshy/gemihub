@@ -20,6 +20,15 @@ import { createLogContext, emitLog } from "~/services/logger.server";
 type Phase = "generate" | "plan" | "review" | "refine";
 
 export async function action({ request }: Route.ActionArgs) {
+  // Project-mount requests carry projectId and run on the org tenant's
+  // Vertex AI. Peek at a clone so the legacy path can still read the body.
+  {
+    const peek = (await request.clone().json().catch(() => null)) as { projectId?: unknown } | null;
+    if (peek && typeof peek.projectId === "string" && peek.projectId) {
+      const { vertexAction } = await import("~/services/ai/vertex-workflow-ai-generate.server");
+      return vertexAction(request);
+    }
+  }
   const tokens = await requireAuth(request);
   const logCtx = createLogContext(request, "/api/workflow/ai-generate", tokens.rootFolderId);
 

@@ -50,7 +50,17 @@ Requires Node.js 24+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 
 ## Architecture
 
-**Stack:** React 19 + React Router 7 (SSR) + Tailwind CSS v4 + Vite. All data stored in Google Drive (no database). Browser IndexedDB for client-side caching.
+**Stack:** React 19 + React Router 7 (SSR) + Tailwind CSS v4 + Vite. Browser IndexedDB for client-side caching.
+
+**Storage mounts:** A session always has a **Drive mount** (the user's Google Drive — the default; no database, works self-hosted). A member of an organization additionally gets a **GCS project mount** while an org project is selected (Firestore holds orgs/projects/members; project files live under per-project prefixes in a shared GCS bucket). Provider selection is per user and per mount — never a build/deploy switch. Key pieces:
+
+- `app/services/storage/` — `MountContext` (`mount = "drive" | "project:{id}"`, cache namespace `mountKey`), provider dispatch (`provider.server.ts`), GCS provider, Drive provider (the Drive layout is FLAT: a file's Drive NAME is its relative path, so paths are the identity on both mounts; `_sync-meta.json` is the path→fileId index), `resolve-mount.server.ts` (session/explicit mount resolution + ACL).
+- `/api/storage/*` — unified path-based routes (`revision`-based optimistic concurrency: GCS generation / Drive md5). `/api/drive/{files,tree}` dispatch to the project mount server-side when the session has one (`storage/drive-compat.server.ts`), so legacy client call sites work on both mounts.
+- `app/services/indexeddb-cache.ts` is a mount-aware dispatcher: Drive impl in `indexeddb-cache-drive.ts` ("gemihub-cache" DB, fileId keys), project impl in `indexeddb-cache-mount.ts` (storage-cache.ts, "gemihub-storage" DB, path keys, namespaced by `mountKey` from localStorage `gemihub-active-tenant-project`, written by `EnterpriseProvider`).
+- Sync: Drive push/pull in `useSync.ts` (inert while a project is selected); project sync in `useStorageSync.ts`; `useSyncUI` selects per mount.
+- `DriveShelf.tsx` shows My Drive above the project FileTree; files move between mounts via `/api/storage/move-between-mounts`.
+
+**AI providers:** default is `genai-key` (the user's own Gemini API key, browser-side — unchanged). Inside an org project, chat and AI routes run on the tenant's **Vertex AI** (no API key needed): AI server routes dispatch on an explicit `projectId` to handlers under `app/services/ai/` (`gemini-vertex.server.ts` engine; `chat-stream-client.ts` is the client SSE orchestrator; `storage-tools.server.ts` keeps the `*_drive_*` tool protocol names). RAG: Drive mount → Gemini File Search; project mount → Firestore vector search (`ragChunks`, needs a composite vector index). One model registry: `app/services/ai/models.ts`.
 
 **Path alias:** `~/*` maps to `./app/*` (configured in tsconfig.json).
 
@@ -66,13 +76,14 @@ Requires Node.js 24+. Copy `.env.example` to `.env` and fill in `GOOGLE_CLIENT_I
 
 ### Key Patterns
 
-- **Streaming:** Free plan: chat executes locally in the browser via `executeLocalChat` (calling Gemini API directly with a cached API key). Paid plan: chat uses the Interactions API via server-side proxy (`/api/chat/interactions`), with multi-round SSE for tool calls (client executes tools locally, sends results back to server). The server-side `/api/chat` SSE endpoint exists as a legacy fallback. Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used, requires_action. Workflow execution also runs locally in the browser (22/25 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
+- **Streaming:** Drive mount, free plan: chat executes locally in the browser via `executeLocalChat` (calling Gemini API directly with a cached API key). Drive mount, paid plan: chat uses the Interactions API via server-side proxy (`/api/chat/interactions`), with multi-round SSE for tool calls (client executes tools locally, sends results back to server). Project mount: chat posts to `/api/chat` with `projectId` and streams from Vertex AI (`executeChatStream` in `chat-stream-client.ts`); the same endpoint without `projectId` is the legacy key-based fallback. Chunk types include text, thinking, tool_call, tool_result, image_generated, rag_used, web_search_used, requires_action. Workflow execution also runs locally in the browser (22/25 node types); only mcp, rag-sync, and gemihub-command nodes call the server via `/api/workflow/execute-node`.
 - **Function Calling:** Gemini calls Drive tools (read/search/list/create/update), Google Search, RAG/File Search, and dynamically-discovered MCP tools (prefixed `mcp_{server}_{tool}`). Paid plan (Interactions API) allows function tools + RAG + Web Search simultaneously — RAG is pre-retrieved via `generateContent` API and injected into the system prompt (Interactions API doesn't support `file_search` tool directly, returns 501); free plan (Chat API) has mutual exclusivity between RAG and function tools.
 - **Cache-First Sync:** Files cached in IndexedDB. MD5 hash comparison detects changes. Manual push/pull with conflict resolution dialog.
 - **Local-First File Updates:** ファイルを更新する機能（チャットの `update_drive_file`、ワークフローの `drive-save` ノード等）は、Google Driveに直接書き込まず、IndexedDB のキャッシュと editHistory のみを更新する。Drive への反映は Push フローで行う。詳細は `docs/features/sync.md`「Chat-Initiated File Operations」を参照。
 - **Encryption:** Optional hybrid RSA+AES encryption for chat history and workflow logs (`crypto.server.ts`).
 - **Auth Flow:** Google OAuth 2.0 → session cookies (httpOnly, 30-day). Tokens stored in session, refreshed automatically.
-- **Settings:** Stored as `settings.json` in the user's Drive (`gemihub/` folder). Six tab categories: General, MCP Servers, RAG, Plugins, Commands, Encryption.
+- **Settings:** Stored as `settings.json` in the user's Drive (`gemihub/` folder); org projects use `gemihub/settings.json` under the project prefix (`user-settings-tenant.server.ts`). Tab categories include General, Organization (org members only), MCP Servers, RAG, Plugins, Commands, Encryption.
+- **Plans:** Hubwork plans are `lite | business | granted` (`app/types/hubwork.ts`, `hasBusinessFeatures`). Buying Business provisions an organization for the purchaser (Stripe webhook → `business-provisioning.server.ts`). Published `web/**` pages serve through the StorageProvider (`hubwork-site.server.ts`) from either mount.
 
 ### Route Configuration
 

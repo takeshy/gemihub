@@ -50,7 +50,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
   }
 
   // Workflow API requires Pro plan
-  if (account.plan !== "pro" && account.plan !== "granted") {
+  if (account.plan !== "business" && account.plan !== "granted") {
     return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
   }
 

@@ -30,7 +30,7 @@ export async function action({ request }: Route.ActionArgs) {
         const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
         let account = await getAccountByRootFolderId(validTokens.rootFolderId);
         if (!account && validTokens.email) account = await getAccountByEmail(validTokens.email);
-        if (account && (account.plan === "pro" || account.plan === "granted")) {
+        if (account && (account.plan === "business" || account.plan === "granted")) {
           await updateAccount(account.id, { encryptedGeminiApiKey: encryptGeminiApiKey(apiKey) });
         }
       } catch { /* best-effort */ }

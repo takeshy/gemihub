@@ -14,10 +14,26 @@ export function isGoogleWorkspaceMimeType(mimeType: string | undefined | null): 
   return Boolean(mimeType?.startsWith("application/vnd.google-apps."));
 }
 
-export function isSyncExcludedPath(fileName: string): boolean {
+// GCS project paths carry the managed root as a literal prefix
+// ("gemihub/history/…"), while Drive paths are relative to the gemihub root
+// folder and never include it. Strip it so both identities share one rule.
+const SYNC_MANAGED_ROOT_PREFIXES = ["gemihub/"];
+
+export function isProjectInternalPath(fileName: string): boolean {
   const normalized = fileName.replace(/^\/+/, "");
   if (SYNC_EXCLUDED_FILE_NAMES.has(normalized)) return true;
   return SYNC_EXCLUDED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+export function isSyncExcludedPath(fileName: string): boolean {
+  const normalized = fileName.replace(/^\/+/, "");
+  const candidates = [normalized];
+  for (const prefix of SYNC_MANAGED_ROOT_PREFIXES) {
+    if (normalized.startsWith(prefix)) {
+      candidates.push(normalized.slice(prefix.length));
+    }
+  }
+  return candidates.some(isProjectInternalPath);
 }
 
 const BINARY_APPLICATION_TYPES = new Set([

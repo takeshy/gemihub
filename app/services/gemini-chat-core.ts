@@ -323,26 +323,10 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
   return [{ functionDeclarations }];
 }
 
-// Model pricing per token (USD)
-// Source: https://ai.google.dev/pricing
-export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "gemini-3.7-flash":       { input: 1.50 / 1e6, output: 7.50 / 1e6 },
-  "gemini-3.5-flash-lite": { input: 0.30 / 1e6, output: 2.50 / 1e6 },
-  "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
-  "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
-  "gemini-3-pro-image-preview": { input: 2.00 / 1e6, output: 120.00 / 1e6 },
-  "gemini-3.1-flash-image-preview": { input: 0.25 / 1e6, output: 60.00 / 1e6 },
-};
-
-// Grounding with Google Search cost per prompt (USD)
-export const SEARCH_GROUNDING_COST: Record<string, number> = {
-  "gemini-3.7-flash": 14 / 1000,
-  "gemini-3.1-pro-preview": 14 / 1000,
-  "gemini-3.1-pro-preview-customtools": 14 / 1000,
-  "gemini-3-pro-image-preview": 14 / 1000,
-  "gemini-3.1-flash-image-preview": 14 / 1000,
-  "gemini-3.5-flash-lite": 14 / 1000,
-};
+// Pricing tables live in the unified model registry (ai/models.ts);
+// imported for local use and re-exported for existing importers.
+import { MODEL_PRICING, SEARCH_GROUNDING_COST } from "./ai/models";
+export { MODEL_PRICING, SEARCH_GROUNDING_COST };
 
 function addWebSource(sources: WebSearchSource[], url?: string, title?: string): void {
   if (!url || !/^https?:\/\//i.test(url) || sources.some((source) => source.url === url)) return;

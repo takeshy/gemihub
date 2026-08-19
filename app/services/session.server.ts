@@ -60,15 +60,33 @@ export async function destroySession(session: Awaited<ReturnType<typeof getSessi
 }
 
 export interface SessionTokens {
+  /**
+   * Empty string for sessions created without a Google Drive grant (org
+   * OIDC/email login). Drive-coupled call sites must gate on
+   * `accessToken !== ""` or branch on `authMethod`.
+   */
   accessToken: string;
   refreshToken: string;
   expiryTime: number;
+  /** Empty string for sessions without a Drive root folder. */
   rootFolderId: string;
   geminiApiKey?: string;
   apiPlan?: ApiPlan;
   selectedModel?: string;
   email?: string;
   grantedScopes?: string;
+  /** Currently selected organization (org members only). */
+  currentOrgId?: string;
+  /** Currently selected org project under currentOrgId. */
+  currentProjectId?: string;
+  /**
+   * How the session was authenticated. "google" = Google OAuth (with or
+   * without Drive scope); "oidc" = federated via per-org IdP; "email" =
+   * org email login. Used to route sign-out / refresh.
+   */
+  authMethod?: "google" | "oidc" | "email";
+  /** OIDC sub claim — stable per-IdP identifier. Set only for OIDC sessions. */
+  oidcSub?: string;
 }
 
 export async function getTokens(request: Request): Promise<SessionTokens | null> {
@@ -78,8 +96,14 @@ export async function getTokens(request: Request): Promise<SessionTokens | null>
   const expiryTime = session.get("expiryTime");
   const rootFolderId = session.get("rootFolderId");
   const encryptedKey = session.get("geminiApiKey") as string | undefined;
+  const sessionEmail = session.get("email") as string | undefined;
+  const authMethod = session.get("authMethod") as "google" | "oidc" | "email" | undefined;
 
-  if (!accessToken || !refreshToken) {
+  // An org OIDC/email session is identified by `email` + `authMethod` even
+  // when accessToken/refreshToken are empty (no Google Drive grant). Google
+  // sessions still require the OAuth tokens.
+  const tokenlessSession = (authMethod === "oidc" || authMethod === "email") && !!sessionEmail;
+  if (!tokenlessSession && (!accessToken || !refreshToken)) {
     return null;
   }
 
@@ -95,11 +119,26 @@ export async function getTokens(request: Request): Promise<SessionTokens | null>
 
   const apiPlan = session.get("apiPlan") as ApiPlan | undefined;
   const selectedModel = session.get("selectedModel") as string | undefined;
-  const email = session.get("email") as string | undefined;
-
   const grantedScopes = session.get("grantedScopes") as string | undefined;
+  const currentOrgId = session.get("currentOrgId") as string | undefined;
+  const currentProjectId = session.get("currentProjectId") as string | undefined;
+  const oidcSub = session.get("oidcSub") as string | undefined;
 
-  return { accessToken, refreshToken, expiryTime, rootFolderId, geminiApiKey, apiPlan, selectedModel, email, grantedScopes };
+  return {
+    accessToken: accessToken ?? "",
+    refreshToken: refreshToken ?? "",
+    expiryTime: expiryTime ?? 0,
+    rootFolderId: rootFolderId ?? "",
+    geminiApiKey,
+    apiPlan,
+    selectedModel,
+    email: sessionEmail,
+    grantedScopes,
+    currentOrgId,
+    currentProjectId,
+    authMethod,
+    oidcSub,
+  };
 }
 
 export async function setTokens(
@@ -126,7 +165,35 @@ export async function setTokens(
   if (tokens.grantedScopes !== undefined) {
     session.set("grantedScopes", tokens.grantedScopes);
   }
+  if (tokens.currentOrgId !== undefined) {
+    session.set("currentOrgId", tokens.currentOrgId);
+  }
+  if (tokens.currentProjectId !== undefined) {
+    session.set("currentProjectId", tokens.currentProjectId);
+  }
+  if (tokens.authMethod !== undefined) {
+    session.set("authMethod", tokens.authMethod);
+  }
+  if (tokens.oidcSub !== undefined) {
+    session.set("oidcSub", tokens.oidcSub);
+  }
   return session;
+}
+
+/**
+ * Update the currently selected org / project. Pass null to clear.
+ * Returns the cookie header — caller must include it in the response.
+ */
+export async function setCurrentSelection(
+  request: Request,
+  selection: { orgId?: string | null; projectId?: string | null },
+): Promise<string> {
+  const session = await getSession(request);
+  if (selection.orgId === null) session.unset("currentOrgId");
+  else if (selection.orgId !== undefined) session.set("currentOrgId", selection.orgId);
+  if (selection.projectId === null) session.unset("currentProjectId");
+  else if (selection.projectId !== undefined) session.set("currentProjectId", selection.projectId);
+  return commitSession(session);
 }
 
 export async function setGeminiApiKey(request: Request, apiKey: string) {

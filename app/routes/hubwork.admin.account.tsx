@@ -26,7 +26,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       const accountStatus = formData.get("accountStatus") as string;
       const domainStatus = formData.get("domainStatus") as string;
       const email = (formData.get("email") as string || "").trim();
-      const validPlans: HubworkAccountPlan[] = ["lite", "pro", "granted"];
+      const validPlans: HubworkAccountPlan[] = ["lite", "business", "granted"];
       const validBillingStatuses: HubworkBillingStatus[] = ["active", "past_due", "canceled"];
       const validAccountStatuses: HubworkAccountStatus[] = ["enabled", "disabled"];
       const validDomainStatuses: HubworkDomainStatus[] = ["none", "pending_dns", "provisioning_cert", "active", "failed"];
@@ -98,7 +98,7 @@ export default function AdminAccountDetail({ loaderData }: Route.ComponentProps)
             <select name="plan" defaultValue={account.plan || "granted"}>
               <option value="granted">Granted (free)</option>
               <option value="lite">Lite (¥300)</option>
-              <option value="pro">Pro (¥2,000)</option>
+              <option value="business">Business (¥7,500)</option>
             </select>
 
             <label>Billing Status</label>

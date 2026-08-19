@@ -323,14 +323,16 @@ Two paid plans extend GemiHub with Google Sheets/Gmail integration and web app b
 |---------|-------------|
 | **Gmail Send** | Workflow node: `gmail-send`. Send emails via Gmail API |
 | **PDF Generation** | Convert Markdown/HTML to PDF |
-| **Upload Limit Removed** | Free plan has 20MB limit; Lite and Pro have no practical limit |
+| **Upload Limit Removed** | Free plan has 20MB limit; Lite and Business have no practical limit |
 | **External Sync Token** | Export token for external clients like Obsidian |
 | **Temp Edit URL** | Generate temporary URLs for external editor integration |
 | **Interactions API Chat** | Chat uses the Gemini Interactions API: function tools + RAG + Web Search simultaneously, conversation chaining via `previous_interaction_id` |
 
-### Pro (¥2,000/month)
+### Business (¥7,500 / $50 per month, per organization)
 
-All Lite features, plus:
+All Lite features, plus an **organization**: shared team projects backed by Google Cloud Storage, member management with roles (owner/admin/member, project viewer/editor/admin), and chat/AI running on the organization's **Vertex AI** — members need no Gemini API key inside a project. The price includes a **$30/month Vertex AI budget** (top-ups in $10/¥1,500 units) and **100 GB of project storage** (expandable in 500 GB units at $30/¥5,000 per month). The purchaser becomes the organization's Owner automatically at checkout. While a project is selected, the IDE shows a **My Drive shelf** for drag-and-drop file moves between your Drive and the project. See [docs/architecture/mounts.md](docs/architecture/mounts.md).
+
+Additional Business features:
 
 | Feature | Description |
 |---------|-------------|
@@ -391,8 +393,8 @@ Firestore
 |-------|------|
 | Frontend | React 19, React Router 7, Tailwind CSS v4, Mermaid |
 | Backend | React Router server (SSR + API routes) |
-| AI | Google Gemini API (`@google/genai`) |
-| Storage | Google Drive API, Firestore |
+| AI | Google Gemini API (`@google/genai`); Vertex AI for organization projects |
+| Storage | Google Drive API (default mount), Cloud Storage (organization projects), Firestore |
 | Auth | Google OAuth 2.0 → session cookies |
 | Infrastructure | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Certificate Manager, Cloud Scheduler, Global HTTPS LB + CDN |
 | Editor | wysimark-lite (Slate-based WYSIWYG) |

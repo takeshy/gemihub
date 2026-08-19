@@ -76,6 +76,13 @@ function deriveSlugFromEmail(email: string): string {
   return email.split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
+export const HUBWORK_DOMAIN = process.env.GEMIHUB_MAIN_DOMAIN || "gemihub.net";
+
+/** Encrypt an OAuth refresh token for storage on a HubworkAccount. */
+export function encryptOAuthRefreshToken(refreshToken: string): string {
+  return encrypt(refreshToken);
+}
+
 export async function createAccount(params: {
   email: string;
   refreshToken: string;
@@ -86,6 +93,9 @@ export async function createAccount(params: {
   plan?: HubworkAccountPlan;
   currency?: HubworkCurrency;
   accountSlug?: string;
+  /** Business org project this account publishes for. */
+  orgId?: string;
+  projectId?: string;
 }): Promise<string> {
   const db = getFirestore();
 
@@ -109,7 +119,7 @@ export async function createAccount(params: {
     email: params.email,
     encryptedRefreshToken: params.refreshToken ? encrypt(params.refreshToken) : null,
     accountSlug: uniqueSlug,
-    defaultDomain: `${uniqueSlug}.gemihub.net`,
+    defaultDomain: `${uniqueSlug}.${HUBWORK_DOMAIN}`,
     customDomain: params.customDomain || "",
     rootFolderName: params.rootFolderName,
     rootFolderId: params.rootFolderId,
@@ -119,6 +129,8 @@ export async function createAccount(params: {
     billingStatus: "active",
     accountStatus: "enabled",
     domainStatus: params.customDomain ? "pending_dns" : "none",
+    ...(params.orgId ? { orgId: params.orgId } : {}),
+    ...(params.projectId ? { projectId: params.projectId } : {}),
     createdAt: FieldValue.serverTimestamp(),
   });
   return docRef.id;
@@ -147,8 +159,11 @@ function docToAccount(doc: FirebaseFirestore.DocumentSnapshot): HubworkAccount {
   // Migration: old docs without slug/defaultDomain
   if (!data.accountSlug) {
     data.accountSlug = data.email ? deriveSlugFromEmail(data.email) : doc.id;
-    data.defaultDomain = `${data.accountSlug}.gemihub.net`;
+    data.defaultDomain = `${data.accountSlug}.${HUBWORK_DOMAIN}`;
   }
+  // Legacy plan value: "pro" was renamed to "business" (no production
+  // subscribers existed; this guards leftover test documents).
+  if (data.plan === "pro") data.plan = "business";
   return { id: doc.id, plan: "granted", ...data } as HubworkAccount;
 }
 
@@ -236,6 +251,21 @@ export async function getAccountByEmail(
   return docToAccount(snapshot.docs[0]);
 }
 
+export async function getAccountByProject(
+  orgId: string,
+  projectId: string,
+): Promise<HubworkAccount | null> {
+  const db = getFirestore();
+  const snap = await db
+    .collection(HUBWORK_ACCOUNTS)
+    .where("orgId", "==", orgId)
+    .where("projectId", "==", projectId)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  return docToAccount(snap.docs[0]);
+}
+
 export async function getAccountByStripeCustomerId(
   customerId: string
 ): Promise<HubworkAccount | null> {
@@ -287,6 +317,8 @@ export async function updateAccount(
       | "stripeSubscriptionId"
       | "activeScheduleRevision"
       | "encryptedGeminiApiKey"
+      | "orgId"
+      | "projectId"
     >
   >
 ): Promise<void> {

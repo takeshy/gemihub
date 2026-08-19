@@ -9,6 +9,13 @@ import { FILE_SEARCH_EMBEDDING_MODEL, smartSync, getOrCreateStore } from "~/serv
 // ---------------------------------------------------------------------------
 
 export async function action({ request }: Route.ActionArgs) {
+  {
+    const peek = (await request.clone().json().catch(() => null)) as { projectId?: unknown } | null;
+    if (peek && typeof peek.projectId === "string" && peek.projectId) {
+      const { tenantAction } = await import("~/services/ai/tenant-rag-sync-route.server");
+      return tenantAction(request);
+    }
+  }
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }

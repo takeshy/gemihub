@@ -110,7 +110,7 @@ const en: LpStrings = {
     { icon: GitBranch, title: "Workflows", description: "Just describe what you want and AI builds an automation workflow. Works with Drive, the web, and external services." },
     { icon: GitCompare, title: "Obsidian-Friendly", description: "Use Obsidian-compatible Canvas files and sync notes with the GemiHub Drive Sync plugin through the same Drive metadata." },
     { icon: Puzzle, title: "Plugins", description: "Add new features from GitHub. Plugins can use AI and Drive, so you can build custom tools and advanced automation." },
-    { icon: Globe, title: "One-Click Publishing", description: "Turn Drive files into public pages, or use Pro features for CDN-hosted HTML pages, custom domains, and AI-assisted web building." },
+    { icon: Globe, title: "One-Click Publishing", description: "Turn Drive files into public pages, or use Business features for CDN-hosted HTML pages, custom domains, and AI-assisted web building." },
     { icon: Zap, title: "Works Offline", description: "All files cached in your browser for instant access — even without internet. Edit offline, then push changes to Drive with one click. Conflicts are detected automatically." },
     { icon: KeyRound, title: "Encrypted Secrets", description: "Store API tokens, passwords, and other secrets as RSA + AES encrypted files in your Drive, organized into folders and searchable by name or description — without ever exposing the value." },
     { icon: Shield, title: "Your Data, Your Control", description: "No external database. Everything stored in your Google Drive. Supports encryption and self-hosting." },
@@ -178,12 +178,12 @@ const en: LpStrings = {
   footerManual: "Manual",
   footerContact: "Contact",
   premiumTitle: "Premium Plans",
-  premiumIntro: "GemiHub is useful on the free plan by default. Paid plans are for features that need heavier server-side processing, such as streaming files over 20 MB, Gmail integration, or temporary upload/edit URLs. Choose Pro when you want to add AI-assisted web service publishing with natural-language build and edit flows, custom domains, and login support.",
+  premiumIntro: "GemiHub is useful on the free plan by default. Paid plans are for features that need heavier server-side processing, such as streaming files over 20 MB, Gmail integration, or temporary upload/edit URLs. Choose Business when you want to add AI-assisted web service publishing with natural-language build and edit flows, custom domains, and login support.",
   premiumFree: "Free",
   premiumLite: "Lite",
-  premiumPro: "Pro",
+  premiumPro: "Business",
   premiumLitePrice: "$2/mo",
-  premiumProPrice: "$15/mo",
+  premiumProPrice: "$50/mo (incl. $30 Vertex AI budget)",
   premiumFreeTag: "$0",
   premiumFeatureUpload: "Max File Size",
   premiumFeatureUploadFree: "20 MB",
@@ -227,7 +227,7 @@ const ja: LpStrings = {
     { icon: GitBranch, title: "ワークフロー", description: "やりたいことを言葉で伝えるだけでAIが自動化ワークフローを作成。Drive や Web、外部サービスとも連携。" },
     { icon: GitCompare, title: "Obsidianと相性抜群", description: "Obsidian互換Canvasを扱え、GemiHub Drive Syncプラグインとは同じDriveメタデータで双方向同期できます。" },
     { icon: Puzzle, title: "プラグイン", description: "GitHubから機能を追加。AI や Drive と連携できるので、自分だけのツールや高度な自動化も構築できます。" },
-    { icon: Globe, title: "ワンクリック公開", description: "Driveファイルを公開ページに。ProならCDN配信、独自ドメイン、AIによるWeb構築にも対応します。" },
+    { icon: Globe, title: "ワンクリック公開", description: "Driveファイルを公開ページに。BusinessならCDN配信、独自ドメイン、AIによるWeb構築にも対応します。" },
     { icon: Zap, title: "オフラインでも快適", description: "すべてのファイルがブラウザにキャッシュされ、ネットがなくても即座にアクセス。オフラインで編集して、ワンクリックでDriveに同期。コンフリクトも自動検出。" },
     { icon: KeyRound, title: "暗号化シークレット", description: "APIトークンやパスワードなどをRSA + AESで暗号化してDriveに保存。フォルダで整理でき、名前や説明で検索可能。値そのものが公開されることはありません。" },
     { icon: Shield, title: "データは自分の手に", description: "外部データベースなし。すべてあなたのGoogle Driveに保存。暗号化やセルフホストにも対応。" },
@@ -295,12 +295,12 @@ const ja: LpStrings = {
   footerManual: "マニュアル",
   footerContact: "お問い合わせ",
   premiumTitle: "有料プラン",
-  premiumIntro: "GemiHub は基本的に無料プランで便利に使えます。有料プランは、1ファイルが20MBを超えてストリーミングが必要な場合、Gmail 連携、一時アップロード URL など、サーバー側の処理負担がかかる機能を使うためのものです。AI を活用して自然文で構築・修正でき、独自ドメインやログイン機能にも対応した自社 Web サービス提供機能を追加する場合は Pro プランを選びます。",
+  premiumIntro: "GemiHub は基本的に無料プランで便利に使えます。有料プランは、1ファイルが20MBを超えてストリーミングが必要な場合、Gmail 連携、一時アップロード URL など、サーバー側の処理負担がかかる機能を使うためのものです。AI を活用して自然文で構築・修正でき、独自ドメインやログイン機能にも対応した自社 Web サービス提供機能を追加する場合は Business プランを選びます。組織を作成してチームでプロジェクトを共有できます。",
   premiumFree: "Free",
   premiumLite: "Lite",
-  premiumPro: "Pro",
+  premiumPro: "Business",
   premiumLitePrice: "¥300/月（税込）",
-  premiumProPrice: "¥2,000/月（税込）",
+  premiumProPrice: "¥7,500/月（税込・Vertex AI利用枠 $30分込み）",
   premiumFreeTag: "¥0",
   premiumFeatureUpload: "1ファイル最大サイズ",
   premiumFeatureUploadFree: "20 MB",
@@ -548,9 +548,9 @@ export default function LandingPage() {
             ))}
           </div>
 
-          {/* Pro feature highlights */}
+          {/* Business feature highlights */}
           <h3 className="mb-6 mt-12 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
-            Pro
+            Business
           </h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[

@@ -49,6 +49,21 @@ import { handleRagAction } from "~/services/sync-rag.server";
 import { ensureHubworkSpreadsheetsInMeta, filesFromMeta } from "~/services/hubwork-spreadsheets-meta.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  await requireAuth(request);
+  // Project mount: fileId is the mount-relative path and actions run against
+  // the storage provider. Must run before getValidTokens — tokenless org
+  // sessions have no Drive tokens.
+  {
+    const { resolveProjectMountFromSession } = await import("~/services/storage/resolve-mount.server");
+    const { handleProjectFilesLoader } = await import("~/services/storage/drive-compat.server");
+    const requestUrl = new URL(request.url);
+    const projectMount = await resolveProjectMountFromSession(
+      request,
+      "viewer",
+      requestUrl.searchParams.get("mount"),
+    );
+    if (projectMount) return handleProjectFilesLoader(projectMount, requestUrl);
+  }
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const logCtx = createLogContext(request, "/api/drive/files", validTokens.rootFolderId);
@@ -145,6 +160,21 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
+  await requireAuth(request);
+  {
+    const { resolveProjectMountFromSession } = await import("~/services/storage/resolve-mount.server");
+    const { handleProjectFilesAction } = await import("~/services/storage/drive-compat.server");
+    const requestUrl = new URL(request.url);
+    const projectMount = await resolveProjectMountFromSession(
+      request,
+      "editor",
+      requestUrl.searchParams.get("mount"),
+    );
+    if (projectMount) {
+      const projectBody = await request.json();
+      return handleProjectFilesAction(projectMount, projectBody);
+    }
+  }
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const logCtx = createLogContext(request, "/api/drive/files", validTokens.rootFolderId);

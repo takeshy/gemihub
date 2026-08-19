@@ -1054,6 +1054,101 @@ export interface TranslationStrings {
 
   // Hubwork tab
   "settings.tab.hubwork": string;
+  "settings.tab.enterprise": string;
+  "mount.myDrive": string;
+  "enterprise.storageTitle": string;
+  "enterprise.storageUsage": string;
+  "enterprise.storageIncluded": string;
+  "enterprise.storageAddonActive": string;
+  "enterprise.buyStorage": string;
+  "enterprise.storageJpy": string;
+  "enterprise.storageUsd": string;
+  "enterprise.title": string;
+  "enterprise.subtitle": string;
+  "enterprise.orgSelectLabel": string;
+  "enterprise.orgSelectPlaceholder": string;
+  "enterprise.roleMember": string;
+  "enterprise.roleAdmin": string;
+  "enterprise.tabMembers": string;
+  "enterprise.tabAi": string;
+  "enterprise.projectsAdvanced": string;
+  "enterprise.projectsAdvancedDesc": string;
+  "enterprise.openProjects": string;
+  "enterprise.loading": string;
+  "enterprise.noOrgSelected": string;
+  "enterprise.opFailed": string;
+  "enterprise.orgSelectFailed": string;
+  "enterprise.connectVertex": string;
+  "enterprise.connectVertexDesc": string;
+  "enterprise.selectOauthJson": string;
+  "enterprise.oauthLoaded": string;
+  "enterprise.configured": string;
+  "enterprise.googleConnected": string;
+  "enterprise.disconnect": string;
+  "enterprise.googleDisconnected": string;
+  "enterprise.connectGoogle": string;
+  "enterprise.loadJsonFirst": string;
+  "enterprise.budgetTitle": string;
+  "enterprise.usageThisMonth": string;
+  "enterprise.topUpBalance": string;
+  "enterprise.buyTopUp": string;
+  "enterprise.budgetAdvanced": string;
+  "enterprise.gcpProjectId": string;
+  "enterprise.vertexLocation": string;
+  "enterprise.orgMonthlyLimit": string;
+  "enterprise.userMonthlyLimit": string;
+  "enterprise.unlimited": string;
+  "enterprise.saveAiSettings": string;
+  "enterprise.aiSettingsSaved": string;
+  "enterprise.inviteMember": string;
+  "enterprise.invite": string;
+  "enterprise.inviteSent": string;
+  "enterprise.superOwnerAddOwner": string;
+  "enterprise.superOwnerAddOwnerDesc": string;
+  "enterprise.addAsOwner": string;
+  "enterprise.ownerAdded": string;
+  "enterprise.colEmail": string;
+  "enterprise.colRole": string;
+  "enterprise.colUsage": string;
+  "enterprise.colActions": string;
+  "enterprise.roleChanged": string;
+  "enterprise.save": string;
+  "enterprise.budgetSaved": string;
+  "enterprise.delete": string;
+  "enterprise.memberRemoved": string;
+  "enterprise.confirmRemoveOrgMember": string;
+  "enterprise.selectProject": string;
+  "enterprise.selectPlaceholder": string;
+  "enterprise.useProject": string;
+  "enterprise.createProjectAdvanced": string;
+  "enterprise.projectName": string;
+  "enterprise.create": string;
+  "enterprise.projectCreated": string;
+  "enterprise.membersOf": string;
+  "enterprise.roleViewer": string;
+  "enterprise.roleEditor": string;
+  "enterprise.projectMemberAdded": string;
+  "enterprise.colExternal": string;
+  "enterprise.yes": string;
+  "enterprise.no": string;
+  "enterprise.projectMemberRemoved": string;
+  "enterprise.confirmRemoveProjectMember": string;
+  "enterprise.add": string;
+  "enterprise.oauthDesktopJsonError": string;
+  "enterprise.oauthWebJsonError": string;
+  "enterprise.topUpJpy": string;
+  "enterprise.topUpUsd": string;
+  "driveShelf.title": string;
+  "driveShelf.personalOnly": string;
+  "driveShelf.open": string;
+  "driveShelf.openHint": string;
+  "driveShelf.dropHere": string;
+  "driveShelf.dropPrompt": string;
+  "driveShelf.loadFailed": string;
+  "driveShelf.moveFailed": string;
+  "driveShelf.connectPrompt": string;
+  "driveShelf.signInGoogle": string;
+  "mount.switcherTitle": string;
   "settings.hubwork.title": string;
   "settings.hubwork.domain": string;
   "settings.hubwork.domainPlaceholder": string;
@@ -2260,6 +2355,101 @@ const en: TranslationStrings = {
 
   // Hubwork tab
   "settings.tab.hubwork": "Premium Plan",
+  "settings.tab.enterprise": "Organization",
+  "mount.myDrive": "My Drive",
+  "enterprise.storageTitle": "Storage",
+  "enterprise.storageUsage": "Used {used} GB / {quota} GB",
+  "enterprise.storageIncluded": "The Business plan includes {included} GB. Add capacity in 500 GB units (¥5,000 / $30 per month; cancel any time from the Stripe customer portal).",
+  "enterprise.storageAddonActive": "Active add-ons: {units} × 500 GB",
+  "enterprise.buyStorage": "Add 500 GB units",
+  "enterprise.storageJpy": "JPY (¥5,000/mo per unit)",
+  "enterprise.storageUsd": "USD ($30/mo per unit)",
+  "enterprise.title": "Organization",
+  "enterprise.subtitle": "Manage this organization's settings according to your role.",
+  "enterprise.orgSelectLabel": "Organization to manage",
+  "enterprise.orgSelectPlaceholder": "Select an organization",
+  "enterprise.roleMember": "Member",
+  "enterprise.roleAdmin": "Admin",
+  "enterprise.tabMembers": "Members",
+  "enterprise.tabAi": "Vertex AI",
+  "enterprise.projectsAdvanced": "Advanced: project management",
+  "enterprise.projectsAdvancedDesc": "The default project is used automatically, so this is usually unnecessary. Open it only to split work into multiple workspaces.",
+  "enterprise.openProjects": "Open project management",
+  "enterprise.loading": "Loading…",
+  "enterprise.noOrgSelected": "Select the organization you belong to. New organizations and their first administrator are registered by the service administrator.",
+  "enterprise.opFailed": "Operation failed",
+  "enterprise.orgSelectFailed": "Failed to select the organization",
+  "enterprise.connectVertex": "Connect Vertex AI",
+  "enterprise.connectVertexDesc": "Load the \"Web application\" OAuth client JSON downloaded from Google Cloud. Its contents are applied automatically and the secret is encrypted on the server.",
+  "enterprise.selectOauthJson": "Select OAuth client JSON",
+  "enterprise.oauthLoaded": "OAuth client loaded",
+  "enterprise.configured": "Configured: ",
+  "enterprise.googleConnected": "Google account connected: ",
+  "enterprise.disconnect": "Disconnect",
+  "enterprise.googleDisconnected": "Google account disconnected",
+  "enterprise.connectGoogle": "Connect Google account",
+  "enterprise.loadJsonFirst": "Load the OAuth client JSON first.",
+  "enterprise.budgetTitle": "Vertex AI & monthly budget",
+  "enterprise.usageThisMonth": "Estimated usage this month: ",
+  "enterprise.topUpBalance": "Purchased top-up: ",
+  "enterprise.buyTopUp": "Buy additional budget for this month",
+  "enterprise.budgetAdvanced": "Advanced: set the project and spending limits manually",
+  "enterprise.gcpProjectId": "Google Cloud project ID",
+  "enterprise.vertexLocation": "Vertex AI location",
+  "enterprise.orgMonthlyLimit": "Organization monthly limit (USD)",
+  "enterprise.userMonthlyLimit": "Default per-user monthly limit (USD)",
+  "enterprise.unlimited": "Unlimited",
+  "enterprise.saveAiSettings": "Save AI settings",
+  "enterprise.aiSettingsSaved": "AI settings saved",
+  "enterprise.inviteMember": "Invite a member",
+  "enterprise.invite": "Invite",
+  "enterprise.inviteSent": "Invitation sent",
+  "enterprise.superOwnerAddOwner": "SuperOwner: add an Owner directly",
+  "enterprise.superOwnerAddOwnerDesc": "Registers the address as this organization's Owner immediately, without an invitation email.",
+  "enterprise.addAsOwner": "Add as Owner",
+  "enterprise.ownerAdded": "Owner added",
+  "enterprise.colEmail": "Email",
+  "enterprise.colRole": "Role",
+  "enterprise.colUsage": "AI usage / individual limit",
+  "enterprise.colActions": "Actions",
+  "enterprise.roleChanged": "Role updated",
+  "enterprise.save": "Save",
+  "enterprise.budgetSaved": "Individual budget saved",
+  "enterprise.delete": "Delete",
+  "enterprise.memberRemoved": "Member removed",
+  "enterprise.confirmRemoveOrgMember": "Remove {email} from the organization?",
+  "enterprise.selectProject": "Select a project",
+  "enterprise.selectPlaceholder": "Select…",
+  "enterprise.useProject": "Use",
+  "enterprise.createProjectAdvanced": "Advanced: create a new project",
+  "enterprise.projectName": "Project name",
+  "enterprise.create": "Create",
+  "enterprise.projectCreated": "Project created",
+  "enterprise.membersOf": "Members of {name}",
+  "enterprise.roleViewer": "Viewer",
+  "enterprise.roleEditor": "Editor",
+  "enterprise.projectMemberAdded": "Project member added",
+  "enterprise.colExternal": "External",
+  "enterprise.yes": "Yes",
+  "enterprise.no": "No",
+  "enterprise.projectMemberRemoved": "Project member removed",
+  "enterprise.confirmRemoveProjectMember": "Remove {email} from the project?",
+  "enterprise.add": "Add",
+  "enterprise.oauthDesktopJsonError": "This JSON is for a \"Desktop app\". Create a \"Web application\" client in Google Cloud and register {origin}/auth/vertex/callback as an authorized redirect URI.",
+  "enterprise.oauthWebJsonError": "Select the \"Web application\" OAuth client JSON created in Google Cloud.",
+  "enterprise.topUpJpy": "JPY (¥1,500 per $10)",
+  "enterprise.topUpUsd": "USD ($10)",
+  "driveShelf.title": "My Drive",
+  "driveShelf.personalOnly": "personal · {count}",
+  "driveShelf.open": "Open",
+  "driveShelf.openHint": "Double-click to open My Drive",
+  "driveShelf.dropHere": "Drop to move here",
+  "driveShelf.dropPrompt": "Drop files here",
+  "driveShelf.loadFailed": "Failed to load My Drive",
+  "driveShelf.moveFailed": "Move failed",
+  "driveShelf.connectPrompt": "Sign in with a Google account (Drive permission) to move files to and from My Drive.",
+  "driveShelf.signInGoogle": "Sign in with Google",
+  "mount.switcherTitle": "Switch workspace (My Drive / organization projects)",
   "settings.hubwork.title": "Premium Plan",
   "settings.hubwork.domain": "Custom Domain",
   "settings.hubwork.domainPlaceholder": "app.example.com",
@@ -2296,9 +2486,9 @@ const en: TranslationStrings = {
   "settings.hubwork.scheduleApiKeyNote": "When scheduled workflows are registered, your Gemini API key is encrypted (AES-256-GCM) and stored server-side so that workflows can run while you are offline. The key is automatically deleted when all schedules are removed.",
   "settings.hubwork.scheduleApiKeyRequired": "Please unlock your Gemini API key before enabling scheduled workflows.",
   "settings.hubwork.subscription": "Subscription",
-  "settings.hubwork.subscribeButton": "Subscribe — ¥2,000/month",
+  "settings.hubwork.subscribeButton": "Subscribe — ¥7,500/month",
   "settings.hubwork.checkoutSubscribeButton": "Subscribe",
-  "settings.hubwork.upgradeToPro": "Upgrade to Pro",
+  "settings.hubwork.upgradeToPro": "Upgrade to Business",
   "settings.hubwork.upgradeButton": "Upgrade",
   "settings.hubwork.priceMonthSuffix": "/month",
   "settings.hubwork.featureInteractionsApiChat": "Interactions API Chat",
@@ -2352,7 +2542,7 @@ const en: TranslationStrings = {
   "settings.hubwork.scopeUpgradeButton": "Grant permissions",
   "settings.hubwork.paidApiKeyRequired": "A paid API key is required to subscribe. Please set API Plan to \"Paid\" in the General tab.",
   "settings.hubwork.provisioning": "Setting up Webpage Builder skill...",
-  "settings.hubwork.welcomeTitle": "Pro Plan is ready!",
+  "settings.hubwork.welcomeTitle": "Business Plan is ready!",
   "settings.hubwork.welcomeDescription": "The \"Webpage Builder\" skill and a spreadsheet have been automatically set up. Here's what you can do:",
   "settings.hubwork.welcomeFeature1": "Open Chat and describe the page you want — the AI will build it for you.",
   "settings.hubwork.welcomeFeature2": "A \"webpage_builder\" spreadsheet with an \"accounts\" sheet has been created. The AI can add more sheets (e.g. tickets, meetings) as needed when building pages.",
@@ -3466,6 +3656,101 @@ const ja: TranslationStrings = {
 
   // Hubwork tab
   "settings.tab.hubwork": "プレミアムプラン",
+  "settings.tab.enterprise": "組織管理",
+  "mount.myDrive": "マイドライブ",
+  "enterprise.storageTitle": "ストレージ",
+  "enterprise.storageUsage": "使用量 {used} GB / {quota} GB",
+  "enterprise.storageIncluded": "Businessプランには {included} GB が含まれます。500GB単位（月額 ¥5,000 / $30）で追加でき、Stripeカスタマーポータルからいつでも解約できます。",
+  "enterprise.storageAddonActive": "追加契約中: {units} × 500GB",
+  "enterprise.buyStorage": "500GB単位で追加購入",
+  "enterprise.storageJpy": "JPY（¥5,000/月・単位）",
+  "enterprise.storageUsd": "USD（$30/月・単位）",
+  "enterprise.title": "組織管理",
+  "enterprise.subtitle": "現在の組織に関する設定を、権限に応じて管理します。",
+  "enterprise.orgSelectLabel": "管理する組織",
+  "enterprise.orgSelectPlaceholder": "組織を選択してください",
+  "enterprise.roleMember": "メンバー",
+  "enterprise.roleAdmin": "管理者",
+  "enterprise.tabMembers": "メンバー",
+  "enterprise.tabAi": "Vertex AI",
+  "enterprise.projectsAdvanced": "Advanced：プロジェクト管理",
+  "enterprise.projectsAdvancedDesc": "通常はデフォルトプロジェクトが自動的に使われるため、設定は不要です。複数の作業領域を分けたい場合だけ開いてください。",
+  "enterprise.openProjects": "プロジェクト管理を開く",
+  "enterprise.loading": "読み込み中…",
+  "enterprise.noOrgSelected": "所属する組織を選択してください。組織の新規登録と最初の管理者設定はサービス管理者が行います。",
+  "enterprise.opFailed": "操作に失敗しました",
+  "enterprise.orgSelectFailed": "組織の選択に失敗しました",
+  "enterprise.connectVertex": "Vertex AIを接続",
+  "enterprise.connectVertexDesc": "Google Cloudからダウンロードした「ウェブ アプリケーション」用OAuthクライアントJSONを読み込みます。内容は自動設定され、シークレットはサーバー側で暗号化して保存されます。",
+  "enterprise.selectOauthJson": "OAuthクライアントJSONを選択",
+  "enterprise.oauthLoaded": "OAuthクライアントを読み込みました",
+  "enterprise.configured": "設定済み: ",
+  "enterprise.googleConnected": "Googleアカウント接続済み: ",
+  "enterprise.disconnect": "切断",
+  "enterprise.googleDisconnected": "Googleアカウントを切断しました",
+  "enterprise.connectGoogle": "Googleアカウントを接続",
+  "enterprise.loadJsonFirst": "先にOAuthクライアントJSONを読み込んでください。",
+  "enterprise.budgetTitle": "Vertex AIと月次予算",
+  "enterprise.usageThisMonth": "今月の概算利用額: ",
+  "enterprise.topUpBalance": "追加購入済み枠: ",
+  "enterprise.buyTopUp": "今月の利用枠を追加購入",
+  "enterprise.budgetAdvanced": "Advanced：プロジェクトと利用上限を手動設定",
+  "enterprise.gcpProjectId": "Google CloudプロジェクトID",
+  "enterprise.vertexLocation": "Vertex AIロケーション",
+  "enterprise.orgMonthlyLimit": "組織全体の月次上限（USD）",
+  "enterprise.userMonthlyLimit": "1ユーザーの標準月次上限（USD）",
+  "enterprise.unlimited": "無制限",
+  "enterprise.saveAiSettings": "AI設定を保存",
+  "enterprise.aiSettingsSaved": "AI設定を保存しました",
+  "enterprise.inviteMember": "メンバーを招待",
+  "enterprise.invite": "招待",
+  "enterprise.inviteSent": "招待を送信しました",
+  "enterprise.superOwnerAddOwner": "SuperOwner：Ownerを直接追加",
+  "enterprise.superOwnerAddOwnerDesc": "招待メールを使わず、この組織のOwnerとして直ちに登録します。",
+  "enterprise.addAsOwner": "Ownerとして直接追加",
+  "enterprise.ownerAdded": "Ownerを追加しました",
+  "enterprise.colEmail": "メール",
+  "enterprise.colRole": "権限",
+  "enterprise.colUsage": "AI利用額 / 個別上限",
+  "enterprise.colActions": "操作",
+  "enterprise.roleChanged": "権限を変更しました",
+  "enterprise.save": "保存",
+  "enterprise.budgetSaved": "個別予算を保存しました",
+  "enterprise.delete": "削除",
+  "enterprise.memberRemoved": "メンバーを削除しました",
+  "enterprise.confirmRemoveOrgMember": "{email} を組織から削除しますか？",
+  "enterprise.selectProject": "プロジェクトを選択",
+  "enterprise.selectPlaceholder": "選択してください",
+  "enterprise.useProject": "使用する",
+  "enterprise.createProjectAdvanced": "Advanced：新しいプロジェクトを作成",
+  "enterprise.projectName": "プロジェクト名",
+  "enterprise.create": "作成",
+  "enterprise.projectCreated": "プロジェクトを作成しました",
+  "enterprise.membersOf": "{name} のメンバー",
+  "enterprise.roleViewer": "閲覧者",
+  "enterprise.roleEditor": "編集者",
+  "enterprise.projectMemberAdded": "プロジェクトメンバーを追加しました",
+  "enterprise.colExternal": "外部",
+  "enterprise.yes": "はい",
+  "enterprise.no": "いいえ",
+  "enterprise.projectMemberRemoved": "プロジェクトメンバーを削除しました",
+  "enterprise.confirmRemoveProjectMember": "{email} をプロジェクトから削除しますか？",
+  "enterprise.add": "追加",
+  "enterprise.oauthDesktopJsonError": "これは「デスクトップ アプリ」用JSONです。Google Cloudで「ウェブ アプリケーション」を作成し、{origin}/auth/vertex/callback を承認済みリダイレクトURIに登録してください",
+  "enterprise.oauthWebJsonError": "Google Cloudで作成した「ウェブ アプリケーション」用OAuthクライアントJSONを選択してください",
+  "enterprise.topUpJpy": "JPY（¥1,500/$10分）",
+  "enterprise.topUpUsd": "USD（$10）",
+  "driveShelf.title": "マイドライブ",
+  "driveShelf.personalOnly": "自分専用 · {count}",
+  "driveShelf.open": "開く",
+  "driveShelf.openHint": "ダブルクリックでマイドライブを開く",
+  "driveShelf.dropHere": "ここに移動",
+  "driveShelf.dropPrompt": "ファイルをここへドロップ",
+  "driveShelf.loadFailed": "マイドライブの読込に失敗しました",
+  "driveShelf.moveFailed": "移動に失敗しました",
+  "driveShelf.connectPrompt": "Googleアカウント（Drive権限）でログインすると、マイドライブとの間でファイルを移動できます。",
+  "driveShelf.signInGoogle": "Googleでログイン",
+  "mount.switcherTitle": "ワークスペース切替（マイドライブ / 組織プロジェクト）",
   "settings.hubwork.title": "プレミアムプラン",
   "settings.hubwork.domain": "カスタムドメイン",
   "settings.hubwork.domainPlaceholder": "app.example.com",
@@ -3502,9 +3787,9 @@ const ja: TranslationStrings = {
   "settings.hubwork.scheduleApiKeyNote": "スケジュール実行を登録すると、Gemini APIキーがAES-256-GCMで暗号化されサーバー側のデータベースに保存されます（オフライン中でもワークフローを実行するため）。すべてのスケジュールを削除すると、保存されたキーも自動的に削除されます。",
   "settings.hubwork.scheduleApiKeyRequired": "定期実行を有効にするには Gemini APIキーをアンロックしてください。",
   "settings.hubwork.subscription": "サブスクリプション",
-  "settings.hubwork.subscribeButton": "登録する — ¥2,000/月",
+  "settings.hubwork.subscribeButton": "登録する — ¥7,500/月",
   "settings.hubwork.checkoutSubscribeButton": "登録する",
-  "settings.hubwork.upgradeToPro": "Proにアップグレード",
+  "settings.hubwork.upgradeToPro": "Businessにアップグレード",
   "settings.hubwork.upgradeButton": "アップグレード",
   "settings.hubwork.priceMonthSuffix": "/月",
   "settings.hubwork.featureInteractionsApiChat": "Interactions APIチャット",
@@ -3558,7 +3843,7 @@ const ja: TranslationStrings = {
   "settings.hubwork.scopeUpgradeButton": "権限を付与",
   "settings.hubwork.paidApiKeyRequired": "サブスクリプションにはPaid APIキーが必要です。Generalタブで「Paid」に設定してください。",
   "settings.hubwork.provisioning": "Webpage Builderスキルをセットアップ中...",
-  "settings.hubwork.welcomeTitle": "Proプランの準備ができました！",
+  "settings.hubwork.welcomeTitle": "Businessプランの準備ができました！",
   "settings.hubwork.welcomeDescription": "「Webpage Builder」スキルとスプレッドシートが自動的にセットアップされました：",
   "settings.hubwork.welcomeFeature1": "Chatで作りたいページを伝えるだけで、AIがWebページを作成します。",
   "settings.hubwork.welcomeFeature2": "accountsシートを含む「webpage_builder」スプレッドシートが作成されました。AIがページ作成時に必要に応じてシート（tickets、meetingsなど）を追加します。",

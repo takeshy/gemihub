@@ -49,7 +49,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const { account, tokens } = await resolveAccountWithTokens(request);
-  if (account.plan !== "pro" && account.plan !== "granted") {
+  if (account.plan !== "business" && account.plan !== "granted") {
     return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
   }
   const { accessToken, rootFolderId } = tokens;

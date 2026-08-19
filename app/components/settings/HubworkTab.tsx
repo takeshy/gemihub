@@ -77,7 +77,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   // IndexedDB but present on Drive, silently cache it so the warning doesn't
   // keep appearing on every visit.
   useEffect(() => {
-    const isPro = hubwork?.plan === "pro" || hubwork?.plan === "granted";
+    const isPro = hubwork?.plan === "business" || hubwork?.plan === "granted";
     if (!isPro) return;
     // On Stripe-callback redirects the effect below already provisions; running
     // both concurrently raced findFileByExactName + createFile and produced two
@@ -117,7 +117,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   useEffect(() => {
     if (provisionedRef.current) return;
     if (!isCallback) return;
-    const isPro = hubwork?.plan === "pro" || hubwork?.plan === "granted";
+    const isPro = hubwork?.plan === "business" || hubwork?.plan === "granted";
     if (!isPro) return;
     provisionedRef.current = true;
     (async () => {
@@ -152,7 +152,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
 
   const plan = hubwork?.plan;
   const isEnabled = !!plan;
-  const isPro = plan === "pro" || plan === "granted";
+  const isPro = plan === "business" || plan === "granted";
   const isPaidApiKey = settings.apiPlan === "paid";
   const installedSkillVersion = hubwork?.skillVersion;
   const skillUpdateAvailable = !skillMissing && compareSkillVersions(installedSkillVersion, WEBPAGE_BUILDER_SKILL_VERSION) < 0;
@@ -164,8 +164,8 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   // never silently switch currency).
   const newSubscriptionCurrency: "jpy" | "usd" = settings.language === "ja" ? "jpy" : "usd";
   const accountCurrency: "jpy" | "usd" = hubwork?.currency === "usd" ? "usd" : "jpy";
-  const priceFor = (p: "lite" | "pro", currency: "jpy" | "usd") =>
-    currency === "usd" ? (p === "lite" ? "$2" : "$15") : (p === "lite" ? "¥300" : "¥2,000");
+  const priceFor = (p: "lite" | "business", currency: "jpy" | "usd") =>
+    currency === "usd" ? (p === "lite" ? "$2" : "$50") : (p === "lite" ? "¥300" : "¥7,500");
 
   const litePlanFeatures = [
     t("settings.hubwork.featureInteractionsApiChat"),
@@ -201,7 +201,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             <h3 className="font-medium text-gray-900 dark:text-gray-100">
               {t("settings.hubwork.subscription")}
             </h3>
-            {(plan === "lite" || plan === "pro") && (
+            {(plan === "lite" || plan === "business") && (
               <p className="text-sm text-green-600 dark:text-green-400 mt-0.5">
                 {plan === "lite" ? "Lite" : "Pro"} — {t("settings.hubwork.subscriptionActive")}
               </p>
@@ -219,7 +219,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           </div>
         </div>
 
-        {(plan === "lite" || plan === "pro") && (
+        {(plan === "lite" || plan === "business") && (
           <stripeFetcher.Form method="post" action="/hubwork/api/stripe/portal">
             <button
               type="submit"
@@ -238,7 +238,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
             <div>
               <div className="font-medium text-gray-900 dark:text-gray-100">{t("settings.hubwork.upgradeToPro")}</div>
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{priceFor("pro", accountCurrency)}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
+              <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{priceFor("business", accountCurrency)}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
               <ul className="mt-2 space-y-0.5">
                 {proPlanFeatures.map((f) => (
                   <li key={f} className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-1">
@@ -286,7 +286,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
               }}
             >
               <input type="hidden" name="accountSlug" value={slug} />
-              <input type="hidden" name="plan" value="pro" />
+              <input type="hidden" name="plan" value="business" />
               <button
                 type="submit"
                 className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
@@ -314,7 +314,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                   features: litePlanFeatures,
                 },
                 {
-                  plan: "pro" as const,
+                  plan: "business" as const,
                   features: proPlanFeatures,
                 },
               ]).map(({ plan: p, features }) => (
@@ -328,7 +328,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                       </li>
                     ))}
                   </ul>
-                  {p === "pro" && (
+                  {p === "business" && (
                     <div className="mb-3">
                       <label className="text-xs text-gray-500 dark:text-gray-400">
                         {t("settings.hubwork.slugLabel")}
@@ -355,7 +355,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                     method="post"
                     action="/hubwork/api/stripe/checkout"
                     onSubmit={(e) => {
-                      if (p === "pro") {
+                      if (p === "business") {
                         if (!slug) {
                           e.preventDefault();
                           setSlugError(t("settings.hubwork.slugRequired"));

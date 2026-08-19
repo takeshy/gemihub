@@ -3,6 +3,7 @@ import {
   getCachedFile,
   setCachedFile,
   deleteCachedFile,
+  activeProjectMountParam,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
 import { isBinaryMimeType, isLargeFile } from "~/services/sync-client-utils";
@@ -188,18 +189,22 @@ export function useFileWithCache(
 
         setContent(newContent);
 
-        // 2. Upload temp file to Drive (1-2 API calls)
-        const fileName = cached?.fileName ?? fileId;
-        await fetch("/api/drive/temp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "save",
-            fileName,
-            fileId,
-            content: newContent,
-          }),
-        });
+        // 2. Upload temp file to Drive (1-2 API calls). Drive-mount only —
+        // on a project mount the edit is pushed through the storage sync
+        // instead, and a temp copy must not leak into the personal Drive.
+        if (!activeProjectMountParam()) {
+          const fileName = cached?.fileName ?? fileId;
+          await fetch("/api/drive/temp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "save",
+              fileName,
+              fileId,
+              content: newContent,
+            }),
+          });
+        }
 
         setSaved(true);
       } catch {

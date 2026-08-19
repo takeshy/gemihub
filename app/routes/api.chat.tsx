@@ -48,6 +48,15 @@ export async function action({ request }: Route.ActionArgs) {
     return new Response("Method not allowed", { status: 405 });
   }
 
+  // Project-mount chat: a body with projectId runs on the org tenant's
+  // Vertex AI (no user API key). Everything else stays on the legacy
+  // key-based path below. Parse once and hand the body through.
+  const rawBody = await request.json();
+  if (rawBody && typeof rawBody === "object" && typeof (rawBody as { projectId?: unknown }).projectId === "string") {
+    const { handleVertexChatAction } = await import("~/services/ai/vertex-chat-route.server");
+    return handleVertexChatAction(request, rawBody);
+  }
+
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
@@ -62,8 +71,7 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
-  const body = await request.json();
-  const parsed = ChatRequestSchema.safeParse(body);
+  const parsed = ChatRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     emitLog(logCtx, 400, { error: "Invalid request body" });
     return new Response(

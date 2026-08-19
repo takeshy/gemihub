@@ -7,7 +7,7 @@ function baseSettings(overrides: Partial<UserSettings["hubwork"]> = {}): UserSet
   return {
     ...DEFAULT_USER_SETTINGS,
     hubwork: {
-      plan: "pro",
+      plan: "business",
       spreadsheets: [{ id: "old-id", label: "webpage_builder" }],
       accounts: {
         accounts: {

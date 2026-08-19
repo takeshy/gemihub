@@ -28,6 +28,9 @@ export interface SkillWorkflowExecOptions {
   geminiApiKey?: string;
   settings?: UserSettings;
   executionMode?: LocalExecuteOptions["executionMode"];
+  /** Project mount context (org projects): cache namespace + project id. */
+  mountKey?: string;
+  projectId?: string;
 }
 
 export async function executeSkillWorkflowTool(

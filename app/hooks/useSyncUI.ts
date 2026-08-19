@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 import { useSync } from "~/hooks/useSync";
+import { useStorageSync } from "~/hooks/useStorageSync";
 
 /**
  * Wraps `useSync` and manages the related dialog state (conflict dialog,
@@ -9,6 +11,11 @@ import { useSync } from "~/hooks/useSync";
  * push-rejected dialog when sync returns the pushRejected error.
  */
 export function useSyncUI() {
+  // Both hooks always run (rules of hooks); each is inert on the inactive
+  // mount. The selected project decides which one drives the UI.
+  const projectActive = useEnterpriseSelection() !== null;
+  const driveSync = useSync();
+  const storageSync = useStorageSync();
   const {
     syncStatus,
     lastSyncTime,
@@ -24,7 +31,7 @@ export function useSyncUI() {
     checkRemoteChanges,
     cacheFilesByIds,
     cachingProgress,
-  } = useSync();
+  } = projectActive ? storageSync : driveSync;
 
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);

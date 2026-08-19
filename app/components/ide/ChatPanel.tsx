@@ -9,10 +9,11 @@ import type {
   GeneratedImage,
   McpAppInfo,
 } from "~/types/chat";
-import type { UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
+import type { ModelInfo, UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
 
 import {
   getAvailableModels,
+  AVAILABLE_MODELS,
   getDefaultModelForPlan,
   getDriveToolModeConstraint,
   getEnabledMcpServers,
@@ -39,6 +40,9 @@ import {
 } from "~/services/indexeddb-cache";
 import { getCachedApiKey } from "~/services/api-key-cache";
 import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
+import { executeChatStream } from "~/hooks/chat-stream-client";
+import { VERTEX_MODELS } from "~/services/ai/models";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 import { executeInteractionsChat } from "~/hooks/useInteractionsChat";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { useSkills } from "~/contexts/SkillContext";
@@ -273,13 +277,22 @@ export function ChatPanel({
   // so background streams can detect they've been detached from the UI.
   const activeSessionIdRef = useRef(0);
 
+  // Org project mount: chat runs on the tenant's Vertex AI via /api/chat and
+  // history lives in the project storage. Ref mirror for long-lived callbacks.
+  const enterpriseSelection = useEnterpriseSelection();
+  const enterpriseSelectionRef = useRef(enterpriseSelection);
+  enterpriseSelectionRef.current = enterpriseSelection;
+
   // Fetch chat histories on mount
   useEffect(() => {
-    fetch("/api/chat/history")
+    const historyUrl = enterpriseSelection
+      ? `/api/chat/history?projectId=${encodeURIComponent(enterpriseSelection.projectId)}`
+      : "/api/chat/history";
+    fetch(historyUrl)
       .then((res) => (res.ok ? res.json() : []))
       .then((data: ChatHistoryItem[]) => setHistories(data))
       .catch((e) => console.error("Failed to fetch chat histories:", e));
-  }, []);
+  }, [enterpriseSelection]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [activeChatFileId, setActiveChatFileId] = useState<string | null>(null);
   const [activeChatCreatedAt, setActiveChatCreatedAt] = useState<number | null>(null);
@@ -342,11 +355,33 @@ export function ChatPanel({
   const [showCryptoPrompt, setShowCryptoPrompt] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
 
-  const availableModels = getAvailableModels(settings.apiPlan);
+  // Project mount: the model list comes from the Vertex catalogue, narrowed
+  // by the project's allowedModels; the user's apiPlan does not apply there.
+  const availableModels = useMemo(() => {
+    if (enterpriseSelection) {
+      const vertexNames = Object.values(VERTEX_MODELS) as ModelType[];
+      const allowedNames = enterpriseSelection.allowedModels.length > 0
+        ? vertexNames.filter((name) => enterpriseSelection.allowedModels.includes(name))
+        : vertexNames;
+      return allowedNames.map(
+        (name) =>
+          AVAILABLE_MODELS.find((m) => m.name === name) ??
+          ({ name, displayName: name, description: "" } satisfies ModelInfo),
+      );
+    }
+    return getAvailableModels(settings.apiPlan);
+  }, [enterpriseSelection, settings.apiPlan]);
   const availableMcpServers = useMemo(() => getEnabledMcpServers(settings), [settings]);
   const defaultModel =
     settings.selectedModel || getDefaultModelForPlan(settings.apiPlan);
   const [selectedModel, setSelectedModel] = useState<ModelType>(defaultModel);
+  // Keep the selection inside the active mount's model list (e.g. after
+  // switching into a project whose allowedModels exclude the current model).
+  useEffect(() => {
+    if (availableModels.length > 0 && !availableModels.some((m) => m.name === selectedModel)) {
+      setSelectedModel(availableModels[0].name);
+    }
+  }, [availableModels, selectedModel]);
 
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(() => {
     try {
@@ -481,6 +516,40 @@ export function ChatPanel({
       setMessages([]);
 
       try {
+        // Project mount: chats live in project storage; load through the
+        // tenant history route (returns parsed ChatHistory or an encrypted
+        // envelope) instead of the Drive file read.
+        const loadSelection = enterpriseSelectionRef.current;
+        if (loadSelection) {
+          const res = await fetch(
+            `/api/chat/history?projectId=${encodeURIComponent(loadSelection.projectId)}&id=${encodeURIComponent(chatId)}`,
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.encrypted && typeof data.encryptedContent === "string") {
+            const cachedKey = cryptoCache.getPrivateKey();
+            if (cachedKey) {
+              try {
+                const plain = await decryptWithPrivateKey(data.encryptedContent, cachedKey);
+                parseChatContent(plain);
+                return;
+              } catch { /* try other paths */ }
+            }
+            const cachedPw = cryptoCache.getPassword();
+            if (cachedPw) {
+              try {
+                const plain = await decryptFileContent(data.encryptedContent, cachedPw);
+                parseChatContent(plain);
+                return;
+              } catch { /* fall through to prompt */ }
+            }
+            setPendingEncryptedContent(data.encryptedContent);
+            setShowCryptoPrompt(true);
+            return;
+          }
+          parseChatContent(JSON.stringify(data));
+          return;
+        }
         const res = await fetch(
           `/api/drive/files?action=read&fileId=${fileId}`
         );
@@ -540,10 +609,15 @@ export function ChatPanel({
   const handleDeleteChat = useCallback(
     async (fileId: string) => {
       try {
+        const delSelection = enterpriseSelectionRef.current;
         await fetch("/api/chat/history", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileId }),
+          body: JSON.stringify(
+            delSelection
+              ? { projectId: delSelection.projectId, chatId: fileId }
+              : { fileId },
+          ),
         });
         // Tombstone only after successful delete so background streams
         // don't lose data on transient network errors.
@@ -587,10 +661,15 @@ export function ChatPanel({
       };
 
       try {
+        const saveSelection = enterpriseSelectionRef.current;
         const res = await fetch("/api/chat/history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(chatHistory),
+          body: JSON.stringify(
+            saveSelection
+              ? { projectId: saveSelection.projectId, chatHistory }
+              : chatHistory,
+          ),
         });
         if (res.ok) {
           const data = await res.json();
@@ -808,7 +887,10 @@ export function ChatPanel({
       // Paid plan uses server-side API key; free plan needs local key
       const isPaidPlan = settings.apiPlan === "paid";
       const localApiKey = getCachedApiKey();
-      if (!isPaidPlan && !localApiKey) {
+      // Inside an org project no Gemini API key is needed — chat runs on the
+      // tenant's Vertex AI.
+      const projectSelection = enterpriseSelectionRef.current;
+      if (!projectSelection && !isPaidPlan && !localApiKey) {
         if (hasEncryptedApiKey && onNeedUnlock) {
           pendingSendRef.current = { content, attachments, overrides };
           onNeedUnlock();
@@ -1013,7 +1095,33 @@ export function ChatPanel({
           !!planInstruction && !isPlanApprovalMessage(content);
 
         const canUseProxy = true;
-        const generator = useInteractions
+        const generator = projectSelection
+          ? executeChatStream(
+              {
+                projectId: projectSelection.projectId,
+                mountKey: `gcs:${projectSelection.orgId}/${projectSelection.projectId}`,
+                model: effectiveModel,
+                canUseProxy,
+                messages: updatedMessages,
+                systemPrompt: fullSystemPrompt,
+                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
+                driveToolMode: effectiveDriveToolMode,
+                mcpServerIds: effectiveMcpIds,
+                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
+                webSearchEnabled: isWebSearch,
+                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                maxFunctionCalls: 50,
+                functionCallWarningThreshold: 10,
+                ragTopK: settings.ragTopK,
+                abortSignal: abortController.signal,
+                requirePlanApproval: needsPlanApproval,
+                settings,
+                okfRoot: settings.okfRoot,
+                activeOkfBundleIds,
+              },
+              chatCallbacks,
+            )
+          : useInteractions
           ? executeInteractionsChat(
               {
                 model: effectiveModel,
@@ -1463,10 +1571,15 @@ export function ChatPanel({
         updatedAt: now,
       };
       try {
+        const saveSelection = enterpriseSelectionRef.current;
         const res = await fetch("/api/chat/history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(chatHistory),
+          body: JSON.stringify(
+            saveSelection
+              ? { projectId: saveSelection.projectId, chatHistory }
+              : chatHistory,
+          ),
         });
         if (res.ok) {
           const data = await res.json();
@@ -1611,7 +1724,7 @@ export function ChatPanel({
         streamingWebSearchUsed={streamingWebSearchUsed}
         isStreaming={isStreaming}
         alwaysThink={getThinkingToggle(selectedModel) === true}
-        isPro={settings.hubwork?.plan === "pro" || settings.hubwork?.plan === "granted"}
+        isPro={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}
         onBuildWebApp={() => handleSend("", undefined, { skillId: "webpage-builder" })}
         onGoToDashboard={onGoToDashboard}
         onCreateDashboard={() => void handleCreateDashboardFromChat()}

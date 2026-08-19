@@ -43,14 +43,24 @@ export function getFirestore(): Firestore {
         "Firestore is not available: no Google Cloud credentials found (Hubwork features require Cloud Run or Application Default Credentials).",
       );
     }
+    const projectId = process.env.GCP_PROJECT_ID;
     const databaseId = process.env.FIRESTORE_DATABASE_ID;
-    _firestore = databaseId ? new Firestore({ databaseId }) : new Firestore();
+    _firestore = new Firestore({
+      ...(projectId ? { projectId } : {}),
+      ...(databaseId ? { databaseId } : {}),
+    });
   }
   return _firestore;
 }
 
-// Collection names
+// Collection names — Hubwork (publishing platform accounts)
 export const HUBWORK_ACCOUNTS = "hubwork-accounts";
 export const HUBWORK_MAGIC_TOKENS = "hubwork-magic-tokens";
 export const HUBWORK_FORM_SUBMISSIONS = "hubwork-form-submissions";
 export const HUBWORK_PENDING_REGISTRATIONS = "hubwork-pending-registrations";
+
+// Collection names — organizations control plane (multi-tenant orgs/projects)
+export const ORGANIZATIONS = "organizations";
+export const USERS = "users";
+export const PROJECTS_SUBCOLLECTION = "projects";
+export const MEMBERS_SUBCOLLECTION = "members";

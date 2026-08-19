@@ -19,11 +19,6 @@ output "nameservers" {
 }
 
 # Legacy domain nameservers (60-day 301 redirect window).
-# TODO(2026-06-25): remove together with the legacy_domain variable.
-output "legacy_nameservers" {
-  description = "Nameservers for the legacy domain (set at the legacy registrar during the 60-day 301 redirect window)"
-  value       = var.manage_dns && var.legacy_domain != "" ? google_dns_managed_zone.legacy[0].name_servers : []
-}
 
 output "cloud_run_service_account_email" {
   description = "Cloud Run service account email"

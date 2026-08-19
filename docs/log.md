@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-08-19
+* **Add**: `architecture/mounts.md` — storage mounts (Drive default / GCS org project) and AI providers (genai-key / Vertex) coexistence model, route dispatch, My Drive shelf, and the `lite | business | granted` plan model.
+
 ## 2026-07-11
 * **Version**: `1.0.1`
 * **New**: Encrypted Secret Manager dashboard widget — create, group, search, unlock, copy, and update `.encrypted` values with searchable descriptions and visible metadata (`features/dashboard.md`, `architecture/encryption.md`).

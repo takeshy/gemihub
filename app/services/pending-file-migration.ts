@@ -18,7 +18,7 @@ import {
   setCachedRemoteMeta,
   getLocalSyncMeta,
   setLocalSyncMeta,
-} from "./indexeddb-cache";
+} from "./indexeddb-cache-drive";
 import { mimeTypeFromFileName } from "./drive-local";
 
 let inFlight: Promise<void> | null = null;

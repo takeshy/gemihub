@@ -4,7 +4,42 @@ import type { ToolDefinition } from "~/types/settings";
 
 export const HUBWORK_TOOL_NAME = "get_spreadsheet_schema";
 
+export const GMAIL_SEND_TOOL_NAME = "gmail_send_email";
+
 export const HUBWORK_TOOL_DEFINITIONS: ToolDefinition[] = [
+  {
+    name: GMAIL_SEND_TOOL_NAME,
+    description:
+      "Send an email through the user's connected Gmail account. " +
+      "Use this when the user explicitly asks to email, send, or share content with an email address. " +
+      "For requests like 'send the currently open note', first read the referenced file with read_drive_file, then send its content in the email body.",
+    parameters: {
+      type: "object",
+      properties: {
+        to: {
+          type: "string",
+          description: "Recipient email address. Multiple recipients may be comma-separated.",
+        },
+        subject: {
+          type: "string",
+          description: "Email subject.",
+        },
+        body: {
+          type: "string",
+          description: "HTML email body. Plain text is accepted and will be sent as HTML text.",
+        },
+        cc: {
+          type: "string",
+          description: "Optional CC email address list.",
+        },
+        bcc: {
+          type: "string",
+          description: "Optional BCC email address list.",
+        },
+      },
+      required: ["to", "subject", "body"],
+    },
+  },
   {
     name: HUBWORK_TOOL_NAME,
     description:

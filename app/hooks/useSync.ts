@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 import {
   getLocalSyncMeta,
   setLocalSyncMeta,
@@ -14,7 +15,7 @@ import {
   pruneOrphanedEditHistory,
   saveLocalConflictBackup,
   type LocalSyncMeta,
-} from "~/services/indexeddb-cache";
+} from "~/services/indexeddb-cache-drive";
 import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
 import { awaitPendingMigrations } from "~/services/pending-file-migration";
 import { ragRegisterInBackground } from "~/services/rag-sync";
@@ -48,6 +49,13 @@ export interface ConflictInfo {
 export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "warning" | "error";
 
 export function useSync() {
+  // Drive push/pull is inert while a project mount is selected — the IDE
+  // then syncs through useStorageSync and this hook's outputs are unused.
+  const projectActive = useEnterpriseSelection() !== null;
+  // Ref mirror so long-lived callbacks observe the latest value without
+  // re-creating on every selection change.
+  const projectActiveRef = useRef(projectActive);
+  projectActiveRef.current = projectActive;
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
@@ -65,6 +73,7 @@ export function useSync() {
    * checkRemoteChanges, push rejection) can avoid reading stale cached meta.
    */
   const refreshSyncCounts = useCallback(async (freshRemoteMeta?: SyncMeta | null) => {
+    if (projectActiveRef.current) return;
     try {
       const cachedRemote = await getCachedRemoteMeta();
       const remoteMeta = freshRemoteMeta !== undefined
@@ -120,6 +129,7 @@ export function useSync() {
 
   // Listen for file-modified events to update counts in real-time
   useEffect(() => {
+    if (projectActive) return;
     const handler = () => { refreshSyncCounts(); };
     const correctionHandler = (e: Event) => {
       const { type, count } = (e as CustomEvent).detail;
@@ -135,7 +145,7 @@ export function useSync() {
       window.removeEventListener("sync-complete", handler);
       window.removeEventListener("sync-counts-corrected", correctionHandler);
     };
-  }, [refreshSyncCounts]);
+  }, [refreshSyncCounts, projectActive]);
 
   // Ref to access syncStatus inside interval without re-creating it
   const syncStatusRef = useRef(syncStatus);
@@ -143,6 +153,7 @@ export function useSync() {
 
   // Check remote changes by fetching fresh remoteMeta, then recompute both counts
   const checkRemoteChanges = useCallback(async () => {
+    if (projectActiveRef.current) return;
     try {
       if (!navigator.onLine) return;
       if (syncStatusRef.current !== "idle") return;
@@ -253,12 +264,14 @@ export function useSync() {
 
   // Poll remote changes every 5 minutes + initial check
   useEffect(() => {
+    if (projectActive) return;
     checkRemoteChanges();
     const interval = setInterval(checkRemoteChanges, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [checkRemoteChanges]);
+  }, [checkRemoteChanges, projectActive]);
 
   const push = useCallback(async () => {
+    if (projectActiveRef.current) return;
     if (syncLockRef.current) { console.warn("[useSync] push skipped: sync already in progress"); return; }
     syncLockRef.current = true;
     setSyncStatus("pushing");
@@ -447,6 +460,7 @@ export function useSync() {
   }, [refreshSyncCounts]);
 
   const pull = useCallback(async (ignoredIds?: Set<string>) => {
+    if (projectActiveRef.current) return;
     if (syncLockRef.current) { console.warn("[useSync] pull skipped: sync already in progress"); return; }
     syncLockRef.current = true;
     setSyncStatus("pulling");
@@ -664,6 +678,7 @@ export function useSync() {
 
   const resolveConflict = useCallback(
     async (fileId: string, choice: "local" | "remote", isEditDelete?: boolean) => {
+      if (projectActiveRef.current) return;
       if (syncLockRef.current) {
         throw new Error("Sync already in progress");
       }
@@ -824,6 +839,7 @@ export function useSync() {
   );
 
   const fullPull = useCallback(async () => {
+    if (projectActiveRef.current) return;
     if (syncLockRef.current) { console.warn("[useSync] fullPull skipped: sync already in progress"); return; }
     syncLockRef.current = true;
     setSyncStatus("pulling");
@@ -934,6 +950,7 @@ export function useSync() {
   }, []);
 
   const cacheFilesByIds = useCallback(async (fileIds: string[]) => {
+    if (projectActiveRef.current) return;
     if (fileIds.length === 0) return;
     if (syncLockRef.current) { console.warn("[useSync] cacheFilesByIds skipped: sync already in progress"); return; }
 

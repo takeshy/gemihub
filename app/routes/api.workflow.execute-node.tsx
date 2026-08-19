@@ -107,9 +107,9 @@ export async function action({ request }: Route.ActionArgs) {
   } catch { /* ignore */ }
 
   if (SHEET_NODE_TYPES.has(nodeType)) {
-    const { hasProFeatures } = await import("~/types/hubwork");
+    const { hasBusinessFeatures } = await import("~/types/hubwork");
     const hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
-    if (!hubworkAccount || !hasProFeatures(hubworkAccount)) {
+    if (!hubworkAccount || !hasBusinessFeatures(hubworkAccount)) {
       return Response.json(
         { error: "Hubwork Pro subscription required" },
         { status: 403, headers: responseHeaders }

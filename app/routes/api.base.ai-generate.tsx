@@ -28,6 +28,15 @@ ${BASE_REF_VIEWS}
 Remember: output ONLY the updated .base YAML (top-level keys among filters, formulas, properties, summaries, views). No explanation, no code fence.`;
 
 export async function action({ request }: Route.ActionArgs) {
+  // Project-mount requests carry projectId and run on the org tenant's
+  // Vertex AI. Peek at a clone so the legacy path can still read the body.
+  {
+    const peek = (await request.clone().json().catch(() => null)) as { projectId?: unknown } | null;
+    if (peek && typeof peek.projectId === "string" && peek.projectId) {
+      const { vertexAction } = await import("~/services/ai/vertex-base-ai-generate.server");
+      return vertexAction(request);
+    }
+  }
   const tokens = await requireAuth(request);
   if (!tokens.geminiApiKey) {
     return Response.json(

@@ -14,12 +14,12 @@ function parseSlugList(value: string | undefined): string[] {
 }
 
 /** USD prices are opt-in per plan — falls back to the JPY price if the USD price env var isn't configured. */
-function resolvePriceId(planType: "lite" | "pro", currency: HubworkCurrency): string | undefined {
+function resolvePriceId(planType: "lite" | "business", currency: HubworkCurrency): string | undefined {
   if (currency === "usd") {
-    const usdPriceId = planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE_USD : process.env.STRIPE_PRICE_ID_PRO_USD;
+    const usdPriceId = planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE_USD : (process.env.STRIPE_PRICE_ID_BUSINESS_USD ?? process.env.STRIPE_PRICE_ID_PRO_USD);
     if (usdPriceId) return usdPriceId;
   }
-  return planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE : process.env.STRIPE_PRICE_ID_PRO;
+  return planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE : (process.env.STRIPE_PRICE_ID_BUSINESS ?? process.env.STRIPE_PRICE_ID_PRO);
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -28,7 +28,95 @@ export async function action({ request }: Route.ActionArgs) {
   const { tokens } = await getValidTokens(request, sessionTokens);
 
   const formData = await request.formData();
-  const planType = (formData.get("plan") as string || "pro") === "lite" ? "lite" : "pro";
+  const requestedPlan = (formData.get("plan") as string) || "business";
+
+  // Vertex budget top-up: a one-time payment ($10 / ¥1,500 per unit) that
+  // extends the organization's current-month AI budget. Org owners/admins only.
+  if (requestedPlan === "vertex-topup") {
+    const orgId = (formData.get("orgId") as string || "").trim();
+    const unitsRaw = Number(formData.get("units") || 1);
+    const units = Number.isInteger(unitsRaw) && unitsRaw >= 1 && unitsRaw <= 20 ? unitsRaw : 1;
+    const topUpCurrency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
+    if (!orgId) throw new Response("Missing orgId", { status: 400 });
+    const { requireOrgAccess } = await import("~/services/project-acl.server");
+    const access = await requireOrgAccess(request, orgId);
+    if (access.role !== "owner" && access.role !== "admin") {
+      throw new Response("Only organization administrators can purchase budget top-ups", { status: 403 });
+    }
+    const topUpPriceId = topUpCurrency === "usd"
+      ? process.env.STRIPE_PRICE_ID_VERTEX_TOPUP_USD ?? process.env.STRIPE_PRICE_ID_VERTEX_TOPUP
+      : process.env.STRIPE_PRICE_ID_VERTEX_TOPUP;
+    if (!topUpPriceId) {
+      throw new Response("Stripe is not configured for budget top-ups", { status: 500 });
+    }
+    const topUpUrl = new URL(request.url);
+    const topUpProto = request.headers.get("x-forwarded-proto") || topUpUrl.protocol.replace(":", "");
+    const topUpBase = `${topUpProto}://${topUpUrl.host}`;
+    const stripeClient = getStripe();
+    const topUpSession = await stripeClient.checkout.sessions.create({
+      mode: "payment",
+      line_items: [{ price: topUpPriceId, quantity: units }],
+      success_url: `${topUpBase}/settings?tab=enterprise`,
+      cancel_url: `${topUpBase}/settings?tab=enterprise`,
+      customer_email: tokens.email || undefined,
+      metadata: {
+        type: "vertex-topup",
+        orgId,
+        units: String(units),
+        currency: topUpCurrency,
+      },
+    });
+    if (!topUpSession.url) {
+      throw new Response("Failed to create checkout session", { status: 500 });
+    }
+    return redirect(topUpSession.url);
+  }
+
+  // Storage add-on: a monthly subscription of 500 GB units (¥5,000 / $30
+  // per unit) that extends the organization's storage quota. Org
+  // owners/admins only. Each purchase is its own subscription so it can be
+  // cancelled independently from the Stripe customer portal.
+  if (requestedPlan === "storage-addon") {
+    const orgId = (formData.get("orgId") as string || "").trim();
+    const unitsRaw = Number(formData.get("units") || 1);
+    const units = Number.isInteger(unitsRaw) && unitsRaw >= 1 && unitsRaw <= 8 ? unitsRaw : 1;
+    const addonCurrency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
+    if (!orgId) throw new Response("Missing orgId", { status: 400 });
+    const { requireOrgAccess } = await import("~/services/project-acl.server");
+    const access = await requireOrgAccess(request, orgId);
+    if (access.role !== "owner" && access.role !== "admin") {
+      throw new Response("Only organization administrators can purchase storage add-ons", { status: 403 });
+    }
+    const addonPriceId = addonCurrency === "usd"
+      ? process.env.STRIPE_PRICE_ID_STORAGE_ADDON_USD ?? process.env.STRIPE_PRICE_ID_STORAGE_ADDON
+      : process.env.STRIPE_PRICE_ID_STORAGE_ADDON;
+    if (!addonPriceId) {
+      throw new Response("Stripe is not configured for storage add-ons", { status: 500 });
+    }
+    const addonUrl = new URL(request.url);
+    const addonProto = request.headers.get("x-forwarded-proto") || addonUrl.protocol.replace(":", "");
+    const addonBase = `${addonProto}://${addonUrl.host}`;
+    const stripeClient = getStripe();
+    const addonSession = await stripeClient.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: addonPriceId, quantity: units }],
+      success_url: `${addonBase}/settings?tab=enterprise`,
+      cancel_url: `${addonBase}/settings?tab=enterprise`,
+      customer_email: tokens.email || undefined,
+      metadata: { type: "storage-addon", orgId, units: String(units), currency: addonCurrency },
+      // Stamp the subscription itself so lifecycle webhooks
+      // (subscription.updated / .deleted) can be routed without a session.
+      subscription_data: {
+        metadata: { type: "storage-addon", orgId, units: String(units) },
+      },
+    });
+    if (!addonSession.url) {
+      throw new Response("Failed to create checkout session", { status: 500 });
+    }
+    return redirect(addonSession.url);
+  }
+
+  const planType = requestedPlan === "lite" ? "lite" : "business";
   const accountSlug = (formData.get("accountSlug") as string || "").toLowerCase().trim();
   const currency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
 
@@ -43,7 +131,7 @@ export async function action({ request }: Route.ActionArgs) {
   // Google OAuth verification bypass: create a granted Pro account without Stripe.
   // Only effective when HUBWORK_REVIEW_SLUGS contains the submitted slug and the
   // user has no existing account yet.
-  if (planType === "pro" && !existing && accountSlug && reviewSlugs.includes(accountSlug)) {
+  if (planType === "business" && !existing && accountSlug && reviewSlugs.includes(accountSlug)) {
     if (accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug)) {
       throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
     }
@@ -68,7 +156,7 @@ export async function action({ request }: Route.ActionArgs) {
       throw new Response("Already on this plan", { status: 400 });
     }
     // Pro requires a slug
-    if (planType === "pro") {
+    if (planType === "business") {
       if (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug)) {
         throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
       }
@@ -106,25 +194,37 @@ export async function action({ request }: Route.ActionArgs) {
     });
 
     // Update account immediately (webhook will also fire, but this gives instant feedback)
-    const { updateAccount } = await import("~/services/hubwork-accounts.server");
+    const { updateAccount, HUBWORK_DOMAIN } = await import("~/services/hubwork-accounts.server");
     const updates: Record<string, string> = { plan: planType };
-    if (planType === "pro" && accountSlug && !existing.accountSlug) {
+    if (planType === "business" && accountSlug && !existing.accountSlug) {
       updates.accountSlug = accountSlug;
-      updates.defaultDomain = `${accountSlug}.gemihub.net`;
+      updates.defaultDomain = `${accountSlug}.${HUBWORK_DOMAIN}`;
     }
     await updateAccount(existing.id, updates);
+
+    // Lite → Business upgrades change the subscription in place, so
+    // checkout.session.completed never fires — provision the organization
+    // here (idempotent; reuses an existing membership).
+    if (planType === "business") {
+      const { provisionBusinessOrganization } = await import("~/services/business-provisioning.server");
+      await provisionBusinessOrganization({
+        accountId: existing.id,
+        email: tokens.email || existing.email || "",
+        accountSlug: accountSlug || existing.accountSlug,
+      });
+    }
 
     return redirect(`${baseUrl}/settings?hubwork_upgraded=1`);
   }
 
   // New subscription
-  if (!accountSlug && planType === "pro") {
+  if (!accountSlug && planType === "business") {
     throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
   }
-  if (planType === "pro" && (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug))) {
+  if (planType === "business" && (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug))) {
     throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
   }
-  if (planType === "pro") {
+  if (planType === "business") {
     const slugTaken = await getAccountBySlug(accountSlug);
     if (slugTaken) {
       throw new Response("This slug is already taken", { status: 409 });

@@ -96,11 +96,13 @@ async function fileSearchRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const joiner = path.includes("?") ? "&" : "?";
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${path}${joiner}key=${encodeURIComponent(apiKey)}`, {
+  // API key goes in a header, never the URL — query strings end up in access
+  // logs, proxies, and Referer headers.
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
       ...(init.headers ?? {}),
     },
   });

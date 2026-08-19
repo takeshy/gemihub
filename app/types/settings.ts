@@ -459,6 +459,9 @@ export interface RagSetting {
   isExternal: boolean;
   targetFolders: string[];
   excludePatterns: string[];
+  /** Firestore vector RAG (org projects): text chunking parameters. */
+  chunkSize?: number;
+  chunkOverlap?: number;
   files: Record<string, RagFileInfo>;
   lastFullSync: number | null;
 }
@@ -712,7 +715,7 @@ export interface HubworkSettings {
   skillVersion?: string;
   customDomain?: string;
   accountId?: string;
-  plan?: "lite" | "pro" | "granted";
+  plan?: "lite" | "business" | "granted";
   /** Billing currency for lite/pro plans. Missing means "jpy" (legacy accounts). */
   currency?: "jpy" | "usd";
   accountSlug?: string;

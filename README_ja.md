@@ -307,13 +307,13 @@ docker run -p 8080:8080 \
 
 ## プレミアムプラン
 
-有料プラン（Stripe 経由 ¥2,000/月）では、GemiHub に **Web アプリビルダー** 機能が追加されます。単一の共有 Cloud Run インスタンスが全有料アカウントを処理し、各アカウントはビルトインサブドメイン（`{slug}.gemihub.net`）とオプションのカスタムドメインを持ちます。アカウントデータは Firestore に保存、ページは Drive から CDN 経由で直接配信、スケジュールワークフローは自動実行されます。詳細は [docs/architecture/premium.md](docs/architecture/premium.md) を参照。
+有料プラン（Business：Stripe 経由 月額 ¥7,500 / $50・組織単位）では、GemiHub に **組織（チーム共有プロジェクト＋Vertex AI）** と **Web アプリビルダー** 機能が追加されます。料金には月 $30 分の Vertex AI 利用枠が含まれ、不足時は $10（¥1,500）単位で追加購入できます。プロジェクト内では Gemini API キーは不要です（詳細は [docs/architecture/mounts.md](docs/architecture/mounts.md)）。単一の共有 Cloud Run インスタンスが全有料アカウントを処理し、各アカウントはビルトインサブドメイン（`{slug}.gemihub.net`）とオプションのカスタムドメインを持ちます。アカウントデータは Firestore に保存、ページは Drive から CDN 経由で直接配信、スケジュールワークフローは自動実行されます。詳細は [docs/architecture/premium.md](docs/architecture/premium.md) を参照。
 
 ### 有料限定機能
 
 | 機能 | 説明 |
 |------|------|
-| **Stripe サブスクリプション** | ¥2,000/月、webhook 駆動のアカウントプロビジョニングとライフサイクル管理 |
+| **Stripe サブスクリプション** | 月額 ¥7,500 / $50（組織単位）、webhook 駆動で組織・アカウントを自動プロビジョニング |
 | **管理画面** | `/hubwork/admin` でアカウント管理（Basic 認証 + Google OAuth メール制限） |
 | **Google Sheets CRUD** | ワークフローノード: `sheet-read`, `sheet-write`, `sheet-update`, `sheet-delete` |
 | **Gmail 送信** | ワークフローノード: `gmail-send`。Gmail API 経由でメール送信 |
@@ -360,7 +360,7 @@ Firestore
 
 ### セットアップ
 
-1. **設定 > Hubwork** タブでサブスクリプション登録（¥2,000/月）— サブドメイン slug を選択
+1. **設定 > プレミアムプラン** タブでサブスクリプション登録（月額 ¥7,500）— サブドメイン slug を選択
 2. サブスクリプション完了後、Hubwork 機能が自動有効化
 3. Sheets 連携を設定（スプレッドシート ID、ユーザーシート、接続シート）
 4. オプションでカスタムドメインを設定 — DNS レコードと SSL 証明書は自動プロビジョニング

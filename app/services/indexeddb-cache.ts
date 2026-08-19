@@ -1,626 +1,137 @@
-// IndexedDB cache service for browser-side file caching and sync metadata
-// Uses a singleton DB connection for performance.
-
-import { isEncryptedFile } from "./crypto-core";
-import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
-
-const DB_NAME = "gemihub-cache";
-const DB_VERSION = 7;
-
-// --- Store types ---
-
-export interface CachedFile {
-  fileId: string; // primary key
-  content: string;
-  rawContentBase64?: string;
-  md5Checksum: string;
-  modifiedTime: string;
-  cachedAt: number;
-  fileName?: string;
-  encoding?: "base64"; // present for binary files stored as base64
-  /** Remote placeholder created while a new: file migration is in progress. */
-  pendingRemoteFileId?: string;
-  frontmatter?: Record<string, unknown>; // parsed frontmatter for .md files
-  fmParsedMtime?: number; // epoch ms of the modifiedTime when frontmatter was parsed
-}
-
-export interface LocalSyncMeta {
-  id: "current"; // primary key (fixed key, always 1 record)
-  lastUpdatedAt: string;
-  files: Record<string, { md5Checksum: string; modifiedTime: string; name?: string; size?: string }>;
-}
-
-export interface EditHistoryDiff {
-  timestamp: string;
-  diff: string;
-  stats: { additions: number; deletions: number };
-}
-
-export interface CachedEditHistoryEntry {
-  fileId: string; // primary key (one entry per file)
-  filePath: string;
-  diffs: EditHistoryDiff[];
-}
-
-export interface CachedTreeNode {
-  id: string;
-  name: string;
-  mimeType: string;
-  isFolder: boolean;
-  modifiedTime?: string;
-  children?: CachedTreeNode[];
-}
-
-export interface CachedFileTree {
-  id: "current"; // primary key (fixed key, always 1 record)
-  rootFolderId: string;
-  items: CachedTreeNode[];
-  cachedAt: number;
-}
-
-export interface CachedRemoteMeta {
-  id: "current"; // primary key (fixed key, always 1 record)
-  rootFolderId: string;
-  lastUpdatedAt: string;
-  files: Record<string, { name: string; mimeType: string; md5Checksum: string; modifiedTime: string; createdTime?: string; shared?: boolean; webViewLink?: string; size?: string }>;
-  cachedAt: number;
-}
-
-export interface CachedLoaderData {
-  id: "current"; // primary key (fixed key, always 1 record)
-  settings: unknown; // UserSettings — stored as opaque JSON to avoid circular import
-  hasGeminiApiKey: boolean;
-  hasEncryptedApiKey: boolean;
-  rootFolderId: string;
-  cachedAt: number;
-}
-
-export interface ConflictBackup {
-  id: string;
-  fileId: string;
-  fileName: string;
-  content: string;
-  encoding?: "base64";
-  createdAt: number;
-}
-
-// --- Singleton DB connection ---
-
-let dbPromise: Promise<IDBDatabase> | null = null;
-
-function getDB(): Promise<IDBDatabase> {
-  if (typeof indexedDB === "undefined") {
-    return Promise.reject(new Error("IndexedDB not available"));
-  }
-
-  if (dbPromise) return dbPromise;
-
-  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-
-      if (!db.objectStoreNames.contains("files")) {
-        db.createObjectStore("files", { keyPath: "fileId" });
-      }
-
-      if (!db.objectStoreNames.contains("syncMeta")) {
-        db.createObjectStore("syncMeta", { keyPath: "id" });
-      }
-
-      if (!db.objectStoreNames.contains("editHistory")) {
-        db.createObjectStore("editHistory", { keyPath: "fileId" });
-      }
-
-      if (!db.objectStoreNames.contains("fileTree")) {
-        db.createObjectStore("fileTree", { keyPath: "id" });
-      }
-
-      if (!db.objectStoreNames.contains("remoteMeta")) {
-        db.createObjectStore("remoteMeta", { keyPath: "id" });
-      }
-
-      if (!db.objectStoreNames.contains("loaderData")) {
-        db.createObjectStore("loaderData", { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains("conflictBackups")) {
-        db.createObjectStore("conflictBackups", { keyPath: "id" });
-      }
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      // If the connection is unexpectedly closed, reset the singleton
-      db.onclose = () => {
-        dbPromise = null;
-      };
-      db.onversionchange = () => {
-        db.close();
-        dbPromise = null;
-      };
-      resolve(db);
-    };
-    request.onerror = () => {
-      dbPromise = null;
-      reject(request.error);
-    };
-  });
-
-  return dbPromise;
-}
-
-function txGet<T>(
-  db: IDBDatabase,
-  storeName: string,
-  key: IDBValidKey
-): Promise<T | undefined> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
-    const req = store.get(key);
-    req.onsuccess = () => resolve(req.result as T | undefined);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function txPut<T>(
-  db: IDBDatabase,
-  storeName: string,
-  value: T
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    store.put(value);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error ?? new Error("Transaction aborted"));
-  });
-}
-
-function txDelete(
-  db: IDBDatabase,
-  storeName: string,
-  key: IDBValidKey
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    store.delete(key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error ?? new Error("Transaction aborted"));
-  });
-}
-
-function txGetAll<T>(db: IDBDatabase, storeName: string): Promise<T[]> {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result as T[]);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-
-// --- files store ---
-
-export async function getCachedFile(
-  fileId: string
-): Promise<CachedFile | undefined> {
-  if (typeof indexedDB === "undefined") return undefined;
-  try {
-    const db = await getDB();
-    return await txGet<CachedFile>(db, "files", fileId);
-  } catch {
-    return undefined;
-  }
-}
-
-export async function setCachedFile(file: CachedFile): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-
-  // Frontmatter write hook (§4.2): when a .md file is cached, parse its
-  // frontmatter and store it on the same record. Skip if already parsed
-  // for this mtime (avoids redundant YAML parsing on cache hits).
-  let toStore: CachedFile = file;
-  if (isMarkdownFile(file.fileName) && file.content !== undefined) {
-    const mtimeMs = file.modifiedTime
-      ? new Date(file.modifiedTime).getTime()
-      : file.cachedAt;
-    if (file.frontmatter === undefined || file.fmParsedMtime !== mtimeMs) {
-      toStore = { ...file, frontmatter: parseFrontmatter(file.content), fmParsedMtime: mtimeMs };
-    }
-  }
-
-  const db = await getDB();
-  await txPut(db, "files", toStore);
-}
-
-export async function renameCachedFile(
-  fileId: string,
-  newFileName: string
-): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    const file = await txGet<CachedFile>(db, "files", fileId);
-    if (file) {
-      file.fileName = newFileName;
-      await txPut(db, "files", file);
-    }
-    const entry = await txGet<CachedEditHistoryEntry>(
-      db,
-      "editHistory",
-      fileId
-    );
-    if (entry) {
-      entry.filePath = newFileName;
-      await txPut(db, "editHistory", entry);
-    }
-  } catch {
-    // ignore
-  }
-}
-
-export async function deleteCachedFile(fileId: string): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txDelete(db, "files", fileId);
-  } catch {
-    // ignore
-  }
-}
-
-export async function saveLocalConflictBackup(
-  backup: Omit<ConflictBackup, "id" | "createdAt">
-): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  const db = await getDB();
-  const createdAt = Date.now();
-  const id = `${createdAt}-${crypto.randomUUID()}`;
-  await txPut(db, "conflictBackups", { ...backup, id, createdAt });
-}
-
-export async function getAllCachedFiles(): Promise<CachedFile[]> {
-  if (typeof indexedDB === "undefined") return [];
-  try {
-    const db = await getDB();
-    return await txGetAll<CachedFile>(db, "files");
-  } catch {
-    return [];
-  }
-}
-
-export async function getEncryptedCachedFileIds(): Promise<Set<string>> {
-  if (typeof indexedDB === "undefined") return new Set();
-  try {
-    const files = await getAllCachedFiles();
-    const encrypted = new Set<string>();
-    for (const f of files) {
-      if (f.content && isEncryptedFile(f.content)) {
-        encrypted.add(f.fileId);
-      }
-    }
-    return encrypted;
-  } catch {
-    return new Set();
-  }
-}
-
-export async function getAllCachedFileIds(): Promise<Set<string>> {
-  if (typeof indexedDB === "undefined") return new Set();
-  try {
-    const db = await getDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("files", "readonly");
-      const store = tx.objectStore("files");
-      const req = store.getAllKeys();
-      req.onsuccess = () => resolve(new Set(req.result.map(String)));
-      req.onerror = () => reject(req.error);
-    });
-  } catch {
-    return new Set();
-  }
-}
-
-export async function getPendingNewFiles(): Promise<CachedFile[]> {
-  if (typeof indexedDB === "undefined") return [];
-  try {
-    const allFiles = await getAllCachedFiles();
-    return allFiles.filter((f) => f.fileId.startsWith("new:"));
-  } catch {
-    return [];
-  }
-}
-
-// --- syncMeta store ---
-
-export async function getLocalSyncMeta(): Promise<LocalSyncMeta | undefined> {
-  if (typeof indexedDB === "undefined") return undefined;
-  try {
-    const db = await getDB();
-    return await txGet<LocalSyncMeta>(db, "syncMeta", "current");
-  } catch {
-    return undefined;
-  }
-}
-
-export async function setLocalSyncMeta(meta: LocalSyncMeta): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  const db = await getDB();
-  await txPut(db, "syncMeta", meta);
-}
-
-export async function removeLocalSyncMetaEntry(fileId: string): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const meta = await getLocalSyncMeta();
-    if (!meta || !meta.files[fileId]) return;
-    delete meta.files[fileId];
-    await setLocalSyncMeta(meta);
-  } catch {
-    // ignore
-  }
-}
-
-export async function bulkRemoveLocalSyncMetaEntries(fileIds: string[]): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const meta = await getLocalSyncMeta();
-    if (!meta) return;
-    let changed = false;
-    for (const fid of fileIds) {
-      if (meta.files[fid]) {
-        delete meta.files[fid];
-        changed = true;
-      }
-    }
-    if (changed) await setLocalSyncMeta(meta);
-  } catch {
-    // ignore
-  }
-}
-
-// --- editHistory store ---
-
-export async function getEditHistoryForFile(
-  fileId: string
-): Promise<CachedEditHistoryEntry | undefined> {
-  if (typeof indexedDB === "undefined") return undefined;
-  try {
-    const db = await getDB();
-    return await txGet<CachedEditHistoryEntry>(db, "editHistory", fileId);
-  } catch {
-    return undefined;
-  }
-}
-
-export async function setEditHistoryEntry(
-  entry: CachedEditHistoryEntry
-): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  const db = await getDB();
-  await txPut(db, "editHistory", entry);
-}
-
-export async function deleteEditHistoryEntry(fileId: string): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txDelete(db, "editHistory", fileId);
-  } catch {
-    // ignore
-  }
-}
-
 /**
- * Atomically apply metadata from a completed background Push while preserving
- * whatever content is currently cached. The dirty marker is removed only when
- * no newer local write replaced the snapshot that was pushed.
+ * Mount-aware IndexedDB cache dispatcher.
+ *
+ * Every consumer keeps importing from this module. When a project mount is
+ * active (EnterpriseProvider mirrors the selection to localStorage before
+ * descendants' effects run), calls go to the mount-keyed storage cache
+ * (indexeddb-cache-mount.ts, path identity, "gemihub-storage" DB); otherwise
+ * to the Drive implementation (indexeddb-cache-drive.ts, fileId identity,
+ * "gemihub-cache" DB) — the default, unchanged behavior.
+ *
+ * App-level entries (loaderData) and Drive-push-specific operations always
+ * use the Drive DB regardless of the active mount.
  */
-export async function applyPushedFileMetadata(
-  fileId: string,
-  pushedContent: string,
-  metadata: { md5Checksum: string; modifiedTime: string },
-): Promise<boolean> {
-  if (typeof indexedDB === "undefined") return false;
-  const db = await getDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(["files", "editHistory"], "readwrite");
-    const files = tx.objectStore("files");
-    const history = tx.objectStore("editHistory");
-    let matched = false;
-    const request = files.get(fileId);
-    request.onsuccess = () => {
-      const cached = request.result as CachedFile | undefined;
-      if (!cached) return;
-      matched = cached.content === pushedContent;
-      files.put({
-        ...cached,
-        md5Checksum: metadata.md5Checksum,
-        modifiedTime: metadata.modifiedTime,
-        cachedAt: Date.now(),
-      });
-      if (matched) history.delete(fileId);
-    };
-    request.onerror = () => tx.abort();
-    tx.oncomplete = () => resolve(matched);
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
-  });
+
+import * as drive from "./indexeddb-cache-drive";
+import * as mount from "./indexeddb-cache-mount";
+import { activeProjectMountKey } from "./indexeddb-cache-mount";
+
+export type {
+  CachedFile,
+  LocalSyncMeta,
+  EditHistoryDiff,
+  CachedEditHistoryEntry,
+  CachedTreeNode,
+  CachedFileTree,
+  CachedRemoteMeta,
+  CachedLoaderData,
+  ConflictBackup,
+} from "./indexeddb-cache-drive";
+export { activeProjectMountKey, activeProjectMountParam } from "./indexeddb-cache-mount";
+
+function onMount(): boolean {
+  return activeProjectMountKey() !== null;
 }
 
-export async function getLocallyModifiedFileIds(): Promise<Set<string>> {
-  if (typeof indexedDB === "undefined") return new Set();
-  try {
-    const db = await getDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("editHistory", "readonly");
-      const store = tx.objectStore("editHistory");
-      const req = store.getAllKeys();
-      req.onsuccess = () => resolve(new Set(req.result.map(String)));
-      req.onerror = () => reject(req.error);
-    });
-  } catch {
-    return new Set();
-  }
-}
+// --- files ---
 
-/**
- * Delete editHistory entries whose fileId is not in `keepIds`.
- * Used to prune orphaned entries left behind when a file was deleted from
- * both localMeta and remoteMeta but its editHistory entry survived.
- * `new:`-prefixed entries are always kept — they belong to files awaiting
- * Drive migration and may not yet appear in either meta.
- * Returns the list of pruned fileIds.
- */
-export async function pruneOrphanedEditHistory(keepIds: Set<string>): Promise<string[]> {
-  if (typeof indexedDB === "undefined") return [];
-  try {
-    const db = await getDB();
-    const allKeys = await new Promise<string[]>((resolve, reject) => {
-      const tx = db.transaction("editHistory", "readonly");
-      const req = tx.objectStore("editHistory").getAllKeys();
-      req.onsuccess = () => resolve(req.result.map(String));
-      req.onerror = () => reject(req.error);
-    });
-    const toDelete = allKeys.filter((k) => !keepIds.has(k) && !k.startsWith("new:"));
-    if (toDelete.length === 0) return [];
-    return await new Promise<string[]>((resolve, reject) => {
-      const tx = db.transaction("editHistory", "readwrite");
-      const store = tx.objectStore("editHistory");
-      for (const k of toDelete) store.delete(k);
-      tx.oncomplete = () => resolve(toDelete);
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {
-    return [];
-  }
-}
+export const getCachedFile: typeof drive.getCachedFile = (fileId) =>
+  onMount() ? mount.getCachedFile(fileId) : drive.getCachedFile(fileId);
 
-export async function getAllEditHistory(): Promise<CachedEditHistoryEntry[]> {
-  if (typeof indexedDB === "undefined") return [];
-  try {
-    const db = await getDB();
-    return await txGetAll<CachedEditHistoryEntry>(db, "editHistory");
-  } catch {
-    return [];
-  }
-}
+export const setCachedFile: typeof drive.setCachedFile = (file) =>
+  onMount() ? mount.setCachedFile(file) : drive.setCachedFile(file);
 
-export async function clearAllEditHistory(): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  const db = await getDB();
-  const tx = db.transaction("editHistory", "readwrite");
-  tx.objectStore("editHistory").clear();
-  await new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
+export const renameCachedFile: typeof drive.renameCachedFile = (fileId, newFileName) =>
+  onMount() ? mount.renameCachedFile(fileId, newFileName) : drive.renameCachedFile(fileId, newFileName);
 
-// --- fileTree store ---
+export const deleteCachedFile: typeof drive.deleteCachedFile = (fileId) =>
+  onMount() ? mount.deleteCachedFile(fileId) : drive.deleteCachedFile(fileId);
 
-export async function getCachedFileTree(): Promise<CachedFileTree | undefined> {
-  if (typeof indexedDB === "undefined") return undefined;
-  try {
-    const db = await getDB();
-    return await txGet<CachedFileTree>(db, "fileTree", "current");
-  } catch {
-    return undefined;
-  }
-}
+export const getAllCachedFiles: typeof drive.getAllCachedFiles = () =>
+  onMount() ? mount.getAllCachedFiles() : drive.getAllCachedFiles();
 
-export async function setCachedFileTree(tree: CachedFileTree): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txPut(db, "fileTree", tree);
-  } catch {
-    // ignore
-  }
-}
+export const getEncryptedCachedFileIds: typeof drive.getEncryptedCachedFileIds = () =>
+  onMount() ? mount.getEncryptedCachedFileIds() : drive.getEncryptedCachedFileIds();
 
-export async function clearCachedFileTree(): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txDelete(db, "fileTree", "current");
-  } catch {
-    // ignore
-  }
-}
+export const getAllCachedFileIds: typeof drive.getAllCachedFileIds = () =>
+  onMount() ? mount.getAllCachedFileIds() : drive.getAllCachedFileIds();
 
-// --- remoteMeta store ---
+export const getPendingNewFiles: typeof drive.getPendingNewFiles = () =>
+  onMount() ? mount.getPendingNewFiles() : drive.getPendingNewFiles();
 
-export async function getCachedRemoteMeta(): Promise<CachedRemoteMeta | undefined> {
-  if (typeof indexedDB === "undefined") return undefined;
-  try {
-    const db = await getDB();
-    return await txGet<CachedRemoteMeta>(db, "remoteMeta", "current");
-  } catch {
-    return undefined;
-  }
-}
+// Drive-push-specific: only the Drive push flow calls these, and it is gated
+// off while a project mount is active.
+export const applyPushedFileMetadata: typeof drive.applyPushedFileMetadata =
+  drive.applyPushedFileMetadata;
+export const saveLocalConflictBackup: typeof drive.saveLocalConflictBackup =
+  drive.saveLocalConflictBackup;
 
-export async function setCachedRemoteMeta(meta: CachedRemoteMeta): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txPut(db, "remoteMeta", meta);
-  } catch {
-    // ignore
-  }
-}
+// --- syncMeta ---
 
-// --- loaderData store ---
+export const getLocalSyncMeta: typeof drive.getLocalSyncMeta = () =>
+  onMount() ? mount.getLocalSyncMeta() : drive.getLocalSyncMeta();
 
-export async function getCachedLoaderData(): Promise<CachedLoaderData | undefined> {
-  if (typeof indexedDB === "undefined") return undefined;
-  try {
-    const db = await getDB();
-    return await txGet<CachedLoaderData>(db, "loaderData", "current");
-  } catch {
-    return undefined;
-  }
-}
+export const setLocalSyncMeta: typeof drive.setLocalSyncMeta = (meta) =>
+  onMount() ? mount.setLocalSyncMeta(meta) : drive.setLocalSyncMeta(meta);
 
-export async function setCachedLoaderData(entry: CachedLoaderData): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    await txPut(db, "loaderData", entry);
-  } catch {
-    // ignore
-  }
-}
+export const removeLocalSyncMetaEntry: typeof drive.removeLocalSyncMetaEntry = (fileId) =>
+  onMount() ? mount.removeLocalSyncMetaEntry(fileId) : drive.removeLocalSyncMetaEntry(fileId);
+
+export const bulkRemoveLocalSyncMetaEntries: typeof drive.bulkRemoveLocalSyncMetaEntries = (fileIds) =>
+  onMount() ? mount.bulkRemoveLocalSyncMetaEntries(fileIds) : drive.bulkRemoveLocalSyncMetaEntries(fileIds);
+
+// --- editHistory ---
+
+export const getEditHistoryForFile: typeof drive.getEditHistoryForFile = (fileId) =>
+  onMount() ? mount.getEditHistoryForFile(fileId) : drive.getEditHistoryForFile(fileId);
+
+export const setEditHistoryEntry: typeof drive.setEditHistoryEntry = (entry) =>
+  onMount() ? mount.setEditHistoryEntry(entry) : drive.setEditHistoryEntry(entry);
+
+export const deleteEditHistoryEntry: typeof drive.deleteEditHistoryEntry = (fileId) =>
+  onMount() ? mount.deleteEditHistoryEntry(fileId) : drive.deleteEditHistoryEntry(fileId);
+
+export const getLocallyModifiedFileIds: typeof drive.getLocallyModifiedFileIds = () =>
+  onMount() ? mount.getLocallyModifiedFileIds() : drive.getLocallyModifiedFileIds();
+
+export const pruneOrphanedEditHistory: typeof drive.pruneOrphanedEditHistory = (keepIds) =>
+  onMount() ? mount.pruneOrphanedEditHistory(keepIds) : drive.pruneOrphanedEditHistory(keepIds);
+
+export const getAllEditHistory: typeof drive.getAllEditHistory = () =>
+  onMount() ? mount.getAllEditHistory() : drive.getAllEditHistory();
+
+export const clearAllEditHistory: typeof drive.clearAllEditHistory = () =>
+  onMount() ? mount.clearAllEditHistory() : drive.clearAllEditHistory();
+
+// --- fileTree ---
+
+export const getCachedFileTree: typeof drive.getCachedFileTree = () =>
+  onMount() ? mount.getCachedFileTree() : drive.getCachedFileTree();
+
+export const setCachedFileTree: typeof drive.setCachedFileTree = (tree) =>
+  onMount() ? mount.setCachedFileTree(tree) : drive.setCachedFileTree(tree);
+
+export const clearCachedFileTree: typeof drive.clearCachedFileTree = () =>
+  onMount() ? mount.clearCachedFileTree() : drive.clearCachedFileTree();
+
+// --- remoteMeta ---
+
+export const getCachedRemoteMeta: typeof drive.getCachedRemoteMeta = () =>
+  onMount() ? mount.getCachedRemoteMeta() : drive.getCachedRemoteMeta();
+
+export const setCachedRemoteMeta: typeof drive.setCachedRemoteMeta = (meta) =>
+  onMount() ? mount.setCachedRemoteMeta(meta) : drive.setCachedRemoteMeta(meta);
+
+// --- loaderData (app-level, never mount-scoped) ---
+
+export const getCachedLoaderData: typeof drive.getCachedLoaderData = drive.getCachedLoaderData;
+export const setCachedLoaderData: typeof drive.setCachedLoaderData = drive.setCachedLoaderData;
 
 // --- clearAll ---
 
-export async function clearAllCache(): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  try {
-    const db = await getDB();
-    const tx = db.transaction(
-      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta", "loaderData", "conflictBackups"],
-      "readwrite"
-    );
-    tx.objectStore("files").clear();
-    tx.objectStore("syncMeta").clear();
-    tx.objectStore("editHistory").clear();
-    tx.objectStore("fileTree").clear();
-    tx.objectStore("remoteMeta").clear();
-    tx.objectStore("loaderData").clear();
-    tx.objectStore("conflictBackups").clear();
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {
-    // ignore
-  }
-}
+export const clearAllCache: typeof drive.clearAllCache = async () => {
+  await drive.clearAllCache();
+  // Also clear the active project mount's cache so "clear cache" means what
+  // it says regardless of the mount the user is looking at.
+  await mount.clearActiveMountCache().catch(() => {});
+};

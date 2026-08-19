@@ -50,7 +50,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const allActive = await getAllActiveAccounts();
   // Scheduled workflows require Pro plan
-  const accounts = allActive.filter(a => a.plan === "pro" || a.plan === "granted");
+  const accounts = allActive.filter(a => a.plan === "business" || a.plan === "granted");
   if (accounts.length === 0) {
     return Response.json({ executed: 0, message: "No active Pro accounts" });
   }

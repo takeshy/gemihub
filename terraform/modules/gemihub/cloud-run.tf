@@ -156,7 +156,7 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
-        name = "STRIPE_PRICE_ID_PRO"
+        name = "STRIPE_PRICE_ID_BUSINESS"
         value_source {
           secret_key_ref {
             secret  = data.google_secret_manager_secret.stripe_price_id_pro.secret_id
@@ -176,7 +176,7 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
-        name = "STRIPE_PRICE_ID_PRO_USD"
+        name = "STRIPE_PRICE_ID_BUSINESS_USD"
         value_source {
           secret_key_ref {
             secret  = data.google_secret_manager_secret.stripe_price_id_pro_usd.secret_id

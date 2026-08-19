@@ -26,6 +26,10 @@ import { Header, type RightPanelId } from "~/components/ide/Header";
 import { LeftSidebar } from "~/components/ide/LeftSidebar";
 import { RightSidebar } from "~/components/ide/RightSidebar";
 import { DriveFileTree } from "~/components/ide/DriveFileTree";
+import { EnterpriseProvider, useEnterpriseSelection } from "~/contexts/EnterpriseContext";
+import { DriveShelf } from "~/components/ide/DriveShelf";
+import { parseStorageDragPayload, STORAGE_DRAG_MIME } from "~/types/storage-drag";
+import type { EnterpriseSessionContext } from "~/types/enterprise";
 import { MainViewer } from "~/components/ide/MainViewer";
 import { ChatPanel } from "~/components/ide/ChatPanel";
 import { PasswordPromptDialog } from "~/components/ide/PasswordPromptDialog";
@@ -50,10 +54,69 @@ import { requestOpenHomeDashboard } from "~/dashboard/pendingDashboardOpen";
 // Loader
 // ---------------------------------------------------------------------------
 
+const NO_ENTERPRISE: EnterpriseSessionContext = {
+  uid: null,
+  email: null,
+  currentOrgId: null,
+  currentProjectId: null,
+  selection: null,
+  selectionStatus: "no-session",
+};
+
+/**
+ * Resolve the org/project selection. Gated on isFirestoreAvailable so
+ * credential-less (self-hosted) environments never touch Firestore; never
+ * throws — the Drive IDE must render even when the org backend is down.
+ */
+async function safeResolveEnterprise(
+  request: Request,
+): Promise<{ enterprise: EnterpriseSessionContext; hasOrganizations: boolean }> {
+  try {
+    const { isFirestoreAvailable } = await import("~/services/firestore.server");
+    if (!isFirestoreAvailable()) return { enterprise: NO_ENTERPRISE, hasOrganizations: false };
+    const { resolveEnterpriseContext } = await import("~/services/enterprise-context.server");
+    const enterprise = await resolveEnterpriseContext(request);
+    let hasOrganizations = enterprise.selectionStatus === "ready" || !!enterprise.currentOrgId;
+    if (!hasOrganizations && enterprise.uid) {
+      const { listOrganizationsForUser } = await import("~/services/organizations.server");
+      hasOrganizations = (await listOrganizationsForUser(enterprise.uid)).length > 0;
+    }
+    return { enterprise, hasOrganizations };
+  } catch (err) {
+    console.warn("[_index loader] enterprise context resolve failed:", err);
+    return { enterprise: NO_ENTERPRISE, hasOrganizations: false };
+  }
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await getTokens(request);
   if (!tokens) {
     throw redirect("/lp");
+  }
+
+  // Org/project selection is independent of Drive — resolve it in parallel
+  // with the Drive bootstrap so a Firestore round-trip doesn't add to TTFB.
+  const enterprisePromise = safeResolveEnterprise(request);
+
+  // Tokenless org session (OIDC/email login — no Google Drive grant): serve
+  // the IDE on the project mount alone. Without a ready project selection
+  // there is nothing to show; /login explains the state.
+  if (!tokens.accessToken) {
+    const { enterprise, hasOrganizations } = await enterprisePromise;
+    if (enterprise.selectionStatus !== "ready") {
+      throw redirect("/login?workspace=pending");
+    }
+    const acceptLanguage = request.headers.get("Accept-Language");
+    return data({
+      settings: { ...DEFAULT_USER_SETTINGS, language: resolveLanguage(null, acceptLanguage) } as UserSettings,
+      hasGeminiApiKey: false,
+      hasEncryptedApiKey: false,
+      rootFolderId: "",
+      isOffline: false,
+      rootFolderMismatch: null,
+      enterprise,
+      hasOrganizations,
+    });
   }
 
   try {
@@ -91,6 +154,57 @@ export async function loader({ request }: Route.LoaderArgs) {
     const acceptLanguage = request.headers.get("Accept-Language");
     const effectiveLanguage = resolveLanguage(settings.language, acceptLanguage);
 
+    // Auto-select the single-org default project for org members who have
+    // not picked one. Persist the selection only when token refresh did not
+    // already produce a session cookie (a second commit built from the stale
+    // request cookie would revert the refreshed tokens).
+    const resolved = await enterprisePromise;
+    let enterprise = resolved.enterprise;
+    let hasOrganizations = resolved.hasOrganizations;
+    let selectionCookie: string | undefined;
+    if (enterprise.selectionStatus === "no-org" && validTokens.email) {
+      try {
+        const { isFirestoreAvailable } = await import("~/services/firestore.server");
+        if (isFirestoreAvailable()) {
+          const { resolveSingleOrgDefaultProject } = await import("~/services/default-project.server");
+          const simplified = await resolveSingleOrgDefaultProject(validTokens.email, enterprise.currentOrgId);
+          if (simplified) {
+            const { requireProjectAccess } = await import("~/services/project-acl.server");
+            const ctx = await requireProjectAccess(request, simplified.project.id, "viewer", {
+              orgId: simplified.orgId,
+            });
+            hasOrganizations = true;
+            enterprise = {
+              uid: ctx.uid,
+              email: validTokens.email,
+              currentOrgId: simplified.orgId,
+              currentProjectId: simplified.project.id,
+              selection: {
+                orgId: simplified.orgId,
+                projectId: simplified.project.id,
+                projectName: simplified.project.name,
+                role: ctx.role,
+                allowedModels: simplified.project.allowedModels,
+                gcsPrefix: simplified.project.gcsPrefix,
+                region: ctx.tenant.region,
+              },
+              selectionStatus: "ready",
+            };
+            if (!setCookieHeader) {
+              const { setCurrentSelection } = await import("~/services/session.server");
+              selectionCookie = await setCurrentSelection(request, {
+                orgId: simplified.orgId,
+                projectId: simplified.project.id,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[_index loader] default project auto-select failed:", err);
+      }
+    }
+
+    const cookie = setCookieHeader ?? selectionCookie;
     return data(
       {
         settings: { ...settings, language: effectiveLanguage } as UserSettings,
@@ -99,8 +213,10 @@ export async function loader({ request }: Route.LoaderArgs) {
         rootFolderId: validTokens.rootFolderId,
         isOffline: false,
         rootFolderMismatch,
+        enterprise,
+        hasOrganizations,
       },
-      { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
+      { headers: cookie ? { "Set-Cookie": cookie } : undefined }
     );
   } catch (e) {
     if (e instanceof Response) throw e;
@@ -114,6 +230,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       rootFolderId: tokens.rootFolderId,
       isOffline: true,
       rootFolderMismatch: null,
+      enterprise: NO_ENTERPRISE,
+      hasOrganizations: false,
     });
   }
 }
@@ -195,6 +313,10 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
         rootFolderId: cached.rootFolderId,
         isOffline: true,
         rootFolderMismatch: null,
+        // Offline fallback runs without org context; the Drive cache is the
+        // only workspace we can serve without a server round-trip.
+        enterprise: NO_ENTERPRISE,
+        hasOrganizations: false,
       });
       return cachedLoaderData;
     }
@@ -208,6 +330,8 @@ export async function clientLoader({ serverLoader }: Route.ClientLoaderArgs) {
         rootFolderId: "",
         isOffline: true,
         rootFolderMismatch: null,
+        enterprise: NO_ENTERPRISE,
+        hasOrganizations: false,
       });
       return cachedLoaderData;
     }
@@ -236,14 +360,23 @@ export default function Index() {
   const data = useLoaderData<typeof loader>();
 
   return (
-    <IDELayout
-      settings={data.settings}
-      hasGeminiApiKey={data.hasGeminiApiKey}
-      hasEncryptedApiKey={data.hasEncryptedApiKey}
-      rootFolderId={data.rootFolderId}
-      initialOffline={data.isOffline}
-      rootFolderMismatch={data.rootFolderMismatch}
-    />
+    <EnterpriseProvider
+      selection={data.enterprise.selection}
+      currentOrgId={data.enterprise.currentOrgId}
+      currentProjectId={data.enterprise.currentProjectId}
+      currentUserId={data.enterprise.uid}
+      currentUserEmail={data.enterprise.email}
+      hasOrganizations={data.hasOrganizations}
+    >
+      <IDELayout
+        settings={data.settings}
+        hasGeminiApiKey={data.hasGeminiApiKey}
+        hasEncryptedApiKey={data.hasEncryptedApiKey}
+        rootFolderId={data.rootFolderId}
+        initialOffline={data.isOffline}
+        rootFolderMismatch={data.rootFolderMismatch}
+      />
+    </EnterpriseProvider>
   );
 }
 
@@ -328,7 +461,7 @@ function IDELayout({
   return (
     <I18nProvider language={settings.language ?? "en"}>
       <EditorContextProvider>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language ?? "en"} hasPremium={settings.hubwork?.plan === "pro" || settings.hubwork?.plan === "granted"}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={settings.language ?? "en"} hasPremium={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}>
       <SkillProvider rootFolderId={rootFolderId} agentPlugins={settings.agentPlugins || []}>
       <IDEContent
         settings={settings}
@@ -1042,20 +1175,64 @@ function IDEContent({
   // Slash commands for ChatPanel (skills are added inside ChatPanel itself)
   const allSlashCommands = settings.slashCommands || [];
 
-  // Shared components
+  // Shared components. On a project mount the My Drive shelf sits above the
+  // project tree; dropping a shelf payload anywhere on the tree area imports
+  // the files into the project at their original relative paths.
+  const projectSelection = useEnterpriseSelection();
+  const importFromShelf = async (event: React.DragEvent) => {
+    if (!projectSelection) return;
+    const payload = parseStorageDragPayload(event.dataTransfer.getData(STORAGE_DRAG_MIME));
+    if (!payload || payload.sourceMount !== "drive") return;
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      const response = await fetch("/api/storage/move-between-mounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceMount: "drive",
+          targetMount: `project:${projectSelection.projectId}`,
+          moves: payload.moves,
+        }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(result?.error ?? `HTTP ${response.status}`);
+      }
+      window.dispatchEvent(new Event("drive-shelf-changed"));
+      window.dispatchEvent(new Event("sync-complete"));
+    } catch (err) {
+      console.error("[drive-shelf] import failed:", err);
+      alert(err instanceof Error ? err.message : "移動に失敗しました");
+    }
+  };
   const fileTreeContent = (
-    <DriveFileTreeWithContext
-      rootFolderId={rootFolderId}
-      onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
-      activeFileId={activeFileId}
-      encryptionEnabled={settings.encryption.enabled}
-      onSearchOpen={() => setShowSearch(true)}
-      showManagementFolders={settings.showManagementFolders}
-      cacheFilesByIds={cacheFilesByIds}
-      cachingProgress={cachingProgress}
-      onPush={push}
-      hasPremiumUpload={!!settings.hubwork?.plan}
-    />
+    <div
+      className="flex h-full min-h-0 flex-col"
+      onDragOver={(event) => {
+        if (projectSelection && event.dataTransfer.types.includes(STORAGE_DRAG_MIME)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDrop={(event) => void importFromShelf(event)}
+    >
+      <DriveShelf />
+      <div className="min-h-0 flex-1">
+        <DriveFileTreeWithContext
+          rootFolderId={rootFolderId}
+          onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
+          activeFileId={activeFileId}
+          encryptionEnabled={settings.encryption.enabled}
+          onSearchOpen={() => setShowSearch(true)}
+          showManagementFolders={settings.showManagementFolders}
+          cacheFilesByIds={cacheFilesByIds}
+          cachingProgress={cachingProgress}
+          onPush={push}
+          hasPremiumUpload={!!settings.hubwork?.plan}
+        />
+      </div>
+    </div>
   );
 
   const searchPanelContent = (

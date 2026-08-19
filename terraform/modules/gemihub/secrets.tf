@@ -37,6 +37,10 @@ data "google_secret_manager_secret" "stripe_price_id_lite" {
   secret_id = "stripe-price-id-lite"
 }
 
+# Plan rename (pro → business): the Cloud Run env vars are now
+# STRIPE_PRICE_ID_BUSINESS{,_USD} but keep reading these existing Secret
+# Manager secrets. Creating properly-named replacement secrets (and dropping
+# these) is a Phase 6 infra task.
 data "google_secret_manager_secret" "stripe_price_id_pro" {
   secret_id = "stripe-price-id-pro"
 }

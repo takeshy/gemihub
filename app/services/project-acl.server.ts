@@ -1,0 +1,251 @@
+/**
+ * Per-request ACL middleware for app-Project-scoped APIs.
+ *
+ * Every route that touches GCS or Vertex AI MUST start with
+ * `requireProjectAccess(...)`. The returned context carries the tenant
+ * project ID, GCS bucket, and prefix — callers must use these and never
+ * trust client-supplied tenant identifiers.
+ *
+ * Authorization rules:
+ *   1. If the user is a project.{viewer|editor|admin} member at >= minRole,
+ *      grant access with that role.
+ *   2. Else, for shared projects only, if the user is org.owner or org.admin
+ *      of the project's org, grant access as project.admin.
+ *      Personal projects remain owner-only.
+ *   3. Otherwise → 403.
+ *
+ * See docs/enterprise.md §7.
+ */
+
+import type { ProjectAccessContext, ProjectRole } from "~/types/enterprise";
+import {
+  getFirestore,
+  ORGANIZATIONS,
+  PROJECTS_SUBCOLLECTION,
+} from "./firestore.server";
+import {
+  emailToUid,
+  getOrganization,
+  getOrgMember,
+} from "./organizations.server";
+import {
+  getProject,
+  getProjectMember,
+  orgRoleAutoProjectRole,
+} from "./projects.server";
+import { getTokens } from "./session.server";
+import { normalizeDeprecatedModelName } from "~/types/settings";
+import { VERTEX_MODELS } from "./ai/models";
+import { isSuperAdmin } from "./super-admin.server";
+
+const ROLE_RANK: Record<ProjectRole, number> = {
+  viewer: 1,
+  editor: 2,
+  admin: 3,
+};
+
+export class ProjectAccessError extends Error {
+  constructor(
+    public readonly status: 401 | 403 | 404,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ProjectAccessError";
+  }
+}
+
+export function hasMinRole(actual: ProjectRole, min: ProjectRole): boolean {
+  return ROLE_RANK[actual] >= ROLE_RANK[min];
+}
+
+/** Resolve the calling user's uid + email from the session. Throws 401 if no session. */
+async function requireSessionIdentity(
+  request: Request,
+): Promise<{ uid: string; email: string; currentOrgId?: string; currentProjectId?: string }> {
+  const tokens = await getTokens(request);
+  if (!tokens || !tokens.email) {
+    throw new ProjectAccessError(401, "not authenticated");
+  }
+  return {
+    uid: emailToUid(tokens.email),
+    email: tokens.email,
+    currentOrgId: tokens.currentOrgId,
+    currentProjectId: tokens.currentProjectId,
+  };
+}
+
+/**
+ * Find the orgId that owns the given projectId. Falls back to a collection-
+ * group query if the caller hasn't told us; future request shapes that carry
+ * `orgId` explicitly should pass it via the optional argument to skip the
+ * scan.
+ */
+async function findOrgIdForProject(
+  projectId: string,
+  preferredOrgId?: string,
+): Promise<string | null> {
+  if (preferredOrgId) {
+    const proj = await getProject(preferredOrgId, projectId);
+    if (proj) return preferredOrgId;
+    return null;
+  }
+  const snap = await getFirestore()
+    .collectionGroup(PROJECTS_SUBCOLLECTION)
+    .where("id", "==", projectId)
+    .limit(2)
+    .get();
+  if (snap.empty) return null;
+  if (snap.size > 1) {
+    throw new ProjectAccessError(
+      404,
+      `ambiguous projectId "${projectId}" — multiple orgs have it; pass orgId explicitly`,
+    );
+  }
+  // Path: organizations/{orgId}/projects/{projectId}
+  const parts = snap.docs[0].ref.path.split("/");
+  if (parts.length !== 4 || parts[0] !== ORGANIZATIONS || parts[2] !== PROJECTS_SUBCOLLECTION) {
+    return null;
+  }
+  return parts[1];
+}
+
+export interface RequireProjectAccessOptions {
+  /** If provided, skip the cross-org scan and look up under this org directly. */
+  orgId?: string;
+}
+
+/**
+ * Resolve the current user's session and authorize them against a project.
+ * Throws `ProjectAccessError` on failure (caller should turn it into a Response).
+ */
+export async function requireProjectAccess(
+  request: Request,
+  projectId: string,
+  minRole: ProjectRole,
+  options: RequireProjectAccessOptions = {},
+): Promise<ProjectAccessContext> {
+  const identity = await requireSessionIdentity(request);
+
+  // Org resolution priority:
+  //   1. caller-supplied options.orgId (explicit beats anything)
+  //   2. session.currentOrgId (UI's selected org — fast path, no scan)
+  //   3. collection-group scan (slow fallback, ambiguity-detected)
+  const orgId = await findOrgIdForProject(
+    projectId,
+    options.orgId ?? identity.currentOrgId,
+  );
+  if (!orgId) {
+    throw new ProjectAccessError(404, `project not found: ${projectId}`);
+  }
+
+  const project = await getProject(orgId, projectId);
+  if (!project) {
+    throw new ProjectAccessError(404, `project not found: ${orgId}/${projectId}`);
+  }
+
+  // 1. Direct project membership wins.
+  let role: ProjectRole | null = null;
+  const projectMember = await getProjectMember(orgId, projectId, identity.uid);
+  if (isSuperAdmin(identity.email)) {
+    // Service administrators may administer every shared workspace.
+    role = "admin";
+  } else if (projectMember) {
+    role = projectMember.role;
+  } else {
+    // 2. Org owner/admin auto-promote to project.admin.
+    const orgMember = await getOrgMember(orgId, identity.uid);
+    if (orgMember) role = orgRoleAutoProjectRole(orgMember.role, project.id);
+  }
+  if (!role) {
+    throw new ProjectAccessError(
+      403,
+      `${identity.email} is not a member of ${orgId}/${projectId}`,
+    );
+  }
+  if (!hasMinRole(role, minRole)) {
+    throw new ProjectAccessError(
+      403,
+      `${identity.email} has role "${role}" but "${minRole}" or higher is required`,
+    );
+  }
+
+  const org = await getOrganization(orgId);
+  if (!org || !org.tenantProject) {
+    throw new ProjectAccessError(404, `organization not found: ${orgId}`);
+  }
+
+  return {
+    uid: identity.uid,
+    role,
+    orgId,
+    projectId,
+    tenant: {
+      ...org.tenantProject,
+      ...(process.env.DEFAULT_TENANT_REGION
+        ? { region: process.env.DEFAULT_TENANT_REGION }
+        : {}),
+      vertexProjectId: org.aiSettings.vertexProjectId,
+      vertexLocation: org.aiSettings.vertexLocation,
+      vertexOAuthOrgId: orgId,
+    },
+    gcsPrefix: project.gcsPrefix,
+    allowedModels: project.allowedModels,
+  };
+}
+
+/**
+ * Variant for routes that only need an authenticated org context (e.g. listing
+ * projects in the org switcher).
+ */
+export async function requireOrgAccess(
+  request: Request,
+  orgId: string,
+): Promise<{ uid: string; email: string; orgId: string; role: "owner" | "admin" | "member" }> {
+  const identity = await requireSessionIdentity(request);
+  if (isSuperAdmin(identity.email)) {
+    const org = await getOrganization(orgId);
+    if (!org) throw new ProjectAccessError(404, `organization not found: ${orgId}`);
+    return { uid: identity.uid, email: identity.email, orgId, role: "admin" };
+  }
+  const member = await getOrgMember(orgId, identity.uid);
+  if (!member) {
+    throw new ProjectAccessError(
+      403,
+      `${identity.email} is not a member of organization ${orgId}`,
+    );
+  }
+  return { uid: identity.uid, email: identity.email, orgId, role: member.role };
+}
+
+// ---------------------------------------------------------------------------
+// Per-project model allowlist
+// ---------------------------------------------------------------------------
+
+const DEFAULT_ALLOWED_MODELS: ReadonlySet<string> = new Set(Object.values(VERTEX_MODELS));
+
+export class ModelNotAllowedError extends Error {
+  status = 403 as const;
+  constructor(public readonly model: string, public readonly allowed: string[]) {
+    super(
+      `model "${model}" is not allowed in this project (allowed: ${allowed.length ? allowed.join(", ") : "<defaults>"})`,
+    );
+    this.name = "ModelNotAllowedError";
+  }
+}
+
+/**
+ * Reject the request if the requested model isn't in the project's
+ * `allowedModels` list. Empty list = the built-in `VERTEX_MODELS` defaults
+ * are allowed.
+ *
+ * Throws `ModelNotAllowedError` (HTTP 403) on rejection.
+ */
+export function assertModelAllowed(ctx: ProjectAccessContext, model: string): void {
+  const normalizedModel = normalizeDeprecatedModelName(model) ?? model;
+  const allowed = ctx.allowedModels.length > 0
+    ? new Set(ctx.allowedModels.map((allowedModel) => normalizeDeprecatedModelName(allowedModel) ?? allowedModel))
+    : DEFAULT_ALLOWED_MODELS;
+  if (!allowed.has(normalizedModel)) {
+    throw new ModelNotAllowedError(model, ctx.allowedModels);
+  }
+}

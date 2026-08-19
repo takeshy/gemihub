@@ -2,7 +2,7 @@ import type { Timestamp } from "@google-cloud/firestore";
 
 // --- Firestore document types ---
 
-export type HubworkAccountPlan = "lite" | "pro" | "granted";
+export type HubworkAccountPlan = "lite" | "business" | "granted";
 export type HubworkBillingStatus = "active" | "past_due" | "canceled";
 export type HubworkAccountStatus = "enabled" | "disabled";
 export type HubworkDomainStatus = "none" | "pending_dns" | "provisioning_cert" | "active" | "failed";
@@ -27,6 +27,10 @@ export interface HubworkAccount {
   domainStatus: HubworkDomainStatus;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  /** Organization provisioned by a Business subscription (owner = purchaser). */
+  orgId?: string;
+  /** The org's default shared project. */
+  projectId?: string;
   activeScheduleRevision?: string;
   createdAt: Timestamp;
 }
@@ -45,9 +49,9 @@ export function isActivePremiumAccount(account: HubworkAccount): boolean {
   return account.accountStatus === "enabled" && !!account.plan && account.billingStatus === "active";
 }
 
-/** Check if account has Pro features (Sheets, web builder, scheduled, server-side) */
-export function hasProFeatures(account: HubworkAccount): boolean {
-  return account.accountStatus === "enabled" && (account.plan === "pro" || account.plan === "granted");
+/** Check if account has Business features (Sheets, web builder, scheduled, server-side, organization) */
+export function hasBusinessFeatures(account: HubworkAccount): boolean {
+  return account.accountStatus === "enabled" && (account.plan === "business" || account.plan === "granted");
 }
 
 export type HubworkConcurrencyPolicy = "allow" | "forbid";

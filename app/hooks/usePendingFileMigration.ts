@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 import { migratePendingFiles } from "~/services/pending-file-migration";
 
 /**
@@ -9,11 +10,14 @@ import { migratePendingFiles } from "~/services/pending-file-migration";
  * initial run and the listener so offline creates don't fire doomed fetches.
  */
 export function usePendingFileMigration(isOffline: boolean) {
+  // Drive migration only: on a project mount, `new:` files are pushed by the
+  // storage sync stack instead.
+  const projectActive = useEnterpriseSelection() !== null;
   useEffect(() => {
-    if (isOffline) return;
+    if (isOffline || projectActive) return;
     migratePendingFiles();
     const handler = () => { migratePendingFiles(); };
     window.addEventListener("pending-files-created", handler);
     return () => window.removeEventListener("pending-files-created", handler);
-  }, [isOffline]);
+  }, [isOffline, projectActive]);
 }

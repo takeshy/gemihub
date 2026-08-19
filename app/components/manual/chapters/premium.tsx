@@ -23,7 +23,7 @@ function PremiumEn() {
                 <th className="py-2 text-left">Feature</th>
                 <th className="py-2 text-center">Free</th>
                 <th className="py-2 text-center">Lite (¥300/mo)</th>
-                <th className="py-2 text-center">Pro (¥2,000/mo)</th>
+                <th className="py-2 text-center">Business (¥7,500/mo)</th>
               </tr>
             </thead>
             <tbody>
@@ -85,8 +85,8 @@ function PremiumEn() {
           Generate temporary URLs for file uploads. External tools can read and write files via these time-limited URLs without authentication.
         </p>
 
-        <h2>Pro Plan Features</h2>
-        <p>All Lite features are included in the Pro plan.</p>
+        <h2>Business Plan Features</h2>
+        <p>All Lite features are included in the Business plan, plus an organization with shared team projects. The price (¥7,500 / $50 per month, billed per organization) includes a $30/month Vertex AI budget; administrators can purchase additional budget in $10 (¥1,500) units when it runs out. Project storage includes 100 GB per organization, expandable in 500 GB units at $30 (¥5,000) per month.</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>
@@ -188,7 +188,7 @@ function PremiumJa() {
                 <th className="py-2 text-left">機能</th>
                 <th className="py-2 text-center">Free</th>
                 <th className="py-2 text-center">Lite（¥300/月）</th>
-                <th className="py-2 text-center">Pro（¥2,000/月）</th>
+                <th className="py-2 text-center">Business（¥7,500/月）</th>
               </tr>
             </thead>
             <tbody>
@@ -250,8 +250,8 @@ function PremiumJa() {
           ファイルアップロード用の一時URLを生成します。外部ツールから認証なしで時間制限付きのファイル読み書きが可能です。
         </p>
 
-        <h2>Proプランの機能</h2>
-        <p>Liteプランの全機能がProプランに含まれます。</p>
+        <h2>Businessプランの機能</h2>
+        <p>Liteプランの全機能がBusinessプランに含まれ、さらにチームでプロジェクトを共有できる組織が作成されます。料金（月額 ¥7,500 / $50、組織単位）には月 $30 分の Vertex AI 利用枠が含まれ、不足時は管理者が $10（¥1,500）単位で追加購入できます。プロジェクト用ストレージは組織あたり100GBまで含まれ、500GB単位（月額 $30 / ¥5,000）で拡張できます。</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>

@@ -85,6 +85,20 @@ function metaToResponse(meta: SyncMeta) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  await requireAuth(request);
+  // Project mount: serve the tree from the storage provider (path ids). Must
+  // run before getValidTokens — tokenless org sessions have no Drive tokens.
+  {
+    const { resolveProjectMountFromSession } = await import("~/services/storage/resolve-mount.server");
+    const { handleProjectTreeLoader } = await import("~/services/storage/drive-compat.server");
+    const requestUrl = new URL(request.url);
+    const projectMount = await resolveProjectMountFromSession(
+      request,
+      "viewer",
+      requestUrl.searchParams.get("mount"),
+    );
+    if (projectMount) return handleProjectTreeLoader(projectMount);
+  }
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;

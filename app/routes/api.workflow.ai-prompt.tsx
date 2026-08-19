@@ -6,6 +6,15 @@ import { getEnabledMcpServers, type ApiPlan } from "~/types/settings";
 import type { ExecutionStep } from "~/engine/types";
 
 export async function action({ request }: Route.ActionArgs) {
+  // Project-mount requests carry projectId and run on the org tenant's
+  // Vertex AI. Peek at a clone so the legacy path can still read the body.
+  {
+    const peek = (await request.clone().json().catch(() => null)) as { projectId?: unknown } | null;
+    if (peek && typeof peek.projectId === "string" && peek.projectId) {
+      const { vertexAction } = await import("~/services/ai/vertex-workflow-ai-prompt.server");
+      return vertexAction(request);
+    }
+  }
   const tokens = await requireAuth(request);
 
   const body = await request.json();

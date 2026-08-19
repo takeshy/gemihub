@@ -22,6 +22,7 @@ import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import type { PluginView } from "~/types/plugin";
 import { useI18n } from "~/i18n/context";
 import { PluginIcon } from "~/components/shared/PluginIcon";
+import { MountSwitcher } from "~/components/enterprise/MountSwitcher";
 
 export type RightPanelId = "chat" | "workflow" | `plugin:${string}` | `main-plugin:${string}`;
 
@@ -136,6 +137,7 @@ export function Header({
             GemiHub
           </span>
         </button>
+        <MountSwitcher />
         <div className="hidden sm:block mx-1 h-4 w-px bg-gray-200 dark:bg-gray-700 shrink-0" />
         {isOffline ? (
           <div className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800">

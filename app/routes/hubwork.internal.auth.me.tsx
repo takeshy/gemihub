@@ -26,7 +26,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw e;
   }
 
-  if (account.plan !== "pro" && account.plan !== "granted") {
+  if (account.plan !== "business" && account.plan !== "granted") {
     return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
   }
 

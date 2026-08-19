@@ -15,6 +15,13 @@ import type { ChatHistory } from "~/types/chat";
 // ---------------------------------------------------------------------------
 
 export async function loader({ request }: Route.LoaderArgs) {
+  {
+    const requestUrl = new URL(request.url);
+    if (requestUrl.searchParams.get("projectId")) {
+      const { vertexLoader } = await import("~/services/ai/vertex-chat-history.server");
+      return vertexLoader(request);
+    }
+  }
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
@@ -32,6 +39,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 // ---------------------------------------------------------------------------
 
 export async function action({ request }: Route.ActionArgs) {
+  // Project-mount requests carry projectId and run on the org tenant's
+  // Vertex AI. Peek at a clone so the legacy path can still read the body.
+  {
+    const peek = (await request.clone().json().catch(() => null)) as { projectId?: unknown } | null;
+    if (peek && typeof peek.projectId === "string" && peek.projectId) {
+      const { vertexAction } = await import("~/services/ai/vertex-chat-history.server");
+      return vertexAction(request);
+    }
+  }
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { activeProjectMountParam } from "~/services/indexeddb-cache";
 import { ragRegisterNewFile } from "~/services/rag-sync";
 import { parallelProcess } from "~/utils/parallel";
 
@@ -130,6 +131,70 @@ export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_L
 
       const failedNames = new Set<string>();
       const fileMap = new Map<string, UploadedFile>();
+
+      // Project mount: upload through the storage API in one batch. fileId is
+      // the mount-relative path; Drive resumable sessions / sync-meta
+      // registration / File Search RAG don't apply here.
+      const mountParam = activeProjectMountParam();
+      if (mountParam) {
+        try {
+          const formData = new FormData();
+          formData.set("mount", mountParam);
+          for (const f of validFiles) {
+            const clientName = getUploadFileName(f);
+            formData.append("files", f);
+            formData.append("filePaths", namePrefix ? `${namePrefix}${clientName}` : clientName);
+          }
+          const res = await fetch("/api/storage/upload", { method: "POST", body: formData });
+          const dataJson = (await res.json().catch(() => ({}))) as {
+            results?: Array<{ name: string; object?: { relativePath: string; contentType: string; md5Hash: string; updatedAt: number }; error?: string }>;
+            error?: string;
+          };
+          if (!res.ok || !dataJson.results) {
+            const error = dataJson.error || "Upload failed";
+            for (const f of validFiles) {
+              const clientName = getUploadFileName(f);
+              failedNames.add(clientName);
+              failedNames.add(f.name);
+              setProgress((prev) => prev.map((p) => (p.name === clientName ? { ...p, status: "error", error } : p)));
+            }
+            setUploading(false);
+            return { ok: false, failedNames, fileMap };
+          }
+          for (const [index, f] of validFiles.entries()) {
+            const clientName = getUploadFileName(f);
+            const result = dataJson.results[index];
+            if (!result?.object) {
+              const error = result?.error || "Upload failed";
+              failedNames.add(clientName);
+              failedNames.add(f.name);
+              setProgress((prev) => prev.map((p) => (p.name === clientName ? { ...p, status: "error", error } : p)));
+              continue;
+            }
+            const uploaded: UploadedFile = {
+              id: result.object.relativePath,
+              name: result.object.relativePath,
+              md5Checksum: result.object.md5Hash,
+              modifiedTime: result.object.updatedAt ? new Date(result.object.updatedAt).toISOString() : undefined,
+              mimeType: result.object.contentType,
+            };
+            fileMap.set(clientName, uploaded);
+            fileMap.set(f.name, uploaded);
+            setProgress((prev) => prev.map((p) => (p.name === clientName ? { ...p, status: "done" } : p)));
+          }
+          setUploading(false);
+          return { ok: true, failedNames, fileMap };
+        } catch {
+          for (const f of validFiles) {
+            const clientName = getUploadFileName(f);
+            failedNames.add(clientName);
+            failedNames.add(f.name);
+            setProgress((prev) => prev.map((p) => (p.name === clientName ? { ...p, status: "error", error: "Network error" } : p)));
+          }
+          setUploading(false);
+          return { ok: false, failedNames, fileMap };
+        }
+      }
 
       const deferMeta = validFiles.length > 1;
       const results = await parallelProcess(validFiles, async (f) => {

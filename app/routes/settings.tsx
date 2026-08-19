@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { data, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { data, redirect, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
 import { getValidTokens, hasRequiredHubworkScopes } from "~/services/google-auth.server";
@@ -46,7 +46,11 @@ import {
   Puzzle,
   Keyboard,
   Globe,
+  Building2,
 } from "lucide-react";
+import { EnterpriseTab } from "~/components/settings/EnterpriseTab";
+import { EnterpriseProvider } from "~/contexts/EnterpriseContext";
+import type { EnterpriseSessionContext } from "~/types/enterprise";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
 import { ShortcutsTab } from "~/components/settings/ShortcutsTab";
@@ -69,12 +73,13 @@ function maskApiKey(key: string): string {
   return key.slice(0, 4) + "***" + key.slice(-4);
 }
 
-type TabId = "general" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shortcuts" | "hubwork";
+type TabId = "general" | "enterprise" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shortcuts" | "hubwork";
 
 import type { TranslationStrings } from "~/i18n/translations";
 
 const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof SettingsIcon; desktopOnly?: boolean }[] = [
   { id: "general", labelKey: "settings.tab.general", icon: SettingsIcon },
+  { id: "enterprise", labelKey: "settings.tab.enterprise", icon: Building2 },
   { id: "sync", labelKey: "settings.tab.sync", icon: RefreshCw },
   { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
@@ -98,6 +103,10 @@ function describeError(error: unknown): string {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await requireAuth(request);
+  // Tokenless org sessions have no Drive-backed settings to load yet.
+  if (!tokens.accessToken) {
+    throw redirect("/login?workspace=pending");
+  }
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
@@ -185,6 +194,35 @@ export async function loader({ request }: Route.LoaderArgs) {
     }).catch(() => {});
   }
 
+  // Organizations: resolve the enterprise selection and whether the user
+  // belongs to any org. Gated on isFirestoreAvailable so self-hosted /
+  // credential-less environments never touch Firestore.
+  let enterprise: EnterpriseSessionContext = {
+    uid: null,
+    email: null,
+    currentOrgId: null,
+    currentProjectId: null,
+    selection: null,
+    selectionStatus: "no-session",
+  };
+  let hasOrganizations = false;
+  try {
+    const { isFirestoreAvailable } = await import("~/services/firestore.server");
+    if (isFirestoreAvailable()) {
+      const { resolveEnterpriseContext } = await import("~/services/enterprise-context.server");
+      enterprise = await resolveEnterpriseContext(request);
+      if (enterprise.uid) {
+        const { listOrganizationsForUser } = await import("~/services/organizations.server");
+        const { isSuperAdmin } = await import("~/services/super-admin.server");
+        hasOrganizations =
+          isSuperAdmin(enterprise.email ?? undefined) ||
+          (await listOrganizationsForUser(enterprise.uid)).length > 0;
+      }
+    }
+  } catch (error) {
+    console.warn("[settings] Failed to resolve enterprise context:", describeError(error));
+  }
+
   // Merge local plugins (dev only)
   const localPlugins = getLocalPlugins();
   const localIds = new Set(localPlugins.map((p) => p.id));
@@ -203,6 +241,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       maskedKey: validTokens.geminiApiKey ? maskApiKey(validTokens.geminiApiKey) : null,
       hasHubworkScopes,
       rootFolderId: validTokens.rootFolderId,
+      enterprise,
+      hasOrganizations,
     },
     { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
   );
@@ -402,7 +442,7 @@ export async function action({ request }: Route.ActionArgs) {
               const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
               let hwAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
               if (!hwAccount && validTokens.email) hwAccount = await getAccountByEmail(validTokens.email);
-              if (hwAccount && (hwAccount.plan === "pro" || hwAccount.plan === "granted")) {
+              if (hwAccount && (hwAccount.plan === "business" || hwAccount.plan === "granted")) {
                 await updateAccount(hwAccount.id, { encryptedGeminiApiKey: encryptGeminiApiKey(effectiveApiKey) });
               }
             } catch { /* best-effort */ }
@@ -706,7 +746,7 @@ export async function action({ request }: Route.ActionArgs) {
           if (!hubworkAccount && validTokens.email) {
             hubworkAccount = await getAccountByEmail(validTokens.email);
           }
-          if (hubworkAccount && (hubworkAccount.plan === "pro" || hubworkAccount.plan === "granted")) {
+          if (hubworkAccount && (hubworkAccount.plan === "business" || hubworkAccount.plan === "granted")) {
             await rebuildScheduleIndex(hubworkAccount.id, schedules);
             if (schedules.length > 0 && validTokens.geminiApiKey) {
               await updateAccount(hubworkAccount.id, {
@@ -763,7 +803,7 @@ clientLoader.hydrate = true as const;
 // ---------------------------------------------------------------------------
 
 export default function Settings() {
-  const { settings, hasApiKey, maskedKey, hasHubworkScopes, rootFolderId } = useLoaderData<typeof loader>();
+  const { settings, hasApiKey, maskedKey, hasHubworkScopes, rootFolderId, enterprise, hasOrganizations } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
   const [currentLang, setCurrentLang] = useState<Language>(settings.language ?? "en");
@@ -813,8 +853,16 @@ export default function Settings() {
   }, [searchParams, setSearchParams]);
 
   return (
+    <EnterpriseProvider
+      selection={enterprise.selection}
+      currentOrgId={enterprise.currentOrgId}
+      currentProjectId={enterprise.currentProjectId}
+      currentUserId={enterprise.uid}
+      currentUserEmail={enterprise.email}
+      hasOrganizations={hasOrganizations}
+    >
     <I18nProvider language={currentLang}>
-      <PluginProvider pluginConfigs={settings.plugins || []} language={currentLang} hasPremium={settings.hubwork?.plan === "pro" || settings.hubwork?.plan === "granted"}>
+      <PluginProvider pluginConfigs={settings.plugins || []} language={currentLang} hasPremium={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}>
         <SettingsInner
           settings={settings}
           hasApiKey={hasApiKey}
@@ -825,9 +873,11 @@ export default function Settings() {
           setActiveTab={setActiveTab}
           onLanguageChange={setCurrentLang}
           hubworkCallback={hubworkCallback}
+          hasOrganizations={hasOrganizations}
         />
       </PluginProvider>
     </I18nProvider>
+    </EnterpriseProvider>
   );
 }
 
@@ -841,6 +891,7 @@ function SettingsInner({
   setActiveTab,
   onLanguageChange,
   hubworkCallback,
+  hasOrganizations,
 }: {
   settings: UserSettings;
   hasApiKey: boolean;
@@ -851,11 +902,13 @@ function SettingsInner({
   setActiveTab: (tab: TabId) => void;
   onLanguageChange: (lang: Language) => void;
   hubworkCallback: boolean;
+  hasOrganizations: boolean;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const visibleTabs = isMobile ? TABS.filter((tab) => !tab.desktopOnly) : TABS;
+  const orgFilteredTabs = TABS.filter((tab) => tab.id !== "enterprise" || hasOrganizations);
+  const visibleTabs = isMobile ? orgFilteredTabs.filter((tab) => !tab.desktopOnly) : orgFilteredTabs;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -911,6 +964,7 @@ function SettingsInner({
         {activeTab === "general" && (
           <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} onLanguageChange={onLanguageChange} />
         )}
+        {activeTab === "enterprise" && hasOrganizations && <EnterpriseTab />}
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
         {activeTab === "rag" && <RagTab settings={settings} />}

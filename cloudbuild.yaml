@@ -38,20 +38,6 @@ steps:
       - '--region'
       - '${_REGION}'
 
-  # Step 5: Deploy to all Hubwork account services (if any exist)
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        SERVICES=$$(gcloud run services list --region=${_REGION} --format='value(name)' --filter='name~^gemihub-hw-' 2>/dev/null || true)
-        for svc in $$SERVICES; do
-          echo "Deploying to Hubwork service: $$svc"
-          gcloud run deploy "$$svc" \
-            --image ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA} \
-            --region ${_REGION}
-        done
-
 images:
   - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub'
 
@@ -61,6 +47,6 @@ options:
 
 substitutions:
   _REGION: asia-northeast1
-  _PROJECT_ID: takeshy-work-b94f7
+  _PROJECT_ID: geminihub-486523
   _SERVICE: gemini-hub
   _REPO: gemini-hub

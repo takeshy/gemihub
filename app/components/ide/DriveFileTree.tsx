@@ -1,3 +1,5 @@
+import { activeProjectMountParam } from "~/services/indexeddb-cache";
+import { STORAGE_DRAG_MIME } from "~/types/storage-drag";
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -115,6 +117,19 @@ function base64ToArrayBuffer(content: string): ArrayBuffer {
     bytes[i] = byteString.charCodeAt(i);
   }
   return buffer;
+}
+
+
+// On a project mount, tag drags with the cross-mount payload so the My Drive
+// shelf can accept project files. Tree ids ARE mount-relative paths there.
+function setStorageDragPayload(e: React.DragEvent, ids: string[]): void {
+  const mount = activeProjectMountParam();
+  if (!mount) return;
+  const moves = ids
+    .filter((id) => !id.startsWith("vfolder:"))
+    .map((id) => ({ from: id, to: id }));
+  if (moves.length === 0) return;
+  e.dataTransfer.setData(STORAGE_DRAG_MIME, JSON.stringify({ sourceMount: mount, moves }));
 }
 
 export function DriveFileTree({
@@ -968,6 +983,7 @@ export function DriveFileTree({
               setSelectedIds(new Set());
               e.dataTransfer.setData("application/x-tree-node-id", item.id);
               e.dataTransfer.setData("application/x-tree-node-parent", parentId);
+              setStorageDragPayload(e, collectFileIds(item));
               e.dataTransfer.effectAllowed = "move";
               setDraggingItem({ id: item.id, parentId });
               document.body.classList.add("tree-dragging");
@@ -1059,6 +1075,7 @@ export function DriveFileTree({
           if (selectedIds.has(item.id) && selectedIds.size > 1) {
             // Multi-drag: set selected IDs
             e.dataTransfer.setData("application/x-tree-node-ids", JSON.stringify([...selectedIds]));
+            setStorageDragPayload(e, [...selectedIds]);
             e.dataTransfer.effectAllowed = "move";
             setDraggingItem({ id: item.id, parentId });
             // Custom drag ghost with count badge
@@ -1073,6 +1090,7 @@ export function DriveFileTree({
             setSelectedIds(new Set());
             e.dataTransfer.setData("application/x-tree-node-id", item.id);
             e.dataTransfer.setData("application/x-tree-node-parent", parentId);
+            setStorageDragPayload(e, [item.id]);
             e.dataTransfer.effectAllowed = "move";
             setDraggingItem({ id: item.id, parentId });
           }

@@ -9,9 +9,6 @@ const build = await import("./build/server/index.js");
 const app = express();
 
 const MAIN_APP_DOMAIN = process.env.GEMIHUB_MAIN_DOMAIN || "gemihub.net";
-// Legacy domain in 60-day 301-redirect window. Started 2026-04-26.
-// Remove this block (and the redirect middleware below) after 2026-06-25.
-const LEGACY_DOMAIN = "gemihub.online";
 
 function isHubworkHost(domain) {
   // Dev: bare localhost is the main app; *.localhost is a hubwork slug.
@@ -26,10 +23,8 @@ function isHubworkHost(domain) {
   return true;
 }
 
-// 301 redirect from legacy gemihub.online (apex, www, slug subdomains) to the
-// equivalent gemihub.net URL. Must run before any other middleware so static
-// assets and the React Router handler never see legacy traffic.
-// TODO(2026-06-25): remove after the 60-day overlap window ends.
+// 301 redirect from www to the apex domain. Must run before any other
+// middleware so static assets and the React Router handler never see it.
 app.use((req, res, next) => {
   const host = req.headers.host;
   if (!host) return next();
@@ -38,12 +33,7 @@ app.use((req, res, next) => {
     res.redirect(301, `https://${MAIN_APP_DOMAIN}${req.originalUrl}`);
     return;
   }
-  const isLegacy =
-    domain === LEGACY_DOMAIN || domain.endsWith(`.${LEGACY_DOMAIN}`);
-  if (!isLegacy) return next();
-  const newHost =
-    domain.slice(0, -LEGACY_DOMAIN.length) + MAIN_APP_DOMAIN;
-  res.redirect(301, `https://${newHost}${req.originalUrl}`);
+  next();
 });
 
 app.use(compression());
