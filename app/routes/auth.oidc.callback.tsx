@@ -95,6 +95,15 @@ export async function loader({ request }: Route.LoaderArgs) {
         { status: 403 },
       );
     }
+    // Domain auto-enrollment trusts the email claim, so it must be verified:
+    // an IdP that lets anyone self-assert an address would otherwise hand out
+    // membership to whoever claims an allow-listed domain.
+    if (!result.emailVerified) {
+      throw new Response(
+        `${result.email} is not verified by the identity provider, so it cannot be auto-enrolled into ${orgId}. Ask an admin to invite you.`,
+        { status: 403 },
+      );
+    }
     await addOrgMember({ orgId, uid, email: result.email, role: "member" });
   }
 

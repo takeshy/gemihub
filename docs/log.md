@@ -4,6 +4,10 @@
 * **Update**: Dashboard, Workflow, and RAG became opt-in "advanced features" — all three default to off (`dashboardEnabled` / `workflowEnabled` / `ragFeatureEnabled` in Settings > General), and the IDE home view shows a Getting Started guide while the dashboard is off. YAML files still open in the plain text editor when Workflow is off (`features/dashboard.md`, `workflows/workflow_execution.md`, `integrations/rag.md`).
 * **Fix**: Organization membership is now required for project access — a leftover project member document no longer grants GCS/Vertex access after the user is removed from the org (explicitly external collaborators are unaffected), and org removal deletes the user's project memberships (`architecture/mounts.md`).
 * **Fix**: Post-login `returnTo` is restricted to same-origin paths in both the Google and OIDC callbacks (open redirect).
+* **Fix**: External project collaborators (no org membership) can now reach their workspace — `/api/orgs/list`, `/api/session/select`, and the workspace-switcher gate all resolve orgs through project memberships as well (`architecture/mounts.md`).
+* **Update**: The Settings Organization tab is limited to accounts that can have an organization — `business`/`granted`, existing org members, or a service admin; Lite never sees it. Documented when an organization is created (Business purchase / service admin / invitation) and corrected the stale `pro` plan naming (`architecture/premium.md`).
+* **Ops**: Terraform can now manage the three Firestore collection-group indexes the organization features need (`members.uid`, `invites.token`, `projects.id`) — set `manage_firestore_indexes = true` and `firestore_database_id` to the app's database (`architecture/infrastructure.md`).
+* **Fix**: OIDC domain auto-enrollment requires `email_verified` — an IdP that lets an account self-assert an allow-listed address can no longer join the organization.
 * **Add**: `architecture/mounts.md` — storage mounts (Drive default / GCS org project) and AI providers (genai-key / Vertex) coexistence model, route dispatch, My Drive shelf, and the `lite | business | granted` plan model.
 
 ## 2026-07-11

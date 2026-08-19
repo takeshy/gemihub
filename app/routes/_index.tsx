@@ -78,8 +78,10 @@ async function safeResolveEnterprise(
     const enterprise = await resolveEnterpriseContext(request);
     let hasOrganizations = enterprise.selectionStatus === "ready" || !!enterprise.currentOrgId;
     if (!hasOrganizations && enterprise.uid) {
-      const { listOrganizationsForUser } = await import("~/services/organizations.server");
-      hasOrganizations = (await listOrganizationsForUser(enterprise.uid)).length > 0;
+      // Includes orgs reachable only through a project membership, so an
+      // external collaborator still gets the workspace switcher.
+      const { listAccessibleOrganizationsForUser } = await import("~/services/projects.server");
+      hasOrganizations = (await listAccessibleOrganizationsForUser(enterprise.uid)).length > 0;
     }
     return { enterprise, hasOrganizations };
   } catch (err) {

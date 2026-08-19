@@ -64,8 +64,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
               // Register SW only on main app domains (skip hubwork custom domains).
               'var _h=location.hostname;',
               'var _isMain=_h==="localhost"||_h==="gemihub.net"||_h==="www.gemihub.net";',
-              'if(_isMain&&"serviceWorker"in navigator){window.addEventListener("load",function(){',
-              'navigator.serviceWorker.register("/sw.js").then(function(){',
+              'if(_isMain&&"serviceWorker"in navigator){',
+              // Was this page already being served by a service worker? If so, a
+              // later controllerchange means an UPDATED worker took over while
+              // this document is still running the previous build's JS (the SW
+              // can serve a cached HTML/asset pair after its 3s network
+              // timeout). Reload once so the page and its bundle match again.
+              'var _hadCtrl=!!navigator.serviceWorker.controller;',
+              'window.addEventListener("load",function(){',
+              // Stamp the script URL with React Router's build version (same
+              // value on every page of a build, changes on every build). /sw.js
+              // itself is byte-identical between deploys, and the browser only
+              // installs an update when the script URL or its bytes change —
+              // without the stamp a client stuck on a stale cached bundle would
+              // never be reloaded.
+              'var _v="";try{var _m=window.__reactRouterManifest;_v=_m&&_m.version||"";}catch(_e){}',
+              'navigator.serviceWorker.register("/sw.js"+(_v?"?v="+encodeURIComponent(_v):"")).then(function(){',
               'navigator.serviceWorker.addEventListener("controllerchange",function cc(){',
               'navigator.serviceWorker.removeEventListener("controllerchange",cc);',
               'var urls=["/"];',
@@ -76,6 +90,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
               'if(navigator.serviceWorker.controller){',
               'navigator.serviceWorker.controller.postMessage({type:"warmup",urls:urls});',
               '}',
+              // Warmup is posted first: the worker keeps caching across the
+              // reload. The sessionStorage stamp keeps a worker that re-activates
+              // repeatedly from turning this into a reload loop.
+              'if(_hadCtrl){try{var k="gemihub-sw-reload-at";var n=Date.now();',
+              'var p=Number(sessionStorage.getItem(k)||"0");',
+              'if(n-p>60000){sessionStorage.setItem(k,String(n));window.location.reload();}}catch(x){}}',
               '});',
               '}).catch(function(){});',
               '})}',

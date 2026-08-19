@@ -1093,6 +1093,7 @@ export interface TranslationStrings {
   // Hubwork tab
   "settings.tab.hubwork": string;
   "settings.tab.enterprise": string;
+  "settings.enterprise.lookupFailed": string;
   "mount.myDrive": string;
   "enterprise.storageTitle": string;
   "enterprise.storageUsage": string;
@@ -2441,6 +2442,7 @@ const en: TranslationStrings = {
   // Hubwork tab
   "settings.tab.hubwork": "Premium Plan",
   "settings.tab.enterprise": "Organization",
+  "settings.enterprise.lookupFailed": "Could not load your organizations. Firestore is configured but the lookup failed — a missing collection-group index is the usual cause.",
   "mount.myDrive": "My Drive",
   "enterprise.storageTitle": "Storage",
   "enterprise.storageUsage": "Used {used} GB / {quota} GB",
@@ -3789,6 +3791,7 @@ const ja: TranslationStrings = {
   // Hubwork tab
   "settings.tab.hubwork": "プレミアムプラン",
   "settings.tab.enterprise": "組織管理",
+  "settings.enterprise.lookupFailed": "組織情報を取得できませんでした。Firestoreは設定されていますが検索に失敗しています（コレクショングループのインデックス未作成が主な原因です）。",
   "mount.myDrive": "マイドライブ",
   "enterprise.storageTitle": "ストレージ",
   "enterprise.storageUsage": "使用量 {used} GB / {quota} GB",

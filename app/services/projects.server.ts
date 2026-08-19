@@ -7,7 +7,14 @@
  * See docs/enterprise.md §6.
  */
 
-import type { AppProject, OrgRole, ProjectMember, ProjectRole, ProjectVisibility } from "~/types/enterprise";
+import type {
+  AppProject,
+  Organization,
+  OrgRole,
+  ProjectMember,
+  ProjectRole,
+  ProjectVisibility,
+} from "~/types/enterprise";
 import {
   getFirestore,
   MEMBERS_SUBCOLLECTION,
@@ -16,6 +23,7 @@ import {
 } from "./firestore.server";
 import {
   emailToUid,
+  getOrganization,
   getOrgMember,
   listOrganizationsForUser,
 } from "./organizations.server";
@@ -185,6 +193,35 @@ export async function listProjectsForUser(uid: string): Promise<AppProject[]> {
   );
 }
 
+
+/**
+ * Organizations the user can reach in the UI: org memberships PLUS the orgs
+ * behind any project they hold a (possibly external) membership in.
+ *
+ * External collaborators deliberately have no org membership, so listing
+ * workspaces by org membership alone would leave them unable to select the
+ * very project they were invited to.
+ */
+export async function listAccessibleOrganizationsForUser(
+  uid: string,
+): Promise<Organization[]> {
+  const memberOrgs = await listOrganizationsForUser(uid);
+  const byId = new Map(memberOrgs.map((org) => [org.id, org]));
+  const projects = await listProjectsForUser(uid);
+  const extraIds = [...new Set(projects.map((p) => p.orgId))].filter((id) => !byId.has(id));
+  const extras = await Promise.all(extraIds.map((id) => getOrganization(id)));
+  for (const org of extras) {
+    if (org) byId.set(org.id, org);
+  }
+  return [...byId.values()];
+}
+
+/** True when the user may select the org (member, or project collaborator). */
+export async function canSelectOrganization(uid: string, orgId: string): Promise<boolean> {
+  if (await getOrgMember(orgId, uid)) return true;
+  const projects = await listProjectsForUser(uid);
+  return projects.some((project) => project.orgId === orgId);
+}
 
 /** Create (once) the current user's isolated project inside the organization. */
 

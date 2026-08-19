@@ -114,6 +114,8 @@ export interface ExchangeCodeInput {
 
 export interface OidcCallbackResult {
   email: string;
+  /** `email_verified` claim. False when the IdP omits it. */
+  emailVerified: boolean;
   sub: string;
   name?: string;
   rawIdToken: string;
@@ -162,13 +164,18 @@ export async function exchangeAndVerify(input: ExchangeCodeInput): Promise<OidcC
   const email = typeof payload.email === "string" ? payload.email : "";
   const sub = typeof payload.sub === "string" ? payload.sub : "";
   const name = typeof payload.name === "string" ? payload.name : undefined;
+  // Some IdPs issue tokens for self-asserted, unverified addresses. The claim
+  // is surfaced (not enforced here) so domain-based auto-enrollment can demand
+  // it while an already-enrolled member can still sign in.
+  const emailVerified =
+    payload.email_verified === true || payload.email_verified === "true";
   if (!email) {
     throw new OidcConfigError("OIDC ID token missing email claim — ensure 'email' scope is granted");
   }
   if (!sub) {
     throw new OidcConfigError("OIDC ID token missing sub claim");
   }
-  return { email, sub, name, rawIdToken: tokens.id_token, payload };
+  return { email, emailVerified, sub, name, rawIdToken: tokens.id_token, payload };
 }
 
 export function emailDomainOf(email: string): string {

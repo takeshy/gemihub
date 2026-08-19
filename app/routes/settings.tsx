@@ -206,22 +206,39 @@ export async function loader({ request }: Route.LoaderArgs) {
     selectionStatus: "no-session",
   };
   let hasOrganizations = false;
+  // Non-null when Firestore is configured but the lookup failed (most often a
+  // missing collection-group index). Shown to users who are entitled to the
+  // organization tab, so the cause is visible instead of the tab silently
+  // vanishing — never to ordinary users, who have nothing to do with orgs.
+  let enterpriseError: string | null = null;
   try {
     const { isFirestoreAvailable } = await import("~/services/firestore.server");
     if (isFirestoreAvailable()) {
       const { resolveEnterpriseContext } = await import("~/services/enterprise-context.server");
       enterprise = await resolveEnterpriseContext(request);
       if (enterprise.uid) {
-        const { listOrganizationsForUser } = await import("~/services/organizations.server");
+        const { listAccessibleOrganizationsForUser } = await import("~/services/projects.server");
         const { isSuperAdmin } = await import("~/services/super-admin.server");
         hasOrganizations =
           isSuperAdmin(enterprise.email ?? undefined) ||
-          (await listOrganizationsForUser(enterprise.uid)).length > 0;
+          (await listAccessibleOrganizationsForUser(enterprise.uid)).length > 0;
       }
     }
   } catch (error) {
-    console.warn("[settings] Failed to resolve enterprise context:", describeError(error));
+    enterpriseError = describeError(error);
+    console.warn("[settings] Failed to resolve enterprise context:", enterpriseError);
   }
+
+  // The organization tab belongs to Business (and granted) accounts, plus
+  // anyone who already belongs to an org — an invited member is on their own
+  // plan, so plan alone must not gate them out — plus service admins.
+  const businessAccount =
+    !!hubworkAccount &&
+    hubworkAccount.accountStatus === "enabled" &&
+    (hubworkAccount.plan === "business" || hubworkAccount.plan === "granted");
+  const { isSuperAdmin: isServiceAdmin } = await import("~/services/super-admin.server");
+  const showEnterpriseTab =
+    hasOrganizations || businessAccount || isServiceAdmin(validTokens.email);
 
   // Merge local plugins (dev only)
   const localPlugins = getLocalPlugins();
@@ -243,6 +260,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       rootFolderId: validTokens.rootFolderId,
       enterprise,
       hasOrganizations,
+      showEnterpriseTab,
+      enterpriseError: showEnterpriseTab ? enterpriseError : null,
     },
     { headers: setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined }
   );
@@ -809,7 +828,7 @@ clientLoader.hydrate = true as const;
 // ---------------------------------------------------------------------------
 
 export default function Settings() {
-  const { settings, hasApiKey, maskedKey, hasHubworkScopes, rootFolderId, enterprise, hasOrganizations } = useLoaderData<typeof loader>();
+  const { settings, hasApiKey, maskedKey, hasHubworkScopes, rootFolderId, enterprise, hasOrganizations, showEnterpriseTab, enterpriseError } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<TabId>("general");
 
   const [currentLang, setCurrentLang] = useState<Language>(settings.language ?? "en");
@@ -879,7 +898,8 @@ export default function Settings() {
           setActiveTab={setActiveTab}
           onLanguageChange={setCurrentLang}
           hubworkCallback={hubworkCallback}
-          hasOrganizations={hasOrganizations}
+          showEnterpriseTab={showEnterpriseTab}
+          enterpriseError={enterpriseError}
         />
       </PluginProvider>
     </I18nProvider>
@@ -897,7 +917,8 @@ function SettingsInner({
   setActiveTab,
   onLanguageChange,
   hubworkCallback,
-  hasOrganizations,
+  showEnterpriseTab,
+  enterpriseError,
 }: {
   settings: UserSettings;
   hasApiKey: boolean;
@@ -908,13 +929,14 @@ function SettingsInner({
   setActiveTab: (tab: TabId) => void;
   onLanguageChange: (lang: Language) => void;
   hubworkCallback: boolean;
-  hasOrganizations: boolean;
+  showEnterpriseTab: boolean;
+  enterpriseError: string | null;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const orgFilteredTabs = TABS.filter((tab) => {
-    if (tab.id === "enterprise") return hasOrganizations;
+    if (tab.id === "enterprise") return showEnterpriseTab;
     // RAG is an advanced, opt-in feature (Settings > General).
     if (tab.id === "rag") return settings.ragFeatureEnabled ?? false;
     return true;
@@ -975,7 +997,17 @@ function SettingsInner({
         {activeTab === "general" && (
           <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} onLanguageChange={onLanguageChange} />
         )}
-        {activeTab === "enterprise" && hasOrganizations && <EnterpriseTab />}
+        {activeTab === "enterprise" && (
+          <>
+            {enterpriseError && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                <p className="font-medium">{t("settings.enterprise.lookupFailed")}</p>
+                <p className="mt-1 break-all font-mono text-xs">{enterpriseError}</p>
+              </div>
+            )}
+            {showEnterpriseTab && <EnterpriseTab />}
+          </>
+        )}
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
         {activeTab === "rag" && (settings.ragFeatureEnabled ?? false) && <RagTab settings={settings} />}

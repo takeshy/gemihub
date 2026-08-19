@@ -5,12 +5,13 @@
  *
  * Switch the user's currently selected org and/or project. Pass null to clear.
  *
- * The chosen org must be one the user is a member of, and the project must
- * exist within it. Otherwise → 403.
+ * The chosen org must be one the user can access (member, or collaborator on
+ * one of its projects), and the project must be accessible within it.
+ * Otherwise → 403.
  */
 
 import type { Route } from "./+types/api.session.select";
-import { getOrgMember } from "~/services/organizations.server";
+import { canSelectOrganization } from "~/services/projects.server";
 import { ProjectAccessError, requireProjectAccess } from "~/services/project-acl.server";
 import { getTokens, setCurrentSelection } from "~/services/session.server";
 import { emailToUid } from "~/services/organizations.server";
@@ -41,10 +42,12 @@ export async function action({ request }: Route.ActionArgs) {
   const effectiveOrg = orgIdToSet === null ? undefined : (orgIdToSet ?? tokens.currentOrgId);
 
   if (orgIdToSet) {
-    const member = await getOrgMember(orgIdToSet, uid);
-    if (!member) {
+    // Org membership OR a project membership inside it — external
+    // collaborators are project-scoped and must still be able to select the
+    // workspace they were invited to.
+    if (!(await canSelectOrganization(uid, orgIdToSet))) {
       return Response.json(
-        { error: `not a member of organization ${orgIdToSet}` },
+        { error: `no access to organization ${orgIdToSet}` },
         { status: 403 },
       );
     }

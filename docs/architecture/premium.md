@@ -138,13 +138,37 @@ This ensures "billing active but DNS pending" accounts can still use scheduled w
 
 ### Account Plans
 
-| Plan | How Created | Description |
-|------|-------------|-------------|
-| `lite` | Stripe Checkout → webhook | ¥300/$2 a month. Gmail node, PDF, no upload limit. |
-| `pro` | Stripe Checkout → webhook | ¥2,000/$15 a month. All Lite features + Sheets nodes, web builder, subdomain, auth, scheduled workflows. |
-| `granted` | Admin panel | Free account created by admin. Has Pro-level access. |
+| Plan | How Created | Description | Organization |
+|------|-------------|-------------|--------------|
+| `lite` | Stripe Checkout → webhook | ¥300/$2 a month. Gmail node, PDF, no upload limit. | **None.** Lite works entirely on the user's own Drive. |
+| `business` | Stripe Checkout → webhook | All Lite features + Sheets nodes, web builder, subdomain, auth, scheduled workflows, org projects on GCS + Vertex AI. | Provisioned automatically (see below). |
+| `granted` | Admin panel | Free account created by admin. Has Business-level access. | Not provisioned — a service admin creates it. |
 
-The `plan` field is required — accounts without a plan cannot use paid features. `granted` accounts have full Pro access.
+The `plan` field is required — accounts without a plan cannot use paid features. `granted` accounts have full Business access.
+
+### When an organization is created
+
+Organizations are never created by an ordinary user action. There are exactly
+three paths:
+
+1. **Business purchase (automatic).** `provisionBusinessOrganization` makes the
+   buyer the Owner of a new organization with one `default` shared project and a
+   $30/month Vertex budget. It runs from the Stripe webhook
+   (`checkout.session.completed`, `planType === "business"`) and — because a
+   Lite→Business upgrade changes the subscription in place and never fires that
+   event — directly from the checkout route. Idempotent: an organization the
+   buyer already owns or administers is reused, so webhook retries and
+   re-subscriptions are safe.
+2. **Service administrator.** `/admin/enterprise` → `POST /api/orgs/create`,
+   restricted to `SUPER_ADMIN_EMAILS`. Takes the org id, name, and the initial
+   administrator's email. This is the only path for a `granted` account.
+3. **Joining an existing org** (no org is created): accepting `/invite/:token`,
+   or OIDC domain auto-enrollment (which requires a verified email claim).
+
+Settings shows the Organization tab only to accounts that can have one: a
+`business`/`granted` account, anyone who already belongs to an organization
+(an invited member keeps their own plan), or a service admin. A Lite user
+never sees it.
 
 ### Account Resolution (Two-Tier URL)
 
