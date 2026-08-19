@@ -80,12 +80,6 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_st
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_lite_usd" {
-  secret_id = data.google_secret_manager_secret.stripe_price_id_lite_usd.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
 # Cloud Build SA permissions
 # NOTE: The Cloud Build default SA is created asynchronously after the API is enabled.
 # These bindings depend on the API being fully ready.

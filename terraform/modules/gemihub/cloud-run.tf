@@ -175,20 +175,12 @@ resource "google_cloud_run_v2_service" "app" {
         }
       }
 
-      env {
-        name = "STRIPE_PRICE_ID_LITE_USD"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.stripe_price_id_lite_usd.secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      # STRIPE_PRICE_ID_BUSINESS_USD is intentionally unset: the only USD
-      # secret holds the retired Pro price, and charging that for Business
-      # would undercharge. Create a USD Business price, add it as
-      # stripe-price-id-business-usd, and bind it here to enable USD billing.
+      # No STRIPE_PRICE_ID_*_USD variables: every price carries both
+      # currencies (currency_options) and the checkout names the currency on
+      # the session. The remaining *-usd secrets hold retired single-currency
+      # prices at the old amounts, so binding them would undercharge — they
+      # are kept only for rollback. Bind one again only if a plan ever gets a
+      # separate USD price instead of currency options.
 
       dynamic "env" {
         for_each = length(var.hubwork_review_slugs) > 0 ? [join(",", var.hubwork_review_slugs)] : []
@@ -233,7 +225,6 @@ resource "google_cloud_run_v2_service" "app" {
     google_secret_manager_secret_iam_member.cloud_run_stripe_price_id_business,
     google_secret_manager_secret_iam_member.cloud_run_stripe_price_id_vertex_topup,
     google_secret_manager_secret_iam_member.cloud_run_stripe_price_id_storage_addon,
-    google_secret_manager_secret_iam_member.cloud_run_stripe_price_id_lite_usd,
   ]
 }
 

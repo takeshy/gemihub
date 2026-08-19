@@ -30,6 +30,38 @@ function resolvePriceId(planType: "lite" | "business", currency: HubworkCurrency
   return planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE : process.env.STRIPE_PRICE_ID_BUSINESS;
 }
 
+/**
+ * The `currency` to put on the Checkout Session, or undefined to let the price
+ * decide.
+ *
+ * A multi-currency price (one price carrying ¥7,500 AND $50) bills in its
+ * default currency unless the session names another — picking a different
+ * price id, which is how single-currency setups work, does nothing for it. So
+ * ask Stripe what the price actually supports:
+ *
+ *   - already the requested currency  → nothing to set
+ *   - offered via currency_options    → set it, and the customer is billed in it
+ *   - not offered                     → leave it; billing falls back to the
+ *                                       price's own currency rather than failing
+ */
+async function sessionCurrencyFor(
+  priceId: string,
+  requested: HubworkCurrency,
+): Promise<HubworkCurrency | undefined> {
+  try {
+    // currency_options is only returned when expanded — without this the
+    // multi-currency prices look single-currency and nothing is ever set.
+    const price = await getStripe().prices.retrieve(priceId, {
+      expand: ["currency_options"],
+    });
+    if (price.currency === requested) return undefined;
+    return price.currency_options?.[requested] ? requested : undefined;
+  } catch (error) {
+    console.warn("[stripe] could not read the price's currencies:", error);
+    return undefined;
+  }
+}
+
 export async function action({ request }: Route.ActionArgs) {
   validateOrigin(request);
   const sessionTokens = await requireAuth(request);
@@ -61,8 +93,10 @@ export async function action({ request }: Route.ActionArgs) {
     const topUpProto = request.headers.get("x-forwarded-proto") || topUpUrl.protocol.replace(":", "");
     const topUpBase = `${topUpProto}://${topUpUrl.host}`;
     const stripeClient = getStripe();
+    const topUpSessionCurrency = await sessionCurrencyFor(topUpPriceId, topUpCurrency);
     const topUpSession = await stripeClient.checkout.sessions.create({
       mode: "payment",
+      ...(topUpSessionCurrency ? { currency: topUpSessionCurrency } : {}),
       line_items: [{ price: topUpPriceId, quantity: units }],
       success_url: `${topUpBase}/settings?tab=enterprise`,
       cancel_url: `${topUpBase}/settings?tab=enterprise`,
@@ -113,8 +147,10 @@ export async function action({ request }: Route.ActionArgs) {
     const addonProto = request.headers.get("x-forwarded-proto") || addonUrl.protocol.replace(":", "");
     const addonBase = `${addonProto}://${addonUrl.host}`;
     const stripeClient = getStripe();
+    const addonSessionCurrency = await sessionCurrencyFor(addonPriceId, addonCurrency);
     const addonSession = await stripeClient.checkout.sessions.create({
       mode: "subscription",
+      ...(addonSessionCurrency ? { currency: addonSessionCurrency } : {}),
       line_items: [{ price: addonPriceId, quantity: units }],
       success_url: `${addonBase}/settings?tab=enterprise`,
       cancel_url: `${addonBase}/settings?tab=enterprise`,
@@ -253,8 +289,10 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const stripe = getStripe();
+  const sessionCurrency = await sessionCurrencyFor(priceId, currency);
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    ...(sessionCurrency ? { currency: sessionCurrency } : {}),
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${baseUrl}/settings?hubwork_subscribed=1`,
     cancel_url: `${baseUrl}/settings`,

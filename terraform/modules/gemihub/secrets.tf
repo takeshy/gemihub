@@ -45,10 +45,6 @@ data "google_secret_manager_secret" "stripe_price_id_storage_addon" {
   secret_id = "stripe-price-id-storage-addon"
 }
 
-data "google_secret_manager_secret" "stripe_price_id_lite_usd" {
-  secret_id = "stripe-price-id-lite-usd"
-}
-
 # The hubwork-admin-credentials / hubwork-admin-emails secrets are no longer
 # read: /hubwork/admin was folded into /admin/enterprise, which authorizes on
 # SUPER_ADMIN_EMAILS. The secrets themselves are left in Secret Manager for
