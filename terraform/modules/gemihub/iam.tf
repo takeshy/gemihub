@@ -62,20 +62,26 @@ resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_li
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_pro" {
-  secret_id = data.google_secret_manager_secret.stripe_price_id_pro.id
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_business" {
+  secret_id = data.google_secret_manager_secret.stripe_price_id_business.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_vertex_topup" {
+  secret_id = data.google_secret_manager_secret.stripe_price_id_vertex_topup.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_storage_addon" {
+  secret_id = data.google_secret_manager_secret.stripe_price_id_storage_addon.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_lite_usd" {
   secret_id = data.google_secret_manager_secret.stripe_price_id_lite_usd.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
-resource "google_secret_manager_secret_iam_member" "cloud_run_stripe_price_id_pro_usd" {
-  secret_id = data.google_secret_manager_secret.stripe_price_id_pro_usd.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run.email}"
 }

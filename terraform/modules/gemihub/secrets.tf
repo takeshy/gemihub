@@ -33,16 +33,20 @@ data "google_secret_manager_secret" "stripe_price_id_lite" {
 # STRIPE_PRICE_ID_BUSINESS{,_USD} but keep reading these existing Secret
 # Manager secrets. Creating properly-named replacement secrets (and dropping
 # these) is a Phase 6 infra task.
-data "google_secret_manager_secret" "stripe_price_id_pro" {
-  secret_id = "stripe-price-id-pro"
+data "google_secret_manager_secret" "stripe_price_id_business" {
+  secret_id = "stripe-price-id-business"
+}
+
+data "google_secret_manager_secret" "stripe_price_id_vertex_topup" {
+  secret_id = "stripe-price-id-vertex-topup"
+}
+
+data "google_secret_manager_secret" "stripe_price_id_storage_addon" {
+  secret_id = "stripe-price-id-storage-addon"
 }
 
 data "google_secret_manager_secret" "stripe_price_id_lite_usd" {
   secret_id = "stripe-price-id-lite-usd"
-}
-
-data "google_secret_manager_secret" "stripe_price_id_pro_usd" {
-  secret_id = "stripe-price-id-pro-usd"
 }
 
 # The hubwork-admin-credentials / hubwork-admin-emails secrets are no longer

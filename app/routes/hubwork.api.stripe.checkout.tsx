@@ -13,13 +13,21 @@ function parseSlugList(value: string | undefined): string[] {
   return (value || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
-/** USD prices are opt-in per plan — falls back to the JPY price if the USD price env var isn't configured. */
+/**
+ * USD prices are opt-in per plan and fall back to the JPY price when unset.
+ *
+ * The retired `STRIPE_PRICE_ID_PRO*` variables are deliberately NOT consulted:
+ * Pro was renamed to Business at a different amount, so falling back to it
+ * would charge the old price for the new plan.
+ */
 function resolvePriceId(planType: "lite" | "business", currency: HubworkCurrency): string | undefined {
   if (currency === "usd") {
-    const usdPriceId = planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE_USD : (process.env.STRIPE_PRICE_ID_BUSINESS_USD ?? process.env.STRIPE_PRICE_ID_PRO_USD);
+    const usdPriceId = planType === "lite"
+      ? process.env.STRIPE_PRICE_ID_LITE_USD
+      : process.env.STRIPE_PRICE_ID_BUSINESS_USD;
     if (usdPriceId) return usdPriceId;
   }
-  return planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE : (process.env.STRIPE_PRICE_ID_BUSINESS ?? process.env.STRIPE_PRICE_ID_PRO);
+  return planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE : process.env.STRIPE_PRICE_ID_BUSINESS;
 }
 
 export async function action({ request }: Route.ActionArgs) {
