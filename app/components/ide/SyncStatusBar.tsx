@@ -69,7 +69,7 @@ export function SyncStatusBar({
       if (projectSelection) {
         const { detectChanges } = await import("~/services/storage-sync");
         const { diff } = await detectChanges(
-          `project:${projectSelection.projectId}`,
+          `project:${projectSelection.orgId}/${projectSelection.projectId}`,
           `gcs:${projectSelection.orgId}/${projectSelection.projectId}`,
           { useCachedRemote: false },
         );

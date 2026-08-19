@@ -1211,7 +1211,7 @@ function IDEContent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceMount: "drive",
-          targetMount: `project:${projectSelection.projectId}`,
+          targetMount: `project:${projectSelection.orgId}/${projectSelection.projectId}`,
           moves: payload.moves,
           // Copy: the file stays in the user's own Drive as well.
           mode: "copy",
@@ -1225,7 +1225,7 @@ function IDEContent({
       // counted as pending pull but not rendered. The user just dropped these
       // in, so cache them right away instead of making them run a pull.
       const { pullObject } = await import("~/services/storage-sync");
-      const mount = `project:${projectSelection.projectId}`;
+      const mount = `project:${projectSelection.orgId}/${projectSelection.projectId}`;
       const mountKey = `gcs:${projectSelection.orgId}/${projectSelection.projectId}`;
       for (const move of payload.moves) {
         await pullObject(mount, mountKey, move.to).catch(() => {});

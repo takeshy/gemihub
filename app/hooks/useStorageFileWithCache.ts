@@ -51,7 +51,7 @@ export function useStorageFileWithCache(
   void _debugLabel;
   const selection = useEnterpriseSelection();
   const mountKey = mountKeyOf(selection);
-  const mount = selection ? `project:${selection.projectId}` : null;
+  const mount = selection ? `project:${selection.orgId}/${selection.projectId}` : null;
 
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

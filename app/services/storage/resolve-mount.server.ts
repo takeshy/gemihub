@@ -5,7 +5,7 @@
  *   mount = "drive"          → the session user's own Google Drive
  *                              (gemihub root folder; requires a Google
  *                              session with Drive tokens)
- *   mount = "project:{id}"   → an org project on GCS; access is gated by
+ *   mount = "project:{orgId}/{id}" → an org project on GCS; access is gated by
  *                              requireProjectAccess with the given role
  *
  * Roles apply only to project mounts (read → "viewer", write → "editor");
@@ -36,6 +36,16 @@ export function mountKeyForDrive(rootFolderId: string): string {
   return `drive:${rootFolderId}`;
 }
 
+export function parseProjectMount(mount: string): { orgId?: string; projectId: string } | null {
+  if (!mount.startsWith("project:")) return null;
+  const value = mount.slice("project:".length);
+  const separator = value.indexOf("/");
+  if (separator < 0) return value ? { projectId: value } : null;
+  const orgId = value.slice(0, separator);
+  const projectId = value.slice(separator + 1);
+  return orgId && projectId ? { orgId, projectId } : null;
+}
+
 export async function resolveMount(
   request: Request,
   mount: string,
@@ -62,12 +72,14 @@ export async function resolveMount(
   }
 
   if (mount.startsWith("project:")) {
-    const projectId = mount.slice("project:".length);
-    if (!projectId) {
+    const projectMount = parseProjectMount(mount);
+    if (!projectMount) {
       throw new MountResolutionError("missing project id in mount parameter", 400);
     }
     // Throws ProjectAccessError (401/403/404) on failure.
-    const ctx = await requireProjectAccess(request, projectId, requiredRole);
+    const ctx = await requireProjectAccess(request, projectMount.projectId, requiredRole, {
+      orgId: projectMount.orgId,
+    });
     return {
       kind: "gcs-project",
       mountKey: mountKeyForProject(ctx.orgId, ctx.projectId),
@@ -77,7 +89,7 @@ export async function resolveMount(
   }
 
   throw new MountResolutionError(
-    `invalid mount parameter: ${mount} (expected "drive" or "project:{id}")`,
+    `invalid mount parameter: ${mount} (expected "drive" or "project:{orgId}/{id}")`,
     400,
   );
 }

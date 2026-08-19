@@ -56,7 +56,10 @@ export function useStorageSync() {
   const selection = useEnterpriseSelection();
   // Composite tenant key matches what storage-cache stores under.
   const mountKey = selection ? `gcs:${selection.orgId}/${selection.projectId}` : null;
-  const mount = selection ? `project:${selection.projectId}` : null;
+  // Include the org in every request. Project ids are only unique within an
+  // organization, and the session cookie can briefly lag behind a workspace
+  // switch (or the loader's automatic default-project selection).
+  const mount = selection ? `project:${selection.orgId}/${selection.projectId}` : null;
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);

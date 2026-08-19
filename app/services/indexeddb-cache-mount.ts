@@ -59,8 +59,8 @@ export function activeProjectMountParam(): string | null {
   try {
     const raw = localStorage.getItem("gemihub-active-tenant-project");
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { projectId?: string };
-    return parsed.projectId ? `project:${parsed.projectId}` : null;
+    const parsed = JSON.parse(raw) as { orgId?: string; projectId?: string };
+    return parsed.orgId && parsed.projectId ? `project:${parsed.orgId}/${parsed.projectId}` : null;
   } catch {
     return null;
   }
