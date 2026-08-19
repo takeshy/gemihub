@@ -61,6 +61,8 @@ export const HUBWORK_PENDING_REGISTRATIONS = "hubwork-pending-registrations";
 
 // Collection names — organizations control plane (multi-tenant orgs/projects)
 export const ORGANIZATIONS = "organizations";
+/** Service-wide settings owned by the service administrator, not by any org. */
+export const SERVICE_CONFIG = "service-config";
 export const USERS = "users";
 export const PROJECTS_SUBCOLLECTION = "projects";
 export const MEMBERS_SUBCOLLECTION = "members";

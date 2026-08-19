@@ -42,6 +42,18 @@ export function useActiveFile({
   }, []);
 
   // Resolve file name when opened via URL (fileId present, fileName unknown)
+  // Forget a file id the active mount cannot resolve, URL included.
+  const forgetMissingFile = useCallback((fileId: string) => {
+    setActiveFileId((prev) => (prev === fileId ? null : prev));
+    setActiveFileName(null);
+    setActiveFileMimeType(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("file") === fileId) {
+      url.searchParams.delete("file");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
   useEffect(() => {
     if (activeFileId?.startsWith("new:")) return; // Not yet on Drive
     if (activeFileId && !activeFileName) {
@@ -62,16 +74,27 @@ export function useActiveFile({
         if (cached?.fileName) {
           applyName(cached.fileName);
         } else {
-          fetch(`/api/drive/files?action=metadata&fileId=${activeFileId}`)
-            .then((res) => res.ok ? res.json() : null)
+          const requestedId = activeFileId;
+          fetch(`/api/drive/files?action=metadata&fileId=${requestedId}`)
+            .then(async (res) => {
+              if (res.ok) return res.json();
+              // 404 = the id does not exist on the ACTIVE mount: a stale
+              // `?file=` from before a mount switch (Drive ids are not project
+              // paths), or a file that is gone. Drop it instead of leaving
+              // activeFileName null, which re-ran this effect — and the
+              // request — on every render.
+              if (res.status === 404) forgetMissingFile(requestedId);
+              return null;
+            })
             .then((data) => {
               if (data?.name) applyName(data.name, data.mimeType);
             })
+            // Network failures are transient: keep the selection.
             .catch(() => {});
         }
       }).catch(() => {});
     }
-  }, [activeFileId, activeFileName, rightPanel, setRightPanel, workflowEnabled]);
+  }, [activeFileId, activeFileName, rightPanel, setRightPanel, workflowEnabled, forgetMissingFile]);
 
   // When a new: file is migrated to a real Drive ID, update active file state + URL
   useEffect(() => {

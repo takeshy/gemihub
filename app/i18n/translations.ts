@@ -1119,16 +1119,6 @@ export interface TranslationStrings {
   "enterprise.noOrgSelected": string;
   "enterprise.opFailed": string;
   "enterprise.orgSelectFailed": string;
-  "enterprise.connectVertex": string;
-  "enterprise.connectVertexDesc": string;
-  "enterprise.selectOauthJson": string;
-  "enterprise.oauthLoaded": string;
-  "enterprise.configured": string;
-  "enterprise.googleConnected": string;
-  "enterprise.disconnect": string;
-  "enterprise.googleDisconnected": string;
-  "enterprise.connectGoogle": string;
-  "enterprise.loadJsonFirst": string;
   "enterprise.budgetTitle": string;
   "enterprise.budgetUsage": string;
   "enterprise.budgetIncluded": string;
@@ -1185,8 +1175,6 @@ export interface TranslationStrings {
   "enterprise.projectMemberRemoved": string;
   "enterprise.confirmRemoveProjectMember": string;
   "enterprise.add": string;
-  "enterprise.oauthDesktopJsonError": string;
-  "enterprise.oauthWebJsonError": string;
   "enterprise.topUpJpy": string;
   "enterprise.topUpUsd": string;
   "driveShelf.title": string;
@@ -2480,16 +2468,6 @@ const en: TranslationStrings = {
   "enterprise.noOrgSelected": "Select the organization you belong to. New organizations and their first administrator are registered by the service administrator.",
   "enterprise.opFailed": "Operation failed",
   "enterprise.orgSelectFailed": "Failed to select the organization",
-  "enterprise.connectVertex": "Connect Vertex AI",
-  "enterprise.connectVertexDesc": "Load the \"Web application\" OAuth client JSON downloaded from Google Cloud. Its contents are applied automatically and the secret is encrypted on the server.",
-  "enterprise.selectOauthJson": "Select OAuth client JSON",
-  "enterprise.oauthLoaded": "OAuth client loaded",
-  "enterprise.configured": "Configured: ",
-  "enterprise.googleConnected": "Google account connected: ",
-  "enterprise.disconnect": "Disconnect",
-  "enterprise.googleDisconnected": "Google account disconnected",
-  "enterprise.connectGoogle": "Connect Google account",
-  "enterprise.loadJsonFirst": "Load the OAuth client JSON first.",
   "enterprise.budgetTitle": "Vertex AI & monthly budget",
   "enterprise.budgetUsage": "Used ${used} / ${limit} this month",
   "enterprise.budgetIncluded": "(includes ${included} with the plan)",
@@ -2546,8 +2524,6 @@ const en: TranslationStrings = {
   "enterprise.projectMemberRemoved": "Project member removed",
   "enterprise.confirmRemoveProjectMember": "Remove {email} from the project?",
   "enterprise.add": "Add",
-  "enterprise.oauthDesktopJsonError": "This JSON is for a \"Desktop app\". Create a \"Web application\" client in Google Cloud and register {origin}/auth/vertex/callback as an authorized redirect URI.",
-  "enterprise.oauthWebJsonError": "Select the \"Web application\" OAuth client JSON created in Google Cloud.",
   "enterprise.topUpJpy": "JPY (¥1,500 per $10)",
   "enterprise.topUpUsd": "USD ($10)",
   "driveShelf.title": "My Drive",
@@ -3841,16 +3817,6 @@ const ja: TranslationStrings = {
   "enterprise.noOrgSelected": "所属する組織を選択してください。組織の新規登録と最初の管理者設定はサービス管理者が行います。",
   "enterprise.opFailed": "操作に失敗しました",
   "enterprise.orgSelectFailed": "組織の選択に失敗しました",
-  "enterprise.connectVertex": "Vertex AIを接続",
-  "enterprise.connectVertexDesc": "Google Cloudからダウンロードした「ウェブ アプリケーション」用OAuthクライアントJSONを読み込みます。内容は自動設定され、シークレットはサーバー側で暗号化して保存されます。",
-  "enterprise.selectOauthJson": "OAuthクライアントJSONを選択",
-  "enterprise.oauthLoaded": "OAuthクライアントを読み込みました",
-  "enterprise.configured": "設定済み: ",
-  "enterprise.googleConnected": "Googleアカウント接続済み: ",
-  "enterprise.disconnect": "切断",
-  "enterprise.googleDisconnected": "Googleアカウントを切断しました",
-  "enterprise.connectGoogle": "Googleアカウントを接続",
-  "enterprise.loadJsonFirst": "先にOAuthクライアントJSONを読み込んでください。",
   "enterprise.budgetTitle": "Vertex AIと月次予算",
   "enterprise.budgetUsage": "今月の使用額 ${used} / ${limit}",
   "enterprise.budgetIncluded": "（プラン込み ${included}）",
@@ -3907,8 +3873,6 @@ const ja: TranslationStrings = {
   "enterprise.projectMemberRemoved": "プロジェクトメンバーを削除しました",
   "enterprise.confirmRemoveProjectMember": "{email} をプロジェクトから削除しますか？",
   "enterprise.add": "追加",
-  "enterprise.oauthDesktopJsonError": "これは「デスクトップ アプリ」用JSONです。Google Cloudで「ウェブ アプリケーション」を作成し、{origin}/auth/vertex/callback を承認済みリダイレクトURIに登録してください",
-  "enterprise.oauthWebJsonError": "Google Cloudで作成した「ウェブ アプリケーション」用OAuthクライアントJSONを選択してください",
   "enterprise.topUpJpy": "JPY（¥1,500/$10分）",
   "enterprise.topUpUsd": "USD（$10）",
   "driveShelf.title": "マイドライブ",

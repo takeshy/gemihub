@@ -9,7 +9,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { google } from "googleapis";
 import type { TenantInfo } from "~/types/enterprise";
-import { getOrganizationVertexGoogleAuthOptions } from "./vertex-oauth.server";
+import {
+  getOrganizationVertexGoogleAuthOptions,
+  getOrganizationVertexProjectId,
+} from "./vertex-oauth.server";
 import { VERTEX_MODELS, type VertexModelKey } from "./ai/models";
 
 export { VERTEX_MODELS, type VertexModelKey };
@@ -23,10 +26,15 @@ const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID ?? "";
  * specific overrides with environment fallbacks.
  */
 export async function createVertexClient(tenant: TenantInfo): Promise<GoogleGenAI> {
-  const googleAuthOptions = await getOrganizationVertexGoogleAuthOptions(tenant.vertexOAuthOrgId);
+  const [googleAuthOptions, connectionProjectId] = await Promise.all([
+    getOrganizationVertexGoogleAuthOptions(tenant.vertexOAuthOrgId),
+    // The org may run on the service-wide default connection, whose GCP
+    // project is the right fallback when the org set none of its own.
+    getOrganizationVertexProjectId(tenant.vertexOAuthOrgId),
+  ]);
   return new GoogleGenAI({
     vertexai: true,
-    project: tenant.vertexProjectId?.trim() || GCP_PROJECT_ID,
+    project: tenant.vertexProjectId?.trim() || connectionProjectId || GCP_PROJECT_ID,
     location: tenant.vertexLocation?.trim() || tenant.region,
     ...(googleAuthOptions ? { googleAuthOptions } : {}),
   });

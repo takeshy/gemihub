@@ -56,8 +56,15 @@ export function MountSwitcher() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (res.ok) window.location.reload();
-      else setBusy(false);
+      if (res.ok) {
+        // Drop `?file=` — ids do not carry across mounts (a Drive file id is
+        // not a project path), so keeping it would just 404 after the reload.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("file");
+        window.location.href = url.toString();
+      } else {
+        setBusy(false);
+      }
     } catch {
       setBusy(false);
     }

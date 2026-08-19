@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { google } from "googleapis";
-import { getFirestore, ORGANIZATIONS } from "./firestore.server";
+import { getFirestore, ORGANIZATIONS, SERVICE_CONFIG } from "./firestore.server";
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const EMAIL_SCOPE = "https://www.googleapis.com/auth/userinfo.email";
@@ -24,6 +24,23 @@ export interface VertexOAuthStatus {
   connectedAt: number | null;
   clientConfigured: boolean;
   projectId: string | null;
+}
+
+/**
+ * Where an organization's Vertex credential comes from.
+ *
+ *   "default" — the service-wide connection configured in /admin/enterprise.
+ *   "own"     — a connection configured for this organization alone.
+ *
+ * Unset means "default", except for organizations that already had their own
+ * connection before this setting existed (they keep using it).
+ */
+export type VertexOAuthSource = "default" | "own";
+
+export interface OrganizationVertexOAuthStatus extends VertexOAuthStatus {
+  source: VertexOAuthSource;
+  /** The service default, so the admin UI can show what "default" resolves to. */
+  serviceDefault: VertexOAuthStatus;
 }
 
 function encryptionKey(): Buffer {
@@ -58,6 +75,62 @@ function orgRef(orgId: string) {
   return getFirestore().collection(ORGANIZATIONS).doc(orgId);
 }
 
+/** Single document holding the service-wide (default) Vertex connection. */
+function serviceRef() {
+  return getFirestore().collection(SERVICE_CONFIG).doc("vertex-oauth");
+}
+
+interface VertexOAuthRecord {
+  client: StoredVertexOAuthClient | null;
+  token: StoredVertexOAuth | null;
+}
+
+function readRecord(data: Record<string, unknown> | undefined): VertexOAuthRecord {
+  const client = data?.vertexOAuthClient as StoredVertexOAuthClient | null | undefined;
+  const token = data?.vertexOAuth as StoredVertexOAuth | null | undefined;
+  return {
+    client: client?.clientId && client?.encryptedClientSecret ? client : null,
+    token: token?.encryptedRefreshToken ? token : null,
+  };
+}
+
+async function serviceRecord(): Promise<VertexOAuthRecord> {
+  const snap = await serviceRef().get();
+  return readRecord(snap.data());
+}
+
+async function orgRecord(orgId: string): Promise<{ record: VertexOAuthRecord; source: VertexOAuthSource }> {
+  const snap = await orgRef(orgId).get();
+  const data = snap.data();
+  const record = readRecord(data);
+  const stored = data?.vertexOAuthSource as VertexOAuthSource | undefined;
+  // No explicit choice: an organization that already has its own connection
+  // keeps it; everyone else inherits the service default.
+  const source: VertexOAuthSource =
+    stored === "own" || stored === "default"
+      ? stored
+      : record.client || record.token
+        ? "own"
+        : "default";
+  return { record, source };
+}
+
+/** The record actually used for an organization, honouring its source. */
+async function effectiveRecord(orgId: string): Promise<VertexOAuthRecord> {
+  const { record, source } = await orgRecord(orgId);
+  return source === "own" ? record : await serviceRecord();
+}
+
+function statusOf(record: VertexOAuthRecord): VertexOAuthStatus {
+  return {
+    connected: Boolean(record.token),
+    connectedEmail: record.token?.connectedEmail ?? null,
+    connectedAt: record.token?.connectedAt ?? null,
+    clientConfigured: Boolean(record.client),
+    projectId: record.client?.projectId ?? null,
+  };
+}
+
 function redirectUri(request?: Request): string {
   if (process.env.VERTEX_OAUTH_REDIRECT_URI) return process.env.VERTEX_OAUTH_REDIRECT_URI;
   if (!request) throw new Error("VERTEX_OAUTH_REDIRECT_URI is required");
@@ -66,14 +139,18 @@ function redirectUri(request?: Request): string {
   return `${protocol}://${url.host}/auth/vertex/callback`;
 }
 
-async function storedClient(orgId: string): Promise<StoredVertexOAuthClient | null> {
-  const snap = await orgRef(orgId).get();
-  const value = snap.data()?.vertexOAuthClient as StoredVertexOAuthClient | null | undefined;
-  return value?.clientId && value?.encryptedClientSecret ? value : null;
+/** Target of an OAuth flow: the service default, or one organization. */
+export type VertexOAuthTarget = { scope: "service" } | { scope: "org"; orgId: string };
+
+async function targetClient(target: VertexOAuthTarget): Promise<StoredVertexOAuthClient | null> {
+  const record = target.scope === "service"
+    ? await serviceRecord()
+    : (await orgRecord(target.orgId)).record;
+  return record.client;
 }
 
-async function oauthClient(orgId: string, request?: Request) {
-  const configured = await storedClient(orgId);
+async function oauthClient(target: VertexOAuthTarget, request?: Request) {
+  const configured = await targetClient(target);
   return new google.auth.OAuth2(
     configured?.clientId || process.env.GOOGLE_CLIENT_ID,
     configured ? decrypt(configured.encryptedClientSecret) : process.env.GOOGLE_CLIENT_SECRET,
@@ -81,11 +158,11 @@ async function oauthClient(orgId: string, request?: Request) {
   );
 }
 
-export async function createVertexOAuthRequest(orgId: string, request: Request) {
+export async function createVertexOAuthRequest(target: VertexOAuthTarget, request: Request) {
   const state = crypto.randomUUID();
   const codeVerifier = crypto.randomBytes(48).toString("base64url");
   const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
-  const url = (await oauthClient(orgId, request)).generateAuthUrl({
+  const url = (await oauthClient(target, request)).generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: true,
@@ -97,8 +174,13 @@ export async function createVertexOAuthRequest(orgId: string, request: Request) 
   return { url, state, codeVerifier };
 }
 
-export async function exchangeVertexOAuthCode(orgId: string, request: Request, code: string, codeVerifier: string) {
-  const { tokens } = await (await oauthClient(orgId, request)).getToken({ code, codeVerifier });
+export async function exchangeVertexOAuthCode(
+  target: VertexOAuthTarget,
+  request: Request,
+  code: string,
+  codeVerifier: string,
+) {
+  const { tokens } = await (await oauthClient(target, request)).getToken({ code, codeVerifier });
   if (!tokens.refresh_token || !tokens.access_token) {
     throw new Error("Google did not return an offline refresh token; revoke the previous grant and reconnect");
   }
@@ -111,16 +193,38 @@ export async function exchangeVertexOAuthCode(orgId: string, request: Request, c
 }
 
 export async function saveOrganizationVertexOAuth(orgId: string, refreshToken: string, connectedEmail: string) {
+  await saveVertexOAuthToken({ scope: "org", orgId }, refreshToken, connectedEmail);
+}
+
+/** Store the connected Google account for either scope. */
+export async function saveVertexOAuthToken(
+  target: VertexOAuthTarget,
+  refreshToken: string,
+  connectedEmail: string,
+) {
   const vertexOAuth: StoredVertexOAuth = {
     encryptedRefreshToken: encrypt(refreshToken),
     connectedEmail: connectedEmail.trim().toLowerCase(),
     connectedAt: Date.now(),
   };
-  await orgRef(orgId).set({ vertexOAuth }, { merge: true });
+  const ref = target.scope === "service" ? serviceRef() : orgRef(target.orgId);
+  await ref.set({ vertexOAuth }, { merge: true });
 }
 
 export async function saveOrganizationVertexOAuthClient(
   orgId: string,
+  input: { clientId: string; clientSecret: string; projectId: string },
+) {
+  await saveVertexOAuthClient({ scope: "org", orgId }, input);
+}
+
+/**
+ * Store the OAuth client for either scope. A refresh token is bound to the
+ * client that issued it, so loading a different client drops the existing
+ * connection and requires a fresh Google consent flow.
+ */
+export async function saveVertexOAuthClient(
+  target: VertexOAuthTarget,
   input: { clientId: string; clientSecret: string; projectId: string },
 ) {
   const vertexOAuthClient: StoredVertexOAuthClient = {
@@ -129,64 +233,90 @@ export async function saveOrganizationVertexOAuthClient(
     projectId: input.projectId.trim(),
     configuredAt: Date.now(),
   };
-  // A refresh token is bound to the client that issued it. Loading a different
-  // client therefore requires a fresh Google consent flow.
-  await orgRef(orgId).set({ vertexOAuthClient, vertexOAuth: null }, { merge: true });
+  const payload: Record<string, unknown> = { vertexOAuthClient, vertexOAuth: null };
+  // Configuring a client for one organization means it wants its own
+  // connection; without this the org would keep resolving to the default.
+  if (target.scope === "org") payload.vertexOAuthSource = "own";
+  const ref = target.scope === "service" ? serviceRef() : orgRef(target.orgId);
+  await ref.set(payload, { merge: true });
+}
+
+/** Switch an organization between the service default and its own connection. */
+export async function setOrganizationVertexOAuthSource(orgId: string, source: VertexOAuthSource) {
+  await orgRef(orgId).set({ vertexOAuthSource: source }, { merge: true });
 }
 
 export async function clearOrganizationVertexOAuth(orgId: string) {
-  // `update` rejects with NOT_FOUND when the org document is missing, which
-  // would turn a disconnect into a 500. Disconnecting must be idempotent, and
-  // the write side already uses set/merge.
+  // `update` rejects with NOT_FOUND when the document is missing, which would
+  // turn a disconnect into a 500. Disconnecting must be idempotent, and the
+  // write side already uses set/merge.
   await orgRef(orgId).set({ vertexOAuth: null }, { merge: true });
 }
 
 export async function disconnectOrganizationVertexOAuth(orgId: string) {
-  const value = await stored(orgId);
-  if (value) {
+  await disconnectVertexOAuth({ scope: "org", orgId });
+}
+
+/** Revoke (best effort) and forget the connection for either scope. */
+export async function disconnectVertexOAuth(target: VertexOAuthTarget) {
+  const record = target.scope === "service"
+    ? await serviceRecord()
+    : (await orgRecord(target.orgId)).record;
+  if (record.token) {
     try {
-      const refreshToken = decrypt(value.encryptedRefreshToken);
+      const refreshToken = decrypt(record.token.encryptedRefreshToken);
       await fetch("https://oauth2.googleapis.com/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ token: refreshToken }),
       });
     } catch (error) {
-      console.warn("Failed to revoke the organization Vertex OAuth token", { orgId, error });
+      console.warn("Failed to revoke the Vertex OAuth token", { target, error });
     }
   }
-  await clearOrganizationVertexOAuth(orgId);
+  const ref = target.scope === "service" ? serviceRef() : orgRef(target.orgId);
+  await ref.set({ vertexOAuth: null }, { merge: true });
 }
 
-async function stored(orgId: string): Promise<StoredVertexOAuth | null> {
-  const snap = await orgRef(orgId).get();
-  const value = snap.data()?.vertexOAuth as StoredVertexOAuth | null | undefined;
-  return value?.encryptedRefreshToken ? value : null;
+/** Status of the service-wide default connection. */
+export async function getServiceVertexOAuthStatus(): Promise<VertexOAuthStatus> {
+  return statusOf(await serviceRecord());
 }
 
-export async function getOrganizationVertexOAuthStatus(orgId: string): Promise<VertexOAuthStatus> {
-  const [value, client] = await Promise.all([stored(orgId), storedClient(orgId)]);
-  return {
-    connected: Boolean(value),
-    connectedEmail: value?.connectedEmail ?? null,
-    connectedAt: value?.connectedAt ?? null,
-    clientConfigured: Boolean(client),
-    projectId: client?.projectId ?? null,
-  };
+export async function getOrganizationVertexOAuthStatus(
+  orgId: string,
+): Promise<OrganizationVertexOAuthStatus> {
+  const [{ record, source }, service] = await Promise.all([orgRecord(orgId), serviceRecord()]);
+  const effective = source === "own" ? record : service;
+  return { ...statusOf(effective), source, serviceDefault: statusOf(service) };
 }
 
-/** Plain structural object intentionally avoids @google/genai's nested auth-library type mismatch. */
+/**
+ * Plain structural object intentionally avoids @google/genai's nested
+ * auth-library type mismatch. Resolves through the organization's source, so
+ * an org on "default" runs on the service-wide connection.
+ */
 export async function getOrganizationVertexGoogleAuthOptions(orgId?: string) {
   if (!orgId) return null;
-  const [value, client] = await Promise.all([stored(orgId), storedClient(orgId)]);
-  if (!value) return null;
+  const record = await effectiveRecord(orgId);
+  if (!record.token) return null;
   return {
     credentials: {
       type: "authorized_user" as const,
-      client_id: client?.clientId || process.env.GOOGLE_CLIENT_ID,
-      client_secret: client ? decrypt(client.encryptedClientSecret) : process.env.GOOGLE_CLIENT_SECRET,
-      refresh_token: decrypt(value.encryptedRefreshToken),
+      client_id: record.client?.clientId || process.env.GOOGLE_CLIENT_ID,
+      client_secret: record.client ? decrypt(record.client.encryptedClientSecret) : process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: decrypt(record.token.encryptedRefreshToken),
     },
     scopes: [CLOUD_PLATFORM_SCOPE],
   };
+}
+
+/**
+ * GCP project backing an organization's Vertex calls: its own aiSettings value
+ * wins, then the project of whichever OAuth client it resolves to.
+ */
+export async function getOrganizationVertexProjectId(orgId?: string): Promise<string | null> {
+  if (!orgId) return null;
+  const record = await effectiveRecord(orgId);
+  return record.client?.projectId ?? null;
 }

@@ -1,14 +1,27 @@
 import { redirect } from "react-router";
 import type { Route } from "./+types/auth.vertex.start";
-import { requireOrgAccess } from "~/services/project-acl.server";
-import { commitSession, getSession } from "~/services/session.server";
-import { createVertexOAuthRequest } from "~/services/vertex-oauth.server";
+import { getTokens, commitSession, getSession } from "~/services/session.server";
+import { isSuperAdmin } from "~/services/super-admin.server";
+import { createVertexOAuthRequest, type VertexOAuthTarget } from "~/services/vertex-oauth.server";
 
+/**
+ * GET /auth/vertex/start[?orgId=<id>]
+ *
+ * Without orgId: connects the SERVICE-WIDE default account that organizations
+ * inherit. With orgId: connects that organization's own account.
+ *
+ * Connecting Vertex binds a Google Cloud project (and its billing) to the
+ * service or to an organization, so both flows are service-administrator only.
+ */
 export async function loader({ request }: Route.LoaderArgs) {
-  const orgId = new URL(request.url).searchParams.get("orgId") ?? "";
-  const access = await requireOrgAccess(request, orgId);
-  if (access.role !== "owner" && access.role !== "admin") throw new Response("Only organization administrators can connect Vertex OAuth", { status: 403 });
-  const oauth = await createVertexOAuthRequest(orgId, request);
+  const tokens = await getTokens(request);
+  if (!isSuperAdmin(tokens?.email)) {
+    throw new Response("Only a service administrator can connect Vertex OAuth", { status: 403 });
+  }
+  const orgId = new URL(request.url).searchParams.get("orgId")?.trim() || "";
+  const target: VertexOAuthTarget = orgId ? { scope: "org", orgId } : { scope: "service" };
+
+  const oauth = await createVertexOAuthRequest(target, request);
   const session = await getSession(request);
   session.set("vertexOAuthState", oauth.state);
   session.set("vertexOAuthCodeVerifier", oauth.codeVerifier);

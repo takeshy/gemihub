@@ -210,48 +210,13 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
   const [location, setLocation] = useState(initial.settings.vertexLocation || "global");
   const [orgBudget, setOrgBudget] = useState(initial.settings.monthlyBudgetUsd?.toString() ?? "");
   const [userBudget, setUserBudget] = useState(initial.settings.defaultUserMonthlyBudgetUsd?.toString() ?? "");
-  const oauth = initial.oauthStatus;
   const usage = initial.usage?.organization?.estimatedCostUsd ?? 0;
   const budget = initial.budget;
   const topUp = budget?.topUpUsd ?? initial.usage?.organization?.topUpUsd ?? 0;
   const budgetLimit = budget?.limitUsd ?? null;
   const storage = initial.storage;
   const storageUsedGb = storage?.usedBytes != null ? storage.usedBytes / 1_000_000_000 : null;
-  async function loadOAuthJson(file: File) {
-    const document = JSON.parse(await file.text()) as {
-      web?: { client_id?: string; client_secret?: string; project_id?: string; redirect_uris?: string[] };
-      installed?: unknown;
-    };
-    const web = document.web;
-    if (!web && document.installed) {
-      throw new Error(t("enterprise.oauthDesktopJsonError").replace("{origin}", window.location.origin));
-    }
-    if (!web?.client_id || !web.client_secret || !web.project_id || !Array.isArray(web.redirect_uris)) {
-      throw new Error(t("enterprise.oauthWebJsonError"));
-    }
-    await api("/api/orgs/vertex-oauth", {
-      method: "POST",
-      body: { orgId, clientId: web.client_id, clientSecret: web.client_secret, projectId: web.project_id, redirectUris: web.redirect_uris },
-    });
-    await api("/api/orgs/ai-settings", {
-      method: "POST",
-      body: { orgId, vertexProjectId: web.project_id, vertexLocation: location, monthlyBudgetUsd: orgBudget || null, defaultUserMonthlyBudgetUsd: userBudget || null },
-    });
-    setProject(web.project_id);
-  }
   return <div className="space-y-4">
-    <section className={cardClass}>
-      <h3 className="font-semibold">{t("enterprise.connectVertex")}</h3>
-      <p className="mt-1 text-sm text-gray-500">{t("enterprise.connectVertexDesc")}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <label className={`${secondaryButton} cursor-pointer`}>
-          {t("enterprise.selectOauthJson")}
-          <input type="file" accept="application/json,.json" className="hidden" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void run(() => loadOAuthJson(file), t("enterprise.oauthLoaded")); }} />
-        </label>
-        {oauth?.clientConfigured && <span className="text-sm text-gray-600 dark:text-gray-300">{t("enterprise.configured")}{oauth.projectId}</span>}
-      </div>
-      {oauth?.connected ? <div className="mt-4 flex flex-wrap items-center gap-3"><span className="rounded-full bg-green-100 px-3 py-1 text-sm text-green-700">{t("enterprise.googleConnected")}{oauth.connectedEmail}</span><button className={secondaryButton} disabled={busy} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "DELETE", body: { orgId } }), t("enterprise.googleDisconnected"))}>{t("enterprise.disconnect")}</button></div> : <div className="mt-4"><a className={`${primaryButton} inline-block ${!oauth?.clientConfigured ? "pointer-events-none opacity-50" : ""}`} aria-disabled={!oauth?.clientConfigured} href={oauth?.clientConfigured ? `/auth/vertex/start?orgId=${encodeURIComponent(orgId)}` : undefined}>{t("enterprise.connectGoogle")}</a>{!oauth?.clientConfigured && <p className="mt-2 text-xs text-gray-500">{t("enterprise.loadJsonFirst")}</p>}</div>}
-    </section>
     <section className={cardClass}>
       <h3 className="font-semibold">{t("enterprise.budgetTitle")}</h3>
       <p className="mt-1 text-sm text-gray-500">
