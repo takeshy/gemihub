@@ -49,6 +49,24 @@ variable "hubwork_review_slugs" {
   default     = []
 }
 
+variable "super_admin_emails" {
+  description = "Service administrators (comma-joined into SUPER_ADMIN_EMAILS)."
+  type        = list(string)
+  default     = []
+}
+
+variable "gcs_bucket_name" {
+  description = "Bucket holding organization project files."
+  type        = string
+  default     = ""
+}
+
+variable "default_tenant_region" {
+  description = "Region for organization tenants."
+  type        = string
+  default     = ""
+}
+
 variable "manage_firestore_indexes" {
   description = "Whether to manage the Firestore indexes required by the organization features."
   type        = bool
@@ -76,6 +94,9 @@ module "gemihub" {
   hubwork_stripe_allowed_slugs   = ["takeshy"]
   manage_firestore_indexes       = var.manage_firestore_indexes
   firestore_database_id          = var.firestore_database_id
+  super_admin_emails             = var.super_admin_emails
+  gcs_bucket_name                = var.gcs_bucket_name
+  default_tenant_region          = var.default_tenant_region
 }
 
 # --------------- Outputs ---------------

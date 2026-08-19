@@ -73,3 +73,21 @@ variable "firestore_database_id" {
   type        = string
   default     = "(default)"
 }
+
+variable "super_admin_emails" {
+  description = "Service administrators: access to /admin/enterprise and cross-organization operations. Empty disables the console entirely."
+  type        = list(string)
+  default     = []
+}
+
+variable "gcs_bucket_name" {
+  description = "Bucket holding organization project files. Empty makes provisioning fall back to gemihub-{orgId}, which will not exist."
+  type        = string
+  default     = ""
+}
+
+variable "default_tenant_region" {
+  description = "Region for organization tenants (Vertex AI location; GCS bucket lives wherever it was created)."
+  type        = string
+  default     = ""
+}

@@ -85,6 +85,41 @@ resource "google_cloud_run_v2_service" "app" {
         value = var.project_id
       }
 
+      # Organization (Business) configuration. Each is omitted when unset, so
+      # a deployment that does not run organizations stays as it was.
+      dynamic "env" {
+        for_each = length(var.super_admin_emails) > 0 ? [join(",", var.super_admin_emails)] : []
+        content {
+          name  = "SUPER_ADMIN_EMAILS"
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.gcs_bucket_name != "" ? [var.gcs_bucket_name] : []
+        content {
+          name  = "GCS_BUCKET_NAME"
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.default_tenant_region != "" ? [var.default_tenant_region] : []
+        content {
+          name  = "DEFAULT_TENANT_REGION"
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
+        # "(default)" is the implicit database; passing it changes nothing.
+        for_each = var.firestore_database_id != "" && var.firestore_database_id != "(default)" ? [var.firestore_database_id] : []
+        content {
+          name  = "FIRESTORE_DATABASE_ID"
+          value = env.value
+        }
+      }
+
       env {
         name  = "GCS_BUCKET_NAME"
         value = google_storage_bucket.tenant_data.name
