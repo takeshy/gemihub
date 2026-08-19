@@ -605,7 +605,23 @@ export async function action({ request }: Route.ActionArgs) {
           console.warn("[settings] Failed to load Hubwork account for migration token:", describeError(error));
           return jsonWithCookie({ success: false, message: "Could not verify Premium plan for external sync tokens." }, { status: 503 });
         }
-        if (!account || !isActivePremiumAccount(account)) {
+        // A member of a Business organization is covered by the organization's
+        // subscription: the entitlement follows the workspace they work in,
+        // not a personal Hubwork account they were never asked to buy.
+        let entitled = !!account && isActivePremiumAccount(account);
+        if (!entitled && validTokens.currentOrgId && validTokens.currentProjectId) {
+          try {
+            const { getAccountByProject } = await import("~/services/hubwork-accounts.server");
+            const orgAccount = await getAccountByProject(
+              validTokens.currentOrgId,
+              validTokens.currentProjectId,
+            );
+            entitled = !!orgAccount && isActivePremiumAccount(orgAccount);
+          } catch (error) {
+            console.warn("[settings] Failed to check the organization's plan:", describeError(error));
+          }
+        }
+        if (!entitled) {
           return jsonWithCookie({ success: false, message: "A Premium plan is required to generate external sync tokens." }, { status: 403 });
         }
 
@@ -935,8 +951,13 @@ function SettingsInner({
   const { t } = useI18n();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const hasOwnPlan = !!settings.hubwork?.plan;
   const orgFilteredTabs = TABS.filter((tab) => {
     if (tab.id === "enterprise") return showEnterpriseTab;
+    // Personal subscription tab: an invited organization member has no plan of
+    // their own and nothing to manage here — the organization pays. The
+    // purchaser keeps it (their plan is how they reach the billing portal).
+    if (tab.id === "hubwork") return hasOwnPlan || !showEnterpriseTab;
     // RAG is an advanced, opt-in feature (Settings > General).
     if (tab.id === "rag") return settings.ragFeatureEnabled ?? false;
     return true;
@@ -1014,7 +1035,7 @@ function SettingsInner({
         {activeTab === "commands" && <CommandsTab settings={settings} />}
         {activeTab === "plugins" && <PluginsTab settings={settings} />}
         {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}
-        {activeTab === "hubwork" && <HubworkTab settings={settings} hasHubworkScopes={hasHubworkScopes} rootFolderId={rootFolderId} isCallback={hubworkCallback} />}
+        {activeTab === "hubwork" && (hasOwnPlan || !showEnterpriseTab) && <HubworkTab settings={settings} hasHubworkScopes={hasHubworkScopes} rootFolderId={rootFolderId} isCallback={hubworkCallback} />}
       </main>
     </div>
   );

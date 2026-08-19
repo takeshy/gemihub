@@ -24,6 +24,7 @@ import { TrashDialog } from "~/components/settings/TrashDialog";
 import { ConflictsDialog } from "~/components/settings/ConflictsDialog";
 import type { UserSettings } from "~/types/settings";
 import { fullPullCacheRecord, type FullPullFilePayload } from "~/services/full-pull-cache";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 
 export function SyncTab({ settings }: { settings: UserSettings }) {
   const { t } = useI18n();
@@ -42,7 +43,12 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
   const [backupToken, setBackupToken] = useState<string | null>(null);
   const [notifyDialog, setNotifyDialog] = useState<{ message: string; variant: "info" | "error" } | null>(null);
   const [backupCopied, setBackupCopied] = useState(false);
-  const hasPremium = !!settings.hubwork?.plan && settings.hubwork?.billingStatus === "active" && settings.hubwork?.accountStatus !== "disabled";
+  // A member working inside an organization project is covered by the
+  // organization's Business subscription; only a user on their own Drive
+  // needs a personal plan. The server applies the same rule.
+  const inOrganizationProject = useEnterpriseSelection() !== null;
+  const hasPremium = inOrganizationProject
+    || (!!settings.hubwork?.plan && settings.hubwork?.billingStatus === "active" && settings.hubwork?.accountStatus !== "disabled");
 
   // Load lastUpdatedAt from IndexedDB
   useEffect(() => {
