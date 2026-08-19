@@ -28,7 +28,6 @@ export interface TranslationStrings {
   "index.signIn": string;
 
   // Index - API key warning
-  "index.apiKeyWarning": string;
   "index.apiKeyLocked": string;
   "index.skillUpdateAvailable": string;
   "index.openSettings": string;
@@ -1074,6 +1073,8 @@ export interface TranslationStrings {
   "sync.conflictBadge": string;
   "sync.ignore": string;
   "sync.unignore": string;
+  "sync.keepDeleted": string;
+  "sync.keepDeletedHint": string;
 
   // Shortcuts tab
   "settings.tab.shortcuts": string;
@@ -1387,7 +1388,6 @@ const en: TranslationStrings = {
   "index.title": "GemiHub",
   "index.subtitle": "Build and execute AI-powered workflows visually",
   "index.signIn": "Sign in with Google",
-  "index.apiKeyWarning": "Gemini API key is not set. AI features will not work.",
   "index.apiKeyLocked": "Gemini API key is locked. Enter your password to unlock.",
   "index.skillUpdateAvailable": "A newer Webpage Builder skill is available. Open Settings > Premium Plan and click \"Update Skill to Latest\".",
   "index.openSettings": "Open Settings",
@@ -2434,6 +2434,8 @@ const en: TranslationStrings = {
   "sync.conflictBadge": "Conflict",
   "sync.ignore": "Ignore",
   "sync.unignore": "Unignore",
+  "sync.keepDeleted": "Keep",
+  "sync.keepDeletedHint": "Keep this file: it is re-added as a new file and uploaded again on the next sync.",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "Shortcuts",
@@ -2747,7 +2749,6 @@ const ja: TranslationStrings = {
   "index.title": "GemiHub",
   "index.subtitle": "AIワークフローをビジュアルに構築・実行",
   "index.signIn": "Googleでサインイン",
-  "index.apiKeyWarning": "Gemini APIキーが設定されていません。AI機能は動作しません。",
   "index.apiKeyLocked": "Gemini APIキーはロックされています。パスワードを入力して解除してください。",
   "index.skillUpdateAvailable": "新しい Webpage Builder スキルがあります。設定 > Premium Plan で「スキルを最新版に更新」を押してください。",
   "index.openSettings": "設定を開く",
@@ -3794,6 +3795,8 @@ const ja: TranslationStrings = {
   "sync.conflictBadge": "コンフリクト",
   "sync.ignore": "無視",
   "sync.unignore": "無視解除",
+  "sync.keepDeleted": "残す",
+  "sync.keepDeletedHint": "このファイルを残します。新規ファイルとして再登録され、次の同期でドライブへ再アップロードされます。",
 
   // Shortcuts tab
   "settings.tab.shortcuts": "ショートカット",

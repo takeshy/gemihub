@@ -187,6 +187,10 @@ export function useStorageSync() {
       }
       setLastSyncTime(new Date().toISOString());
       await refreshCounts(true);
+      // The tree, editor and skill discovery all rebuild on these events; the
+      // Drive hook fires them and this one did not, so a project mount only
+      // showed pulled/pushed files after a page reload.
+      window.dispatchEvent(new Event("sync-complete"));
       if (syncStatus !== "conflict") setSyncStatus("idle");
     } catch (err) {
       fail(err instanceof Error ? err.message : "push failed");
@@ -226,6 +230,14 @@ export function useStorageSync() {
         }
         setLastSyncTime(new Date().toISOString());
         await refreshCounts(true);
+        window.dispatchEvent(new Event("sync-complete"));
+        if (toPull.length > 0) {
+          // fileId == relative path on a storage mount, so open editors can
+          // refresh from the same event the Drive hook uses.
+          window.dispatchEvent(
+            new CustomEvent("files-pulled", { detail: { fileIds: toPull } }),
+          );
+        }
         if (syncStatus !== "conflict") setSyncStatus("idle");
       } catch (err) {
         fail(err instanceof Error ? err.message : "pull failed");
@@ -336,6 +348,10 @@ export function useStorageSync() {
         setConflicts((prev) => prev.filter((c) => c.fileId !== fileId));
         setLastSyncTime(new Date().toISOString());
         await refreshCounts(true);
+        window.dispatchEvent(new Event("sync-complete"));
+        window.dispatchEvent(
+          new CustomEvent("files-pulled", { detail: { fileIds: [fileId] } }),
+        );
         if (syncStatus === "conflict" && conflicts.length <= 1) setSyncStatus("idle");
       } catch (err) {
         fail(err instanceof Error ? err.message : "conflict resolution failed");
@@ -365,6 +381,7 @@ export function useStorageSync() {
       setCachingProgress({ total: 1, done: 1 });
       setLastSyncTime(new Date().toISOString());
       await refreshCounts(true);
+      window.dispatchEvent(new Event("sync-complete"));
       setSyncStatus("idle");
     } catch (err) {
       fail(err instanceof Error ? err.message : "full pull failed");

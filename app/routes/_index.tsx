@@ -1221,6 +1221,15 @@ function IDEContent({
         const result = await response.json().catch(() => null) as { error?: string } | null;
         throw new Error(result?.error ?? `HTTP ${response.status}`);
       }
+      // The project tree is local-first: a file that only exists remotely is
+      // counted as pending pull but not rendered. The user just dropped these
+      // in, so cache them right away instead of making them run a pull.
+      const { pullObject } = await import("~/services/storage-sync");
+      const mount = `project:${projectSelection.projectId}`;
+      const mountKey = `gcs:${projectSelection.orgId}/${projectSelection.projectId}`;
+      for (const move of payload.moves) {
+        await pullObject(mount, mountKey, move.to).catch(() => {});
+      }
       window.dispatchEvent(new Event("drive-shelf-changed"));
       window.dispatchEvent(new Event("sync-complete"));
     } catch (err) {
@@ -1407,22 +1416,20 @@ function IDEContent({
         onClose={() => setLauncherOpen(false)}
       />
 
-      {/* The key is optional: an organization project runs on the tenant's
-          Vertex AI, so warn only on the Drive mount where it is actually used. */}
-      {!hasGeminiApiKey && !projectSelection && (
+      {/* Only when there is a stored key waiting to be unlocked. Having no key
+          at all is a normal state now (org projects use the tenant's Vertex AI,
+          and chat says what is missing when you try to send), so it gets no
+          banner — and an org project never needs the key regardless. */}
+      {!hasGeminiApiKey && hasEncryptedApiKey && !projectSelection && (
         <div className="flex items-center justify-between border-b border-yellow-200 bg-yellow-50 px-4 py-1.5 text-xs dark:border-yellow-800 dark:bg-yellow-900/20">
-          <span className="text-yellow-800 dark:text-yellow-200">
-            {hasEncryptedApiKey ? t("index.apiKeyLocked") : t("index.apiKeyWarning")}
-          </span>
+          <span className="text-yellow-800 dark:text-yellow-200">{t("index.apiKeyLocked")}</span>
           <div className="flex items-center gap-3">
-            {hasEncryptedApiKey && (
-              <button
-                onClick={() => setShowPasswordPrompt(true)}
-                className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
-              >
-                {t("unlock.submit")}
-              </button>
-            )}
+            <button
+              onClick={() => setShowPasswordPrompt(true)}
+              className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"
+            >
+              {t("unlock.submit")}
+            </button>
             <a
               href="/settings"
               className="font-medium text-yellow-800 underline hover:no-underline dark:text-yellow-200"

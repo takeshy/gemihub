@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { ArrowUp, ArrowDown, AlertTriangle, Loader2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 import type { SyncStatus, ConflictInfo } from "~/hooks/useSync";
 import {
   getCachedRemoteMeta,
@@ -46,6 +47,7 @@ export function SyncStatusBar({
   pullDialogTrigger = 0,
 }: SyncStatusBarProps) {
   const { t } = useI18n();
+  const projectSelection = useEnterpriseSelection();
   const conflictCount = conflicts.length;
   const isBusy = syncStatus === "pushing" || syncStatus === "pulling";
 
@@ -61,6 +63,42 @@ export function SyncStatusBar({
     setDialogFiles([]);
 
     try {
+      // Project mount: the badge counts come from the storage diff (paths),
+      // not from the Drive metadata tables read below — listing those here
+      // produced an empty dialog next to a non-zero badge.
+      if (projectSelection) {
+        const { detectChanges } = await import("~/services/storage-sync");
+        const { diff } = await detectChanges(
+          `project:${projectSelection.projectId}`,
+          `gcs:${projectSelection.orgId}/${projectSelection.projectId}`,
+          { useCachedRemote: false },
+        );
+        const entry = (path: string, kind: FileListItem["type"]): FileListItem =>
+          ({ id: path, name: path, type: kind });
+        const files: FileListItem[] =
+          type === "push"
+            ? [
+                ...diff.toPush.map((path) => entry(path, "modified")),
+                ...diff.localOnly.map((path) => entry(path, "modified")),
+              ]
+            : [
+                // remoteOnly is included here (unlike the Drive branch): the
+                // project tree is local-first, so a never-pulled remote file
+                // is genuinely pending work and the badge counts it.
+                ...diff.toPull.map((path) => entry(path, "modified")),
+                ...diff.remoteOnly.map((path) => entry(path, "modified")),
+                ...diff.editDeleteConflicts.map((path) => entry(path, "editDeleted")),
+                ...diff.conflicts.map((conflict) => entry(conflict.objectPath, "conflict")),
+              ];
+        const visible = files.filter((file) => !isSyncExcludedPath(file.name));
+        visible.sort((a, b) => a.name.localeCompare(b.name));
+        setDialogFiles(visible);
+        window.dispatchEvent(new CustomEvent("sync-counts-corrected", {
+          detail: { type, count: visible.length },
+        }));
+        return;
+      }
+
       const cachedRemoteMeta = await getCachedRemoteMeta();
       const remoteMeta = cachedRemoteMeta
         ? {
@@ -139,7 +177,7 @@ export function SyncStatusBar({
     } finally {
       setDialogLoading(false);
     }
-  }, []);
+  }, [projectSelection]);
 
   // External trigger to open pull diff dialog (e.g. from push-rejected dialog)
   useEffect(() => {

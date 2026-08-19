@@ -1,6 +1,8 @@
 import {
+  deleteCachedFile,
   getCachedFile,
   getCachedRemoteMeta,
+  setCachedFile,
   setCachedRemoteMeta,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
@@ -143,4 +145,63 @@ export async function updateCachedRemoteMetaFromSyncMeta(remoteMeta: SyncMeta): 
       cachedAt: Date.now(),
     });
   }
+}
+
+/**
+ * Turn a remotely-deleted file into a brand-new local file.
+ *
+ * Used when the user ignores a deletion during pull. Keeping the old cache
+ * entry would only survive until the next cache clear — the file no longer
+ * exists on Drive, so nothing could restore it. Re-registering the content
+ * under a `new:` id makes it an ordinary unpushed creation, which the pending
+ * migration uploads to Drive as a new file.
+ *
+ * Returns the new id, or null when there is no cached content to keep.
+ */
+export async function resurrectDeletedFileAsNew(
+  fileId: string,
+  /** Name from localMeta — cached entries written by older versions may lack one. */
+  fallbackName?: string,
+): Promise<string | null> {
+  const cached = await getCachedFile(fileId);
+  const name = cached?.fileName || fallbackName;
+  // No cached content means there is nothing to keep; the caller applies the
+  // deletion normally instead.
+  if (!cached || !name) return null;
+  const newId = `new:${name}`;
+  if (!(await getCachedFile(newId))) {
+    await setCachedFile({
+      ...cached,
+      fileId: newId,
+      fileName: name,
+      md5Checksum: "",
+      modifiedTime: "",
+      cachedAt: Date.now(),
+    });
+  }
+  await deleteCachedFile(fileId);
+
+  // The file tree renders localMeta entries plus `new:` entries from
+  // cachedRemoteMeta. Without this the resurrected file is in the cache but in
+  // neither table, so it disappears from the tree until the next reload.
+  try {
+    const remoteMeta = await getCachedRemoteMeta();
+    if (remoteMeta) {
+      const now = new Date().toISOString();
+      remoteMeta.files[newId] = {
+        name,
+        mimeType: remoteMeta.files[fileId]?.mimeType ?? "text/plain",
+        md5Checksum: "",
+        modifiedTime: now,
+        createdTime: now,
+      };
+      delete remoteMeta.files[fileId];
+      remoteMeta.lastUpdatedAt = now;
+      remoteMeta.cachedAt = Date.now();
+      await setCachedRemoteMeta(remoteMeta);
+    }
+  } catch {
+    // Non-critical: the next tree fetch rebuilds meta from the server.
+  }
+  return newId;
 }

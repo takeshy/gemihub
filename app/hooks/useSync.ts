@@ -33,6 +33,7 @@ import {
   collectTrackedIds,
   collectPushCandidates,
   filterActionablePull,
+  resurrectDeletedFileAsNew,
   updateCachedRemoteMetaFromSyncMeta,
 } from "./sync-utils";
 
@@ -474,7 +475,7 @@ export function useSync() {
       remoteMeta = data.remoteMeta as SyncMeta | null;
 
       // 2. Get local state
-      const localMeta = (await getLocalSyncMeta()) ?? null;
+      let localMeta = (await getLocalSyncMeta()) ?? null;
       const modifiedIds = await getLocallyModifiedFileIds();
 
       // 3. Compute diff client-side
@@ -504,9 +505,39 @@ export function useSync() {
       // local-only creations awaiting push (counted in the push badge), not
       // remote deletions. Deleting them here would destroy unpushed work.
       const localMetaFiles = localMeta?.files ?? {};
-      const localOnlyReal = diff.localOnly.filter(
+      const deletedRemotely = diff.localOnly.filter(
         id => !id.startsWith("new:") && (id in localMetaFiles)
       );
+      // An ignored deletion means "keep this file". Simply skipping it would
+      // leave the only copy in the local cache, which the next cache clear
+      // would destroy — the file is gone from Drive. Instead the deletion is
+      // accepted and the content is re-registered as a NEW local file, which
+      // the pending migration uploads to Drive again.
+      const ignoredDeletions = ignoredIds
+        ? deletedRemotely.filter(id => ignoredIds.has(id))
+        : [];
+      const localOnlyReal = deletedRemotely.filter(id => !ignoredIds?.has(id));
+      let resurrectedAny = false;
+      if (ignoredDeletions.length > 0) {
+        const updatedMetaForKeep: LocalSyncMeta = localMeta ?? {
+          id: "current",
+          lastUpdatedAt: new Date().toISOString(),
+          files: {},
+        };
+        for (const fid of ignoredDeletions) {
+          const newId = await resurrectDeletedFileAsNew(fid, localMetaFiles[fid]?.name);
+          if (!newId) {
+            // Nothing cached to keep — apply the deletion like any other.
+            await deleteCachedFile(fid);
+          }
+          await deleteEditHistoryEntry(fid);
+          delete updatedMetaForKeep.files[fid];
+          if (newId) resurrectedAny = true;
+        }
+        updatedMetaForKeep.lastUpdatedAt = new Date().toISOString();
+        await setLocalSyncMeta(updatedMetaForKeep);
+        localMeta = updatedMetaForKeep;
+      }
       let baseMeta: LocalSyncMeta | null = localMeta;
       if (localOnlyReal.length > 0) {
         const updatedMetaForDelete: LocalSyncMeta = localMeta ?? {
@@ -643,7 +674,13 @@ export function useSync() {
       if (remoteMeta) await updateCachedRemoteMetaFromSyncMeta(remoteMeta);
 
       // 9. Dispatch events and update counts
-      if (allFilesToPull.length > 0 || localOnlyReal.length > 0) {
+      if (resurrectedAny) {
+        // Re-render the tree with the `new:` entries, then upload them to
+        // Drive as new files.
+        window.dispatchEvent(new Event("tree-meta-updated"));
+        window.dispatchEvent(new Event("pending-files-created"));
+      }
+      if (allFilesToPull.length > 0 || localOnlyReal.length > 0 || resurrectedAny) {
         setLastSyncTime(new Date().toISOString());
         window.dispatchEvent(new Event("sync-complete"));
         if (filesToPull.length > 0) {

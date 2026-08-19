@@ -65,8 +65,12 @@ export function SyncDiffDialog({
   const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({});
   const rows = useMemo(() => buildDialogRows(files), [files]);
 
+  // Pull only. "deleted" = the file is gone on the remote and the pull would
+  // remove the local copy — ignoring keeps it (and leaves the change pending).
+  // Conflicts and edit-delete cases need a real decision, so they cannot be
+  // silently skipped.
   const canIgnore = (fileType: FileListItem["type"]) =>
-    type === "pull" && fileType === "modified";
+    type === "pull" && (fileType === "modified" || fileType === "deleted");
 
   const toggleIgnore = useCallback((fileId: string) => {
     setIgnoredIds((prev) => {
@@ -219,10 +223,20 @@ export function SyncDiffDialog({
             <button
               onClick={() => toggleIgnore(f.id)}
               className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              title={ignored ? t("sync.unignore") : t("sync.ignore")}
+              title={
+                ignored
+                  ? t("sync.unignore")
+                  : f.type === "deleted"
+                    ? t("sync.keepDeletedHint")
+                    : t("sync.ignore")
+              }
             >
               {ignored ? <Eye size={ICON.SM} /> : <EyeOff size={ICON.SM} />}
-              {ignored ? t("sync.unignore") : t("sync.ignore")}
+              {ignored
+                ? t("sync.unignore")
+                : f.type === "deleted"
+                  ? t("sync.keepDeleted")
+                  : t("sync.ignore")}
             </button>
           )}
 
