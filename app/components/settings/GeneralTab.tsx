@@ -137,18 +137,15 @@ export function GeneralTab({
           {t("settings.general.apiKeyPasswordSection")}
         </h3>
         {!isEncryptionSetup && (
-          <p className="text-xs text-red-500 dark:text-red-400 mb-3">
-            <span className="text-red-500">*</span> {t("settings.general.required")}
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            {t("settings.general.apiKeyOptional")}
           </p>
         )}
 
         {/* API Key */}
         <div className="mb-4">
           <div className="flex items-center justify-between">
-            <Label htmlFor="geminiApiKey">
-              {t("settings.general.apiKey")}
-              {!isEncryptionSetup && <span className="text-red-500 ml-1">*</span>}
-            </Label>
+            <Label htmlFor="geminiApiKey">{t("settings.general.apiKey")}</Label>
             <a
               href="https://aistudio.google.com/apikey"
               target="_blank"
@@ -185,7 +182,7 @@ export function GeneralTab({
             <div className="mb-4">
               <Label htmlFor="password">
                 {t("settings.general.password")}
-                <span className="text-red-500 ml-1">*</span>
+                {geminiApiKey && <span className="text-red-500 ml-1">*</span>}
               </Label>
               <input
                 type="password"

@@ -1,6 +1,8 @@
 # Update Log
 
 ## 2026-08-19
+* **Update**: The built-in `markdown` / `canvas` / `base` / `dashboard` skills are embedded in the app bundle instead of being provisioned into `skills/` on Drive — they no longer appear in the file tree or sync, and their instructions are inlined into the system prompt (`integrations/skill.md`).
+* **Update**: Organization membership is granted directly from Settings > Organization (immediate add + notification email) instead of a token invitation, and members always authenticate with Google — the sign-in now requests the Gmail/Calendar scopes up front so invitation mail works without a second consent round.
 * **Update**: Dashboard, Workflow, and RAG became opt-in "advanced features" — all three default to off (`dashboardEnabled` / `workflowEnabled` / `ragFeatureEnabled` in Settings > General), and the IDE home view shows a Getting Started guide while the dashboard is off. YAML files still open in the plain text editor when Workflow is off (`features/dashboard.md`, `workflows/workflow_execution.md`, `integrations/rag.md`).
 * **Fix**: Organization membership is now required for project access — a leftover project member document no longer grants GCS/Vertex access after the user is removed from the org (explicitly external collaborators are unaffected), and org removal deletes the user's project memberships (`architecture/mounts.md`).
 * **Fix**: Post-login `returnTo` is restricted to same-origin paths in both the Google and OIDC callbacks (open redirect).

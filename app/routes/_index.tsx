@@ -1398,7 +1398,9 @@ function IDEContent({
         onClose={() => setLauncherOpen(false)}
       />
 
-      {!hasGeminiApiKey && (
+      {/* The key is optional: an organization project runs on the tenant's
+          Vertex AI, so warn only on the Drive mount where it is actually used. */}
+      {!hasGeminiApiKey && !projectSelection && (
         <div className="flex items-center justify-between border-b border-yellow-200 bg-yellow-50 px-4 py-1.5 text-xs dark:border-yellow-800 dark:bg-yellow-900/20">
           <span className="text-yellow-800 dark:text-yellow-200">
             {hasEncryptedApiKey ? t("index.apiKeyLocked") : t("index.apiKeyWarning")}

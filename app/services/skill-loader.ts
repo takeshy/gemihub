@@ -151,6 +151,17 @@ function warnOnce(key: string, message: string): void {
 }
 
 /**
+ * Synthetic id prefix used by the embedded skills in `builtin-skills.ts`.
+ * Duplicated here on purpose: this module must stay importable from plain
+ * node (tests), and that file pulls Vite-only `?raw` imports.
+ */
+const BUILTIN_SKILL_ID_PREFIX = "builtin:";
+
+function isBuiltinSkillFileId(fileId: string): boolean {
+  return fileId.startsWith(BUILTIN_SKILL_ID_PREFIX);
+}
+
+/**
  * Discover skills from the cached file tree.
  *
  * For each skill the single source of truth is the `skill-capabilities`
@@ -177,10 +188,19 @@ function warnOnce(key: string, message: string): void {
  * ```
  */
 export async function discoverSkills(agentPlugins: AgentPluginConfig[] = []): Promise<SkillMetadata[]> {
+  // Built-in skills ship with the app. They are listed first and shadow any
+  // leftover Drive folder of the same name (installs provisioned before the
+  // skills moved into the bundle still have skills/markdown/ and friends).
+  // Imported lazily: builtin-skills.ts uses Vite `?raw` imports, which only the
+  // bundler can resolve — a static import would break every plain-node consumer.
+  const { getBuiltinSkills } = await import("./builtin-skills");
+  const builtins = getBuiltinSkills();
+  const builtinIds = new Set(builtins.map((skill) => skill.id));
   let tree = await getCachedFileTree();
   if (!tree) {
     const remoteMeta = await getCachedRemoteMeta();
-    if (!remoteMeta) return [];
+    // No Drive cache yet (first load / offline): the built-ins are still usable.
+    if (!remoteMeta) return builtins;
     const items = buildTreeFromMeta(remoteMeta);
     tree = { id: "current", rootFolderId: remoteMeta.rootFolderId, items, cachedAt: Date.now() };
   }
@@ -269,7 +289,7 @@ export async function discoverSkills(agentPlugins: AgentPluginConfig[] = []): Pr
     }
   }
 
-  return results;
+  return [...builtins, ...results.filter((skill) => !builtinIds.has(skill.id))];
 }
 
 function resolveWorkflowFileId(
@@ -295,6 +315,11 @@ function resolveWorkflowFileId(
 export async function loadSkill(
   metadata: SkillMetadata,
 ): Promise<LoadedSkill> {
+  if (isBuiltinSkillFileId(metadata.skillMdFileId)) {
+    const { loadBuiltinSkill } = await import("./builtin-skills");
+    const builtin = loadBuiltinSkill(metadata.id);
+    if (builtin) return builtin;
+  }
   const cached = await getCachedFile(metadata.skillMdFileId);
   const { body } = cached
     ? parseFrontmatter(cached.content)
@@ -358,7 +383,20 @@ export function buildSkillSystemPrompt(skills: LoadedSkill[], hubworkAccounts?: 
     if (skill.description) {
       sections.push(skill.description);
     }
-    sections.push(`SKILL.md fileId: \`${skill.skillMdFileId}\` — call \`read_drive_file({fileId: "${skill.skillMdFileId}"})\` to load the full instructions and workflow details.`);
+    if (isBuiltinSkillFileId(skill.skillMdFileId)) {
+      // Built-in skills live in the app bundle, not on Drive, so there is no
+      // file to read — inline the instructions and their reference material.
+      sections.push("");
+      sections.push("### Instructions (embedded — no file read required)");
+      sections.push(skill.instructions);
+      for (const reference of skill.references) {
+        sections.push("");
+        sections.push("### Reference material");
+        sections.push(reference);
+      }
+    } else {
+      sections.push(`SKILL.md fileId: \`${skill.skillMdFileId}\` — call \`read_drive_file({fileId: "${skill.skillMdFileId}"})\` to load the full instructions and workflow details.`);
+    }
     if (skill.workflows.length > 0) {
       sections.push("");
       sections.push("### Available Workflow IDs");

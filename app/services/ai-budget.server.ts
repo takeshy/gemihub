@@ -27,6 +27,13 @@ export class AiBudgetExceededError extends Error {
 
 type Price = { input: number; output: number };
 
+/**
+ * Vertex AI budget included with the Business plan, in USD per month. Set on
+ * the organization at provisioning time; owners may raise or lower it, and
+ * purchased top-ups extend it for the current month on top of this figure.
+ */
+export const BUSINESS_INCLUDED_AI_BUDGET_USD = 30;
+
 const DEFAULT_PRICES_PER_MILLION: Record<string, Price> = {
   "gemini-3.1-pro-preview": { input: 2, output: 12 },
   "gemini-3.1-pro-preview-customtools": { input: 2, output: 12 },

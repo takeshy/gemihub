@@ -434,6 +434,7 @@ export interface TranslationStrings {
   "canvas.helpPanZoom": string;
 
   // ChatPanel
+  "chat.apiKeyMissing": string;
   "chat.newChat": string;
   "chat.noHistory": string;
   "chat.confirmDelete": string;
@@ -594,9 +595,9 @@ export interface TranslationStrings {
   "settings.general.passwordMismatch": string;
   "settings.general.passwordMinLength": string;
   "settings.general.apiKeyPasswordSection": string;
+  "settings.general.apiKeyOptional": string;
   "settings.general.configured": string;
   "settings.general.invalidApiKey": string;
-  "settings.general.apiKeyRequired": string;
   "settings.general.passwordRequiredError": string;
   "settings.general.currentPasswordRequired": string;
   "settings.general.required": string;
@@ -1128,6 +1129,9 @@ export interface TranslationStrings {
   "enterprise.connectGoogle": string;
   "enterprise.loadJsonFirst": string;
   "enterprise.budgetTitle": string;
+  "enterprise.budgetUsage": string;
+  "enterprise.budgetIncluded": string;
+  "enterprise.budgetIncludedWithTopUp": string;
   "enterprise.usageThisMonth": string;
   "enterprise.topUpBalance": string;
   "enterprise.buyTopUp": string;
@@ -1140,9 +1144,15 @@ export interface TranslationStrings {
   "enterprise.saveAiSettings": string;
   "enterprise.aiSettingsSaved": string;
   "enterprise.inviteMember": string;
+  "enterprise.addMember": string;
+  "enterprise.addMemberDesc": string;
+  "enterprise.memberAdded": string;
+  "enterprise.memberAddedEmailFailed": string;
+  "enterprise.memberAddedGmailScopeMissing": string;
   "enterprise.invite": string;
   "enterprise.inviteSent": string;
   "enterprise.inviteEmailFailed": string;
+  "enterprise.inviteGmailScopeMissing": string;
   "enterprise.superOwnerAddOwner": string;
   "enterprise.superOwnerAddOwnerDesc": string;
   "enterprise.addAsOwner": string;
@@ -1782,6 +1792,7 @@ const en: TranslationStrings = {
   "canvas.helpPanZoom": "Drag empty canvas space to pan. Ctrl/Cmd + wheel zooms.",
 
   // ChatPanel
+  "chat.apiKeyMissing": "No Gemini API key is set, so chat cannot run. Add one in Settings > General, or switch to an organization project (which uses the organization's Vertex AI).",
   "chat.newChat": "New Chat",
   "chat.noHistory": "No chat history",
   "chat.confirmDelete": "Delete this chat?",
@@ -1943,9 +1954,9 @@ const en: TranslationStrings = {
   "settings.general.passwordMismatch": "Passwords do not match",
   "settings.general.passwordMinLength": "Password must be at least 8 characters",
   "settings.general.apiKeyPasswordSection": "API Key & Password",
+  "settings.general.apiKeyOptional": "Optional. Set a key to use AI features on your own Drive; organization projects run on the organization's Vertex AI and need no key. A password is required only when you store a key, because it is kept encrypted.",
   "settings.general.configured": "API Key & Encryption configured.",
   "settings.general.invalidApiKey": "Invalid API key. Please check your Gemini API key and try again.",
-  "settings.general.apiKeyRequired": "API key is required for initial setup.",
   "settings.general.passwordRequiredError": "Password is required for initial setup.",
   "settings.general.currentPasswordRequired": "Current password is required to change the API key.",
   "settings.general.required": "Required",
@@ -2477,6 +2488,9 @@ const en: TranslationStrings = {
   "enterprise.connectGoogle": "Connect Google account",
   "enterprise.loadJsonFirst": "Load the OAuth client JSON first.",
   "enterprise.budgetTitle": "Vertex AI & monthly budget",
+  "enterprise.budgetUsage": "Used ${used} / ${limit} this month",
+  "enterprise.budgetIncluded": "(includes ${included} with the plan)",
+  "enterprise.budgetIncludedWithTopUp": "(includes ${included} with the plan + ${topUp} purchased)",
   "enterprise.usageThisMonth": "Estimated usage this month: ",
   "enterprise.topUpBalance": "Purchased top-up: ",
   "enterprise.buyTopUp": "Buy additional budget for this month",
@@ -2489,9 +2503,15 @@ const en: TranslationStrings = {
   "enterprise.saveAiSettings": "Save AI settings",
   "enterprise.aiSettingsSaved": "AI settings saved",
   "enterprise.inviteMember": "Invite a member",
+  "enterprise.addMember": "Add a member",
+  "enterprise.addMemberDesc": "The member is added immediately and signs in with their Google account. A notification email is sent from your Google account.",
+  "enterprise.memberAdded": "Member added",
+  "enterprise.memberAddedEmailFailed": "{email} was added to the organization, but the notification email could not be sent. Let them know they can sign in with Google.",
+  "enterprise.memberAddedGmailScopeMissing": "{email} was added to the organization, but this session has no Gmail send permission, so no email was sent. Sign in again from /auth/google?hubwork=1 to grant it.",
   "enterprise.invite": "Invite",
   "enterprise.inviteSent": "Invitation sent",
   "enterprise.inviteEmailFailed": "The invitation was created, but the email could not be sent. Check the Google connection, or share this URL directly: {url}",
+  "enterprise.inviteGmailScopeMissing": "The invitation was created, but this session has no Gmail send permission, so no email was sent. Sign in again from /auth/google?hubwork=1 to grant it, or share this URL directly: {url}",
   "enterprise.superOwnerAddOwner": "SuperOwner: add an Owner directly",
   "enterprise.superOwnerAddOwnerDesc": "Registers the address as this organization's Owner immediately, without an invitation email.",
   "enterprise.addAsOwner": "Add as Owner",
@@ -3131,6 +3151,7 @@ const ja: TranslationStrings = {
   "canvas.helpPanZoom": "空白部分をドラッグするとキャンバスを移動できます。Ctrl/Cmd + ホイールでズームします。",
 
   // ChatPanel
+  "chat.apiKeyMissing": "Gemini APIキーが未設定のためチャットを実行できません。設定 > 一般 で登録するか、組織プロジェクト（組織のVertex AIを使用）に切り替えてください。",
   "chat.newChat": "新しいチャット",
   "chat.noHistory": "チャット履歴はありません",
   "chat.confirmDelete": "このチャットを削除しますか？",
@@ -3292,9 +3313,9 @@ const ja: TranslationStrings = {
   "settings.general.passwordMismatch": "パスワードが一致しません",
   "settings.general.passwordMinLength": "パスワードは8文字以上である必要があります",
   "settings.general.apiKeyPasswordSection": "APIキー & パスワード",
+  "settings.general.apiKeyOptional": "任意です。自分のDriveでAI機能を使う場合に設定してください（組織プロジェクトは組織のVertex AIで動作するためキー不要です）。キーを保存するときのみ、暗号化のためパスワードが必要です。",
   "settings.general.configured": "APIキーと暗号化が設定されています。",
   "settings.general.invalidApiKey": "無効なAPIキーです。Gemini APIキーを確認して再度お試しください。",
-  "settings.general.apiKeyRequired": "初回設定にはAPIキーが必要です。",
   "settings.general.passwordRequiredError": "初回設定にはパスワードが必要です。",
   "settings.general.currentPasswordRequired": "APIキーを変更するには現在のパスワードが必要です。",
   "settings.general.required": "必須",
@@ -3826,6 +3847,9 @@ const ja: TranslationStrings = {
   "enterprise.connectGoogle": "Googleアカウントを接続",
   "enterprise.loadJsonFirst": "先にOAuthクライアントJSONを読み込んでください。",
   "enterprise.budgetTitle": "Vertex AIと月次予算",
+  "enterprise.budgetUsage": "今月の使用額 ${used} / ${limit}",
+  "enterprise.budgetIncluded": "（プラン込み ${included}）",
+  "enterprise.budgetIncludedWithTopUp": "（プラン込み ${included} ＋ 追加購入 ${topUp}）",
   "enterprise.usageThisMonth": "今月の概算利用額: ",
   "enterprise.topUpBalance": "追加購入済み枠: ",
   "enterprise.buyTopUp": "今月の利用枠を追加購入",
@@ -3838,9 +3862,15 @@ const ja: TranslationStrings = {
   "enterprise.saveAiSettings": "AI設定を保存",
   "enterprise.aiSettingsSaved": "AI設定を保存しました",
   "enterprise.inviteMember": "メンバーを招待",
+  "enterprise.addMember": "メンバーを追加",
+  "enterprise.addMemberDesc": "その場で組織に追加され、本人はGoogleアカウントでログインします。通知メールはあなたのGoogleアカウントから送信されます。",
+  "enterprise.memberAdded": "メンバーを追加しました",
+  "enterprise.memberAddedEmailFailed": "{email} を組織に追加しましたが、通知メールを送信できませんでした。Googleでログインできることを本人にお伝えください。",
+  "enterprise.memberAddedGmailScopeMissing": "{email} を組織に追加しましたが、このセッションにはGmail送信権限がないためメールを送信していません。/auth/google?hubwork=1 からログインし直すと付与できます。",
   "enterprise.invite": "招待",
   "enterprise.inviteSent": "招待を送信しました",
   "enterprise.inviteEmailFailed": "招待は作成されましたが、メールを送信できませんでした。Google連携を確認するか、次のURLを直接お渡しください: {url}",
+  "enterprise.inviteGmailScopeMissing": "招待は作成されましたが、このセッションにはGmail送信権限がないためメールを送信していません。/auth/google?hubwork=1 からログインし直して権限を付与するか、次のURLを直接お渡しください: {url}",
   "enterprise.superOwnerAddOwner": "SuperOwner：Ownerを直接追加",
   "enterprise.superOwnerAddOwnerDesc": "招待メールを使わず、この組織のOwnerとして直ちに登録します。",
   "enterprise.addAsOwner": "Ownerとして直接追加",

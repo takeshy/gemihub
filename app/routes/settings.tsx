@@ -324,14 +324,12 @@ export async function action({ request }: Route.ActionArgs) {
         const encryptChatHistory = formData.get("encryptChatHistory") === "on";
         const encryptWorkflowHistory = formData.get("encryptWorkflowHistory") === "on";
 
-        // Require API key and password on initial setup
-        if (!currentSettings.encryptedApiKey) {
-          if (!geminiApiKey) {
-            return jsonWithCookie({ success: false, message: "apiKeyRequired" });
-          }
-          if (!password) {
-            return jsonWithCookie({ success: false, message: "passwordRequiredError" });
-          }
+        // The Gemini API key is OPTIONAL: an organization project runs on the
+        // tenant's Vertex AI, and a user may only want the editor, dashboard,
+        // or sync. A password is required only when a key is actually being
+        // stored, because the key is kept encrypted at rest.
+        if (!currentSettings.encryptedApiKey && geminiApiKey && !password) {
+          return jsonWithCookie({ success: false, message: "passwordRequiredError" });
         }
 
         // Validate API key by calling Gemini API

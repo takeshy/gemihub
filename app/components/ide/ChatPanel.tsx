@@ -898,7 +898,14 @@ export function ChatPanel({
         if (hasEncryptedApiKey && onNeedUnlock) {
           pendingSendRef.current = { content, attachments, overrides };
           onNeedUnlock();
+          return;
         }
+        // The key is optional, so "no key at all" is a normal state — say what
+        // is missing instead of dropping the message silently.
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: t("chat.apiKeyMissing"), timestamp: Date.now() },
+        ]);
         return;
       }
 
@@ -1731,8 +1738,15 @@ export function ChatPanel({
         alwaysThink={getThinkingToggle(selectedModel) === true}
         isPro={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}
         onBuildWebApp={() => handleSend("", undefined, { skillId: "webpage-builder" })}
-        onGoToDashboard={onGoToDashboard}
-        onCreateDashboard={() => void handleCreateDashboardFromChat()}
+        {...((settings.dashboardEnabled ?? false)
+          ? {
+              onGoToDashboard,
+              onCreateDashboard: () => void handleCreateDashboardFromChat(),
+            }
+          : // Dashboard is an opt-in advanced feature — with it off the empty
+            // chat must not advertise it. Omitting both callbacks drops the
+            // whole card in MessageList.
+            {})}
         onAskAboutGemihub={handleAskAboutGemihub}
       />
 
@@ -1740,7 +1754,10 @@ export function ChatPanel({
       <ChatInput
         ref={chatInputRef}
         onSend={handleSend}
-        disabled={!hasApiKey && !getCachedApiKey()}
+        // A Gemini API key is only needed on the Drive mount with the free
+        // plan: an org project runs on the tenant's Vertex AI and the paid
+        // plan goes through the server-side Interactions proxy.
+        disabled={!enterpriseSelection && settings.apiPlan !== "paid" && !hasApiKey && !getCachedApiKey()}
         models={availableModels}
         selectedModel={selectedModel}
         onModelChange={handleModelChange}

@@ -82,11 +82,12 @@ export async function provisionBusinessOrganization(params: {
         ownerEmail: email,
         tenantProject: tenant,
       });
-      // Business plan ($50/mo per organization) includes a $30/mo Vertex
-      // budget; owners can top it up in $10 units or adjust it later.
+      // Business plan ($50/mo per organization) includes a Vertex budget;
+      // owners can top it up in $10 units or adjust it later.
+      const { BUSINESS_INCLUDED_AI_BUDGET_USD } = await import("./ai-budget.server");
       await setOrganizationAiSettings(org.id, {
         ...org.aiSettings,
-        monthlyBudgetUsd: 30,
+        monthlyBudgetUsd: BUSINESS_INCLUDED_AI_BUDGET_USD,
       });
       writeAuditLog({
         orgId: org.id,

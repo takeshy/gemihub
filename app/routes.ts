@@ -81,7 +81,6 @@ export default [
   route("api/settings/hubwork-sheets", "routes/api.settings.hubwork-sheets.tsx"),
   route("api/settings/hubwork-provision", "routes/api.settings.hubwork-provision.tsx"),
   route("api/settings/hubwork-migrate", "routes/api.settings.hubwork-migrate.tsx"),
-  route("api/settings/gemihub-skills-provision", "routes/api.settings.gemihub-skills-provision.tsx"),
   route("api/settings/external-skills", "routes/api.settings.external-skills.tsx"),
   route("api/okf/gemihub", "routes/api.okf.gemihub.tsx"),
   route("api/hubwork/webpage-review", "routes/api.hubwork.webpage-review.tsx"),

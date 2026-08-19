@@ -20,7 +20,7 @@ import {
 import { getOrganization } from "~/services/organizations.server";
 import { createInvite } from "~/services/invites.server";
 import { inviteUrlFor, sendInviteEmail } from "~/services/notify.server";
-import { getValidTokens } from "~/services/google-auth.server";
+import { getValidTokens, hasRequiredHubworkScopes } from "~/services/google-auth.server";
 import { requireAuth } from "~/services/session.server";
 import type { OrgRole } from "~/types/enterprise";
 import { google } from "googleapis";
@@ -89,6 +89,14 @@ export async function action({ request }: Route.ActionArgs) {
     if (!validTokens.accessToken) {
       throw new Error("Google OAuth access token is not available for invitation email delivery");
     }
+    // Delivery uses the admin's own Gmail, which needs the gmail.send scope —
+    // a plain sign-in only grants drive.file. Fail fast with a reason the UI
+    // can turn into a "reconnect Google" action instead of a raw 403.
+    if (!hasRequiredHubworkScopes(validTokens.grantedScopes)) {
+      const err = new Error("gmail_scope_missing");
+      err.name = "InviteScopeError";
+      throw err;
+    }
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: validTokens.accessToken });
     await sendInviteEmail({
@@ -106,11 +114,13 @@ export async function action({ request }: Route.ActionArgs) {
     // status here makes admins retry, minting another live token each time,
     // so this is a 200 carrying a warning plus the URL to hand over manually.
     console.warn("[api.members.invite] notify failed:", err);
+    const scopeMissing = err instanceof Error && err.message === "gmail_scope_missing";
     return Response.json({
       invite,
       inviteUrl,
       emailSent: false,
-      warning: "invite_email_failed",
+      warning: scopeMissing ? "gmail_scope_missing" : "invite_email_failed",
+      reason: err instanceof Error ? err.message : String(err),
     });
   }
 }

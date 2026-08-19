@@ -3,7 +3,10 @@ import { auditFromRoute } from "~/services/audit-log.server";
 import { ProjectAccessError, requireOrgAccess } from "~/services/project-acl.server";
 import { getOrganization, setOrganizationAiSettings } from "~/services/organizations.server";
 import type { OrganizationAiSettings } from "~/types/enterprise";
-import { getOrganizationAiUsage } from "~/services/ai-budget.server";
+import {
+  BUSINESS_INCLUDED_AI_BUDGET_USD,
+  getOrganizationAiUsage,
+} from "~/services/ai-budget.server";
 import { getOrganizationVertexOAuthStatus } from "~/services/vertex-oauth.server";
 import {
   BUSINESS_INCLUDED_STORAGE_GB,
@@ -82,10 +85,26 @@ export async function loader({ request }: Route.LoaderArgs) {
       getOrganizationVertexOAuthStatus(orgId),
       getOrgStorageUsageBytes(orgId, org.tenantProject).catch(() => null),
     ]);
+    // Mirror the storage block: what the plan includes, what was purchased on
+    // top, and the resulting ceiling — otherwise the section only shows spend
+    // with nothing to compare it against.
+    const includedBudgetUsd = BUSINESS_INCLUDED_AI_BUDGET_USD;
+    const configuredBudgetUsd = org.aiSettings.monthlyBudgetUsd;
+    const topUpUsd = usage.organization.topUpUsd ?? 0;
     return Response.json({
       settings: org.aiSettings,
       usage,
       oauthStatus,
+      budget: {
+        includedUsd: includedBudgetUsd,
+        configuredUsd: configuredBudgetUsd,
+        topUpUsd,
+        // null = unlimited (no configured ceiling).
+        limitUsd:
+          configuredBudgetUsd != null && configuredBudgetUsd > 0
+            ? configuredBudgetUsd + topUpUsd
+            : null,
+      },
       storage: {
         usedBytes: storageUsedBytes,
         quotaGb: storageQuotaGbForOrg(org),

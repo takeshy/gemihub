@@ -12,6 +12,7 @@ interface AiPayload {
   settings: OrganizationAiSettings;
   usage?: { organization?: UsageSummary; users?: Record<string, UsageSummary> };
   oauthStatus?: { connected: boolean; connectedEmail: string | null; connectedAt: number | null; clientConfigured: boolean; projectId: string | null };
+  budget?: { includedUsd: number; configuredUsd: number | null; topUpUsd: number; limitUsd: number | null };
   storage?: { usedBytes: number | null; quotaGb: number; includedGb: number; addonUnits: number };
 }
 type SectionId = "ai" | "members" | "projects";
@@ -211,7 +212,9 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
   const [userBudget, setUserBudget] = useState(initial.settings.defaultUserMonthlyBudgetUsd?.toString() ?? "");
   const oauth = initial.oauthStatus;
   const usage = initial.usage?.organization?.estimatedCostUsd ?? 0;
-  const topUp = initial.usage?.organization?.topUpUsd ?? 0;
+  const budget = initial.budget;
+  const topUp = budget?.topUpUsd ?? initial.usage?.organization?.topUpUsd ?? 0;
+  const budgetLimit = budget?.limitUsd ?? null;
   const storage = initial.storage;
   const storageUsedGb = storage?.usedBytes != null ? storage.usedBytes / 1_000_000_000 : null;
   async function loadOAuthJson(file: File) {
@@ -252,9 +255,28 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
     <section className={cardClass}>
       <h3 className="font-semibold">{t("enterprise.budgetTitle")}</h3>
       <p className="mt-1 text-sm text-gray-500">
-        {t("enterprise.usageThisMonth")}${usage.toFixed(2)}
-        {topUp > 0 && <span className="ml-2">（{t("enterprise.topUpBalance")}${topUp.toFixed(2)}）</span>}
+        {budgetLimit != null
+          ? t("enterprise.budgetUsage")
+              .replace("{used}", usage.toFixed(2))
+              .replace("{limit}", budgetLimit.toFixed(2))
+          : `${t("enterprise.usageThisMonth")}$${usage.toFixed(2)}`}
+        {budget && (
+          <span className="ml-2">
+            {(topUp > 0
+              ? t("enterprise.budgetIncludedWithTopUp").replace("{topUp}", topUp.toFixed(2))
+              : t("enterprise.budgetIncluded")
+            ).replace("{included}", budget.includedUsd.toFixed(2))}
+          </span>
+        )}
       </p>
+      {budgetLimit != null && budgetLimit > 0 && (
+        <div className="mt-2 h-2 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-800">
+          <div
+            className={`h-full ${usage / budgetLimit > 0.9 ? "bg-red-500" : "bg-blue-500"}`}
+            style={{ width: `${Math.min(100, (usage / budgetLimit) * 100)}%` }}
+          />
+        </div>
+      )}
       <form method="POST" action="/hubwork/api/stripe/checkout" className="mt-3 flex flex-wrap items-center gap-2">
         <input type="hidden" name="plan" value="vertex-topup" />
         <input type="hidden" name="orgId" value={orgId} />
@@ -328,15 +350,23 @@ function MembersSection({ orgId, members, ai, busy, run, isSuperOwner }: { orgId
   const [ownerEmail, setOwnerEmail] = useState("");
   return <div className="space-y-4">
     <section className={cardClass}>
-      <h3 className="font-semibold">{t("enterprise.inviteMember")}</h3>
+      <h3 className="font-semibold">{t("enterprise.addMember")}</h3>
+      <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{t("enterprise.addMemberDesc")}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_160px_auto]"><input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" /><select className={inputClass} value={inviteRole} onChange={(e) => setInviteRole(e.target.value as OrgRole)}><option value="member">{t("enterprise.roleMember")}</option><option value="admin">{t("enterprise.roleAdmin")}</option></select><button className={primaryButton} disabled={busy || !email} onClick={() => void run(async () => {
-        const result = await api<{ emailSent?: boolean; inviteUrl?: string }>("/api/members/invite", { method: "POST", body: { orgId, email, role: inviteRole } });
-        // The invite exists either way — never make the admin retry (and mint
-        // another live token) just because the email bounced.
-        return result.emailSent === false
-          ? { warning: t("enterprise.inviteEmailFailed").replace("{url}", result.inviteUrl ?? "") }
-          : undefined;
-      }, t("enterprise.inviteSent"))}>{t("enterprise.invite")}</button></div>
+        // Direct add: the membership takes effect immediately and the member
+        // signs in with Google. The mail is only a notification, so a delivery
+        // failure is reported without undoing (or retrying) the add.
+        const result = await api<{ emailSent?: boolean; warning?: string }>("/api/members/add", { method: "POST", body: { orgId, email, role: inviteRole } });
+        setEmail("");
+        if (result.emailSent !== false) return undefined;
+        return {
+          warning: t(
+            result.warning === "gmail_scope_missing"
+              ? "enterprise.memberAddedGmailScopeMissing"
+              : "enterprise.memberAddedEmailFailed",
+          ).replace("{email}", email),
+        };
+      }, t("enterprise.memberAdded"))}>{t("enterprise.add")}</button></div>
     </section>
     {isSuperOwner && <details className={cardClass}><summary className="cursor-pointer text-sm font-medium text-gray-600 dark:text-gray-300">{t("enterprise.superOwnerAddOwner")}</summary><p className="mt-3 text-xs leading-5 text-gray-500">{t("enterprise.superOwnerAddOwnerDesc")}</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><input className={inputClass} type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} placeholder="owner@example.com" /><button className={primaryButton} disabled={busy || !ownerEmail} onClick={() => void run(async () => { await api("/api/members/add", { method: "POST", body: { orgId, email: ownerEmail, role: "owner" } }); setOwnerEmail(""); }, t("enterprise.ownerAdded"))}>{t("enterprise.addAsOwner")}</button></div></details>}
     <section className={`${cardClass} overflow-x-auto`}><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b"><th className="p-2">{t("enterprise.colEmail")}</th><th className="p-2">{t("enterprise.colRole")}</th><th className="p-2">{t("enterprise.colUsage")}</th><th className="p-2">{t("enterprise.colActions")}</th></tr></thead><tbody>{members.map((member) => <MemberRow key={member.uid} orgId={orgId} member={member} ai={ai} busy={busy} run={run} />)}</tbody></table></section>

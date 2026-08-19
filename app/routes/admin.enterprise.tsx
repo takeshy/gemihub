@@ -8,9 +8,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await getTokens(request);
   if (!tokens?.email) throw new Response("not authenticated", { status: 401 });
   if (!isSuperAdmin(tokens.email)) {
+    // statusText is a ByteString (Latin-1 only) — a non-ASCII reason phrase
+    // makes `new Response` throw a TypeError, turning this 403 into a crash.
+    // It is also the only part the root ErrorBoundary renders, so the guidance
+    // lives here rather than in the body.
     throw new Response("service administrator only", {
       status: 403,
-      statusText: "takeshy.work@gmail.com でログインしてください",
+      statusText:
+        "Service administrator only: sign in with an account listed in SUPER_ADMIN_EMAILS",
     });
   }
   return { email: tokens.email };

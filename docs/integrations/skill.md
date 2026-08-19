@@ -29,6 +29,28 @@ gemihub/
         template.md
 ```
 
+## Built-in skills (embedded)
+
+`markdown`, `canvas`, `base`, and `dashboard` ship inside the app bundle
+(`app/services/builtin-skills.ts`, sourced from
+`app/services/gemihub-skill-templates/`). They are **not** written to Drive —
+they never appear in the file tree, never sync, and need no provisioning.
+
+- `discoverSkills` lists them first and drops any Drive skill with the same id,
+  so installs that still carry the folders provisioned by earlier versions show
+  one entry rather than two. Those leftover folders are ordinary files now; the
+  app no longer creates or updates them, and they can be deleted.
+- `loadSkill` returns the embedded copy, and `buildSkillSystemPrompt` inlines
+  the instructions plus reference material instead of pointing the model at a
+  `read_drive_file` call — there is no file id to read.
+- Their synthetic ids use the `builtin:` prefix (`builtin:markdown/SKILL.md`),
+  which never collides with a Drive id.
+- `builtin-skills.ts` uses Vite `?raw` imports, so it is imported lazily from
+  `skill-loader.ts`; a static import would break plain-node consumers (tests).
+
+Agent-plugin skills and the Hubwork `webpage-builder` skill are unaffected —
+they still live on Drive.
+
 ## SKILL.md Format
 
 Each `SKILL.md` file has three parts: YAML frontmatter for user-facing metadata, a ```skill-capabilities fenced YAML block declaring which workflows the skill exposes, and a markdown body for instructions:
