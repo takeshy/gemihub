@@ -73,6 +73,7 @@ import { useTreeFileOperations } from "~/hooks/useTreeFileOperations";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { useTreeDragDrop } from "~/hooks/useTreeDragDrop";
 import { useTreeFileCreate } from "~/hooks/useTreeFileCreate";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 
 import { SKILLS_FOLDER_NAME } from "~/types/settings";
 
@@ -183,6 +184,11 @@ export function DriveFileTree({
     setBusyFileIds((prev) => { const next = new Set(prev); for (const id of ids) next.delete(id); return next; });
   }, []);
   const { t } = useI18n();
+  const enterpriseSelection = useEnterpriseSelection();
+  const activeMount = enterpriseSelection
+    ? `project:${enterpriseSelection.orgId}/${enterpriseSelection.projectId}`
+    : "drive";
+  const cacheRootFolderId = enterpriseSelection ? "gcs" : rootFolderId;
   const isMobile = useIsMobile();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { progress, upload, clearProgress } = useFileUpload(
@@ -243,7 +249,7 @@ export function DriveFileTree({
     }
     const cachedMeta: CachedRemoteMeta = {
       id: "current",
-      rootFolderId,
+      rootFolderId: cacheRootFolderId,
       lastUpdatedAt: metaData.lastUpdatedAt,
       files: mergedFiles,
       cachedAt: Date.now(),
@@ -302,17 +308,26 @@ export function DriveFileTree({
       : Promise.resolve();
     await Promise.all([
       setCachedRemoteMeta(cachedMeta),
-      setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
+      setCachedFileTree({ id: "current", rootFolderId: cacheRootFolderId, items, cachedAt: Date.now() }),
       syncMetaPromise,
     ]);
-  }, [rootFolderId]);
+  }, [cacheRootFolderId]);
 
   const fetchAndCacheTree = useCallback(async (refresh = false) => {
+    const requestedMount = activeMount;
+    const isStillActiveMount = () => (activeProjectMountParam() ?? "drive") === requestedMount;
     try {
-      const url = `/api/drive/tree?folderId=${rootFolderId}${refresh ? "&refresh=true" : ""}`;
+      const params = new URLSearchParams({ folderId: rootFolderId, mount: requestedMount });
+      if (refresh) params.set("refresh", "true");
+      const url = `/api/drive/tree?${params.toString()}`;
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
+      // A tree request can finish after the user changes mounts. The cache
+      // dispatcher follows the *current* mount, so processing that stale
+      // response would write Drive file ids into a project snapshot (or vice
+      // versa) and render them as files in the newly selected tree.
+      if (!isStillActiveMount()) return;
 
       if (data.meta) {
         // Merge local-only "new:" entries from existing CachedRemoteMeta
@@ -328,7 +343,7 @@ export function DriveFileTree({
 
         const cachedMeta: CachedRemoteMeta = {
           id: "current",
-          rootFolderId,
+          rootFolderId: cacheRootFolderId,
           lastUpdatedAt: data.meta.lastUpdatedAt,
           files: mergedFiles,
           cachedAt: Date.now(),
@@ -339,14 +354,14 @@ export function DriveFileTree({
         setTreeItems(items);
         setRemoteMeta(mergedFiles);
         await Promise.all([
-          setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() }),
+          setCachedFileTree({ id: "current", rootFolderId: cacheRootFolderId, items, cachedAt: Date.now() }),
           setCachedRemoteMeta(cachedMeta),
         ]);
       } else {
         // Fallback: no meta available, use raw items from server
         const items = data.items as CachedTreeNode[];
         setTreeItems(items);
-        await setCachedFileTree({ id: "current", rootFolderId, items, cachedAt: Date.now() });
+        await setCachedFileTree({ id: "current", rootFolderId: cacheRootFolderId, items, cachedAt: Date.now() });
       }
     } catch {
       // ignore
@@ -355,7 +370,7 @@ export function DriveFileTree({
       // Notify SkillContext (and other listeners) that the tree is ready
       window.dispatchEvent(new Event("tree-cached"));
     }
-  }, [rootFolderId]);
+  }, [activeMount, cacheRootFolderId, rootFolderId]);
 
   // Load cached/modified/encrypted file IDs when tree items change
   useEffect(() => {
@@ -479,9 +494,9 @@ export function DriveFileTree({
   // (covers optimistic insert, migration ID swap, rename, delete, etc.)
   useEffect(() => {
     if (treeItems.length > 0 && rootFolderId) {
-      setCachedFileTree({ id: "current", rootFolderId, items: treeItems, cachedAt: Date.now() });
+      setCachedFileTree({ id: "current", rootFolderId: cacheRootFolderId, items: treeItems, cachedAt: Date.now() });
     }
-  }, [treeItems, rootFolderId]);
+  }, [treeItems, cacheRootFolderId, rootFolderId]);
 
   // Push flattened file list to parent when tree or modified files change
   useEffect(() => {
@@ -523,10 +538,10 @@ export function DriveFileTree({
         getLocalSyncMeta(),
       ]);
 
-      const canRebuildFromMeta = cachedMeta && cachedMeta.rootFolderId === rootFolderId;
+      const canRebuildFromMeta = cachedMeta && cachedMeta.rootFolderId === cacheRootFolderId;
       const hasUsableCachedTree =
         cached &&
-        cached.rootFolderId === rootFolderId &&
+        cached.rootFolderId === cacheRootFolderId &&
         cached.items.length > 0;
 
       if (!cancelled && canRebuildFromMeta) {
@@ -550,7 +565,7 @@ export function DriveFileTree({
     return () => {
       cancelled = true;
     };
-  }, [rootFolderId, fetchAndCacheTree]);
+  }, [cacheRootFolderId, fetchAndCacheTree]);
 
   const toggleFolder = useCallback((folderId: string) => {
     setSelectedFolderId((prev) => (prev === folderId ? null : folderId));
