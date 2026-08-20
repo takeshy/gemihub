@@ -184,7 +184,13 @@ export async function action({ request }: Route.ActionArgs) {
   // Google OAuth verification bypass: create a granted Pro account without Stripe.
   // Only effective when HUBWORK_REVIEW_SLUGS contains the submitted slug and the
   // user has no existing account yet.
-  if (planType === "business" && !existing && accountSlug && reviewSlugs.includes(accountSlug)) {
+  //
+  // Never for an additional-organization purchase: `existing` is forced to null
+  // above, so this branch would be reachable for a buyer who already has an
+  // account — and the createAccount below runs WITHOUT allowDuplicateOwner, so
+  // the email dedup would just hand back their existing account id, provision
+  // no organization, and still redirect to ?hubwork_subscribed=1.
+  if (planType === "business" && !additionalOrganization && !existing && accountSlug && reviewSlugs.includes(accountSlug)) {
     if (accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug)) {
       throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
     }

@@ -259,7 +259,14 @@ export async function action({ request }: Route.ActionArgs) {
     switch (_action) {
       case "saveGeneral": {
         const apiPlan = (formData.get("apiPlan") as ApiPlan) || currentSettings.apiPlan;
-        const selectedModel = normalizeDeprecatedModelName(formData.get("selectedModel")) ?? null;
+        // GeneralTab hides the whole Gemini block (the model <select> included)
+        // on an organization mount, so an absent field means "not editable
+        // here", not "cleared". Without the fallback, saving any other General
+        // setting from an org mount would silently reset the user's chosen
+        // model to the plan default below.
+        const selectedModel = formData.has("selectedModel")
+          ? normalizeDeprecatedModelName(formData.get("selectedModel")) ?? null
+          : normalizeDeprecatedModelName(currentSettings.selectedModel) ?? null;
         const systemPrompt = (formData.get("systemPrompt") as string) || "";
         // Password managers may autofill the API-key password input when the user
         // only intends to save another setting (for example, the default model).

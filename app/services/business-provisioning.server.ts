@@ -22,7 +22,7 @@ import {
   setOrganizationAiSettings,
 } from "./organizations.server";
 import { createProject, getProject } from "./projects.server";
-import { updateAccount } from "./hubwork-accounts.server";
+import { getAccountById, updateAccount } from "./hubwork-accounts.server";
 import { writeAuditLog } from "./audit-log.server";
 
 const ORG_ID_RE = /^[a-z0-9]{6,16}$/;
@@ -48,17 +48,30 @@ export async function provisionBusinessOrganization(params: {
   try {
     const uid = emailToUid(email);
 
-    // Reuse an organization the buyer ADMINISTERS rather than creating a
-    // second one. Reusing any membership would provision the plan they paid
-    // for inside somebody else's organization when they happen to be a plain
-    // member there.
-    const existing = params.forceNewOrganization ? [] : await listOrganizationsForUser(uid);
-    let org = null;
-    for (const candidate of existing) {
-      const membership = await getOrgMember(candidate.id, uid);
-      if (membership?.role === "owner" || membership?.role === "admin") {
-        org = candidate;
-        break;
+    // The account already records the organization this purchase provisioned,
+    // so reuse it — even under forceNewOrganization.
+    // `checkout.session.completed` is delivered at least once and Stripe
+    // retries on any non-2xx or timeout; without this a redelivery would skip
+    // the reuse scan below, find the slug-derived id taken, fall through to a
+    // hash id and create a SECOND organization for one purchase (the first one
+    // then orphaned by the updateAccount at the end). It also pins the account
+    // to the org whose web/** the published domain already serves, instead of
+    // letting a re-subscribe pick a different one out of the scan below.
+    const account = await getAccountById(params.accountId);
+    let org = account?.orgId ? await getOrganization(account.orgId) : null;
+
+    // Otherwise reuse an organization the buyer ADMINISTERS rather than
+    // creating a second one. Reusing any membership would provision the plan
+    // they paid for inside somebody else's organization when they happen to be
+    // a plain member there.
+    if (!org && !params.forceNewOrganization) {
+      const existing = await listOrganizationsForUser(uid);
+      for (const candidate of existing) {
+        const membership = await getOrgMember(candidate.id, uid);
+        if (membership?.role === "owner" || membership?.role === "admin") {
+          org = candidate;
+          break;
+        }
       }
     }
 

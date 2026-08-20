@@ -60,7 +60,7 @@ function OrganizationEn() {
         </p>
         <ul>
           <li><strong>Included budget</strong> — $30 per billing period, following the subscription cycle rather than the calendar month.</li>
-          <li><strong>Top-ups</strong> — buy more in $30 units (¥4,500) when a period runs short. A top-up stays usable until the end of the following period.</li>
+          <li><strong>Top-ups</strong> — buy more in $10 units (¥1,500) when a period runs short. A top-up stays usable until the end of the following period.</li>
           <li><strong>Per-member limits</strong> — set a default monthly cap for everyone, and override it for individuals. Reaching a cap stops AI calls for that scope, not for the whole organization.</li>
           <li><strong>Advanced</strong> — owners can point the organization at their own Google Cloud project and Vertex AI location.</li>
         </ul>
@@ -148,7 +148,7 @@ function OrganizationJa() {
         </p>
         <ul>
           <li><strong>付属の利用枠</strong> — 請求期間ごとに$30。暦月ではなくサブスクリプションの請求サイクルに沿います。</li>
-          <li><strong>追加購入</strong> — 足りなくなったら$30単位（¥4,500）で追加できます。購入した枠は次の請求期間の終わりまで利用可能です。</li>
+          <li><strong>追加購入</strong> — 足りなくなったら$10単位（¥1,500）で追加できます。購入した枠は次の請求期間の終わりまで利用可能です。</li>
           <li><strong>メンバーごとの上限</strong> — 全員の既定上限を設定し、個別に上書きできます。上限に達してもその範囲のAI呼び出しが止まるだけで、組織全体は停止しません。</li>
           <li><strong>詳細設定</strong> — ownerは組織独自のGoogle CloudプロジェクトとVertex AIロケーションを指定できます。</li>
         </ul>

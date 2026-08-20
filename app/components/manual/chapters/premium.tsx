@@ -91,7 +91,7 @@ function PremiumEn() {
         </p>
 
         <h2>Business Plan Features</h2>
-        <p>All Lite features are included in the Business plan, plus an organization with shared team projects. The price (¥7,500 / $50 per month, billed per organization) includes a $30/month Vertex AI budget; administrators can purchase additional budget in $30 (¥4,500) units when it runs out, usable until the end of the billing period after purchase. Project storage includes 100 GB per organization and can be expanded once by 500 GB at $30 (¥5,000) per month, for a maximum of 600 GB.</p>
+        <p>All Lite features are included in the Business plan, plus an organization with shared team projects. The price (¥7,500 / $50 per month, billed per organization) includes a $30/month Vertex AI budget; administrators can purchase additional budget in $10 (¥1,500) units when it runs out, usable until the end of the billing period after purchase. Project storage includes 100 GB per organization and can be expanded once by 500 GB at $30 (¥5,000) per month, for a maximum of 600 GB.</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>
@@ -261,7 +261,7 @@ function PremiumJa() {
         </p>
 
         <h2>Businessプランの機能</h2>
-        <p>Liteプランの全機能がBusinessプランに含まれ、さらにチームでプロジェクトを共有できる組織が作成されます。料金（月額 ¥7,500 / $50、組織単位）には月 $30 分の Vertex AI 利用枠が含まれ、不足時は管理者が $30（¥4,500）単位で追加購入でき、追加分は購入した請求期間と次の期間の終わりまで利用できます。プロジェクト用ストレージは組織あたり100GBまで含まれ、1回だけ500GB（月額 $30 / ¥5,000）追加できます（合計最大600GB）。</p>
+        <p>Liteプランの全機能がBusinessプランに含まれ、さらにチームでプロジェクトを共有できる組織が作成されます。料金（月額 ¥7,500 / $50、組織単位）には月 $30 分の Vertex AI 利用枠が含まれ、不足時は管理者が $10（¥1,500）単位で追加購入でき、追加分は購入した請求期間と次の期間の終わりまで利用できます。プロジェクト用ストレージは組織あたり100GBまで含まれ、1回だけ500GB（月額 $30 / ¥5,000）追加できます（合計最大600GB）。</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>

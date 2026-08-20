@@ -21,6 +21,7 @@ import {
   type StorageDragPayload,
 } from "~/types/storage-drag";
 import { collectFileIds } from "~/utils/tree-helpers";
+import { isProjectInternalPath } from "~/services/sync-client-utils";
 import { ICON } from "~/utils/icon-sizes";
 import { DriveFileModal, type DriveModalFile } from "./DriveFileModal";
 
@@ -46,6 +47,33 @@ function folderMoves(
   });
 }
 
+/**
+ * Drop the management entries (`history/`, `trash/`, `plugins/`,
+ * `settings.json`, …) that /api/drive/tree returns but /api/storage/tree
+ * filtered. Without this they show up in the shelf, inflate its file count,
+ * and can be dragged into the shared organization — a copy the
+ * move-between-mounts route only rejects after the gesture.
+ */
+function pruneInternalPaths(
+  nodes: CachedTreeNode[],
+  pathByFileId: ReadonlyMap<string, string>,
+): CachedTreeNode[] {
+  return nodes.flatMap((node) => {
+    if (!node.isFolder) {
+      const path = pathByFileId.get(node.id) ?? node.name;
+      return isProjectInternalPath(path) ? [] : [node];
+    }
+    const folderPath = node.id.startsWith("vfolder:")
+      ? node.id.slice("vfolder:".length)
+      : node.name;
+    if (isProjectInternalPath(`${folderPath}/`)) return [];
+    // The Drive layout is flat, so a virtual folder exists only because a file
+    // under it does: once every child is pruned the folder itself is noise.
+    const children = pruneInternalPaths(node.children ?? [], pathByFileId);
+    return children.length > 0 ? [{ ...node, children }] : [];
+  });
+}
+
 export function DriveShelf({ rootFolderId }: { rootFolderId: string }) {
   const { t } = useI18n();
   const { selection, currentOrgId, currentProjectId } = useEnterpriseContext();
@@ -63,15 +91,26 @@ export function DriveShelf({ rootFolderId }: { rootFolderId: string }) {
 
   const load = useCallback(async () => {
     if (!shelfActive) return;
+    const markDriveUnavailable = () => {
+      setDriveUnavailable(true);
+      setItems([]);
+      setPathByFileId(new Map());
+      setError(null);
+    };
     try {
+      // An OIDC/email session has no Drive grant, so the loader hands the shelf
+      // an empty rootFolderId. /api/drive/tree answers that with 400 "Missing
+      // folderId" — neither 401 nor 403 — so without this guard the shelf shows
+      // a raw "HTTP 400" instead of the connect-with-Google prompt below.
+      if (!rootFolderId) {
+        markDriveUnavailable();
+        return;
+      }
       const treeResponse = await fetch(`/api/drive/tree?${new URLSearchParams({ mount: "drive", folderId: rootFolderId })}`);
       if (treeResponse.status === 401 || treeResponse.status === 403) {
         // Session has no Drive grant (OIDC/email login) — offer nothing here;
         // the user can connect via Google login.
-        setDriveUnavailable(true);
-        setItems([]);
-        setPathByFileId(new Map());
-        setError(null);
+        markDriveUnavailable();
         return;
       }
       if (!treeResponse.ok) throw new Error(`HTTP ${treeResponse.status}`);
@@ -79,11 +118,14 @@ export function DriveShelf({ rootFolderId }: { rootFolderId: string }) {
         items: CachedTreeNode[];
         meta?: { files?: Record<string, { name: string }> };
       };
+      const paths = new Map(
+        Object.entries(treeData.meta?.files ?? {})
+          .filter(([, file]) => !isProjectInternalPath(file.name))
+          .map(([fileId, file]) => [fileId, file.name] as const),
+      );
       setDriveUnavailable(false);
-      setItems(treeData.items);
-      setPathByFileId(new Map(
-        Object.entries(treeData.meta?.files ?? {}).map(([fileId, file]) => [fileId, file.name]),
-      ));
+      setItems(pruneInternalPaths(treeData.items, paths));
+      setPathByFileId(paths);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t("driveShelf.loadFailed"));

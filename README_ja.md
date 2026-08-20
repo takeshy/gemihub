@@ -318,7 +318,7 @@ docker run -p 8080:8080 \
 
 ## プレミアムプラン
 
-有料プラン（Business：Stripe 経由 月額 ¥7,500 / $50・組織単位）では、GemiHub に **組織（チーム共有プロジェクト＋Vertex AI）** と **Web アプリビルダー** 機能が追加されます。料金には月 $30 分の Vertex AI 利用枠が含まれ、不足時は $30（¥4,500）単位で追加購入できます（追加分は次の請求期間の終わりまで有効）。プロジェクト内では Gemini API キーは不要です（詳細は [docs/architecture/mounts.md](docs/architecture/mounts.md)）。単一の共有 Cloud Run インスタンスが全有料アカウントを処理し、各アカウントはビルトインサブドメイン（`{slug}.gemihub.net`）とオプションのカスタムドメインを持ちます。アカウントデータは Firestore に保存、ページは Drive から CDN 経由で直接配信、スケジュールワークフローは自動実行されます。詳細は [docs/architecture/premium.md](docs/architecture/premium.md) を参照。
+有料プラン（Business：Stripe 経由 月額 ¥7,500 / $50・組織単位）では、GemiHub に **組織（チーム共有プロジェクト＋Vertex AI）** と **Web アプリビルダー** 機能が追加されます。料金には月 $30 分の Vertex AI 利用枠が含まれ、不足時は $10（¥1,500）単位で追加購入できます（追加分は次の請求期間の終わりまで有効）。プロジェクト内では Gemini API キーは不要です（詳細は [docs/architecture/mounts.md](docs/architecture/mounts.md)）。単一の共有 Cloud Run インスタンスが全有料アカウントを処理し、各アカウントはビルトインサブドメイン（`{slug}.gemihub.net`）とオプションのカスタムドメインを持ちます。アカウントデータは Firestore に保存、ページは Drive から CDN 経由で直接配信、スケジュールワークフローは自動実行されます。詳細は [docs/architecture/premium.md](docs/architecture/premium.md) を参照。
 
 ### 有料限定機能
 

@@ -1197,6 +1197,7 @@ export interface TranslationStrings {
   "driveShelf.connectPrompt": string;
   "driveShelf.signInGoogle": string;
   "mount.switcherTitle": string;
+  "mount.switchFailed": string;
   "settings.hubwork.title": string;
   "settings.hubwork.domain": string;
   "settings.hubwork.domainPlaceholder": string;
@@ -2543,8 +2544,8 @@ const en: TranslationStrings = {
   "enterprise.projectMemberRemoved": "Project member removed",
   "enterprise.confirmRemoveProjectMember": "Remove {email} from the project?",
   "enterprise.add": "Add",
-  "enterprise.topUpJpy": "JPY (¥4,500 per $30 unit)",
-  "enterprise.topUpUsd": "USD ($30 per unit)",
+  "enterprise.topUpJpy": "JPY (¥1,500 per $10 unit)",
+  "enterprise.topUpUsd": "USD ($10 per unit)",
   "driveShelf.title": "My Drive",
   "driveShelf.personalOnly": "personal · {count}",
   "driveShelf.openHint": "Click to open this file without leaving the project",
@@ -2559,6 +2560,7 @@ const en: TranslationStrings = {
   "driveShelf.connectPrompt": "Sign in with a Google account (Drive permission) to copy files to and from My Drive.",
   "driveShelf.signInGoogle": "Sign in with Google",
   "mount.switcherTitle": "Switch workspace (My Drive / organization projects)",
+  "mount.switchFailed": "Could not switch workspace.",
   "settings.hubwork.title": "Premium Plan",
   "settings.hubwork.domain": "Custom Domain",
   "settings.hubwork.domainPlaceholder": "app.example.com",
@@ -3905,8 +3907,8 @@ const ja: TranslationStrings = {
   "enterprise.projectMemberRemoved": "プロジェクトメンバーを削除しました",
   "enterprise.confirmRemoveProjectMember": "{email} をプロジェクトから削除しますか？",
   "enterprise.add": "追加",
-  "enterprise.topUpJpy": "JPY（¥4,500／$30分・1単位）",
-  "enterprise.topUpUsd": "USD（$30／1単位）",
+  "enterprise.topUpJpy": "JPY（¥1,500／$10分・1単位）",
+  "enterprise.topUpUsd": "USD（$10／1単位）",
   "driveShelf.title": "マイドライブ",
   "driveShelf.personalOnly": "自分専用 · {count}",
   "driveShelf.openHint": "クリックしてプロジェクトを離れずに開く",
@@ -3921,6 +3923,7 @@ const ja: TranslationStrings = {
   "driveShelf.connectPrompt": "Googleアカウント（Drive権限）でログインすると、マイドライブとの間でファイルをコピーできます。",
   "driveShelf.signInGoogle": "Googleでログイン",
   "mount.switcherTitle": "ワークスペース切替（マイドライブ / 組織プロジェクト）",
+  "mount.switchFailed": "ワークスペースを切り替えられませんでした。",
   "settings.hubwork.title": "プレミアムプラン",
   "settings.hubwork.domain": "カスタムドメイン",
   "settings.hubwork.domainPlaceholder": "app.example.com",

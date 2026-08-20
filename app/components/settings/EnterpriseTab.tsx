@@ -39,7 +39,7 @@ async function api<T>(url: string, options?: { method?: string; body?: object })
 }
 
 /** Keep in step with VERTEX_TOPUP_UNIT_USD in ai-budget.server.ts. */
-const VERTEX_TOPUP_UNIT_USD = 30;
+const VERTEX_TOPUP_UNIT_USD = 10;
 
 const inputClass = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900";
 const cardClass = "rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900";

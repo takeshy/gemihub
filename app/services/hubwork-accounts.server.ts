@@ -245,6 +245,24 @@ export async function getAccountByRootFolderIdOrEmail(
   return getAccountByEmail(email);
 }
 
+function createdAtMillis(account: HubworkAccount): number {
+  const value = account.createdAt as { toMillis?: () => number } | undefined;
+  // Docs written before createdAt existed sort last, never first.
+  return typeof value?.toMillis === "function" ? value.toMillis() : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * The personal billing account for an email.
+ *
+ * One buyer can own several accounts: their personal record plus one per
+ * additional Business organization (allowDuplicateOwner), and those org
+ * records are created with an empty rootFolderId. An unordered `limit(1)`
+ * would hand callers back whichever document Firestore returned first — so
+ * the settings loader's email fallback could resolve an ORGANIZATION's record
+ * and then write the user's rootFolderId into it, hijacking the org account
+ * and orphaning the personal one. Prefer a record that has a rootFolderId,
+ * then the oldest, so every call site resolves the same account.
+ */
 export async function getAccountByEmail(
   email: string
 ): Promise<HubworkAccount | null> {
@@ -252,10 +270,18 @@ export async function getAccountByEmail(
   const snapshot = await db
     .collection(HUBWORK_ACCOUNTS)
     .where("email", "==", email.toLowerCase().trim())
-    .limit(1)
+    .limit(20)
     .get();
   if (snapshot.empty) return null;
-  return docToAccount(snapshot.docs[0]);
+  const accounts = snapshot.docs.map(docToAccount);
+  if (accounts.length === 1) return accounts[0];
+  const personal = accounts.filter((account) => !!account.rootFolderId);
+  const candidates = personal.length > 0 ? personal : accounts;
+  return candidates.reduce((best, account) => {
+    const delta = createdAtMillis(account) - createdAtMillis(best);
+    // Tie-break on id so a shared timestamp still resolves deterministically.
+    return delta < 0 || (delta === 0 && account.id < best.id) ? account : best;
+  });
 }
 
 export async function getAccountByProject(

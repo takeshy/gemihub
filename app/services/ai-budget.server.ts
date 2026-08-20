@@ -39,7 +39,7 @@ export const BUSINESS_INCLUDED_AI_BUDGET_USD = 30;
  * STRIPE_PRICE_ID_VERTEX_TOPUP{,_USD} — the webhook credits this amount per
  * unit, so a mismatch would hand out budget that was never paid for.
  */
-export const VERTEX_TOPUP_UNIT_USD = 30;
+export const VERTEX_TOPUP_UNIT_USD = 10;
 
 const DEFAULT_PRICES_PER_MILLION: Record<string, Price> = {
   "gemini-3.1-pro-preview": { input: 2, output: 12 },
