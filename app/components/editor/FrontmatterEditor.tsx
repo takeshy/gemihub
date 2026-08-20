@@ -47,6 +47,7 @@ interface FrontmatterEditorProps {
   parsed: ParsedFrontmatter;
   onFrontmatterChange: (properties: FrontmatterProperty[]) => void;
   readOnly?: boolean;
+  initialCollapsed?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -181,12 +182,13 @@ const ALL_TYPES: { type: PropertyType; labelKey: keyof TranslationStrings }[] = 
 // Component
 // ---------------------------------------------------------------------------
 
-export function FrontmatterEditor({ parsed, onFrontmatterChange, readOnly }: FrontmatterEditorProps) {
+export function FrontmatterEditor({ parsed, onFrontmatterChange, readOnly, initialCollapsed }: FrontmatterEditorProps) {
   const { t } = useI18n();
   const [properties, setProperties] = useState<FrontmatterProperty[]>(() =>
     propertiesFromFrontmatter(parsed.frontmatter)
   );
   const [collapsed, setCollapsed] = useState(() => {
+    if (initialCollapsed !== undefined) return initialCollapsed;
     try { return localStorage.getItem("frontmatter-collapsed") === "true"; } catch { return true; }
   });
   const [contextMenu, setContextMenu] = useState<{

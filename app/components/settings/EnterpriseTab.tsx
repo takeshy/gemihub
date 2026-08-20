@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { useEnterpriseContext } from "~/contexts/EnterpriseContext";
 import { useI18n } from "~/i18n/context";
-import type { OrganizationAiSettings, OrgRole, ProjectRole } from "~/types/enterprise";
+import type { OrganizationAiSettings, OrgRole } from "~/types/enterprise";
 
 interface OrgItem { id: string; name: string; role: OrgRole | null }
-interface ProjectItem { id: string; orgId: string; name: string; role: ProjectRole | null }
+interface ProjectItem { id: string }
 interface OrgMemberItem { uid: string; email: string; role: OrgRole; monthlyBudgetUsdOverride?: number | null }
-interface ProjectMemberItem { uid: string; email: string; role: ProjectRole; isExternal?: boolean }
 interface UsageSummary { estimatedCostUsd: number; inputTokens: number; outputTokens: number; topUpUsd?: number }
 interface AiPayload {
   settings: OrganizationAiSettings;
@@ -26,7 +25,7 @@ interface AiPayload {
   };
   storage?: { usedBytes: number | null; quotaGb: number; includedGb: number; addonUnits: number };
 }
-type SectionId = "ai" | "members" | "projects";
+type SectionId = "ai" | "members";
 
 async function api<T>(url: string, options?: { method?: string; body?: object }): Promise<T> {
   const response = await fetch(url, {
@@ -51,11 +50,8 @@ export function EnterpriseTab() {
   const { t } = useI18n();
   const enterprise = useEnterpriseContext();
   const [orgs, setOrgs] = useState<OrgItem[]>([]);
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [members, setMembers] = useState<OrgMemberItem[]>([]);
-  const [projectMembers, setProjectMembers] = useState<ProjectMemberItem[]>([]);
   const [orgId, setOrgId] = useState(enterprise.currentOrgId ?? "");
-  const [projectId, setProjectId] = useState(enterprise.currentProjectId ?? "");
   const [section, setSection] = useState<SectionId>("members");
   const [ai, setAi] = useState<AiPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,17 +76,13 @@ export function EnterpriseTab() {
 
   useEffect(() => {
     if (!orgId) {
-      setProjects([]); setMembers([]); setAi(null); setLoading(false); return;
+      setMembers([]); setAi(null); setLoading(false); return;
     }
     let cancelled = false;
     setLoading(true);
     const encoded = encodeURIComponent(orgId);
     const orgRole = orgs.find((org) => org.id === orgId)?.role;
-    const requests: Promise<unknown>[] = [
-      api<{ projects: ProjectItem[] }>(`/api/projects/list?orgId=${encoded}`).then((value) => {
-        if (!cancelled) setProjects(value.projects);
-      }),
-    ];
+    const requests: Promise<unknown>[] = [];
     if (orgRole === "owner" || orgRole === "admin") {
       requests.push(api<{ members: OrgMemberItem[] }>(`/api/members/list?orgId=${encoded}`).then((value) => {
         if (!cancelled) setMembers(value.members);
@@ -111,13 +103,6 @@ export function EnterpriseTab() {
     return () => { cancelled = true; };
   }, [orgId, orgs, reloadKey]);
 
-  useEffect(() => {
-    if (!orgId || !projectId || !canManage) { setProjectMembers([]); return; }
-    void api<{ members: ProjectMemberItem[] }>(`/api/members/list?orgId=${encodeURIComponent(orgId)}&projectId=${encodeURIComponent(projectId)}`)
-      .then(({ members: rows }) => setProjectMembers(rows))
-      .catch((error) => setMessage({ kind: "error", text: error.message }));
-  }, [orgId, projectId, canManage, reloadKey]);
-
   async function run(task: () => Promise<unknown>, success: string) {
     setBusy(true); setMessage(null);
     try {
@@ -134,14 +119,8 @@ export function EnterpriseTab() {
     }
   }
 
-  async function selectContext(nextOrgId: string, nextProjectId: string | null) {
-    await api("/api/session/select", { method: "POST", body: { orgId: nextOrgId || null, projectId: nextProjectId } });
-    window.location.href = "/settings?tab=enterprise";
-  }
-
   async function selectOrganization(nextOrgId: string) {
     setOrgId(nextOrgId);
-    setProjectId("");
     setSection("members");
     if (!nextOrgId) return;
 
@@ -194,14 +173,6 @@ export function EnterpriseTab() {
         </nav>
       )}
 
-      {orgId && canManage && (
-        <details className="rounded-lg border border-gray-200 px-4 py-3 dark:border-gray-800">
-          <summary className="cursor-pointer text-sm font-medium text-gray-500 dark:text-gray-400">{t("enterprise.projectsAdvanced")}</summary>
-          <p className="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">{t("enterprise.projectsAdvancedDesc")}</p>
-          <button type="button" className={`${secondaryButton} mt-3`} onClick={() => setSection("projects")}>{t("enterprise.openProjects")}</button>
-        </details>
-      )}
-
       {loading && <p className="text-sm text-gray-500">{t("enterprise.loading")}</p>}
       {!orgId && <div className={cardClass}><p className="text-sm text-gray-600">{t("enterprise.noOrgSelected")}</p></div>}
 
@@ -210,9 +181,6 @@ export function EnterpriseTab() {
       )}
       {orgId && section === "members" && canManage && (
         <MembersSection key={orgId} orgId={orgId} members={members} ai={ai} busy={busy} run={run} isSuperOwner={isSuperOwner} />
-      )}
-      {orgId && section === "projects" && (
-        <ProjectsSection key={orgId} orgId={orgId} projects={projects} projectId={projectId} setProjectId={setProjectId} projectMembers={projectMembers} canManage={canManage} busy={busy} run={run} selectContext={selectContext} />
       )}
     </div>
   );
@@ -380,27 +348,6 @@ function MemberRow({ orgId, member, ai, busy, run }: { orgId: string; member: Or
   const [budget, setBudget] = useState(member.monthlyBudgetUsdOverride?.toString() ?? "");
   const usage = ai?.usage?.users?.[member.uid]?.estimatedCostUsd ?? 0;
   return <tr className="border-b border-gray-100"><td className="p-2">{member.email}</td><td className="p-2">{member.role === "owner" ? <span className="font-medium">Owner</span> : <select className="rounded border px-2 py-1 dark:bg-gray-900" value={member.role} disabled={busy} onChange={(e) => void run(() => api("/api/members/update-role", { method: "POST", body: { orgId, uid: member.uid, role: e.target.value } }), t("enterprise.roleChanged"))}><option value="member">{t("enterprise.roleMember")}</option><option value="admin">{t("enterprise.roleAdmin")}</option></select>}</td><td className="p-2"><div className="flex items-center gap-2"><span>${usage.toFixed(2)} /</span><input className="w-24 rounded border px-2 py-1 dark:bg-gray-900" type="number" min="0.01" step="0.01" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder={ai?.settings.defaultUserMonthlyBudgetUsd?.toString() ?? t("enterprise.unlimited")} /><button className="text-blue-600" disabled={busy} onClick={() => void run(() => api("/api/members/ai-budget", { method: "POST", body: { orgId, uid: member.uid, monthlyBudgetUsdOverride: budget || null } }), t("enterprise.budgetSaved"))}>{t("enterprise.save")}</button></div></td><td className="p-2"><button className="text-red-600" disabled={busy} onClick={() => confirm(t("enterprise.confirmRemoveOrgMember").replace("{email}", member.email)) && void run(() => api("/api/members/remove", { method: "POST", body: { orgId, uid: member.uid } }), t("enterprise.memberRemoved"))}>{t("enterprise.delete")}</button></td></tr>;
-}
-
-function ProjectsSection({ orgId, projects, projectId, setProjectId, projectMembers, canManage, busy, run, selectContext }: { orgId: string; projects: ProjectItem[]; projectId: string; setProjectId: (id: string) => void; projectMembers: ProjectMemberItem[]; canManage: boolean; busy: boolean; run: (task: () => Promise<unknown>, success: string) => Promise<void>; selectContext: (orgId: string, projectId: string | null) => Promise<void> }) {
-  const { t } = useI18n();
-  const [newId, setNewId] = useState(""); const [newName, setNewName] = useState("");
-  const [email, setEmail] = useState(""); const [memberRole, setMemberRole] = useState<ProjectRole>("editor");
-  const selected = projects.find((project) => project.id === projectId);
-  return <div className="space-y-4">
-    <section className={cardClass}>
-      <h3 className="font-semibold">{t("enterprise.selectProject")}</h3>
-      <div className="mt-3 flex gap-2">
-        <select className={inputClass} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-          <option value="">{t("enterprise.selectPlaceholder")}</option>
-          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-        </select>
-        <button className={primaryButton} disabled={!projectId} onClick={() => void selectContext(orgId, projectId)}>{t("enterprise.useProject")}</button>
-      </div>
-    </section>
-    {canManage && <details className={cardClass}><summary className="cursor-pointer text-sm font-medium text-gray-600 dark:text-gray-300">{t("enterprise.createProjectAdvanced")}</summary><div className="mt-4 grid gap-3 border-t border-gray-200 pt-4 dark:border-gray-800 sm:grid-cols-[1fr_1fr_auto]"><input className={inputClass} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("enterprise.projectName")} /><input className={inputClass} value={newId} onChange={(e) => setNewId(e.target.value)} placeholder="project-id" /><button className={primaryButton} disabled={busy || !newId || !newName} onClick={() => void run(() => api("/api/projects/create", { method: "POST", body: { orgId, projectId: newId, name: newName } }), t("enterprise.projectCreated"))}>{t("enterprise.create")}</button></div></details>}
-    {selected && canManage && <section className={`${cardClass} overflow-x-auto`}><h3 className="font-semibold">{t("enterprise.membersOf").replace("{name}", selected.name)}</h3><div className="my-3 grid gap-2 sm:grid-cols-[1fr_150px_auto]"><input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="user@example.com" /><select className={inputClass} value={memberRole} onChange={(e) => setMemberRole(e.target.value as ProjectRole)}><option value="viewer">{t("enterprise.roleViewer")}</option><option value="editor">{t("enterprise.roleEditor")}</option><option value="admin">{t("enterprise.roleAdmin")}</option></select><button className={primaryButton} disabled={busy || !email} onClick={() => void run(() => api("/api/members/add", { method: "POST", body: { orgId, projectId, email, role: memberRole } }), t("enterprise.projectMemberAdded"))}>{t("enterprise.add")}</button></div><table className="w-full min-w-[520px] text-left text-sm"><thead><tr className="border-b"><th className="p-2">{t("enterprise.colEmail")}</th><th className="p-2">{t("enterprise.colRole")}</th><th className="p-2">{t("enterprise.colExternal")}</th><th className="p-2">{t("enterprise.colActions")}</th></tr></thead><tbody>{projectMembers.map((member) => <tr key={member.uid} className="border-b"><td className="p-2">{member.email}</td><td className="p-2"><select className="rounded border px-2 py-1 dark:bg-gray-900" value={member.role} disabled={busy} onChange={(e) => void run(() => api("/api/members/update-role", { method: "POST", body: { orgId, projectId, uid: member.uid, role: e.target.value } }), t("enterprise.roleChanged"))}><option value="viewer">{t("enterprise.roleViewer")}</option><option value="editor">{t("enterprise.roleEditor")}</option><option value="admin">{t("enterprise.roleAdmin")}</option></select></td><td className="p-2">{member.isExternal ? t("enterprise.yes") : t("enterprise.no")}</td><td className="p-2"><button className="text-red-600" disabled={busy} onClick={() => confirm(t("enterprise.confirmRemoveProjectMember").replace("{email}", member.email)) && void run(() => api("/api/members/remove", { method: "POST", body: { orgId, projectId, uid: member.uid } }), t("enterprise.projectMemberRemoved"))}>{t("enterprise.delete")}</button></td></tr>)}</tbody></table></section>}
-  </div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

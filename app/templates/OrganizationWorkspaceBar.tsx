@@ -1,15 +1,13 @@
-import { Building2, ChevronDown, Cloud, FolderKanban } from "lucide-react";
+import { Building2, ChevronDown, Cloud } from "lucide-react";
 
 export interface OrganizationWorkspace {
   organizationName: string;
-  projectName: string;
   storageLabel?: string;
   aiLabel?: string;
 }
 
 export const organizationWorkspaceFixture: OrganizationWorkspace = {
   organizationName: "Acme Design",
-  projectName: "Website renewal",
   storageLabel: "Cloud Storage",
   aiLabel: "Vertex AI",
 };
@@ -21,10 +19,6 @@ export function OrganizationWorkspaceBar({ workspace }: { workspace: Organizatio
         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600"><Building2 size={15} /></span>
         <button type="button" className="flex min-w-0 items-center gap-1.5 rounded px-2 py-1 text-xs font-medium hover:bg-slate-800">
           <span className="truncate">{workspace.organizationName}</span><ChevronDown size={12} className="text-slate-400" />
-        </button>
-        <span className="text-slate-600">/</span>
-        <button type="button" className="flex min-w-0 items-center gap-1.5 rounded px-2 py-1 text-xs hover:bg-slate-800">
-          <FolderKanban size={13} className="text-blue-400" /><span className="truncate">{workspace.projectName}</span><ChevronDown size={12} className="text-slate-400" />
         </button>
       </div>
       <div className="flex items-center gap-3 text-[11px] text-slate-400">

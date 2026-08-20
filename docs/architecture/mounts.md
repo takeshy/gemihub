@@ -48,12 +48,15 @@ dispatcher), `app/services/ai/` (Vertex handlers, `models.ts` registry),
 
 ## The My Drive shelf
 
-While a project is selected, the IDE's main FileTree shows the project;
+While an organization is selected, the IDE's main FileTree shows the organization;
 `DriveShelf` (amber strip above the tree) shows the user's Drive. Dragging
-between the shelf and the tree moves files across mounts through
+between the shelf and the tree copies files across mounts through
 `/api/storage/move-between-mounts` (GCS↔GCS is a native copy; Drive↔GCS is a
-byte transfer). "開く" on the shelf deselects the project and returns the IDE
-to the Drive mount.
+byte transfer). Clicking a Drive file opens a read-only preview modal without
+changing the active organization. The main IDE, its cache and edit history,
+and all Pull/Push operations remain scoped to the organization. Internally a
+single compatibility `default` project ID still namespaces storage and ACLs;
+it is not exposed as a selectable workspace level.
 
 ## Organizations & plans
 

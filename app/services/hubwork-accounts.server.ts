@@ -96,15 +96,19 @@ export async function createAccount(params: {
   /** Business org project this account publishes for. */
   orgId?: string;
   projectId?: string;
+  /** A Business purchase creates one billing account per organization. */
+  allowDuplicateOwner?: boolean;
+  /** Stable Stripe checkout id used to make additional-org webhooks idempotent. */
+  idempotencyKey?: string;
 }): Promise<string> {
   const db = getFirestore();
 
   // Prevent duplicate accounts for the same email or rootFolderId
-  if (params.email) {
+  if (!params.allowDuplicateOwner && params.email) {
     const byEmail = await getAccountByEmail(params.email);
     if (byEmail) return byEmail.id;
   }
-  if (params.rootFolderId) {
+  if (!params.allowDuplicateOwner && params.rootFolderId) {
     const byRoot = await getAccountByRootFolderId(params.rootFolderId);
     if (byRoot) return byRoot.id;
   }
@@ -114,7 +118,10 @@ export async function createAccount(params: {
   const existing = await getAccountBySlug(slug);
   const uniqueSlug = existing ? `${slug}-${Date.now().toString(36)}` : slug;
 
-  const docRef = db.collection(HUBWORK_ACCOUNTS).doc();
+  const docRef = params.idempotencyKey
+    ? db.collection(HUBWORK_ACCOUNTS).doc(`checkout_${params.idempotencyKey}`)
+    : db.collection(HUBWORK_ACCOUNTS).doc();
+  if (params.idempotencyKey && (await docRef.get()).exists) return docRef.id;
   await docRef.set({
     email: params.email,
     encryptedRefreshToken: params.refreshToken ? encrypt(params.refreshToken) : null,

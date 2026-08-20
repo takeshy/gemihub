@@ -34,11 +34,13 @@ export function GeneralTab({
   hasApiKey,
   maskedKey,
   onLanguageChange,
+  hideGeminiSettings = false,
 }: {
   settings: UserSettings;
   hasApiKey: boolean;
   maskedKey: string | null;
   onLanguageChange: (lang: Language) => void;
+  hideGeminiSettings?: boolean;
 }) {
   const fetcher = useFetcher();
   const loading = fetcher.state !== "idle";
@@ -132,6 +134,7 @@ export function GeneralTab({
         <input type="hidden" name="_action" value="saveGeneral" />
         <input type="hidden" name="apiKeyEdited" value={apiKeyEdited ? "true" : "false"} />
 
+        {!hideGeminiSettings && <>
         {/* API Key & Password Section */}
         <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
           <KeyRound size={16} />
@@ -334,6 +337,7 @@ export function GeneralTab({
             ))}
           </select>
         </div>
+        </>}
 
         {/* System Prompt */}
         <div className="mb-6">

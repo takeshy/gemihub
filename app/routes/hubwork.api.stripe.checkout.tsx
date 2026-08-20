@@ -170,11 +170,12 @@ export async function action({ request }: Route.ActionArgs) {
 
   const planType = requestedPlan === "lite" ? "lite" : "business";
   const accountSlug = (formData.get("accountSlug") as string || "").toLowerCase().trim();
+  const additionalOrganization = planType === "business" && formData.get("additionalOrganization") === "true";
   const currency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
 
   const reviewSlugs = parseSlugList(process.env.HUBWORK_REVIEW_SLUGS);
 
-  const existing = await getAccountByRootFolderId(tokens.rootFolderId);
+  const existing = additionalOrganization ? null : await getAccountByRootFolderId(tokens.rootFolderId);
 
   const url = new URL(request.url);
   const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
@@ -302,6 +303,7 @@ export async function action({ request }: Route.ActionArgs) {
       accountSlug,
       plan: planType,
       currency,
+      additionalOrganization: additionalOrganization ? "true" : "false",
     },
   });
 

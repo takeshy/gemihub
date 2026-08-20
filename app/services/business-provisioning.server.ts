@@ -41,6 +41,7 @@ export async function provisionBusinessOrganization(params: {
   accountId: string;
   email: string;
   accountSlug?: string;
+  forceNewOrganization?: boolean;
 }): Promise<{ orgId: string; projectId: string } | null> {
   const email = params.email.trim().toLowerCase();
   if (!email) return null;
@@ -51,7 +52,7 @@ export async function provisionBusinessOrganization(params: {
     // second one. Reusing any membership would provision the plan they paid
     // for inside somebody else's organization when they happen to be a plain
     // member there.
-    const existing = await listOrganizationsForUser(uid);
+    const existing = params.forceNewOrganization ? [] : await listOrganizationsForUser(uid);
     let org = null;
     for (const candidate of existing) {
       const membership = await getOrgMember(candidate.id, uid);

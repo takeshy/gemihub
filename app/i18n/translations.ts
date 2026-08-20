@@ -1186,6 +1186,10 @@ export interface TranslationStrings {
   "driveShelf.title": string;
   "driveShelf.personalOnly": string;
   "driveShelf.openHint": string;
+  "driveModal.myDrive": string;
+  "driveModal.loadFailed": string;
+  "driveModal.previewUnavailable": string;
+  "driveModal.download": string;
   "driveShelf.dropHere": string;
   "driveShelf.dropPrompt": string;
   "driveShelf.loadFailed": string;
@@ -1231,6 +1235,9 @@ export interface TranslationStrings {
   "settings.hubwork.subscription": string;
   "settings.hubwork.subscribeButton": string;
   "settings.hubwork.checkoutSubscribeButton": string;
+  "settings.hubwork.additionalBusinessTitle": string;
+  "settings.hubwork.additionalBusinessDescription": string;
+  "settings.hubwork.additionalBusinessButton": string;
   "settings.hubwork.upgradeToPro": string;
   "settings.hubwork.upgradeButton": string;
   "settings.hubwork.priceMonthSuffix": string;
@@ -2540,7 +2547,11 @@ const en: TranslationStrings = {
   "enterprise.topUpUsd": "USD ($30 per unit)",
   "driveShelf.title": "My Drive",
   "driveShelf.personalOnly": "personal · {count}",
-  "driveShelf.openHint": "Double-click to open My Drive",
+  "driveShelf.openHint": "Click to open this file without leaving the project",
+  "driveModal.myDrive": "My Drive",
+  "driveModal.loadFailed": "Failed to load the My Drive file",
+  "driveModal.previewUnavailable": "Preview is not available for this file type.",
+  "driveModal.download": "Download",
   "driveShelf.dropHere": "Drop to copy here",
   "driveShelf.dropPrompt": "Drop files here",
   "driveShelf.loadFailed": "Failed to load My Drive",
@@ -2586,6 +2597,9 @@ const en: TranslationStrings = {
   "settings.hubwork.subscription": "Subscription",
   "settings.hubwork.subscribeButton": "Subscribe — ¥7,500/month",
   "settings.hubwork.checkoutSubscribeButton": "Subscribe",
+  "settings.hubwork.additionalBusinessTitle": "Add another Business organization",
+  "settings.hubwork.additionalBusinessDescription": "Business is purchased per organization. You can own and switch between multiple Business organizations from the same account.",
+  "settings.hubwork.additionalBusinessButton": "Purchase another Business organization",
   "settings.hubwork.upgradeToPro": "Upgrade to Business",
   "settings.hubwork.upgradeButton": "Upgrade",
   "settings.hubwork.priceMonthSuffix": "/month",
@@ -2596,7 +2610,7 @@ const en: TranslationStrings = {
   "settings.hubwork.featureExternalSyncToken": "External Sync Token",
   "settings.hubwork.featureTempUploadUrl": "Temp Upload URL",
   "settings.hubwork.featureMaxFileSize5gb": "Max File Size: 5 GB",
-  "settings.hubwork.featureAllLiteFeatures": "All Lite features",
+  "settings.hubwork.featureAllLiteFeatures": "All Premium features",
   "settings.hubwork.featureGoogleSheetsCrud": "Google Sheets CRUD",
   "settings.hubwork.featureStaticPageHosting": "Static Page Hosting (CDN)",
   "settings.hubwork.featureCustomDomains": "Custom Domains (auto SSL)",
@@ -3895,7 +3909,11 @@ const ja: TranslationStrings = {
   "enterprise.topUpUsd": "USD（$30／1単位）",
   "driveShelf.title": "マイドライブ",
   "driveShelf.personalOnly": "自分専用 · {count}",
-  "driveShelf.openHint": "ダブルクリックでマイドライブを開く",
+  "driveShelf.openHint": "クリックしてプロジェクトを離れずに開く",
+  "driveModal.myDrive": "マイドライブ",
+  "driveModal.loadFailed": "マイドライブのファイルを読み込めませんでした",
+  "driveModal.previewUnavailable": "このファイル形式はプレビューできません。",
+  "driveModal.download": "ダウンロード",
   "driveShelf.dropHere": "ここにコピー",
   "driveShelf.dropPrompt": "ファイルをここへドロップ",
   "driveShelf.loadFailed": "マイドライブの読込に失敗しました",
@@ -3941,6 +3959,9 @@ const ja: TranslationStrings = {
   "settings.hubwork.subscription": "サブスクリプション",
   "settings.hubwork.subscribeButton": "登録する — ¥7,500/月",
   "settings.hubwork.checkoutSubscribeButton": "登録する",
+  "settings.hubwork.additionalBusinessTitle": "Business組織を追加購入",
+  "settings.hubwork.additionalBusinessDescription": "Businessは組織単位の契約です。同じアカウントで複数のBusiness組織を購入し、切り替えて利用できます。",
+  "settings.hubwork.additionalBusinessButton": "Business組織を追加購入する",
   "settings.hubwork.upgradeToPro": "Businessにアップグレード",
   "settings.hubwork.upgradeButton": "アップグレード",
   "settings.hubwork.priceMonthSuffix": "/月",
@@ -3951,7 +3972,7 @@ const ja: TranslationStrings = {
   "settings.hubwork.featureExternalSyncToken": "外部同期トークン",
   "settings.hubwork.featureTempUploadUrl": "一時アップロードURL",
   "settings.hubwork.featureMaxFileSize5gb": "最大ファイルサイズ: 5 GB",
-  "settings.hubwork.featureAllLiteFeatures": "Liteの全機能",
+  "settings.hubwork.featureAllLiteFeatures": "Premiumの全機能",
   "settings.hubwork.featureGoogleSheetsCrud": "Google Sheets CRUD",
   "settings.hubwork.featureStaticPageHosting": "静的ページ配信（CDN）",
   "settings.hubwork.featureCustomDomains": "カスタムドメイン（自動SSL）",

@@ -1246,7 +1246,7 @@ function IDEContent({
       }}
       onDrop={(event) => void importFromShelf(event)}
     >
-      <DriveShelf />
+      <DriveShelf rootFolderId={rootFolderId} />
       <div className="min-h-0 flex-1">
         <DriveFileTreeWithContext
           rootFolderId={rootFolderId}

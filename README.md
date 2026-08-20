@@ -328,7 +328,7 @@ docker run -p 8080:8080 \
 
 Two paid plans extend GemiHub with Google Sheets/Gmail integration and web app builder capabilities. See [docs/architecture/premium.md](docs/architecture/premium.md) for full details.
 
-### Lite (¥300/month)
+### Premium (internally `lite`, ¥300/month)
 
 | Feature | Description |
 |---------|-------------|
@@ -341,7 +341,7 @@ Two paid plans extend GemiHub with Google Sheets/Gmail integration and web app b
 
 ### Business (¥7,500 / $50 per month, per organization)
 
-All Lite features, plus an **organization**: shared team projects backed by Google Cloud Storage, member management with roles (owner/admin/member, project viewer/editor/admin), and chat/AI running on the organization's **Vertex AI** — members need no Gemini API key inside a project. The price includes a **$30/month Vertex AI budget** (top-ups in $30/¥4,500 units, usable until the end of the following billing period) and **100 GB of project storage** (expandable once by 500 GB at $30/¥5,000 per month, for 600 GB maximum). The purchaser becomes the organization's Owner automatically at checkout. While a project is selected, the IDE shows a **My Drive shelf** for drag-and-drop file moves between your Drive and the project. See [docs/architecture/mounts.md](docs/architecture/mounts.md).
+All Premium features, plus an **organization** backed by Google Cloud Storage, organization-level member management, and chat/AI running on the organization's **Vertex AI**. The price includes a **$30/month Vertex AI budget** and **100 GB of organization storage**. One account can purchase and switch between multiple Business organizations. While an organization is selected, the IDE shows a **My Drive shelf** for copying files between your Drive and the organization. See [docs/architecture/mounts.md](docs/architecture/mounts.md).
 
 Additional Business features:
 

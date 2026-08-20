@@ -9,10 +9,10 @@ export function OrganizationChapter({ lang }: { lang: Language }) {
 function OrganizationEn() {
   return (
     <>
-      <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Organizations &amp; Shared Projects</h1>
+      <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Organizations</h1>
       <div className={prose}>
         <p>
-          On the <strong>Business</strong> plan, GemiHub is not just your own Drive any more. Subscribing provisions an <strong>organization</strong> with one shared <strong>project</strong>: a workspace whose files everyone on the team opens, edits, and syncs together. Billing is per organization, so adding members costs nothing extra.
+          On the <strong>Business</strong> plan, subscribing provisions an <strong>organization</strong>: a workspace whose files everyone on the team opens, edits, and syncs together. Billing is per organization, so adding members costs nothing extra. One account can purchase and switch between multiple Business organizations.
         </p>
         <p>
           Nothing about the free experience goes away. Your own Drive is still there — the two live side by side, and you switch between them at any time.
@@ -21,19 +21,22 @@ function OrganizationEn() {
         <h2>Two Workspaces</h2>
         <ul>
           <li><strong>My Drive</strong> — the default for everyone. Files live in your Google Drive, and AI runs on your own Gemini API key in the browser.</li>
-          <li><strong>Organization project</strong> — available while you belong to an organization. Files live in GemiHub&apos;s managed cloud storage under the project, and AI runs on the organization&apos;s Vertex AI, so members need no API key of their own.</li>
+          <li><strong>Organization</strong> — files live in GemiHub&apos;s managed cloud storage, and AI runs on the organization&apos;s Vertex AI, so members need no API key of their own.</li>
         </ul>
         <p>
-          Switch with the workspace selector in the IDE header. It appears only if you belong to at least one organization; choosing <strong>My Drive</strong> deselects the project and returns everything — file tree, chat, sync, RAG — to your own Drive.
+          Switch between <strong>My Drive</strong> and each organization with the single workspace selector in the IDE header. File tree, chat, sync, and RAG follow that selection.
         </p>
         <img src="/images/organization_general_en.png" alt="Organization project selected in the workspace header" className="w-full" loading="lazy" />
 
         <h2>The My Drive Shelf</h2>
         <p>
-          While a project is selected, the file tree shows the project and your personal Drive sits above it as the <strong>My Drive</strong> shelf. Drag a file in either direction to copy it between the two. A drag always <em>copies</em> — the source keeps its file, so dragging can never remove something from under the team.
+          While an organization is selected, its file tree is shown and your personal Drive sits above it as the <strong>My Drive</strong> shelf. Drag a file in either direction to copy it between the two.
+        </p>
+        <p>
+          Click a file in the shelf to preview it in a separate read-only window without leaving the organization. The IDE header and all Pull/Push operations remain scoped to the selected organization.
         </p>
 
-        <h2>Sync in a Project</h2>
+        <h2>Sync in an Organization</h2>
         <p>
           Push and pull work exactly as they do on your own Drive, including the conflict dialog and diff preview. The difference is underneath: every write carries the revision it was based on, so if a teammate saved first, your push is rejected with a conflict instead of quietly overwriting their work.
         </p>
@@ -45,9 +48,7 @@ function OrganizationEn() {
         </p>
         <img src="/images/organization_settings_en.png" alt="Organization member management settings" className="w-full" loading="lazy" />
         <ul>
-          <li><strong>Organization roles</strong> — <code>owner</code>, <code>admin</code>, <code>member</code>. Owners and admins manage members, budgets, storage, and projects.</li>
-          <li><strong>Project roles</strong> — <code>admin</code>, <code>editor</code>, <code>viewer</code>, set per project.</li>
-          <li><strong>External collaborators</strong> — someone outside the organization can be added to a single project. They are marked <strong>External</strong> in the member list and see nothing else in the organization.</li>
+          <li><strong>Organization roles</strong> — <code>owner</code>, <code>admin</code>, <code>member</code>. Owners and admins manage members, budgets, and storage.</li>
         </ul>
         <p>
           Members with no plan of their own are entitled through the organization&apos;s subscription, so they do not need to subscribe individually.
@@ -55,7 +56,7 @@ function OrganizationEn() {
 
         <h2>Vertex AI &amp; the Monthly Budget</h2>
         <p>
-          Inside a project, chat, RAG, and workflow AI run on the organization&apos;s Vertex AI — no per-user Gemini API key. Spending is tracked per organization and per member in <strong>Settings &gt; Organization &gt; Vertex AI</strong>:
+          Inside an organization, chat, RAG, and workflow AI run on the organization&apos;s Vertex AI — no per-user Gemini API key. Spending is tracked per organization and per member in <strong>Settings &gt; Organization &gt; Vertex AI</strong>:
         </p>
         <ul>
           <li><strong>Included budget</strong> — $30 per billing period, following the subscription cycle rather than the calendar month.</li>
@@ -66,7 +67,7 @@ function OrganizationEn() {
 
         <h2>Storage</h2>
         <p>
-          Each organization includes <strong>100 GB</strong> of shared project storage, expandable once by a <strong>500 GB</strong> add-on (¥5,000 / $30 per month, cancellable from the Stripe portal) for a 600 GB ceiling. Usage and remaining space are shown in <strong>Settings &gt; Organization &gt; Storage</strong>.
+          Each organization includes <strong>100 GB</strong> of shared storage, expandable once by a <strong>500 GB</strong> add-on (¥5,000 / $30 per month, cancellable from the Stripe portal) for a 600 GB ceiling.
         </p>
         <p>
           When storage is full, sync pauses. Deleting still works, but a trashed file keeps using space — empty the trash to actually free it.
@@ -74,17 +75,12 @@ function OrganizationEn() {
 
         <h2>Search &amp; RAG on Shared Files</h2>
         <p>
-          A project has its own vector search over its files, so the AI answers from the team&apos;s documents. RAG sync is run from the RAG settings tab exactly as on Drive; only the index behind it differs.
+          Each organization has its own vector search over its files, so the AI answers from the team&apos;s documents.
         </p>
 
-        <h2>Projects</h2>
+        <h2>Dashboards &amp; Workflows in an Organization</h2>
         <p>
-          The default project is selected automatically, so most teams never need more. If you want to split work into separate workspaces, open <strong>Advanced: project management</strong> in the Organization tab to create a project, add its members, and switch to it.
-        </p>
-
-        <h2>Dashboards &amp; Workflows in a Project</h2>
-        <p>
-          Dashboards and workflows use the same editors as My Drive. The workspace bar makes the active organization and project explicit; saved files and AI execution stay scoped to that project.
+          Dashboards and workflows use the same editors as My Drive. The workspace bar makes the active organization explicit; saved files and AI execution stay scoped to that organization.
         </p>
         <img src="/images/organization_dashboard_en.png" alt="Dashboard in an organization project" className="w-full" loading="lazy" />
         <img src="/images/organization_workflow_en.png" alt="Workflow editor in an organization project" className="w-full" loading="lazy" />
@@ -101,10 +97,10 @@ function OrganizationEn() {
 function OrganizationJa() {
   return (
     <>
-      <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">組織と共有プロジェクト</h1>
+      <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">組織</h1>
       <div className={prose}>
         <p>
-          <strong>Business</strong>プランでは、GemiHubは自分のDriveだけのものではなくなります。契約すると<strong>組織</strong>と、共有<strong>プロジェクト</strong>が1つ自動的に作成されます。プロジェクトはチーム全員が同じファイルを開き、編集し、同期するワークスペースです。課金は組織単位なので、メンバーを増やしても追加費用はかかりません。
+          <strong>Business</strong>を契約すると、チーム全員が同じファイルを開き、編集し、同期できる<strong>組織</strong>が作成されます。課金は組織単位で、1つのアカウントから複数のBusiness組織を購入して切り替えられます。
         </p>
         <p>
           無料プランの使い勝手が失われることはありません。自分のDriveはそのまま残り、2つのワークスペースはいつでも切り替えられます。
@@ -113,19 +109,22 @@ function OrganizationJa() {
         <h2>2つのワークスペース</h2>
         <ul>
           <li><strong>My Drive</strong> — 全ユーザーの既定。ファイルは自分のGoogle Driveに保存され、AIは自分のGemini APIキーでブラウザ上から実行されます。</li>
-          <li><strong>組織プロジェクト</strong> — 組織に所属している間だけ利用可能。ファイルはGemiHubのマネージドクラウドストレージのプロジェクト配下に保存され、AIは組織のVertex AIで動作するため、メンバー個人のAPIキーは不要です。</li>
+          <li><strong>組織</strong> — ファイルはGemiHubのマネージドクラウドストレージに保存され、AIは組織のVertex AIで動作するため、メンバー個人のAPIキーは不要です。</li>
         </ul>
         <p>
-          切り替えはIDEヘッダーのワークスペースセレクタから。組織に所属している場合のみ表示され、<strong>My Drive</strong>を選ぶとプロジェクトの選択が解除され、ファイルツリー・チャット・同期・RAGのすべてが自分のDriveに戻ります。
+          IDEヘッダーの1つのワークスペースセレクタで、<strong>My Drive</strong>と各組織を切り替えます。ファイルツリー・チャット・同期・RAGは選択先に連動します。
         </p>
         <img src="/images/organization_general.png" alt="ワークスペースヘッダーで組織プロジェクトを選択した画面" className="w-full" loading="lazy" />
 
         <h2>My Driveシェルフ</h2>
         <p>
-          プロジェクトを選択している間、ファイルツリーにはプロジェクトが表示され、その上に<strong>My Drive</strong>シェルフとして自分のDriveが並びます。ドラッグでどちらの方向にもファイルをコピーできます。ドラッグは常に<em>コピー</em>で、元のファイルは残るため、チームのファイルが消えることはありません。
+          組織を選択している間、組織のファイルツリーの上に<strong>My Drive</strong>シェルフとして自分のDriveが並びます。ドラッグでどちらの方向にもファイルをコピーできます。
+        </p>
+        <p>
+          シェルフのファイルをクリックすると、組織を選択したまま、読み取り専用の別ウィンドウで内容を確認できます。Pull／Pushの対象は選択中の組織です。
         </p>
 
-        <h2>プロジェクトでの同期</h2>
+        <h2>組織での同期</h2>
         <p>
           Push / Pull は自分のDriveと同じ操作感で、コンフリクトダイアログや差分プレビューもそのまま使えます。違うのは内部の仕組みで、書き込みには基となったリビジョンが付きます。先に同僚が保存していた場合、Pushは黙って上書きせずコンフリクトとして拒否されます。
         </p>
@@ -137,9 +136,7 @@ function OrganizationJa() {
         </p>
         <img src="/images/organization_settings.png" alt="組織メンバーの管理設定" className="w-full" loading="lazy" />
         <ul>
-          <li><strong>組織ロール</strong> — <code>owner</code> / <code>admin</code> / <code>member</code>。ownerとadminがメンバー・予算・ストレージ・プロジェクトを管理します。</li>
-          <li><strong>プロジェクトロール</strong> — <code>admin</code> / <code>editor</code> / <code>viewer</code>をプロジェクトごとに設定します。</li>
-          <li><strong>外部コラボレーター</strong> — 組織外の人を特定のプロジェクトだけに追加できます。メンバー一覧では<strong>外部</strong>と表示され、組織の他の情報は見えません。</li>
+          <li><strong>組織ロール</strong> — <code>owner</code> / <code>admin</code> / <code>member</code>。ownerとadminがメンバー・予算・ストレージを管理します。</li>
         </ul>
         <p>
           自分では有料プランを契約していないメンバーも、組織のサブスクリプションで権利が付与されるため、個別契約は不要です。
@@ -147,7 +144,7 @@ function OrganizationJa() {
 
         <h2>Vertex AIと月間予算</h2>
         <p>
-          プロジェクト内のチャット・RAG・ワークフローのAIは組織のVertex AIで動作し、ユーザーごとのGemini APIキーは不要です。利用額は組織単位・メンバー単位で<strong>設定 &gt; 組織 &gt; Vertex AI</strong>から確認できます。
+          組織内のチャット・RAG・ワークフローのAIは組織のVertex AIで動作し、ユーザーごとのGemini APIキーは不要です。
         </p>
         <ul>
           <li><strong>付属の利用枠</strong> — 請求期間ごとに$30。暦月ではなくサブスクリプションの請求サイクルに沿います。</li>
@@ -158,7 +155,7 @@ function OrganizationJa() {
 
         <h2>ストレージ</h2>
         <p>
-          組織ごとに<strong>100 GB</strong>の共有プロジェクトストレージが含まれます。<strong>500 GB</strong>のアドオン（¥5,000／$30 月額、Stripeポータルからいつでも解約可）を1つ追加でき、上限は600 GBです。使用量と残量は<strong>設定 &gt; 組織 &gt; ストレージ</strong>で確認できます。
+          組織ごとに<strong>100 GB</strong>の共有ストレージが含まれます。<strong>500 GB</strong>のアドオン（¥5,000／$30 月額）を1つ追加でき、上限は600 GBです。
         </p>
         <p>
           ストレージが満杯になると同期は停止します。削除自体は可能ですが、ゴミ箱のファイルは容量を消費し続けるため、完全に削除して初めて空きが戻ります。
@@ -166,17 +163,12 @@ function OrganizationJa() {
 
         <h2>共有ファイルの検索とRAG</h2>
         <p>
-          プロジェクトには専用のベクトル検索があり、AIはチームの資料をもとに回答します。RAG同期の操作はDriveのときと同じくRAG設定タブから行い、違うのは背後のインデックスだけです。
+          組織ごとに専用のベクトル検索があり、AIはチームの資料をもとに回答します。
         </p>
 
-        <h2>プロジェクト</h2>
+        <h2>組織内のDashboardとWorkflow</h2>
         <p>
-          既定のプロジェクトは自動的に選択されるため、通常は追加不要です。用途ごとにワークスペースを分けたい場合は、組織タブの<strong>詳細: プロジェクト管理</strong>を開いて、プロジェクトの作成・メンバー追加・切り替えができます。
-        </p>
-
-        <h2>プロジェクト内のDashboardとWorkflow</h2>
-        <p>
-          DashboardとWorkflowはMy Driveと同じエディターを使用します。ワークスペースバーで現在の組織とプロジェクトを確認でき、保存先とAI実行はそのプロジェクト内に限定されます。
+          DashboardとWorkflowはMy Driveと同じエディターを使用します。ワークスペースバーで現在の組織を確認でき、保存先とAI実行はその組織内に限定されます。
         </p>
         <img src="/images/organization_dashboard.png" alt="組織プロジェクト内のDashboard" className="w-full" loading="lazy" />
         <img src="/images/organization_workflow.png" alt="組織プロジェクト内のWorkflowエディター" className="w-full" loading="lazy" />

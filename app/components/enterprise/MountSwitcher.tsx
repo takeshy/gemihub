@@ -1,7 +1,8 @@
 /**
  * Compact workspace switcher for the IDE header. Visible only to users who
- * belong to at least one organization: lets them jump between My Drive (no
- * project selected) and the org's shared projects. Selecting posts
+ * belong to at least one organization: lets them jump between My Drive and
+ * organizations. Each organization uses its compatibility default project
+ * internally; projects are not exposed as a user-facing workspace level.
  * /api/session/select and reloads so every loader re-resolves the mount.
  */
 
@@ -19,7 +20,6 @@ export function MountSwitcher() {
   const { currentOrgId, currentProjectId, hasOrganizations } = useEnterpriseContext();
   const { t } = useI18n();
   const [orgs, setOrgs] = useState<OrgItem[] | null>(null);
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -34,27 +34,22 @@ export function MountSwitcher() {
     return () => { cancelled = true; };
   }, [hasOrganizations]);
 
-  const activeOrgId = currentOrgId ?? (orgs?.length === 1 ? orgs[0].id : null);
-
-  useEffect(() => {
-    if (!activeOrgId) { setProjects([]); return; }
-    let cancelled = false;
-    fetch(`/api/projects/list?${new URLSearchParams({ orgId: activeOrgId })}`)
-      .then((res) => (res.ok ? res.json() : { projects: [] }))
-      .then((data: { projects?: ProjectItem[] }) => {
-        if (!cancelled) setProjects(data.projects ?? []);
-      })
-      .catch(() => { if (!cancelled) setProjects([]); });
-    return () => { cancelled = true; };
-  }, [activeOrgId]);
-
-  async function select(body: { orgId?: string | null; projectId: string | null }) {
+  async function selectOrganization(orgId: string | null) {
     setBusy(true);
     try {
+      let projectId: string | null = null;
+      if (orgId) {
+        const projectsResponse = await fetch(`/api/projects/list?${new URLSearchParams({ orgId })}`);
+        if (!projectsResponse.ok) throw new Error(`HTTP ${projectsResponse.status}`);
+        const data = await projectsResponse.json() as { projects?: ProjectItem[] };
+        projectId = data.projects?.find((project) => project.id === "default")?.id
+          ?? (data.projects?.length === 1 ? data.projects[0].id : null);
+        if (!projectId) throw new Error("Organization storage is not ready");
+      }
       const res = await fetch("/api/session/select", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ orgId, projectId }),
       });
       if (res.ok) {
         // Drop `?file=` — ids do not carry across mounts (a Drive file id is
@@ -76,30 +71,14 @@ export function MountSwitcher() {
 
   return (
     <span className="hidden items-center gap-1 sm:inline-flex" title={t("mount.switcherTitle")}>
-      {orgs.length > 1 && (
-        <select
-          className={selectClass}
-          value={activeOrgId ?? ""}
-          disabled={busy}
-          onChange={(e) => void select({ orgId: e.target.value || null, projectId: null })}
-        >
-          <option value="">{t("mount.myDrive")}</option>
-          {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-        </select>
-      )}
       <select
         className={selectClass}
-        value={currentProjectId ?? ""}
-        disabled={busy || (!activeOrgId && projects.length === 0)}
-        onChange={(e) => {
-          const projectId = e.target.value || null;
-          void select(projectId ? { orgId: activeOrgId, projectId } : { projectId: null });
-        }}
+        value={currentProjectId ? currentOrgId ?? "" : ""}
+        disabled={busy}
+        onChange={(e) => void selectOrganization(e.target.value || null)}
       >
         <option value="">{t("mount.myDrive")}</option>
-        {projects.map((project) => (
-          <option key={project.id} value={project.id}>{project.name}</option>
-        ))}
+        {orgs.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
       </select>
     </span>
   );

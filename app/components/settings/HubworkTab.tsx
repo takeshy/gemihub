@@ -153,7 +153,6 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
   const plan = hubwork?.plan;
   const isEnabled = !!plan;
   const isPro = plan === "business" || plan === "granted";
-  const isPaidApiKey = settings.apiPlan === "paid";
   const installedSkillVersion = hubwork?.skillVersion;
   const skillUpdateAvailable = !skillMissing && compareSkillVersions(installedSkillVersion, WEBPAGE_BUILDER_SKILL_VERSION) < 0;
   const skillVersionStatus = t("settings.hubwork.skillVersionStatus")
@@ -203,7 +202,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
             </h3>
             {(plan === "lite" || plan === "business") && (
               <p className="text-sm text-green-600 dark:text-green-400 mt-0.5">
-                {plan === "lite" ? "Lite" : "Business"} — {t("settings.hubwork.subscriptionActive")}
+                {plan === "lite" ? "Premium" : "Business"} — {t("settings.hubwork.subscriptionActive")}
               </p>
             )}
             {plan === "granted" && (
@@ -232,6 +231,30 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
               )}
             </button>
           </stripeFetcher.Form>
+        )}
+
+        {isPro && (
+          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+            <div className="font-medium text-gray-900 dark:text-gray-100">{t("settings.hubwork.additionalBusinessTitle")}</div>
+            <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-400">{t("settings.hubwork.additionalBusinessDescription")}</p>
+            <div className="mt-3 flex items-center gap-1">
+              <input type="text" value={slug} onChange={(e) => { setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")); setSlugError(""); }} placeholder="another-org" className="w-36 rounded-md border border-gray-300 bg-white px-2 py-1.5 font-mono text-sm dark:border-gray-700 dark:bg-gray-800" />
+              <span className="text-xs text-gray-400">.gemihub.net</span>
+            </div>
+            {slugError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{slugError}</p>}
+            <stripeFetcher.Form method="post" action="/hubwork/api/stripe/checkout" className="mt-3" onSubmit={(event) => {
+              if (!slug || !/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug) || slug.length < 3) {
+                event.preventDefault();
+                setSlugError(slug ? t("settings.hubwork.slugInvalid") : t("settings.hubwork.slugRequired"));
+              }
+            }}>
+              <input type="hidden" name="accountSlug" value={slug} />
+              <input type="hidden" name="plan" value="business" />
+              <input type="hidden" name="currency" value={accountCurrency} />
+              <input type="hidden" name="additionalOrganization" value="true" />
+              <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{t("settings.hubwork.additionalBusinessButton")}</button>
+            </stripeFetcher.Form>
+          </div>
         )}
 
         {plan === "lite" && (
@@ -297,14 +320,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           </div>
         )}
 
-        {!plan && !isPaidApiKey && (
-          <p className="text-sm text-amber-600 dark:text-amber-400">
-            <AlertCircle size={14} className="inline mr-1 -mt-0.5" />
-            {t("settings.hubwork.paidApiKeyRequired")}
-          </p>
-        )}
-
-        {!plan && isPaidApiKey && (
+        {!plan && (
           <div className="space-y-4">
             {/* Plan cards */}
             <div className="grid grid-cols-2 gap-3">
@@ -319,7 +335,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                 },
               ]).map(({ plan: p, features }) => (
                 <div key={p} className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                  <div className="font-medium text-gray-900 dark:text-gray-100 capitalize">{p}</div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">{p === "lite" ? "Premium" : "Business"}</div>
                   <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{priceFor(p, newSubscriptionCurrency)}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
                   <ul className="mt-2 space-y-0.5 mb-3">
                     {features.map((f) => (

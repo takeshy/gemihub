@@ -71,10 +71,11 @@ export async function action({ request }: Route.ActionArgs) {
       const email = session.customer_details?.email || "";
       const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id || "";
       const subscriptionId = typeof session.subscription === "string" ? session.subscription : "";
+      const additionalOrganization = session.metadata?.additionalOrganization === "true";
 
       // Find existing account by rootFolderId or email
-      let account = rootFolderId ? await getAccountByRootFolderId(rootFolderId) : null;
-      if (!account && email) {
+      let account = additionalOrganization ? null : rootFolderId ? await getAccountByRootFolderId(rootFolderId) : null;
+      if (!additionalOrganization && !account && email) {
         account = await getAccountByEmail(email);
       }
 
@@ -96,10 +97,15 @@ export async function action({ request }: Route.ActionArgs) {
           email: email || "",
           refreshToken: "",
           rootFolderName: "",
-          rootFolderId: rootFolderId || "",
+          // Additional Business subscriptions belong to an organization, not
+          // the buyer's personal Drive billing record. Keeping this empty also
+          // leaves the single personal Premium lookup deterministic.
+          rootFolderId: additionalOrganization ? "" : rootFolderId || "",
           plan: planType,
           currency,
           accountSlug: accountSlug || undefined,
+          allowDuplicateOwner: additionalOrganization,
+          idempotencyKey: additionalOrganization ? session.id : undefined,
         });
         if (customerId) {
           await updateAccount(newId, { stripeCustomerId: customerId, stripeSubscriptionId: subscriptionId });
@@ -118,6 +124,7 @@ export async function action({ request }: Route.ActionArgs) {
           accountId: provisionedAccountId,
           email: buyerEmail,
           accountSlug: accountSlug || account?.accountSlug,
+          forceNewOrganization: additionalOrganization,
         });
       }
       break;

@@ -22,31 +22,41 @@ import {
 } from "~/types/storage-drag";
 import { collectFileIds } from "~/utils/tree-helpers";
 import { ICON } from "~/utils/icon-sizes";
+import { DriveFileModal, type DriveModalFile } from "./DriveFileModal";
 
-function folderMoves(item: CachedTreeNode): StorageDragPayload["moves"] {
+function folderMoves(
+  item: CachedTreeNode,
+  pathByFileId: ReadonlyMap<string, string>,
+): StorageDragPayload["moves"] {
   const folderPath = item.id.startsWith("vfolder:")
     ? item.id.slice("vfolder:".length)
     : item.name;
   const parentPath = folderPath.includes("/")
     ? folderPath.slice(0, folderPath.lastIndexOf("/"))
     : "";
-  return collectFileIds(item).map((path) => ({
-    from: path,
-    to: parentPath && path.startsWith(`${parentPath}/`)
-      ? path.slice(parentPath.length + 1)
-      : path,
-  }));
+  return collectFileIds(item).flatMap((fileId) => {
+    const path = pathByFileId.get(fileId);
+    if (!path) return [];
+    return [{
+      from: path,
+      to: parentPath && path.startsWith(`${parentPath}/`)
+        ? path.slice(parentPath.length + 1)
+        : path,
+    }];
+  });
 }
 
-export function DriveShelf() {
+export function DriveShelf({ rootFolderId }: { rootFolderId: string }) {
   const { t } = useI18n();
   const { selection, currentOrgId, currentProjectId } = useEnterpriseContext();
   const [items, setItems] = useState<CachedTreeNode[]>([]);
+  const [pathByFileId, setPathByFileId] = useState<Map<string, string>>(new Map());
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [driveUnavailable, setDriveUnavailable] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<DriveModalFile | null>(null);
 
   // The shelf only renders on a project mount; never fetch Drive otherwise.
   const shelfActive = !!(currentOrgId && currentProjectId && selection);
@@ -54,26 +64,33 @@ export function DriveShelf() {
   const load = useCallback(async () => {
     if (!shelfActive) return;
     try {
-      const treeResponse = await fetch(`/api/storage/tree?${new URLSearchParams({ mount: "drive" })}`);
+      const treeResponse = await fetch(`/api/drive/tree?${new URLSearchParams({ mount: "drive", folderId: rootFolderId })}`);
       if (treeResponse.status === 401 || treeResponse.status === 403) {
         // Session has no Drive grant (OIDC/email login) — offer nothing here;
         // the user can connect via Google login.
         setDriveUnavailable(true);
         setItems([]);
+        setPathByFileId(new Map());
         setError(null);
         return;
       }
       if (!treeResponse.ok) throw new Error(`HTTP ${treeResponse.status}`);
-      const treeData = await treeResponse.json() as { items: CachedTreeNode[] };
+      const treeData = await treeResponse.json() as {
+        items: CachedTreeNode[];
+        meta?: { files?: Record<string, { name: string }> };
+      };
       setDriveUnavailable(false);
       setItems(treeData.items);
+      setPathByFileId(new Map(
+        Object.entries(treeData.meta?.files ?? {}).map(([fileId, file]) => [fileId, file.name]),
+      ));
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t("driveShelf.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [shelfActive, t]);
+  }, [rootFolderId, shelfActive, t]);
 
   useEffect(() => {
     if (!shelfActive) return;
@@ -92,20 +109,11 @@ export function DriveShelf() {
     [items],
   );
 
-  async function openDrive() {
-    // Deselect the project — the IDE falls back to the Drive mount.
-    const response = await fetch("/api/session/select", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: null }),
-    });
-    if (response.ok) window.location.reload();
-  }
-
   function startDrag(event: React.DragEvent, item: CachedTreeNode) {
+    const filePath = pathByFileId.get(item.id);
     const moves = item.isFolder
-      ? folderMoves(item)
-      : [{ from: item.id, to: item.id.split("/").pop() || item.name }];
+      ? folderMoves(item, pathByFileId)
+      : filePath ? [{ from: filePath, to: filePath.split("/").pop() || item.name }] : [];
     if (moves.length === 0) return;
     const payload: StorageDragPayload = { sourceMount: "drive", moves };
     event.dataTransfer.setData(STORAGE_DRAG_MIME, JSON.stringify(payload));
@@ -150,10 +158,18 @@ export function DriveShelf() {
           type="button"
           draggable={!loading}
           onDragStart={(event) => startDrag(event, item)}
-          onDoubleClick={() => void openDrive()}
+          onClick={() => {
+            if (item.isFolder) return;
+            setSelectedFile({
+              fileId: item.id,
+              fileName: item.name,
+              filePath: pathByFileId.get(item.id) ?? item.name,
+              mimeType: item.mimeType,
+            });
+          }}
           className="flex w-full items-center gap-1 rounded py-0.5 pr-1 text-left text-xs text-amber-950 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/40"
           style={{ paddingLeft: `${8 + depth * 12}px` }}
-          title={t("driveShelf.openHint")}
+          title={item.isFolder ? item.name : t("driveShelf.openHint")}
         >
           {item.isFolder
             ? <FolderOpen size={ICON.SM} className="shrink-0 text-amber-600 dark:text-amber-400" />
@@ -220,6 +236,7 @@ export function DriveShelf() {
             : <div className="px-3 py-2 text-xs text-amber-700 dark:text-amber-300">{t("driveShelf.dropPrompt")}</div>}
         </div>
       )}
+      {selectedFile && <DriveFileModal file={selectedFile} onClose={() => setSelectedFile(null)} />}
     </section>
   );
 }

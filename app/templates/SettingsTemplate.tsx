@@ -21,6 +21,7 @@ import { ShortcutsTab } from "~/components/settings/ShortcutsTab";
 import { SyncTab } from "~/components/settings/SyncTab";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useI18n } from "~/i18n/context";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 import type { TranslationStrings } from "~/i18n/translations";
 import type { Language, UserSettings } from "~/types/settings";
 
@@ -91,10 +92,10 @@ export function SettingsTemplate({
 }: SettingsTemplateProps) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
-  const hasOwnPlan = !!settings.hubwork?.plan;
+  const organizationSelected = useEnterpriseSelection() !== null;
   const orgFilteredTabs = TABS.filter((tab) => {
     if (tab.id === "enterprise") return showEnterpriseTab;
-    if (tab.id === "hubwork") return hasOwnPlan || !showEnterpriseTab;
+    if (tab.id === "hubwork") return !organizationSelected;
     if (tab.id === "rag") return settings.ragFeatureEnabled ?? false;
     return true;
   });
@@ -152,6 +153,7 @@ export function SettingsTemplate({
             hasApiKey={hasApiKey}
             maskedKey={maskedKey}
             onLanguageChange={onLanguageChange}
+            hideGeminiSettings={organizationSelected}
           />
         )}
         {activeTab === "enterprise" && (
@@ -171,7 +173,7 @@ export function SettingsTemplate({
         {activeTab === "commands" && <CommandsTab settings={settings} />}
         {activeTab === "plugins" && <PluginsTab settings={settings} />}
         {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}
-        {activeTab === "hubwork" && (hasOwnPlan || !showEnterpriseTab) && (
+        {activeTab === "hubwork" && !organizationSelected && (
           <HubworkTab
             settings={settings}
             hasHubworkScopes={hasHubworkScopes}

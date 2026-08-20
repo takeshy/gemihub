@@ -82,9 +82,9 @@ Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと�
 
 ![ビジュアルワークフローエディタ](./public/images/visual_workflow.png)
 
-### 組織と共有プロジェクト
+### 組織
 
-個人作業は My Drive のまま利用し、共有作業では組織プロジェクトへ切り替えられます。組織プロジェクトでは Cloud Storage と Vertex AI を利用し、メンバー権限、メンバーごとの AI 予算、プロジェクト単位のダッシュボードとワークフローを管理できます。
+個人作業は My Drive のまま利用し、共有作業では組織へ切り替えられます。組織では Cloud Storage と Vertex AI を利用し、メンバー権限とメンバーごとの AI 予算を管理できます。Businessは組織単位で、1つのアカウントから複数組織を購入して切り替えられます。
 
 ![組織プロジェクト](./public/images/organization_general.png)
 
