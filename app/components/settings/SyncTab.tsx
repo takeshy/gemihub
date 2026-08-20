@@ -43,12 +43,16 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
   const [backupToken, setBackupToken] = useState<string | null>(null);
   const [notifyDialog, setNotifyDialog] = useState<{ message: string; variant: "info" | "error" } | null>(null);
   const [backupCopied, setBackupCopied] = useState(false);
-  // A member working inside an organization project is covered by the
-  // organization's Business subscription; only a user on their own Drive
-  // needs a personal plan. The server applies the same rule.
+  // External sync hands out a token for the user's own Google Drive, so it
+  // belongs to My Drive and to the account that bought a plan. An
+  // organization membership does not carry it: a member who wants to sync
+  // their personal Drive needs their own Lite (or Business) subscription.
+  // The server applies the same two rules.
   const inOrganizationProject = useEnterpriseSelection() !== null;
-  const hasPremium = inOrganizationProject
-    || (!!settings.hubwork?.plan && settings.hubwork?.billingStatus === "active" && settings.hubwork?.accountStatus !== "disabled");
+  const hasPremium =
+    !!settings.hubwork?.plan
+    && settings.hubwork?.billingStatus === "active"
+    && settings.hubwork?.accountStatus !== "disabled";
 
   // Load lastUpdatedAt from IndexedDB
   useEffect(() => {
@@ -428,7 +432,9 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
         </div>
       </SectionCard>
 
-      {/* External Sync */}
+      {/* External Sync — My Drive only: the token carries a Drive access token
+          and root folder id, which mean nothing inside an org project. */}
+      {!inOrganizationProject && (
       <SectionCard>
         <div className="flex items-center gap-2 mb-3">
           <KeyRound size={16} className="text-gray-600 dark:text-gray-400" />
@@ -480,6 +486,7 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
           </div>
         )}
       </SectionCard>
+      )}
 
       {/* Data Management */}
       <SectionCard>

@@ -595,6 +595,7 @@ export interface TranslationStrings {
   "settings.general.passwordMinLength": string;
   "settings.general.apiKeyOptional": string;
   "settings.general.configured": string;
+  "settings.general.apiKeySavedLocked": string;
   "settings.general.invalidApiKey": string;
   "settings.general.passwordRequiredError": string;
   "settings.general.currentPasswordRequired": string;
@@ -1347,6 +1348,7 @@ export interface TranslationStrings {
   "settings.general.enableWorkflowDescription": string;
   "settings.general.enableRag": string;
   "settings.general.enableRagDescription": string;
+  "settings.general.ragUnavailableOnVertex": string;
   "settings.general.enableWebpageBuilder": string;
   "settings.general.enableWebpageBuilderDescription": string;
   "settings.general.aiProvider": string;
@@ -1968,6 +1970,7 @@ const en: TranslationStrings = {
   "settings.general.passwordMinLength": "Password must be at least 8 characters",
   "settings.general.apiKeyOptional": "Optional. Set a key to use AI features on your own Drive; organization projects run on the organization's Vertex AI and need no key. A password is required only when you store a key, because it is kept encrypted.",
   "settings.general.configured": "API Key & Encryption configured.",
+  "settings.general.apiKeySavedLocked": "A key is saved (encrypted) but not unlocked in this session. Leave blank to keep it, or enter a new key to replace it.",
   "settings.general.invalidApiKey": "Invalid API key. Please check your Gemini API key and try again.",
   "settings.general.passwordRequiredError": "Password is required for initial setup.",
   "settings.general.currentPasswordRequired": "Current password is required to change the API key.",
@@ -2391,8 +2394,8 @@ const en: TranslationStrings = {
   "settings.sync.migrationToolDescription": "Generate a token for syncing GemiHub files with the GemiHub - Drive Sync Obsidian plugin or another external client. If encryption is enabled, authentication credentials are also exported to Google Drive.",
   "settings.sync.migrationTokenGenerate": "Generate Sync Token",
   "settings.sync.migrationTokenWarning": "This token grants access to your GemiHub files in Google Drive. It expires in about 1 hour.",
-  "settings.sync.migrationTokenPremiumNotice": "This feature is available to Premium Plan users.",
-  "settings.sync.migrationTokenPremiumRequired": "A Premium Plan subscription is required to generate external sync tokens.",
+  "settings.sync.migrationTokenPremiumNotice": "Available on My Drive to Lite and Business subscribers. Belonging to an organization does not include it — syncing your own Drive needs your own subscription.",
+  "settings.sync.migrationTokenPremiumRequired": "Your own Lite or Business subscription is required to generate external sync tokens.",
   "settings.sync.backupTokenCopy": "Copy",
   "settings.sync.backupTokenCopied": "Copied!",
   "settings.sync.backupTokenHide": "Hide Token",
@@ -2720,6 +2723,7 @@ const en: TranslationStrings = {
   "settings.general.enableWorkflowDescription": "Show the workflow panel and allow YAML workflows to be edited and executed.",
   "settings.general.enableRag": "Enable RAG",
   "settings.general.enableRagDescription": "Show the RAG settings tab and the RAG selector in chat.",
+  "settings.general.ragUnavailableOnVertex": "Not available while chat runs on Vertex AI: RAG uses Gemini File Search, which needs your own Gemini API key. Switch the AI provider back to API key to use it.",
   "settings.general.enableWebpageBuilder": "Enable Web app builder",
   "settings.general.enableWebpageBuilderDescription": "Show the \"Build a web app\" action in chat and keep the Webpage Builder skill up to date. Requires a Business plan.",
   "settings.general.aiProvider": "AI Provider",
@@ -3341,6 +3345,7 @@ const ja: TranslationStrings = {
   "settings.general.passwordMinLength": "パスワードは8文字以上である必要があります",
   "settings.general.apiKeyOptional": "任意です。自分のDriveでAI機能を使う場合に設定してください（組織プロジェクトは組織のVertex AIで動作するためキー不要です）。キーを保存するときのみ、暗号化のためパスワードが必要です。",
   "settings.general.configured": "APIキーと暗号化が設定されています。",
+  "settings.general.apiKeySavedLocked": "キーは暗号化して保存済みですが、このセッションではまだ復号されていません。そのまま使う場合は空欄、変更する場合は新しいキーを入力してください。",
   "settings.general.invalidApiKey": "無効なAPIキーです。Gemini APIキーを確認して再度お試しください。",
   "settings.general.passwordRequiredError": "初回設定にはパスワードが必要です。",
   "settings.general.currentPasswordRequired": "APIキーを変更するには現在のパスワードが必要です。",
@@ -3764,8 +3769,8 @@ const ja: TranslationStrings = {
   "settings.sync.migrationToolDescription": "Obsidian プラグイン「GemiHub - Drive Sync」などの外部クライアントと GemiHub ファイルを同期するためのトークンを生成します。暗号化が有効な場合、認証情報も Google Drive にエクスポートされます。",
   "settings.sync.migrationTokenGenerate": "同期トークンを生成",
   "settings.sync.migrationTokenWarning": "このトークンは Google Drive の GemiHub ファイルへのアクセス権を付与します。約1時間で失効します。",
-  "settings.sync.migrationTokenPremiumNotice": "この機能はプレミアムプランユーザーが利用できます。",
-  "settings.sync.migrationTokenPremiumRequired": "外部同期トークンの生成にはプレミアムプランの契約が必要です。",
+  "settings.sync.migrationTokenPremiumNotice": "マイドライブで、Lite または Business を契約している方が利用できます。組織に所属しているだけでは対象外で、自分のドライブを同期するにはご自身の契約が必要です。",
+  "settings.sync.migrationTokenPremiumRequired": "外部同期トークンの生成には、ご自身の Lite または Business の契約が必要です。",
   "settings.sync.backupTokenCopy": "コピー",
   "settings.sync.backupTokenCopied": "コピーしました！",
   "settings.sync.backupTokenHide": "トークンを非表示",
@@ -4093,6 +4098,7 @@ const ja: TranslationStrings = {
   "settings.general.enableWorkflowDescription": "ワークフローパネルを表示し、YAMLワークフローの編集・実行を有効にします。",
   "settings.general.enableRag": "RAGを使用する",
   "settings.general.enableRagDescription": "設定のRAGタブと、チャットのRAGセレクタを表示します。",
+  "settings.general.ragUnavailableOnVertex": "Vertex AIでチャットを実行している間は利用できません。RAGはGemini File Searchを使用するため、ご自身のGemini APIキーが必要です。利用するにはAIプロバイダをAPIキーに戻してください。",
   "settings.general.enableWebpageBuilder": "Webアプリ構築を使用する",
   "settings.general.enableWebpageBuilderDescription": "チャットの「Webアプリを構築する」導線を表示し、Webページビルダースキルの更新案内を有効にします（Businessプランが必要です）。",
   "settings.general.aiProvider": "AIプロバイダ",

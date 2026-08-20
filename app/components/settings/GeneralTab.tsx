@@ -28,7 +28,11 @@ import {
   THEME_OPTIONS,
 } from "~/types/settings";
 import { THIRD_PARTY_NOTICES } from "~/third-party-notices";
-import { VERTEX_TOPUP_UNIT_USD } from "~/types/hubwork";
+import {
+  VERTEX_TOPUP_UNIT_CHOICES,
+  VERTEX_TOPUP_UNIT_JPY,
+  VERTEX_TOPUP_UNIT_USD,
+} from "~/types/hubwork";
 import { hasVertexPrice } from "~/services/ai/models";
 
 
@@ -68,6 +72,21 @@ export function GeneralTab({
   const [fontSize, setFontSize] = useState<FontSize>(settings.fontSize);
   const [theme, setTheme] = useState<Theme>(settings.theme || "system");
   const availableModels = getAvailableModels(apiPlan);
+  // Personal Vertex has neither Gemini File Search (that needs the user's own
+  // API key) nor a project vector index, so RAG cannot work there. A disabled
+  // checkbox submits nothing, which is exactly the "off" we want persisted.
+  // Only on the Drive mount: an org project's chat also runs on Vertex, but
+  // there RAG is the Firestore vector index and works fine.
+  const ragBlockedByVertex = !hideGeminiSettings && usePersonalVertex;
+
+  // Top-ups are sold in the currency of the UI language, so the amount is one
+  // choice instead of two.
+  const topUpCurrency = language === "ja" ? "jpy" : "usd";
+  const formatTopUpAmount = (units: number) =>
+    topUpCurrency === "jpy"
+      ? `+¥${(units * VERTEX_TOPUP_UNIT_JPY).toLocaleString("ja-JP")}`
+      : `+$${units * VERTEX_TOPUP_UNIT_USD}`;
+
   // Personal Vertex spends a prepaid balance, so it can only offer models the
   // usage recorder knows a price for.
   const vertexModels = availableModels.filter((model) => hasVertexPrice(model.name));
@@ -87,7 +106,13 @@ export function GeneralTab({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isEncryptionSetup = !!settings.encryptedApiKey;
+  // An encrypted key is stored in settings.json. NOT the same as `hasApiKey`,
+  // which is the loader's view of the DECRYPTED key in this session — that one
+  // is empty until the user unlocks, and on any new session. Mixing the two
+  // made the panel claim "API Key & Encryption configured" while the field
+  // below invited the user to enter a key they had already saved.
+  const hasStoredApiKey = !!settings.encryptedApiKey;
+  const isEncryptionSetup = hasStoredApiKey;
 
   // AI provider sub-tab. The balance arrives after mount, so it cannot take
   // part in the initial value — only the saved opt-in can.
@@ -223,11 +248,17 @@ export function GeneralTab({
               {t("settings.general.apiKeyGetLink")} ↗
             </a>
           </div>
-          {hasApiKey && (
+          {hasApiKey ? (
             <p className="text-xs text-green-600 dark:text-green-400 mb-1">
               Current key: <code className="font-mono">{maskedKey}</code>
             </p>
-          )}
+          ) : hasStoredApiKey ? (
+            /* Saved but not unlocked in this session, so there is no masked
+               value to show — say it is saved rather than looking empty. */
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+              {t("settings.general.apiKeySavedLocked")}
+            </p>
+          ) : null}
           <input
             type="password"
             id="geminiApiKey"
@@ -238,7 +269,7 @@ export function GeneralTab({
               setApiKeyEdited(true);
             }}
             autoComplete="off"
-            placeholder={hasApiKey ? t("settings.general.apiKeyKeep") : t("settings.general.apiKeyPlaceholder")}
+            placeholder={hasStoredApiKey ? t("settings.general.apiKeyKeep") : t("settings.general.apiKeyPlaceholder")}
             className={inputClass}
           />
         </div>
@@ -447,15 +478,16 @@ export function GeneralTab({
                 </p>
               )}
             </div>
-            {/* Top-up form */}
+            {/* Top-up form — one amount dropdown. The currency follows the UI
+                language rather than asking, which made a two-dropdown form out
+                of a single choice. */}
             <form method="POST" action="/hubwork/api/stripe/checkout" className="mb-4 flex flex-wrap items-center gap-2">
               <input type="hidden" name="plan" value="personal-vertex-topup" />
+              <input type="hidden" name="currency" value={topUpCurrency} />
               <select name="units" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="1">
-                {[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>{`+$${n * VERTEX_TOPUP_UNIT_USD}`}</option>)}
-              </select>
-              <select name="currency" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="jpy">
-                <option value="jpy">{t("enterprise.topUpJpy")}</option>
-                <option value="usd">{t("enterprise.topUpUsd")}</option>
+                {VERTEX_TOPUP_UNIT_CHOICES.map((n) => (
+                  <option key={n} value={n}>{formatTopUpAmount(n)}</option>
+                ))}
               </select>
               <button type="submit" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
                 {t("settings.general.buyVertexCredit")}
@@ -569,19 +601,22 @@ export function GeneralTab({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-3 ${ragBlockedByVertex ? "opacity-60" : ""}`}>
               <input
                 type="checkbox"
                 id="ragFeatureEnabled"
                 name="ragFeatureEnabled"
-                checked={ragFeatureEnabled}
+                checked={ragBlockedByVertex ? false : ragFeatureEnabled}
+                disabled={ragBlockedByVertex}
                 onChange={(e) => setRagFeatureEnabled(e.target.checked)}
                 className={checkboxClass}
               />
               <div>
                 <Label htmlFor="ragFeatureEnabled">{t("settings.general.enableRag")}</Label>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t("settings.general.enableRagDescription")}
+                  {ragBlockedByVertex
+                    ? t("settings.general.ragUnavailableOnVertex")
+                    : t("settings.general.enableRagDescription")}
                 </p>
               </div>
             </div>

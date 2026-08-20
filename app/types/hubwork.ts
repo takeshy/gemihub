@@ -9,6 +9,12 @@ import type { Timestamp } from "@google-cloud/firestore";
  */
 export const VERTEX_TOPUP_UNIT_USD = 10;
 
+/** The same unit priced in JPY. Must match STRIPE_PRICE_ID_VERTEX_TOPUP. */
+export const VERTEX_TOPUP_UNIT_JPY = 1500;
+
+/** Unit counts a single checkout may buy. */
+export const VERTEX_TOPUP_UNIT_CHOICES = [1, 2, 3, 5, 10] as const;
+
 // --- Firestore document types ---
 
 export type HubworkAccountPlan = "lite" | "business" | "granted";

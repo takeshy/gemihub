@@ -294,7 +294,7 @@ export const PAID_MODELS: ModelInfo[] = [
   {
     name: "gemini-3.1-pro-preview",
     displayName: "Gemini 3.1 Pro Preview",
-    description: "Latest flagship model with 1M context, best performance (recommended)",
+    description: "Flagship model with 1M context. Highest quality, but older and slower than 3.7 Flash",
   },
   {
     name: "gemini-3.1-pro-preview-customtools",

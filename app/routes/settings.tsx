@@ -583,22 +583,18 @@ export async function action({ request }: Route.ActionArgs) {
           console.warn("[settings] Failed to load Hubwork account for migration token:", describeError(error));
           return jsonWithCookie({ success: false, message: "Could not verify Premium plan for external sync tokens." }, { status: 503 });
         }
-        // A member of a Business organization is covered by the organization's
-        // subscription: the entitlement follows the workspace they work in,
-        // not a personal Hubwork account they were never asked to buy.
-        let entitled = !!account && isActivePremiumAccount(account);
-        if (!entitled && validTokens.currentOrgId && validTokens.currentProjectId) {
-          try {
-            const { getAccountByProject } = await import("~/services/hubwork-accounts.server");
-            const orgAccount = await getAccountByProject(
-              validTokens.currentOrgId,
-              validTokens.currentProjectId,
-            );
-            entitled = !!orgAccount && isActivePremiumAccount(orgAccount);
-          } catch (error) {
-            console.warn("[settings] Failed to check the organization's plan:", describeError(error));
-          }
+        // The token below carries THIS user's Drive access token and root
+        // folder id, so it only ever syncs My Drive — refuse to mint one from
+        // inside an organization project, where it would silently hand out
+        // personal Drive access from a shared workspace.
+        if (validTokens.currentOrgId && validTokens.currentProjectId) {
+          return jsonWithCookie({ success: false, message: "External sync tokens are for My Drive. Switch to My Drive to generate one." }, { status: 400 });
         }
+        // The entitlement follows the account that bought a plan, not the
+        // organization someone belongs to: an org membership covers the shared
+        // project, while syncing a personal Drive needs a personal Lite (or
+        // Business) subscription of one's own.
+        const entitled = !!account && isActivePremiumAccount(account);
         if (!entitled) {
           return jsonWithCookie({ success: false, message: "A Premium plan is required to generate external sync tokens." }, { status: 403 });
         }
