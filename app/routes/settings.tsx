@@ -286,6 +286,13 @@ export async function action({ request }: Route.ActionArgs) {
         const workflowEnabled = formData.get("workflowEnabled") === "on";
         const ragFeatureEnabled = formData.get("ragFeatureEnabled") === "on";
         const webpageBuilderEnabled = formData.get("webpageBuilderEnabled") === "on";
+        // Same absent-vs-cleared distinction as selectedModel above: the whole
+        // AI provider block is hidden on an org mount, so a missing field
+        // means "not editable here". Reading it as false would turn personal
+        // Vertex off every time an org member saved an unrelated setting.
+        const usePersonalVertex = formData.has("usePersonalVertex")
+          ? formData.get("usePersonalVertex") === "on"
+          : currentSettings.usePersonalVertex === true;
 
         // Encryption-related fields
         const password = (formData.get("password") as string)?.trim() || "";
@@ -329,6 +336,7 @@ export async function action({ request }: Route.ActionArgs) {
           workflowEnabled,
           ragFeatureEnabled,
           webpageBuilderEnabled,
+          usePersonalVertex,
         };
 
         // Update file encryption toggles

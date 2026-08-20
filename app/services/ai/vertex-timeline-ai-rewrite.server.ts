@@ -65,7 +65,7 @@ export async function vertexAction(request: Request) {
     model: selectedModel,
     systemPrompt,
     messages: [{ role: "user", content: userPrompt, timestamp: Date.now() }],
-    billing: { orgId: ctx.orgId, uid: ctx.uid },
+    billing: { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
   });
   const generated = result.text;
 

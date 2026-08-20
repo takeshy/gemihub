@@ -1,5 +1,14 @@
 import type { Timestamp } from "@google-cloud/firestore";
 
+/**
+ * USD credited per purchased Vertex AI budget top-up unit. Must match the
+ * Stripe price behind STRIPE_PRICE_ID_VERTEX_TOPUP{,_USD} — the webhook
+ * credits this amount per unit, so a mismatch hands out budget nobody paid
+ * for. Lives here rather than in ai-budget.server.ts because the settings UI
+ * renders it, and a client import of a .server module fails the build.
+ */
+export const VERTEX_TOPUP_UNIT_USD = 10;
+
 // --- Firestore document types ---
 
 export type HubworkAccountPlan = "lite" | "business" | "granted";

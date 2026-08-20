@@ -66,7 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
         "READY if the text has enough context.",
       ].join(" "),
       enableThinking: false,
-      billing: { orgId: ctx.orgId, uid: ctx.uid },
+      billing: { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
     });
     const decision = result.text.trim().toUpperCase();
     const normalized =
@@ -90,7 +90,7 @@ export async function action({ request }: Route.ActionArgs) {
       "Keep the same language as the chunk. Return only the refined chunk text.",
     ].join(" "),
     enableThinking: false,
-    billing: { orgId: ctx.orgId, uid: ctx.uid },
+    billing: { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
   });
 
   return json({ text: result.text.trim() || text, usage: result.usage });

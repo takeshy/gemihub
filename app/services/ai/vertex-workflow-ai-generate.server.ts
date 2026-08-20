@@ -180,7 +180,7 @@ export async function vertexAction(request: Request) {
           tenant,
           selectedModel,
           history,
-          { orgId: ctx.orgId, uid: ctx.uid },
+          { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
         )) {
           const data = JSON.stringify(chunk);
           controller.enqueue(

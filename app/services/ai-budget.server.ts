@@ -1,12 +1,14 @@
 import { FieldValue } from "@google-cloud/firestore";
 import type { StreamChunkUsage } from "~/types/chat";
-import { getFirestore, ORGANIZATIONS } from "./firestore.server";
+import { getFirestore, ORGANIZATIONS, USERS } from "./firestore.server";
 import { getOrganization, getOrgMember } from "./organizations.server";
-import { MODEL_PRICING, SEARCH_GROUNDING_COST } from "./ai/models";
+import { VERTEX_MODEL_PRICING, SEARCH_GROUNDING_COST } from "./ai/models";
 
 export interface AiBillingContext {
-  orgId: string;
+  /** Required for scope "org"; absent for scope "personal". */
+  orgId?: string;
   uid: string;
+  scope: "org" | "personal";
 }
 
 export interface AiUsageSummary {
@@ -20,8 +22,12 @@ export interface AiUsageSummary {
 
 export class AiBudgetExceededError extends Error {
   status = 429 as const;
-  constructor(public readonly scope: "organization" | "user", public readonly limitUsd: number) {
-    super(`${scope} monthly AI budget of $${limitUsd.toFixed(2)} has been reached`);
+  constructor(
+    public readonly scope: "organization" | "user" | "personal",
+    public readonly limitUsd: number,
+  ) {
+    const label = scope === "personal" ? "personal AI credit" : `${scope} monthly AI budget`;
+    super(`${label} of $${limitUsd.toFixed(2)} has been reached`);
     this.name = "AiBudgetExceededError";
   }
 }
@@ -35,25 +41,14 @@ type Price = { input: number; output: number };
  */
 export const BUSINESS_INCLUDED_AI_BUDGET_USD = 30;
 
-/**
- * USD credited per purchased top-up unit. Must match the Stripe price behind
- * STRIPE_PRICE_ID_VERTEX_TOPUP{,_USD} — the webhook credits this amount per
- * unit, so a mismatch would hand out budget that was never paid for.
- */
-export const VERTEX_TOPUP_UNIT_USD = 10;
+// Defined in ~/types/hubwork so the settings UI can render it without
+// importing this server-only module.
+export { VERTEX_TOPUP_UNIT_USD } from "~/types/hubwork";
 
 /** Per-token price → per-million, without the float noise of a raw multiply. */
 function perMillion(perToken: number): number {
   return Math.round(perToken * 1e12) / 1e6;
 }
-
-/**
- * Gemma runs on Vertex only, so it has no entry in the published Gemini table.
- */
-const GEMMA_PRICES_PER_MILLION: Record<string, Price> = {
-  "gemma-4-31b-it": { input: 1, output: 1 },
-  "gemma-4-26b-a4b-it": { input: 1, output: 1 },
-};
 
 /**
  * Derived from the one published price table (`ai/models.ts`) so a budget can
@@ -63,15 +58,12 @@ const GEMMA_PRICES_PER_MILLION: Record<string, Price> = {
  * at $12 against $60–$120. Every dollar of that gap was an over-run we paid
  * for and the organization's budget never saw.
  */
-const DEFAULT_PRICES_PER_MILLION: Record<string, Price> = {
-  ...Object.fromEntries(
-    Object.entries(MODEL_PRICING).map(([model, price]) => [
-      model,
-      { input: perMillion(price.input), output: perMillion(price.output) },
-    ]),
-  ),
-  ...GEMMA_PRICES_PER_MILLION,
-};
+const DEFAULT_PRICES_PER_MILLION: Record<string, Price> = Object.fromEntries(
+  Object.entries(VERTEX_MODEL_PRICING).map(([model, price]) => [
+    model,
+    { input: perMillion(price.input), output: perMillion(price.output) },
+  ]),
+);
 
 /** Google Search grounding for a model the table does not list yet. */
 const DEFAULT_SEARCH_GROUNDING_COST = 14 / 1000;
@@ -346,20 +338,30 @@ export async function resolveOrgTopUp(
 }
 
 export async function assertAiBudgetAvailable(context: AiBillingContext): Promise<void> {
+  if (context.scope === "personal") {
+    const balance = await getPersonalAiBalance(context.uid);
+    if (balance.balanceUsd <= 0) {
+      throw new AiBudgetExceededError("personal", 0);
+    }
+    return;
+  }
+
+  const orgId = context.orgId;
+  if (!orgId) throw new Error("AI billing context is missing orgId for org scope");
   const [org, member] = await Promise.all([
-    getOrganization(context.orgId),
-    getOrgMember(context.orgId, context.uid),
+    getOrganization(orgId),
+    getOrgMember(orgId, context.uid),
   ]);
   if (!org) throw new Error("AI billing context is not accessible");
   const period = resolveBudgetPeriod(org.budgetAnchorDay ?? null);
-  const { orgUsage, userUsage } = usageRefs(context.orgId, context.uid, period.key);
+  const { orgUsage, userUsage } = usageRefs(orgId, context.uid, period.key);
   const [orgSnap, userSnap] = await Promise.all([orgUsage.get(), userUsage.get()]);
   const orgSpent = microsToUsd(orgSnap.data()?.estimatedCostMicros);
   const userSpent = microsToUsd(userSnap.data()?.estimatedCostMicros);
   const orgLimit = org.aiSettings.monthlyBudgetUsd;
   // Purchased top-ups extend the limit; they stay usable through the end of
   // the month after purchase, so last month's unused balance counts too.
-  const { availableUsd: topUpUsd } = await resolveOrgTopUp(context.orgId, orgLimit, period);
+  const { availableUsd: topUpUsd } = await resolveOrgTopUp(orgId, orgLimit, period);
   const effectiveOrgLimit = orgLimit != null && orgLimit > 0 ? orgLimit + topUpUsd : orgLimit;
   // Project-only external collaborators inherit the organization default.
   const userLimit = member?.monthlyBudgetUsdOverride ?? org.aiSettings.defaultUserMonthlyBudgetUsd;
@@ -384,8 +386,15 @@ export async function recordAiUsage(
   const estimatedCostMicros = Math.max(0, Math.ceil(estimatedCostUsd * 1_000_000));
   const inputTokens = Math.max(0, usage?.inputTokens ?? 0);
   const outputTokens = Math.max(0, usage?.outputTokens ?? 0) + Math.max(0, usage?.thinkingTokens ?? 0);
-  const period = await currentBudgetPeriod(context.orgId);
-  const { orgUsage, userUsage } = usageRefs(context.orgId, context.uid, period.key);
+
+  if (context.scope === "personal") {
+    return recordPersonalAiUsage(context.uid, model, estimatedCostUsd, estimatedCostMicros, inputTokens, outputTokens, searchRequests);
+  }
+
+  const orgId = context.orgId;
+  if (!orgId) throw new Error("AI billing context is missing orgId for org scope");
+  const period = await currentBudgetPeriod(orgId);
+  const { orgUsage, userUsage } = usageRefs(orgId, context.uid, period.key);
   const increment = {
     month: period.key,
     estimatedCostMicros: FieldValue.increment(estimatedCostMicros),
@@ -455,4 +464,99 @@ export async function getOrganizationAiUsage(orgId: string): Promise<{
     },
     users: Object.fromEntries(usersSnap.docs.map((doc) => [doc.id, toSummary(period.key, doc.data())])),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Personal (Drive-mount) Vertex AI billing — prepaid running balance
+// ---------------------------------------------------------------------------
+
+export interface PersonalAiBalance {
+  /**
+   * totalTopUpUsd - totalUsageUsd; the credit remaining for Vertex calls.
+   * NOT clamped at zero: the balance is only checked when a request starts,
+   * so a single long request can finish below zero. Hiding that would leave
+   * the user's next top-up silently paying off an invisible debt.
+   */
+  balanceUsd: number;
+  totalTopUpUsd: number;
+  totalUsageUsd: number;
+}
+
+function personalBalanceRef(uid: string) {
+  return getFirestore().collection(USERS).doc(uid).collection("aiBalance").doc("balance");
+}
+
+export async function getPersonalAiBalance(uid: string): Promise<PersonalAiBalance> {
+  const snap = await personalBalanceRef(uid).get();
+  const data = snap.data();
+  const totalTopUpMicros = typeof data?.totalTopUpMicros === "number" ? data.totalTopUpMicros : 0;
+  const totalUsageMicros = typeof data?.totalUsageMicros === "number" ? data.totalUsageMicros : 0;
+  return {
+    balanceUsd: (totalTopUpMicros - totalUsageMicros) / 1_000_000,
+    totalTopUpUsd: totalTopUpMicros / 1_000_000,
+    totalUsageUsd: totalUsageMicros / 1_000_000,
+  };
+}
+
+async function recordPersonalAiUsage(
+  uid: string,
+  model: string,
+  estimatedCostUsd: number,
+  estimatedCostMicros: number,
+  inputTokens: number,
+  outputTokens: number,
+  searchGroundingRequests: number,
+): Promise<number> {
+  const ref = personalBalanceRef(uid);
+  const increment = {
+    totalUsageMicros: FieldValue.increment(estimatedCostMicros),
+    totalInputTokens: FieldValue.increment(inputTokens),
+    totalOutputTokens: FieldValue.increment(outputTokens),
+    totalRequests: FieldValue.increment(1),
+    totalSearchGroundingRequests: FieldValue.increment(searchGroundingRequests),
+    updatedAt: Date.now(),
+  };
+  await ref.set(increment, { merge: true });
+  return estimatedCostUsd;
+}
+
+export async function addPersonalAiBudgetTopUp(
+  uid: string,
+  usd: number,
+  eventId: string,
+): Promise<boolean> {
+  if (!(usd > 0)) return false;
+  const fs = getFirestore();
+  const ref = personalBalanceRef(uid);
+  const eventRef = ref.collection("topupEvents").doc(eventId);
+  return fs.runTransaction(async (tx) => {
+    const seen = await tx.get(eventRef);
+    if (seen.exists) return false;
+    tx.set(eventRef, { usd, createdAt: Date.now() });
+    tx.set(
+      ref,
+      { totalTopUpMicros: FieldValue.increment(Math.round(usd * 1_000_000)), updatedAt: Date.now() },
+      { merge: true },
+    );
+    return true;
+  });
+}
+
+export interface PersonalTopupEvent {
+  id: string;
+  usd: number;
+  createdAt: number;
+}
+
+export async function getPersonalTopupHistory(uid: string, limit = 50): Promise<PersonalTopupEvent[]> {
+  const snap = await personalBalanceRef(uid)
+    .collection("topupEvents")
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+  return snap.docs.map((doc) => ({
+    id: doc.id,
+    usd: microsToUsd(doc.data()?.usd ? Math.round(doc.data().usd * 1_000_000) : 0),
+    createdAt: typeof doc.data()?.createdAt === "number" ? doc.data().createdAt : 0,
+  }));
 }

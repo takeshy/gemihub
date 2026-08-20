@@ -63,6 +63,13 @@ export async function action({ request }: Route.ActionArgs) {
     return handleVertexChatAction(request, rawBody);
   }
 
+  // Personal Vertex: Drive-mount users who opted into Vertex AI with a prepaid
+  // budget (no org project required). Uses the service-default Vertex connection.
+  if (typeof rawBody === "object" && (rawBody as { personalVertex?: unknown }).personalVertex === true) {
+    const { handlePersonalVertexChatAction } = await import("~/services/ai/personal-vertex-route.server");
+    return handlePersonalVertexChatAction(request, rawBody);
+  }
+
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;

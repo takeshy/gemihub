@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { currentAiUsageMonth, estimateVertexCostUsd } from "./ai-budget.server.ts";
-import { MODEL_PRICING, SEARCH_GROUNDING_COST } from "./ai/models.ts";
+import { VERTEX_MODEL_PRICING, SEARCH_GROUNDING_COST } from "./ai/models.ts";
 
 test("currentAiUsageMonth uses a stable UTC calendar month", () => {
   assert.equal(currentAiUsageMonth(new Date("2026-08-31T23:59:59Z")), "2026-08");
@@ -23,7 +23,7 @@ test("estimateVertexCostUsd prices input and output/thinking separately", () => 
 test("estimateVertexCostUsd matches the published per-token table", () => {
   // A budget priced below what Google charges is money we never bill for, so
   // every model the registry publishes must round-trip exactly.
-  for (const [model, price] of Object.entries(MODEL_PRICING)) {
+  for (const [model, price] of Object.entries(VERTEX_MODEL_PRICING)) {
     assert.equal(
       estimateVertexCostUsd(model, { inputTokens: 1_000_000 }),
       price.input * 1_000_000,

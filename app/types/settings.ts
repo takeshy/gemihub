@@ -633,6 +633,12 @@ export interface UserSettings {
   webpageBuilderEnabled: boolean;
   /** Path of the dashboard to open on app launch (e.g. "Dashboards/home.dashboard"). */
   homeDashboard?: string | null;
+  /**
+   * When true and no org project is selected, chat runs on the service-wide
+   * Vertex AI connection with a personal prepaid budget instead of the
+   * user's own Gemini API key. Top-ups are purchased from Settings > General.
+   */
+  usePersonalVertex: boolean;
   // Hubwork (paid feature) - web app builder with Sheets/Gmail
   hubwork?: HubworkSettings;
 }
@@ -764,6 +770,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   ragFeatureEnabled: false,
   webpageBuilderEnabled: false,
   homeDashboard: null,
+  usePersonalVertex: false,
 };
 
 /** Fixed folder name for agent skills. */

@@ -894,7 +894,9 @@ export function ChatPanel({
       // Inside an org project no Gemini API key is needed — chat runs on the
       // tenant's Vertex AI.
       const projectSelection = enterpriseSelectionRef.current;
-      if (!projectSelection && !isPaidPlan && !localApiKey) {
+      // Inside an org project or using personal Vertex, no Gemini API key is
+      // needed — chat runs on Vertex AI.
+      if (!projectSelection && !isPaidPlan && !localApiKey && settings.usePersonalVertex !== true) {
         if (hasEncryptedApiKey && onNeedUnlock) {
           pendingSendRef.current = { content, attachments, overrides };
           onNeedUnlock();
@@ -1066,6 +1068,14 @@ export function ChatPanel({
 
         // Paid plan (non-image models) → Interactions API via server
         const useInteractions = settings.apiPlan === "paid" && !isImageGenerationModel(effectiveModel);
+        // Personal Vertex: Drive-mount users who opted into Vertex AI with a
+        // prepaid budget. Takes priority over Interactions/API-key when no
+        // org project is selected.
+        // streamWithTools handles image models (responseModalities), so there
+        // is no reason to exclude them — doing so dropped an image request
+        // back onto the API-key path, which a personal-Vertex user has no key
+        // for.
+        const usePersonalVertex = !projectSelection && settings.usePersonalVertex === true;
 
         const chatCallbacks = {
           onDriveEvent: (event: import("~/engine/local-executor").DriveEvent) => {
@@ -1111,6 +1121,35 @@ export function ChatPanel({
               {
                 projectId: projectSelection.projectId,
                 mountKey: `gcs:${projectSelection.orgId}/${projectSelection.projectId}`,
+                model: effectiveModel,
+                canUseProxy,
+                messages: updatedMessages,
+                systemPrompt: fullSystemPrompt,
+                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
+                driveToolMode: effectiveDriveToolMode,
+                mcpServerIds: effectiveMcpIds,
+                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
+                webSearchEnabled: isWebSearch,
+                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                maxFunctionCalls: 50,
+                functionCallWarningThreshold: 10,
+                ragTopK: settings.ragTopK,
+                abortSignal: abortController.signal,
+                requirePlanApproval: needsPlanApproval,
+                settings,
+                okfRoot: settings.okfRoot,
+                activeOkfBundleIds,
+              },
+              chatCallbacks,
+            )
+          : usePersonalVertex
+          ? executeChatStream(
+              {
+                personalVertex: true,
+                // No mountKey: that namespaces the PROJECT storage cache. A
+                // fabricated one would send skill-workflow file writes into a
+                // namespace nothing else reads. The Drive mount's own cache is
+                // addressed by file id, not by mountKey.
                 model: effectiveModel,
                 canUseProxy,
                 messages: updatedMessages,

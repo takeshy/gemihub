@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEnterpriseContext } from "~/contexts/EnterpriseContext";
 import { useI18n } from "~/i18n/context";
+import { VERTEX_TOPUP_UNIT_USD } from "~/types/hubwork";
 import type { OrganizationAiSettings, OrgRole } from "~/types/enterprise";
 
 interface OrgItem { id: string; name: string; role: OrgRole | null }
@@ -25,7 +26,7 @@ interface AiPayload {
   };
   storage?: { usedBytes: number | null; quotaGb: number; includedGb: number; addonUnits: number };
 }
-type SectionId = "ai" | "members";
+type SectionId = "members" | "ai" | "storage";
 
 async function api<T>(url: string, options?: { method?: string; body?: object }): Promise<T> {
   const response = await fetch(url, {
@@ -38,8 +39,6 @@ async function api<T>(url: string, options?: { method?: string; body?: object })
   return result;
 }
 
-/** Keep in step with VERTEX_TOPUP_UNIT_USD in ai-budget.server.ts. */
-const VERTEX_TOPUP_UNIT_USD = 10;
 
 const inputClass = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900";
 const cardClass = "rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900";
@@ -146,6 +145,7 @@ export function EnterpriseTab() {
   const tabs: Array<{ id: SectionId; label: string; visible: boolean }> = [
     { id: "members", label: t("enterprise.tabMembers"), visible: canManage },
     { id: "ai", label: t("enterprise.tabAi"), visible: canManage },
+    { id: "storage", label: t("enterprise.tabStorage"), visible: canManage && !!ai?.storage },
   ];
 
   return (
@@ -179,6 +179,9 @@ export function EnterpriseTab() {
       {orgId && section === "ai" && canManage && ai && (
         <AiSection key={orgId} orgId={orgId} initial={ai} busy={busy} run={run} />
       )}
+      {orgId && section === "storage" && canManage && ai?.storage && (
+        <StorageSection key={orgId} orgId={orgId} initial={ai} busy={busy} />
+      )}
       {orgId && section === "members" && canManage && (
         <MembersSection key={orgId} orgId={orgId} members={members} ai={ai} busy={busy} run={run} isSuperOwner={isSuperOwner} />
       )}
@@ -196,8 +199,6 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
   const budget = initial.budget;
   const topUp = budget?.topUpUsd ?? initial.usage?.organization?.topUpUsd ?? 0;
   const budgetLimit = budget?.limitUsd ?? null;
-  const storage = initial.storage;
-  const storageUsedGb = storage?.usedBytes != null ? storage.usedBytes / 1_000_000_000 : null;
   return <div className="space-y-4">
     <section className={cardClass}>
       <h3 className="font-semibold">{t("enterprise.budgetTitle")}</h3>
@@ -262,54 +263,61 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
         <button className={`${primaryButton} mt-4`} disabled={busy || !location} onClick={() => void run(() => api("/api/orgs/ai-settings", { method: "POST", body: { orgId, vertexProjectId: project, vertexLocation: location, monthlyBudgetUsd: orgBudget || null, defaultUserMonthlyBudgetUsd: userBudget || null } }), t("enterprise.aiSettingsSaved"))}>{t("enterprise.saveAiSettings")}</button>
       </details>
     </section>
-    {storage && (
-      <section className={cardClass}>
-        <h3 className="font-semibold">{t("enterprise.storageTitle")}</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          {storageUsedGb != null
-            ? t("enterprise.storageUsage")
-                .replace("{used}", storageUsedGb.toFixed(2))
-                .replace("{quota}", String(storage.quotaGb))
-            : `— / ${storage.quotaGb} GB`}
-          {storage.addonUnits > 0 && (
-            <span className="ml-2">
-              {t("enterprise.storageAddonActive").replace("{units}", String(storage.addonUnits))}
-            </span>
-          )}
+  </div>;
+}
+
+function StorageSection({ orgId, initial, busy }: { orgId: string; initial: AiPayload; busy: boolean }) {
+  const { t } = useI18n();
+  const storage = initial.storage;
+  if (!storage) return null;
+  const storageUsedGb = storage.usedBytes != null ? storage.usedBytes / 1_000_000_000 : null;
+  return <div className="space-y-4">
+    <section className={cardClass}>
+      <h3 className="font-semibold">{t("enterprise.storageTitle")}</h3>
+      <p className="mt-1 text-sm text-gray-500">
+        {storageUsedGb != null
+          ? t("enterprise.storageUsage")
+              .replace("{used}", storageUsedGb.toFixed(2))
+              .replace("{quota}", String(storage.quotaGb))
+          : `— / ${storage.quotaGb} GB`}
+        {storage.addonUnits > 0 && (
+          <span className="ml-2">
+            {t("enterprise.storageAddonActive").replace("{units}", String(storage.addonUnits))}
+          </span>
+        )}
+      </p>
+      {storageUsedGb != null && (
+        <div className="mt-2 h-2 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-800">
+          <div
+            className={`h-full ${storageUsedGb / storage.quotaGb > 0.9 ? "bg-red-500" : "bg-blue-500"}`}
+            style={{ width: `${Math.min(100, (storageUsedGb / storage.quotaGb) * 100)}%` }}
+          />
+        </div>
+      )}
+      {storageUsedGb != null && storageUsedGb >= storage.quotaGb && (
+        <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs leading-5 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          {t("enterprise.storageFull")}
         </p>
-        {storageUsedGb != null && (
-          <div className="mt-2 h-2 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-800">
-            <div
-              className={`h-full ${storageUsedGb / storage.quotaGb > 0.9 ? "bg-red-500" : "bg-blue-500"}`}
-              style={{ width: `${Math.min(100, (storageUsedGb / storage.quotaGb) * 100)}%` }}
-            />
-          </div>
-        )}
-        {storageUsedGb != null && storageUsedGb >= storage.quotaGb && (
-          <p className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs leading-5 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
-            {t("enterprise.storageFull")}
-          </p>
-        )}
-        <p className="mt-3 text-xs leading-5 text-gray-500">
-          {t("enterprise.storageIncluded").replace("{included}", String(storage.includedGb))}
-        </p>
-        {storage.addonUnits > 0 ? (
-          <p className="mt-3 text-xs leading-5 text-gray-500">{t("enterprise.storageAddonMaxed")}</p>
-        ) : (
-        <form method="POST" action="/hubwork/api/stripe/checkout" className="mt-3 flex flex-wrap items-center gap-2">
-          <input type="hidden" name="plan" value="storage-addon" />
-          <input type="hidden" name="orgId" value={orgId} />
-          {/* One add-on per organization, so there is no quantity to choose. */}
-          <input type="hidden" name="units" value="1" />
-          <select name="currency" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="jpy">
-            <option value="jpy">{t("enterprise.storageJpy")}</option>
-            <option value="usd">{t("enterprise.storageUsd")}</option>
-          </select>
-          <button type="submit" className={secondaryButton} disabled={busy}>{t("enterprise.buyStorage")}</button>
-        </form>
-        )}
-      </section>
-    )}
+      )}
+      <p className="mt-3 text-xs leading-5 text-gray-500">
+        {t("enterprise.storageIncluded").replace("{included}", String(storage.includedGb))}
+      </p>
+      {storage.addonUnits > 0 ? (
+        <p className="mt-3 text-xs leading-5 text-gray-500">{t("enterprise.storageAddonMaxed")}</p>
+      ) : (
+      <form method="POST" action="/hubwork/api/stripe/checkout" className="mt-3 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="plan" value="storage-addon" />
+        <input type="hidden" name="orgId" value={orgId} />
+        {/* One add-on per organization, so there is no quantity to choose. */}
+        <input type="hidden" name="units" value="1" />
+        <select name="currency" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="jpy">
+          <option value="jpy">{t("enterprise.storageJpy")}</option>
+          <option value="usd">{t("enterprise.storageUsd")}</option>
+        </select>
+        <button type="submit" className={secondaryButton} disabled={busy}>{t("enterprise.buyStorage")}</button>
+      </form>
+      )}
+    </section>
   </div>;
 }
 

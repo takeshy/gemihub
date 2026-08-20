@@ -371,7 +371,7 @@ export async function handleVertexChatAction(
           maxFunctionCalls: requestSettings?.maxFunctionCalls,
           executeToolCall,
           delegateToolNames,
-          billing: { orgId: ctx.orgId, uid: ctx.uid },
+          billing: { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
         })) {
           sendChunk(chunk);
         }

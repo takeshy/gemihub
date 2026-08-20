@@ -64,6 +64,31 @@ export async function action({ request }: Route.ActionArgs) {
         break;
       }
 
+      // Personal Vertex budget top-up (one-time payment): add to the user's
+      // personal prepaid AI balance. Idempotent via the checkout session id.
+      if (session.metadata?.type === "personal-vertex-topup") {
+        // Checkout refuses to start without an email, so a missing one here
+        // means a paid session we cannot credit — log it loudly rather than
+        // dropping the payment silently.
+        const email = session.metadata.email || session.customer_details?.email || "";
+        const units = Math.max(1, Math.min(20, parseInt(session.metadata.units || "1", 10) || 1));
+        if (!email) {
+          console.error(`[stripe-webhook] personal-vertex-topup ${session.id} has no email to credit`);
+          break;
+        }
+        const { addPersonalAiBudgetTopUp, VERTEX_TOPUP_UNIT_USD } = await import("~/services/ai-budget.server");
+        const { emailToUid } = await import("~/services/organizations.server");
+        const credited = await addPersonalAiBudgetTopUp(
+          emailToUid(email),
+          units * VERTEX_TOPUP_UNIT_USD,
+          session.id,
+        );
+        if (!credited) {
+          console.warn(`[stripe-webhook] personal-vertex-topup ${session.id} already credited; ignoring redelivery`);
+        }
+        break;
+      }
+
       const rootFolderId = session.metadata?.rootFolderId || "";
       const accountSlug = session.metadata?.accountSlug || "";
       const planType = (session.metadata?.plan === "lite" ? "lite" : "business") as "lite" | "business";

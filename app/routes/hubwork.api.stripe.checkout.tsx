@@ -114,6 +114,50 @@ export async function action({ request }: Route.ActionArgs) {
     return redirect(topUpSession.url);
   }
 
+  // Personal Vertex budget top-up: a one-time payment ($10 / ¥1,500 per unit)
+  // that adds to the user's personal prepaid AI balance. No org required —
+  // the user's email is the key. Reuses the same Stripe price as org top-ups.
+  if (requestedPlan === "personal-vertex-topup") {
+    // The balance is keyed by email. Without one the webhook has nothing to
+    // credit, and the payment would go through for nothing.
+    if (!tokens.email) {
+      throw new Response("This account has no email address to credit the balance to", { status: 400 });
+    }
+    const unitsRaw = Number(formData.get("units") || 1);
+    const units = Number.isInteger(unitsRaw) && unitsRaw >= 1 && unitsRaw <= 20 ? unitsRaw : 1;
+    const topUpCurrency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
+    const topUpPriceId = topUpCurrency === "usd"
+      ? process.env.STRIPE_PRICE_ID_VERTEX_TOPUP_USD ?? process.env.STRIPE_PRICE_ID_VERTEX_TOPUP
+      : process.env.STRIPE_PRICE_ID_VERTEX_TOPUP;
+    if (!topUpPriceId) {
+      throw new Response("Stripe is not configured for budget top-ups", { status: 500 });
+    }
+    const topUpUrl = new URL(request.url);
+    const topUpProto = request.headers.get("x-forwarded-proto") || topUpUrl.protocol.replace(":", "");
+    const topUpBase = `${topUpProto}://${topUpUrl.host}`;
+    const stripeClient = getStripe();
+    const topUpSessionCurrency = await sessionCurrencyFor(topUpPriceId, topUpCurrency);
+    const topUpSession = await stripeClient.checkout.sessions.create({
+      mode: "payment",
+      ...(topUpSessionCurrency ? { currency: topUpSessionCurrency } : {}),
+      line_items: [{ price: topUpPriceId, quantity: units }],
+      success_url: `${topUpBase}/settings?tab=general`,
+      cancel_url: `${topUpBase}/settings?tab=general`,
+      customer_email: tokens.email || undefined,
+      metadata: {
+        type: "personal-vertex-topup",
+        // The personal balance is keyed by email (emailToUid lowercases it).
+        email: tokens.email,
+        units: String(units),
+        currency: topUpCurrency,
+      },
+    });
+    if (!topUpSession.url) {
+      throw new Response("Failed to create checkout session", { status: 500 });
+    }
+    return redirect(topUpSession.url);
+  }
+
   // Storage add-on: a monthly subscription of 500 GB units (¥5,000 / $30
   // per unit) that extends the organization's storage quota. Org
   // owners/admins only. Each purchase is its own subscription so it can be

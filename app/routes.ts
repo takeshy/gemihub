@@ -71,6 +71,8 @@ export default [
   route("api/chat/interactions", "routes/api.chat.interactions.tsx"),
   route("api/chat/compact", "routes/api.chat.compact.tsx"),
   route("api/chat/history", "routes/api.chat.history.tsx"),
+  route("api/personal-vertex/balance", "routes/api.personal-vertex.balance.tsx"),
+  route("api/personal-vertex/history", "routes/api.personal-vertex.history.tsx"),
   route("api/settings/mcp-test", "routes/api.settings.mcp-test.tsx"),
   route("api/settings/mcp-oauth-token", "routes/api.settings.mcp-oauth-token.tsx"),
   route("auth/mcp-oauth-callback", "routes/auth.mcp-oauth-callback.tsx"),

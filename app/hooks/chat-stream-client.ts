@@ -19,6 +19,7 @@ import type { Message, StreamChunk, StreamChunkUsage, ToolCall, McpAppInfo } fro
 import type { DriveEvent } from "~/engine/local-executor";
 import type { ExecutionLog } from "~/engine/types";
 import { isDriveToolMediaResult } from "~/services/gemini-content-builders";
+import { executeLocalDriveTool } from "~/services/drive-tools-local";
 import {
   executeSkillWorkflowTool,
   type SkillWorkflowCallbacks,
@@ -54,8 +55,10 @@ export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
 }
 
 export interface ChatStreamOptions {
-  /** Phase 5e-step4: required so /api/chat can route to the tenant's Vertex project. */
-  projectId: string;
+  /** Org project — required for org-scoped Vertex. Omit for personalVertex. */
+  projectId?: string;
+  /** When true, the request runs on the service-default Vertex connection with a personal prepaid budget. */
+  personalVertex?: boolean;
   /** Enterprise tenant identifier ({orgId}/{projectId}) for GCS-backed local tools. */
   mountKey?: string;
   model: ModelType;
@@ -271,6 +274,8 @@ function buildToolDispatcher(
     settings?: UserSettings;
     mountKey?: string;
     projectId?: string;
+    /** Drive mount running on personal Vertex — writes go to the Drive cache. */
+    personalVertex?: boolean;
     okfRoot?: string;
     activeOkfBundleIds?: string[];
   },
@@ -297,6 +302,23 @@ function buildToolDispatcher(
     }
 
     if (name === "create_drive_file" || name === "update_drive_file") {
+      // Personal Vertex runs on the Drive mount, whose local-first writes go
+      // through drive-tools-local (IndexedDB + editHistory). The project
+      // storage cache below needs a projectId this path does not have.
+      if (options?.personalVertex) {
+        const result = await executeLocalDriveTool(
+          name,
+          args,
+          { onDriveEvent: (event) => callbacks?.onDriveEvent?.(event) },
+          abortSignal,
+        );
+        // Strip the echoed content before it goes back to the model.
+        if (typeof result === "object" && result !== null) {
+          const { content: _content, ...rest } = result as Record<string, unknown>;
+          return rest;
+        }
+        return result;
+      }
       return executeLocalStorageWriteTool(name, args, callbacks, options);
     }
 
@@ -514,6 +536,7 @@ export async function* executeChatStream(
 ): AsyncGenerator<StreamChunk> {
   const {
     projectId,
+    personalVertex,
     model,
     canUseProxy,
     messages,
@@ -552,6 +575,7 @@ export async function* executeChatStream(
       settings,
       mountKey: options.mountKey,
       projectId: options.projectId,
+      personalVertex,
       okfRoot,
       activeOkfBundleIds,
     },
@@ -656,7 +680,7 @@ export async function* executeChatStream(
     // Tool results from the previous round are now baked into workingMessages
     // (as the assistant turn's toolCalls + toolResults), not a separate field.
     const requestBody: Record<string, unknown> = {
-      projectId,
+      ...(personalVertex ? { personalVertex: true } : { projectId }),
       messages: workingMessages.map(m => ({
         role: m.role,
         content: m.content,

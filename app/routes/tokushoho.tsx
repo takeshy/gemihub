@@ -80,6 +80,7 @@ function TokushohoJa() {
         <li>Lite プラン：月額 300円（税込）</li>
         <li>Business プラン：月額 7,500円（税込・組織単位、Vertex AI利用枠 $30分込み）</li>
         <li>Vertex AI利用枠 追加購入：1,500円（$10分）／単位（都度払い、購入した請求期間と次の期間の終わりまで有効）</li>
+        <li>Vertex AI プリペイド残高（個人・Drive マウント）：1,500円（$10分）／単位（都度払い、有効期限なし）</li>
         <li>ストレージ追加：月額 5,000円／500GB（1組織1回まで。Businessプランの100GBと合わせて最大600GB）</li>
       </ul>
     )},
@@ -134,6 +135,7 @@ function TokushohoEn() {
         <li>Lite plan: ¥300/month (tax included)</li>
         <li>Business plan: ¥7,500/month (tax included, per organization, includes a $30 Vertex AI budget)</li>
         <li>Vertex AI budget top-up: ¥1,500 ($10) per unit (one-time payment, usable until the end of the billing period after purchase)</li>
+        <li>Vertex AI prepaid balance (personal, Drive mount): ¥1,500 ($10) per unit (one-time payment, no expiry)</li>
         <li>Storage add-on: ¥5,000 ($30)/month per 500 GB unit (100 GB included in the Business plan)</li>
       </ul>
     )},

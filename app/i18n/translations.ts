@@ -593,7 +593,6 @@ export interface TranslationStrings {
   "settings.general.wrongCurrentPassword": string;
   "settings.general.passwordMismatch": string;
   "settings.general.passwordMinLength": string;
-  "settings.general.apiKeyPasswordSection": string;
   "settings.general.apiKeyOptional": string;
   "settings.general.configured": string;
   "settings.general.invalidApiKey": string;
@@ -1115,6 +1114,7 @@ export interface TranslationStrings {
   "enterprise.roleAdmin": string;
   "enterprise.tabMembers": string;
   "enterprise.tabAi": string;
+  "enterprise.tabStorage": string;
   "enterprise.projectsAdvanced": string;
   "enterprise.projectsAdvancedDesc": string;
   "enterprise.openProjects": string;
@@ -1349,6 +1349,16 @@ export interface TranslationStrings {
   "settings.general.enableRagDescription": string;
   "settings.general.enableWebpageBuilder": string;
   "settings.general.enableWebpageBuilderDescription": string;
+  "settings.general.aiProvider": string;
+  "settings.general.tabApikey": string;
+  "settings.general.tabVertex": string;
+  "settings.general.enableVertexAiDescription": string;
+  "settings.general.vertexBalance": string;
+  "settings.general.vertexBalanceEmpty": string;
+  "settings.general.buyVertexCredit": string;
+  "settings.general.purchaseHistory": string;
+  "settings.general.historyDate": string;
+  "settings.general.historyAmount": string;
   "settings.general.showManagementFolders": string;
   "settings.general.showManagementFoldersDescription": string;
   "skills.selector.title": string;
@@ -1956,7 +1966,6 @@ const en: TranslationStrings = {
   "settings.general.wrongCurrentPassword": "Current password is incorrect",
   "settings.general.passwordMismatch": "Passwords do not match",
   "settings.general.passwordMinLength": "Password must be at least 8 characters",
-  "settings.general.apiKeyPasswordSection": "API Key & Password",
   "settings.general.apiKeyOptional": "Optional. Set a key to use AI features on your own Drive; organization projects run on the organization's Vertex AI and need no key. A password is required only when you store a key, because it is kept encrypted.",
   "settings.general.configured": "API Key & Encryption configured.",
   "settings.general.invalidApiKey": "Invalid API key. Please check your Gemini API key and try again.",
@@ -2478,6 +2487,7 @@ const en: TranslationStrings = {
   "enterprise.roleAdmin": "Admin",
   "enterprise.tabMembers": "Members",
   "enterprise.tabAi": "Vertex AI",
+  "enterprise.tabStorage": "Storage",
   "enterprise.projectsAdvanced": "Advanced: project management",
   "enterprise.projectsAdvancedDesc": "The default project is used automatically, so this is usually unnecessary. Open it only to split work into multiple workspaces.",
   "enterprise.openProjects": "Open project management",
@@ -2712,6 +2722,16 @@ const en: TranslationStrings = {
   "settings.general.enableRagDescription": "Show the RAG settings tab and the RAG selector in chat.",
   "settings.general.enableWebpageBuilder": "Enable Web app builder",
   "settings.general.enableWebpageBuilderDescription": "Show the \"Build a web app\" action in chat and keep the Webpage Builder skill up to date. Requires a Business plan.",
+  "settings.general.aiProvider": "AI Provider",
+  "settings.general.tabApikey": "Gemini API Key",
+  "settings.general.tabVertex": "Vertex AI (Prepaid)",
+  "settings.general.enableVertexAiDescription": "Run chat on Google Vertex AI with a prepaid balance. No Gemini API key needed. Purchase credits below — $10 (¥1,500) per unit, no expiry.",
+  "settings.general.vertexBalance": "Current balance",
+  "settings.general.vertexBalanceEmpty": "Purchase credits to start using Vertex AI",
+  "settings.general.buyVertexCredit": "Buy credits",
+  "settings.general.purchaseHistory": "Purchase history",
+  "settings.general.historyDate": "Date",
+  "settings.general.historyAmount": "Amount",
   "settings.general.showManagementFolders": "Show management folders",
   "settings.general.showManagementFoldersDescription": "Show folders used by external tools (e.g. LocalLlmHub) in the file tree.",
   "skills.selector.title": "Agent Skills",
@@ -3319,7 +3339,6 @@ const ja: TranslationStrings = {
   "settings.general.wrongCurrentPassword": "現在のパスワードが正しくありません",
   "settings.general.passwordMismatch": "パスワードが一致しません",
   "settings.general.passwordMinLength": "パスワードは8文字以上である必要があります",
-  "settings.general.apiKeyPasswordSection": "APIキー & パスワード",
   "settings.general.apiKeyOptional": "任意です。自分のDriveでAI機能を使う場合に設定してください（組織プロジェクトは組織のVertex AIで動作するためキー不要です）。キーを保存するときのみ、暗号化のためパスワードが必要です。",
   "settings.general.configured": "APIキーと暗号化が設定されています。",
   "settings.general.invalidApiKey": "無効なAPIキーです。Gemini APIキーを確認して再度お試しください。",
@@ -3841,6 +3860,7 @@ const ja: TranslationStrings = {
   "enterprise.roleAdmin": "管理者",
   "enterprise.tabMembers": "メンバー",
   "enterprise.tabAi": "Vertex AI",
+  "enterprise.tabStorage": "ストレージ",
   "enterprise.projectsAdvanced": "Advanced：プロジェクト管理",
   "enterprise.projectsAdvancedDesc": "通常はデフォルトプロジェクトが自動的に使われるため、設定は不要です。複数の作業領域を分けたい場合だけ開いてください。",
   "enterprise.openProjects": "プロジェクト管理を開く",
@@ -4075,6 +4095,16 @@ const ja: TranslationStrings = {
   "settings.general.enableRagDescription": "設定のRAGタブと、チャットのRAGセレクタを表示します。",
   "settings.general.enableWebpageBuilder": "Webアプリ構築を使用する",
   "settings.general.enableWebpageBuilderDescription": "チャットの「Webアプリを構築する」導線を表示し、Webページビルダースキルの更新案内を有効にします（Businessプランが必要です）。",
+  "settings.general.aiProvider": "AIプロバイダ",
+  "settings.general.tabApikey": "Gemini APIキー",
+  "settings.general.tabVertex": "Vertex AI（プリペイド）",
+  "settings.general.enableVertexAiDescription": "チャットをGoogle Vertex AIで実行します（プリペイド残高）。Gemini APIキーは不要です。下記からクレジットを購入 — $10（¥1,500）単位、有効期限なし。",
+  "settings.general.vertexBalance": "現在の残高",
+  "settings.general.vertexBalanceEmpty": "クレジットを購入してVertex AIを利用開始",
+  "settings.general.buyVertexCredit": "クレジット購入",
+  "settings.general.purchaseHistory": "購入履歴",
+  "settings.general.historyDate": "日付",
+  "settings.general.historyAmount": "金額",
   "settings.general.showManagementFolders": "管理フォルダを表示",
   "settings.general.showManagementFoldersDescription": "外部ツールが使用するフォルダ（例: LocalLlmHub）をファイルツリーに表示します。",
   "skills.selector.title": "エージェントスキル",
