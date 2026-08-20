@@ -95,6 +95,11 @@ output "gemihub_okf_bucket" {
   value       = module.gemihub.gemihub_okf_bucket
 }
 
+output "tenant_data_bucket" {
+  description = "Private Cloud Storage bucket for organization project data"
+  value       = module.gemihub.tenant_data_bucket
+}
+
 output "nameservers" {
   description = "Set these nameservers at your domain registrar"
   value       = module.gemihub.nameservers

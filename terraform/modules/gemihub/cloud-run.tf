@@ -86,6 +86,11 @@ resource "google_cloud_run_v2_service" "app" {
       }
 
       env {
+        name  = "GCS_BUCKET_NAME"
+        value = google_storage_bucket.tenant_data.name
+      }
+
+      env {
         name  = "GEMIHUB_OKF_BUCKET"
         value = google_storage_bucket.gemihub_okf.name
       }

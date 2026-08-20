@@ -195,12 +195,18 @@ export function useStorageSync() {
       });
       // Push all locally-modified and brand-new files.
       const toPush = [...diff.toPush, ...diff.localOnly];
+      const localOnly = new Set(diff.localOnly);
       const total = toPush.length;
       setCachingProgress({ total, done: 0 });
       let done = 0;
       for (const path of toPush) {
         try {
-          await pushObject(mount, mountKey, path);
+          await pushObject(
+            mount,
+            mountKey,
+            path,
+            localOnly.has(path) ? { ifRevisionMatch: "0" } : undefined,
+          );
         } catch (err) {
           if (err instanceof StorageSyncError && err.status === 413) {
             // Storage quota reached mid-push (another member wrote too).

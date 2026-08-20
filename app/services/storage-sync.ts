@@ -361,6 +361,7 @@ export async function pushObject(
   mount: string,
   mountKey: string,
   relativePath: string,
+  options?: { ifRevisionMatch?: string },
 ): Promise<CachedObject> {
   if (isSyncExcludedPath(relativePath)) {
     throw new StorageSyncError("object is excluded from sync", 400, relativePath);
@@ -386,7 +387,12 @@ export async function pushObject(
       content: cached.content,
       encoding: cached.encoding,
       contentType: cached.contentType,
-      ifRevisionMatch: cached.revision || "0",
+      // A fresh remote snapshot may prove that this is a new object even when
+      // IndexedDB still carries a generation from an older/removed backend.
+      // Let that caller explicitly require non-existence instead of reusing
+      // the stale cached generation. Ordinary updates retain the cached
+      // generation and therefore remain protected against lost updates.
+      ifRevisionMatch: (options?.ifRevisionMatch ?? cached.revision) || "0",
     }),
   });
 

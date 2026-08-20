@@ -49,15 +49,24 @@ function memberDoc(orgId: string, uid: string) {
 }
 
 function toOrganization(doc: OrganizationDoc): Organization {
+  const storedTenant = doc.tenantProject ?? {
+    gcsBucket: "",
+    region: "global",
+  };
+  // Production uses one Terraform-managed bucket with an organization/project
+  // prefix for tenant isolation. Treat the deployment setting as authoritative
+  // so organizations created before the bucket was wired into Cloud Run do not
+  // remain pointed at the old, synthesized (and never-created) gemihub-{orgId}
+  // bucket name stored in Firestore.
+  const configuredBucket = process.env.GCS_BUCKET_NAME?.trim();
   return {
     id: doc.id,
     name: doc.name,
     ownerUid: doc.ownerUid,
     idp: doc.idp ?? null,
-    tenantProject: doc.tenantProject ?? {
-      gcsBucket: "",
-      region: "global",
-    },
+    tenantProject: configuredBucket
+      ? { ...storedTenant, gcsBucket: configuredBucket }
+      : storedTenant,
     aiSettings: { ...DEFAULT_AI_SETTINGS, ...doc.aiSettings },
     storageAddons: doc.storageAddons ?? {},
     ...(typeof doc.budgetAnchorDay === "number" ? { budgetAnchorDay: doc.budgetAnchorDay } : {}),
