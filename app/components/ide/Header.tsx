@@ -136,7 +136,7 @@ export function Header({
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         <button onClick={onLogoClick} className="flex items-center gap-1.5 shrink-0 hover:opacity-80 cursor-pointer">
           <img src="/icons/icon-192x192.png" alt="" width={20} height={20} className="rounded" />
-          <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+          <span className="hidden text-sm font-bold text-gray-900 dark:text-gray-100 sm:inline">
             GemiHub
           </span>
         </button>
