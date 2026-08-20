@@ -14,7 +14,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
-import { invalidateIndexCache } from "~/routes/_index";
+import { invalidateIndexCache } from "~/utils/index-cache";
 import { StatusBanner, SectionCard, Label, inputClass } from "~/components/settings/shared";
 import { RagFilesDialog } from "~/components/settings/RagFilesDialog";
 import type { UserSettings, RagSetting } from "~/types/settings";

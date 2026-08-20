@@ -27,7 +27,7 @@ import {
   getDefaultModelForPlan,
   isModelAllowedForPlan,
 } from "~/types/settings";
-import { I18nProvider, useI18n } from "~/i18n/context";
+import { I18nProvider } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import {
@@ -36,33 +36,16 @@ import {
   generateKeyPair,
   encryptData,
 } from "~/services/crypto-core";
-import {
-  ArrowLeft,
-  Settings as SettingsIcon,
-  Server,
-  Database,
-  Terminal,
-  RefreshCw,
-  Puzzle,
-  Keyboard,
-  Globe,
-  Building2,
-} from "lucide-react";
-import { EnterpriseTab } from "~/components/settings/EnterpriseTab";
 import { EnterpriseProvider } from "~/contexts/EnterpriseContext";
 import type { EnterpriseSessionContext } from "~/types/enterprise";
-import { CommandsTab } from "~/components/settings/CommandsTab";
-import { PluginsTab } from "~/components/settings/PluginsTab";
-import { ShortcutsTab } from "~/components/settings/ShortcutsTab";
-import { GeneralTab } from "~/components/settings/GeneralTab";
-import { SyncTab } from "~/components/settings/SyncTab";
-import { McpTab } from "~/components/settings/McpTab";
-import { RagTab } from "~/components/settings/RagTab";
-import { HubworkTab } from "~/components/settings/HubworkTab";
-import { useIsMobile } from "~/hooks/useIsMobile";
 import { PluginProvider } from "~/contexts/PluginContext";
 import { isActivePremiumAccount } from "~/types/hubwork";
 import { resolveSubmittedGeminiApiKey } from "~/utils/settings-api-key";
+import {
+  SettingsTemplate,
+  isSettingsTabId,
+  type SettingsTabId,
+} from "~/templates/SettingsTemplate";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,26 +54,6 @@ import { resolveSubmittedGeminiApiKey } from "~/utils/settings-api-key";
 function maskApiKey(key: string): string {
   if (key.length <= 8) return "***";
   return key.slice(0, 4) + "***" + key.slice(-4);
-}
-
-type TabId = "general" | "enterprise" | "mcp" | "rag" | "commands" | "plugins" | "sync" | "shortcuts" | "hubwork";
-
-import type { TranslationStrings } from "~/i18n/translations";
-
-const TABS: { id: TabId; labelKey: keyof TranslationStrings; icon: typeof SettingsIcon; desktopOnly?: boolean }[] = [
-  { id: "general", labelKey: "settings.tab.general", icon: SettingsIcon },
-  { id: "enterprise", labelKey: "settings.tab.enterprise", icon: Building2 },
-  { id: "sync", labelKey: "settings.tab.sync", icon: RefreshCw },
-  { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
-  { id: "rag", labelKey: "settings.tab.rag", icon: Database },
-  { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
-  { id: "shortcuts", labelKey: "settings.tab.shortcuts", icon: Keyboard, desktopOnly: true },
-  { id: "plugins", labelKey: "settings.tab.plugins", icon: Puzzle },
-  { id: "hubwork", labelKey: "settings.tab.hubwork", icon: Globe },
-];
-
-function isTabId(value: string | null): value is TabId {
-  return value !== null && TABS.some((tab) => tab.id === value);
 }
 
 function describeError(error: unknown): string {
@@ -845,7 +808,8 @@ clientLoader.hydrate = true as const;
 
 export default function Settings() {
   const { settings, hasApiKey, maskedKey, hasHubworkScopes, rootFolderId, enterprise, hasOrganizations, showEnterpriseTab, enterpriseError } = useLoaderData<typeof loader>();
-  const [activeTab, setActiveTab] = useState<TabId>("general");
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
 
   const [currentLang, setCurrentLang] = useState<Language>(settings.language ?? "en");
   useApplySettings(currentLang, settings.fontSize, settings.theme);
@@ -862,7 +826,7 @@ export default function Settings() {
   // change" to the Router and this effect would never re-fire.
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
-    if (isTabId(requestedTab)) {
+    if (isSettingsTabId(requestedTab)) {
       setActiveTab(requestedTab);
     }
     if (searchParams.has("mcp-oauth-return")) {
@@ -904,14 +868,22 @@ export default function Settings() {
     >
     <I18nProvider language={currentLang}>
       <PluginProvider pluginConfigs={settings.plugins || []} language={currentLang} hasPremium={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}>
-        <SettingsInner
+        <SettingsTemplate
           settings={settings}
           hasApiKey={hasApiKey}
           maskedKey={maskedKey}
           hasHubworkScopes={hasHubworkScopes}
           rootFolderId={rootFolderId}
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          onTabChange={setActiveTab}
+          onBack={() => {
+            const prev = document.referrer;
+            if (prev && new URL(prev).origin === window.location.origin) {
+              navigate(-1);
+            } else {
+              navigate("/");
+            }
+          }}
           onLanguageChange={setCurrentLang}
           hubworkCallback={hubworkCallback}
           showEnterpriseTab={showEnterpriseTab}
@@ -920,123 +892,5 @@ export default function Settings() {
       </PluginProvider>
     </I18nProvider>
     </EnterpriseProvider>
-  );
-}
-
-function SettingsInner({
-  settings,
-  hasApiKey,
-  maskedKey,
-  hasHubworkScopes,
-  rootFolderId,
-  activeTab,
-  setActiveTab,
-  onLanguageChange,
-  hubworkCallback,
-  showEnterpriseTab,
-  enterpriseError,
-}: {
-  settings: UserSettings;
-  hasApiKey: boolean;
-  maskedKey: string | null;
-  hasHubworkScopes: boolean;
-  rootFolderId: string;
-  activeTab: TabId;
-  setActiveTab: (tab: TabId) => void;
-  onLanguageChange: (lang: Language) => void;
-  hubworkCallback: boolean;
-  showEnterpriseTab: boolean;
-  enterpriseError: string | null;
-}) {
-  const { t } = useI18n();
-  const navigate = useNavigate();
-  const isMobile = useIsMobile();
-  const hasOwnPlan = !!settings.hubwork?.plan;
-  const orgFilteredTabs = TABS.filter((tab) => {
-    if (tab.id === "enterprise") return showEnterpriseTab;
-    // Personal subscription tab: an invited organization member has no plan of
-    // their own and nothing to manage here — the organization pays. The
-    // purchaser keeps it (their plan is how they reach the billing portal).
-    if (tab.id === "hubwork") return hasOwnPlan || !showEnterpriseTab;
-    // RAG is an advanced, opt-in feature (Settings > General).
-    if (tab.id === "rag") return settings.ragFeatureEnabled ?? false;
-    return true;
-  });
-  const visibleTabs = isMobile ? orgFilteredTabs.filter((tab) => !tab.desktopOnly) : orgFilteredTabs;
-
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
-          <button
-            onClick={() => {
-              // Go back if previous page was same origin, otherwise go to top
-              const prev = document.referrer;
-              if (prev && new URL(prev).origin === window.location.origin) {
-                navigate(-1);
-              } else {
-                navigate("/");
-              }
-            }}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{t("settings.title")}</h1>
-        </div>
-      </header>
-
-      {/* Tabs */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-5xl mx-auto px-4">
-          <nav className="flex gap-1 overflow-x-auto scrollbar-hide" aria-label="Settings tabs">
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                    isActive
-                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {t(tab.labelKey)}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      {/* Tab content */}
-      <main className="max-w-5xl mx-auto px-4 py-4 sm:py-8">
-        {activeTab === "general" && (
-          <GeneralTab settings={settings} hasApiKey={hasApiKey} maskedKey={maskedKey} onLanguageChange={onLanguageChange} />
-        )}
-        {activeTab === "enterprise" && (
-          <>
-            {enterpriseError && (
-              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                <p className="font-medium">{t("settings.enterprise.lookupFailed")}</p>
-                <p className="mt-1 break-all font-mono text-xs">{enterpriseError}</p>
-              </div>
-            )}
-            {showEnterpriseTab && <EnterpriseTab />}
-          </>
-        )}
-        {activeTab === "sync" && <SyncTab settings={settings} />}
-        {activeTab === "mcp" && <McpTab settings={settings} />}
-        {activeTab === "rag" && (settings.ragFeatureEnabled ?? false) && <RagTab settings={settings} />}
-        {activeTab === "commands" && <CommandsTab settings={settings} />}
-        {activeTab === "plugins" && <PluginsTab settings={settings} />}
-        {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}
-        {activeTab === "hubwork" && (hasOwnPlan || !showEnterpriseTab) && <HubworkTab settings={settings} hasHubworkScopes={hasHubworkScopes} rootFolderId={rootFolderId} isCallback={hubworkCallback} />}
-      </main>
-    </div>
   );
 }

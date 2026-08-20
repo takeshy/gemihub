@@ -11,7 +11,7 @@ function SyncEn() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Sync: Push to Drive / Pull to Local</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/push_pull.png" alt="Sync: Push to Drive / Pull to Local" className="w-full" loading="lazy" />
+        <img src="/images/push_pull_en.png" alt="Push changes list in the IDE" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <p>
@@ -28,7 +28,7 @@ function SyncEn() {
           Before syncing, a diff dialog shows exactly which files will be synced, with status badges (new, modified, deleted).
         </p>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/pull_diff.png" alt="Sync diff dialog" className="w-full" loading="lazy" />
+          <img src="/images/pull_diff_en.png" alt="Pull changes list in the IDE" className="w-full" loading="lazy" />
         </figure>
         <p>
           If you want to keep your local version over the pulled content, you can open the file first and upload it via <strong>Temp UP</strong>, then perform the Pull, and afterwards overwrite it using <strong>Temp DL</strong>. This will mark the file as locally modified so it will be uploaded on the next Push.
@@ -41,7 +41,7 @@ function SyncEn() {
 
         <h2>Conflict Resolution</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/conflict.png" alt="Conflict resolution dialog" className="w-full" loading="lazy" />
+          <img src="/images/conflict_en.png" alt="Conflict resolution dialog" className="w-full" loading="lazy" />
         </figure>
         <p>
           A conflict occurs when the same file has been modified both locally and on Drive since the last sync. When conflicts are detected:
@@ -55,7 +55,7 @@ function SyncEn() {
 
         <h2>Sync Settings</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_sync.png" alt="Sync settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_sync_en.png" alt="Sync settings" className="w-full" loading="lazy" />
         </figure>
         <p>In <strong>Settings &gt; Sync</strong>, you can:</p>
         <ul>

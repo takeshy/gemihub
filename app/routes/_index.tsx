@@ -11,9 +11,12 @@ import { resolveLanguage } from "~/i18n/resolve-language";
 import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, WifiOff, AlertTriangle, Loader2, Check, AlertCircle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
+import { invalidateIndexCache, registerIndexCacheInvalidator } from "~/utils/index-cache";
+import { getCachedLoaderDataInMemory, registerLoaderDataReader } from "~/services/loader-data-memory";
 import { EditorContextProvider, useEditorContext } from "~/contexts/EditorContext";
 import { setCachedFile, getCachedLoaderData, setCachedLoaderData, getLocalSyncMeta, setLocalSyncMeta, getAllCachedFiles, clearAllCache } from "~/services/indexeddb-cache";
-import { PluginProvider, usePlugins } from "~/contexts/PluginContext";
+import { PluginProvider } from "~/contexts/PluginContext";
+import { usePlugins } from "~/contexts/plugin-context";
 import { SkillProvider } from "~/contexts/SkillContext";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally } from "~/engine/local-executor";
@@ -252,11 +255,10 @@ function getLocalStorageLanguage(): import("~/types/settings").Language | null {
 
 type LoaderData = Awaited<ReturnType<Route.ClientLoaderArgs["serverLoader"]>>;
 let cachedLoaderData: LoaderData | null = null;
-
-/** In-memory access to loader data (avoids IndexedDB round-trip). */
-export function getCachedLoaderDataInMemory(): LoaderData | null {
-  return cachedLoaderData;
-}
+registerLoaderDataReader(() => cachedLoaderData);
+registerIndexCacheInvalidator(() => {
+  cachedLoaderData = null;
+});
 
 function applyLocalStorageLanguage(d: LoaderData): LoaderData {
   const lsLang = getLocalStorageLanguage();
@@ -348,10 +350,6 @@ export function HydrateFallback() {
       <img src="/icons/icon-192x192.png" alt="" width={48} height={48} className="animate-pulse rounded" />
     </div>
   );
-}
-
-export function invalidateIndexCache() {
-  cachedLoaderData = null;
 }
 
 // ---------------------------------------------------------------------------

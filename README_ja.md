@@ -82,6 +82,16 @@ Model Context Protocol（MCP）を通じて、GemiHub は外部サービスと�
 
 ![ビジュアルワークフローエディタ](./public/images/visual_workflow.png)
 
+### 組織と共有プロジェクト
+
+個人作業は My Drive のまま利用し、共有作業では組織プロジェクトへ切り替えられます。組織プロジェクトでは Cloud Storage と Vertex AI を利用し、メンバー権限、メンバーごとの AI 予算、プロジェクト単位のダッシュボードとワークフローを管理できます。
+
+![組織プロジェクト](./public/images/organization_general.png)
+
+![組織設定](./public/images/organization_settings.png)
+
+![共有プロジェクトのダッシュボード](./public/images/organization_dashboard.png)
+
 ### あなたのデータは、あなたの管理下に
 
 チャット履歴、ワークフロー、設定、変更履歴 — すべてのデータは Google Drive の `gemihub/` フォルダに保存されます。独自データベースもベンダーロックインもありません。オプションのハイブリッド暗号化（RSA + AES）で機密ファイルを保護でき、Python 復号スクリプトも提供されているため、暗号化データには常に独立してアクセスできます。
@@ -138,7 +148,7 @@ GemiHub は Obsidian プラグイン [GemiHub - Drive Sync](https://github.com/t
 
 コンテキストメニューから Drive ファイルを管理 — Web 公開、履歴表示、暗号化、リネーム、ダウンロードなど。
 
-![ファイル管理](./public/images/pubish_web.png)
+![ファイル管理](./public/images/publish_web.png)
 
 ## 機能一覧
 
@@ -149,6 +159,7 @@ GemiHub は Obsidian プラグイン [GemiHub - Drive Sync](https://github.com/t
 - **AI チャット** — Gemini とのストリーミング会話、Function Calling、思考表示、画像生成、ファイル添付
 - **スラッシュコマンド** — ユーザー定義の `/コマンド`、テンプレート変数（`{content}`, `{selection}`（ファイルID・位置情報付き））、`@ファイル` メンション（Drive ファイルIDに解決しツール経由でアクセス）、コマンドごとのモデル/ツール設定。`/run @workflow.yaml` でチャットからワークフローを直接実行（インラインストリーミングログ付き）
 - **ビジュアルワークフローエディタ** — ビジュアルノードベースビルダー（30種のノードタイプ）、YAML 入出力、SSE リアルタイム実行
+- **組織と共有プロジェクト** — 個人の My Drive と、Cloud Storage・Vertex AI を利用する組織プロジェクトを切り替え。ロールベースのメンバー管理、メンバーごとの AI 予算、プロジェクト単位のダッシュボードとワークフローに対応
 - **AI ワークフロー生成** — 自然言語でワークフローを作成・修正、ストリーミングプレビューと差分表示
 - **キーボードショートカット** — 修飾キー対応（Ctrl/Cmd, Shift, Alt）のカスタムショートカットを設定画面から設定可能
 - **RAG** — Drive ファイルを Gemini File Search に同期し、コンテキストを考慮した AI 応答を実現

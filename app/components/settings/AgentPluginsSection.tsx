@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { AlertTriangle, Check, Download, Loader2, Power, PowerOff, RefreshCw, Trash2, X } from "lucide-react";
 import type { AgentPluginConfig } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
-import { invalidateIndexCache } from "~/routes/_index";
+import { invalidateIndexCache } from "~/utils/index-cache";
 import { cacheProvisionedSkillFiles, removeCachedFilesByPrefix } from "~/services/provisioned-skill-cache";
 
 interface Preview {

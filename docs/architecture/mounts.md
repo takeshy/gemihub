@@ -63,8 +63,8 @@ self-hosting silently stays Drive-only. Plans are `lite | business | granted`
 — buying **Business** (¥7,500 / $50 per month, billed per organization)
 provisions an organization for the purchaser (Stripe webhook →
 `business-provisioning.server.ts`) with a default shared project, a
-$30/month Vertex AI budget (top-ups $10/¥1,500 per unit, idempotent via
-`addAiBudgetTopUp`), and 100 GB of project storage — expandable in 500 GB
+$30/month Vertex AI budget (top-ups $30/¥4,500 per unit —
+`VERTEX_TOPUP_UNIT_USD` — idempotent via `addAiBudgetTopUp`), and 100 GB of project storage — expandable in 500 GB
 units ($30/¥5,000 per month, add-on subscriptions recorded in
 `Organization.storageAddons` and enforced by `storage-quota.server.ts`
 inside `gcs-storage.writeObject`).

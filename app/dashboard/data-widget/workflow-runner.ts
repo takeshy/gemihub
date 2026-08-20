@@ -18,7 +18,7 @@ import {
   getAllCachedFiles,
 } from "~/services/indexeddb-cache";
 import { processDriveEvent } from "~/utils/drive-file-local";
-import { getCachedLoaderDataInMemory } from "~/routes/_index";
+import { getCachedLoaderDataInMemory } from "~/services/loader-data-memory";
 import type {
   WorkflowCacheRecord,
   WorkflowRowsResult,

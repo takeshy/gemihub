@@ -11,7 +11,7 @@ import {
 } from "~/types/settings";
 import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
-import { invalidateIndexCache } from "~/routes/_index";
+import { invalidateIndexCache } from "~/utils/index-cache";
 
 const inputClass =
   "w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm";

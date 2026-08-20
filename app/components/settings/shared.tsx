@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useFetcher } from "react-router";
 import { Check, AlertCircle, X, Loader2, Save } from "lucide-react";
 import { useI18n } from "~/i18n/context";
-import { invalidateIndexCache } from "~/routes/_index";
+import { invalidateIndexCache } from "~/utils/index-cache";
 
 export function StatusBanner({ fetcher }: { fetcher: ReturnType<typeof useFetcher> }) {
   const data = fetcher.data as { success?: boolean; message?: string } | undefined;

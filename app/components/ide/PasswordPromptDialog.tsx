@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 import { Lock, Loader2, AlertCircle } from "lucide-react";
 import { useI18n } from "~/i18n/context";
-import { invalidateIndexCache, getCachedLoaderDataInMemory } from "~/routes/_index";
+import { getCachedLoaderDataInMemory } from "~/services/loader-data-memory";
+import { invalidateIndexCache } from "~/utils/index-cache";
 import { setCachedApiKey } from "~/services/api-key-cache";
 import { decryptPrivateKey } from "~/services/crypto-core";
 import { getCachedLoaderData } from "~/services/indexeddb-cache";

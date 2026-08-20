@@ -5,7 +5,7 @@ import type { UserSettings } from "~/types/settings";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally, type DriveEvent } from "~/engine/local-executor";
 import { processDriveEvent } from "~/utils/drive-file-local";
-import { getCachedLoaderDataInMemory } from "~/routes/_index";
+import { getCachedLoaderDataInMemory } from "~/services/loader-data-memory";
 import { getCachedApiKey, setCachedApiKey } from "~/services/api-key-cache";
 import { getCachedLoaderData } from "~/services/indexeddb-cache";
 import { decryptPrivateKey } from "~/services/crypto-core";

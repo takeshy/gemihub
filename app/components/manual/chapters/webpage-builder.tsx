@@ -12,10 +12,10 @@ function WebpageBuilderEn() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">AI Web Builder</h1>
       <div className={prose}>
         <p>
-          The <strong>Webpage Builder</strong> is a built-in Agent Skill that ships with the Pro plan and turns the chat into an end-to-end website author. You describe what you want — a booking page, a member portal, a contact form — and the AI produces the HTML, the workflow YAML behind it, the sheet schema it needs, and the spec / change-log entries to go with it.
+          The <strong>Webpage Builder</strong> is a built-in Agent Skill that ships with the Business plan and turns the chat into an end-to-end website author. You describe what you want — a booking page, a member portal, a contact form — and the AI produces the HTML, the workflow YAML behind it, the sheet schema it needs, and the spec / change-log entries to go with it.
         </p>
         <p>
-          The skill is auto-provisioned to <code>skills/webpage-builder/</code> on your Drive the first time you open the IDE on a Pro account, and is updated in place on every release. You don&apos;t install it; you just turn it on for a chat.
+          Turn on <strong>web app builder</strong> in <strong>Settings &gt; General</strong> (it is off by default) on a Business account. The skill is then auto-provisioned to <code>skills/webpage-builder/</code> on your Drive the first time you open the IDE, and is updated in place on every release. You don&apos;t install it; you just turn it on for a chat.
         </p>
 
         <h2>Activate</h2>
@@ -92,10 +92,10 @@ function WebpageBuilderJa() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">AI Web ビルダー</h1>
       <div className={prose}>
         <p>
-          <strong>Webpage Builder</strong> は Pro プランに同梱される組み込み Agent Skill で、チャットをウェブサイトのエンドツーエンド作成ツールに変えます。「予約ページが欲しい」「会員制ポータルを作りたい」「問い合わせフォームを置きたい」と話すだけで、AI が HTML、裏側のワークフロー YAML、必要なシートスキーマ、仕様書 / 変更履歴まで一式生成します。
+          <strong>Webpage Builder</strong> は Business プランに同梱される組み込み Agent Skill で、チャットをウェブサイトのエンドツーエンド作成ツールに変えます。「予約ページが欲しい」「会員制ポータルを作りたい」「問い合わせフォームを置きたい」と話すだけで、AI が HTML、裏側のワークフロー YAML、必要なシートスキーマ、仕様書 / 変更履歴まで一式生成します。
         </p>
         <p>
-          このスキルは Pro アカウントで初めて IDE を開いたときに <code>skills/webpage-builder/</code> へ自動プロビジョニングされ、リリースのたびに上書き更新されます。インストール作業は不要で、チャットで有効化するだけです。
+          Business アカウントで<strong>設定 &gt; 一般</strong>の<strong>Webアプリビルダー</strong>をオンにしてください（既定はオフです）。オンにすると、次に IDE を開いたときに <code>skills/webpage-builder/</code> へ自動プロビジョニングされ、リリースのたびに上書き更新されます。インストール作業は不要で、チャットで有効化するだけです。
         </p>
 
         <h2>有効化</h2>

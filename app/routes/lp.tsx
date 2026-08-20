@@ -1,4 +1,4 @@
-import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, Music, LayoutDashboard, GitCompare, Highlighter, KeyRound } from "lucide-react";
+import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, Music, LayoutDashboard, GitCompare, Highlighter, KeyRound, Building2, UserCog, Sparkles, Database, Copy, Clock } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
@@ -51,6 +51,7 @@ interface LpStrings {
   pluginShowcases: PluginShowcase[];
   pluginShowcaseInstall: string;
   pluginShowcaseLink: string;
+  dataUsageOrgNote: string;
   dataUsageLearnMore: string;
   privacyPolicy: string;
   heroManual: string;
@@ -75,6 +76,8 @@ interface LpStrings {
   premiumFeatureInteractionsDesc: string;
   premiumFeatureGmail: string;
   premiumFeatureGmailDesc: string;
+  premiumFeatureCalendar: string;
+  premiumFeatureCalendarDesc: string;
   premiumFeaturePdf: string;
   premiumFeaturePdfDesc: string;
   premiumFeatureObsidianToken: string;
@@ -93,8 +96,18 @@ interface LpStrings {
   premiumFeatureServerExecDesc: string;
   premiumFeatureWebBuilder: string;
   premiumFeatureWebBuilderDesc: string;
+  premiumFeatureOrg: string;
+  premiumFeatureVertex: string;
+  premiumFeatureAiBudget: string;
+  premiumFeatureAiBudgetValue: string;
+  premiumFeatureStorage: string;
+  premiumFeatureStorageValue: string;
   premiumIncluded: string;
   premiumNotIncluded: string;
+  teamTitle: string;
+  teamBadge: string;
+  teamIntro: string;
+  teamCards: DataCard[];
 }
 
 const en: LpStrings = {
@@ -122,6 +135,11 @@ const en: LpStrings = {
     { src: "/images/dashboard_edit.png", alt: "Dashboard Editing", description: "Toggle edit mode to add widgets, drag and resize panels, configure sources, undo or redo layout changes, and switch between rendered and raw YAML views." },
     { src: "/images/dashboard_workflow.png", alt: "Workflow Widgets", description: "Run a workflow from a dashboard and render the result as cards, a table, Markdown, or HTML. Optional auto-refresh keeps generated reports current." },
     { src: "/images/dashboard_kanban.png", alt: "Kanban Boards", description: "Turn Markdown files in a folder into a kanban board. Create cards from the board header or drag cards between columns to update frontmatter in Drive." },
+    { src: "/images/organization_general.png", alt: "Organization Projects", description: "Switch between My Drive and shared organization projects while keeping the active workspace visible." },
+    { src: "/images/organization_settings.png", alt: "Organization Management", description: "Manage members, roles, per-member AI budgets, projects, and storage from one settings screen." },
+    { src: "/images/organization_sync.png", alt: "Organization Project Sync", description: "Sync project files through managed Cloud Storage with project-aware status and controls." },
+    { src: "/images/organization_dashboard.png", alt: "Shared Project Dashboard", description: "Use dashboards inside a shared project with the active organization and project always in view." },
+    { src: "/images/organization_workflow.png", alt: "Organization Workflows", description: "Build and run workflows scoped to the active project with organization-managed Vertex AI." },
     { src: "/images/secret_manager.png", alt: "Secret Manager", description: "Create, browse, unlock, copy, and update RSA + AES encrypted values from a dashboard widget. Organize secrets into folders and search by name, description, or visible metadata without ever exposing the encrypted value." },
     { src: "/images/cap.png", alt: "AI Chat & File Management", description: "Write notes in a rich editor and let AI proofread or summarize them. Chat with web search, file search by meaning, image generation, and connections to external tools." },
     { src: "/images/chat_mcp_apps.png", alt: "MCP Apps", description: "Connect external apps via MCP (Model Context Protocol). The AI discovers available tools automatically and uses them in your conversation — calendars, databases, and more." },
@@ -132,7 +150,7 @@ const en: LpStrings = {
     { src: "/images/okf_sample.png", alt: "OKF Knowledge Bundles", description: "Keep curated Markdown knowledge bundles (OKF) in Drive and switch them on per chat — the AI answers with your domain knowledge always in context." },
     { src: "/images/canvas.png", alt: "Obsidian-Compatible Canvas", description: "Open .canvas files with text cards, groups, file previews, web pages, and curved links. Edit mode lets you arrange cards and connections." },
     { src: "/images/publish_web.png", alt: "One-Click Publishing", description: "Turn any Drive file into a public web page. Share via URL with no hosting required." },
-    { src: "/images/pull_diff.png", alt: "Push/Pull Sync", description: "All data lives in your Google Drive. Push and pull changes with automatic conflict handling and diff previews." },
+    { src: "/images/pull_diff_en.png", alt: "Push/Pull Sync", description: "All data lives in your Google Drive. Push and pull changes with automatic conflict handling and diff previews." },
   ],
   dataUsageTitle: "How We Handle Your Data",
   dataUsageIntro: "GemiHub uses your Google account to sign in. Here's what we access and why:",
@@ -168,6 +186,7 @@ const en: LpStrings = {
   ],
   pluginShowcaseInstall: "Install from Settings > Plugins with:",
   pluginShowcaseLink: "View on GitHub",
+  dataUsageOrgNote: "Business organizations are the one exception: shared project files live in GemiHub's managed cloud storage, with the organization, project, and member records kept in Firestore, so a team can work on the same files. Your personal Drive keeps working exactly as before, and files can be copied between the two at any time.",
   dataUsageLearnMore: "Learn more in our",
   privacyPolicy: "Privacy Policy",
   heroManual: "Read the Manual",
@@ -178,12 +197,12 @@ const en: LpStrings = {
   footerManual: "Manual",
   footerContact: "Contact",
   premiumTitle: "Premium Plans",
-  premiumIntro: "GemiHub is useful on the free plan by default. Paid plans are for features that need heavier server-side processing, such as streaming files over 20 MB, Gmail integration, or temporary upload/edit URLs. Choose Business when you want to add AI-assisted web service publishing with natural-language build and edit flows, custom domains, and login support.",
+  premiumIntro: "GemiHub is useful on the free plan by default. Paid plans are for features that need heavier server-side processing, such as streaming files over 20 MB, Gmail integration, or temporary upload/edit URLs. Choose Business to work as a team — it provisions an organization with a shared project, Vertex AI with a monthly budget included, and shared storage — plus AI-assisted web service publishing with natural-language build and edit flows, custom domains, and login support. Business is billed per organization, not per seat.",
   premiumFree: "Free",
   premiumLite: "Lite",
   premiumPro: "Business",
   premiumLitePrice: "$2/mo",
-  premiumProPrice: "$50/mo (incl. $30 Vertex AI budget)",
+  premiumProPrice: "$50/mo per org (incl. $30 Vertex AI budget)",
   premiumFreeTag: "$0",
   premiumFeatureUpload: "Max File Size",
   premiumFeatureUploadFree: "20 MB",
@@ -192,6 +211,8 @@ const en: LpStrings = {
   premiumFeatureInteractionsDesc: "Multi-round AI chat with server-side proxy — supports function calling, RAG, and web search simultaneously in a single conversation.",
   premiumFeatureGmail: "Gmail Send",
   premiumFeatureGmailDesc: "Send emails from workflows using a Gmail Send node. Automate notifications, reports, and customer emails.",
+  premiumFeatureCalendar: "Google Calendar Nodes",
+  premiumFeatureCalendarDesc: "List, create, update, and delete Google Calendar events from workflows. Automate scheduling and calendar-driven reminders.",
   premiumFeaturePdf: "PDF Generation",
   premiumFeaturePdfDesc: "Generate PDF files from Markdown or HTML within workflows. Perfect for invoices, reports, and certificates.",
   premiumFeatureObsidianToken: "Obsidian Sync Token",
@@ -210,8 +231,25 @@ const en: LpStrings = {
   premiumFeatureServerExecDesc: "Execute workflow script nodes in a secure isolated VM on the server. Run complex logic without browser limitations.",
   premiumFeatureWebBuilder: "AI Web Builder Skill",
   premiumFeatureWebBuilderDesc: "An AI agent that helps you build and deploy web pages and APIs. Describe what you want, and it creates the pages, workflows, and configurations for you.",
+  premiumFeatureOrg: "Organization & Shared Projects",
+  premiumFeatureVertex: "Vertex AI Included (no API key)",
+  premiumFeatureAiBudget: "Monthly Vertex AI Budget",
+  premiumFeatureAiBudgetValue: "$30 included",
+  premiumFeatureStorage: "Shared Project Storage",
+  premiumFeatureStorageValue: "100 GB (+500 GB)",
   premiumIncluded: "Included",
   premiumNotIncluded: "Not included",
+  teamTitle: "Built for Teams",
+  teamBadge: "Business",
+  teamIntro: "A Business subscription provisions an organization with a shared project. The organization is the billing unit — add as many members as you need without a per-seat charge — and everyone works on the same files, with their own Drive still one drag away.",
+  teamCards: [
+    { icon: Building2, title: "Shared Project Workspace", description: "The whole team opens the same file tree. Push and pull work exactly as they do on your own Drive, and every write is revision-checked so concurrent edits can't quietly overwrite each other." },
+    { icon: UserCog, title: "Roles & External Collaborators", description: "Organization roles (owner / admin / member) plus per-project roles (admin / editor / viewer). Invite someone outside the organization into a single project as an external collaborator." },
+    { icon: Sparkles, title: "Vertex AI, No API Keys", description: "Inside a project, chat, RAG, and workflow AI run on the organization's Vertex AI. Members need no Gemini API key of their own. A $30 monthly budget is included, with per-member caps and top-ups when you need more." },
+    { icon: Database, title: "Search Across Shared Docs", description: "Project files get their own vector search, so the AI answers from the team's documents — not just what each person happens to have on their Drive." },
+    { icon: HardDrive, title: "Project Storage", description: "100 GB of shared storage per organization, expandable by 500 GB. Usage and remaining space are shown in Settings > Organization." },
+    { icon: Copy, title: "My Drive Stays Yours", description: "Your personal Drive sits above the project tree as the My Drive shelf. Drag either way to copy files between your Drive and the shared project — a drag always copies, so nothing disappears from under the team." },
+  ],
 };
 
 const ja: LpStrings = {
@@ -239,6 +277,11 @@ const ja: LpStrings = {
     { src: "/images/dashboard_edit.png", alt: "ダッシュボード編集", description: "編集モードでウィジェットを追加し、ドラッグ・リサイズ・設定変更。Undo/Redo と Raw YAML 表示にも対応します。" },
     { src: "/images/dashboard_workflow.png", alt: "ワークフローウィジェット", description: "ダッシュボードからワークフローを実行し、結果をカード、テーブル、Markdown、HTMLとして表示。自動更新も設定できます。" },
     { src: "/images/dashboard_kanban.png", alt: "カンバンボード", description: "フォルダ内のMarkdownをカンバン化。ヘッダーからカードを作成し、ドラッグでステータス列を移動するとfrontmatterも更新されます。" },
+    { src: "/images/organization_general.png", alt: "組織プロジェクト", description: "My Drive と共有の組織プロジェクトを切り替え、現在のワークスペースを常に確認できます。" },
+    { src: "/images/organization_settings.png", alt: "組織管理", description: "メンバー、権限、メンバーごとの AI 予算、プロジェクト、ストレージをひとつの設定画面で管理できます。" },
+    { src: "/images/organization_sync.png", alt: "組織プロジェクトの同期", description: "プロジェクトに対応した状態表示と操作で、Cloud Storage 上の共有ファイルを同期できます。" },
+    { src: "/images/organization_dashboard.png", alt: "共有プロジェクトのダッシュボード", description: "利用中の組織とプロジェクトを確認しながら、共有プロジェクト内でダッシュボードを使えます。" },
+    { src: "/images/organization_workflow.png", alt: "組織のワークフロー", description: "組織管理の Vertex AI を使い、現在のプロジェクトに属するワークフローを作成・実行できます。" },
     { src: "/images/secret_manager.png", alt: "Secret Manager", description: "ダッシュボードウィジェットから RSA + AES 暗号化された値を作成・管理。フォルダで整理でき、名前・説明・公開メタデータで検索。暗号化された値そのものは公開しません。" },
     { src: "/images/cap.png", alt: "AIチャット＆ファイル管理", description: "エディターでメモを書いて、AI に校正や要約をおまかせ。チャットでは Web 検索、ファイルの意味検索、画像生成、外部ツール連携も。" },
     { src: "/images/chat_mcp_apps.png", alt: "MCP Apps", description: "MCP（Model Context Protocol）で外部アプリと連携。AI が利用可能なツールを自動で検出し、会話の中でカレンダーやデータベースなどを操作します。" },
@@ -285,6 +328,7 @@ const ja: LpStrings = {
   ],
   pluginShowcaseInstall: "Settings > Plugins からインストール:",
   pluginShowcaseLink: "GitHubで見る",
+  dataUsageOrgNote: "例外は Business の組織機能です。共有プロジェクトのファイルは GemiHub のマネージドクラウドストレージに保存され、組織・プロジェクト・メンバーの情報は Firestore で管理されます（チームで同じファイルを扱うため）。個人の Drive はこれまでどおり使えて、両者の間でファイルをいつでもコピーできます。",
   dataUsageLearnMore: "詳しくは",
   privacyPolicy: "プライバシーポリシー",
   heroManual: "マニュアルを読む",
@@ -295,12 +339,12 @@ const ja: LpStrings = {
   footerManual: "マニュアル",
   footerContact: "お問い合わせ",
   premiumTitle: "有料プラン",
-  premiumIntro: "GemiHub は基本的に無料プランで便利に使えます。有料プランは、1ファイルが20MBを超えてストリーミングが必要な場合、Gmail 連携、一時アップロード URL など、サーバー側の処理負担がかかる機能を使うためのものです。AI を活用して自然文で構築・修正でき、独自ドメインやログイン機能にも対応した自社 Web サービス提供機能を追加する場合は Business プランを選びます。組織を作成してチームでプロジェクトを共有できます。",
+  premiumIntro: "GemiHub は基本的に無料プランで便利に使えます。有料プランは、1ファイルが20MBを超えてストリーミングが必要な場合、Gmail 連携、一時アップロード URL など、サーバー側の処理負担がかかる機能を使うためのものです。Business プランは、組織と共有プロジェクトを作成してチームで使うためのプラン。Vertex AI の利用枠と共有ストレージが含まれ、AI を活用して自然文で構築・修正できる自社 Web サービス提供機能、独自ドメイン、ログイン機能にも対応します。料金は組織単位で、メンバーごとの追加課金はありません。",
   premiumFree: "Free",
   premiumLite: "Lite",
   premiumPro: "Business",
   premiumLitePrice: "¥300/月（税込）",
-  premiumProPrice: "¥7,500/月（税込・Vertex AI利用枠 $30分込み）",
+  premiumProPrice: "¥7,500/月（税込・組織単位・Vertex AI利用枠 $30分込み）",
   premiumFreeTag: "¥0",
   premiumFeatureUpload: "1ファイル最大サイズ",
   premiumFeatureUploadFree: "20 MB",
@@ -309,6 +353,8 @@ const ja: LpStrings = {
   premiumFeatureInteractionsDesc: "サーバー経由のマルチラウンド AI チャット。ファンクションコール・RAG・Web検索を1つの会話で同時に利用可能。",
   premiumFeatureGmail: "Gmail 送信",
   premiumFeatureGmailDesc: "ワークフローから Gmail 送信ノードでメールを自動送信。通知、レポート、顧客メールの自動化に。",
+  premiumFeatureCalendar: "Google カレンダー ノード",
+  premiumFeatureCalendarDesc: "ワークフローから Google カレンダーの予定を取得・作成・更新・削除。スケジュール調整やリマインドの自動化に。",
   premiumFeaturePdf: "PDF 生成",
   premiumFeaturePdfDesc: "Markdown や HTML からワークフロー内で PDF を生成。請求書、レポート、証明書の作成に最適。",
   premiumFeatureObsidianToken: "Obsidian 連携トークン",
@@ -327,8 +373,25 @@ const ja: LpStrings = {
   premiumFeatureServerExecDesc: "ワークフローのスクリプトノードをサーバー上の安全な隔離 VM で実行。ブラウザの制約なく複雑なロジックを処理。",
   premiumFeatureWebBuilder: "AI Web Builder スキル",
   premiumFeatureWebBuilderDesc: "Webページと API の構築・デプロイを支援する AI エージェント。やりたいことを伝えるだけで、ページ・ワークフロー・設定を自動作成。",
+  premiumFeatureOrg: "組織・共有プロジェクト",
+  premiumFeatureVertex: "Vertex AI 込み（APIキー不要）",
+  premiumFeatureAiBudget: "Vertex AI 月間利用枠",
+  premiumFeatureAiBudgetValue: "$30分込み",
+  premiumFeatureStorage: "共有プロジェクトのストレージ",
+  premiumFeatureStorageValue: "100 GB（+500 GB）",
   premiumIncluded: "対応",
   premiumNotIncluded: "非対応",
+  teamTitle: "チームで使う",
+  teamBadge: "Business",
+  teamIntro: "Business プランを契約すると、組織と共有プロジェクトが自動で作成されます。課金は組織単位なので、メンバーを何人追加しても追加料金はかかりません。チーム全員が同じファイルを扱いながら、自分の Drive もドラッグひとつで行き来できます。",
+  teamCards: [
+    { icon: Building2, title: "共有プロジェクト", description: "チーム全員が同じファイルツリーを開けます。Push / Pull は自分の Drive と同じ操作感。書き込みはリビジョンで検証されるため、同時編集で相手の変更を上書きしてしまうことがありません。" },
+    { icon: UserCog, title: "権限と外部コラボレーター", description: "組織ロール（owner / admin / member）とプロジェクトロール（admin / editor / viewer）を設定可能。組織外のメンバーを特定のプロジェクトだけに外部コラボレーターとして招待できます。" },
+    { icon: Sparkles, title: "Vertex AI 込み・APIキー不要", description: "プロジェクト内のチャット・RAG・ワークフローの AI は組織の Vertex AI で動作。メンバーは自分の Gemini API キーを用意する必要がありません。月 $30 の利用枠が付属し、メンバーごとの上限設定や追加購入にも対応します。" },
+    { icon: Database, title: "共有ドキュメントを横断検索", description: "プロジェクトのファイル専用のベクトル検索を備え、AI が個人の Drive ではなくチームの資料をもとに回答します。" },
+    { icon: HardDrive, title: "プロジェクトストレージ", description: "組織ごとに 100 GB の共有ストレージ。500 GB 単位で追加でき、使用量と残量は設定 > 組織 で確認できます。" },
+    { icon: Copy, title: "個人の Drive はそのまま", description: "プロジェクトのファイルツリーの上に「My Drive」シェルフとして自分の Drive が並びます。ドラッグでどちらの方向にもコピーでき（移動ではなくコピーなので）、チームのファイルが消えることはありません。" },
+  ],
 };
 
 export default function LandingPage() {
@@ -496,6 +559,7 @@ export default function LandingPage() {
               { label: s.premiumFeatureUpload, free: s.premiumFeatureUploadFree, lite: s.premiumFeatureUploadPaid, pro: s.premiumFeatureUploadPaid },
               { label: s.premiumFeatureInteractions, free: false, lite: true, pro: true },
               { label: s.premiumFeatureGmail, free: false, lite: true, pro: true },
+              { label: s.premiumFeatureCalendar, free: false, lite: true, pro: true },
               { label: s.premiumFeaturePdf, free: false, lite: true, pro: true },
               { label: s.premiumFeatureObsidianToken, free: false, lite: true, pro: true },
               { label: s.premiumFeatureTempUrl, free: false, lite: true, pro: true },
@@ -505,6 +569,10 @@ export default function LandingPage() {
               { label: s.premiumFeatureSchedule, free: false, lite: false, pro: true },
               { label: s.premiumFeatureServerExec, free: false, lite: false, pro: true },
               { label: s.premiumFeatureWebBuilder, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureOrg, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureVertex, free: false, lite: false, pro: true },
+              { label: s.premiumFeatureAiBudget, free: false, lite: false, pro: s.premiumFeatureAiBudgetValue },
+              { label: s.premiumFeatureStorage, free: false, lite: false, pro: s.premiumFeatureStorageValue },
             ];
             const renderCell = (val: boolean | string) => {
               if (typeof val === "string") return <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{val}</span>;
@@ -534,6 +602,7 @@ export default function LandingPage() {
             {[
               { icon: MessageSquare, title: s.premiumFeatureInteractions, desc: s.premiumFeatureInteractionsDesc },
               { icon: Mail, title: s.premiumFeatureGmail, desc: s.premiumFeatureGmailDesc },
+              { icon: Calendar, title: s.premiumFeatureCalendar, desc: s.premiumFeatureCalendarDesc },
               { icon: FileText, title: s.premiumFeaturePdf, desc: s.premiumFeaturePdfDesc },
               { icon: RefreshCw, title: s.premiumFeatureObsidianToken, desc: s.premiumFeatureObsidianTokenDesc },
               { icon: Upload, title: s.premiumFeatureTempUrl, desc: s.premiumFeatureTempUrlDesc },
@@ -557,7 +626,7 @@ export default function LandingPage() {
               { icon: FileSpreadsheet, title: s.premiumFeatureSheets, desc: s.premiumFeatureSheetsDesc },
               { icon: Globe, title: s.premiumFeatureHosting, desc: s.premiumFeatureHostingDesc },
               { icon: Lock, title: s.premiumFeatureDomain, desc: s.premiumFeatureDomainDesc },
-              { icon: Calendar, title: s.premiumFeatureSchedule, desc: s.premiumFeatureScheduleDesc },
+              { icon: Clock, title: s.premiumFeatureSchedule, desc: s.premiumFeatureScheduleDesc },
               { icon: Server, title: s.premiumFeatureServerExec, desc: s.premiumFeatureServerExecDesc },
               { icon: PenTool, title: s.premiumFeatureWebBuilder, desc: s.premiumFeatureWebBuilderDesc },
             ].map(({ icon: Icon, title, desc }) => (
@@ -573,8 +642,37 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Plugin Showcase */}
+      {/* Teams / Organizations */}
       <section className="px-4 py-20">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-4 flex flex-col items-center gap-2">
+            <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+              {s.teamBadge}
+            </span>
+            <h2 className="text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
+              <Building2 size={28} className="mb-1 mr-2 inline text-purple-600 dark:text-purple-400" />
+              {s.teamTitle}
+            </h2>
+          </div>
+          <p className="mx-auto mb-10 max-w-2xl text-center text-sm text-gray-500 dark:text-gray-400 sm:text-base">
+            {s.teamIntro}
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {s.teamCards.map(({ icon: Icon, title, description }) => (
+              <div key={title} className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/40">
+                  <Icon size={22} className="text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Plugin Showcase */}
+      <section className="bg-gray-50/30 px-4 py-20 dark:bg-gray-900/20">
         <div className="mx-auto max-w-5xl">
           <h2 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-50 sm:text-3xl">
             {s.pluginShowcaseTitle}
@@ -648,7 +746,10 @@ export default function LandingPage() {
             </div>
           ))}
         </div>
-        <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+          {s.dataUsageOrgNote}
+        </p>
+        <p className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
           {s.dataUsageLearnMore}{" "}
           <a href={`/policy${jaPrefix}`} className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400">
             {s.privacyPolicy}

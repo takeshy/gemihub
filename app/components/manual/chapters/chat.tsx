@@ -11,7 +11,7 @@ function ChatEn() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">AI Chat</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/chat_rag.png" alt="AI Chat interface" className="w-full" loading="lazy" />
+        <img src="/images/chat_rag_en.png" alt="AI Chat interface" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <p>

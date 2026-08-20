@@ -1,6 +1,4 @@
 import {
-  createContext,
-  useContext,
   useState,
   useEffect,
   useCallback,
@@ -16,24 +14,8 @@ import type {
 } from "~/types/plugin";
 import { loadPlugin, loadPluginStyles, unloadPlugin } from "~/services/plugin-loader";
 import { createPluginAPI } from "~/services/plugin-api";
-
-interface PluginContextValue {
-  plugins: PluginInstance[];
-  sidebarViews: PluginView[];
-  mainViews: PluginView[];
-  settingsTabs: PluginSettingsTab[];
-  loading: boolean;
-  getPluginAPI: (pluginId: string) => PluginAPI | null;
-}
-
-const PluginContext = createContext<PluginContextValue>({
-  plugins: [],
-  sidebarViews: [],
-  mainViews: [],
-  settingsTabs: [],
-  loading: false,
-  getPluginAPI: () => null,
-});
+import { PluginContext } from "~/contexts/plugin-context";
+export { usePlugins } from "~/contexts/plugin-context";
 
 export function PluginProvider({
   pluginConfigs,
@@ -183,8 +165,4 @@ export function PluginProvider({
       {children}
     </PluginContext.Provider>
   );
-}
-
-export function usePlugins(): PluginContextValue {
-  return useContext(PluginContext);
 }

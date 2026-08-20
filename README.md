@@ -82,6 +82,16 @@ Build complex automation pipelines with a visual editor. Chain together AI promp
 
 ![Visual Workflow Editor](./public/images/visual_workflow.png)
 
+### Organizations & Shared Projects
+
+Keep personal work in My Drive, or switch to an organization project for a managed shared workspace. Organization projects use Cloud Storage and Vertex AI, with member roles, per-member AI budgets, and project-scoped dashboards and workflows.
+
+![Organization Project](./public/images/organization_general.png)
+
+![Organization Settings](./public/images/organization_settings.png)
+
+![Shared Project Dashboard](./public/images/organization_dashboard.png)
+
 ### Obsidian-Compatible Canvas
 
 Create and view `.canvas` files using an Obsidian-compatible JSON Canvas editor. GemiHub renders text cards, groups, file previews, web pages, and curved links, with read-only viewing by default and an edit mode for arranging cards, connecting objects, changing colors, and updating Markdown content.
@@ -96,7 +106,7 @@ All data — chat history, workflows, settings, edit history — is stored in yo
 
 GemiHub is offline-first. All your files are cached in the browser's IndexedDB, so they load instantly — even without an internet connection. Create and edit files offline, and your changes are tracked automatically. When you're back online, push your changes to Google Drive with one click. If someone else edited the same file, GemiHub detects the conflict and lets you choose which version to keep, with the other safely backed up.
 
-![Push/Pull Sync](./public/images/push_pull.png)
+![Push/Pull Sync](./public/images/push_pull_en.png)
 
 ### Obsidian Integration
 
@@ -132,7 +142,7 @@ Edit workflow nodes with a form-based UI. Configure LLM prompts, models, Drive f
 
 Run workflows and see real-time streaming output with execution logs.
 
-![Workflow Execution](./public/images/workflow_execution.png)
+![Workflow Execution](./public/images/workflow_execution_en.png)
 
 ### AI Workflow Generation
 
@@ -144,7 +154,7 @@ Create and modify workflows using natural language. AI generates the YAML with s
 
 Manage Drive files with a context menu — publish to web, view history, encrypt, rename, download, and more.
 
-![File Management](./public/images/pubish_web.png)
+![File Management](./public/images/publish_web.png)
 
 ## Features
 
@@ -155,6 +165,7 @@ Manage Drive files with a context menu — publish to web, view history, encrypt
 - **AI Chat** — Streaming conversations with Gemini, function calling, thinking display, image generation, file attachments. Paid plan uses the Interactions API for simultaneous function tools + RAG + Web Search and conversation chaining
 - **Slash Commands** — User-defined `/commands` with template variables (`{content}`, `{selection}` with file ID & position), `@file` mentions (resolved to Drive file IDs for tool access), per-command model/tool overrides. `/run @workflow.yaml` executes workflows directly from chat with inline streaming logs
 - **Visual Workflow Editor** — Visual node-based builder (30 node types), YAML import/export, real-time SSE execution
+- **Organizations & Shared Projects** — Switch between personal My Drive and organization projects backed by managed Cloud Storage and Vertex AI, with role-based membership, per-member AI budgets, and project-scoped dashboards and workflows
 - **AI Workflow Generation** — Create and modify workflows via natural language with streaming preview and diff view
 - **Keyboard Shortcuts** — Configurable shortcuts with modifier key support (Ctrl/Cmd, Shift, Alt) via Settings
 - **RAG** — Sync Drive files to Gemini File Search for context-aware AI responses

@@ -1,7 +1,7 @@
 import { CloudDownload, CloudUpload, FileText, FolderOpen, History, Lightbulb, ListChecks, Loader2, MessageSquare, PenLine, Rocket, Settings } from "lucide-react";
 import { Link } from "react-router";
 import type { UserSettings } from "~/types/settings";
-import { usePlugins } from "~/contexts/PluginContext";
+import { usePlugins } from "~/contexts/plugin-context";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
 import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
 import { getMediaType } from "~/utils/media-utils";

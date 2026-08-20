@@ -15,7 +15,7 @@ import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
 import { writeFileLocal, readFileLocal } from "~/services/drive-local";
 import { SKILLS_FOLDER_NAME } from "~/types/settings";
-import { getCachedLoaderDataInMemory } from "~/routes/_index";
+import { getCachedLoaderDataInMemory } from "~/services/loader-data-memory";
 import { AIWorkflowDialog } from "~/components/ide/AIWorkflowDialog";
 import type { ConfigEditorProps } from "../types";
 import type {

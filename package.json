@@ -13,6 +13,8 @@
     "test": "tsx --test 'app/**/*.test.ts'",
     "test:sync-diff": "tsx --test app/services/sync-meta.server.test.ts app/services/sync-client-utils.test.ts",
     "test:parser": "tsx --test app/engine/parser.test.ts",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
     "okf:package": "node --import tsx scripts/package-gemihub-okf.ts"
   },
   "dependencies": {
@@ -48,6 +50,8 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@react-router/dev": "7.17.0",
+    "@storybook/addon-a11y": "^10.5.10",
+    "@storybook/react-vite": "^10.5.10",
     "@tailwindcss/vite": "^4.1.13",
     "@types/diff": "^7.0.2",
     "@types/js-yaml": "^4.0.9",
@@ -58,6 +62,7 @@
     "eslint": "^9.39.2",
     "eslint-plugin-react-hooks": "^7.0.1",
     "fake-indexeddb": "^6.2.5",
+    "storybook": "^10.5.10",
     "tailwindcss": "^4.1.13",
     "tsx": "^4.21.0",
     "typescript": "^5.9.2",

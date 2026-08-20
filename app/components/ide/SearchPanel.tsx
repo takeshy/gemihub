@@ -32,6 +32,8 @@ export interface SearchPanelProps {
   fileList: FileListItem[];
   onSelectFile: (fileId: string, fileName: string, mimeType: string) => void;
   onClose: () => void;
+  initialQuery?: string;
+  autoSearch?: boolean;
 }
 
 function getFileIcon(name: string) {
@@ -54,11 +56,13 @@ export function SearchPanel({
   fileList,
   onSelectFile,
   onClose,
+  initialQuery = "",
+  autoSearch = false,
 }: SearchPanelProps) {
   const { t } = useI18n();
   const hasRag = ragStoreIds.length > 0;
   const [mode, setMode] = useState<SearchMode>("local");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [ragAiText, setRagAiText] = useState<string | null>(null);
@@ -171,6 +175,10 @@ export function SearchPanel({
       setSearching(false);
     }
   }, [query, mode, ragStoreIds, ragTopK, ragModel, fileList, t]);
+
+  useEffect(() => {
+    if (autoSearch && initialQuery) void handleSearch();
+  }, [autoSearch, initialQuery, handleSearch]);
 
   const handleKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLInputElement>) => {

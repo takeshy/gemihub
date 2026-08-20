@@ -12,7 +12,7 @@ function PremiumEn() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Premium Plan</h1>
       <div className={prose}>
         <p>
-          GemiHub&apos;s Premium plan transforms it into a web app builder with Google Sheets/Gmail integration, static page hosting, scheduled workflows, and custom domain support.
+          GemiHub&apos;s Premium plans add server-side capability on top of the free Drive experience. <strong>Lite</strong> unlocks the paid workflow nodes and the Interactions API chat. <strong>Business</strong> turns GemiHub into a web app builder — Google Sheets/Gmail integration, static page hosting, scheduled workflows, custom domains — and provisions an organization with a shared project for your team, billed per organization rather than per seat. See the <strong>Organizations &amp; Shared Projects</strong> chapter for the team side.
         </p>
 
         <h2>Plans</h2>
@@ -30,6 +30,7 @@ function PremiumEn() {
               <tr><td>Max File Size</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
               <tr><td>Interactions API Chat</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>Gmail Send</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Google Calendar Nodes</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>PDF Generation</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>Obsidian Sync Token</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>Temp Upload URL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
@@ -39,6 +40,10 @@ function PremiumEn() {
               <tr><td>Scheduled Workflows</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>Server-Side Execution</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>AI Web Builder</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Organization &amp; Shared Projects</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Vertex AI (no API key)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Included Vertex AI Budget</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30 / period</td></tr>
+              <tr><td>Shared Project Storage</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB (+500 GB)</td></tr>
             </tbody>
           </table>
         </div>
@@ -177,7 +182,7 @@ function PremiumJa() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">プレミアムプラン</h1>
       <div className={prose}>
         <p>
-          GemiHubのプレミアムプランです。Google Sheets/Gmail連携、静的ページホスティング、スケジュール実行、カスタムドメインなどの機能により、Webアプリビルダーとして利用できます。
+          GemiHubのプレミアムプランは、無料のDrive環境にサーバーサイドの機能を追加します。<strong>Lite</strong>では有料のワークフローノードとInteractions APIチャットが利用可能に。<strong>Business</strong>ではGoogle Sheets/Gmail連携、静的ページホスティング、スケジュール実行、カスタムドメインによりWebアプリビルダーとして使えるうえ、チーム用の組織と共有プロジェクトが作成されます（課金はメンバー単位ではなく組織単位）。チーム機能の詳細は<strong>組織と共有プロジェクト</strong>の章を参照してください。
         </p>
 
         <h2>プラン一覧</h2>
@@ -195,6 +200,7 @@ function PremiumJa() {
               <tr><td>1ファイル最大サイズ</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
               <tr><td>Interactions API チャット</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>Gmail 送信</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Google カレンダー ノード</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>PDF 生成</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>Obsidian 同期トークン</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>一時アップロードURL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
@@ -204,6 +210,10 @@ function PremiumJa() {
               <tr><td>スケジュール実行</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>サーバーサイド実行</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>AI Webビルダー</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>組織・共有プロジェクト</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Vertex AI（APIキー不要）</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Vertex AI 月間利用枠</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30/期間</td></tr>
+              <tr><td>共有プロジェクトのストレージ</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB（+500 GB）</td></tr>
             </tbody>
           </table>
         </div>

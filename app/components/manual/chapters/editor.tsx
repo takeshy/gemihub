@@ -37,6 +37,9 @@ function EditorEn() {
         </p>
 
         <h2>Diff View</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/editor_diff_en.png" alt="File comparison in the IDE" className="w-full" loading="lazy" />
+        </figure>
         <p>
           Click the <strong>Diff</strong> tab to compare the current file with any other file in your workspace. Select the comparison target from the dropdown.
         </p>
@@ -58,7 +61,7 @@ function EditorEn() {
 
         <h2>Publishing</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/pubish_web.png" alt="Publish to web" className="w-full" loading="lazy" />
+          <img src="/images/publish_web.png" alt="Publish to web" className="w-full" loading="lazy" />
         </figure>
         <p>
           Right-click a file and select <strong>Publish to Web</strong> to make it publicly accessible via URL. HTML and Markdown files are rendered; other types are served with their original MIME type.
@@ -170,6 +173,9 @@ function EditorJa() {
         </p>
 
         <h2>比較ビュー</h2>
+        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+          <img src="/images/editor_diff.png" alt="IDEのファイル比較" className="w-full" loading="lazy" />
+        </figure>
         <p>
           <strong>比較</strong>タブをクリックして、現在のファイルをワークスペース内の他のファイルと比較します。ドロップダウンから比較対象を選択。
         </p>
@@ -191,7 +197,7 @@ function EditorJa() {
 
         <h2>Web公開</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/pubish_web.png" alt="Web公開" className="w-full" loading="lazy" />
+          <img src="/images/publish_web.png" alt="Web公開" className="w-full" loading="lazy" />
         </figure>
         <p>
           ファイルを右クリックして<strong>ウェブに公開</strong>を選択すると、URL経由で公開できます。HTMLとMarkdownファイルはレンダリングされ、他のタイプは元のMIMEタイプで配信されます。

@@ -11,7 +11,7 @@ function SettingsEn() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Settings Overview</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/setting_general.png" alt="Settings page" className="w-full" loading="lazy" />
+        <img src="/images/setting_general_en.png" alt="Settings page" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <p>
@@ -29,11 +29,15 @@ function SettingsEn() {
           <li><strong>Theme</strong> — Light / Dark / System.</li>
           <li><strong>Password &amp; Encryption</strong> — Set a password for API key encryption and file encryption features.</li>
           <li><strong>Encrypt Chat / Workflow History</strong> — Toggle encryption for saved histories.</li>
+          <li><strong>Optional advanced features</strong> — Enable Dashboard, Workflow, RAG, and the Web App Builder. Disabled features remain hidden from navigation and settings.</li>
         </ul>
+        <p>
+          Recommended order: complete General first, enable only the optional features you need, configure Sync, and then set up integrations such as MCP and RAG. Organization and plan tabs appear only for eligible accounts.
+        </p>
 
         <h2>MCP Servers</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_mcp.png" alt="MCP settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_mcp_en.png" alt="MCP settings" className="w-full" loading="lazy" />
         </figure>
         <ul>
           <li>Add, edit, and remove MCP server connections.</li>
@@ -43,7 +47,7 @@ function SettingsEn() {
 
         <h2>RAG</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_rag.png" alt="RAG settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_rag_en.png" alt="RAG settings" className="w-full" loading="lazy" />
         </figure>
         <ul>
           <li>Add and manage RAG store configurations (Internal / External).</li>
@@ -55,7 +59,7 @@ function SettingsEn() {
 
         <h2>Plugins</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_plugin.png" alt="Plugin settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_plugin_en.png" alt="Plugin settings" className="w-full" loading="lazy" />
         </figure>
         <ul>
           <li>Install plugins from GitHub repositories.</li>
@@ -65,7 +69,7 @@ function SettingsEn() {
 
         <h2>Commands</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_command.png" alt="Command settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_command_en.png" alt="Command settings" className="w-full" loading="lazy" />
         </figure>
         <ul>
           <li>Create custom slash commands for the chat.</li>
@@ -75,7 +79,7 @@ function SettingsEn() {
 
         <h2>Shortcuts</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_shortcut.png" alt="Shortcut settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_shortcut_en.png" alt="Shortcut settings" className="w-full" loading="lazy" />
         </figure>
         <ul>
           <li>Assign keyboard shortcuts to execute workflows.</li>
@@ -85,16 +89,27 @@ function SettingsEn() {
 
         <h2>Premium Plan</h2>
         <ul>
-          <li>Subscribe to Lite or Pro plan via Stripe.</li>
+          <li>Subscribe to the Lite or Business plan via Stripe.</li>
           <li>Configure Spreadsheet ID for Google Sheets nodes.</li>
           <li>Set up custom domain and view domain status.</li>
           <li>Manage scheduled workflows (cron, timezone, retry, timeout).</li>
           <li>Access Stripe Billing Portal for subscription management.</li>
         </ul>
 
+        <h2>Organization</h2>
+        <p>
+          Shown only to members of an organization (Business plan). See the <strong>Organizations &amp; Shared Projects</strong> chapter for the full picture.
+        </p>
+        <ul>
+          <li>Add and remove members, and set organization and project roles.</li>
+          <li>Track Vertex AI spending per organization and per member, set caps, and buy budget top-ups.</li>
+          <li>Check project storage usage and purchase the storage add-on.</li>
+          <li>Advanced: create and switch projects, and point the organization at your own Google Cloud project.</li>
+        </ul>
+
         <h2>Sync</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_sync.png" alt="Sync settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_sync_en.png" alt="Sync settings" className="w-full" loading="lazy" />
         </figure>
         <ul>
           <li>View sync status and last sync time.</li>
@@ -132,7 +147,11 @@ function SettingsJa() {
           <li><strong>テーマ</strong> — ライト / ダーク / システム。</li>
           <li><strong>パスワード & 暗号化</strong> — APIキー暗号化とファイル暗号化機能のパスワード設定。</li>
           <li><strong>チャット / ワークフロー履歴の暗号化</strong> — 保存される履歴の暗号化切り替え。</li>
+          <li><strong>任意の上級機能</strong> — ダッシュボード、ワークフロー、RAG、Webアプリビルダーを有効化。無効な機能はナビゲーションと設定から隠れます。</li>
         </ul>
+        <p>
+          推奨順序は、まず一般設定を完了し、必要な上級機能だけを有効にしてから同期を設定し、その後にMCPやRAGなどの連携を設定します。組織・プラン関連タブは対象アカウントにのみ表示されます。
+        </p>
 
         <h2>MCPサーバー</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
@@ -188,11 +207,22 @@ function SettingsJa() {
 
         <h2>プレミアムプラン</h2>
         <ul>
-          <li>StripeでLiteまたはProプランに登録。</li>
+          <li>StripeでLiteまたはBusinessプランに登録。</li>
           <li>Google Sheetsノード用のスプレッドシートIDを設定。</li>
           <li>カスタムドメインの設定とドメインステータスの確認。</li>
           <li>スケジュール実行の管理（cron、タイムゾーン、リトライ、タイムアウト）。</li>
           <li>Stripe Billing Portalでサブスクリプション管理。</li>
+        </ul>
+
+        <h2>組織</h2>
+        <p>
+          組織に所属している場合（Businessプラン）のみ表示されます。詳細は<strong>組織と共有プロジェクト</strong>の章を参照してください。
+        </p>
+        <ul>
+          <li>メンバーの追加・削除、組織ロールとプロジェクトロールの設定。</li>
+          <li>Vertex AIの利用額を組織単位・メンバー単位で確認、上限設定、利用枠の追加購入。</li>
+          <li>プロジェクトストレージの使用量確認とストレージアドオンの購入。</li>
+          <li>詳細設定：プロジェクトの作成・切り替え、組織独自のGoogle Cloudプロジェクトの指定。</li>
         </ul>
 
         <h2>同期</h2>

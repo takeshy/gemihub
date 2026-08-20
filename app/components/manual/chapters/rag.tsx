@@ -11,7 +11,7 @@ function RagEn() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">RAG (Retrieval-Augmented Generation)</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/chat_rag.png" alt="RAG in chat" className="w-full" loading="lazy" />
+        <img src="/images/chat_rag_en.png" alt="RAG in chat" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <p>
@@ -20,7 +20,7 @@ function RagEn() {
 
         <h2>Setting Up RAG</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_rag.png" alt="RAG settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_rag_en.png" alt="RAG settings" className="w-full" loading="lazy" />
         </figure>
         <ol>
           <li>Go to <strong>Settings &gt; RAG</strong>.</li>

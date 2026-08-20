@@ -20,7 +20,7 @@ function McpEn() {
 
         <h2>Setting Up MCP Servers</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_mcp.png" alt="MCP settings" className="w-full" loading="lazy" />
+          <img src="/images/setting_mcp_en.png" alt="MCP settings" className="w-full" loading="lazy" />
         </figure>
         <ol>
           <li>Go to <strong>Settings &gt; MCP Servers</strong>.</li>

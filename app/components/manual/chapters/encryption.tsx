@@ -20,7 +20,7 @@ function EncryptionEn() {
 
         <h2>Setting Up Encryption</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/setting_general.png" alt="General settings with encryption" className="w-full" loading="lazy" />
+          <img src="/images/setting_general_en.png" alt="General settings with encryption" className="w-full" loading="lazy" />
         </figure>
         <ol>
           <li>Go to <strong>Settings &gt; General</strong>.</li>

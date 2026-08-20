@@ -9,6 +9,7 @@ client_secret_*.apps.googleusercontent.com.json
 /.react-router/
 /build/
 /dist/
+/storybook-static/
 
 # Server-side temp data
 /data/

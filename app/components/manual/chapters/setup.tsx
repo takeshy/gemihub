@@ -11,7 +11,7 @@ function SetupEn() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Initial Setup</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/setting_general.png" alt="Settings - General tab" className="w-full" loading="lazy" />
+        <img src="/images/setting_general_en.png" alt="Settings - General tab" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <h2>1. Sign In</h2>
@@ -43,12 +43,17 @@ function SetupEn() {
           Set a password in the <strong>API Key &amp; Password</strong> section (minimum 8 characters). The password is used to encrypt your API key and enable file encryption features. All encryption is client-side — GemiHub never sends your password to any server.
         </p>
 
-        <h2>5. First Sync</h2>
+        <h2>5. Enable Optional Advanced Features</h2>
+        <p>
+          Dashboard, Workflow, RAG, and the Web App Builder are off by default to keep the workspace simple. Open <strong>Settings &gt; General &gt; Optional advanced features</strong> and enable only what you need. Do this before following the Dashboard, Workflow, or RAG chapters; their navigation and settings tabs stay hidden while disabled.
+        </p>
+
+        <h2>6. First Sync</h2>
         <p>
           After configuration, GemiHub will automatically create the <code>gemihub/</code> folder on your Drive and save your settings. Use <strong>Push to Drive</strong> to upload local changes and <strong>Pull to Local</strong> to download files from Drive.
         </p>
 
-        <h2>6. Language &amp; Theme</h2>
+        <h2>7. Language &amp; Theme</h2>
         <p>
           In Settings &gt; General, you can change the interface language (English / Japanese) and the color theme (Light / Dark / System).
         </p>
@@ -94,12 +99,17 @@ function SetupJa() {
           <strong>APIキー &amp; パスワード</strong>セクションでパスワードを設定します（8文字以上）。パスワードはAPIキーの暗号化とファイル暗号化機能に使用されます。すべての暗号化はクライアントサイドで行われ、パスワードがサーバーに送信されることはありません。
         </p>
 
-        <h2>5. 初回同期</h2>
+        <h2>5. 任意の上級機能を有効にする</h2>
+        <p>
+          初期画面をシンプルに保つため、ダッシュボード、ワークフロー、RAG、Webアプリビルダーは初期状態で無効です。<strong>設定 &gt; 一般 &gt; 任意の上級機能</strong>で、利用する機能だけを有効にしてください。ダッシュボード、ワークフロー、RAGの章へ進む前に有効化が必要です。無効な間は関連するナビゲーションや設定タブも表示されません。
+        </p>
+
+        <h2>6. 初回同期</h2>
         <p>
           設定後、GemiHubは自動的にDriveに<code>gemihub/</code>フォルダを作成し、設定を保存します。<strong>ドライブ反映</strong>でローカルの変更をアップロードし、<strong>ローカル反映</strong>でDriveからファイルをダウンロードします。
         </p>
 
-        <h2>6. 言語とテーマ</h2>
+        <h2>7. 言語とテーマ</h2>
         <p>
           設定 &gt; 一般で、インターフェース言語（英語 / 日本語）とカラーテーマ（ライト / ダーク / システム）を変更できます。
         </p>

@@ -11,7 +11,7 @@ function WorkflowEn() {
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Workflows</h1>
       <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-        <img src="/images/visual_workflow.png" alt="Visual workflow builder" className="w-full" loading="lazy" />
+        <img src="/images/visual_workflow_en.png" alt="Visual workflow builder" className="w-full" loading="lazy" />
       </figure>
       <div className={prose}>
         <p>
@@ -38,7 +38,7 @@ function WorkflowEn() {
 
         <h2>Running a Workflow</h2>
         <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
-          <img src="/images/workflow_execution.png" alt="Workflow execution" className="w-full" loading="lazy" />
+          <img src="/images/workflow_execution_en.png" alt="Workflow execution results in the IDE" className="w-full" loading="lazy" />
         </figure>
         <ol>
           <li>Open a workflow file and switch to the Workflow panel in the right sidebar.</li>

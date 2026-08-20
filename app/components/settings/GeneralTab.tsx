@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { KeyRound, Lock, Check } from "lucide-react";
 import { useI18n } from "~/i18n/context";
-import { invalidateIndexCache } from "~/routes/_index";
+import { invalidateIndexCache } from "~/utils/index-cache";
 import {
   SectionCard,
   Label,
