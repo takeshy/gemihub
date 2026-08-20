@@ -190,7 +190,7 @@ export function useStorageSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
-      const { diff } = await detectChanges(mount, mountKey, {
+      const { diff, remote } = await detectChanges(mount, mountKey, {
         useCachedRemote: false,
       });
       // Push all locally-modified and brand-new files.
@@ -201,12 +201,17 @@ export function useStorageSync() {
       let done = 0;
       for (const path of toPush) {
         try {
-          await pushObject(
-            mount,
-            mountKey,
-            path,
-            localOnly.has(path) ? { ifRevisionMatch: "0" } : undefined,
-          );
+          // The remote content can still match our base while its generation
+          // changed (for example, another client rewrote identical bytes).
+          // diff.toPush has already proved the content is safe to overwrite,
+          // so use the generation from this fresh listing rather than the
+          // potentially stale generation retained in IndexedDB.
+          const currentRevision = localOnly.has(path)
+            ? "0"
+            : remote.entries[path]?.revision;
+          await pushObject(mount, mountKey, path, {
+            ifRevisionMatch: currentRevision,
+          });
         } catch (err) {
           if (err instanceof StorageSyncError && err.status === 413) {
             // Storage quota reached mid-push (another member wrote too).
