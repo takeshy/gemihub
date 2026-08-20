@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ModelNotAllowedError, assertModelAllowed } from "./project-acl.server.ts";
+import { ModelNotAllowedError, ModelNotPricedError, assertModelAllowed } from "./project-acl.server.ts";
+import { VERTEX_MODELS } from "./ai/models.ts";
 import type { ProjectAccessContext, TenantInfo } from "~/types/enterprise.ts";
 
 const TENANT: TenantInfo = {
@@ -65,6 +66,38 @@ test("ModelNotAllowedError: surfaces model and allowed list", () => {
     assert.ok(err instanceof ModelNotAllowedError);
     assert.equal(err.model, "gemini-3.1-pro-preview");
     assert.deepEqual(err.allowed, ["gemini-3.5-flash"]);
+    assert.equal(err.status, 403);
+  }
+});
+
+test("assertModelAllowed: every built-in default is priced", () => {
+  const ctx = ctxWith([]);
+  for (const model of Object.values(VERTEX_MODELS)) {
+    assert.doesNotThrow(() => assertModelAllowed(ctx, model), model);
+  }
+});
+
+test("assertModelAllowed: an allowlisted but unpriced model is refused", () => {
+  // Spending an organization's budget at the Pro-tier fallback while Google
+  // bills the real (up to 10x) rate is the loss this gate exists to prevent.
+  const ctx = ctxWith(["gemini-9-unreleased"]);
+  assert.throws(
+    () => assertModelAllowed(ctx, "gemini-9-unreleased"),
+    ModelNotPricedError,
+  );
+});
+
+test("ModelNotPricedError: surfaces the model and a 403", () => {
+  const ctx = ctxWith(["gemini-9-unreleased"]);
+  try {
+    assertModelAllowed(ctx, "gemini-9-unreleased");
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.ok(err instanceof ModelNotPricedError);
+    // Routes match on ModelNotAllowedError, so the subclass must satisfy it.
+    assert.ok(err instanceof ModelNotAllowedError);
+    assert.equal(err.model, "gemini-9-unreleased");
+    assert.deepEqual(err.allowed, ["gemini-9-unreleased"]);
     assert.equal(err.status, 403);
   }
 });

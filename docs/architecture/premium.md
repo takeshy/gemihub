@@ -104,6 +104,16 @@ of project storage (`BUSINESS_INCLUDED_STORAGE_GB`).
 - **Per-member limits** — `OrganizationAiSettings.monthlyBudgetUsd` and
   `defaultUserMonthlyBudgetUsd`, overridable per member with
   `OrgMember.monthlyBudgetUsdOverride`.
+- **What the budget is charged** — `estimateVertexCostUsd` prices tokens from
+  `MODEL_PRICING` in `ai/models.ts`, the one published table both providers
+  read, plus `SEARCH_GROUNDING_COST` ($0.014) for every request that carried
+  the Google Search tool, which Google bills per prompt rather than per token.
+  `VERTEX_AI_PRICING_JSON` overrides or extends the table per deployment.
+  A model with no price is refused by `assertModelAllowed`
+  (`ModelNotPricedError`, HTTP 403) rather than spent at the Pro-tier
+  fallback: an image model's output costs roughly ten times that fallback, and
+  the gap would be spend the organization's budget never sees. Adding a model
+  to `VERTEX_MODELS` therefore means adding its price too.
 
 The organization model itself (mounts, ACL, Vertex AI dispatch) is documented
 in [Storage Mounts & AI Providers](./mounts.md).

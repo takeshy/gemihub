@@ -43,6 +43,7 @@ import {
 import {
   assertAiBudgetAvailable,
   recordAiUsage,
+  type AiUsageExtras,
   type AiBillingContext,
 } from "./ai-budget.server";
 
@@ -65,10 +66,13 @@ async function recordAiUsageSafely(
   billing: AiBillingContext | undefined,
   model: string,
   usage?: StreamChunkUsage,
+  extras?: AiUsageExtras,
 ): Promise<void> {
-  if (!billing || !usage) return;
+  // Google Search grounding is billed per prompt, so a stream that grounded
+  // still costs money even if it reported no usage metadata.
+  if (!billing || (!usage && !extras?.searchGroundingRequests)) return;
   try {
-    await recordAiUsage(billing, model, usage);
+    await recordAiUsage(billing, model, usage, extras);
   } catch (error) {
     console.error("[ai-budget] failed to record usage", error);
   }
@@ -1018,6 +1022,9 @@ export async function* streamWithTools(
   });
 
   let response = await chat.sendMessageStream({ message: initialMessage });
+  // Grounding is priced per prompt, not per token: count every request that
+  // carried the Google Search tool so the budget sees the real cost.
+  let groundedRequests = params.webSearchEnabled ? 1 : 0;
 
   let totalUsage: UsageMetadata | undefined;
   let functionCallsMade = 0;
@@ -1183,10 +1190,13 @@ export async function* streamWithTools(
       }
 
       response = await chat.sendMessageStream({ message: responseParts });
+      if (params.webSearchEnabled) groundedRequests += 1;
     }
 
     const finalUsage = toStreamUsage(totalUsage);
-    await recordAiUsageSafely(params.billing, params.model, finalUsage);
+    await recordAiUsageSafely(params.billing, params.model, finalUsage, {
+      searchGroundingRequests: groundedRequests,
+    });
     yield {
       type: "done",
       usage: finalUsage,
@@ -1198,7 +1208,9 @@ export async function* streamWithTools(
       error: err instanceof Error ? err.message : "Vertex tool stream failed",
     };
     const finalUsage = toStreamUsage(totalUsage);
-    await recordAiUsageSafely(params.billing, params.model, finalUsage);
+    await recordAiUsageSafely(params.billing, params.model, finalUsage, {
+      searchGroundingRequests: groundedRequests,
+    });
     yield {
       type: "done",
       usage: finalUsage,

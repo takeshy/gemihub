@@ -2,6 +2,7 @@ import { FieldValue } from "@google-cloud/firestore";
 import type { StreamChunkUsage } from "~/types/chat";
 import { getFirestore, ORGANIZATIONS } from "./firestore.server";
 import { getOrganization, getOrgMember } from "./organizations.server";
+import { MODEL_PRICING, SEARCH_GROUNDING_COST } from "./ai/models";
 
 export interface AiBillingContext {
   orgId: string;
@@ -41,16 +42,54 @@ export const BUSINESS_INCLUDED_AI_BUDGET_USD = 30;
  */
 export const VERTEX_TOPUP_UNIT_USD = 10;
 
-const DEFAULT_PRICES_PER_MILLION: Record<string, Price> = {
-  "gemini-3.1-pro-preview": { input: 2, output: 12 },
-  "gemini-3.1-pro-preview-customtools": { input: 2, output: 12 },
-  "gemini-3.7-flash": { input: 0.5, output: 3 },
-  "gemini-3.5-flash-lite": { input: 0.1, output: 0.4 },
-  "gemini-3-pro-image-preview": { input: 2, output: 12 },
-  "gemini-3.1-flash-image-preview": { input: 0.5, output: 3 },
+/** Per-token price → per-million, without the float noise of a raw multiply. */
+function perMillion(perToken: number): number {
+  return Math.round(perToken * 1e12) / 1e6;
+}
+
+/**
+ * Gemma runs on Vertex only, so it has no entry in the published Gemini table.
+ */
+const GEMMA_PRICES_PER_MILLION: Record<string, Price> = {
   "gemma-4-31b-it": { input: 1, output: 1 },
   "gemma-4-26b-a4b-it": { input: 1, output: 1 },
 };
+
+/**
+ * Derived from the one published price table (`ai/models.ts`) so a budget can
+ * never be spent at a lower rate than Google actually bills us. This used to
+ * be a second hand-maintained table and it had drifted badly under-price —
+ * Flash at $0.5/$3 against a real $1.50/$7.50, and both image models' output
+ * at $12 against $60–$120. Every dollar of that gap was an over-run we paid
+ * for and the organization's budget never saw.
+ */
+const DEFAULT_PRICES_PER_MILLION: Record<string, Price> = {
+  ...Object.fromEntries(
+    Object.entries(MODEL_PRICING).map(([model, price]) => [
+      model,
+      { input: perMillion(price.input), output: perMillion(price.output) },
+    ]),
+  ),
+  ...GEMMA_PRICES_PER_MILLION,
+};
+
+/** Google Search grounding for a model the table does not list yet. */
+const DEFAULT_SEARCH_GROUNDING_COST = 14 / 1000;
+
+export interface AiUsageExtras {
+  /**
+   * Requests that carried the Google Search tool. Grounding is billed per
+   * prompt on top of tokens, so a search-heavy session costs materially more
+   * than its token count suggests.
+   */
+  searchGroundingRequests?: number;
+}
+
+function groundingCostUsd(model: string, extras?: AiUsageExtras): number {
+  const requests = Math.max(0, Math.trunc(extras?.searchGroundingRequests ?? 0));
+  if (requests === 0) return 0;
+  return requests * (SEARCH_GROUNDING_COST[model] ?? DEFAULT_SEARCH_GROUNDING_COST);
+}
 
 function prices(): Record<string, Price> {
   const raw = process.env.VERTEX_AI_PRICING_JSON;
@@ -70,13 +109,30 @@ function prices(): Record<string, Price> {
   }
 }
 
-export function estimateVertexCostUsd(model: string, usage?: StreamChunkUsage): number {
-  if (!usage) return 0;
+/**
+ * Whether a model has a price we can charge an organization's budget with.
+ *
+ * An unpriced model falls back to the Pro-tier estimate below, which is about
+ * a tenth of what an image model actually costs — the gap is spend we absorb
+ * and the budget never sees. Gate model selection on this instead: add the
+ * model to `MODEL_PRICING` (or `VERTEX_AI_PRICING_JSON`) to enable it.
+ */
+export function isVertexModelPriced(model: string): boolean {
+  return Object.hasOwn(prices(), model);
+}
+
+export function estimateVertexCostUsd(
+  model: string,
+  usage?: StreamChunkUsage,
+  extras?: AiUsageExtras,
+): number {
+  const grounding = groundingCostUsd(model, extras);
+  if (!usage) return grounding;
   // Unknown models use a conservative fallback instead of bypassing budgets.
   const price = prices()[model] ?? { input: 2, output: 12 };
   const input = Math.max(0, usage.inputTokens ?? 0);
   const output = Math.max(0, usage.outputTokens ?? 0) + Math.max(0, usage.thinkingTokens ?? 0);
-  return (input * price.input + output * price.output) / 1_000_000;
+  return (input * price.input + output * price.output) / 1_000_000 + grounding;
 }
 
 export function currentAiUsageMonth(now = new Date()): string {
@@ -319,12 +375,15 @@ export async function recordAiUsage(
   context: AiBillingContext,
   model: string,
   usage?: StreamChunkUsage,
+  extras?: AiUsageExtras,
 ): Promise<number> {
-  if (!usage) return 0;
-  const estimatedCostUsd = estimateVertexCostUsd(model, usage);
+  const searchRequests = Math.max(0, Math.trunc(extras?.searchGroundingRequests ?? 0));
+  // Grounding is billed even when the response carried no usage metadata.
+  if (!usage && searchRequests === 0) return 0;
+  const estimatedCostUsd = estimateVertexCostUsd(model, usage, extras);
   const estimatedCostMicros = Math.max(0, Math.ceil(estimatedCostUsd * 1_000_000));
-  const inputTokens = Math.max(0, usage.inputTokens ?? 0);
-  const outputTokens = Math.max(0, usage.outputTokens ?? 0) + Math.max(0, usage.thinkingTokens ?? 0);
+  const inputTokens = Math.max(0, usage?.inputTokens ?? 0);
+  const outputTokens = Math.max(0, usage?.outputTokens ?? 0) + Math.max(0, usage?.thinkingTokens ?? 0);
   const period = await currentBudgetPeriod(context.orgId);
   const { orgUsage, userUsage } = usageRefs(context.orgId, context.uid, period.key);
   const increment = {
@@ -333,6 +392,7 @@ export async function recordAiUsage(
     inputTokens: FieldValue.increment(inputTokens),
     outputTokens: FieldValue.increment(outputTokens),
     requests: FieldValue.increment(1),
+    searchGroundingRequests: FieldValue.increment(searchRequests),
     updatedAt: Date.now(),
   };
   const batch = getFirestore().batch();

@@ -36,6 +36,7 @@ import {
 import { getTokens } from "./session.server";
 import { normalizeDeprecatedModelName } from "~/types/settings";
 import { VERTEX_MODELS } from "./ai/models";
+import { isVertexModelPriced } from "./ai-budget.server";
 import { isSuperAdmin } from "./super-admin.server";
 
 const ROLE_RANK: Record<ProjectRole, number> = {
@@ -241,11 +242,30 @@ export class ModelNotAllowedError extends Error {
 }
 
 /**
+ * Extends ModelNotAllowedError on purpose: every AI route already maps that
+ * one to a 403 with `model` / `allowed`, so an unpriced model reports the same
+ * way instead of falling through to a generic 500.
+ */
+export class ModelNotPricedError extends ModelNotAllowedError {
+  constructor(model: string, allowed: string[]) {
+    super(model, allowed);
+    this.name = "ModelNotPricedError";
+    this.message = `model "${model}" has no Vertex price and cannot be billed to an organization budget. Add it to MODEL_PRICING (or VERTEX_AI_PRICING_JSON) first.`;
+  }
+}
+
+/**
  * Reject the request if the requested model isn't in the project's
  * `allowedModels` list. Empty list = the built-in `VERTEX_MODELS` defaults
  * are allowed.
  *
- * Throws `ModelNotAllowedError` (HTTP 403) on rejection.
+ * A model we cannot price is refused as well. Every built-in default is
+ * priced, so this only bites a project that put an unknown model in its own
+ * `allowedModels` — where the alternative is spending the organization's
+ * budget at the Pro-tier fallback rate while Google bills us the real one
+ * (an image model's output is ~10x that fallback).
+ *
+ * Throws `ModelNotAllowedError` / `ModelNotPricedError` (HTTP 403).
  */
 export function assertModelAllowed(ctx: ProjectAccessContext, model: string): void {
   const normalizedModel = normalizeDeprecatedModelName(model) ?? model;
@@ -254,5 +274,8 @@ export function assertModelAllowed(ctx: ProjectAccessContext, model: string): vo
     : DEFAULT_ALLOWED_MODELS;
   if (!allowed.has(normalizedModel)) {
     throw new ModelNotAllowedError(model, ctx.allowedModels);
+  }
+  if (!isVertexModelPriced(normalizedModel)) {
+    throw new ModelNotPricedError(model, ctx.allowedModels);
   }
 }
