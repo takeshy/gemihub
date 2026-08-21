@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEnterpriseContext } from "~/contexts/EnterpriseContext";
 import { useI18n } from "~/i18n/context";
-import { VERTEX_TOPUP_UNIT_USD } from "~/types/hubwork";
+import { VERTEX_TOPUP_UNIT_JPY, VERTEX_TOPUP_UNIT_USD } from "~/types/hubwork";
 import type { OrganizationAiSettings, OrgRole } from "~/types/enterprise";
 
 interface OrgItem { id: string; name: string; role: OrgRole | null }
@@ -199,7 +199,7 @@ export function EnterpriseTab() {
 }
 
 function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPayload; busy: boolean; run: (task: () => Promise<unknown>, success?: string) => Promise<void> }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const [project, setProject] = useState(initial.settings.vertexProjectId);
   const [location, setLocation] = useState(initial.settings.vertexLocation || "global");
   const [orgBudget, setOrgBudget] = useState(initial.settings.monthlyBudgetUsd?.toString() ?? "");
@@ -302,12 +302,13 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
       <form method="POST" action="/hubwork/api/stripe/checkout" className="mt-3 flex flex-wrap items-center gap-2">
         <input type="hidden" name="plan" value="vertex-topup" />
         <input type="hidden" name="orgId" value={orgId} />
+        <input type="hidden" name="currency" value={language === "ja" ? "jpy" : "usd"} />
         <select name="units" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="1">
-          {[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>{`+$${n * VERTEX_TOPUP_UNIT_USD}`}</option>)}
-        </select>
-        <select name="currency" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="jpy">
-          <option value="jpy">{t("enterprise.topUpJpy")}</option>
-          <option value="usd">{t("enterprise.topUpUsd")}</option>
+          {[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>
+            {language === "ja"
+              ? `¥${(n * VERTEX_TOPUP_UNIT_JPY).toLocaleString("ja-JP")}（$${n * VERTEX_TOPUP_UNIT_USD}分）`
+              : `$${n * VERTEX_TOPUP_UNIT_USD}`}
+          </option>)}
         </select>
         <button type="submit" className={secondaryButton} disabled={busy}>{t("enterprise.buyTopUp")}</button>
       </form>
