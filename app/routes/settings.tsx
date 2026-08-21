@@ -77,10 +77,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   let hubworkAccountMatchedByEmail = false;
   let hubworkLookupSucceeded = true;
   try {
-    const { getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
-    hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
+    const { getAccountByOrganization, getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
+    hubworkAccount = validTokens.currentOrgId
+      ? await getAccountByOrganization(validTokens.currentOrgId)
+      : await getAccountByRootFolderId(validTokens.rootFolderId);
     // Also try matching by email for accounts created via Stripe/admin before user enabled
-    if (!hubworkAccount && validTokens.email) {
+    if (!validTokens.currentOrgId && !hubworkAccount && validTokens.email) {
       hubworkAccount = await getAccountByEmail(validTokens.email);
       hubworkAccountMatchedByEmail = !!hubworkAccount;
     }
@@ -118,6 +120,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       ? {
           ...driveSettings.hubwork,
           accountId: hubworkAccount.id,
+          orgId: hubworkAccount.orgId,
           plan: hubworkAccount.plan,
           currency: hubworkAccount.currency,
           accountSlug: hubworkAccount.accountSlug,

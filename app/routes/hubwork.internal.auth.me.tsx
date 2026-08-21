@@ -1,6 +1,5 @@
 import type { Route } from "./+types/hubwork.internal.auth.me";
-import { resolveAccountWithTokens } from "~/services/hubwork-account-resolver.server";
-import { getSettings } from "~/services/user-settings.server";
+import { resolveHubworkRuntime } from "~/services/hubwork-runtime.server";
 import { getContactEmail } from "~/services/hubwork-session.server";
 import { buildAuthProfile, buildCurrentUser } from "~/services/hubwork-page-renderer.server";
 import { readIdeMockFile } from "~/services/hubwork-ide-mock.server";
@@ -15,9 +14,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   // Try Hubwork account resolution first
-  let account, tokens;
+  let account, tokens, settings;
   try {
-    ({ account, tokens } = await resolveAccountWithTokens(request));
+    ({ account, tokens, settings } = await resolveHubworkRuntime(request));
   } catch (e) {
     if (e instanceof Response && e.status === 404) {
       // No Hubwork account for this domain — IDE fallback
@@ -35,8 +34,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { accessToken, rootFolderId } = tokens;
-  const settings = await getSettings(accessToken, rootFolderId);
+  const { accessToken } = tokens;
 
   const { resolveAccountType } = await import("~/types/settings");
   const resolved = resolveAccountType(settings?.hubwork?.accounts, type);

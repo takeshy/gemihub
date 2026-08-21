@@ -1,7 +1,8 @@
 import type { gmail_v1 } from "googleapis";
 import { createMagicToken } from "./hubwork-magic-link.server";
-import { loadEmailTemplate, renderEmailTemplate } from "./hubwork-email-template.server";
+import { loadEmailTemplateFromProject, renderEmailTemplate } from "./hubwork-email-template.server";
 import { sendHtmlEmail } from "./hubwork-mail-send.server";
+import type { ProjectAccessContext } from "~/types/enterprise";
 
 export const MAGIC_LINK_EXPIRES_MINUTES = 10;
 
@@ -17,8 +18,7 @@ export function getBaseUrl(request: Request): string {
  * action and the registration-duplicate silent-login fallback.
  */
 export async function sendLoginMagicLink(params: {
-  accessToken: string;
-  rootFolderId: string;
+  project: ProjectAccessContext;
   gmailClient: gmail_v1.Gmail;
   accountId: string;
   accountType: string;
@@ -30,9 +30,8 @@ export async function sendLoginMagicLink(params: {
   const token = await createMagicToken(params.email, params.accountId, params.accountType);
   const magicLink = `${params.baseUrl}/__gemihub/auth/verify/${token}?redirect=${encodeURIComponent(params.redirectPath)}`;
 
-  const template = await loadEmailTemplate(
-    params.accessToken,
-    params.rootFolderId,
+  const template = await loadEmailTemplateFromProject(
+    params.project,
     params.accountType,
     "login",
   );

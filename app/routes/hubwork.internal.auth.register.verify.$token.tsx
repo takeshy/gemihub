@@ -1,6 +1,5 @@
 import type { Route } from "./+types/hubwork.internal.auth.register.verify.$token";
-import { resolveAccountWithTokens } from "~/services/hubwork-account-resolver.server";
-import { getSettings } from "~/services/user-settings.server";
+import { resolveHubworkRuntime } from "~/services/hubwork-runtime.server";
 import { checkRateLimit } from "~/services/hubwork-rate-limiter.server";
 import { validateRedirectUrl } from "~/utils/security";
 import {
@@ -36,10 +35,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const redirectPath = validateRedirectUrl(url.searchParams.get("redirect"), "/");
 
-  const { tokens } = await resolveAccountWithTokens(request);
-  const { accessToken, rootFolderId } = tokens;
+  const { tokens, settings } = await resolveHubworkRuntime(request);
+  const { accessToken } = tokens;
 
-  const settings = await getSettings(accessToken, rootFolderId);
   const resolved = resolveAccountType(settings?.hubwork?.accounts, result.type);
   const spreadsheetId =
     resolved?.accountType.identity.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id;

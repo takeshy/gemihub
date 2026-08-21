@@ -1,6 +1,5 @@
 import type { Route } from "./+types/hubwork.internal.auth.login";
-import { resolveAccountWithTokens } from "~/services/hubwork-account-resolver.server";
-import { getSettings } from "~/services/user-settings.server";
+import { resolveHubworkRuntime } from "~/services/hubwork-runtime.server";
 import { checkRateLimit } from "~/services/hubwork-rate-limiter.server";
 import { validateRedirectUrl, validateOrigin } from "~/utils/security";
 import {
@@ -48,12 +47,11 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   }
 
-  const { account, tokens } = await resolveAccountWithTokens(request);
+  const { account, tokens, settings, project } = await resolveHubworkRuntime(request);
   if (account.plan !== "business" && account.plan !== "granted") {
     return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
   }
-  const { accessToken, rootFolderId } = tokens;
-  const settings = await getSettings(accessToken, rootFolderId);
+  const { accessToken } = tokens;
 
   const { resolveAccountType } = await import("~/types/settings");
   const resolved = resolveAccountType(settings?.hubwork?.accounts, type);
@@ -103,8 +101,7 @@ export async function action({ request }: Route.ActionArgs) {
     const url = new URL(request.url);
     const gmailClient = google.gmail({ version: "v1", auth: oauth2Client });
     await sendLoginMagicLink({
-      accessToken,
-      rootFolderId,
+      project,
       gmailClient,
       accountId: account.id,
       accountType: resolved.key,

@@ -133,6 +133,6 @@ export default [
   route("hubwork/api/stripe/checkout", "routes/hubwork.api.stripe.checkout.tsx"),
   route("hubwork/api/stripe/webhook", "routes/hubwork.api.stripe.webhook.tsx"),
   route("hubwork/api/stripe/portal", "routes/hubwork.api.stripe.portal.tsx"),
-  // Hubwork site catch-all (must be last — serves pages from Drive on Hubwork domains)
+  // Hubwork site catch-all (must be last — serves pages from Business GCS projects)
   route("*", "routes/hubwork.site.$.tsx"),
 ] satisfies RouteConfig;

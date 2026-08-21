@@ -1201,6 +1201,7 @@ export interface TranslationStrings {
   "mount.switchFailed": string;
   "settings.hubwork.title": string;
   "settings.hubwork.domain": string;
+  "settings.hubwork.domainOrganizationDescription": string;
   "settings.hubwork.domainPlaceholder": string;
   "settings.hubwork.domainProvision": string;
   "settings.hubwork.domainRemove": string;
@@ -2576,6 +2577,7 @@ const en: TranslationStrings = {
   "mount.switchFailed": "Could not switch workspace.",
   "settings.hubwork.title": "Premium Plan",
   "settings.hubwork.domain": "Custom Domain",
+  "settings.hubwork.domainOrganizationDescription": "This domain belongs to the currently selected organization and is shared by its members.",
   "settings.hubwork.domainPlaceholder": "app.example.com",
   "settings.hubwork.domainProvision": "Provision",
   "settings.hubwork.domainRemove": "Remove",
@@ -3951,6 +3953,7 @@ const ja: TranslationStrings = {
   "mount.switchFailed": "ワークスペースを切り替えられませんでした。",
   "settings.hubwork.title": "プレミアムプラン",
   "settings.hubwork.domain": "カスタムドメイン",
+  "settings.hubwork.domainOrganizationDescription": "このドメインは現在選択中の組織に属し、組織のメンバー間で共有されます。",
   "settings.hubwork.domainPlaceholder": "app.example.com",
   "settings.hubwork.domainProvision": "設定開始",
   "settings.hubwork.domainRemove": "削除",

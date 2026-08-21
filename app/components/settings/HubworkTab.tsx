@@ -5,10 +5,12 @@ import { useI18n } from "~/i18n/context";
 import { SectionCard } from "~/components/settings/shared";
 import type { UserSettings, HubworkSchedule } from "~/types/settings";
 import { compareSkillVersions, WEBPAGE_BUILDER_SKILL_VERSION } from "~/services/hubwork-skill-version";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 
 
 export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFolderId, isCallback }: { settings: UserSettings; hasHubworkScopes: boolean; rootFolderId: string; isCallback?: boolean }) {
   const { t } = useI18n();
+  const organizationSelected = useEnterpriseSelection() !== null;
   const hubwork = settings.hubwork;
   const domainFetcher = useFetcher();
   const scheduleFetcher = useFetcher();
@@ -403,7 +405,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         )}
       </SectionCard>
 
-      {isPro && hubwork?.accountSlug && (
+      {organizationSelected && isPro && hubwork?.accountSlug && (
         <SectionCard>
           <div className="flex items-center gap-3">
             <Globe size={18} className="text-gray-400" />
@@ -444,7 +446,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           )}
 
           {/* Pro-only: Domain, Schedules */}
-          {isPro && (
+          {organizationSelected && isPro && (
             <>
 
               {/* Custom Domain */}
@@ -453,6 +455,9 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
               <Globe size={16} />
               {t("settings.hubwork.domain")}
             </h3>
+            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+              {t("settings.hubwork.domainOrganizationDescription")}
+            </p>
 
             {hubwork?.customDomain ? (
               <CustomDomainStatus
@@ -633,7 +638,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                 {scheduleFetcher.state !== "idle" ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : (
-                  "Save"
+                  t("common.save")
                 )}
               </button>
             </scheduleFetcher.Form>

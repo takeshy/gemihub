@@ -299,6 +299,23 @@ export async function getAccountByProject(
   return docToAccount(snap.docs[0]);
 }
 
+/** The single Hubwork publication/billing account owned by an organization. */
+export async function getAccountByOrganization(
+  orgId: string,
+): Promise<HubworkAccount | null> {
+  const db = getFirestore();
+  const snap = await db
+    .collection(HUBWORK_ACCOUNTS)
+    .where("orgId", "==", orgId)
+    .limit(2)
+    .get();
+  if (snap.empty) return null;
+  if (snap.size > 1) {
+    throw new Error(`organization ${orgId} has multiple Hubwork accounts`);
+  }
+  return docToAccount(snap.docs[0]);
+}
+
 export async function getAccountByStripeCustomerId(
   customerId: string
 ): Promise<HubworkAccount | null> {

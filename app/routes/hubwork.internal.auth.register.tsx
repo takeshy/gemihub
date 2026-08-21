@@ -1,9 +1,8 @@
 import type { Route } from "./+types/hubwork.internal.auth.register";
-import { resolveAccountWithTokens } from "~/services/hubwork-account-resolver.server";
-import { getSettings } from "~/services/user-settings.server";
+import { resolveHubworkRuntime } from "~/services/hubwork-runtime.server";
 import { checkRateLimit } from "~/services/hubwork-rate-limiter.server";
 import { validateRedirectUrl, validateOrigin } from "~/utils/security";
-import { loadEmailTemplate, renderEmailTemplate } from "~/services/hubwork-email-template.server";
+import { loadEmailTemplateFromProject, renderEmailTemplate } from "~/services/hubwork-email-template.server";
 import { sendHtmlEmail } from "~/services/hubwork-mail-send.server";
 import {
   createPendingRegistration,
@@ -59,13 +58,12 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   }
 
-  const { account, tokens } = await resolveAccountWithTokens(request);
+  const { account, tokens, settings, project } = await resolveHubworkRuntime(request);
   if (account.plan !== "business" && account.plan !== "granted") {
     return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
   }
-  const { accessToken, rootFolderId } = tokens;
+  const { accessToken } = tokens;
 
-  const settings = await getSettings(accessToken, rootFolderId);
   const resolved = resolveAccountType(settings?.hubwork?.accounts, type);
   const resolvedSpreadsheetId =
     resolved?.accountType.identity.spreadsheetId || settings?.hubwork?.spreadsheets?.[0]?.id;
@@ -107,8 +105,7 @@ export async function action({ request }: Route.ActionArgs) {
       // silent-login: send a login link instead of a registration link.
       const url = new URL(request.url);
       await sendLoginMagicLink({
-        accessToken,
-        rootFolderId,
+        project,
         gmailClient,
         accountId: account.id,
         accountType: resolved.key,
@@ -130,7 +127,7 @@ export async function action({ request }: Route.ActionArgs) {
     const baseUrl = getBaseUrl(request);
     const registerLink = `${baseUrl}/__gemihub/auth/register/verify/${token}?redirect=${encodeURIComponent(redirectPath)}`;
 
-    const template = await loadEmailTemplate(accessToken, rootFolderId, resolved.key, "register");
+    const template = await loadEmailTemplateFromProject(project, resolved.key, "register");
     const url = new URL(request.url);
     // Spread user fields first so built-in variables (registerLink/email/etc.)
     // can't be overridden by a maliciously-named form field.

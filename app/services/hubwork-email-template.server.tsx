@@ -4,6 +4,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { readRemoteSyncMeta } from "./sync-meta.server";
 import { readFile } from "./google-drive.server";
+import { readObject as readGcsObject } from "./gcs-storage.server";
+import type { ProjectAccessContext } from "~/types/enterprise";
 
 /**
  * Email template kinds. Additional kinds can be added here.
@@ -110,6 +112,32 @@ export async function loadEmailTemplate(
     }
   } catch (e) {
     console.warn(`[email-template] Failed to load ${kind} for ${accountType}:`, e);
+  }
+  return BUILT_IN_TEMPLATES[kind];
+}
+
+/** Load a published Hubwork email template exclusively from its GCS project. */
+export async function loadEmailTemplateFromProject(
+  ctx: ProjectAccessContext,
+  accountType: string,
+  kind: EmailTemplateKind,
+): Promise<EmailTemplate> {
+  const candidates = [
+    `${TEMPLATE_PREFIX}${accountType}/${kind}.md`,
+    `${TEMPLATE_PREFIX}${kind}.md`,
+  ];
+  for (const path of candidates) {
+    try {
+      const { bytes } = await readGcsObject(ctx, path);
+      const raw = new TextDecoder("utf-8").decode(bytes);
+      const { data, body } = parseFrontmatter(raw);
+      const subject = typeof data.subject === "string" && data.subject.trim()
+        ? data.subject.trim()
+        : BUILT_IN_TEMPLATES[kind].subject;
+      return { subject, markdown: body };
+    } catch {
+      // Try the less-specific template, then the built-in default.
+    }
   }
   return BUILT_IN_TEMPLATES[kind];
 }

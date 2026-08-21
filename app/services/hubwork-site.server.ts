@@ -2,8 +2,7 @@
  * Published-page resolution over the storage provider.
  *
  * Shared by hubwork.site.$ (path serving) and hubwork-page.server (root
- * page): both Drive-backed accounts and Business org projects serve `web/**`
- * through the same code — the MountContext decides the backend.
+ * page). Hubwork mounts are always Business organization GCS projects.
  *
  * Resolution order (unchanged from the Drive-era implementation):
  *   1. Exact file: /users/abc123 → web/users/abc123.html

@@ -2,24 +2,32 @@ import { data } from "react-router";
 import type { Route } from "./+types/hubwork.api.domain";
 import { requireAuth } from "~/services/session.server";
 import { provisionDomain, getDomainStatus, removeDomain } from "~/services/hubwork-domain.server";
-import { getAccountByDomain, getAccountByRootFolderId } from "~/services/hubwork-accounts.server";
+import { getAccountByDomain, getAccountByOrganization } from "~/services/hubwork-accounts.server";
+import { emailToUid, getOrgMember } from "~/services/organizations.server";
+import { isSuperAdmin } from "~/services/super-admin.server";
 import { validateOrigin } from "~/utils/security";
 
-async function requireOwnedHubworkAccount(request: Request) {
+async function requireManagedOrganizationAccount(request: Request) {
   const tokens = await requireAuth(request);
-  const account = await getAccountByRootFolderId(tokens.rootFolderId);
+  if (!tokens.currentOrgId || !tokens.email) {
+    throw new Response("Select an organization first", { status: 400 });
+  }
+  const membership = await getOrgMember(tokens.currentOrgId, emailToUid(tokens.email));
+  if (!isSuperAdmin(tokens.email) && membership?.role !== "owner" && membership?.role !== "admin") {
+    throw new Response("Organization owner or admin access required", { status: 403 });
+  }
+  const account = await getAccountByOrganization(tokens.currentOrgId);
   if (!account) {
-    throw new Response("Hubwork account not found", { status: 404 });
+    throw new Response("Hubwork account not found for the selected organization", { status: 404 });
   }
   return account;
 }
 
 /**
- * GET /hubwork/api/domain?accountId=xxx
- * Check domain provisioning status.
+ * Check the selected organization's domain provisioning status.
  */
 export async function loader({ request }: Route.LoaderArgs) {
-  const account = await requireOwnedHubworkAccount(request);
+  const account = await requireManagedOrganizationAccount(request);
   const status = await getDomainStatus(account.id, account.customDomain);
   return data(status);
 }
@@ -30,7 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
  */
 export async function action({ request }: Route.ActionArgs) {
   validateOrigin(request);
-  const account = await requireOwnedHubworkAccount(request);
+  const account = await requireManagedOrganizationAccount(request);
 
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
@@ -61,7 +69,7 @@ export async function action({ request }: Route.ActionArgs) {
       // Check domain is not already in use
       const existing = await getAccountByDomain(domain);
       if (existing && existing.id !== account.id) {
-        return data({ error: "Domain is already in use by another account" }, { status: 409 });
+        return data({ error: "Domain is already in use by another organization" }, { status: 409 });
       }
 
       try {

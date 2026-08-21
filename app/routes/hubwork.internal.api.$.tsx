@@ -1,10 +1,11 @@
 import { redirect } from "react-router";
 import type { Route } from "./+types/hubwork.internal.api.$";
-import { resolveAccountWithTokens } from "~/services/hubwork-account-resolver.server";
-import { getSettings } from "~/services/user-settings.server";
-import { getDriveContext, readFile } from "~/services/google-drive.server";
-import { readRemoteSyncMeta } from "~/services/sync-meta.server";
-import { buildApiIndex, resolveApiWorkflow } from "~/services/hubwork-api-resolver.server";
+import { resolveHubworkAccount } from "~/services/hubwork-account-resolver.server";
+import { getTokensForAccount } from "~/services/hubwork-accounts.server";
+import { buildApiIndexFromPaths, resolveApiWorkflow } from "~/services/hubwork-api-resolver.server";
+import { mountContextForHubworkAccount } from "~/services/storage/account-mount.server";
+import { listObjectsForSync, readObject } from "~/services/storage/provider.server";
+import { getSettingsForTenant } from "~/services/user-settings-tenant.server";
 import { getContactEmail } from "~/services/hubwork-session.server";
 import { buildAuthProfile, buildCurrentUser } from "~/services/hubwork-page-renderer.server";
 import { parseWorkflowYaml } from "~/engine/parser";
@@ -38,9 +39,9 @@ async function handleApiRequest(request: Request, apiPath: string) {
     return Response.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  let account, tokens;
+  let account;
   try {
-    ({ account, tokens } = await resolveAccountWithTokens(request));
+    account = await resolveHubworkAccount(request);
   } catch (e) {
     if (e instanceof Response && e.status === 404) {
       // No Hubwork account for this domain — IDE fallback
@@ -54,22 +55,24 @@ async function handleApiRequest(request: Request, apiPath: string) {
     return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
   }
 
-  const { accessToken, rootFolderId } = tokens;
-
-  // Resolve workflow file from Drive
-  const syncMeta = await readRemoteSyncMeta(accessToken, rootFolderId);
-  if (!syncMeta) {
-    return Response.json({ error: "Not found" }, { status: 404 });
+  const mountCtx = await mountContextForHubworkAccount(account);
+  if (!mountCtx?.gcs) {
+    return Response.json({ error: "Hubwork Cloud Storage project is not configured" }, { status: 503 });
   }
-
-  const apiIndex = buildApiIndex(syncMeta);
+  // OAuth remains necessary for Sheets/Gmail/Calendar integrations, but no
+  // Hubwork content or workflow definition is read from Drive.
+  const tokens = await getTokensForAccount(account);
+  const { accessToken, rootFolderId } = tokens;
+  const apiObjects = await listObjectsForSync(mountCtx, "web/api");
+  const apiIndex = buildApiIndexFromPaths(apiObjects.map((object) => object.relativePath));
   const resolved = resolveApiWorkflow(apiIndex, apiPath);
   if (!resolved) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
   // Read and parse workflow YAML
-  const yamlContent = await readFile(accessToken, resolved.fileId);
+  const { bytes: workflowBytes } = await readObject(mountCtx, resolved.fileId);
+  const yamlContent = new TextDecoder("utf-8").decode(workflowBytes);
   const workflow = parseWorkflowYaml(yamlContent);
   const trigger = workflow.trigger || {};
 
@@ -105,7 +108,7 @@ async function handleApiRequest(request: Request, apiPath: string) {
     }
     authType = requireAuth;
 
-    const settings = await getSettings(accessToken, rootFolderId);
+    const settings = await getSettingsForTenant(mountCtx.gcs);
     const { resolveAccountType } = await import("~/types/settings");
     const resolvedAccount = resolveAccountType(settings?.hubwork?.accounts, requireAuth);
     const accountType = resolvedAccount?.accountType;
@@ -249,12 +252,11 @@ async function handleApiRequest(request: Request, apiPath: string) {
   const abortController = new AbortController();
 
   // Build ServiceContext
-  const settings = await getSettings(accessToken, rootFolderId);
-  const driveContext = await getDriveContext({ accessToken, refreshToken: "", expiryTime: 0, rootFolderId });
+  const settings = await getSettingsForTenant(mountCtx.gcs);
   const serviceContext: ServiceContext = {
     driveAccessToken: accessToken,
     driveRootFolderId: rootFolderId,
-    driveHistoryFolderId: driveContext.historyFolderId,
+    driveHistoryFolderId: "",
     abortSignal: abortController.signal,
     settings,
   };

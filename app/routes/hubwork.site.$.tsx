@@ -11,9 +11,7 @@ const SECURITY_HEADERS: Record<string, string> = {
 /**
  * Catch-all route for Hubwork sites.
  * Only activates on Hubwork domains (resolved via Host header).
- * Serves `web/**` through the storage provider with CDN caching — the
- * account's mount decides whether the bytes come from the owner's Drive or
- * the Business organization's project storage.
+ * Serves `web/**` from the Business organization's GCS project with CDN caching.
  */
 export async function loader({ request, params }: Route.LoaderArgs) {
   let account;

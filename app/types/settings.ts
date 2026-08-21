@@ -730,6 +730,8 @@ export interface HubworkSettings {
   skillVersion?: string;
   customDomain?: string;
   accountId?: string;
+  /** Organization that owns this Hubwork publication configuration. */
+  orgId?: string;
   plan?: "lite" | "business" | "granted";
   /** Billing currency for lite/pro plans. Missing means "jpy" (legacy accounts). */
   currency?: "jpy" | "usd";

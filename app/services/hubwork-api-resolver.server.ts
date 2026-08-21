@@ -21,6 +21,18 @@ export function buildApiIndex(syncMeta: SyncMeta): Map<string, string> {
   return index;
 }
 
+/** Build the same API index from canonical GCS object paths. */
+export function buildApiIndexFromPaths(paths: Iterable<string>): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const path of paths) {
+    if (path.startsWith(API_PREFIX) && path.endsWith(".yaml")) {
+      const relativePath = path.substring(API_PREFIX.length);
+      if (relativePath) index.set(relativePath, path);
+    }
+  }
+  return index;
+}
+
 /**
  * Resolve an API path to a workflow file.
  *

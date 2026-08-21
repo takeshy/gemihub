@@ -8,8 +8,7 @@ const SECURITY_HEADERS: HeadersInit = {
 };
 
 /**
- * Serve the root page of a Hubwork site through the storage provider (the
- * account's mount decides Drive vs the Business org project).
+ * Serve the root page of a Hubwork site from its Business org GCS project.
  * Returns a Response if the request matches a hubwork account, or null otherwise.
  */
 export async function serveHubworkRootPage(
