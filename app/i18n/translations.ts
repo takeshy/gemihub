@@ -1146,6 +1146,15 @@ export interface TranslationStrings {
   "enterprise.vertexDisconnect": string;
   "enterprise.vertexDisconnected": string;
   "enterprise.vertexOwnBillingNote": string;
+  "enterprise.vertexExecutionProjectId": string;
+  "enterprise.vertexOauthJsonTitle": string;
+  "enterprise.vertexOauthJsonDescription": string;
+  "enterprise.vertexOauthClientProject": string;
+  "enterprise.vertexOauthJsonSelect": string;
+  "enterprise.vertexOauthJsonSaved": string;
+  "enterprise.vertexOauthJsonError": string;
+  "enterprise.vertexOauthDesktopError": string;
+  "enterprise.vertexOauthRedirectUri": string;
   "enterprise.orgMonthlyLimit": string;
   "enterprise.userMonthlyLimit": string;
   "enterprise.unlimited": string;
@@ -2531,15 +2540,24 @@ const en: TranslationStrings = {
   "enterprise.gcpProjectId": "Google Cloud project ID",
   "enterprise.vertexLocation": "Vertex AI location",
   "enterprise.vertexSourceTitle": "Vertex AI billing source",
-  "enterprise.vertexSourceDescription": "Use GemiHub's included/purchased budget, or connect a Google Cloud project owned by this organization.",
-  "enterprise.vertexPrepaid": "GemiHub budget",
-  "enterprise.vertexOwn": "Organization Google Cloud project",
+  "enterprise.vertexSourceDescription": "Choose whether Vertex AI is billed through GemiHub or directly to your own Google Cloud account.",
+  "enterprise.vertexPrepaid": "GemiHub",
+  "enterprise.vertexOwn": "Own Google Cloud",
   "enterprise.vertexSourceSaved": "Vertex AI source updated",
   "enterprise.vertexConnected": "Connected as {email}",
   "enterprise.vertexConnect": "Connect with Google",
   "enterprise.vertexDisconnect": "Disconnect",
   "enterprise.vertexDisconnected": "Google connection removed",
   "enterprise.vertexOwnBillingNote": "Charges are billed directly to the organization's Google Cloud project and do not consume GemiHub budget.",
+  "enterprise.vertexExecutionProjectId": "Vertex AI execution project ID",
+  "enterprise.vertexOauthJsonTitle": "Google OAuth client",
+  "enterprise.vertexOauthJsonDescription": "Upload a Web application OAuth client JSON. Its project ID identifies the OAuth client and may differ from the Vertex AI execution project ID above.",
+  "enterprise.vertexOauthClientProject": "OAuth client project: {project}",
+  "enterprise.vertexOauthJsonSelect": "Upload OAuth client JSON",
+  "enterprise.vertexOauthJsonSaved": "OAuth client JSON saved",
+  "enterprise.vertexOauthJsonError": "Select an OAuth client JSON for a Google Cloud Web application.",
+  "enterprise.vertexOauthDesktopError": "This JSON is for a Desktop application. Create a Web application OAuth client and register {url} as an authorized redirect URI.",
+  "enterprise.vertexOauthRedirectUri": "Authorized redirect URI: {url}",
   "enterprise.orgMonthlyLimit": "Organization monthly limit (USD)",
   "enterprise.userMonthlyLimit": "Default per-user monthly limit (USD)",
   "enterprise.unlimited": "Unlimited",
@@ -3925,15 +3943,24 @@ const ja: TranslationStrings = {
   "enterprise.gcpProjectId": "Google CloudプロジェクトID",
   "enterprise.vertexLocation": "Vertex AIロケーション",
   "enterprise.vertexSourceTitle": "Vertex AIの課金元",
-  "enterprise.vertexSourceDescription": "GemiHubの付属・購入予算を使うか、この組織が所有するGoogle Cloudプロジェクトを接続します。",
-  "enterprise.vertexPrepaid": "GemiHub予算",
-  "enterprise.vertexOwn": "組織のGoogle Cloudプロジェクト",
+  "enterprise.vertexSourceDescription": "Vertex AIの料金をGemiHub経由にするか、自前のGoogle Cloudへ直接請求するかを選択します。",
+  "enterprise.vertexPrepaid": "GemiHub",
+  "enterprise.vertexOwn": "自前のGoogle Cloud",
   "enterprise.vertexSourceSaved": "Vertex AIの利用元を更新しました",
   "enterprise.vertexConnected": "{email} として接続済み",
   "enterprise.vertexConnect": "Googleで接続",
   "enterprise.vertexDisconnect": "連携解除",
   "enterprise.vertexDisconnected": "Google連携を解除しました",
   "enterprise.vertexOwnBillingNote": "料金は組織のGoogle Cloudプロジェクトへ直接請求され、GemiHub予算は消費しません。",
+  "enterprise.vertexExecutionProjectId": "Vertex AI実行先プロジェクトID",
+  "enterprise.vertexOauthJsonTitle": "Google OAuthクライアント",
+  "enterprise.vertexOauthJsonDescription": "「ウェブアプリケーション」用OAuthクライアントJSONを読み込みます。JSON内のプロジェクトIDはOAuthクライアントの所属先であり、上のVertex AI実行先プロジェクトIDとは別でも構いません。",
+  "enterprise.vertexOauthClientProject": "OAuthクライアントのプロジェクト: {project}",
+  "enterprise.vertexOauthJsonSelect": "OAuthクライアントJSONを読み込む",
+  "enterprise.vertexOauthJsonSaved": "OAuthクライアントJSONを保存しました",
+  "enterprise.vertexOauthJsonError": "Google Cloudの「ウェブアプリケーション」用OAuthクライアントJSONを選択してください。",
+  "enterprise.vertexOauthDesktopError": "これは「デスクトップアプリ」用JSONです。「ウェブアプリケーション」を作成し、{url} を承認済みリダイレクトURIに登録してください。",
+  "enterprise.vertexOauthRedirectUri": "承認済みリダイレクトURI: {url}",
   "enterprise.orgMonthlyLimit": "組織全体の月次上限（USD）",
   "enterprise.userMonthlyLimit": "1ユーザーの標準月次上限（USD）",
   "enterprise.unlimited": "無制限",

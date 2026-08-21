@@ -200,6 +200,17 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
   const topUp = budget?.topUpUsd ?? initial.usage?.organization?.topUpUsd ?? 0;
   const budgetLimit = budget?.limitUsd ?? null;
   const oauth = initial.oauthStatus;
+  const saveAiSettings = () => api("/api/orgs/ai-settings", { method: "POST", body: { orgId, vertexProjectId: project, vertexLocation: location, monthlyBudgetUsd: orgBudget || null, defaultUserMonthlyBudgetUsd: userBudget || null } });
+  const uploadOAuthJson = async (file: File) => {
+    const callbackUrl = `${window.location.origin}/auth/vertex/callback`;
+    const document = JSON.parse(await file.text()) as { web?: { client_id?: string; client_secret?: string; project_id?: string; redirect_uris?: string[] }; installed?: unknown };
+    if (!document.web && document.installed) throw new Error(t("enterprise.vertexOauthDesktopError").replace("{url}", callbackUrl));
+    const web = document.web;
+    if (!web?.client_id || !web.client_secret || !web.project_id || !Array.isArray(web.redirect_uris)) {
+      throw new Error(t("enterprise.vertexOauthJsonError"));
+    }
+    return api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, clientId: web.client_id, clientSecret: web.client_secret, projectId: web.project_id, redirectUris: web.redirect_uris } });
+  };
   return <div className="space-y-4">
     <section className={cardClass}>
       <h3 className="font-semibold">{t("enterprise.vertexSourceTitle")}</h3>
@@ -209,16 +220,37 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
         <button type="button" disabled={busy || oauth?.source === "own"} className={`${secondaryButton} ${oauth?.source === "own" ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, source: "own" } }), t("enterprise.vertexSourceSaved"))}>{t("enterprise.vertexOwn")}</button>
       </div>
       {oauth?.source === "own" && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-          {oauth.connected
-            ? <span className="text-green-600">{t("enterprise.vertexConnected").replace("{email}", oauth.connectedEmail || "")}</span>
-            : <a href={`/auth/vertex/start?orgId=${encodeURIComponent(orgId)}`} className={primaryButton}>{t("enterprise.vertexConnect")}</a>}
-          {oauth.connected && <button type="button" className="text-red-600 hover:underline" onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "DELETE", body: { orgId } }), t("enterprise.vertexDisconnected"))}>{t("enterprise.vertexDisconnect")}</button>}
-          <span className="text-xs text-gray-500">{t("enterprise.vertexOwnBillingNote")}</span>
+        <div className="mt-4 space-y-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <p className="text-xs text-gray-500">{t("enterprise.vertexOwnBillingNote")}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t("enterprise.vertexExecutionProjectId")}><input className={inputClass} value={project} onChange={(e) => setProject(e.target.value)} placeholder="my-vertex-project" /></Field>
+            <Field label={t("enterprise.vertexLocation")}><input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} list="vertex-locations-own" /><datalist id="vertex-locations-own"><option value="global" /><option value="asia-northeast1" /><option value="us-central1" /><option value="europe-west4" /></datalist></Field>
+          </div>
+          <button type="button" className={primaryButton} disabled={busy || !project || !location} onClick={() => void run(saveAiSettings, t("enterprise.aiSettingsSaved"))}>{t("enterprise.saveAiSettings")}</button>
+          <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
+            <h4 className="text-sm font-medium">{t("enterprise.vertexOauthJsonTitle")}</h4>
+            <p className="mt-1 text-xs text-gray-500">{t("enterprise.vertexOauthJsonDescription")}</p>
+            {oauth.projectId && <p className="mt-2 text-xs text-gray-500">{t("enterprise.vertexOauthClientProject").replace("{project}", oauth.projectId)}</p>}
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+              <label className={`${secondaryButton} cursor-pointer ${busy ? "pointer-events-none opacity-50" : ""}`}>
+                {t("enterprise.vertexOauthJsonSelect")}
+                <input type="file" accept="application/json,.json" className="hidden" disabled={busy} onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void run(() => uploadOAuthJson(file), t("enterprise.vertexOauthJsonSaved"));
+                }} />
+              </label>
+              {oauth.connected
+                ? <span className="text-green-600">{t("enterprise.vertexConnected").replace("{email}", oauth.connectedEmail || "")}</span>
+                : <a href={`/auth/vertex/start?orgId=${encodeURIComponent(orgId)}`} className={primaryButton}>{t("enterprise.vertexConnect")}</a>}
+              {oauth.connected && <button type="button" className="text-red-600 hover:underline" onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "DELETE", body: { orgId } }), t("enterprise.vertexDisconnected"))}>{t("enterprise.vertexDisconnect")}</button>}
+            </div>
+            <p className="mt-2 text-xs text-gray-500">{t("enterprise.vertexOauthRedirectUri").replace("{url}", typeof window === "undefined" ? "/auth/vertex/callback" : `${window.location.origin}/auth/vertex/callback`)}</p>
+          </div>
         </div>
       )}
     </section>
-    <section className={cardClass}>
+    {oauth?.source !== "own" && <section className={cardClass}>
       <h3 className="font-semibold">{t("enterprise.budgetTitle")}</h3>
       <p className="mt-1 text-sm text-gray-500">
         {budgetLimit != null
@@ -273,14 +305,12 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
       <details className="mt-4">
         <summary className="cursor-pointer text-sm font-medium text-gray-600 dark:text-gray-300">{t("enterprise.budgetAdvanced")}</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Field label={t("enterprise.gcpProjectId")}><input className={inputClass} value={project} onChange={(e) => setProject(e.target.value)} placeholder="my-vertex-project" /></Field>
-        <Field label={t("enterprise.vertexLocation")}><input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} list="vertex-locations" /><datalist id="vertex-locations"><option value="global" /><option value="asia-northeast1" /><option value="us-central1" /><option value="europe-west4" /></datalist></Field>
         <Field label={t("enterprise.orgMonthlyLimit")}><input className={inputClass} type="number" min="0" step="0.01" value={orgBudget} onChange={(e) => setOrgBudget(e.target.value)} placeholder={t("enterprise.unlimited")} /></Field>
         <Field label={t("enterprise.userMonthlyLimit")}><input className={inputClass} type="number" min="0" step="0.01" value={userBudget} onChange={(e) => setUserBudget(e.target.value)} placeholder={t("enterprise.unlimited")} /></Field>
         </div>
-        <button className={`${primaryButton} mt-4`} disabled={busy || !location} onClick={() => void run(() => api("/api/orgs/ai-settings", { method: "POST", body: { orgId, vertexProjectId: project, vertexLocation: location, monthlyBudgetUsd: orgBudget || null, defaultUserMonthlyBudgetUsd: userBudget || null } }), t("enterprise.aiSettingsSaved"))}>{t("enterprise.saveAiSettings")}</button>
+        <button className={`${primaryButton} mt-4`} disabled={busy} onClick={() => void run(saveAiSettings, t("enterprise.aiSettingsSaved"))}>{t("enterprise.saveAiSettings")}</button>
       </details>
-    </section>
+    </section>}
   </div>;
 }
 
