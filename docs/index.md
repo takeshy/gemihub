@@ -34,6 +34,7 @@ Welcome to the GemiHub Open Knowledge Format bundle.
 ## Architecture
 
 * [Storage Mounts & AI Providers](architecture/mounts.md) - Coexistence model: the default Drive mount (own Drive + own Gemini API key) and the org project mount (GCS + Vertex AI), selected per user and per mount.
+* [Self-Hosting](architecture/self-hosting.md) - Self-hosting setup: Google Cloud project and OAuth client, the drive.file scope, Gemini API key, environment variables, dev server, and Docker/production builds.
 * [Infrastructure](architecture/infrastructure.md) - Infrastructure: Cloud Run deployment, Docker builds, and self-hosting.
 * [Premium Plan](architecture/premium.md) - Premium plans: multi-tenancy with Firestore, Cloud Storage static hosting, custom domains, scheduled execution, isolated-vm, and the Business organization/shared-project model.
 * [Encryption](architecture/encryption.md) - Hybrid RSA+AES encryption for individual files, dashboard-managed secrets, chat history, and workflow logs.
