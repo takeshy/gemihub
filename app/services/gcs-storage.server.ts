@@ -76,10 +76,6 @@ async function getStorageForTenant(tenant: TenantInfo): Promise<Storage> {
   const cached = _storageCache.get(key);
   if (cached) return cached;
   // Implicit ADC through Storage's bundled google-auth-library works here.
-  // (The fork needed an explicit v10 auth client + Headers proxy only because
-  // of its `gaxios: ^7` package.json override, which this repo doesn't have.
-  // If that override is ever adopted, restore the workaround from
-  // gemihub-business/app/services/gcs-storage.server.ts.)
   const storage = new Storage({
     ...(GCP_PROJECT_ID ? { projectId: GCP_PROJECT_ID } : {}),
   });
@@ -149,6 +145,9 @@ export async function writeObject(
   contentType: string,
   options?: WriteOptions,
 ): Promise<StoredObject> {
+  if (ctx.organizationReadOnly) {
+    throw new Error("organization is read-only during the cancellation retention period");
+  }
   const storage = await getStorageForTenant(ctx.tenant);
   const file = fileFor(storage, ctx, relativePath);
   const customMetadata: Record<string, string> = { ...(options?.customMetadata ?? {}) };
@@ -192,6 +191,9 @@ export async function deleteObject(
   relativePath: string,
   options?: { ifGenerationMatch?: string },
 ): Promise<void> {
+  if (ctx.organizationReadOnly) {
+    throw new Error("organization is read-only during the cancellation retention period");
+  }
   const storage = await getStorageForTenant(ctx.tenant);
   const file = fileFor(storage, ctx, relativePath);
   try {
@@ -304,6 +306,9 @@ export async function moveObjectsBetweenProjects(
   moves: Array<{ from: string; to: string }>,
   options: { keepSource?: boolean } = {},
 ): Promise<StoredObject[]> {
+  if (targetCtx.organizationReadOnly || (!options.keepSource && sourceCtx.organizationReadOnly)) {
+    throw new Error("organization is read-only during the cancellation retention period");
+  }
   const sourceStorage = await getStorageForTenant(sourceCtx.tenant);
   const targetStorage = sourceCtx.tenant.gcsBucket === targetCtx.tenant.gcsBucket
     ? sourceStorage

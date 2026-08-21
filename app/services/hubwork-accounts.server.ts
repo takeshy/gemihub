@@ -365,6 +365,8 @@ export async function updateAccount(
       | "currency"
       | "stripeCustomerId"
       | "stripeSubscriptionId"
+      | "canceledAt"
+      | "deleteAfter"
       | "activeScheduleRevision"
       | "encryptedGeminiApiKey"
       | "orgId"
@@ -374,6 +376,35 @@ export async function updateAccount(
 ): Promise<void> {
   const db = getFirestore();
   await db.collection(HUBWORK_ACCOUNTS).doc(accountId).update(data);
+}
+
+export const BUSINESS_CANCELLATION_RETENTION_DAYS = 30;
+
+/** Apply one consistent subscription lifecycle, including the Business export window. */
+export async function setAccountBillingStatus(
+  accountId: string,
+  status: "active" | "past_due" | "canceled",
+  now = Timestamp.now(),
+): Promise<void> {
+  const ref = getFirestore().collection(HUBWORK_ACCOUNTS).doc(accountId);
+  if (status === "canceled") {
+    const deleteAfter = Timestamp.fromMillis(
+      now.toMillis() + BUSINESS_CANCELLATION_RETENTION_DAYS * 86_400_000,
+    );
+    await ref.update({
+      billingStatus: status,
+      accountStatus: "disabled",
+      canceledAt: now,
+      deleteAfter,
+    });
+    return;
+  }
+  await ref.update({
+    billingStatus: status,
+    ...(status === "active" ? { accountStatus: "enabled" } : {}),
+    canceledAt: FieldValue.delete(),
+    deleteAfter: FieldValue.delete(),
+  });
 }
 
 export async function updateRefreshToken(

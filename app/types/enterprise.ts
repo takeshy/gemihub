@@ -123,6 +123,10 @@ export interface ProjectAccessContext {
   projectId: string;
   tenant: TenantInfo;
   gcsPrefix: string;
+  /** Cancellation export window: reads are allowed, mutations and paid AI are not. */
+  organizationReadOnly?: boolean;
+  /** ISO date after which retained organization data is eligible for deletion. */
+  organizationDeleteAfter?: string;
   /**
    * Vertex models the project is allowed to invoke. Empty array means
    * "all built-in defaults" (see VERTEX_MODELS). Enforced by

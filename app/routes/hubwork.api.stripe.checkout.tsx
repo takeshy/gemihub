@@ -254,7 +254,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   // Upgrade existing subscription (e.g. Lite → Pro)
-  if (existing?.stripeSubscriptionId && existing.billingStatus === "active") {
+  if (existing?.stripeSubscriptionId && existing.billingStatus !== "canceled") {
     if (existing.plan === planType) {
       throw new Response("Already on this plan", { status: 400 });
     }

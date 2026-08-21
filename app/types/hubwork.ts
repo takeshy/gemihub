@@ -42,6 +42,10 @@ export interface HubworkAccount {
   domainStatus: HubworkDomainStatus;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  /** When paid access ended. Business organization data remains readable for 30 days. */
+  canceledAt?: Timestamp;
+  /** End of the cancellation export window; data is eligible for deletion afterwards. */
+  deleteAfter?: Timestamp;
   /** Organization provisioned by a Business subscription (owner = purchaser). */
   orgId?: string;
   /** The org's default shared project. */
@@ -50,23 +54,23 @@ export interface HubworkAccount {
   createdAt: Timestamp;
 }
 
-/** Check if account is active (enabled status and billing not past_due) */
+/** past_due is a payment-recovery grace period; only disabled/canceled access stops. */
 export function isHubworkFeatureAvailable(account: HubworkAccount): boolean {
-  return account.accountStatus === "enabled" && account.billingStatus !== "past_due";
+  return account.accountStatus === "enabled" && account.billingStatus !== "canceled";
 }
 
-/** Check if account has paid features (Gmail, no upload limit, etc.) — lite or above */
+/** Check if account has paid features (Gmail, 5 GB uploads, etc.) — lite or above. */
 export function hasPaidFeatures(account: HubworkAccount): boolean {
-  return account.accountStatus === "enabled" && !!account.plan;
+  return account.accountStatus === "enabled" && account.billingStatus !== "canceled" && !!account.plan;
 }
 
 export function isActivePremiumAccount(account: HubworkAccount): boolean {
-  return account.accountStatus === "enabled" && !!account.plan && account.billingStatus === "active";
+  return account.accountStatus === "enabled" && !!account.plan && account.billingStatus !== "canceled";
 }
 
 /** Check if account has Business features (Sheets, web builder, scheduled, server-side, organization) */
 export function hasBusinessFeatures(account: HubworkAccount): boolean {
-  return account.accountStatus === "enabled" && (account.plan === "business" || account.plan === "granted");
+  return account.accountStatus === "enabled" && account.billingStatus !== "canceled" && (account.plan === "business" || account.plan === "granted");
 }
 
 export type HubworkConcurrencyPolicy = "allow" | "forbid";

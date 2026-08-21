@@ -125,7 +125,7 @@ GemiHub is MIT-licensed and fully usable for free with your own Gemini API key. 
 | | Free | Premium — ¥300/month (≈$2) | Business — ¥7,500/month (≈$50), per organization |
 |---|---|---|---|
 | Everything above | ✓ | ✓ | ✓ |
-| Upload limit | 20 MB | none | none |
+| Upload limit | 20 MB/file | 5 GB/file | 5 GB/file |
 | Gmail send and Google Calendar workflow nodes | — | ✓ | ✓ |
 | PDF generation, external sync token, temp edit URL | — | ✓ | ✓ |
 | Interactions API chat (function tools + RAG + Web Search together) | — | ✓ | ✓ |

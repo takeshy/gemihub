@@ -38,6 +38,7 @@ import { normalizeDeprecatedModelName } from "~/types/settings";
 import { VERTEX_MODELS } from "./ai/models";
 import { isVertexModelPriced } from "./ai-budget.server";
 import { isSuperAdmin } from "./super-admin.server";
+import { getAccountByOrganization } from "./hubwork-accounts.server";
 
 const ROLE_RANK: Record<ProjectRole, number> = {
   viewer: 1,
@@ -181,6 +182,14 @@ export async function requireProjectAccess(
   if (!org || !org.tenantProject) {
     throw new ProjectAccessError(404, `organization not found: ${orgId}`);
   }
+  const billingAccount = await getAccountByOrganization(orgId);
+  const organizationReadOnly = billingAccount?.billingStatus === "canceled";
+  if (organizationReadOnly && minRole !== "viewer" && !isSuperAdmin(identity.email)) {
+    throw new ProjectAccessError(
+      403,
+      "organization is read-only during the 30-day cancellation retention period",
+    );
+  }
 
   return {
     uid: identity.uid,
@@ -198,6 +207,10 @@ export async function requireProjectAccess(
       vertexBillingMode: org.vertexOAuthSource === "own" ? "customer" : "service",
     },
     gcsPrefix: project.gcsPrefix,
+    organizationReadOnly,
+    ...(billingAccount?.deleteAfter
+      ? { organizationDeleteAfter: billingAccount.deleteAfter.toDate().toISOString() }
+      : {}),
     allowedModels: project.allowedModels,
   };
 }
@@ -211,6 +224,14 @@ export async function requireOrgAccess(
   orgId: string,
 ): Promise<{ uid: string; email: string; orgId: string; role: "owner" | "admin" | "member" }> {
   const identity = await requireSessionIdentity(request);
+  const account = await getAccountByOrganization(orgId);
+  const isMutation = request.method !== "GET" && request.method !== "HEAD";
+  if (account?.billingStatus === "canceled" && isMutation && !isSuperAdmin(identity.email)) {
+    throw new ProjectAccessError(
+      403,
+      "organization is read-only during the 30-day cancellation retention period",
+    );
+  }
   if (isSuperAdmin(identity.email)) {
     const org = await getOrganization(orgId);
     if (!org) throw new ProjectAccessError(404, `organization not found: ${orgId}`);
@@ -269,6 +290,12 @@ export class ModelNotPricedError extends ModelNotAllowedError {
  * Throws `ModelNotAllowedError` / `ModelNotPricedError` (HTTP 403).
  */
 export function assertModelAllowed(ctx: ProjectAccessContext, model: string): void {
+  if (ctx.organizationReadOnly) {
+    throw new ModelNotAllowedError(
+      model,
+      ctx.allowedModels,
+    );
+  }
   const normalizedModel = normalizeDeprecatedModelName(model) ?? model;
   const allowed = ctx.allowedModels.length > 0
     ? new Set(ctx.allowedModels.map((allowedModel) => normalizeDeprecatedModelName(allowedModel) ?? allowedModel))

@@ -51,7 +51,7 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
   const inOrganizationProject = useEnterpriseSelection() !== null;
   const hasPremium =
     !!settings.hubwork?.plan
-    && settings.hubwork?.billingStatus === "active"
+    && settings.hubwork?.billingStatus !== "canceled"
     && settings.hubwork?.accountStatus !== "disabled";
 
   // Load lastUpdatedAt from IndexedDB

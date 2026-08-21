@@ -24,6 +24,7 @@ import {
 import { getTokens } from "~/services/session.server";
 import { isSuperAdmin } from "~/services/super-admin.server";
 import { auditFromRoute } from "~/services/audit-log.server";
+import { getAccountByOrganization } from "~/services/hubwork-accounts.server";
 
 interface RemoveBody {
   orgId?: unknown;
@@ -74,6 +75,15 @@ export async function action({ request }: Route.ActionArgs) {
     // last owner) must not be able to strip the org of its owner. Only a
     // service administrator may remove an owner.
     const target = await getOrgMember(orgId, uid);
+    const billingAccount = target?.role === "owner"
+      ? await getAccountByOrganization(orgId)
+      : null;
+    if (target?.role === "owner" && billingAccount?.billingStatus !== "canceled") {
+      return Response.json(
+        { error: "the subscription owner cannot leave while the Business contract is active; transfer or cancel the contract first" },
+        { status: 409 },
+      );
+    }
     if (target?.role === "owner" && !isSuperAdmin(callerEmail)) {
       return Response.json(
         { error: "only a service administrator can remove an owner" },

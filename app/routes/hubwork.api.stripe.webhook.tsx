@@ -5,6 +5,7 @@ import {
   getAccountByEmail,
   getAccountByStripeCustomerId,
   createAccount,
+  setAccountBillingStatus,
   updateAccount,
 } from "~/services/hubwork-accounts.server";
 import { removeDomain } from "~/services/hubwork-domain.server";
@@ -116,6 +117,7 @@ export async function action({ request }: Route.ActionArgs) {
           ...(email && !account.email ? { email } : {}),
           ...(accountSlug && !account.accountSlug ? { accountSlug, defaultDomain: `${accountSlug}.gemihub.net` } : {}),
         });
+        await setAccountBillingStatus(account.id, "active");
         provisionedAccountId = account.id;
       } else {
         const newId = await createAccount({
@@ -180,7 +182,7 @@ export async function action({ request }: Route.ActionArgs) {
               console.warn(`[stripe-webhook] Failed to remove custom domain for ${account.id}:`, e);
             }
           }
-          await updateAccount(account.id, { billingStatus: "canceled", accountStatus: "disabled" });
+          await setAccountBillingStatus(account.id, "canceled");
         }
       }
       break;
@@ -227,11 +229,7 @@ export async function action({ request }: Route.ActionArgs) {
               console.warn(`[stripe-webhook] Failed to remove custom domain for ${account.id}:`, e);
             }
           }
-          await updateAccount(account.id, {
-            billingStatus,
-            ...(billingStatus === "canceled" ? { accountStatus: "disabled" as const } : {}),
-            ...(isActive && account.accountStatus === "disabled" && (account.plan === "lite" || account.plan === "business") ? { accountStatus: "enabled" as const } : {}),
-          });
+          await setAccountBillingStatus(account.id, billingStatus);
         }
       }
       break;

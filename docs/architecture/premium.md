@@ -42,7 +42,7 @@ Cloud Scheduler (single job)
 
 - **Single Cloud Run for all accounts** — no per-account instances. Accounts are resolved from the `Host` header via Firestore lookup (cached 60s in memory).
 - **Two-tier URL** — every account gets `{accountSlug}.gemihub.net` immediately; custom domains are optional and additive. DNS-pending accounts still work via the built-in subdomain.
-- **Cloud Run as Drive proxy** — pages are read from Google Drive via `_sync-meta.json` lookup and served with `Cache-Control` headers. Cloud CDN caches the responses. No Cloud Storage or Backend Buckets needed.
+- **Cloud Run as storage proxy** — pages are read from the account's linked Drive or GCS project mount and served with `Cache-Control` headers. Cloud CDN caches the responses. No public storage bucket or Backend Bucket is needed.
 - **Firestore for multi-instance state** — magic link tokens must be shared across Cloud Run instances. Rate limiting stays in-memory (per-instance, acceptable for DoS mitigation).
 - **AJAX-based data access** — pages are static HTML; authenticated data is fetched at runtime via `/__gemihub/auth/me` and `/__gemihub/api/*` workflow endpoints. No server-side injection.
 - **settings.json as schedule source of truth** — Firestore `scheduleIndex` stores desired schedule config rebuilt on save, while `scheduleRuntime` stores mutable execution state. Scheduler reads Firestore for matching and runtime state, and reads Drive only when loading workflow YAML for actual execution.
@@ -96,7 +96,9 @@ of project storage (`BUSINESS_INCLUDED_STORAGE_GB`).
 - **AI budget top-ups** — one-time purchases of `VERTEX_TOPUP_UNIT_USD` = $10
   per unit (¥1,500), 1–20 units per checkout, credited idempotently by the
   webhook via `addAiBudgetTopUp`. The window follows the billing cycle
-  (`Organization.budgetAnchorDay`), not the calendar month.
+  (`Organization.budgetAnchorDay`), not the calendar month. A top-up remains
+  usable through the end of the following billing period; unused value then
+  expires. Spend consumes the base allowance before purchased top-ups.
 - **Storage add-on** — a separate monthly subscription of 500 GB
   (`STORAGE_ADDON_UNIT_GB`, ¥5,000 / $30 per month). `MAX_STORAGE_ADDON_UNITS`
   is 1, so the quota tops out at 600 GB per organization. Enforced in
@@ -136,6 +138,8 @@ hubwork-accounts/{accountId}
   currency?: "jpy" | "usd"           — which Price the account was billed with; missing = "jpy" (legacy)
   stripeCustomerId?: string          — Stripe customer ID (set by webhook)
   stripeSubscriptionId?: string      — Stripe subscription ID (set by webhook)
+  canceledAt?: Timestamp             — when paid access ended
+  deleteAfter?: Timestamp            — Business data becomes deletion-eligible after 30 days
   orgId?: string                     — organization provisioned by the Business subscription
   projectId?: string                 — that organization's default shared project
   billingStatus: "active" | "past_due" | "canceled"   — granted accounts always set to "active"
@@ -178,23 +182,29 @@ Status is split into three independent concerns:
 
 | Field | Values | Controls | Set By |
 |-------|--------|----------|--------|
-| `billingStatus` | `active`, `past_due`, `canceled` | Feature access (with `plan`). `granted` accounts are always initialized to `"active"` and not modified by Stripe. | Stripe webhooks (paid) / always `"active"` (granted) |
+| `billingStatus` | `active`, `past_due`, `canceled` | Billing lifecycle. `past_due` is a grace period; `canceled` stops paid access. `granted` accounts remain `active`. | Stripe webhooks (paid) / always `active` (granted) |
 | `accountStatus` | `enabled`, `disabled` | Master switch for the account | Admin panel |
 | `domainStatus` | `none`, `pending_dns`, `provisioning_cert`, `active`, `failed` | Custom domain URL availability | Domain provisioning flow |
 
 **Access rules:**
-- **Hubwork features available:** `accountStatus == "enabled"` (single check). Stripe webhooks automatically set `accountStatus` to `"disabled"` on cancellation and re-enable on reactivation, so `billingStatus` is informational only (displayed in admin panel).
+- **Hubwork features available:** `accountStatus == "enabled"` and `billingStatus != "canceled"`. `past_due` remains enabled while Stripe retries payment. Stripe webhooks disable the account on cancellation and re-enable it on recovery.
 - **Schedule execution:** same as above. `domainStatus` is irrelevant
 - **Built-in subdomain (`defaultDomain`):** always available when features are available
 - **Custom domain:** only when `domainStatus == "active"`, but feature access is independent
 
 This ensures "billing active but DNS pending" accounts can still use scheduled workflows, form actions, and the built-in subdomain.
 
+For Business cancellation, the organization project remains readable for 30
+days so members can export their data. All project mutations, billable AI, and
+organization configuration changes are blocked during this period; the data is
+eligible for deletion afterwards. The subscription Owner cannot leave or be
+demoted until the contract is transferred or canceled.
+
 ### Account Plans
 
 | Plan | How Created | Description | Organization |
 |------|-------------|-------------|--------------|
-| `lite` | Stripe Checkout → webhook | ¥300/$2 a month. Gmail node, PDF, no upload limit. | **None.** Lite works entirely on the user's own Drive. |
+| `lite` | Stripe Checkout → webhook | ¥300/$2 a month. Gmail node, PDF, uploads up to 5 GB per file. | **None.** Lite works entirely on the user's own Drive. |
 | `business` | Stripe Checkout → webhook | All Lite features + Sheets nodes, web builder, subdomain, auth, scheduled workflows, org projects on GCS + Vertex AI. | Provisioned automatically (see below). |
 | `granted` | Admin panel | Free account created by admin. Has Business-level access. | Not provisioned — a service admin creates it. |
 
