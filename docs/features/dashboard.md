@@ -35,7 +35,7 @@ grid:
   gap: 8
 widgets:
   - id: <uuid>
-    type: file | base | kanban | secret-manager | timeline | workflow | web | memo-list
+    type: file | base | kanban | secret-manager | timeline | calendar | workflow | web | memo-list
     layout:
       lg: { x: 0, y: 0, w: 6, h: 3 }
       sm: { x: 0, y: 0, w: 12, h: 3 }   # auto-derived if omitted
@@ -52,7 +52,7 @@ Key files: `dashboardFile.ts` (parse/serialize/load/save/list/rename/delete), `t
 - **No separate edit mode.** Hovering a widget cell reveals a chrome pill centered at the top (pill mover / Maximize / Open / Settings / drag grip / Delete) and a resize handle in the bottom-right corner — no mode toggle needed. The **Open** button appears for file-backed widgets — those whose `WidgetDef.filePathOf(config)` resolves to an existing Drive file (file/markdown via `path`, workflow via `workflow`, base via `base`, kanban via `kanban`) — and navigates to that file's page in the main viewer (`plugin-select-file`). Widgets can also expose an external URL via `WidgetDef.externalUrlOf(config)`; Web Embed uses this to open its configured page in a new browser tab. The chrome ignores pointer events until revealed, and it floats over the top **center** because widget headers keep their own controls (filter/sort icons, memo toggle) at the left/right edges. When the pill still covers a control, its small left nub drags the pill anywhere inside the cell (session-only; the offset resets on cell resize/maximize). On touch devices (`pointer: coarse`) the chrome is always visible and interactive, since hover-reveal is unreliable there. Undo/redo supports config-edit coalescing.
 - **Maximize** — the pill's Maximize button expands one widget to fill the grid area (`absolute inset-0` overlay, ported from obsidian-gemini-helper); sibling cells stay mounted but hidden so their state survives restore. The state is ephemeral (not persisted) and clears automatically if the widget disappears (delete/undo/dashboard switch). Drag/resize handles are hidden while maximized.
 - **Align (整列)** — two toolbar buttons tile all widgets evenly into up to 3 **columns** (horizontal) or 3 **rows** (vertical), round-robin, sized to roughly one screen (`equalizeLayout.ts`, ported from mdwys). One click is one undo step; `sm` layouts are dropped so `deriveSmLayout` re-derives the stacked layout.
-- The canvas (`DashboardCanvas.tsx`) renders the grid; each widget lives in a `GridCell.tsx` that owns drag/resize. `DashboardHost.tsx` owns the dashboard lifecycle (create / rename / delete / switch, home pinning via `settings.homeDashboard`) and debounced save. It defaults to the home dashboard on mount, but `pendingDashboardOpen.ts` lets an external caller (e.g. the chat panel's "New Dashboard" button) override that with a specific dashboard path — a pending value consumed on mount, plus a live `gemihub-open-dashboard` window event for when `DashboardHost` is already mounted. A freshly created dashboard is cached under a `new:` id until the background migration to Drive completes; `DashboardHost` listens for `file-id-migrated` to keep its open dashboard's fileId in sync (and to refresh the dashboard list) — without this, a debounced save issued right after creation targets the now-stale `new:` id, which can resurrect an orphaned cache entry and get re-migrated as a second, duplicate `.dashboard` file. `createNewDashboard`/`renameDashboard` (`dashboardFile.ts`) dispatch `tree-meta-updated` in addition to `file-modified` so the left sidebar's file tree picks up the change immediately (`file-modified` alone only refreshes the sidebar's "modified" badges, not its file list).
+- The canvas (`DashboardCanvas.tsx`) renders the grid; each widget lives in a `GridCell.tsx` that owns drag/resize. `DashboardHost.tsx` owns the dashboard lifecycle (create / rename / delete / switch, home pinning via `settings.homeDashboard`) and debounced save. It defaults to the home dashboard on mount, but `pendingDashboardOpen.ts` lets an external caller (e.g. the chat panel's "New Dashboard" button) override that with a specific dashboard path — a pending value consumed on mount, plus a live `gemihub-open-dashboard` window event for when `DashboardHost` is already mounted. A freshly created dashboard is cached under a `new:` id until the background migration to Drive completes; `DashboardHost` listens for `file-id-migrated` to keep its open dashboard's fileId in sync (and to refresh the dashboard list) — without this, a debounced save issued right after creation targets the now-stale `new:` id, which can resurrect an orphaned cache entry and get re-migrated as a second, duplicate `.dashboard` file. Deletion cancels any pending save, waits for an already-started save to settle, and then deletes the latest migrated file id; otherwise the delayed save can recreate the dashboard after deletion. `createNewDashboard`/`renameDashboard` (`dashboardFile.ts`) dispatch `tree-meta-updated` in addition to `file-modified` so the left sidebar's file tree picks up the change immediately (`file-modified` alone only refreshes the sidebar's "modified" badges, not its file list).
 
 Adding a widget opens the `WidgetPalette` modal, which lists every registered widget type.
 
@@ -67,11 +67,12 @@ Widgets are registered in `widgets/registry.ts` via `registerWidget(def)`. Each 
 | `kanban` | Kanban board over a folder of markdown files | `.kanban` definition file + folder |
 | `secret-manager` | Create, search, unlock, copy, and update encrypted values | `.encrypted` files |
 | `timeline` | Personal microblog of dated posts (tags, image attachments, pin/edit) | timeline folder |
+| `calendar` | Month calendar combining local events, Timeline activity, and explicitly refreshed Google Calendar events | system timeline + browser cache |
 | `workflow` | Run a workflow and render its output | workflow |
 | `web` | Embed an external URL (with embeddability check + fallback card) | URL |
 | `memo-list` | Browse all memo files (filter, paging, newest-memo preview) | `Dashboards/Memos/` |
 
-The current core widget set is registered in `widgets/registry.ts`: `file`, `base`, `kanban`, `secret-manager`, `timeline`, `workflow`, `web`, `memo-list`. `web` is unchanged from the initial dashboard release; the others are described below.
+The current core widget set is registered in `widgets/registry.ts`: `file`, `base`, `kanban`, `secret-manager`, `timeline`, `calendar`, `workflow`, `web`, `memo-list`. `web` is unchanged from the initial dashboard release; the others are described below.
 
 > **Markdown widget is now the File widget.** The earlier `markdown` widget grew into `file` (same config shape, more formats + memos). Released dashboards persisting `type: markdown` keep working without migration: the registry registers the same `WidgetDef` under both types (`markdown` is hidden from the palette), so the YAML round-trips byte-stable. New widgets are written as `type: file`.
 
@@ -159,6 +160,16 @@ config:
 - **Tags** — inline `#tags` in a post body are extracted into clickable chips shown below the post (the chips are the canonical display; the raw `#tag` tokens are stripped from the rendered body so they aren't shown twice). Clicking a chip filters the feed by that tag.
 - **Filtering & paging** — header controls filter by free-text word, tags, and date range, and toggle pinned-only; older posts load on demand beyond `latestCount`.
 - **Rendering & folding** — posts render through `GfmMarkdownPreview` (wiki embeds for images via `WikiEmbed`). Markdown embeds and long posts collapse according to `collapseLineLimit` / `collapseCharLimit`, and each post is a memoized `TimelinePostView` so editing one post doesn't re-render the whole feed.
+
+### Calendar widget and Launcher calendar
+
+The `calendar` widget shows a month grid that combines local calendar events with activity from the system Timeline. The same `CalendarWidget` is also available from the IDE Launcher, so both surfaces share the same events, Google Calendar cache, and day-detail behavior.
+
+- **Day details** — clicking a date opens a portal-based modal instead of expanding content below the month. The modal lists that day's events and activity and keeps only **Add event** in its header; an empty day does not render a redundant “No events or activity” message. Close it with the backdrop, ×, or Escape. In the Launcher, Escape closes the day modal first and leaves the Launcher open.
+- **Local events** — Add event writes a calendar-marked entry to `Dashboards/Timeline/System/<YYYY-MM-DD>.md`; local events can be edited, moved to another date, and deleted. Timeline activity is read-only in this view.
+- **Google Calendar** — **Google events** requests the primary calendar for exactly the visible month (`timeMin` inclusive, next-month `timeMax` exclusive, up to 250 results). Returned events are read-only and link to Google Calendar. Refresh is explicit; changing months never makes a network request by itself.
+- **Month cache** — successful Google results are stored by month in the app-level Drive IndexedDB (`googleCalendarMonths`, schema version 9). Returning from another file, dashboard, or Launcher instance restores the cached month immediately. The cache belongs to the personal app cache even while an organization project is selected; it is not written into a `.dashboard` file or synced to project storage.
+- **Overlay behavior** — the day modal is portaled to `document.body` at a higher layer than the Launcher, avoiding clipping by widget and Launcher overflow containers.
 
 ### Memo List widget
 

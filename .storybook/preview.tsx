@@ -60,6 +60,15 @@ globalThis.fetch = async (input, init) => {
       notes: { name: "Notes/project-notes.md", mimeType: "text/markdown", md5Checksum: "notes", modifiedTime },
     } } });
   }
+  if (url.pathname === "/api/calendar") {
+    return json({
+      events: [
+        { id: "design-review", summary: "Design review / デザインレビュー", start: "2026-08-22T10:00:00+09:00", end: "2026-08-22T11:00:00+09:00", location: "Meet", htmlLink: "https://calendar.google.com/calendar/event?eid=design-review" },
+        { id: "release", summary: "Release prep / リリース準備", start: "2026-08-22T14:30:00+09:00", end: "2026-08-22T15:30:00+09:00", description: "Final check / 最終チェック", htmlLink: "https://calendar.google.com/calendar/event?eid=release" },
+        { id: "planning", summary: "Weekly planning / 来週の計画", start: "2026-08-26", end: "2026-08-27", htmlLink: "https://calendar.google.com/calendar/event?eid=planning" },
+      ],
+    });
+  }
   if (url.pathname === "/api/chat/history") return json([]);
   if (url.pathname === "/api/sync" && init?.method === "POST") {
     let fileIds: string[] = [];

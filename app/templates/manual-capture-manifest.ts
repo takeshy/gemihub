@@ -21,6 +21,8 @@ export const MANUAL_CAPTURES: ManualCaptureEntry[] = [
   { fileName: "dashboard_edit.png", chapter: "dashboard" },
   { fileName: "dashboard_kanban.png", chapter: "dashboard" },
   { fileName: "dashboard_workflow.png", chapter: "dashboard" },
+  { fileName: "dashboard_calendar.png", chapter: "dashboard", storyId: "templates-calendar-launcher--calendar" },
+  { fileName: "dashboard_calendar_en.png", chapter: "dashboard (English)", storyId: "templates-calendar-launcher--calendar-english" },
   { fileName: "drive_tool_mcp_selector.png", chapter: "chat" },
   { fileName: "edit_workflow.png", chapter: "workflow" },
   { fileName: "editor.png", chapter: "editor" },
