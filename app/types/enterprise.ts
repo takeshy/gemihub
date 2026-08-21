@@ -153,6 +153,13 @@ export interface EnterpriseSelectionView {
   /** Bucket-internal prefix; convenient for the client to display paths. */
   gcsPrefix: string;
   region: string;
+  /**
+   * Cancellation export window: the IDE must tell the user why writes fail and
+   * how long they still have to export, instead of surfacing bare 403s.
+   */
+  readOnly?: boolean;
+  /** ISO timestamp the export window closes (present while `readOnly`). */
+  readOnlyDeleteAfter?: string;
 }
 
 /**

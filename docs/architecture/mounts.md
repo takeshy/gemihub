@@ -78,11 +78,38 @@ Published `web/**` pages serve through the storage provider
 
 ### Cancellation lifecycle
 
+One helper decides what an organization's data may still be used for:
+`organizationLifecycle()` in `app/types/hubwork.ts`, enforced for every
+project API by `requireProjectAccess` / `requireOrgAccess`.
+
+| Lifecycle | Condition | Effect |
+|-----------|-----------|--------|
+| `active` | not canceled, `accountStatus: "enabled"` | normal operation |
+| `read-only` | `billingStatus: "canceled"`, `now < deleteAfter` | reads and exports only |
+| `expired` | `billingStatus: "canceled"`, `now >= deleteAfter` | 403 — data pending deletion |
+| `disabled` | `accountStatus: "disabled"` without cancellation | 403 — no export grace |
+
 `past_due` is a payment-recovery grace period and does not remove paid
 features. When a Business subscription becomes `canceled`, hosted and paid AI
-features stop and its organization project becomes read-only for 30 days.
-Members may read and export files during that window, but cannot write, delete,
-move, run billable organization AI, or change organization configuration. At
-the end of the window the retained organization data is eligible for deletion.
-The subscription owner cannot leave or be demoted while the contract is active;
-the contract must first be transferred to another Owner or canceled.
+features stop and its organization project becomes read-only for 30 days
+(`BUSINESS_CANCELLATION_RETENTION_DAYS`). Members may read and export files
+during that window, but cannot write, delete, move, run organization AI (every
+organization model is metered against the tenant, so all of them are blocked),
+or change organization configuration. The IDE shows a banner with the export
+deadline; the server answers writes with `OrganizationReadOnlyError` (403), not
+a generic model or storage error.
+
+Once `deleteAfter` passes the organization stops being served altogether and
+its data waits for deletion. **Deletion is not automatic**: a service
+administrator sees each account's lifecycle and deadline in the admin console
+(`/admin/enterprise` → accounts). The billing record cannot be deleted on its
+own because that would orphan and reopen the retained organization; tenant-data
+purging is a separate operator procedure. A super
+administrator is exempt from the 403 gates — support can still open a canceled
+or expired organization to export it or transfer ownership — but the data
+stays read-only in the app either way.
+
+The subscription owner cannot leave or be demoted through self-service. The
+owner holds the Stripe subscription, so a service administrator must move
+ownership (add the new owner, then remove the old one), including after
+cancellation.

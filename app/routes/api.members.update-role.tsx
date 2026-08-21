@@ -25,7 +25,6 @@ import type { OrgRole, ProjectRole } from "~/types/enterprise";
 import { getTokens } from "~/services/session.server";
 import { isSuperAdmin } from "~/services/super-admin.server";
 import { auditFromRoute } from "~/services/audit-log.server";
-import { getAccountByOrganization } from "~/services/hubwork-accounts.server";
 
 interface UpdateBody {
   orgId?: unknown;
@@ -101,20 +100,15 @@ export async function action({ request }: Route.ActionArgs) {
       return Response.json({ error: `${uid} is not a member of this org` }, { status: 404 });
     }
     // Owner protection: ORG_ROLES never assigns "owner", so any change to an
-    // owner is a demotion. Only a service administrator may do that —
-    // otherwise an org admin could strip the owner's control.
-    const billingAccount = target.role === "owner"
-      ? await getAccountByOrganization(orgId)
-      : null;
-    if (target.role === "owner" && billingAccount?.billingStatus !== "canceled") {
-      return Response.json(
-        { error: "the subscription owner cannot be demoted while the Business contract is active; transfer or cancel the contract first" },
-        { status: 409 },
-      );
-    }
+    // owner is a demotion. The owner holds the Business subscription, so only a
+    // service administrator may do that — otherwise an org admin could strip
+    // the owner's control, and there is no self-service contract transfer.
     if (target.role === "owner" && !isSuperAdmin(callerEmail)) {
       return Response.json(
-        { error: "only a service administrator can change an owner's role" },
+        {
+          error:
+            "only a service administrator can demote a subscription owner or transfer ownership",
+        },
         { status: 403 },
       );
     }

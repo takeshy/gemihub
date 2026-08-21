@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ModelNotAllowedError, ModelNotPricedError, assertModelAllowed } from "./project-acl.server.ts";
+import {
+  ModelNotAllowedError,
+  ModelNotPricedError,
+  OrganizationReadOnlyError,
+  ProjectAccessError,
+  assertModelAllowed,
+} from "./project-acl.server.ts";
 import { VERTEX_MODELS } from "./ai/models.ts";
 import type { ProjectAccessContext, TenantInfo } from "~/types/enterprise.ts";
 
@@ -100,4 +106,23 @@ test("ModelNotPricedError: surfaces the model and a 403", () => {
     assert.deepEqual(err.allowed, ["gemini-9-unreleased"]);
     assert.equal(err.status, 403);
   }
+});
+
+test("assertModelAllowed: a read-only organization reports the export window, not the model", () => {
+  const ctx: ProjectAccessContext = {
+    ...ctxWith([]),
+    organizationReadOnly: true,
+    organizationDeleteAfter: "2026-09-20T00:00:00.000Z",
+  };
+  assert.throws(
+    () => assertModelAllowed(ctx, "gemini-3.1-pro-preview"),
+    (err: unknown) => {
+      assert.ok(err instanceof OrganizationReadOnlyError);
+      assert.ok(err instanceof ProjectAccessError);
+      assert.equal(err.status, 403);
+      assert.match(err.message, /read-only/);
+      assert.match(err.message, /2026-09-20/);
+      return true;
+    },
+  );
 });

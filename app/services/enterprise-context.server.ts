@@ -26,6 +26,8 @@ import {
   orgRoleAutoProjectRole,
 } from "./projects.server";
 import { getTokens } from "./session.server";
+import { getAccountByOrganization } from "./hubwork-accounts.server";
+import { cancellationDeleteAfterIso, organizationLifecycle } from "~/types/hubwork";
 
 const NO_SESSION: EnterpriseSessionContext = {
   uid: null,
@@ -114,6 +116,13 @@ export async function resolveEnterpriseContext(
     };
   }
 
+  // Cancellation state is reported, never enforced here: the IDE needs it to
+  // explain why saving is disabled and how many days of export are left.
+  const billingAccount = await getAccountByOrganization(currentOrgId);
+  const readOnly = billingAccount
+    ? organizationLifecycle(billingAccount) === "read-only"
+    : false;
+
   const view: EnterpriseSelectionView = {
     orgId: currentOrgId,
     projectId: currentProjectId,
@@ -122,6 +131,14 @@ export async function resolveEnterpriseContext(
     allowedModels: project.allowedModels,
     gcsPrefix: project.gcsPrefix,
     region: process.env.DEFAULT_TENANT_REGION || org.tenantProject.region,
+    ...(readOnly
+      ? {
+          readOnly,
+          ...(billingAccount && cancellationDeleteAfterIso(billingAccount)
+            ? { readOnlyDeleteAfter: cancellationDeleteAfterIso(billingAccount) }
+            : {}),
+        }
+      : {}),
   };
   return {
     uid,

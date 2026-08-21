@@ -1414,6 +1414,28 @@ function IDEContent({
         onClose={() => setLauncherOpen(false)}
       />
 
+      {/* Cancellation export window: every write is rejected server-side, so
+          say it once up front instead of letting each save fail with a 403. */}
+      {projectSelection?.readOnly && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs dark:border-amber-800 dark:bg-amber-900/20">
+          <span className="text-amber-800 dark:text-amber-200">{t("index.orgReadOnly")}</span>
+          {projectSelection.readOnlyDeleteAfter && (
+            <span className="font-medium text-amber-800 dark:text-amber-200">
+              {t("index.orgReadOnlyDeadline").replace(
+                "{date}",
+                new Date(projectSelection.readOnlyDeleteAfter).toLocaleDateString(),
+              )}
+            </span>
+          )}
+          <a
+            href="/settings?tab=hubwork"
+            className="font-medium text-amber-800 underline hover:no-underline dark:text-amber-200"
+          >
+            {t("common.settings")}
+          </a>
+        </div>
+      )}
+
       {/* Only when there is a stored key waiting to be unlocked. Having no key
           at all is a normal state now (org projects use the tenant's Vertex AI,
           and chat says what is missing when you try to send), so it gets no

@@ -54,6 +54,64 @@ export interface HubworkAccount {
   createdAt: Timestamp;
 }
 
+/** Days a canceled Business organization stays readable so members can export. */
+export const BUSINESS_CANCELLATION_RETENTION_DAYS = 30;
+
+/**
+ * What an organization's data may still be used for.
+ *
+ * - `active` — normal operation.
+ * - `read-only` — canceled, inside the export window: reads and exports only.
+ * - `expired` — the export window ended; the data is queued for deletion and
+ *   is no longer served. Without this state a canceled organization would sit
+ *   readable forever, because `deleteAfter` alone is only a stored date.
+ * - `disabled` — the admin master switch (`accountStatus`) is off. Distinct
+ *   from `read-only`: there is no export grace, the account is simply closed.
+ */
+export type OrganizationLifecycle = "active" | "read-only" | "expired" | "disabled";
+
+function timestampMillis(value: Timestamp | undefined): number | null {
+  const candidate = value as { toMillis?: () => number } | undefined;
+  return typeof candidate?.toMillis === "function" ? candidate.toMillis() : null;
+}
+
+/**
+ * Resolve the lifecycle of the organization owned by this billing account.
+ *
+ * Cancellation wins over `accountStatus`: cancelling *sets* the account to
+ * disabled, and the 30-day export window has to survive that.
+ */
+export function organizationLifecycle(
+  account: Pick<HubworkAccount, "billingStatus" | "accountStatus" | "deleteAfter" | "canceledAt">,
+  nowMs: number = Date.now(),
+): OrganizationLifecycle {
+  if (account.billingStatus === "canceled") {
+    const storedDeleteAfterMs = timestampMillis(account.deleteAfter);
+    const canceledAtMs = timestampMillis(account.canceledAt);
+    const deleteAfterMs = storedDeleteAfterMs ?? (
+      canceledAtMs === null
+        ? null
+        : canceledAtMs + BUSINESS_CANCELLATION_RETENTION_DAYS * 86_400_000
+    );
+    return deleteAfterMs !== null && nowMs < deleteAfterMs ? "read-only" : "expired";
+  }
+  return account.accountStatus === "disabled" ? "disabled" : "active";
+}
+
+/** ISO date the export window closes, for error messages and the IDE banner. */
+export function cancellationDeleteAfterIso(
+  account: Pick<HubworkAccount, "deleteAfter" | "canceledAt">,
+): string | undefined {
+  const storedDeleteAfterMs = timestampMillis(account.deleteAfter);
+  const canceledAtMs = timestampMillis(account.canceledAt);
+  const deleteAfterMs = storedDeleteAfterMs ?? (
+    canceledAtMs === null
+      ? null
+      : canceledAtMs + BUSINESS_CANCELLATION_RETENTION_DAYS * 86_400_000
+  );
+  return deleteAfterMs === null ? undefined : new Date(deleteAfterMs).toISOString();
+}
+
 /** past_due is a payment-recovery grace period; only disabled/canceled access stops. */
 export function isHubworkFeatureAvailable(account: HubworkAccount): boolean {
   return account.accountStatus === "enabled" && account.billingStatus !== "canceled";

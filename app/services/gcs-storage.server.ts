@@ -21,6 +21,7 @@ import {
   type StoredObject,
 } from "./gcs-storage-utils";
 import { isSyncExcludedPath } from "./sync-client-utils";
+import { OrganizationReadOnlyError } from "./project-acl.server";
 
 export { objectPathOf, type StoredObject };
 
@@ -146,7 +147,7 @@ export async function writeObject(
   options?: WriteOptions,
 ): Promise<StoredObject> {
   if (ctx.organizationReadOnly) {
-    throw new Error("organization is read-only during the cancellation retention period");
+    throw new OrganizationReadOnlyError(ctx.organizationDeleteAfter);
   }
   const storage = await getStorageForTenant(ctx.tenant);
   const file = fileFor(storage, ctx, relativePath);
@@ -192,7 +193,7 @@ export async function deleteObject(
   options?: { ifGenerationMatch?: string },
 ): Promise<void> {
   if (ctx.organizationReadOnly) {
-    throw new Error("organization is read-only during the cancellation retention period");
+    throw new OrganizationReadOnlyError(ctx.organizationDeleteAfter);
   }
   const storage = await getStorageForTenant(ctx.tenant);
   const file = fileFor(storage, ctx, relativePath);
@@ -307,7 +308,9 @@ export async function moveObjectsBetweenProjects(
   options: { keepSource?: boolean } = {},
 ): Promise<StoredObject[]> {
   if (targetCtx.organizationReadOnly || (!options.keepSource && sourceCtx.organizationReadOnly)) {
-    throw new Error("organization is read-only during the cancellation retention period");
+    throw new OrganizationReadOnlyError(
+      targetCtx.organizationDeleteAfter ?? sourceCtx.organizationDeleteAfter,
+    );
   }
   const sourceStorage = await getStorageForTenant(sourceCtx.tenant);
   const targetStorage = sourceCtx.tenant.gcsBucket === targetCtx.tenant.gcsBucket

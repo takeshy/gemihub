@@ -17,17 +17,20 @@ import {
   getAccountByEmail,
   getAccountById,
   getAllAccounts,
+  setAccountBillingStatus,
   updateAccount,
 } from "~/services/hubwork-accounts.server";
 import { removeDomain } from "~/services/hubwork-domain.server";
 import { getTokens } from "~/services/session.server";
 import { isSuperAdmin } from "~/services/super-admin.server";
 import type {
+  HubworkAccount,
   HubworkAccountPlan,
   HubworkAccountStatus,
   HubworkBillingStatus,
   HubworkDomainStatus,
 } from "~/types/hubwork";
+import { cancellationDeleteAfterIso, organizationLifecycle } from "~/types/hubwork";
 import { validateOrigin } from "~/utils/security";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -45,9 +48,27 @@ async function requireServiceAdmin(request: Request): Promise<string> {
   return tokens.email;
 }
 
+function timestampIso(value: HubworkAccount["createdAt"] | undefined): string | undefined {
+  const candidate = value as { toMillis?: () => number } | undefined;
+  return typeof candidate?.toMillis === "function"
+    ? new Date(candidate.toMillis()).toISOString()
+    : undefined;
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   await requireServiceAdmin(request);
-  return Response.json({ accounts: await getAllAccounts() });
+  const accounts = await getAllAccounts();
+  // Deleting retained data is a deliberate administrator action, so the
+  // console has to show which accounts are inside their export window and
+  // which have passed it and are waiting to be purged.
+  return Response.json({
+    accounts: accounts.map((account) => ({
+      ...account,
+      canceledAt: timestampIso(account.canceledAt),
+      deleteAfter: cancellationDeleteAfterIso(account),
+      lifecycle: organizationLifecycle(account),
+    })),
+  });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -72,6 +93,12 @@ export async function action({ request }: Route.ActionArgs) {
       return Response.json({ error: "accountId is required" }, { status: 400 });
     }
     const account = await getAccountById(body.accountId);
+    if (account?.orgId) {
+      return Response.json(
+        { error: "organization billing records cannot be deleted separately from retained organization data" },
+        { status: 409 },
+      );
+    }
     if (account?.customDomain) {
       try {
         await removeDomain(account.id, account.customDomain);
@@ -116,7 +143,7 @@ export async function action({ request }: Route.ActionArgs) {
     if (!BILLING_STATUSES.includes(body.billingStatus as HubworkBillingStatus)) {
       return Response.json({ error: `invalid billingStatus: ${String(body.billingStatus)}` }, { status: 400 });
     }
-    updates.billingStatus = body.billingStatus as HubworkBillingStatus;
+    await setAccountBillingStatus(body.accountId, body.billingStatus as HubworkBillingStatus);
   }
   if (body.accountStatus !== undefined) {
     if (!ACCOUNT_STATUSES.includes(body.accountStatus as HubworkAccountStatus)) {
@@ -135,9 +162,9 @@ export async function action({ request }: Route.ActionArgs) {
     if (!EMAIL_RE.test(email)) return Response.json({ error: "valid email is required" }, { status: 400 });
     updates.email = email;
   }
-  if (Object.keys(updates).length === 0) {
+  if (Object.keys(updates).length === 0 && body.billingStatus === undefined) {
     return Response.json({ error: "no fields to update" }, { status: 400 });
   }
-  await updateAccount(body.accountId, updates);
+  if (Object.keys(updates).length > 0) await updateAccount(body.accountId, updates);
   return Response.json({ ok: true, account: await getAccountById(body.accountId) });
 }

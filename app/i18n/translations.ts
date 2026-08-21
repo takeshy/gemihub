@@ -29,6 +29,8 @@ export interface TranslationStrings {
 
   // Index - API key warning
   "index.apiKeyLocked": string;
+  "index.orgReadOnly": string;
+  "index.orgReadOnlyDeadline": string;
   "index.skillUpdateAvailable": string;
   "index.openSettings": string;
 
@@ -1431,6 +1433,8 @@ const en: TranslationStrings = {
   "index.subtitle": "Build and execute AI-powered workflows visually",
   "index.signIn": "Sign in with Google",
   "index.apiKeyLocked": "Gemini API key is locked. Enter your password to unlock.",
+  "index.orgReadOnly": "This organization's subscription was canceled. Files can be read and exported, but changes cannot be saved.",
+  "index.orgReadOnlyDeadline": "Export by {date} — retained data is deleted after that.",
   "index.skillUpdateAvailable": "A newer Webpage Builder skill is available. Open Settings > Premium Plan and click \"Update Skill to Latest\".",
   "index.openSettings": "Open Settings",
 
@@ -2834,6 +2838,8 @@ const ja: TranslationStrings = {
   "index.subtitle": "AIワークフローをビジュアルに構築・実行",
   "index.signIn": "Googleでサインイン",
   "index.apiKeyLocked": "Gemini APIキーはロックされています。パスワードを入力して解除してください。",
+  "index.orgReadOnly": "この組織のサブスクリプションは解約されました。ファイルの閲覧とエクスポートはできますが、保存はできません。",
+  "index.orgReadOnlyDeadline": "{date} までにエクスポートしてください。以降、保持データは削除されます。",
   "index.skillUpdateAvailable": "新しい Webpage Builder スキルがあります。設定 > Premium Plan で「スキルを最新版に更新」を押してください。",
   "index.openSettings": "設定を開く",
 

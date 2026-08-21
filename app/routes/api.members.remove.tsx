@@ -24,7 +24,6 @@ import {
 import { getTokens } from "~/services/session.server";
 import { isSuperAdmin } from "~/services/super-admin.server";
 import { auditFromRoute } from "~/services/audit-log.server";
-import { getAccountByOrganization } from "~/services/hubwork-accounts.server";
 
 interface RemoveBody {
   orgId?: unknown;
@@ -72,21 +71,17 @@ export async function action({ request }: Route.ActionArgs) {
       );
     }
     // Owner protection: an org admin (or an owner removing themself as the
-    // last owner) must not be able to strip the org of its owner. Only a
-    // service administrator may remove an owner.
+    // last owner) must not be able to strip the org of its owner. The owner
+    // holds the Business subscription and there is no self-service way to move
+    // it, so only a service administrator may remove one — that is also how an
+    // ownership transfer is performed (add the new owner, then remove the old).
     const target = await getOrgMember(orgId, uid);
-    const billingAccount = target?.role === "owner"
-      ? await getAccountByOrganization(orgId)
-      : null;
-    if (target?.role === "owner" && billingAccount?.billingStatus !== "canceled") {
-      return Response.json(
-        { error: "the subscription owner cannot leave while the Business contract is active; transfer or cancel the contract first" },
-        { status: 409 },
-      );
-    }
     if (target?.role === "owner" && !isSuperAdmin(callerEmail)) {
       return Response.json(
-        { error: "only a service administrator can remove an owner" },
+        {
+          error:
+            "only a service administrator can remove a subscription owner or transfer ownership",
+        },
         { status: 403 },
       );
     }

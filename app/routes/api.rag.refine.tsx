@@ -37,7 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!projectId) return json({ error: "projectId is required" }, 400);
   if (!text) return json({ error: "text is required" }, 400);
 
-  const ctx = await requireProjectAccess(request, projectId, "viewer");
+  const ctx = await requireProjectAccess(request, projectId, "viewer", { isMutation: true });
   const model = allowedModel(body?.model);
   const mode = body?.mode === "evaluate-context" ? "evaluate-context" : "refine";
   const messages: Message[] = [

@@ -3,6 +3,7 @@ import { Form, useFetcher, useLoaderData } from "react-router";
 import type { Route } from "./+types/admin.enterprise";
 import { getTokens } from "~/services/session.server";
 import { isSuperAdmin } from "~/services/super-admin.server";
+import type { OrganizationLifecycle } from "~/types/hubwork";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const tokens = await getTokens(request);
@@ -47,6 +48,9 @@ interface AccountItem {
   domainStatus: "none" | "pending_dns" | "provisioning_cert" | "active" | "failed";
   orgId?: string;
   projectId?: string;
+  canceledAt?: string;
+  deleteAfter?: string;
+  lifecycle: OrganizationLifecycle;
 }
 
 type Message = { kind: "error" | "success"; text: string };
@@ -601,6 +605,10 @@ function EditOrganization({
 // Accounts (Hubwork billing / publishing records)
 // ---------------------------------------------------------------------------
 
+function formatDay(iso: string | undefined): string {
+  return iso ? new Date(iso).toLocaleDateString("ja-JP") : "日付不明";
+}
+
 const PLAN_LABELS: Record<AccountItem["plan"], string> = {
   lite: "Lite",
   business: "Business",
@@ -670,6 +678,12 @@ function AccountsPanel({
                       {PLAN_LABELS[account.plan] ?? account.plan} · {account.accountStatus === "enabled" ? "有効" : "停止中"} ·{" "}
                       {account.customDomain || account.defaultDomain || account.accountSlug || "ドメイン未設定"}
                       {account.orgId && <> · 組織 {account.orgId}</>}
+                      {account.lifecycle === "read-only" && (
+                        <> · 解約済み（エクスポート期限 {formatDay(account.deleteAfter)}）</>
+                      )}
+                      {account.lifecycle === "expired" && (
+                        <> · 保持期間終了（{formatDay(account.deleteAfter)}）— データ削除待ち</>
+                      )}
                     </p>
                   </div>
                   <button
@@ -774,7 +788,8 @@ function AccountEditor({
         <button
           type="button"
           className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-          disabled={busy}
+          disabled={busy || !!account.orgId}
+          title={account.orgId ? "組織データとは別に課金レコードだけを削除することはできません" : undefined}
           onClick={() => {
             if (!confirm(`${account.email || account.id} を削除しますか？カスタムドメインも解除されます。`)) return;
             void run(
@@ -784,7 +799,7 @@ function AccountEditor({
             );
           }}
         >
-          削除
+          {account.orgId ? "組織に紐付いているため削除不可" : "削除"}
         </button>
       </div>
     </div>

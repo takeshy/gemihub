@@ -10,8 +10,16 @@ import type {
   HubworkScheduleRuntime,
   ResolvedAccountTokens,
 } from "~/types/hubwork";
-import { isHubworkFeatureAvailable } from "~/types/hubwork";
+import {
+  BUSINESS_CANCELLATION_RETENTION_DAYS,
+  isHubworkFeatureAvailable,
+  organizationLifecycle,
+} from "~/types/hubwork";
 import type { HubworkSchedule } from "~/types/settings";
+
+// Re-exported for the server call sites that already import from here; the
+// constant itself lives with the pure lifecycle helpers in ~/types/hubwork.
+export { BUSINESS_CANCELLATION_RETENTION_DAYS };
 
 // --- Encryption (AES-256-GCM, same pattern as session.server.ts) ---
 
@@ -299,21 +307,60 @@ export async function getAccountByProject(
   return docToAccount(snap.docs[0]);
 }
 
-/** The single Hubwork publication/billing account owned by an organization. */
+// orgId → billing account, 60s TTL. `requireProjectAccess` resolves the
+// account on every storage read, chat turn and sync poll, so the uncached
+// query was one extra Firestore round trip per request. Same TTL as the
+// Host-header account cache in hubwork-account-resolver.server.ts.
+const orgAccountCache = new Map<string, { account: HubworkAccount | null; expiresAt: number }>();
+const ORG_ACCOUNT_CACHE_TTL_MS = 60 * 1000;
+
+/** Drop cached lookups after any write that can change billing/lifecycle. */
+export function invalidateOrgAccountCache(): void {
+  orgAccountCache.clear();
+}
+
+/**
+ * The single Hubwork publication/billing account owned by an organization.
+ *
+ * A duplicate is a data defect, not a request error: throwing here took down
+ * every project API for that org (this runs inside `requireProjectAccess`).
+ * Log it and resolve conservatively: the most restrictive lifecycle wins,
+ * then oldest first and id as tie-break. A stale active duplicate must never
+ * reopen an organization whose other billing record is canceled or disabled.
+ */
 export async function getAccountByOrganization(
   orgId: string,
+  options: { bypassCache?: boolean } = {},
 ): Promise<HubworkAccount | null> {
+  if (!options.bypassCache) {
+    const cached = orgAccountCache.get(orgId);
+    if (cached && cached.expiresAt > Date.now()) return cached.account;
+  }
+
   const db = getFirestore();
   const snap = await db
     .collection(HUBWORK_ACCOUNTS)
     .where("orgId", "==", orgId)
-    .limit(2)
+    .limit(20)
     .get();
-  if (snap.empty) return null;
-  if (snap.size > 1) {
-    throw new Error(`organization ${orgId} has multiple Hubwork accounts`);
+  const accounts = snap.docs.map(docToAccount);
+  if (accounts.length > 1) {
+    console.error(
+      `[hubwork] organization ${orgId} has ${accounts.length} Hubwork accounts: ${accounts.map((a) => a.id).join(", ")}`,
+    );
   }
-  return docToAccount(snap.docs[0]);
+  const lifecycleRank = { active: 0, "read-only": 1, disabled: 2, expired: 3 } as const;
+  const account = accounts.length === 0
+    ? null
+    : accounts.reduce((best, candidate) => {
+        const bestRank = lifecycleRank[organizationLifecycle(best)];
+        const candidateRank = lifecycleRank[organizationLifecycle(candidate)];
+        if (candidateRank !== bestRank) return candidateRank > bestRank ? candidate : best;
+        const delta = createdAtMillis(candidate) - createdAtMillis(best);
+        return delta < 0 || (delta === 0 && candidate.id < best.id) ? candidate : best;
+      });
+  orgAccountCache.set(orgId, { account, expiresAt: Date.now() + ORG_ACCOUNT_CACHE_TTL_MS });
+  return account;
 }
 
 export async function getAccountByStripeCustomerId(
@@ -376,35 +423,56 @@ export async function updateAccount(
 ): Promise<void> {
   const db = getFirestore();
   await db.collection(HUBWORK_ACCOUNTS).doc(accountId).update(data);
+  invalidateOrgAccountCache();
 }
 
-export const BUSINESS_CANCELLATION_RETENTION_DAYS = 30;
-
-/** Apply one consistent subscription lifecycle, including the Business export window. */
+/**
+ * Apply one consistent subscription lifecycle, including the Business export
+ * window.
+ *
+ * Runs in a transaction because the correct write depends on the current
+ * status: cancelling disables the account, and only a transition *out of*
+ * `canceled` may re-enable it. A blind `past_due` write used to clear
+ * `canceledAt`/`deleteAfter` while leaving `accountStatus: "disabled"` — the
+ * organization silently became writable again on a closed account.
+ */
 export async function setAccountBillingStatus(
   accountId: string,
   status: "active" | "past_due" | "canceled",
   now = Timestamp.now(),
 ): Promise<void> {
-  const ref = getFirestore().collection(HUBWORK_ACCOUNTS).doc(accountId);
-  if (status === "canceled") {
-    const deleteAfter = Timestamp.fromMillis(
-      now.toMillis() + BUSINESS_CANCELLATION_RETENTION_DAYS * 86_400_000,
-    );
-    await ref.update({
+  const db = getFirestore();
+  const ref = db.collection(HUBWORK_ACCOUNTS).doc(accountId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const wasCanceled = snap.get("billingStatus") === "canceled";
+
+    if (status === "canceled") {
+      tx.update(ref, {
+        billingStatus: status,
+        accountStatus: "disabled",
+        // Keep the original cancellation date on a repeated webhook so a
+        // retry cannot extend the export window.
+        ...(wasCanceled ? {} : {
+          canceledAt: now,
+          deleteAfter: Timestamp.fromMillis(
+            now.toMillis() + BUSINESS_CANCELLATION_RETENTION_DAYS * 86_400_000,
+          ),
+        }),
+      });
+      return;
+    }
+
+    tx.update(ref, {
       billingStatus: status,
-      accountStatus: "disabled",
-      canceledAt: now,
-      deleteAfter,
+      // `active` is a reactivation; recovering from `canceled` re-enables the
+      // account whichever paid status Stripe reports. An administrative
+      // disable (never canceled) is left alone — that switch is not Stripe's.
+      ...(status === "active" || wasCanceled ? { accountStatus: "enabled" } : {}),
+      ...(wasCanceled ? { canceledAt: FieldValue.delete(), deleteAfter: FieldValue.delete() } : {}),
     });
-    return;
-  }
-  await ref.update({
-    billingStatus: status,
-    ...(status === "active" ? { accountStatus: "enabled" } : {}),
-    canceledAt: FieldValue.delete(),
-    deleteAfter: FieldValue.delete(),
   });
+  invalidateOrgAccountCache();
 }
 
 export async function updateRefreshToken(
@@ -437,6 +505,7 @@ export async function deleteAccount(accountId: string): Promise<void> {
   const db = getFirestore();
   await db.collection(HUBWORK_ACCOUNTS).doc(accountId).delete();
   tokenCache.delete(accountId);
+  invalidateOrgAccountCache();
 }
 
 // --- Token management ---

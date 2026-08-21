@@ -69,7 +69,7 @@ export async function action({ request }: Route.ActionArgs) {
   const limit = clampInt(topK, 5, 1, MAX_TOP_K);
 
   try {
-    const ctx = await requireProjectAccess(request, projectId, "viewer");
+    const ctx = await requireProjectAccess(request, projectId, "viewer", { isMutation: true });
     const embedding = await generateEmbedding(query.trim(), ctx.tenant, {
       taskType: "RETRIEVAL_QUERY",
     });

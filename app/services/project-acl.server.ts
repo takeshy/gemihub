@@ -39,6 +39,12 @@ import { VERTEX_MODELS } from "./ai/models";
 import { isVertexModelPriced } from "./ai-budget.server";
 import { isSuperAdmin } from "./super-admin.server";
 import { getAccountByOrganization } from "./hubwork-accounts.server";
+import {
+  BUSINESS_CANCELLATION_RETENTION_DAYS,
+  cancellationDeleteAfterIso,
+  organizationLifecycle,
+  type OrganizationLifecycle,
+} from "~/types/hubwork";
 
 const ROLE_RANK: Record<ProjectRole, number> = {
   viewer: 1,
@@ -54,6 +60,62 @@ export class ProjectAccessError extends Error {
     super(message);
     this.name = "ProjectAccessError";
   }
+}
+
+/**
+ * The organization is inside its cancellation export window. Extends
+ * `ProjectAccessError` so every route that already maps that to a 403 reports
+ * the real reason instead of a misleading "model not allowed" or a 500.
+ */
+export class OrganizationReadOnlyError extends ProjectAccessError {
+  constructor(public readonly deleteAfter?: string) {
+    super(
+      403,
+      `organization is read-only during the ${BUSINESS_CANCELLATION_RETENTION_DAYS}-day cancellation export window` +
+        `${deleteAfter ? ` (ends ${deleteAfter.slice(0, 10)})` : ""}: files can be read and exported, ` +
+        `but writes, organization AI and configuration changes are blocked`,
+    );
+    this.name = "OrganizationReadOnlyError";
+  }
+}
+
+/**
+ * Resolve the billing lifecycle of an organization and reject the request when
+ * it may no longer be served. Returns the read-only state for the caller to
+ * put on the access context.
+ *
+ * A super administrator bypasses all of it — support has to be able to work on
+ * a canceled or disabled organization (exports, transfers, deletion).
+ */
+async function resolveOrganizationLifecycle(
+  orgId: string,
+  email: string,
+  isMutation: boolean,
+): Promise<{ readOnly: boolean; deleteAfter?: string; lifecycle: OrganizationLifecycle }> {
+  // Mutations must observe cancellation immediately. The cache is deliberately
+  // process-local, so invalidating it in a Stripe webhook cannot invalidate
+  // another application instance.
+  const account = await getAccountByOrganization(orgId, { bypassCache: isMutation });
+  // A missing billing record is an integrity defect, not a free active org.
+  // Fail closed so deleting an account cannot reopen retained tenant data.
+  const lifecycle = account ? organizationLifecycle(account) : "disabled";
+  const deleteAfter = account ? cancellationDeleteAfterIso(account) : undefined;
+  if (isSuperAdmin(email)) {
+    return { readOnly: lifecycle !== "active", deleteAfter, lifecycle };
+  }
+  if (lifecycle === "expired") {
+    throw new ProjectAccessError(
+      403,
+      `organization ${orgId} passed its cancellation export window${deleteAfter ? ` on ${deleteAfter.slice(0, 10)}` : ""} and its data is pending deletion`,
+    );
+  }
+  if (lifecycle === "disabled") {
+    throw new ProjectAccessError(403, `organization ${orgId} is disabled`);
+  }
+  if (lifecycle === "read-only" && isMutation) {
+    throw new OrganizationReadOnlyError(deleteAfter);
+  }
+  return { readOnly: lifecycle === "read-only", deleteAfter, lifecycle };
 }
 
 export function hasMinRole(actual: ProjectRole, min: ProjectRole): boolean {
@@ -114,6 +176,11 @@ async function findOrgIdForProject(
 export interface RequireProjectAccessOptions {
   /** If provided, skip the cross-org scan and look up under this org directly. */
   orgId?: string;
+  /**
+   * Treat the operation as a mutation even when viewer project access is
+   * sufficient (for example, metered AI requests that do not edit files).
+   */
+  isMutation?: boolean;
 }
 
 /**
@@ -182,14 +249,11 @@ export async function requireProjectAccess(
   if (!org || !org.tenantProject) {
     throw new ProjectAccessError(404, `organization not found: ${orgId}`);
   }
-  const billingAccount = await getAccountByOrganization(orgId);
-  const organizationReadOnly = billingAccount?.billingStatus === "canceled";
-  if (organizationReadOnly && minRole !== "viewer" && !isSuperAdmin(identity.email)) {
-    throw new ProjectAccessError(
-      403,
-      "organization is read-only during the 30-day cancellation retention period",
-    );
-  }
+  const { readOnly: organizationReadOnly, deleteAfter } = await resolveOrganizationLifecycle(
+    orgId,
+    identity.email,
+    options.isMutation ?? minRole !== "viewer",
+  );
 
   return {
     uid: identity.uid,
@@ -208,9 +272,7 @@ export async function requireProjectAccess(
     },
     gcsPrefix: project.gcsPrefix,
     organizationReadOnly,
-    ...(billingAccount?.deleteAfter
-      ? { organizationDeleteAfter: billingAccount.deleteAfter.toDate().toISOString() }
-      : {}),
+    ...(deleteAfter ? { organizationDeleteAfter: deleteAfter } : {}),
     allowedModels: project.allowedModels,
   };
 }
@@ -224,14 +286,8 @@ export async function requireOrgAccess(
   orgId: string,
 ): Promise<{ uid: string; email: string; orgId: string; role: "owner" | "admin" | "member" }> {
   const identity = await requireSessionIdentity(request);
-  const account = await getAccountByOrganization(orgId);
   const isMutation = request.method !== "GET" && request.method !== "HEAD";
-  if (account?.billingStatus === "canceled" && isMutation && !isSuperAdmin(identity.email)) {
-    throw new ProjectAccessError(
-      403,
-      "organization is read-only during the 30-day cancellation retention period",
-    );
-  }
+  await resolveOrganizationLifecycle(orgId, identity.email, isMutation);
   if (isSuperAdmin(identity.email)) {
     const org = await getOrganization(orgId);
     if (!org) throw new ProjectAccessError(404, `organization not found: ${orgId}`);
@@ -291,10 +347,10 @@ export class ModelNotPricedError extends ModelNotAllowedError {
  */
 export function assertModelAllowed(ctx: ProjectAccessContext, model: string): void {
   if (ctx.organizationReadOnly) {
-    throw new ModelNotAllowedError(
-      model,
-      ctx.allowedModels,
-    );
+    // Every organization model runs on the tenant's Vertex AI and is metered
+    // against the organization, so the export window blocks all of them — but
+    // report it as the read-only state, not as "this model isn't allowed".
+    throw new OrganizationReadOnlyError(ctx.organizationDeleteAfter);
   }
   const normalizedModel = normalizeDeprecatedModelName(model) ?? model;
   const allowed = ctx.allowedModels.length > 0

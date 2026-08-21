@@ -187,7 +187,8 @@ Status is split into three independent concerns:
 | `domainStatus` | `none`, `pending_dns`, `provisioning_cert`, `active`, `failed` | Custom domain URL availability | Domain provisioning flow |
 
 **Access rules:**
-- **Hubwork features available:** `accountStatus == "enabled"` and `billingStatus != "canceled"`. `past_due` remains enabled while Stripe retries payment. Stripe webhooks disable the account on cancellation and re-enable it on recovery.
+- **Hubwork features available:** `accountStatus == "enabled"` and `billingStatus != "canceled"`. `past_due` remains enabled while Stripe retries payment. Stripe webhooks disable the account on cancellation and re-enable it on recovery (`setAccountBillingStatus` applies the whole transition in one Firestore transaction, so a recovery cannot leave a disabled account with active billing).
+- **Organization project access:** gated by `organizationLifecycle()` — `disabled` and `expired` accounts get a 403, a canceled account inside its window is read-only. The admin master switch therefore closes the org mount too, which a plain `billingStatus` check did not.
 - **Schedule execution:** same as above. `domainStatus` is irrelevant
 - **Built-in subdomain (`defaultDomain`):** always available when features are available
 - **Custom domain:** only when `domainStatus == "active"`, but feature access is independent
@@ -195,10 +196,15 @@ Status is split into three independent concerns:
 This ensures "billing active but DNS pending" accounts can still use scheduled workflows, form actions, and the built-in subdomain.
 
 For Business cancellation, the organization project remains readable for 30
-days so members can export their data. All project mutations, billable AI, and
-organization configuration changes are blocked during this period; the data is
-eligible for deletion afterwards. The subscription Owner cannot leave or be
-demoted until the contract is transferred or canceled.
+days so members can export their data. All project mutations, organization AI,
+and organization configuration changes are blocked during this period. After
+`deleteAfter` the organization is no longer served (403) and its data waits to
+be purged through a separate operator procedure — the admin console lists the
+lifecycle and deadline per account, but refuses to delete the billing record
+alone because that would reopen orphaned tenant data. There is no automatic
+purge job. A subscription Owner cannot leave or be demoted through self-service;
+a service administrator must transfer ownership. See
+`docs/architecture/mounts.md` § Cancellation lifecycle for the state table.
 
 ### Account Plans
 
