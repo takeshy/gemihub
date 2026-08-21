@@ -26,7 +26,7 @@ import {
   getEnabledMcpServers,
   supportsWebSearch,
 } from "~/types/settings";
-import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
+import type { ToolDefinition, McpServerConfig, ModelType, UserSettings } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
 import type { TenantInfo } from "~/types/enterprise";
 import { createLogContext, emitLog } from "../logger.server";
@@ -107,13 +107,16 @@ const PERSONAL_ALLOWED_MODELS: ReadonlySet<string> = new Set(
 const PERSONAL_MAX_FUNCTION_CALLS = 15;
 
 /** Build a TenantInfo from service-wide environment defaults. */
-function personalTenant(): TenantInfo {
+function personalTenant(uid: string, settings: UserSettings): TenantInfo {
+  const own = settings.personalVertexSource === "own";
   return {
     gcsBucket: "",
     region: process.env.DEFAULT_TENANT_REGION || "global",
-    vertexProjectId: process.env.GCP_PROJECT_ID || "",
-    vertexLocation: process.env.VERTEX_LOCATION || process.env.DEFAULT_TENANT_REGION || "global",
-    // vertexOAuthOrgId left undefined so createVertexClient falls back to ADC.
+    vertexProjectId: own ? settings.personalVertexProjectId?.trim() : process.env.GCP_PROJECT_ID || "",
+    vertexLocation: own
+      ? settings.personalVertexLocation?.trim() || "global"
+      : process.env.VERTEX_LOCATION || process.env.DEFAULT_TENANT_REGION || "global",
+    ...(own ? { vertexOAuthUserId: uid, vertexBillingMode: "customer" as const } : {}),
   };
 }
 
@@ -196,6 +199,15 @@ export async function handlePersonalVertexChatAction(
     );
   }
 
+  const personalSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+  const usesOwnVertex = personalSettings.personalVertexSource === "own";
+  if (usesOwnVertex && !personalSettings.personalVertexProjectId?.trim()) {
+    return new Response(JSON.stringify({ error: "Set a Google Cloud project ID before using your own Vertex AI." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json", ...responseHeaders },
+    });
+  }
+
   // Per-user rate limiting
   const rateLimited = await requireRateLimit("chat", uid);
   if (rateLimited) {
@@ -232,15 +244,12 @@ export async function handlePersonalVertexChatAction(
   let resolvedMcpServers: McpServerConfig[] | undefined;
   let settingsForMcpPersistence:
     | Awaited<ReturnType<typeof getSettings>>
-    | null = null;
+    | null = personalSettings;
   const mcpTokenSnapshot = new Map<string, string>();
 
   if (!functionToolsForcedOff && enableMcp && requestedMcpServerIds.length > 0) {
     try {
-      const settings = await getSettings(
-        validTokens.accessToken,
-        validTokens.rootFolderId,
-      );
+      const settings = personalSettings;
       settingsForMcpPersistence = settings;
       const byId = new Map(
         getEnabledMcpServers(settings).map((s) => [s.id || "", s] as const),
@@ -299,7 +308,7 @@ export async function handlePersonalVertexChatAction(
   };
   emitLog(logCtx, 200);
 
-  const tenant = personalTenant();
+  const tenant = personalTenant(uid, personalSettings);
 
   // Create SSE stream
   const abortSignal = request.signal;
@@ -377,7 +386,7 @@ export async function handlePersonalVertexChatAction(
           ),
           executeToolCall,
           delegateToolNames,
-          billing: { uid, scope: "personal" },
+          billing: usesOwnVertex ? undefined : { uid, scope: "personal" },
         })) {
           sendChunk(chunk);
         }

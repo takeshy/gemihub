@@ -89,7 +89,7 @@ export async function vertexAction(request: Request) {
           messages: messages as unknown as Message[],
           systemPrompt,
           enableThinking,
-          billing: { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
+          billing: ctx.tenant.vertexBillingMode === "customer" ? undefined : { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
         })) {
           sendChunk(chunk);
         }

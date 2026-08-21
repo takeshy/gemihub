@@ -82,7 +82,7 @@ Return the complete updated .base YAML only.`;
     model: selectedModel,
     systemPrompt: BASE_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userPrompt, timestamp: Date.now() }],
-    billing: { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
+    billing: ctx.tenant.vertexBillingMode === "customer" ? undefined : { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
   });
   const generated = result.text;
   const compiled = compileBase(generated);

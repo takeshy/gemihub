@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { google } from "googleapis";
-import { getFirestore, ORGANIZATIONS, SERVICE_CONFIG } from "./firestore.server";
+import { getFirestore, ORGANIZATIONS, SERVICE_CONFIG, USERS } from "./firestore.server";
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const EMAIL_SCOPE = "https://www.googleapis.com/auth/userinfo.email";
@@ -75,6 +75,10 @@ function orgRef(orgId: string) {
   return getFirestore().collection(ORGANIZATIONS).doc(orgId);
 }
 
+function userRef(uid: string) {
+  return getFirestore().collection(USERS).doc(uid);
+}
+
 /** Single document holding the service-wide (default) Vertex connection. */
 function serviceRef() {
   return getFirestore().collection(SERVICE_CONFIG).doc("vertex-oauth");
@@ -126,7 +130,7 @@ function statusOf(record: VertexOAuthRecord): VertexOAuthStatus {
     connected: Boolean(record.token),
     connectedEmail: record.token?.connectedEmail ?? null,
     connectedAt: record.token?.connectedAt ?? null,
-    clientConfigured: Boolean(record.client),
+    clientConfigured: Boolean(record.client || (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)),
     projectId: record.client?.projectId ?? null,
   };
 }
@@ -141,15 +145,26 @@ function redirectUri(request?: Request): string {
 
 /** Target of an OAuth flow: the service default, or one organization. */
 export type VertexOAuthTarget = { scope: "service" } | { scope: "org"; orgId: string };
+export type PersonalVertexOAuthTarget = { scope: "user"; uid: string };
+export type AnyVertexOAuthTarget = VertexOAuthTarget | PersonalVertexOAuthTarget;
 
-async function targetClient(target: VertexOAuthTarget): Promise<StoredVertexOAuthClient | null> {
-  const record = target.scope === "service"
-    ? await serviceRecord()
-    : (await orgRecord(target.orgId)).record;
-  return record.client;
+function targetRef(target: AnyVertexOAuthTarget) {
+  if (target.scope === "service") return serviceRef();
+  return target.scope === "org" ? orgRef(target.orgId) : userRef(target.uid);
 }
 
-async function oauthClient(target: VertexOAuthTarget, request?: Request) {
+async function targetRecord(target: AnyVertexOAuthTarget): Promise<VertexOAuthRecord> {
+  if (target.scope === "service") return serviceRecord();
+  if (target.scope === "org") return (await orgRecord(target.orgId)).record;
+  const snap = await userRef(target.uid).get();
+  return readRecord(snap.data());
+}
+
+async function targetClient(target: AnyVertexOAuthTarget): Promise<StoredVertexOAuthClient | null> {
+  return (await targetRecord(target)).client;
+}
+
+async function oauthClient(target: AnyVertexOAuthTarget, request?: Request) {
   const configured = await targetClient(target);
   return new google.auth.OAuth2(
     configured?.clientId || process.env.GOOGLE_CLIENT_ID,
@@ -158,7 +173,7 @@ async function oauthClient(target: VertexOAuthTarget, request?: Request) {
   );
 }
 
-export async function createVertexOAuthRequest(target: VertexOAuthTarget, request: Request) {
+export async function createVertexOAuthRequest(target: AnyVertexOAuthTarget, request: Request) {
   const state = crypto.randomUUID();
   const codeVerifier = crypto.randomBytes(48).toString("base64url");
   const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
@@ -175,7 +190,7 @@ export async function createVertexOAuthRequest(target: VertexOAuthTarget, reques
 }
 
 export async function exchangeVertexOAuthCode(
-  target: VertexOAuthTarget,
+  target: AnyVertexOAuthTarget,
   request: Request,
   code: string,
   codeVerifier: string,
@@ -198,7 +213,7 @@ export async function saveOrganizationVertexOAuth(orgId: string, refreshToken: s
 
 /** Store the connected Google account for either scope. */
 export async function saveVertexOAuthToken(
-  target: VertexOAuthTarget,
+  target: AnyVertexOAuthTarget,
   refreshToken: string,
   connectedEmail: string,
 ) {
@@ -207,7 +222,7 @@ export async function saveVertexOAuthToken(
     connectedEmail: connectedEmail.trim().toLowerCase(),
     connectedAt: Date.now(),
   };
-  const ref = target.scope === "service" ? serviceRef() : orgRef(target.orgId);
+  const ref = targetRef(target);
   await ref.set({ vertexOAuth }, { merge: true });
 }
 
@@ -258,10 +273,8 @@ export async function disconnectOrganizationVertexOAuth(orgId: string) {
 }
 
 /** Revoke (best effort) and forget the connection for either scope. */
-export async function disconnectVertexOAuth(target: VertexOAuthTarget) {
-  const record = target.scope === "service"
-    ? await serviceRecord()
-    : (await orgRecord(target.orgId)).record;
+export async function disconnectVertexOAuth(target: AnyVertexOAuthTarget) {
+  const record = await targetRecord(target);
   if (record.token) {
     try {
       const refreshToken = decrypt(record.token.encryptedRefreshToken);
@@ -274,13 +287,31 @@ export async function disconnectVertexOAuth(target: VertexOAuthTarget) {
       console.warn("Failed to revoke the Vertex OAuth token", { target, error });
     }
   }
-  const ref = target.scope === "service" ? serviceRef() : orgRef(target.orgId);
+  const ref = targetRef(target);
   await ref.set({ vertexOAuth: null }, { merge: true });
 }
 
 /** Status of the service-wide default connection. */
 export async function getServiceVertexOAuthStatus(): Promise<VertexOAuthStatus> {
   return statusOf(await serviceRecord());
+}
+
+export async function getUserVertexOAuthStatus(uid: string): Promise<VertexOAuthStatus> {
+  return statusOf(await targetRecord({ scope: "user", uid }));
+}
+
+export async function getUserVertexGoogleAuthOptions(uid: string) {
+  const record = await targetRecord({ scope: "user", uid });
+  if (!record.token) return null;
+  return {
+    credentials: {
+      type: "authorized_user" as const,
+      client_id: record.client?.clientId || process.env.GOOGLE_CLIENT_ID,
+      client_secret: record.client ? decrypt(record.client.encryptedClientSecret) : process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: decrypt(record.token.encryptedRefreshToken),
+    },
+    scopes: [CLOUD_PLATFORM_SCOPE],
+  };
 }
 
 export async function getOrganizationVertexOAuthStatus(

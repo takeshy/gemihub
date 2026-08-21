@@ -639,6 +639,12 @@ export interface UserSettings {
    * user's own Gemini API key. Top-ups are purchased from Settings > General.
    */
   usePersonalVertex: boolean;
+  /** Billing/credential source used by Vertex on the My Drive mount. */
+  personalVertexSource?: "prepaid" | "own";
+  /** Customer-owned Google Cloud project used on the My Drive mount. */
+  personalVertexProjectId?: string;
+  /** Vertex location for the customer-owned project. */
+  personalVertexLocation?: string;
   // Hubwork (paid feature) - web app builder with Sheets/Gmail
   hubwork?: HubworkSettings;
 }

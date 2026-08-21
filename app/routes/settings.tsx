@@ -296,6 +296,13 @@ export async function action({ request }: Route.ActionArgs) {
         const usePersonalVertex = formData.has("usePersonalVertex")
           ? formData.get("usePersonalVertex") === "on"
           : currentSettings.usePersonalVertex === true;
+        const personalVertexSource = formData.get("personalVertexSource") === "own" ? "own" : "prepaid";
+        const personalVertexProjectId = ((formData.get("personalVertexProjectId") as string) || "").trim();
+        const personalVertexLocation = ((formData.get("personalVertexLocation") as string) || "global").trim();
+        const vertexResourcePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+        if (personalVertexSource === "own" && (!vertexResourcePattern.test(personalVertexProjectId) || !vertexResourcePattern.test(personalVertexLocation))) {
+          return jsonWithCookie({ success: false, message: "invalidPersonalVertexSettings" });
+        }
 
         // Encryption-related fields
         const password = (formData.get("password") as string)?.trim() || "";
@@ -340,6 +347,9 @@ export async function action({ request }: Route.ActionArgs) {
           ragFeatureEnabled,
           webpageBuilderEnabled,
           usePersonalVertex,
+          personalVertexSource,
+          personalVertexProjectId,
+          personalVertexLocation,
         };
 
         // Update file encryption toggles

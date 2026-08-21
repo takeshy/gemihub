@@ -30,6 +30,10 @@ export interface TenantInfo {
   vertexLocation?: string;
   /** Server-only organization key used to resolve stored Vertex OAuth. */
   vertexOAuthOrgId?: string;
+  /** Server-only user key used to resolve a personal Vertex OAuth connection. */
+  vertexOAuthUserId?: string;
+  /** Customer-owned Vertex bypasses GemiHub's prepaid budget accounting. */
+  vertexBillingMode?: "service" | "customer";
 }
 
 export interface OrganizationAiSettings {
@@ -48,6 +52,8 @@ export interface Organization {
   idp: OrgIdpConfig | null;
   tenantProject: TenantInfo;
   aiSettings: OrganizationAiSettings;
+  /** Whether Vertex uses GemiHub's connection or this organization's OAuth connection. */
+  vertexOAuthSource?: "default" | "own";
   /**
    * Storage add-on subscriptions: Stripe subscription id → purchased
    * 500 GB units. Effective quota = 100 GB + sum(units) × 500 GB.

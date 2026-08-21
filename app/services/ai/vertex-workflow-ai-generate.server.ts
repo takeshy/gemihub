@@ -180,7 +180,7 @@ export async function vertexAction(request: Request) {
           tenant,
           selectedModel,
           history,
-          { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
+          ctx.tenant.vertexBillingMode === "customer" ? undefined : { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
         )) {
           const data = JSON.stringify(chunk);
           controller.enqueue(

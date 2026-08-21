@@ -65,8 +65,13 @@ export async function action({ request }: Route.ActionArgs) {
   const orgId = (body.orgId as string | undefined)?.trim() || "";
 
   const tokens = await getTokens(request);
-  if (!isSuperAdmin(tokens?.email)) {
-    return Response.json({ error: "only a service administrator can configure Vertex OAuth" }, { status: 403 });
+  if (orgId) {
+    const access = await requireOrgAccess(request, orgId);
+    if (access.role !== "owner" && access.role !== "admin" && !isSuperAdmin(tokens?.email)) {
+      return Response.json({ error: "only an organization administrator can configure Vertex OAuth" }, { status: 403 });
+    }
+  } else if (!isSuperAdmin(tokens?.email)) {
+    return Response.json({ error: "only a service administrator can configure the default Vertex OAuth" }, { status: 403 });
   }
   const actor = { uid: tokens?.email ?? "", email: tokens?.email ?? "" };
   const target: VertexOAuthTarget = orgId ? { scope: "org", orgId } : { scope: "service" };

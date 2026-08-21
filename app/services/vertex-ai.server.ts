@@ -12,6 +12,7 @@ import type { TenantInfo } from "~/types/enterprise";
 import {
   getOrganizationVertexGoogleAuthOptions,
   getOrganizationVertexProjectId,
+  getUserVertexGoogleAuthOptions,
 } from "./vertex-oauth.server";
 import { VERTEX_MODELS, type VertexModelKey } from "./ai/models";
 
@@ -27,11 +28,16 @@ const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID ?? "";
  */
 export async function createVertexClient(tenant: TenantInfo): Promise<GoogleGenAI> {
   const [googleAuthOptions, connectionProjectId] = await Promise.all([
-    getOrganizationVertexGoogleAuthOptions(tenant.vertexOAuthOrgId),
+    tenant.vertexOAuthUserId
+      ? getUserVertexGoogleAuthOptions(tenant.vertexOAuthUserId)
+      : getOrganizationVertexGoogleAuthOptions(tenant.vertexOAuthOrgId),
     // The org may run on the service-wide default connection, whose GCP
     // project is the right fallback when the org set none of its own.
     getOrganizationVertexProjectId(tenant.vertexOAuthOrgId),
   ]);
+  if (tenant.vertexBillingMode === "customer" && !googleAuthOptions) {
+    throw new Error("Connect a Google account with access to the selected Vertex AI project first");
+  }
   return new GoogleGenAI({
     vertexai: true,
     project: tenant.vertexProjectId?.trim() || connectionProjectId || GCP_PROJECT_ID,
@@ -41,7 +47,9 @@ export async function createVertexClient(tenant: TenantInfo): Promise<GoogleGenA
 }
 
 export async function getVertexAccessToken(tenant: TenantInfo): Promise<string> {
-  const oauth = await getOrganizationVertexGoogleAuthOptions(tenant.vertexOAuthOrgId);
+  const oauth = tenant.vertexOAuthUserId
+    ? await getUserVertexGoogleAuthOptions(tenant.vertexOAuthUserId)
+    : await getOrganizationVertexGoogleAuthOptions(tenant.vertexOAuthOrgId);
   const auth = new google.auth.GoogleAuth(oauth ?? { scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
   const client = await auth.getClient();
   const token = await client.getAccessToken();

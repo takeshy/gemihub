@@ -1136,6 +1136,16 @@ export interface TranslationStrings {
   "enterprise.budgetAdvanced": string;
   "enterprise.gcpProjectId": string;
   "enterprise.vertexLocation": string;
+  "enterprise.vertexSourceTitle": string;
+  "enterprise.vertexSourceDescription": string;
+  "enterprise.vertexPrepaid": string;
+  "enterprise.vertexOwn": string;
+  "enterprise.vertexSourceSaved": string;
+  "enterprise.vertexConnected": string;
+  "enterprise.vertexConnect": string;
+  "enterprise.vertexDisconnect": string;
+  "enterprise.vertexDisconnected": string;
+  "enterprise.vertexOwnBillingNote": string;
   "enterprise.orgMonthlyLimit": string;
   "enterprise.userMonthlyLimit": string;
   "enterprise.unlimited": string;
@@ -1356,6 +1366,14 @@ export interface TranslationStrings {
   "settings.general.tabApikey": string;
   "settings.general.tabVertex": string;
   "settings.general.enableVertexAiDescription": string;
+  "settings.general.vertexPrepaid": string;
+  "settings.general.vertexOwn": string;
+  "settings.general.vertexProjectId": string;
+  "settings.general.vertexLocation": string;
+  "settings.general.vertexOwnBillingNote": string;
+  "settings.general.vertexConnected": string;
+  "settings.general.vertexConnect": string;
+  "settings.general.vertexDisconnect": string;
   "settings.general.vertexBalance": string;
   "settings.general.vertexBalanceEmpty": string;
   "settings.general.buyVertexCredit": string;
@@ -2512,6 +2530,16 @@ const en: TranslationStrings = {
   "enterprise.budgetAdvanced": "Advanced: set the project and spending limits manually",
   "enterprise.gcpProjectId": "Google Cloud project ID",
   "enterprise.vertexLocation": "Vertex AI location",
+  "enterprise.vertexSourceTitle": "Vertex AI billing source",
+  "enterprise.vertexSourceDescription": "Use GemiHub's included/purchased budget, or connect a Google Cloud project owned by this organization.",
+  "enterprise.vertexPrepaid": "GemiHub budget",
+  "enterprise.vertexOwn": "Organization Google Cloud project",
+  "enterprise.vertexSourceSaved": "Vertex AI source updated",
+  "enterprise.vertexConnected": "Connected as {email}",
+  "enterprise.vertexConnect": "Connect with Google",
+  "enterprise.vertexDisconnect": "Disconnect",
+  "enterprise.vertexDisconnected": "Google connection removed",
+  "enterprise.vertexOwnBillingNote": "Charges are billed directly to the organization's Google Cloud project and do not consume GemiHub budget.",
   "enterprise.orgMonthlyLimit": "Organization monthly limit (USD)",
   "enterprise.userMonthlyLimit": "Default per-user monthly limit (USD)",
   "enterprise.unlimited": "Unlimited",
@@ -2732,6 +2760,14 @@ const en: TranslationStrings = {
   "settings.general.tabApikey": "Gemini API Key",
   "settings.general.tabVertex": "Vertex AI (Prepaid)",
   "settings.general.enableVertexAiDescription": "Run chat on Google Vertex AI with a prepaid balance. No Gemini API key needed. Purchase credits below — $10 (¥1,500) per unit, no expiry.",
+  "settings.general.vertexPrepaid": "GemiHub prepaid credits",
+  "settings.general.vertexOwn": "My Google Cloud project",
+  "settings.general.vertexProjectId": "Google Cloud project ID",
+  "settings.general.vertexLocation": "Vertex AI location",
+  "settings.general.vertexOwnBillingNote": "Vertex AI charges are billed directly to your Google Cloud project and do not consume GemiHub credits.",
+  "settings.general.vertexConnected": "Connected as {email}",
+  "settings.general.vertexConnect": "Connect with Google",
+  "settings.general.vertexDisconnect": "Disconnect",
   "settings.general.vertexBalance": "Current balance",
   "settings.general.vertexBalanceEmpty": "Purchase credits to start using Vertex AI",
   "settings.general.buyVertexCredit": "Buy credits",
@@ -3888,6 +3924,16 @@ const ja: TranslationStrings = {
   "enterprise.budgetAdvanced": "Advanced：プロジェクトと利用上限を手動設定",
   "enterprise.gcpProjectId": "Google CloudプロジェクトID",
   "enterprise.vertexLocation": "Vertex AIロケーション",
+  "enterprise.vertexSourceTitle": "Vertex AIの課金元",
+  "enterprise.vertexSourceDescription": "GemiHubの付属・購入予算を使うか、この組織が所有するGoogle Cloudプロジェクトを接続します。",
+  "enterprise.vertexPrepaid": "GemiHub予算",
+  "enterprise.vertexOwn": "組織のGoogle Cloudプロジェクト",
+  "enterprise.vertexSourceSaved": "Vertex AIの利用元を更新しました",
+  "enterprise.vertexConnected": "{email} として接続済み",
+  "enterprise.vertexConnect": "Googleで接続",
+  "enterprise.vertexDisconnect": "連携解除",
+  "enterprise.vertexDisconnected": "Google連携を解除しました",
+  "enterprise.vertexOwnBillingNote": "料金は組織のGoogle Cloudプロジェクトへ直接請求され、GemiHub予算は消費しません。",
   "enterprise.orgMonthlyLimit": "組織全体の月次上限（USD）",
   "enterprise.userMonthlyLimit": "1ユーザーの標準月次上限（USD）",
   "enterprise.unlimited": "無制限",
@@ -4108,6 +4154,14 @@ const ja: TranslationStrings = {
   "settings.general.tabApikey": "Gemini APIキー",
   "settings.general.tabVertex": "Vertex AI（プリペイド）",
   "settings.general.enableVertexAiDescription": "チャットをGoogle Vertex AIで実行します（プリペイド残高）。Gemini APIキーは不要です。下記からクレジットを購入 — $10（¥1,500）単位、有効期限なし。",
+  "settings.general.vertexPrepaid": "GemiHubプリペイド",
+  "settings.general.vertexOwn": "自分のGoogle Cloudプロジェクト",
+  "settings.general.vertexProjectId": "Google CloudプロジェクトID",
+  "settings.general.vertexLocation": "Vertex AIロケーション",
+  "settings.general.vertexOwnBillingNote": "Vertex AIの料金はGoogle Cloudプロジェクトへ直接請求され、GemiHubクレジットは消費しません。",
+  "settings.general.vertexConnected": "{email} として接続済み",
+  "settings.general.vertexConnect": "Googleで接続",
+  "settings.general.vertexDisconnect": "連携解除",
   "settings.general.vertexBalance": "現在の残高",
   "settings.general.vertexBalanceEmpty": "クレジットを購入してVertex AIを利用開始",
   "settings.general.buyVertexCredit": "クレジット購入",

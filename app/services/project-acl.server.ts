@@ -195,6 +195,7 @@ export async function requireProjectAccess(
       vertexProjectId: org.aiSettings.vertexProjectId,
       vertexLocation: org.aiSettings.vertexLocation,
       vertexOAuthOrgId: orgId,
+      vertexBillingMode: org.vertexOAuthSource === "own" ? "customer" : "service",
     },
     gcsPrefix: project.gcsPrefix,
     allowedModels: project.allowedModels,

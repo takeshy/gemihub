@@ -64,6 +64,10 @@ export function GeneralTab({
   const [ragFeatureEnabled, setRagFeatureEnabled] = useState(settings.ragFeatureEnabled ?? false);
   const [webpageBuilderEnabled, setWebpageBuilderEnabled] = useState(settings.webpageBuilderEnabled ?? false);
   const [usePersonalVertex, setUsePersonalVertex] = useState(settings.usePersonalVertex ?? false);
+  const [personalVertexSource, setPersonalVertexSource] = useState<"prepaid" | "own">(settings.personalVertexSource === "own" ? "own" : "prepaid");
+  const [personalVertexProjectId, setPersonalVertexProjectId] = useState(settings.personalVertexProjectId || "");
+  const [personalVertexLocation, setPersonalVertexLocation] = useState(settings.personalVertexLocation || "global");
+  const [personalVertexOAuth, setPersonalVertexOAuth] = useState<{ connected: boolean; connectedEmail: string | null } | null>(null);
   const [personalBalance, setPersonalBalance] = useState<number | null>(null);
   // null until the balance endpoint answers; false on a self-hosted install
   // with no Firestore, where there is no prepaid balance to sell or spend.
@@ -149,6 +153,13 @@ export function GeneralTab({
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch("/api/personal-vertex/connection")
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setPersonalVertexOAuth(data?.oauthStatus ?? null))
+      .catch(() => setPersonalVertexOAuth(null));
+  }, []);
+
   // Show error dialog, reload confirm (API key change), or success banner.
   // Use a ref for `t` so the effect only re-runs when fetcher.data changes,
   // preventing stale error data from being reprocessed when `t` updates.
@@ -227,6 +238,9 @@ export function GeneralTab({
           )}
         </div>
         <input type="hidden" name="usePersonalVertex" value={usePersonalVertex ? "on" : ""} />
+        <input type="hidden" name="personalVertexSource" value={personalVertexSource} />
+        <input type="hidden" name="personalVertexProjectId" value={personalVertexProjectId} />
+        <input type="hidden" name="personalVertexLocation" value={personalVertexLocation} />
 
         {aiTab === "apikey" && <>
         {!isEncryptionSetup && (
@@ -439,6 +453,38 @@ export function GeneralTab({
             <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
               {t("settings.general.enableVertexAiDescription")}
             </p>
+            <div className="mb-4 flex gap-2">
+              <button type="button" onClick={() => setPersonalVertexSource("prepaid")} className={`${personalVertexSource === "prepaid" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-300"} rounded-lg border px-3 py-2 text-sm dark:bg-gray-900`}>
+                {t("settings.general.vertexPrepaid")}
+              </button>
+              <button type="button" onClick={() => setPersonalVertexSource("own")} className={`${personalVertexSource === "own" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-300"} rounded-lg border px-3 py-2 text-sm dark:bg-gray-900`}>
+                {t("settings.general.vertexOwn")}
+              </button>
+            </div>
+            {personalVertexSource === "own" && (
+              <div className="mb-4 space-y-3 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                <div>
+                  <Label htmlFor="personalVertexProjectId">{t("settings.general.vertexProjectId")}</Label>
+                  <input id="personalVertexProjectId" className={inputClass} value={personalVertexProjectId} onChange={(event) => setPersonalVertexProjectId(event.target.value)} placeholder="my-gcp-project" />
+                </div>
+                <div>
+                  <Label htmlFor="personalVertexLocation">{t("settings.general.vertexLocation")}</Label>
+                  <input id="personalVertexLocation" className={inputClass} value={personalVertexLocation} onChange={(event) => setPersonalVertexLocation(event.target.value)} placeholder="global" />
+                </div>
+                <p className="text-xs text-gray-500">{t("settings.general.vertexOwnBillingNote")}</p>
+                {personalVertexOAuth?.connected ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-green-600">{t("settings.general.vertexConnected").replace("{email}", personalVertexOAuth.connectedEmail || "")}</span>
+                    <button type="button" className="text-red-600 hover:underline" onClick={async () => {
+                      const response = await fetch("/api/personal-vertex/connection", { method: "DELETE" });
+                      if (response.ok) setPersonalVertexOAuth({ connected: false, connectedEmail: null });
+                    }}>{t("settings.general.vertexDisconnect")}</button>
+                  </div>
+                ) : (
+                  <a href="/auth/vertex/start?personal=1" className="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{t("settings.general.vertexConnect")}</a>
+                )}
+              </div>
+            )}
             {/* Model — the API key tab's selector is unmounted here, and the
                 model decides how fast the prepaid balance drains, so the
                 choice has to be reachable from this tab too. Only models the
@@ -460,6 +506,7 @@ export function GeneralTab({
                 ))}
               </select>
             </div>
+            {personalVertexSource === "prepaid" && <>
             {/* Balance */}
             <div className="mb-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
               <div className="flex items-center justify-between">
@@ -521,6 +568,7 @@ export function GeneralTab({
                 </div>
               </details>
             )}
+            </>}
           </div>
         )}
 

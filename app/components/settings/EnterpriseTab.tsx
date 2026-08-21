@@ -11,7 +11,7 @@ interface UsageSummary { estimatedCostUsd: number; inputTokens: number; outputTo
 interface AiPayload {
   settings: OrganizationAiSettings;
   usage?: { organization?: UsageSummary; users?: Record<string, UsageSummary> };
-  oauthStatus?: { connected: boolean; connectedEmail: string | null; connectedAt: number | null; clientConfigured: boolean; projectId: string | null };
+  oauthStatus?: { connected: boolean; connectedEmail: string | null; connectedAt: number | null; clientConfigured: boolean; projectId: string | null; source: "default" | "own"; serviceDefault: { connected: boolean } };
   budget?: {
     periodStart?: string;
     periodEnd?: string;
@@ -199,7 +199,25 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
   const budget = initial.budget;
   const topUp = budget?.topUpUsd ?? initial.usage?.organization?.topUpUsd ?? 0;
   const budgetLimit = budget?.limitUsd ?? null;
+  const oauth = initial.oauthStatus;
   return <div className="space-y-4">
+    <section className={cardClass}>
+      <h3 className="font-semibold">{t("enterprise.vertexSourceTitle")}</h3>
+      <p className="mt-1 text-xs text-gray-500">{t("enterprise.vertexSourceDescription")}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={busy || oauth?.source === "default"} className={`${secondaryButton} ${oauth?.source === "default" ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, source: "default" } }), t("enterprise.vertexSourceSaved"))}>{t("enterprise.vertexPrepaid")}</button>
+        <button type="button" disabled={busy || oauth?.source === "own"} className={`${secondaryButton} ${oauth?.source === "own" ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, source: "own" } }), t("enterprise.vertexSourceSaved"))}>{t("enterprise.vertexOwn")}</button>
+      </div>
+      {oauth?.source === "own" && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          {oauth.connected
+            ? <span className="text-green-600">{t("enterprise.vertexConnected").replace("{email}", oauth.connectedEmail || "")}</span>
+            : <a href={`/auth/vertex/start?orgId=${encodeURIComponent(orgId)}`} className={primaryButton}>{t("enterprise.vertexConnect")}</a>}
+          {oauth.connected && <button type="button" className="text-red-600 hover:underline" onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "DELETE", body: { orgId } }), t("enterprise.vertexDisconnected"))}>{t("enterprise.vertexDisconnect")}</button>}
+          <span className="text-xs text-gray-500">{t("enterprise.vertexOwnBillingNote")}</span>
+        </div>
+      )}
+    </section>
     <section className={cardClass}>
       <h3 className="font-semibold">{t("enterprise.budgetTitle")}</h3>
       <p className="mt-1 text-sm text-gray-500">
