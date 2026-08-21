@@ -11,6 +11,7 @@ import {
   deleteEditHistoryEntry,
   bulkRemoveLocalSyncMetaEntries,
   getAllCachedFiles,
+  queuePendingDeletion,
   type CachedTreeNode,
   type CachedRemoteMeta,
 } from "~/services/indexeddb-cache";
@@ -76,10 +77,26 @@ async function bulkDeleteFiles(
     }
   }
 
-  // Bulk delete remote files in a single request
+  // Soft deletes are local-first: hide them now and let the next Push move
+  // them to Drive's trash. Permanent deletion remains an explicit online
+  // operation and is never queued.
   let lastMeta: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] } | null = null;
   let failCount = 0;
   if (remoteIds.length > 0) {
+    if (!permanent) {
+      const meta = await getCachedRemoteMeta();
+      await Promise.all(remoteIds.map(async (fid) => {
+        const fileName = meta?.files[fid]?.name ?? fid;
+        await queuePendingDeletion({ fileId: fid, fileName, queuedAt: Date.now() });
+        await deleteCachedFile(fid);
+        await deleteEditHistoryEntry(fid);
+      }));
+      if (meta) {
+        for (const fid of remoteIds) delete meta.files[fid];
+        await setCachedRemoteMeta(meta);
+      }
+      return { lastMeta: null, failCount: 0 };
+    }
     const res = await fetch("/api/drive/files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

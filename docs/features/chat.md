@@ -104,7 +104,7 @@ Mode is auto-constrained by model and RAG settings:
 - **Web Search mode**: forced to `none` (incompatible with other tools — free plan only)
 - **RAG enabled**: function calling tools disabled (free plan only — the Chat API does not support fileSearch + functionDeclarations simultaneously)
 
-> **Paid plan advantage**: The Interactions API allows function tools + RAG + Web Search simultaneously. RAG is pre-retrieved via the `generateContent` API (with the `file_search` tool) and injected into the system prompt, since the Interactions API does not support the `file_search` tool directly (returns 501 `not_implemented`). The above RAG/Web Search tool restrictions do not apply to paid plan users (except Gemma 4 + Web Search, which is a model-level limitation).
+> **GemiHub Premium/Business advantage**: The Interactions API allows function tools + RAG + Web Search simultaneously. RAG is pre-retrieved via the `generateContent` API (with the `file_search` tool) and injected into the system prompt, since the Interactions API does not support the `file_search` tool directly (returns 501 `not_implemented`). The above RAG/Web Search tool restrictions do not apply to GemiHub Premium/Business users (except Gemma 4 + Web Search, which is a model-level limitation).
 
 ### MCP Tools
 
@@ -123,7 +123,7 @@ When the limit is reached, Gemini receives a system message requesting a summary
 
 ## Models
 
-Models are determined by the user's API plan (Free or Paid). Each model has different capabilities:
+Available models are determined by the selected AI execution provider and that provider's entitlement or billing tier, not by the GemiHub subscription alone. GemiHub Free/Premium/Business controls product features such as Interactions API access; a user-supplied Gemini API key remains subject to its own Google API tier, while Personal Vertex uses prepaid GemiHub credit. Each model has different capabilities:
 
 - **Standard models**: Streaming text + function calling + thinking
 - **Image models**: Image generation (no function calling)
@@ -280,10 +280,10 @@ The Interactions API endpoint does not support CORS, so browser-side calls are n
 | File | Role |
 |------|------|
 | `app/routes/api.chat.tsx` | Chat SSE API (server-side, legacy fallback) — streaming, tool dispatch |
-| `app/routes/api.chat.interactions.tsx` | Interactions API SSE proxy (paid plan) — multi-round tool call protocol |
+| `app/routes/api.chat.interactions.tsx` | Interactions API SSE proxy (GemiHub Premium/Business) — multi-round tool call protocol |
 | `app/routes/api.chat.history.tsx` | Chat history CRUD (list, save, delete) |
-| `app/hooks/useLocalChat.ts` | Browser-side chat execution (free plan) — calls Gemini Chat API directly |
-| `app/hooks/useInteractionsChat.ts` | Interactions API client (paid plan) — multi-round SSE with local tool execution |
+| `app/hooks/useLocalChat.ts` | Browser-side chat execution (GemiHub Free path) — calls Gemini Chat API directly using the user's provider credentials |
+| `app/hooks/useInteractionsChat.ts` | Interactions API client (GemiHub Premium/Business) — multi-round SSE with local tool execution |
 | `app/services/gemini-chat-core.ts` | Browser-compatible Gemini Chat API client (streaming, function calling, RAG, thinking, image generation) |
 | `app/services/gemini-interactions.server.ts` | Server-only Interactions API wrapper (tool conversion, input building, stream translation) |
 | `app/services/gemini-chat.server.ts` | Server-only re-export of gemini-chat-core.ts |
@@ -304,7 +304,7 @@ The Interactions API endpoint does not support CORS, so browser-side calls are n
 | Route | Method | Description |
 |-------|--------|-------------|
 | `/api/chat` | POST | Chat SSE stream with function calling (legacy fallback) |
-| `/api/chat/interactions` | POST | Interactions API SSE proxy (paid plan, multi-round) |
+| `/api/chat/interactions` | POST | Interactions API SSE proxy (GemiHub Premium/Business, multi-round) |
 | `/api/chat/history` | GET | List chat histories |
 | `/api/chat/history` | POST | Save chat history |
 | `/api/chat/history` | DELETE | Delete chat history |

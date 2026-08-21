@@ -16,8 +16,8 @@ Workflows are **off by default**. `UserSettings.workflowEnabled` (Settings > Gen
 ## Features
 
 - **YAML Parser**: Converts YAML workflow definitions into an executable AST
-- **Handler-Based Execution**: 24 node types dispatched to isolated handler functions
-- **Local Execution**: 21/24 node types run in the browser; only 3 (mcp, rag-sync, gemihub-command) call the server
+- **Handler-Based Execution**: 25 base node types dispatched to isolated handler functions, plus 9 hosted paid-feature nodes
+- **Local Execution**: 22/25 base node types run in the browser; only 3 (mcp, rag-sync, gemihub-command) call the server
 - **Interactive Prompts**: Pause execution to prompt users for input, then resume
 - **Sub-Workflow Execution**: Recursive workflow calls with cycle detection
 - **Variable Templating**: `{{var}}` syntax with nested access, array indexing, and JSON escaping
@@ -376,7 +376,7 @@ The `workflow` node type executes another workflow file.
 
 ## Handlers
 
-All 24 node types are dispatched to isolated handler functions. Local handlers (21 types) live in `app/engine/local-handlers/`. Server-side handlers (3 types: mcp, rag-sync, gemihub-command) live in `app/engine/handlers/`. Some shared handlers (control flow, json) in `app/engine/handlers/` are also imported by the local executor.
+All 25 base node types are dispatched to isolated handler functions. Local handlers (22 types) live in `app/engine/local-handlers/`. Server-side handlers (3 types: mcp, rag-sync, gemihub-command) live in `app/engine/handlers/`. Some shared handlers (control flow, json) in `app/engine/handlers/` are also imported by the local executor. The hosted service adds 9 paid-feature nodes for Sheets, Gmail, and Calendar.
 
 ### Control Flow
 
@@ -576,10 +576,10 @@ Shortcut bindings are stored in `settings.json` on Drive as the `shortcutKeys` f
 |------|-------------|
 | `app/engine/parser.ts` | YAML parser, AST builder, edge resolution |
 | `app/engine/executor.ts` | Stack-based server executor with handler dispatch |
-| `app/engine/local-executor.ts` | Client-side executor (21/24 nodes local, 3 server) |
+| `app/engine/local-executor.ts` | Client-side executor (22/25 base nodes local, 3 server) |
 | `app/engine/local-handlers/` | Local node handlers (command, http, drive, prompt, workflow) |
 | `app/engine/types.ts` | Core types (WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks) |
-| `app/engine/handlers/` | 24 node type handlers (shared by both server and local executors) |
+| `app/engine/handlers/` | Base-node handlers shared by the server and local executors, plus hosted paid-feature handlers |
 | `app/hooks/useLocalWorkflowExecution.ts` | Client-side local execution hook |
 | `app/routes/api.workflow.execute-node.tsx` | Single-node execution API for server-requiring nodes |
 | `app/routes/api.workflow.mcp-proxy.tsx` | MCP tool definition and execution proxy |

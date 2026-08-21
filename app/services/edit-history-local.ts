@@ -267,22 +267,35 @@ function createDiffStr(
  * Returns false if content has been reverted to original (no net change).
  */
 export async function hasNetContentChange(fileId: string): Promise<boolean> {
+  const original = await getOriginalContentForPush(fileId);
   const cached = await getCachedFile(fileId);
   if (!cached) return false;
+  if (original === null) return true; // Can't reconstruct → assume changed
+  return original !== cached.content;
+}
 
+/** Reconstruct the last synced text for server-side history generation. */
+export async function getOriginalContentForPush(fileId: string): Promise<string | null> {
+  const cached = await getCachedFile(fileId);
+  if (!cached || cached.encoding === "base64") return null;
   const editHistory = await getEditHistoryForFile(fileId);
-  if (!editHistory || editHistory.diffs.length === 0) return false;
-
-  const meaningfulDiffs = editHistory.diffs.filter(d => d.diff !== "");
-  if (meaningfulDiffs.length === 0) return false;
-
-  // Reverse order (newest first) for reconstructContent
+  if (!editHistory) return null;
+  const meaningfulDiffs = editHistory.diffs.filter((entry) => entry.diff !== "");
+  if (meaningfulDiffs.length === 0) return cached.content;
   const diffs: DiffWithOrigin[] = [...meaningfulDiffs]
     .reverse()
-    .map(d => ({ diff: d.diff, origin: "local" as const }));
+    .map((entry) => ({ diff: entry.diff, origin: "local" as const }));
+  return reconstructContent(cached.content, diffs);
+}
 
-  const original = reconstructContent(cached.content, diffs);
-  if (original === null) return true; // Can't reconstruct → assume changed
-
-  return original !== cached.content;
+export async function getPushHistoryDiff(fileId: string): Promise<{
+  diff: string;
+  stats: { additions: number; deletions: number };
+} | null> {
+  const cached = await getCachedFile(fileId);
+  if (!cached || cached.encoding === "base64") return null;
+  const original = await getOriginalContentForPush(fileId);
+  if (original === null) return null;
+  const result = createDiffStr(original, cached.content, 3);
+  return result.diff ? result : null;
 }

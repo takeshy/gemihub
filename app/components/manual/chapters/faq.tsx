@@ -53,7 +53,7 @@ function FaqEn() {
 
         <h2>Can I restore deleted files?</h2>
         <p>
-          Yes. Deleted files are moved to a <code>trash/</code> folder on Drive (soft delete). Go to <strong>Settings &gt; Sync</strong> and click <strong>Manage</strong> next to Trash to restore or permanently delete files.
+          Yes. Deletions are queued locally, then the next Push moves the files to a <code>trash/</code> folder on Drive. Go to <strong>Settings &gt; Sync</strong> and click <strong>Manage</strong> next to Trash to restore or permanently delete files.
         </p>
 
         <h2>How do I clear the local cache?</h2>
@@ -117,7 +117,7 @@ function FaqJa() {
 
         <h2>削除したファイルは復元できますか？</h2>
         <p>
-          はい。削除されたファイルはDrive上の<code>trash/</code>フォルダに移動されます（ソフトデリート）。<strong>設定 &gt; 同期</strong>のゴミ箱の横の<strong>管理</strong>をクリックして復元または完全削除できます。
+          はい。削除はまずローカルで予約され、次回のPushでDrive上の<code>trash/</code>フォルダに移動されます。<strong>設定 &gt; 同期</strong>のゴミ箱の横の<strong>管理</strong>をクリックして復元または完全削除できます。
         </p>
 
         <h2>ローカルキャッシュをクリアするには？</h2>

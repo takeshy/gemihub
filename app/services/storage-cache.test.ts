@@ -31,6 +31,9 @@ import {
   setLocalSyncEntry,
   setRemoteSyncSnapshot,
   saveLocalConflictBackup,
+  queueStorageDeletion,
+  listPendingStorageDeletions,
+  deletePendingStorageDeletion,
   type CachedObject,
   type LocalSyncEntry,
   type RemoteSyncSnapshot,
@@ -112,6 +115,28 @@ test("deleteCachedObject removes a single record", async () => {
   await setCachedObject(o);
   await deleteCachedObject("orgA/proj1", o.objectPath);
   assert.equal(await getCachedObject("orgA/proj1", o.objectPath), undefined);
+});
+
+test("pending deletions persist per mount until drained", async () => {
+  await queueStorageDeletion({
+    mountKey: "orgA/proj1",
+    objectPath: "proj1/notes/a.md",
+    relativePath: "notes/a.md",
+    queuedAt: 123,
+  });
+  await queueStorageDeletion({
+    mountKey: "orgB/proj1",
+    objectPath: "proj1/notes/a.md",
+    relativePath: "notes/a.md",
+    queuedAt: 456,
+  });
+  assert.deepEqual(
+    (await listPendingStorageDeletions("orgA/proj1")).map((entry) => entry.queuedAt),
+    [123],
+  );
+  await deletePendingStorageDeletion("orgA/proj1", "proj1/notes/a.md");
+  assert.equal((await listPendingStorageDeletions("orgA/proj1")).length, 0);
+  assert.equal((await listPendingStorageDeletions("orgB/proj1")).length, 1);
 });
 
 // ---------------------------------------------------------------------------

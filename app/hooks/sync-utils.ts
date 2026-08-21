@@ -4,6 +4,7 @@ import {
   getCachedRemoteMeta,
   setCachedFile,
   setCachedRemoteMeta,
+  getPendingDeletions,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { hasNetContentChange } from "~/services/edit-history-local";
@@ -131,7 +132,10 @@ export async function updateCachedRemoteMetaFromSyncMeta(remoteMeta: SyncMeta): 
   // value). Skipping those would leave cachedRemoteMeta stale after sync ops.
   if (existing) {
     // Preserve local-only "new:" entries that haven't been migrated to Drive yet
-    const mergedFiles = { ...remoteMeta.files };
+    const pendingDeletionIds = new Set((await getPendingDeletions()).map((entry) => entry.fileId));
+    const mergedFiles = Object.fromEntries(
+      Object.entries(remoteMeta.files).filter(([id]) => !pendingDeletionIds.has(id)),
+    );
     for (const [id, entry] of Object.entries(existing.files)) {
       if (id.startsWith("new:") && !(id in mergedFiles)) {
         mergedFiles[id] = entry;

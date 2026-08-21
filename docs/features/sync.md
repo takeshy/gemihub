@@ -13,7 +13,7 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 
 - **Manual Sync**: Push and pull changes when you want
 - **Offline-First**: Files are cached in IndexedDB for instant access
-- **Soft Delete**: Deleted files are moved to a `trash/` folder on Drive (recoverable)
+- **Local-first Soft Delete**: Deleted files disappear locally immediately and are queued for the next Push, which moves them to a recoverable `trash/` folder on Drive
 - **Conflict Resolution**: Choose local or remote version with automatic backup
 - **Full Push / Full Pull**: Bulk sync for initial setup or recovery
 - **Untracked File Management**: Detect, restore, or delete orphaned remote files
@@ -106,17 +106,21 @@ Uploads locally-changed files to remote.
        The check applies the same filters as the Pull badge (`filterActionablePull`): sync-excluded paths, files whose cached content already
        matches the remote checksum, and stale uncached deletions do not block. Pure new remote files (`remoteOnly`) do not block push.
 
-2. BATCH UPLOAD: Update all files via single API call
+2. COMBINED MUTATION: Apply queued deletions and file updates via one API call
    ├─ Get modified file IDs from IndexedDB editHistory (tracked and new/untracked files alike; `new:` placeholders excluded)
    ├─ Filter out system files and excluded paths (history/, plugins/, etc.)
    ├─ Include binary files (base64-encoded) with encoding flag (skip hasNetContentChange)
    ├─ Filter out reverted text files (hasNetContentChange = false)
    ├─ Read all modified file contents from IndexedDB cache
-   ├─ POST /api/sync { action: "pushFiles", files, remoteMeta, syncMetaFileId }
+   ├─ Reconstruct each text file's last-synced content from local edit-history diffs
+   │   └─ Send only the resulting compact `historyDiff`, avoiding both a Drive read and a duplicate full-content upload
+   ├─ Include persistent deletion reservations as `deleteFileIds`
+   ├─ POST /api/sync { action: "pushFiles", files, deleteFileIds, remoteMeta }
    │   └─ Server:
    │       ├─ Use client-provided remoteMeta (skip re-reading _sync-meta.json)
+   │       ├─ Move reserved deletions to trash while uploads run
    │       ├─ For each file (parallel, max 5 concurrent):
-   │       │   ├─ Read old content from Drive (for edit history)
+   │       │   ├─ Use the client-supplied diff for edit history (Drive-read fallback only when unavailable)
    │       │   ├─ Skip upload if content is identical to remote (optimization)
    │       │   └─ Update file on Drive
    │       ├─ Write _sync-meta.json once via syncMetaFileId (skip findFileByExactName)
@@ -151,7 +155,7 @@ Uploads locally-changed files to remote.
 ### Important Notes
 
 - Push checks for conflicts and remote-newer **before** writing any files to Drive. If the check fails, nothing is written.
-- Push does **NOT** delete remote files. Deletion is handled separately (see Soft Delete below).
+- Push drains local deletion reservations in the same request as file updates (see Soft Delete below).
 - After a successful push, local edit history in IndexedDB is cleared for the pushed files and for reverted files (files whose content was edited then reverted to the synced state).
 
 ---
@@ -247,11 +251,11 @@ Downloads all remote files, skipping those with matching hashes.
 
 ## Full Push
 
-Uploads all locally modified files directly to Drive and merges metadata. **This is a destructive operation** — it does not check for conflicts or remote changes before overwriting. Remote files will be overwritten without warning.
+Uploads every eligible file currently present in the local cache directly to Drive and merges metadata. **This is a destructive operation** — it does not check for conflicts or remote changes before overwriting. Cached copies replace their remote counterparts without conflict detection.
 
 ### Flow
 
-1. **Batch upload** — all modified files are sent in a single `pushFiles` API call; server updates Drive files in parallel (max 5 concurrent), reads/writes `_sync-meta.json` once, and saves remote edit history in background
+1. **Batch upload** — all eligible cached files are sent in a single `pushFiles` API call; server updates Drive files in parallel (max 5 concurrent), reads/writes `_sync-meta.json` once, and saves remote edit history in background
 2. **Update IndexedDB** — cache and LocalSyncMeta updated with new md5/modifiedTime from server response
 3. **Clear edit history** — if all eligible files were pushed, clear all edit history; otherwise clear per-file for successfully pushed files only
 4. **Fire "sync-complete" event** and update localModifiedCount
@@ -293,15 +297,16 @@ Example: `notes/daily.md` → `sync_conflicts/notes_daily_20260207_143000.md`
 
 ## Soft Delete (Trash)
 
-File deletion uses a soft delete model. Deleted files are moved to a `trash/` subfolder on Google Drive instead of being permanently destroyed.
+File deletion uses a local-first soft delete model. The file is hidden locally and persisted in an IndexedDB deletion queue immediately, including while offline. The next incremental Push moves it to a `trash/` subfolder on Google Drive instead of permanently destroying it.
 
 ### Flow
 
 1. User deletes a file (context menu → Trash)
-2. Server moves the file to `trash/` subfolder via Drive API (`moveFile`)
-3. File is removed from `_sync-meta.json`
-4. Local caches (IndexedDB file cache) are cleaned up
-5. File tree updates to reflect the removal
+2. The local cache and file tree are cleaned up, and a persistent deletion reservation is added
+3. The Push badge includes the reservation
+4. On the next Push, remote-change checks run before any deletion
+5. If unchanged remotely, the server moves the file to `trash/` and removes it from `_sync-meta.json`
+6. If it changed remotely, Push is rejected and Pull restores the remote version while cancelling that deletion reservation
 
 ### Cross-Device Sync
 

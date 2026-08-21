@@ -15,6 +15,7 @@ import {
   removeLocalSyncMetaEntry,
   setEditHistoryEntry,
   getEditHistoryForFile,
+  queuePendingDeletion,
   type CachedRemoteMeta,
 } from "./indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "./edit-history-local";
@@ -495,34 +496,16 @@ export async function deleteFileLocal(fileId: string): Promise<void> {
     delete meta.files[fileId];
     await setCachedRemoteMeta(meta);
   } else {
-    const res = await fetch("/api/drive/files", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete", fileId }),
-    });
-    if (!res.ok) throw new Error(`Failed to delete file: ${entry.name}`);
-    const data = await res.json() as {
-      meta?: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] };
-    };
-    if (data.meta) {
-      const pendingEntries = Object.fromEntries(
-        Object.entries(meta.files).filter(([id]) => id.startsWith("new:")),
-      );
-      await setCachedRemoteMeta({
-        ...meta,
-        lastUpdatedAt: data.meta.lastUpdatedAt,
-        files: { ...data.meta.files, ...pendingEntries },
-        cachedAt: Date.now(),
-      });
-    } else {
-      delete meta.files[fileId];
-      await setCachedRemoteMeta(meta);
-    }
+    await queuePendingDeletion({ fileId, fileName: entry.name, queuedAt: Date.now() });
+    delete meta.files[fileId];
+    await setCachedRemoteMeta(meta);
   }
 
   await deleteCachedFile(fileId);
   await deleteEditHistoryEntry(fileId);
-  await removeLocalSyncMetaEntry(fileId);
+  // Keep LocalSyncMeta until Push drains the deletion. It is the base revision
+  // used to detect a remote edit made after this deletion was queued.
+  if (fileId.startsWith("new:")) await removeLocalSyncMetaEntry(fileId);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("tree-meta-updated"));
     window.dispatchEvent(new Event("sync-complete"));

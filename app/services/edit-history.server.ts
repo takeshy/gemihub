@@ -172,20 +172,43 @@ export async function saveEdit(
     model?: string;
   }
 ): Promise<EditHistoryEntry | null> {
-  const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
-
   const { diff, stats } = createDiffStr(params.oldContent, params.newContent, settings.diff.contextLines);
 
   if (stats.additions === 0 && stats.deletions === 0) return null;
 
+  return saveEditDiff(accessToken, rootFolderId, settings, {
+    path: params.path,
+    diff,
+    stats,
+    source: params.source,
+    workflowName: params.workflowName,
+    model: params.model,
+  });
+}
+
+export async function saveEditDiff(
+  accessToken: string,
+  rootFolderId: string,
+  settings: EditHistorySettings,
+  params: {
+    path: string;
+    diff: string;
+    stats: { additions: number; deletions: number };
+    source: "workflow" | "propose_edit" | "manual" | "auto";
+    workflowName?: string;
+    model?: string;
+  },
+): Promise<EditHistoryEntry | null> {
+  if (!params.diff || (params.stats.additions === 0 && params.stats.deletions === 0)) return null;
+  const historyFolderId = await ensureEditHistoryFolderId(accessToken, rootFolderId);
   const entry: EditHistoryEntry = {
     id: generateId(),
     timestamp: new Date().toISOString(),
     source: params.source,
     workflowName: params.workflowName,
     model: params.model,
-    diff,
-    stats,
+    diff: params.diff,
+    stats: params.stats,
   };
 
   const { history, fileId: historyFileId } = await loadHistoryFile(

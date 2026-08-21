@@ -77,7 +77,7 @@ function SyncEn() {
 
         <h2>Trash</h2>
         <p>
-          Deleting a file moves it to a <code>trash/</code> folder on Drive (soft delete). You can restore trashed files from Settings &gt; Sync, or permanently delete them.
+          Deleting a file queues it locally. The next Push moves it to a <code>trash/</code> folder on Drive. You can restore pushed trash from Settings &gt; Sync, or permanently delete it.
         </p>
 
         <h2>Offline Usage</h2>
@@ -160,7 +160,7 @@ function SyncJa() {
 
         <h2>ゴミ箱</h2>
         <p>
-          ファイルを削除するとDrive上の<code>trash/</code>フォルダに移動します（ソフトデリート）。設定 &gt; 同期から復元または完全削除できます。
+          ファイルを削除するとまずローカルで予約され、次回のPushでDrive上の<code>trash/</code>フォルダに移動します。Push済みのゴミ箱は設定 &gt; 同期から復元または完全削除できます。
         </p>
 
         <h2>オフライン使用</h2>

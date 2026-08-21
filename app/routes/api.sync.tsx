@@ -1,7 +1,7 @@
 import type { Route } from "./+types/api.sync";
 import { requireAuth, setTokens, commitSession } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
-import { getSettings } from "~/services/user-settings.server";
+import { getSettings, saveSettings } from "~/services/user-settings.server";
 import {
   listUserFiles,
   readFile,
@@ -35,10 +35,12 @@ import {
 } from "~/services/sync-meta.server";
 import { SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME } from "~/services/sync-diff";
 import { parallelProcess } from "~/utils/parallel";
-import { saveEdit } from "~/services/edit-history.server";
+import { saveEdit, saveEditDiff } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
 import { indexUniqueRemotePaths, remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
+import { deleteSingleFileFromRag } from "~/services/file-search.server";
+import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 
 function guessMimeType(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -627,9 +629,18 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     case "pushFiles": {
-      const files = body.files as Array<{ fileId: string; content: string; fileName?: string; encoding?: "base64" }>;
-      if (!Array.isArray(files) || files.length === 0) {
-        return logAndReturn({ error: "Missing or empty files array" }, { status: 400 });
+      const files = body.files as Array<{
+        fileId: string;
+        content: string;
+        fileName?: string;
+        encoding?: "base64";
+        historyDiff?: { diff: string; stats: { additions: number; deletions: number } };
+      }>;
+      const deleteFileIds = Array.isArray(body.deleteFileIds)
+        ? (body.deleteFileIds as unknown[]).filter((id): id is string => typeof id === "string" && id.length > 0)
+        : [];
+      if (!Array.isArray(files) || (files.length === 0 && deleteFileIds.length === 0)) {
+        return logAndReturn({ error: "Missing files and deleteFileIds" }, { status: 400 });
       }
       const forceRecreate = body.forceRecreate === true;
 
@@ -661,8 +672,43 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
 
+      // Start queued trash moves immediately and let them overlap file uploads.
+      // The same root listing used by upload guards protects deletions against
+      // a remote edit that landed after the client's preflight snapshot.
+      const deletedFileNameById = new Map(
+        deleteFileIds
+          .map((id) => [id, pushRemoteMeta.files[id]?.name] as const)
+          .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+      );
+      const deletionPromise = (async () => {
+        if (deleteFileIds.length === 0) return { deleted: [] as string[], failed: [] as string[] };
+        const trashFolderId = await ensureSubFolder(
+          validTokens.accessToken,
+          validTokens.rootFolderId,
+          "trash",
+        );
+        const results = await parallelProcess(deleteFileIds, async (id) => {
+          const expected = clientRemoteMeta?.files[id];
+          const current = currentRootFilesById.get(id);
+          if (expected && current && remoteChangedSincePushSnapshot(expected, current)) {
+            return { id, ok: false };
+          }
+          if (!current) return { id, ok: true };
+          try {
+            await moveFile(validTokens.accessToken, id, trashFolderId, validTokens.rootFolderId);
+            return { id, ok: true };
+          } catch (err) {
+            return { id, ok: isNotFoundError(err) };
+          }
+        }, 5);
+        return {
+          deleted: results.filter((result) => result.ok).map((result) => result.id),
+          failed: results.filter((result) => !result.ok).map((result) => result.id),
+        };
+      })();
+
       // Update files in parallel: read old content, skip upload if unchanged
-      const pushResults = await parallelProcess(files, async ({ fileId, content, fileName, encoding }) => {
+      const pushResults = await parallelProcess(files, async ({ fileId, content, fileName, encoding, historyDiff }) => {
         const isBinary = encoding === "base64";
 
         // A cached ID can still address a trashed file or a file moved outside
@@ -760,10 +806,12 @@ export async function action({ request }: Route.ActionArgs) {
 
         // --- Text file path ---
         let oldContent: string | null = null;
-        try {
-          oldContent = await readFile(validTokens.accessToken, driveFileId);
-        } catch {
-          // File might be new or unreadable, skip history
+        if (!historyDiff) {
+          try {
+            oldContent = await readFile(validTokens.accessToken, driveFileId);
+          } catch {
+            // File might be new or unreadable, skip history
+          }
         }
 
         // Skip upload if content is identical to remote
@@ -782,6 +830,7 @@ export async function action({ request }: Route.ActionArgs) {
             size: existingMeta?.size,
             oldContent,
             newContent: content,
+            historyDiff,
           };
         }
 
@@ -824,6 +873,7 @@ export async function action({ request }: Route.ActionArgs) {
             size: updated.size,
             oldContent,
             newContent: content,
+            historyDiff,
           };
         } catch (err) {
           // When forceRecreate is enabled and the file is 404, recreate it
@@ -860,6 +910,7 @@ export async function action({ request }: Route.ActionArgs) {
           throw err;
         }
       }, 5);
+      const deletionResults = await deletionPromise;
 
       type PushSuccess = {
         ok: true;
@@ -873,10 +924,12 @@ export async function action({ request }: Route.ActionArgs) {
         mimeType: string;
         oldContent: string | null;
         newContent: string | null;
+        historyDiff?: { diff: string; stats: { additions: number; deletions: number } };
       };
       const successful = pushResults.filter((r) => r.ok) as PushSuccess[];
       const skippedFileIds = pushResults.filter((r) => !r.ok).map((r) => r.fileId);
       const actuallyUploaded = successful.filter((r) => r.uploaded);
+      for (const id of deletionResults.deleted) delete pushRemoteMeta.files[id];
 
       // Update meta entries only for files that were actually uploaded
       // For recreated files, use the newFileId as the meta key
@@ -894,7 +947,7 @@ export async function action({ request }: Route.ActionArgs) {
         };
       }
 
-      if (actuallyUploaded.length > 0) {
+      if (actuallyUploaded.length > 0 || deletionResults.deleted.length > 0) {
         // Re-read latest _sync-meta.json to merge entries added by concurrent operations
         // (e.g. usePendingFileMigration creating files while push was in progress)
         const latestMeta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
@@ -914,6 +967,7 @@ export async function action({ request }: Route.ActionArgs) {
               size: r.size ?? existing?.size,
             };
           }
+          for (const id of deletionResults.deleted) delete latestMeta.files[id];
           latestMeta.lastUpdatedAt = new Date().toISOString();
           await writeRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId, latestMeta);
           // Return merged meta so client has the complete picture
@@ -937,22 +991,59 @@ export async function action({ request }: Route.ActionArgs) {
 
       // Save remote edit history in background (best-effort, does not block response)
       // Skip binary files — they have no meaningful text diff
-      const historyEntries = successful.filter(
-        (r) => r.oldContent != null && r.newContent != null && r.oldContent !== r.newContent
-          && !shouldTreatAsBinaryFile(r.name, r.mimeType)
+      const historyEntries = successful.filter((r) =>
+        !shouldTreatAsBinaryFile(r.name, r.mimeType)
+        && (r.historyDiff || (r.oldContent != null && r.newContent != null && r.oldContent !== r.newContent))
       );
       if (historyEntries.length > 0) {
         (async () => {
           try {
             const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
             await parallelProcess(historyEntries, async (r) => {
-              await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
-                path: r.name,
-                oldContent: r.oldContent!,
-                newContent: r.newContent!,
-                source: "manual",
-              });
+              if (r.historyDiff) {
+                await saveEditDiff(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
+                  path: r.name,
+                  ...r.historyDiff,
+                  source: "manual",
+                });
+              } else {
+                await saveEdit(validTokens.accessToken, validTokens.rootFolderId, settings.editHistory, {
+                  path: r.name,
+                  oldContent: r.oldContent!,
+                  newContent: r.newContent!,
+                  source: "manual",
+                });
+              }
             }, 5);
+          } catch {
+            // best-effort
+          }
+        })();
+      }
+
+      // RAG cleanup for trashed files remains best-effort and off the response path.
+      if (deletionResults.deleted.length > 0 && deletedFileNameById.size > 0) {
+        void (async () => {
+          try {
+            const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+            const ragSetting = settings.ragSettings[DEFAULT_RAG_STORE_KEY];
+            if (!ragSetting?.files) return;
+            let changed = false;
+            for (const id of deletionResults.deleted) {
+              const fileName = deletedFileNameById.get(id);
+              if (!fileName) continue;
+              const ragFile = ragSetting.files[fileName];
+              if (!ragFile) continue;
+              let removable = !ragFile.fileId;
+              if (ragFile.fileId && validTokens.geminiApiKey) {
+                removable = await deleteSingleFileFromRag(validTokens.geminiApiKey, ragFile.fileId);
+              }
+              if (removable) {
+                delete ragSetting.files[fileName];
+                changed = true;
+              }
+            }
+            if (changed) await saveSettings(validTokens.accessToken, validTokens.rootFolderId, settings);
           } catch {
             // best-effort
           }
@@ -968,6 +1059,7 @@ export async function action({ request }: Route.ActionArgs) {
           modifiedTime: r.modifiedTime,
         })),
         skippedFileIds,
+        failedDeletionFileIds: deletionResults.failed,
         remoteMeta: pushRemoteMeta,
       });
     }

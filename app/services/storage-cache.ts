@@ -8,18 +8,20 @@
  */
 
 const DB_NAME = "gemihub-storage";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORE_OBJECTS = "objects";
 const STORE_LOCAL_SYNC = "localSync";
 const STORE_REMOTE_SYNC = "remoteSync";
 const STORE_EDIT_HISTORY = "editHistory";
 const STORE_CONFLICT_BACKUPS = "conflictBackups";
+const STORE_PENDING_DELETIONS = "pendingDeletions";
 
 const INDEX_OBJECTS_TENANT = "by_tenant";
 const INDEX_LOCAL_SYNC_TENANT = "by_tenant";
 const INDEX_EDIT_HISTORY_TENANT = "by_tenant";
 const INDEX_CONFLICT_BACKUPS_TENANT = "by_tenant";
+const INDEX_PENDING_DELETIONS_TENANT = "by_tenant";
 
 export interface CachedObject {
   mountKey: string;
@@ -73,6 +75,13 @@ export interface ConflictBackup {
   encoding: "utf-8" | "base64";
   contentType: string;
   createdAt: number;
+}
+
+export interface PendingStorageDeletion {
+  mountKey: string;
+  objectPath: string;
+  relativePath: string;
+  queuedAt: number;
 }
 
 export function scopeFromMountKey(mountKey: string): string {
@@ -135,6 +144,12 @@ function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_CONFLICT_BACKUPS)) {
         const store = db.createObjectStore(STORE_CONFLICT_BACKUPS, { keyPath: "id" });
         store.createIndex(INDEX_CONFLICT_BACKUPS_TENANT, "mountKey", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_PENDING_DELETIONS)) {
+        const store = db.createObjectStore(STORE_PENDING_DELETIONS, {
+          keyPath: ["mountKey", "objectPath"],
+        });
+        store.createIndex(INDEX_PENDING_DELETIONS_TENANT, "mountKey", { unique: false });
       }
     };
 
@@ -225,6 +240,25 @@ export async function deleteCachedObject(
 ): Promise<void> {
   await txPromise(STORE_OBJECTS, "readwrite", async (_tx, stores) => {
     await reqPromise(stores[STORE_OBJECTS].delete([mountKey, objectPath]));
+  });
+}
+
+export async function queueStorageDeletion(entry: PendingStorageDeletion): Promise<void> {
+  await txPromise(STORE_PENDING_DELETIONS, "readwrite", async (_tx, stores) => {
+    await reqPromise(stores[STORE_PENDING_DELETIONS].put(entry));
+  });
+}
+
+export async function listPendingStorageDeletions(mountKey: string): Promise<PendingStorageDeletion[]> {
+  return txPromise(STORE_PENDING_DELETIONS, "readonly", async (_tx, stores) => {
+    const index = stores[STORE_PENDING_DELETIONS].index(INDEX_PENDING_DELETIONS_TENANT);
+    return reqPromise(index.getAll(IDBKeyRange.only(mountKey)) as IDBRequest<PendingStorageDeletion[]>);
+  });
+}
+
+export async function deletePendingStorageDeletion(mountKey: string, objectPath: string): Promise<void> {
+  await txPromise(STORE_PENDING_DELETIONS, "readwrite", async (_tx, stores) => {
+    await reqPromise(stores[STORE_PENDING_DELETIONS].delete([mountKey, objectPath]));
   });
 }
 

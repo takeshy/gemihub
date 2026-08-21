@@ -26,6 +26,7 @@ export type {
   CachedRemoteMeta,
   CachedLoaderData,
   ConflictBackup,
+  PendingDeletion,
 } from "./indexeddb-cache-drive";
 export { activeProjectMountKey, activeProjectMountParam } from "./indexeddb-cache-mount";
 
@@ -65,6 +66,12 @@ export const applyPushedFileMetadata: typeof drive.applyPushedFileMetadata =
   drive.applyPushedFileMetadata;
 export const saveLocalConflictBackup: typeof drive.saveLocalConflictBackup =
   drive.saveLocalConflictBackup;
+export const queuePendingDeletion: typeof drive.queuePendingDeletion = (entry) =>
+  onMount() ? mount.queuePendingDeletion(entry) : drive.queuePendingDeletion(entry);
+export const getPendingDeletions: typeof drive.getPendingDeletions = () =>
+  onMount() ? mount.getPendingDeletions() : drive.getPendingDeletions();
+export const deletePendingDeletion: typeof drive.deletePendingDeletion = (fileId) =>
+  onMount() ? mount.deletePendingDeletion(fileId) : drive.deletePendingDeletion(fileId);
 
 // --- syncMeta ---
 

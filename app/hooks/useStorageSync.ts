@@ -21,6 +21,9 @@ import {
   saveLocalConflictBackup,
   setLocalSyncEntry,
   setCachedObject,
+  listPendingStorageDeletions,
+  deletePendingStorageDeletion,
+  deleteLocalSyncEntry,
 } from "~/services/storage-cache";
 import {
   detectChanges,
@@ -120,7 +123,8 @@ export function useStorageSync() {
         const { diff } = await detectChanges(mount, mountKey, {
           useCachedRemote: !freshRemote,
         });
-        setLocalModifiedCount(diff.toPush.length + diff.localOnly.length);
+        const pendingDeletions = await listPendingStorageDeletions(mountKey);
+        setLocalModifiedCount(diff.toPush.length + diff.localOnly.length + pendingDeletions.length);
         setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length);
         const legacyConflicts = diffToLegacyConflicts(diff);
         setConflicts(legacyConflicts);
@@ -190,9 +194,40 @@ export function useStorageSync() {
     setSyncStatus("pushing");
     setError(null);
     try {
-      const { diff, remote } = await detectChanges(mount, mountKey, {
+      const { diff, localBase, remote } = await detectChanges(mount, mountKey, {
         useCachedRemote: false,
       });
+      const pendingDeletions = await listPendingStorageDeletions(mountKey);
+      if (pendingDeletions.length > 0) {
+        const changedDeletion = pendingDeletions.some((entry) => {
+          const base = localBase.entries[entry.relativePath];
+          const current = remote.entries[entry.relativePath];
+          return base && current && base.revision !== current.revision;
+        });
+        if (changedDeletion) {
+          await refreshCounts(true);
+          fail("settings.sync.pushRejected");
+          return;
+        }
+        const deleteRes = await fetch("/api/drive/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "bulkDelete",
+            fileIds: pendingDeletions.map((entry) => entry.relativePath),
+            permanent: false,
+          }),
+        });
+        if (!deleteRes.ok) throw new Error("Failed to push pending deletions");
+        const deleteData = await deleteRes.json() as { failedFileIds?: string[] };
+        const failed = new Set(deleteData.failedFileIds ?? []);
+        for (const entry of pendingDeletions) {
+          if (failed.has(entry.relativePath)) continue;
+          await deletePendingStorageDeletion(mountKey, entry.objectPath);
+          await deleteLocalSyncEntry(mountKey, entry.objectPath);
+        }
+        if (failed.size > 0) throw new Error(`Failed to delete ${failed.size} file(s)`);
+      }
       // Push all locally-modified and brand-new files.
       const toPush = [...diff.toPush, ...diff.localOnly];
       const localOnly = new Set(diff.localOnly);
@@ -275,6 +310,9 @@ export function useStorageSync() {
         let done = 0;
         for (const path of toPull) {
           await pullObject(mount, mountKey, path);
+          const pending = (await listPendingStorageDeletions(mountKey))
+            .find((entry) => entry.relativePath === path);
+          if (pending) await deletePendingStorageDeletion(mountKey, pending.objectPath);
           done += 1;
           setCachingProgress({ total, done });
         }

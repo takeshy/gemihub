@@ -24,6 +24,9 @@ import {
   setLocalSyncEntry,
   setRemoteSyncSnapshot,
   clearMountCache,
+  queueStorageDeletion,
+  listPendingStorageDeletions,
+  deletePendingStorageDeletion,
   type CachedObject,
 } from "./storage-cache";
 import type {
@@ -33,6 +36,7 @@ import type {
   CachedRemoteMeta,
   CachedTreeNode,
   LocalSyncMeta,
+  PendingDeletion,
 } from "./indexeddb-cache-drive";
 import { isMarkdownFile, parseFrontmatter } from "~/utils/frontmatter";
 
@@ -64,6 +68,33 @@ export function activeProjectMountParam(): string | null {
   } catch {
     return null;
   }
+}
+
+export async function queuePendingDeletion(entry: PendingDeletion): Promise<void> {
+  const mountKey = activeProjectMountKey();
+  if (!mountKey) return;
+  await queueStorageDeletion({
+    mountKey,
+    objectPath: objectPathForCachedFile(mountKey, entry.fileId),
+    relativePath: entry.fileId,
+    queuedAt: entry.queuedAt,
+  });
+}
+
+export async function getPendingDeletions(): Promise<PendingDeletion[]> {
+  const mountKey = activeProjectMountKey();
+  if (!mountKey) return [];
+  return (await listPendingStorageDeletions(mountKey)).map((entry) => ({
+    fileId: entry.relativePath,
+    fileName: entry.relativePath,
+    queuedAt: entry.queuedAt,
+  }));
+}
+
+export async function deletePendingDeletion(fileId: string): Promise<void> {
+  const mountKey = activeProjectMountKey();
+  if (!mountKey) return;
+  await deletePendingStorageDeletion(mountKey, objectPathForCachedFile(mountKey, fileId));
 }
 
 function isoFromUpdatedAt(value: number | string | undefined): string {
@@ -387,12 +418,13 @@ export async function getCachedRemoteMeta(): Promise<CachedRemoteMeta | undefine
   if (!mountKey) return undefined;
   const snapshot = await getRemoteSyncSnapshot(mountKey);
   if (!snapshot) return undefined;
+  const pendingPaths = new Set((await listPendingStorageDeletions(mountKey)).map((entry) => entry.relativePath));
   return {
     id: "current",
     rootFolderId: "gcs",
     lastUpdatedAt: isoFromUpdatedAt(snapshot.fetchedAt),
     cachedAt: snapshot.fetchedAt,
-    files: Object.fromEntries(snapshot.entries.map((entry) => [
+    files: Object.fromEntries(snapshot.entries.filter((entry) => !pendingPaths.has(entry.relativePath)).map((entry) => [
       entry.relativePath,
       {
         name: entry.relativePath,

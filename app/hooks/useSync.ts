@@ -14,9 +14,12 @@ import {
   deleteEditHistoryEntry,
   pruneOrphanedEditHistory,
   saveLocalConflictBackup,
+  getPendingDeletions,
+  deletePendingDeletion,
+  bulkRemoveLocalSyncMetaEntries,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache-drive";
-import { addCommitBoundary, hasNetContentChange } from "~/services/edit-history-local";
+import { addCommitBoundary, getPushHistoryDiff, hasNetContentChange } from "~/services/edit-history-local";
 import { awaitPendingMigrations } from "~/services/pending-file-migration";
 import { ragRegisterInBackground } from "~/services/rag-sync";
 import { fullPullCacheRecord, type FullPullFilePayload } from "~/services/full-pull-cache";
@@ -105,7 +108,8 @@ export function useSync() {
 
       // --- Push count ---
       const pushCandidates = await collectPushCandidates(ids, remoteFiles);
-      setLocalModifiedCount(pushCandidates.length);
+      const pendingDeletions = await getPendingDeletions();
+      setLocalModifiedCount(pushCandidates.length + pendingDeletions.length);
 
       // --- Pull count ---
       // When remoteMeta is null (no sync meta on Drive), there is nothing to pull.
@@ -168,7 +172,10 @@ export function useSync() {
         const existingCached = await getCachedRemoteMeta();
         const remoteChanged = existingCached?.lastUpdatedAt !== remoteMeta.lastUpdatedAt;
         // Preserve local-only "new:" entries that haven't been migrated to Drive yet
-        const mergedFiles = { ...remoteMeta.files };
+        const pendingDeletionIds = new Set((await getPendingDeletions()).map((entry) => entry.fileId));
+        const mergedFiles = Object.fromEntries(
+          Object.entries(remoteMeta.files).filter(([id]) => !pendingDeletionIds.has(id)),
+        );
         if (existingCached) {
           for (const [id, entry] of Object.entries(existingCached.files)) {
             if (id.startsWith("new:") && !(id in mergedFiles)) {
@@ -191,6 +198,7 @@ export function useSync() {
         const localFiles = localMeta?.files ?? {};
         const newEntries: Record<string, LocalSyncMeta["files"][string]> = {};
         for (const [id, f] of Object.entries(remoteMeta.files)) {
+          if (pendingDeletionIds.has(id)) continue;
           if (localFiles[id]) continue;
           if (SYNC_EXCLUDED_FILE_NAMES.has(f.name)) continue;
           newEntries[id] = {
@@ -316,7 +324,10 @@ export function useSync() {
         if (remoteMeta) {
           const existingCached = await getCachedRemoteMeta();
           // Preserve local-only "new:" entries
-          const mergedFiles = { ...remoteMeta.files };
+          const pendingDeletionIds = new Set((await getPendingDeletions()).map((entry) => entry.fileId));
+          const mergedFiles = Object.fromEntries(
+            Object.entries(remoteMeta.files).filter(([id]) => !pendingDeletionIds.has(id)),
+          );
           if (existingCached) {
             for (const [id, entry] of Object.entries(existingCached.files)) {
               if (id.startsWith("new:") && !(id in mergedFiles)) {
@@ -339,11 +350,21 @@ export function useSync() {
         return;
       }
 
-      // 5. Collect modified files and batch update on Drive.
+      // 5. Collect queued soft deletions. They are sent in the same request as
+      // file updates below so Push needs only one mutating API round-trip.
+      const pendingDeletions = await getPendingDeletions();
+
+      // 6. Collect modified files and batch update on Drive.
       // All editHistory ids are eligible: tracked files and new/untracked
       // files alike (e.g. right after new: → Drive migration).
       const cachedRemote = await getCachedRemoteMeta();
-      const filesToPush: Array<{ fileId: string; content: string; fileName: string; encoding?: "base64" }> = [];
+      const filesToPush: Array<{
+        fileId: string;
+        content: string;
+        fileName: string;
+        encoding?: "base64";
+        historyDiff?: { diff: string; stats: { additions: number; deletions: number } };
+      }> = [];
       const revertedIds: string[] = [];
       // Skip "new:" files — they haven't been migrated to Drive yet and have no real file ID
       for (const fid of [...modifiedIds].filter(id => !id.startsWith("new:"))) {
@@ -361,24 +382,32 @@ export function useSync() {
           revertedIds.push(fid);
           continue;
         }
-        filesToPush.push({ fileId: fid, content: cached.content, fileName });
+        const historyDiff = await getPushHistoryDiff(fid);
+        filesToPush.push({
+          fileId: fid,
+          content: cached.content,
+          fileName,
+          ...(historyDiff === null ? {} : { historyDiff }),
+        });
       }
 
       // Batch push files to Drive via single API call
       const pushedResultIds = new Set<string>();
       let skippedCount = 0;
-      if (filesToPush.length > 0) {
+      if (filesToPush.length > 0 || pendingDeletions.length > 0) {
         const pushRes = await fetch("/api/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "pushFiles",
-            files: filesToPush.map(({ fileId, content, fileName, encoding }) => ({
+            files: filesToPush.map(({ fileId, content, fileName, encoding, historyDiff }) => ({
               fileId,
               content,
               fileName,
               ...(encoding ? { encoding } : {}),
+              ...(historyDiff === undefined ? {} : { historyDiff }),
             })),
+            deleteFileIds: pendingDeletions.map((entry) => entry.fileId),
             remoteMeta,
           }),
         });
@@ -387,6 +416,13 @@ export function useSync() {
         skippedCount = Array.isArray(pushData.skippedFileIds)
           ? pushData.skippedFileIds.length
           : 0;
+        const failedDeletionIds = new Set<string>(pushData.failedDeletionFileIds ?? []);
+        const deletedIds = pendingDeletions
+          .map((entry) => entry.fileId)
+          .filter((id) => !failedDeletionIds.has(id));
+        await Promise.all(deletedIds.map((id) => deletePendingDeletion(id)));
+        await bulkRemoveLocalSyncMetaEntries(deletedIds);
+        if (failedDeletionIds.size > 0) skippedCount += failedDeletionIds.size;
 
         // Update IndexedDB cache with new checksums/timestamps
         for (const r of pushData.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
@@ -441,7 +477,8 @@ export function useSync() {
         await deleteEditHistoryEntry(fileId);
       }
       const remainingModified = await getLocallyModifiedFileIds();
-      setLocalModifiedCount(remainingModified.size);
+      const remainingDeletions = await getPendingDeletions();
+      setLocalModifiedCount(remainingModified.size + remainingDeletions.length);
       window.dispatchEvent(new Event("sync-complete"));
 
       setLastSyncTime(new Date().toISOString());
@@ -666,6 +703,9 @@ export function useSync() {
       // 8. Save localMeta only for applied pulls. Ignored entries deliberately
       // retain their old checksum/name and therefore remain pending.
       if (filesToPull.length > 0) {
+        // Pulling a newer remote version explicitly cancels a queued deletion
+        // for that file; the remote copy becomes authoritative again.
+        await Promise.all(filesToPull.map((id) => deletePendingDeletion(id)));
         updatedMeta.lastUpdatedAt = new Date().toISOString();
         await setLocalSyncMeta(updatedMeta);
         baseMeta = updatedMeta;

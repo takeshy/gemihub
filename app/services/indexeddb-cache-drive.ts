@@ -7,7 +7,7 @@ import { isEncryptedFile } from "./crypto-core";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 
 const DB_NAME = "gemihub-cache";
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 // --- Store types ---
 
@@ -90,6 +90,12 @@ export interface ConflictBackup {
   createdAt: number;
 }
 
+export interface PendingDeletion {
+  fileId: string;
+  fileName: string;
+  queuedAt: number;
+}
+
 // --- Singleton DB connection ---
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -133,6 +139,9 @@ function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("conflictBackups")) {
         db.createObjectStore("conflictBackups", { keyPath: "id" });
       }
+      if (!db.objectStoreNames.contains("pendingDeletions")) {
+        db.createObjectStore("pendingDeletions", { keyPath: "fileId" });
+      }
     };
 
     request.onsuccess = () => {
@@ -154,6 +163,25 @@ function getDB(): Promise<IDBDatabase> {
   });
 
   return dbPromise;
+}
+
+// --- pending soft deletions (drained by the next incremental Push) ---
+
+export async function queuePendingDeletion(entry: PendingDeletion): Promise<void> {
+  const db = await getDB();
+  await txPut(db, "pendingDeletions", entry);
+}
+
+export async function getPendingDeletions(): Promise<PendingDeletion[]> {
+  if (typeof indexedDB === "undefined") return [];
+  const db = await getDB();
+  return txGetAll<PendingDeletion>(db, "pendingDeletions");
+}
+
+export async function deletePendingDeletion(fileId: string): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const db = await getDB();
+  await txDelete(db, "pendingDeletions", fileId);
 }
 
 function txGet<T>(
