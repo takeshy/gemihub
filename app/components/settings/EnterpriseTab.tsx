@@ -74,6 +74,15 @@ export function EnterpriseTab() {
   }, []);
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("vertexOAuth") !== "connected") return;
+    setSection("ai");
+    setMessage({ kind: "success", text: t("enterprise.aiSettingsSaved") });
+    url.searchParams.delete("vertexOAuth");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [t]);
+
+  useEffect(() => {
     if (!orgId) {
       setMembers([]); setAi(null); setLoading(false); return;
     }
@@ -102,14 +111,14 @@ export function EnterpriseTab() {
     return () => { cancelled = true; };
   }, [orgId, orgs, reloadKey]);
 
-  async function run(task: () => Promise<unknown>, success: string) {
+  async function run(task: () => Promise<unknown>, success?: string) {
     setBusy(true); setMessage(null);
     try {
       // A task may report partial success (e.g. the invite was created but the
       // notification email could not be sent) by returning { warning }.
       const result = await task();
       const warning = (result as { warning?: string } | undefined)?.warning;
-      setMessage(warning ? { kind: "warning", text: warning } : { kind: "success", text: success });
+      setMessage(warning ? { kind: "warning", text: warning } : success ? { kind: "success", text: success } : null);
       setReloadKey((key) => key + 1);
     } catch (error) {
       setMessage({ kind: "error", text: error instanceof Error ? error.message : t("enterprise.opFailed") });
@@ -189,7 +198,7 @@ export function EnterpriseTab() {
   );
 }
 
-function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPayload; busy: boolean; run: (task: () => Promise<unknown>, success: string) => Promise<void> }) {
+function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPayload; busy: boolean; run: (task: () => Promise<unknown>, success?: string) => Promise<void> }) {
   const { t } = useI18n();
   const [project, setProject] = useState(initial.settings.vertexProjectId);
   const [location, setLocation] = useState(initial.settings.vertexLocation || "global");
@@ -216,23 +225,18 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
       <h3 className="font-semibold">{t("enterprise.vertexSourceTitle")}</h3>
       <p className="mt-1 text-xs text-gray-500">{t("enterprise.vertexSourceDescription")}</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={busy || oauth?.source === "default"} className={`${secondaryButton} ${oauth?.source === "default" ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, source: "default" } }), t("enterprise.vertexSourceSaved"))}>{t("enterprise.vertexPrepaid")}</button>
-        <button type="button" disabled={busy || oauth?.source === "own"} className={`${secondaryButton} ${oauth?.source === "own" ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, source: "own" } }), t("enterprise.vertexSourceSaved"))}>{t("enterprise.vertexOwn")}</button>
+        <button type="button" disabled={busy || oauth?.source === "default"} className={`${secondaryButton} ${oauth?.source === "default" ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, source: "default" } }))}>{t("enterprise.vertexPrepaid")}</button>
+        <button type="button" disabled={busy || oauth?.source === "own"} className={`${secondaryButton} ${oauth?.source === "own" ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => void run(() => api("/api/orgs/vertex-oauth", { method: "POST", body: { orgId, source: "own" } }))}>{t("enterprise.vertexOwn")}</button>
       </div>
       {oauth?.source === "own" && (
         <div className="mt-4 space-y-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
           <p className="text-xs text-gray-500">{t("enterprise.vertexOwnBillingNote")}</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={t("enterprise.vertexExecutionProjectId")}><input className={inputClass} value={project} onChange={(e) => setProject(e.target.value)} placeholder="my-vertex-project" /></Field>
-            <Field label={t("enterprise.vertexLocation")}><input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} list="vertex-locations-own" /><datalist id="vertex-locations-own"><option value="global" /><option value="asia-northeast1" /><option value="us-central1" /><option value="europe-west4" /></datalist></Field>
-          </div>
-          <button type="button" className={primaryButton} disabled={busy || !project || !location} onClick={() => void run(saveAiSettings, t("enterprise.aiSettingsSaved"))}>{t("enterprise.saveAiSettings")}</button>
-          <div className="border-t border-gray-200 pt-4 dark:border-gray-700">
-            <h4 className="text-sm font-medium">{t("enterprise.vertexOauthJsonTitle")}</h4>
+          <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-950/30">
+            <h4 className="font-semibold text-blue-900 dark:text-blue-100">{t("enterprise.vertexOauthJsonTitle")}</h4>
             <p className="mt-1 text-xs text-gray-500">{t("enterprise.vertexOauthJsonDescription")}</p>
             {oauth.projectId && <p className="mt-2 text-xs text-gray-500">{t("enterprise.vertexOauthClientProject").replace("{project}", oauth.projectId)}</p>}
             <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-              <label className={`${secondaryButton} cursor-pointer ${busy ? "pointer-events-none opacity-50" : ""}`}>
+              <label className={`${primaryButton} cursor-pointer ${busy ? "pointer-events-none opacity-50" : ""}`}>
                 {t("enterprise.vertexOauthJsonSelect")}
                 <input type="file" accept="application/json,.json" className="hidden" disabled={busy} onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -247,6 +251,11 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
             </div>
             <p className="mt-2 text-xs text-gray-500">{t("enterprise.vertexOauthRedirectUri").replace("{url}", typeof window === "undefined" ? "/auth/vertex/callback" : `${window.location.origin}/auth/vertex/callback`)}</p>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t("enterprise.vertexExecutionProjectId")}><input className={inputClass} value={project} onChange={(e) => setProject(e.target.value)} placeholder="my-vertex-project" /></Field>
+            <Field label={t("enterprise.vertexLocation")}><input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} list="vertex-locations-own" /><datalist id="vertex-locations-own"><option value="global" /><option value="asia-northeast1" /><option value="us-central1" /><option value="europe-west4" /></datalist></Field>
+          </div>
+          <button type="button" className={primaryButton} disabled={busy || !project || !location} onClick={() => void run(saveAiSettings, t("enterprise.aiSettingsSaved"))}>{t("enterprise.saveAiSettings")}</button>
         </div>
       )}
     </section>
