@@ -27,6 +27,7 @@ export type {
   CachedLoaderData,
   ConflictBackup,
   PendingDeletion,
+  GoogleCalendarMonthCache,
 } from "./indexeddb-cache-drive";
 export { activeProjectMountKey, activeProjectMountParam } from "./indexeddb-cache-mount";
 
@@ -133,6 +134,8 @@ export const setCachedRemoteMeta: typeof drive.setCachedRemoteMeta = (meta) =>
 
 export const getCachedLoaderData: typeof drive.getCachedLoaderData = drive.getCachedLoaderData;
 export const setCachedLoaderData: typeof drive.setCachedLoaderData = drive.setCachedLoaderData;
+export const getGoogleCalendarMonthCache: typeof drive.getGoogleCalendarMonthCache = drive.getGoogleCalendarMonthCache;
+export const setGoogleCalendarMonthCache: typeof drive.setGoogleCalendarMonthCache = drive.setGoogleCalendarMonthCache;
 
 // --- clearAll ---
 

@@ -7,7 +7,7 @@ import { isEncryptedFile } from "./crypto-core";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 
 const DB_NAME = "gemihub-cache";
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 // --- Store types ---
 
@@ -96,6 +96,20 @@ export interface PendingDeletion {
   queuedAt: number;
 }
 
+export interface GoogleCalendarMonthCache {
+  monthKey: string;
+  fetchedAt: number;
+  events: Array<{
+    id?: string;
+    summary?: string;
+    description?: string;
+    start?: string;
+    end?: string;
+    location?: string;
+    htmlLink?: string;
+  }>;
+}
+
 // --- Singleton DB connection ---
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -142,6 +156,9 @@ function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("pendingDeletions")) {
         db.createObjectStore("pendingDeletions", { keyPath: "fileId" });
       }
+      if (!db.objectStoreNames.contains("googleCalendarMonths")) {
+        db.createObjectStore("googleCalendarMonths", { keyPath: "monthKey" });
+      }
     };
 
     request.onsuccess = () => {
@@ -182,6 +199,18 @@ export async function deletePendingDeletion(fileId: string): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   const db = await getDB();
   await txDelete(db, "pendingDeletions", fileId);
+}
+
+export async function getGoogleCalendarMonthCache(monthKey: string): Promise<GoogleCalendarMonthCache | undefined> {
+  if (typeof indexedDB === "undefined") return undefined;
+  const db = await getDB();
+  return txGet<GoogleCalendarMonthCache>(db, "googleCalendarMonths", monthKey);
+}
+
+export async function setGoogleCalendarMonthCache(entry: GoogleCalendarMonthCache): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const db = await getDB();
+  await txPut(db, "googleCalendarMonths", entry);
 }
 
 function txGet<T>(
@@ -640,7 +669,7 @@ export async function clearAllCache(): Promise<void> {
   try {
     const db = await getDB();
     const tx = db.transaction(
-      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta", "loaderData", "conflictBackups"],
+      ["files", "syncMeta", "editHistory", "fileTree", "remoteMeta", "loaderData", "conflictBackups", "googleCalendarMonths"],
       "readwrite"
     );
     tx.objectStore("files").clear();
@@ -650,6 +679,7 @@ export async function clearAllCache(): Promise<void> {
     tx.objectStore("remoteMeta").clear();
     tx.objectStore("loaderData").clear();
     tx.objectStore("conflictBackups").clear();
+    tx.objectStore("googleCalendarMonths").clear();
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

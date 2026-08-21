@@ -52,6 +52,7 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
   const [localHomeDashboard, setLocalHomeDashboard] = useState<string | null | undefined>(undefined);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
   const fileIdRef = useRef<string | null>(null);
   const fileNameRef = useRef<string | null>(null);
   fileIdRef.current = fileId;
@@ -159,11 +160,18 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
     setData(newData);
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      const id = await saveDashboardFile(newData, fileIdRef.current, fileNameRef.current ?? undefined);
-      setFileId(id);
-      fileIdRef.current = id;
+    saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
+      const saving = (async () => {
+        const id = await saveDashboardFile(newData, fileIdRef.current, fileNameRef.current ?? undefined);
+        setFileId(id);
+        fileIdRef.current = id;
+      })();
+      saveInFlightRef.current = saving;
+      const clearSaving = () => {
+        if (saveInFlightRef.current === saving) saveInFlightRef.current = null;
+      };
+      void saving.then(clearSaving, clearSaving);
     }, 500);
   }, []);
 
@@ -279,7 +287,17 @@ export default function DashboardHost({ settings }: DashboardHostProps) {
   const handleDeleteDashboard = useCallback(async () => {
     if (!fileId) return;
     if (!confirm(t("dashboard.deleteDashboardConfirm"))) return;
-    await deleteDashboard(fileId);
+    // Discard a not-yet-started debounced save. If a save already reached
+    // IndexedDB, let it settle before queueing the deletion so it cannot
+    // recreate the dashboard after deleteFileLocal removes its cache entry.
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    await saveInFlightRef.current?.catch(() => {});
+    await deleteDashboard(fileIdRef.current ?? fileId);
+    fileIdRef.current = null;
+    fileNameRef.current = null;
     // Switch to next available dashboard or empty state
     await refreshDashboardList();
     const homeResult = await resolveHomeDashboard(effectiveHomeDashboard);
