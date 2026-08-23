@@ -49,41 +49,45 @@ Cloud Scheduler (single job)
 
 ## Plans
 
-Plans are `lite | business | granted` (`app/types/hubwork.ts`). `granted` is an
-admin-created free account with Business entitlements. Business is billed **per
-organization**, not per seat.
+Plans are `lite | pro | business | granted` (`app/types/hubwork.ts`). `granted`
+is an admin-created free account with Business entitlements. Business is
+billed **per organization**, not per seat. Pro sits between Lite and Business:
+scheduled workflows and static page hosting on the built-in subdomain, while
+staying permanently on the user's own Drive mount (no organization, no GCS,
+AI via BYO Gemini key or personal Vertex prepaid balance).
 
-| Feature | Free | Lite (¥300/$2 mo) | Business (¥7,500/$50 mo) |
-|---------|:----:|:--------------:|:---------------:|
-| Upload limit | 20MB | 5GB | 5GB |
-| Gmail Send node | - | Yes | Yes |
-| Google Calendar nodes | - | Yes | Yes |
-| HTTP node CORS proxy (cross-origin fetch) | 2 req/min | 60 req/min | 60 req/min |
-| PDF Generation | - | Yes | Yes |
-| External Sync Token / Temp Edit URL | - | Yes | Yes |
-| Interactions API Chat | - | Yes | Yes |
-| Google Sheets CRUD nodes | - | - | Yes |
-| Static Page Hosting (CDN) | - | - | Yes |
-| Built-in Subdomain | - | - | Yes |
-| Custom Domains (auto SSL) | - | - | Yes |
-| Multi-Type Auth | - | - | Yes |
-| Workflow API (`/__gemihub/api/*`) | - | - | Yes |
-| Client Helper (`/__gemihub/api.js`) | - | - | Yes |
-| AI Web Builder Skill | - | - | Yes (opt-in) |
-| Server-Side Execution | - | - | Yes |
-| Scheduled Workflows | - | - | Yes |
-| Admin Panel | - | - | Yes |
-| Organization + shared project mount | - | - | Yes |
-| Vertex AI (no per-user Gemini key) | - | - | Yes |
-| Included Vertex AI budget | - | - | $30 / billing period |
-| Shared project storage | - | - | 100 GB (+500 GB add-on) |
+| Feature | Free | Lite (¥300/$2 mo) | Pro (¥3,000/$20 mo) | Business (¥7,500/$50 mo) |
+|---------|:----:|:--------------:|:--------------:|:---------------:|
+| Upload limit | 20MB | 5GB | 5GB | 5GB |
+| Gmail Send node | - | Yes | Yes | Yes |
+| Google Calendar nodes | - | Yes | Yes | Yes |
+| HTTP node CORS proxy (cross-origin fetch) | 2 req/min | 60 req/min | 60 req/min | 60 req/min |
+| PDF Generation | - | Yes | Yes | Yes |
+| External Sync Token / Temp Edit URL | - | Yes | Yes | Yes |
+| Interactions API Chat | - | Yes | Yes | Yes |
+| Scheduled Workflows | - | - | Yes | Yes |
+| Static Page Hosting | - | - | Yes (from Drive, no CDN) | Yes (GCS + CDN) |
+| Built-in Subdomain | - | - | Yes | Yes |
+| Google Sheets CRUD nodes | - | - | - | Yes |
+| Custom Domains (auto SSL) | - | - | - | Yes |
+| Multi-Type Auth | - | - | - | Yes |
+| Workflow API (`/__gemihub/api/*`) | - | - | - | Yes |
+| Client Helper (`/__gemihub/api.js`) | - | - | - | Yes |
+| AI Web Builder Skill | - | - | - | Yes (opt-in) |
+| Server-Side Execution | - | - | - | Yes |
+| Admin Panel | - | - | - | Yes |
+| Organization + shared project mount | - | - | - | Yes |
+| Vertex AI (org-billed) | - | - | - | Yes |
+| Included Vertex AI budget | - | - | - | $30 / billing period |
+| Shared project storage | - | - | - | 100 GB (+500 GB add-on) |
 
 Gating helpers: `hasPaidFeatures` (Lite and above) covers Gmail/Calendar nodes,
-upload limits, and the external sync token; `hasBusinessFeatures` (business /
-granted) covers Sheets nodes, hosting, scheduling, server-side execution, and
-the organization surface. A member of a Business organization is entitled
-through the organization even without a personal subscription (see
-`SyncTab.tsx` and the external sync token route).
+upload limits, and the external sync token; `hasProFeatures` (pro /
+business / granted) covers scheduled workflows and page hosting;
+`hasBusinessFeatures` (business / granted) covers Sheets nodes, custom
+domains, server-side execution, and the organization surface. A member of a
+Business organization is entitled through the organization even without a
+personal subscription (see `SyncTab.tsx` and the external sync token route).
 
 ### Business extras
 
@@ -95,7 +99,9 @@ of project storage (`BUSINESS_INCLUDED_STORAGE_GB`).
 
 - **AI budget top-ups** — one-time purchases of `VERTEX_TOPUP_UNIT_USD` = $10
   per unit (¥1,500), 1–20 units per checkout, credited idempotently by the
-  webhook via `addAiBudgetTopUp`. The window follows the billing cycle
+  webhook via `addAiBudgetTopUp`. Each unit credits
+  `VERTEX_TOPUP_UNIT_CREDIT_USD` = $9 of budget — the gap absorbs Stripe's
+  processing fee. The window follows the billing cycle
   (`Organization.budgetAnchorDay`), not the calendar month. A top-up remains
   usable through the end of the following billing period; unused value then
   expires. Spend consumes the base allowance before purchased top-ups.
@@ -133,8 +139,9 @@ hubwork-accounts/{accountId}
   customDomain?: string              — e.g. "app.acme.com"
   rootFolderName: string
   rootFolderId: string
-  plan: "lite" | "business" | "granted"  — lite = ¥300/$2/month, business = ¥7,500/$50/month
-                                     (per organization), granted = admin-created free
+  plan: "lite" | "pro" | "business" | "granted"  — lite = ¥300/$2/month, pro = ¥3,000/$20/month,
+                                     business = ¥7,500/$50/month (per organization),
+                                     granted = admin-created free
   currency?: "jpy" | "usd"           — which Price the account was billed with; missing = "jpy" (legacy)
   stripeCustomerId?: string          — Stripe customer ID (set by webhook)
   stripeSubscriptionId?: string      — Stripe subscription ID (set by webhook)
@@ -211,6 +218,7 @@ a service administrator must transfer ownership. See
 | Plan | How Created | Description | Organization |
 |------|-------------|-------------|--------------|
 | `lite` | Stripe Checkout → webhook | ¥300/$2 a month. Gmail node, PDF, uploads up to 5 GB per file. | **None.** Lite works entirely on the user's own Drive. |
+| `pro` | Stripe Checkout → webhook | ¥3,000/$20 a month. All Lite features + scheduled workflows and static page hosting on the built-in subdomain, served from the user's own Drive (no CDN). AI runs on the account's own Gemini key or a personal Vertex prepaid balance — never an org budget. | **None.** Pro always stays on the user's own Drive mount. |
 | `business` | Stripe Checkout → webhook | All Lite features + Sheets nodes, web builder, subdomain, auth, scheduled workflows, org projects on GCS + Vertex AI. | Provisioned automatically (see below). |
 | `granted` | Admin panel | Free account created by admin. Has Business-level access. | Not provisioned — a service admin creates it. |
 
@@ -606,6 +614,26 @@ Cloud Run identifies the account from the `Host` header — no path-based routin
 
 ## Scheduled Workflows
 
+### AI Billing (Pro and Business alike)
+
+Scheduled execution never touches the organization's Vertex budget. The
+`command` / `gemihub-command` nodes resolve their model credentials in this
+order:
+
+1. `account.encryptedGeminiApiKey` — the account's own Gemini API key
+   (encrypted server-side when schedules are registered). Used first.
+2. Without a key, a Drive-mount account with
+   `settings.personalVertexSource === "prepaid"` runs on our Vertex project,
+   billed against the user's **personal** prepaid balance
+   (`users/{uid}/aiBalance/balance`). The balance is asserted before each node
+   (`assertAiBudgetAvailable`) and usage is recorded afterwards; an exhausted
+   balance fails the run into the normal retry/lastError flow.
+3. Neither configured → the run fails with "Gemini API key not configured".
+
+The org Vertex budget (`scope: "org"`, Business chat) is unrelated to any of
+this. `personalVertexSource === "own"` (the user's own GCP project) is not
+supported for unattended scheduled runs.
+
 ### Source of Truth
 
 `settings.json` on Google Drive is the single source of truth for schedule configuration. Firestore `scheduleIndex` stores desired schedule configuration derived from settings, and Firestore `scheduleRuntime` stores mutable execution state such as retries and locks.
@@ -827,12 +855,15 @@ Send an email via Gmail API.
 
 ### Stripe Integration
 
-¥300/¥7,500-a-month (Lite/Business) subscription via Stripe Checkout — or $2/$50 for accounts billed in USD (see **Currency** below). The same endpoint also sells the two Business add-ons (`plan=vertex-topup`, `plan=storage-addon`), both restricted to organization owners/admins. The flow:
+¥300/¥3,000/¥7,500-a-month (Lite/Pro/Business) subscriptions via Stripe
+Checkout — or $2/$20/$50 for accounts billed in USD (see **Currency** below).
+The same endpoint also sells the two Business add-ons (`plan=vertex-topup`,
+`plan=storage-addon`), both restricted to organization owners/admins. The flow:
 
 1. User clicks "Subscribe" in **Settings > Premium Plan** tab
 2. `POST /hubwork/api/stripe/checkout` creates a Stripe Checkout Session with `metadata: { rootFolderId, accountSlug, plan, currency }`
 3. User completes payment on Stripe's hosted page
-4. Stripe webhook (`checkout.session.completed`) → creates/updates Firestore account with `plan: "lite"` or `"business"`, `currency`, `billingStatus: "active"`; a Business payment additionally provisions the organization (`provisionBusinessOrganization`)
+4. Stripe webhook (`checkout.session.completed`) → creates/updates Firestore account with `plan: "lite" | "pro" | "business"`, `currency`, `billingStatus: "active"`; a Business payment additionally provisions the organization (`provisionBusinessOrganization`)
 5. User returns to Settings — Premium features are automatically enabled (no separate toggle needed)
 
 Subscription lifecycle:
@@ -845,9 +876,9 @@ Users manage their subscription (cancel, update payment) via Stripe Billing Port
 
 `HubworkAccount.currency` (`"jpy" | "usd"`, missing = `"jpy"` for legacy accounts) records which Stripe Price a subscriber was actually charged with, independent of their current UI language:
 
-- **New subscriptions** (`hubwork.api.stripe.checkout.tsx`): the checkout form (`HubworkTab.tsx`) submits a hidden `currency` field derived from `settings.language` (`ja` → `jpy`, else `usd`). `resolvePriceId(plan, currency)` picks `STRIPE_PRICE_ID_{LITE,BUSINESS}_USD` when `currency === "usd"` and the env var is configured, falling back to the JPY price otherwise — so USD support is opt-in and a missing env var never breaks checkout. The retired `STRIPE_PRICE_ID_PRO*` variables are deliberately never consulted: Pro was renamed to Business at a different amount, so falling back to them would charge the old price for the new plan.
-- **Upgrades** (Lite → Business on an existing subscription): use the account's *stored* `currency`, never a resubmitted form value — otherwise a subscriber could switch currency (and therefore price) on upgrade just by tampering with the form.
-- **Settings display**: `HubworkTab.tsx`'s `priceFor(plan, currency)` shows ¥300/¥7,500 or $2/$50 depending on which currency applies (UI language for the new-subscription cards, the account's stored currency for the upgrade card) — this stays independent of the price text baked into `lp.tsx`'s marketing copy.
+- **New subscriptions** (`hubwork.api.stripe.checkout.tsx`): the checkout form (`HubworkTab.tsx`) submits a hidden `currency` field derived from `settings.language` (`ja` → `jpy`, else `usd`). `resolvePriceId(plan, currency)` picks `STRIPE_PRICE_ID_{LITE,PRO,BUSINESS}_USD` when `currency === "usd"` and the env var is configured, falling back to the base price otherwise — so USD support is opt-in (the base prices are multi-currency via `currency_options`) and a missing env var never breaks checkout. `STRIPE_PRICE_ID_PRO` is a fresh Price for the relaunched Pro plan; the identically-named variable of the retired pre-Business Pro plan was replaced, not reused.
+- **Upgrades** (Lite→Pro / Lite→Business / Pro→Business on an existing subscription): use the account's *stored* `currency`, never a resubmitted form value — otherwise a subscriber could switch currency (and therefore price) on upgrade just by tampering with the form. Business→Pro downgrades are not offered (untangling the provisioned organization is out of scope).
+- **Settings display**: `HubworkTab.tsx`'s `priceFor(plan, currency)` shows ¥300/¥3,000/¥7,500 or $2/$20/$50 depending on which currency applies (UI language for the new-subscription cards, the account's stored currency for the upgrade cards) — this stays independent of the price text baked into `lp.tsx`'s marketing copy.
 - Currency is synced from Firestore into `settings.hubwork.currency` in `settings.tsx`'s loader (same pattern as `plan`/`billingStatus`), and mirrored into Drive `settings.json` so it survives without a Firestore round-trip on every load.
 
 ### Admin Panel
@@ -923,9 +954,11 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
 | `STRIPE_SECRET_KEY` | Stripe API secret key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `STRIPE_PRICE_ID_LITE` | Stripe Price ID for the Lite plan, JPY (¥300/month) |
+| `STRIPE_PRICE_ID_PRO` | Stripe Price ID for the Pro plan (¥3,000/month) — multi-currency price; USD bills via `currency_options` |
 | `STRIPE_PRICE_ID_BUSINESS` | Stripe Price ID for the Business plan, JPY (¥7,500/month, per organization) |
-| `STRIPE_PRICE_ID_LITE_USD` | Optional. Stripe Price ID for the Lite plan, USD ($2/month) — omit to keep USD-locale checkout on the JPY price |
-| `STRIPE_PRICE_ID_BUSINESS_USD` | Optional. Stripe Price ID for the Business plan, USD ($50/month) — omit to keep USD-locale checkout on the JPY price |
+| `STRIPE_PRICE_ID_LITE_USD` | Optional. Stripe Price ID for the Lite plan, USD ($2/month) — omit to keep USD-locale checkout on the base price |
+| `STRIPE_PRICE_ID_PRO_USD` | Optional. USD override for Pro ($20/month); not required — omit to bill USD via the base price's currency options |
+| `STRIPE_PRICE_ID_BUSINESS_USD` | Optional. Stripe Price ID for the Business plan, USD ($50/month) — omit to keep USD-locale checkout on the base price |
 | `STRIPE_PRICE_ID_VERTEX_TOPUP` | Stripe Price ID for one Vertex AI budget top-up unit, JPY (¥1,500 = $10 of budget). Must match `VERTEX_TOPUP_UNIT_USD` |
 | `STRIPE_PRICE_ID_VERTEX_TOPUP_USD` | Optional. The same top-up unit priced in USD ($10) |
 | `STRIPE_PRICE_ID_STORAGE_ADDON` | Stripe Price ID for one 500 GB storage add-on, JPY (¥5,000/month) |

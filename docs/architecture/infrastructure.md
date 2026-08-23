@@ -110,7 +110,7 @@ terraform/
 | `STRIPE_SECRET_KEY` | Secret Manager |
 | `STRIPE_WEBHOOK_SECRET` | Secret Manager |
 | `STRIPE_PRICE_ID_LITE` | Secret Manager |
-| `STRIPE_PRICE_ID_PRO` | Secret Manager |
+| `STRIPE_PRICE_ID_PRO` | Secret Manager (Pro plan, ¥3,000/$20 a month; multi-currency Price) |
 | `HUBWORK_ADMIN_CREDENTIALS` | Secret Manager (`user:password` format, enables Basic Auth for admin panel) |
 | `HUBWORK_ADMIN_EMAILS` | Secret Manager (comma-separated admin emails for OAuth check) |
 | `NODE_ENV` | Set in Dockerfile: `production` |

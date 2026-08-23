@@ -176,9 +176,6 @@ function docToAccount(doc: FirebaseFirestore.DocumentSnapshot): HubworkAccount {
     data.accountSlug = data.email ? deriveSlugFromEmail(data.email) : doc.id;
     data.defaultDomain = `${data.accountSlug}.${HUBWORK_DOMAIN}`;
   }
-  // Legacy plan value: "pro" was renamed to "business" (no production
-  // subscribers existed; this guards leftover test documents).
-  if (data.plan === "pro") data.plan = "business";
   return { id: doc.id, plan: "granted", ...data } as HubworkAccount;
 }
 

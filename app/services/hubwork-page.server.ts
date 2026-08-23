@@ -1,6 +1,7 @@
 import { resolveHubworkAccount } from "~/services/hubwork-account-resolver.server";
 import { mountContextForHubworkAccount } from "~/services/storage/account-mount.server";
 import { resolveHubworkPage } from "~/services/hubwork-site.server";
+import { hasProFeatures } from "~/types/hubwork";
 
 const SECURITY_HEADERS: HeadersInit = {
   "X-Content-Type-Options": "nosniff",
@@ -8,7 +9,8 @@ const SECURITY_HEADERS: HeadersInit = {
 };
 
 /**
- * Serve the root page of a Hubwork site from its Business org GCS project.
+ * Serve the root page of a Hubwork site — Pro accounts from their own Drive,
+ * Business organizations from their GCS project.
  * Returns a Response if the request matches a hubwork account, or null otherwise.
  */
 export async function serveHubworkRootPage(
@@ -21,7 +23,7 @@ export async function serveHubworkRootPage(
     return null;
   }
 
-  if (account.plan !== "business" && account.plan !== "granted") {
+  if (!hasProFeatures(account)) {
     return null;
   }
 

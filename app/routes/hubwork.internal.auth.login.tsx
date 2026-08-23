@@ -49,7 +49,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const { account, tokens, settings, project } = await resolveHubworkRuntime(request);
   if (account.plan !== "business" && account.plan !== "granted") {
-    return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
+    return Response.json({ error: "Hubwork Business subscription required" }, { status: 403 });
   }
   const { accessToken } = tokens;
 

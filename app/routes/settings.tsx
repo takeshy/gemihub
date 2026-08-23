@@ -458,7 +458,7 @@ export async function action({ request }: Route.ActionArgs) {
               const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
               let hwAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
               if (!hwAccount && validTokens.email) hwAccount = await getAccountByEmail(validTokens.email);
-              if (hwAccount && (hwAccount.plan === "business" || hwAccount.plan === "granted")) {
+              if (hwAccount && (hwAccount.plan === "pro" || hwAccount.plan === "business" || hwAccount.plan === "granted")) {
                 await updateAccount(hwAccount.id, { encryptedGeminiApiKey: encryptGeminiApiKey(effectiveApiKey) });
               }
             } catch { /* best-effort */ }
@@ -774,7 +774,7 @@ export async function action({ request }: Route.ActionArgs) {
           if (!hubworkAccount && validTokens.email) {
             hubworkAccount = await getAccountByEmail(validTokens.email);
           }
-          if (hubworkAccount && (hubworkAccount.plan === "business" || hubworkAccount.plan === "granted")) {
+          if (hubworkAccount && (hubworkAccount.plan === "pro" || hubworkAccount.plan === "business" || hubworkAccount.plan === "granted")) {
             await rebuildScheduleIndex(hubworkAccount.id, schedules);
             if (schedules.length > 0 && validTokens.geminiApiKey) {
               await updateAccount(hubworkAccount.id, {

@@ -43,7 +43,7 @@ export const BUSINESS_INCLUDED_AI_BUDGET_USD = 30;
 
 // Defined in ~/types/hubwork so the settings UI can render it without
 // importing this server-only module.
-export { VERTEX_TOPUP_UNIT_USD } from "~/types/hubwork";
+export { VERTEX_TOPUP_UNIT_USD, VERTEX_TOPUP_UNIT_CREDIT_USD } from "~/types/hubwork";
 
 /** Per-token price → per-million, without the float noise of a raw multiply. */
 function perMillion(perToken: number): number {

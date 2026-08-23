@@ -1,23 +1,30 @@
 import type { Timestamp } from "@google-cloud/firestore";
 
 /**
- * USD credited per purchased Vertex AI budget top-up unit. Must match the
- * Stripe price behind STRIPE_PRICE_ID_VERTEX_TOPUP{,_USD} — the webhook
- * credits this amount per unit, so a mismatch hands out budget nobody paid
- * for. Lives here rather than in ai-budget.server.ts because the settings UI
- * renders it, and a client import of a .server module fails the build.
+ * USD charged per purchased Vertex AI budget top-up unit. Must match the
+ * Stripe price behind STRIPE_PRICE_ID_VERTEX_TOPUP{,_USD} — this is the billed
+ * amount, not the credited budget (see VERTEX_TOPUP_UNIT_CREDIT_USD). Lives
+ * here rather than in ai-budget.server.ts because the settings UI renders it,
+ * and a client import of a .server module fails the build.
  */
 export const VERTEX_TOPUP_UNIT_USD = 10;
 
 /** The same unit priced in JPY. Must match STRIPE_PRICE_ID_VERTEX_TOPUP. */
 export const VERTEX_TOPUP_UNIT_JPY = 1500;
 
+/**
+ * USD actually credited per purchased top-up unit. Lower than
+ * VERTEX_TOPUP_UNIT_USD (the charged amount) to absorb Stripe's processing
+ * fee (~3.6% in Japan) with margin to spare.
+ */
+export const VERTEX_TOPUP_UNIT_CREDIT_USD = 9;
+
 /** Unit counts a single checkout may buy. */
 export const VERTEX_TOPUP_UNIT_CHOICES = [1, 2, 3, 5, 10] as const;
 
 // --- Firestore document types ---
 
-export type HubworkAccountPlan = "lite" | "business" | "granted";
+export type HubworkAccountPlan = "lite" | "pro" | "business" | "granted";
 export type HubworkBillingStatus = "active" | "past_due" | "canceled";
 export type HubworkAccountStatus = "enabled" | "disabled";
 export type HubworkDomainStatus = "none" | "pending_dns" | "provisioning_cert" | "active" | "failed";
@@ -126,9 +133,22 @@ export function isActivePremiumAccount(account: HubworkAccount): boolean {
   return account.accountStatus === "enabled" && !!account.plan && account.billingStatus !== "canceled";
 }
 
-/** Check if account has Business features (Sheets, web builder, scheduled, server-side, organization) */
+/** Check if account has Business features (Sheets, web builder, custom domains, organization) */
 export function hasBusinessFeatures(account: HubworkAccount): boolean {
   return account.accountStatus === "enabled" && account.billingStatus !== "canceled" && (account.plan === "business" || account.plan === "granted");
+}
+
+/**
+ * Check if account has Pro features or better (scheduled workflows, static
+ * page hosting on the built-in subdomain). Business/granted accounts are
+ * included — Pro is a strict subset of their entitlements.
+ */
+export function hasProFeatures(account: HubworkAccount): boolean {
+  return (
+    account.accountStatus === "enabled" &&
+    account.billingStatus !== "canceled" &&
+    (account.plan === "pro" || account.plan === "business" || account.plan === "granted")
+  );
 }
 
 export type HubworkConcurrencyPolicy = "allow" | "forbid";

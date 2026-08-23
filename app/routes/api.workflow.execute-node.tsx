@@ -111,7 +111,7 @@ export async function action({ request }: Route.ActionArgs) {
     const hubworkAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
     if (!hubworkAccount || !hasBusinessFeatures(hubworkAccount)) {
       return Response.json(
-        { error: "Hubwork Pro subscription required" },
+        { error: "Hubwork Business subscription required" },
         { status: 403, headers: responseHeaders }
       );
     }

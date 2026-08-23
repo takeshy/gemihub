@@ -14,20 +14,41 @@ function parseSlugList(value: string | undefined): string[] {
 }
 
 /**
- * USD prices are opt-in per plan and fall back to the JPY price when unset.
+ * USD prices are opt-in per plan and fall back to the base price when unset.
+ * The base prices are multi-currency (JPY + USD via currency_options), so the
+ * fallback alone is enough; `STRIPE_PRICE_ID_PRO_USD` simply follows the same
+ * optional override pattern as Lite/Business.
  *
- * The retired `STRIPE_PRICE_ID_PRO*` variables are deliberately NOT consulted:
- * Pro was renamed to Business at a different amount, so falling back to it
- * would charge the old price for the new plan.
+ * `STRIPE_PRICE_ID_PRO` is the NEW Pro plan's price. The retired pre-Business
+ * Pro variables of the same name were provisioned fresh for this plan and the
+ * old ones are never referenced.
  */
-function resolvePriceId(planType: "lite" | "business", currency: HubworkCurrency): string | undefined {
+function resolvePriceId(planType: "lite" | "pro" | "business", currency: HubworkCurrency): string | undefined {
   if (currency === "usd") {
     const usdPriceId = planType === "lite"
       ? process.env.STRIPE_PRICE_ID_LITE_USD
-      : process.env.STRIPE_PRICE_ID_BUSINESS_USD;
+      : planType === "pro"
+        ? process.env.STRIPE_PRICE_ID_PRO_USD
+        : process.env.STRIPE_PRICE_ID_BUSINESS_USD;
     if (usdPriceId) return usdPriceId;
   }
-  return planType === "lite" ? process.env.STRIPE_PRICE_ID_LITE : process.env.STRIPE_PRICE_ID_BUSINESS;
+  return planType === "lite"
+    ? process.env.STRIPE_PRICE_ID_LITE
+    : planType === "pro"
+      ? process.env.STRIPE_PRICE_ID_PRO
+      : process.env.STRIPE_PRICE_ID_BUSINESS;
+}
+
+/**
+ * Explicit allowlist instead of `plan === "lite" ? "lite" : "business"`: a
+ * ternary would silently charge a mistyped or new plan name at the Business
+ * price.
+ */
+function normalizePlanType(requestedPlan: string): "lite" | "pro" | "business" | undefined {
+  if (requestedPlan === "lite" || requestedPlan === "pro" || requestedPlan === "business") {
+    return requestedPlan;
+  }
+  return undefined;
 }
 
 /**
@@ -212,7 +233,10 @@ export async function action({ request }: Route.ActionArgs) {
     return redirect(addonSession.url);
   }
 
-  const planType = requestedPlan === "lite" ? "lite" : "business";
+  const planType = normalizePlanType(requestedPlan);
+  if (!planType) {
+    throw new Response(`Unknown plan: ${requestedPlan}`, { status: 400 });
+  }
   const accountSlug = (formData.get("accountSlug") as string || "").toLowerCase().trim();
   const additionalOrganization = planType === "business" && formData.get("additionalOrganization") === "true";
   const currency: HubworkCurrency = formData.get("currency") === "usd" ? "usd" : "jpy";
@@ -258,8 +282,16 @@ export async function action({ request }: Route.ActionArgs) {
     if (existing.plan === planType) {
       throw new Response("Already on this plan", { status: 400 });
     }
-    // Pro requires a slug
-    if (planType === "business") {
+    // Business → Pro is not offered: the account would keep its
+    // orgId/projectId (and therefore organization-gated features like Sheets,
+    // custom domains, and the org's Vertex AI budget) while paying the Pro
+    // price. Untangling the provisioned organization is out of scope, so
+    // reject this transition outright rather than relying on the UI alone.
+    if (planType === "pro" && (existing.plan === "business" || existing.plan === "granted")) {
+      throw new Response("Downgrading from Business to Pro is not supported", { status: 400 });
+    }
+    // Business and Pro both need a slug for the built-in subdomain
+    if (planType === "business" || planType === "pro") {
       if (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug)) {
         throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
       }
@@ -299,15 +331,18 @@ export async function action({ request }: Route.ActionArgs) {
     // Update account immediately (webhook will also fire, but this gives instant feedback)
     const { updateAccount, HUBWORK_DOMAIN } = await import("~/services/hubwork-accounts.server");
     const updates: Record<string, string> = { plan: planType };
-    if (planType === "business" && accountSlug && !existing.accountSlug) {
+    if ((planType === "business" || planType === "pro") && accountSlug && !existing.accountSlug) {
       updates.accountSlug = accountSlug;
       updates.defaultDomain = `${accountSlug}.${HUBWORK_DOMAIN}`;
     }
     await updateAccount(existing.id, updates);
 
-    // Lite → Business upgrades change the subscription in place, so
-    // checkout.session.completed never fires — provision the organization
-    // here (idempotent; reuses an existing membership).
+    // Plan changes on an existing subscription (Lite→Pro, Lite→Business,
+    // Pro→Business) update it in place, so checkout.session.completed never
+    // fires — only a move to Business provisions the organization here
+    // (idempotent; reuses an existing membership). Business→Pro downgrades
+    // are not offered: untangling the provisioned organization is out of
+    // scope.
     if (planType === "business") {
       const { provisionBusinessOrganization } = await import("~/services/business-provisioning.server");
       await provisionBusinessOrganization({
@@ -320,14 +355,15 @@ export async function action({ request }: Route.ActionArgs) {
     return redirect(`${baseUrl}/settings?hubwork_upgraded=1`);
   }
 
-  // New subscription
-  if (!accountSlug && planType === "business") {
+  // New subscription — Business and Pro both require a slug for the
+  // built-in subdomain (site hosting resolves accounts by Host header).
+  if (!accountSlug && planType !== "lite") {
     throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
   }
-  if (planType === "business" && (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug))) {
+  if (planType !== "lite" && (!accountSlug || accountSlug.length < 3 || !SLUG_PATTERN.test(accountSlug))) {
     throw new Response("Invalid account slug. Must be 3+ chars, lowercase alphanumeric and hyphens.", { status: 400 });
   }
-  if (planType === "business") {
+  if (planType !== "lite") {
     const slugTaken = await getAccountBySlug(accountSlug);
     if (slugTaken) {
       throw new Response("This slug is already taken", { status: 409 });

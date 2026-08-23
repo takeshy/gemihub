@@ -6,6 +6,7 @@ import {
   cancellationDeleteAfterIso,
   hasBusinessFeatures,
   hasPaidFeatures,
+  hasProFeatures,
   isActivePremiumAccount,
   isHubworkFeatureAvailable,
   organizationLifecycle,
@@ -53,6 +54,27 @@ function canceledAccount(): Parameters<typeof organizationLifecycle>[0] {
     deleteAfter: { toMillis: () => DELETE_AFTER } as never,
   };
 }
+
+function planAccount(plan: HubworkAccount["plan"]): HubworkAccount {
+  return {
+    billingStatus: "active",
+    accountStatus: "enabled",
+    plan,
+  } as HubworkAccount;
+}
+
+test("hasProFeatures covers pro and above, and respects status gates", () => {
+  assert.equal(hasProFeatures(planAccount("pro")), true);
+  assert.equal(hasProFeatures(planAccount("business")), true);
+  assert.equal(hasProFeatures(planAccount("granted")), true);
+  assert.equal(hasProFeatures(planAccount("lite")), false);
+  assert.equal(hasProFeatures({ billingStatus: "active", accountStatus: "enabled" } as HubworkAccount), false);
+
+  const disabled = { ...planAccount("pro"), accountStatus: "disabled" } as HubworkAccount;
+  const canceled = { ...planAccount("pro"), billingStatus: "canceled" } as HubworkAccount;
+  assert.equal(hasProFeatures(disabled), false);
+  assert.equal(hasProFeatures(canceled), false);
+});
 
 test("cancellation keeps the organization readable until deleteAfter", () => {
   const account = canceledAccount();

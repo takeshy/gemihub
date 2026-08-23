@@ -738,7 +738,7 @@ export interface HubworkSettings {
   accountId?: string;
   /** Organization that owns this Hubwork publication configuration. */
   orgId?: string;
-  plan?: "lite" | "business" | "granted";
+  plan?: "lite" | "pro" | "business" | "granted";
   /** Billing currency for lite/pro plans. Missing means "jpy" (legacy accounts). */
   currency?: "jpy" | "usd";
   accountSlug?: string;

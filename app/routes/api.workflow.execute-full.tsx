@@ -57,7 +57,7 @@ export async function action({ request }: Route.ActionArgs) {
     const { hasBusinessFeatures } = await import("~/types/hubwork");
     const hubworkAccount = await getAccountByRootFolderId(tokens.rootFolderId);
     if (!hubworkAccount || !hasBusinessFeatures(hubworkAccount)) {
-      throw new Response("Hubwork Pro subscription required", { status: 403 });
+      throw new Response("Hubwork Business subscription required", { status: 403 });
     }
   } else if (hasHubworkLiteNode) {
     const { hasPaidFeatures } = await import("~/types/hubwork");

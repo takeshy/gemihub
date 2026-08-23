@@ -50,9 +50,9 @@ async function handleApiRequest(request: Request, apiPath: string) {
     throw e;
   }
 
-  // Workflow API requires Pro plan
+  // Workflow API requires Business plan
   if (account.plan !== "business" && account.plan !== "granted") {
-    return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
+    return Response.json({ error: "Hubwork Business subscription required" }, { status: 403 });
   }
 
   const mountCtx = await mountContextForHubworkAccount(account);

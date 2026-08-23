@@ -528,7 +528,7 @@ export function GeneralTab({
             {/* Top-up form — one amount dropdown. The currency follows the UI
                 language rather than asking, which made a two-dropdown form out
                 of a single choice. */}
-            <form method="POST" action="/hubwork/api/stripe/checkout" className="mb-4 flex flex-wrap items-center gap-2">
+            <form method="POST" action="/hubwork/api/stripe/checkout" className="mb-2 flex flex-wrap items-center gap-2">
               <input type="hidden" name="plan" value="personal-vertex-topup" />
               <input type="hidden" name="currency" value={topUpCurrency} />
               <select name="units" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="1">
@@ -540,6 +540,9 @@ export function GeneralTab({
                 {t("settings.general.buyVertexCredit")}
               </button>
             </form>
+            <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+              {t("settings.general.vertexTopupCreditNote")}
+            </p>
             {/* Purchase history */}
             {topupHistory && topupHistory.length > 0 && (
               <details className="rounded-lg border border-gray-200 dark:border-gray-700">

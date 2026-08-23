@@ -66,8 +66,10 @@ interface LpStrings {
   premiumFree: string;
   premiumLite: string;
   premiumPro: string;
+  premiumBusiness: string;
   premiumLitePrice: string;
   premiumProPrice: string;
+  premiumBusinessPrice: string;
   premiumFreeTag: string;
   premiumFeatureUpload: string;
   premiumFeatureUploadFree: string;
@@ -88,6 +90,9 @@ interface LpStrings {
   premiumFeatureSheetsDesc: string;
   premiumFeatureHosting: string;
   premiumFeatureHostingDesc: string;
+  premiumFeatureHostingProDesc: string;
+  premiumFeatureAiBillingSchedule: string;
+  premiumFeatureAiBillingScheduleDesc: string;
   premiumFeatureDomain: string;
   premiumFeatureDomainDesc: string;
   premiumFeatureSchedule: string;
@@ -200,9 +205,11 @@ const en: LpStrings = {
   premiumIntro: "GemiHub is useful on the free plan by default. Paid plans are for features that need heavier server-side processing, such as streaming files over 20 MB, Gmail integration, or temporary upload/edit URLs. Choose Business to work as a team — it provisions an organization with a shared project, Vertex AI with a monthly budget included, and shared storage — plus AI-assisted web service publishing with natural-language build and edit flows, custom domains, and login support. Business is billed per organization, not per seat.",
   premiumFree: "Free",
   premiumLite: "Lite",
-  premiumPro: "Business",
+  premiumPro: "Pro",
+  premiumBusiness: "Business",
   premiumLitePrice: "$2/mo",
-  premiumProPrice: "$50/mo per org (incl. $30 Vertex AI budget)",
+  premiumProPrice: "$20/mo",
+  premiumBusinessPrice: "$50/mo per org (incl. $30 Vertex AI budget)",
   premiumFreeTag: "$0",
   premiumFeatureUpload: "Max File Size",
   premiumFeatureUploadFree: "20 MB",
@@ -221,8 +228,11 @@ const en: LpStrings = {
   premiumFeatureTempUrlDesc: "Generate a temporary URL to upload or edit files from any external editor or tool. Work in your favorite environment and push changes back.",
   premiumFeatureSheets: "Google Sheets CRUD",
   premiumFeatureSheetsDesc: "Read, write, append, and query Google Sheets directly from workflows. Build data-driven automations with your spreadsheets.",
-  premiumFeatureHosting: "Static Page Hosting (CDN)",
+  premiumFeatureHosting: "Static Page Hosting",
   premiumFeatureHostingDesc: "Publish HTML pages from your Drive with global CDN delivery. Build websites, landing pages, and web apps — all served from your files.",
+  premiumFeatureHostingProDesc: "Publish HTML pages straight from your own Drive with a built-in subdomain — no organization or CDN setup needed.",
+  premiumFeatureAiBillingSchedule: "AI Billing for Scheduled Runs",
+  premiumFeatureAiBillingScheduleDesc: "Scheduled workflows run on your own Gemini API key, or a prepaid personal Vertex AI balance if you don't have one set — no organization required.",
   premiumFeatureDomain: "Custom Domains & Auto SSL",
   premiumFeatureDomainDesc: "Use your own domain with automatic SSL certificate provisioning. Every account also gets a built-in subdomain (yourname.gemihub.net).",
   premiumFeatureSchedule: "Scheduled Workflows",
@@ -342,9 +352,11 @@ const ja: LpStrings = {
   premiumIntro: "GemiHub は基本的に無料プランで便利に使えます。有料プランは、1ファイルが20MBを超えてストリーミングが必要な場合、Gmail 連携、一時アップロード URL など、サーバー側の処理負担がかかる機能を使うためのものです。Business プランは、組織と共有プロジェクトを作成してチームで使うためのプラン。Vertex AI の利用枠と共有ストレージが含まれ、AI を活用して自然文で構築・修正できる自社 Web サービス提供機能、独自ドメイン、ログイン機能にも対応します。料金は組織単位で、メンバーごとの追加課金はありません。",
   premiumFree: "Free",
   premiumLite: "Lite",
-  premiumPro: "Business",
+  premiumPro: "Pro",
+  premiumBusiness: "Business",
   premiumLitePrice: "¥300/月（税込）",
-  premiumProPrice: "¥7,500/月（税込・組織単位・Vertex AI利用枠 $30分込み）",
+  premiumProPrice: "¥3,000/月（税込）",
+  premiumBusinessPrice: "¥7,500/月（税込・組織単位・Vertex AI利用枠 $30分込み）",
   premiumFreeTag: "¥0",
   premiumFeatureUpload: "1ファイル最大サイズ",
   premiumFeatureUploadFree: "20 MB",
@@ -363,8 +375,11 @@ const ja: LpStrings = {
   premiumFeatureTempUrlDesc: "一時的な URL を発行して、外部エディタやツールからファイルをアップロード・編集。お気に入りの環境で作業して変更を反映。",
   premiumFeatureSheets: "Google Sheets CRUD",
   premiumFeatureSheetsDesc: "ワークフローから Google Sheets の読み書き・追記・クエリが可能。スプレッドシートを使ったデータ駆動の自動化を構築。",
-  premiumFeatureHosting: "静的ページホスティング（CDN）",
+  premiumFeatureHosting: "静的ページホスティング",
   premiumFeatureHostingDesc: "Drive の HTML ページをグローバル CDN で配信。Webサイト、LP、Webアプリをファイルから直接公開。",
+  premiumFeatureHostingProDesc: "自分のDriveからHTMLページを直接公開。ビルトインサブドメイン付きで、組織もCDN設定も不要。",
+  premiumFeatureAiBillingSchedule: "スケジュール実行のAI課金",
+  premiumFeatureAiBillingScheduleDesc: "スケジュール実行は自分のGemini APIキーで動作。未設定なら個人のVertex AI残高（プリペイド）に課金 — 組織は不要。",
   premiumFeatureDomain: "カスタムドメイン & 自動SSL",
   premiumFeatureDomainDesc: "独自ドメインを自動 SSL 証明書付きで利用可能。全アカウントにビルトインサブドメイン（yourname.gemihub.net）も付属。",
   premiumFeatureSchedule: "スケジュール実行",
@@ -537,7 +552,7 @@ export default function LandingPage() {
           </p>
 
           {/* Plan headers */}
-          <div className="mb-6 grid grid-cols-4 gap-3 text-center">
+          <div className="mb-6 grid grid-cols-5 gap-3 text-center">
             <div />
             <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{s.premiumFree}</h3>
@@ -547,32 +562,36 @@ export default function LandingPage() {
               <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{s.premiumLite}</h3>
               <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{s.premiumLitePrice}</p>
             </div>
+            <div className="rounded-xl border border-sky-300 bg-sky-50 p-4 dark:border-sky-700 dark:bg-sky-950/40">
+              <h3 className="text-lg font-bold text-sky-700 dark:text-sky-300">{s.premiumPro}</h3>
+              <p className="mt-1 text-xl font-bold text-sky-600 dark:text-sky-400">{s.premiumProPrice}</p>
+            </div>
             <div className="rounded-xl border border-purple-300 bg-purple-50 p-4 ring-2 ring-purple-400 dark:border-purple-700 dark:bg-purple-950/40 dark:ring-purple-500">
-              <h3 className="text-lg font-bold text-purple-700 dark:text-purple-300">{s.premiumPro}</h3>
-              <p className="mt-1 text-xl font-bold text-purple-600 dark:text-purple-400">{s.premiumProPrice}</p>
+              <h3 className="text-lg font-bold text-purple-700 dark:text-purple-300">{s.premiumBusiness}</h3>
+              <p className="mt-1 text-xl font-bold text-purple-600 dark:text-purple-400">{s.premiumBusinessPrice}</p>
             </div>
           </div>
 
           {/* Feature comparison */}
           {(() => {
-            const features: { label: string; free: boolean | string; lite: boolean | string; pro: boolean | string }[] = [
-              { label: s.premiumFeatureUpload, free: s.premiumFeatureUploadFree, lite: s.premiumFeatureUploadPaid, pro: s.premiumFeatureUploadPaid },
-              { label: s.premiumFeatureInteractions, free: false, lite: true, pro: true },
-              { label: s.premiumFeatureGmail, free: false, lite: true, pro: true },
-              { label: s.premiumFeatureCalendar, free: false, lite: true, pro: true },
-              { label: s.premiumFeaturePdf, free: false, lite: true, pro: true },
-              { label: s.premiumFeatureObsidianToken, free: false, lite: true, pro: true },
-              { label: s.premiumFeatureTempUrl, free: false, lite: true, pro: true },
-              { label: s.premiumFeatureSheets, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureHosting, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureDomain, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureSchedule, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureServerExec, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureWebBuilder, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureOrg, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureVertex, free: false, lite: false, pro: true },
-              { label: s.premiumFeatureAiBudget, free: false, lite: false, pro: s.premiumFeatureAiBudgetValue },
-              { label: s.premiumFeatureStorage, free: false, lite: false, pro: s.premiumFeatureStorageValue },
+            const features: { label: string; free: boolean | string; lite: boolean | string; pro: boolean | string; business: boolean | string }[] = [
+              { label: s.premiumFeatureUpload, free: s.premiumFeatureUploadFree, lite: s.premiumFeatureUploadPaid, pro: s.premiumFeatureUploadPaid, business: s.premiumFeatureUploadPaid },
+              { label: s.premiumFeatureInteractions, free: false, lite: true, pro: true, business: true },
+              { label: s.premiumFeatureGmail, free: false, lite: true, pro: true, business: true },
+              { label: s.premiumFeatureCalendar, free: false, lite: true, pro: true, business: true },
+              { label: s.premiumFeaturePdf, free: false, lite: true, pro: true, business: true },
+              { label: s.premiumFeatureObsidianToken, free: false, lite: true, pro: true, business: true },
+              { label: s.premiumFeatureTempUrl, free: false, lite: true, pro: true, business: true },
+              { label: s.premiumFeatureSchedule, free: false, lite: false, pro: true, business: true },
+              { label: s.premiumFeatureHosting, free: false, lite: false, pro: true, business: true },
+              { label: s.premiumFeatureSheets, free: false, lite: false, pro: false, business: true },
+              { label: s.premiumFeatureDomain, free: false, lite: false, pro: false, business: true },
+              { label: s.premiumFeatureServerExec, free: false, lite: false, pro: false, business: true },
+              { label: s.premiumFeatureWebBuilder, free: false, lite: false, pro: false, business: true },
+              { label: s.premiumFeatureOrg, free: false, lite: false, pro: false, business: true },
+              { label: s.premiumFeatureVertex, free: false, lite: false, pro: false, business: true },
+              { label: s.premiumFeatureAiBudget, free: false, lite: false, pro: false, business: s.premiumFeatureAiBudgetValue },
+              { label: s.premiumFeatureStorage, free: false, lite: false, pro: false, business: s.premiumFeatureStorageValue },
             ];
             const renderCell = (val: boolean | string) => {
               if (typeof val === "string") return <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{val}</span>;
@@ -582,12 +601,13 @@ export default function LandingPage() {
             };
             return (
               <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                {features.map(({ label, free, lite, pro }, i) => (
-                  <div key={label} className={`grid grid-cols-4 gap-3 px-4 py-3 ${i % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-900/60"}`}>
+                {features.map(({ label, free, lite, pro, business }, i) => (
+                  <div key={label} className={`grid grid-cols-5 gap-3 px-4 py-3 ${i % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-900/60"}`}>
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</div>
                     <div className="text-center">{renderCell(free)}</div>
                     <div className="text-center">{renderCell(lite)}</div>
                     <div className="text-center">{renderCell(pro)}</div>
+                    <div className="text-center">{renderCell(business)}</div>
                   </div>
                 ))}
               </div>
@@ -617,6 +637,26 @@ export default function LandingPage() {
             ))}
           </div>
 
+          {/* Pro feature highlights */}
+          <h3 className="mb-6 mt-12 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            Pro
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { icon: Clock, title: s.premiumFeatureSchedule, desc: s.premiumFeatureScheduleDesc },
+              { icon: Globe, title: s.premiumFeatureHosting, desc: s.premiumFeatureHostingProDesc },
+              { icon: KeyRound, title: s.premiumFeatureAiBillingSchedule, desc: s.premiumFeatureAiBillingScheduleDesc },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 dark:bg-sky-900/40">
+                  <Icon size={22} className="text-sky-600 dark:text-sky-400" />
+                </div>
+                <h4 className="mb-1.5 text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h4>
+                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">{desc}</p>
+              </div>
+            ))}
+          </div>
+
           {/* Business feature highlights */}
           <h3 className="mb-6 mt-12 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
             Business
@@ -624,9 +664,7 @@ export default function LandingPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { icon: FileSpreadsheet, title: s.premiumFeatureSheets, desc: s.premiumFeatureSheetsDesc },
-              { icon: Globe, title: s.premiumFeatureHosting, desc: s.premiumFeatureHostingDesc },
               { icon: Lock, title: s.premiumFeatureDomain, desc: s.premiumFeatureDomainDesc },
-              { icon: Clock, title: s.premiumFeatureSchedule, desc: s.premiumFeatureScheduleDesc },
               { icon: Server, title: s.premiumFeatureServerExec, desc: s.premiumFeatureServerExecDesc },
               { icon: PenTool, title: s.premiumFeatureWebBuilder, desc: s.premiumFeatureWebBuilderDesc },
             ].map(({ icon: Icon, title, desc }) => (

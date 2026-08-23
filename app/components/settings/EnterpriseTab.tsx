@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useEnterpriseContext } from "~/contexts/EnterpriseContext";
 import { useI18n } from "~/i18n/context";
-import { VERTEX_TOPUP_UNIT_JPY, VERTEX_TOPUP_UNIT_USD } from "~/types/hubwork";
+import { VERTEX_TOPUP_UNIT_JPY, VERTEX_TOPUP_UNIT_USD, VERTEX_TOPUP_UNIT_CREDIT_USD } from "~/types/hubwork";
 import type { OrganizationAiSettings, OrgRole } from "~/types/enterprise";
 
 interface OrgItem { id: string; name: string; role: OrgRole | null }
@@ -306,12 +306,13 @@ function AiSection({ orgId, initial, busy, run }: { orgId: string; initial: AiPa
         <select name="units" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-900" defaultValue="1">
           {[1, 2, 3, 5, 10].map((n) => <option key={n} value={n}>
             {language === "ja"
-              ? `¥${(n * VERTEX_TOPUP_UNIT_JPY).toLocaleString("ja-JP")}（$${n * VERTEX_TOPUP_UNIT_USD}分）`
+              ? `¥${(n * VERTEX_TOPUP_UNIT_JPY).toLocaleString("ja-JP")}（$${n * VERTEX_TOPUP_UNIT_CREDIT_USD}分）`
               : `$${n * VERTEX_TOPUP_UNIT_USD}`}
           </option>)}
         </select>
         <button type="submit" className={secondaryButton} disabled={busy}>{t("enterprise.buyTopUp")}</button>
       </form>
+      <p className="mt-1 text-xs text-gray-500">{t("settings.general.vertexTopupCreditNote")}</p>
       <details className="mt-4">
         <summary className="cursor-pointer text-sm font-medium text-gray-600 dark:text-gray-300">{t("enterprise.budgetAdvanced")}</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">

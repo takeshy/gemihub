@@ -34,7 +34,7 @@ import { cancellationDeleteAfterIso, organizationLifecycle } from "~/types/hubwo
 import { validateOrigin } from "~/utils/security";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PLANS: HubworkAccountPlan[] = ["lite", "business", "granted"];
+const PLANS: HubworkAccountPlan[] = ["lite", "pro", "business", "granted"];
 const BILLING_STATUSES: HubworkBillingStatus[] = ["active", "past_due", "canceled"];
 const ACCOUNT_STATUSES: HubworkAccountStatus[] = ["enabled", "disabled"];
 const DOMAIN_STATUSES: HubworkDomainStatus[] = ["none", "pending_dns", "provisioning_cert", "active", "failed"];

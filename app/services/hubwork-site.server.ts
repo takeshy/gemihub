@@ -2,7 +2,9 @@
  * Published-page resolution over the storage provider.
  *
  * Shared by hubwork.site.$ (path serving) and hubwork-page.server (root
- * page). Hubwork mounts are always Business organization GCS projects.
+ * page). The mount is GCS for a Business organization or Drive for a Pro
+ * account (see account-mount.server.ts) — resolution below is mount-agnostic
+ * and works against either via the storage provider.
  *
  * Resolution order (unchanged from the Drive-era implementation):
  *   1. Exact file: /users/abc123 → web/users/abc123.html

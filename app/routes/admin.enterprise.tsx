@@ -42,7 +42,7 @@ interface AccountItem {
   accountSlug: string;
   defaultDomain: string;
   customDomain?: string;
-  plan: "lite" | "business" | "granted";
+  plan: "lite" | "pro" | "business" | "granted";
   billingStatus: "active" | "past_due" | "canceled";
   accountStatus: "enabled" | "disabled";
   domainStatus: "none" | "pending_dns" | "provisioning_cert" | "active" | "failed";
@@ -611,6 +611,7 @@ function formatDay(iso: string | undefined): string {
 
 const PLAN_LABELS: Record<AccountItem["plan"], string> = {
   lite: "Lite",
+  pro: "Pro",
   business: "Business",
   granted: "Granted（無償付与）",
 };

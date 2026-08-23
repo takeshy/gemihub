@@ -1,8 +1,16 @@
 import type { Route } from "./+types/hubwork.api.workflow.scheduled";
 import { FieldValue } from "@google-cloud/firestore";
 import { getSettingsForTenant } from "~/services/user-settings-tenant.server";
+import { getSettings } from "~/services/user-settings.server";
 import { mountContextForHubworkAccount } from "~/services/storage/account-mount.server";
 import { listObjectsForSync, readObject } from "~/services/storage/provider.server";
+import {
+  personalVertexBillingForSchedule,
+  personalVertexExhaustedEmail,
+  selectScheduledAccounts,
+  shouldNotifyPersonalVertexExhausted,
+} from "~/services/hubwork-scheduled.server";
+import { sendHtmlEmail } from "~/services/hubwork-mail-send.server";
 import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflow } from "~/engine/executor";
 import type { WorkflowInput, ServiceContext } from "~/engine/types";
@@ -35,11 +43,13 @@ export async function action({ request }: Route.ActionArgs) {
   await authorizeScheduledRequest(request);
 
   const allActive = await getAllActiveAccounts();
-  // Scheduled workflows require Pro plan
-  const accounts = allActive.filter(a => a.plan === "business" || a.plan === "granted");
+  const accounts = selectScheduledAccounts(allActive);
   if (accounts.length === 0) {
-    return Response.json({ executed: 0, message: "No active Pro accounts" });
+    return Response.json({ executed: 0, message: "No active accounts eligible for scheduled execution" });
   }
+
+  const requestUrl = new URL(request.url);
+  const settingsUrl = `${request.headers.get("x-forwarded-proto") || requestUrl.protocol.replace(":", "")}://${requestUrl.host}/settings`;
 
   const now = new Date();
   const allResults: { accountId: string; workflowPath: string; status: string; error?: string }[] = [];
@@ -79,13 +89,17 @@ export async function action({ request }: Route.ActionArgs) {
 
       // Fetch tokens and build context only when we have work to do
       const mountCtx = await mountContextForHubworkAccount(account);
-      if (!mountCtx?.gcs) {
-        console.warn(`[hubwork-scheduled] Missing Cloud Storage project for account ${account.id}`);
+      if (!mountCtx) {
+        console.warn(`[hubwork-scheduled] No storage mount available for account ${account.id}`);
         continue;
       }
       const tokens = await getTokensForAccount(account);
       const { accessToken, rootFolderId } = tokens;
-      const settings = await getSettingsForTenant(mountCtx.gcs);
+      // Business accounts read settings from the org's GCS project; Pro
+      // accounts (Drive mount) read gemihub/settings.json from Drive.
+      const settings = mountCtx.gcs
+        ? await getSettingsForTenant(mountCtx.gcs)
+        : await getSettings(accessToken, rootFolderId);
       const workflowObjects = await listObjectsForSync(mountCtx);
       const workflowPaths = workflowObjects.map((object) => object.relativePath);
 
@@ -109,6 +123,14 @@ export async function action({ request }: Route.ActionArgs) {
         settings,
         geminiApiKey,
       };
+
+      // No BYO key: fall back to the personal Vertex prepaid balance when the
+      // user opted into it. The command node asserts the balance before
+      // running and records usage afterwards; an empty balance throws and is
+      // handled by the regular retry/lastError flow below.
+      if (!geminiApiKey) {
+        serviceContext.personalVertexBilling = personalVertexBillingForSchedule(settings, account.email);
+      }
 
       const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id;
       if (hubworkSpreadsheetId) {
@@ -186,6 +208,14 @@ export async function action({ request }: Route.ActionArgs) {
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           const runtime = runtimes[schedule.id];
+
+          if (shouldNotifyPersonalVertexExhausted(error, runtime?.lastError)) {
+            try {
+              await sendHtmlEmail(serviceContext.hubworkGmailClient!, personalVertexExhaustedEmail(account.email, settingsUrl));
+            } catch (mailError) {
+              console.warn(`[hubwork-scheduled] Failed to send balance-exhausted notification for account ${account.id}:`, mailError);
+            }
+          }
 
           // Increment retryCount for deferred retry on next tick
           const newRetryCount = isRetry ? (runtime?.retryCount || 0) + 1 : 1;

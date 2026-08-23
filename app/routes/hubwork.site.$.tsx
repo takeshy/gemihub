@@ -2,6 +2,7 @@ import type { Route } from "./+types/hubwork.site.$";
 import { resolveHubworkAccount } from "~/services/hubwork-account-resolver.server";
 import { mountContextForHubworkAccount } from "~/services/storage/account-mount.server";
 import { resolveHubworkPage } from "~/services/hubwork-site.server";
+import { hasProFeatures } from "~/types/hubwork";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
@@ -11,7 +12,8 @@ const SECURITY_HEADERS: Record<string, string> = {
 /**
  * Catch-all route for Hubwork sites.
  * Only activates on Hubwork domains (resolved via Host header).
- * Serves `web/**` from the Business organization's GCS project with CDN caching.
+ * Serves `web/**` — Pro accounts straight from their Drive, Business
+ * organizations from their GCS project with CDN caching.
  */
 export async function loader({ request, params }: Route.LoaderArgs) {
   let account;
@@ -21,8 +23,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw new Response("Not Found", { status: 404 });
   }
 
-  // Page hosting requires the Business plan
-  if (account.plan !== "business" && account.plan !== "granted") {
+  // Page hosting requires the Pro plan or better
+  if (!hasProFeatures(account)) {
     throw new Response("Not Found", { status: 404 });
   }
 

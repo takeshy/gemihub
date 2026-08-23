@@ -26,7 +26,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   if (account.plan !== "business" && account.plan !== "granted") {
-    return Response.json({ error: "Hubwork Pro subscription required" }, { status: 403 });
+    return Response.json({ error: "Hubwork Business subscription required" }, { status: 403 });
   }
 
   const email = await getContactEmail(request, type);

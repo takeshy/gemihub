@@ -241,6 +241,12 @@ export interface ServiceContext {
   driveRootFolderId: string;
   driveHistoryFolderId: string;
   geminiApiKey?: string;
+  /**
+   * Personal Vertex prepaid billing scope, used by AI nodes when
+   * `geminiApiKey` is absent (e.g. scheduled runs opted into the personal
+   * Vertex balance instead of a BYO key).
+   */
+  personalVertexBilling?: { uid: string };
   abortSignal?: AbortSignal;
   editHistorySettings?: import("~/types/settings").EditHistorySettings;
   settings?: import("~/types/settings").UserSettings;

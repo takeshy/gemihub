@@ -12,7 +12,7 @@ function PremiumEn() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Premium Plan</h1>
       <div className={prose}>
         <p>
-          GemiHub&apos;s Premium plans add server-side capability on top of the free Drive experience. <strong>Lite</strong> unlocks the paid workflow nodes and the Interactions API chat. <strong>Business</strong> turns GemiHub into a web app builder — Google Sheets/Gmail integration, static page hosting, scheduled workflows, custom domains — and provisions an organization with a shared project for your team, billed per organization rather than per seat. See the <strong>Organizations &amp; Shared Projects</strong> chapter for the team side.
+          GemiHub&apos;s Premium plans add server-side capability on top of the free Drive experience. <strong>Lite</strong> unlocks the paid workflow nodes and the Interactions API chat. <strong>Pro</strong> adds scheduled workflows and static page hosting served straight from your own Drive — no organization required. <strong>Business</strong> turns GemiHub into a full web app builder — Google Sheets/Gmail integration, CDN-hosted pages, custom domains — and provisions an organization with a shared project for your team, billed per organization rather than per seat. See the <strong>Organizations &amp; Shared Projects</strong> chapter for the team side.
         </p>
 
         <h2>Plans</h2>
@@ -23,27 +23,29 @@ function PremiumEn() {
                 <th className="py-2 text-left">Feature</th>
                 <th className="py-2 text-center">Free</th>
                 <th className="py-2 text-center">Lite (¥300/mo)</th>
+                <th className="py-2 text-center">Pro (¥3,000/mo)</th>
                 <th className="py-2 text-center">Business (¥7,500/mo)</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td>Max File Size</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
-              <tr><td>Interactions API Chat</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Gmail Send</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Google Calendar Nodes</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>PDF Generation</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Obsidian Sync Token</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Temp Upload URL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Google Sheets CRUD</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Static Page Hosting (CDN)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Custom Domains (auto SSL)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Scheduled Workflows</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Server-Side Execution</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>AI Web Builder</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Organization &amp; Shared Projects</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Vertex AI (no API key)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Included Vertex AI Budget</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30 / period</td></tr>
-              <tr><td>Shared Project Storage</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB (+500 GB)</td></tr>
+              <tr><td>Max File Size</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
+              <tr><td>Interactions API Chat</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Gmail Send</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Google Calendar Nodes</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>PDF Generation</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Obsidian Sync Token</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Temp Upload URL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Scheduled Workflows</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Static Page Hosting</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓ (Drive)</td><td className="text-center">✓ (CDN)</td></tr>
+              <tr><td>AI Billing for Scheduled Runs</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">Own key or Vertex balance</td><td className="text-center">+ org Vertex budget</td></tr>
+              <tr><td>Google Sheets CRUD</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Custom Domains (auto SSL)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Server-Side Execution</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>AI Web Builder</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Organization &amp; Shared Projects</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Vertex AI (no API key)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Included Vertex AI Budget</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30 / period</td></tr>
+              <tr><td>Shared Project Storage</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB (+500 GB)</td></tr>
             </tbody>
           </table>
         </div>
@@ -90,8 +92,38 @@ function PremiumEn() {
           Generate temporary URLs for file uploads. External tools can read and write files via these time-limited URLs without authentication.
         </p>
 
+        <h2>Pro Plan Features</h2>
+        <p>All Lite features are included in the Pro plan (¥3,000 / $20 per month), plus scheduled workflows and static page hosting — both served directly from your own Drive, with no organization or GCS project required. AI calls made during a scheduled run use your own Gemini API key if you&apos;ve saved one (<strong>Settings &gt; Premium Plan</strong>); otherwise, if you&apos;ve opted into a personal Vertex AI balance (<strong>Settings &gt; General</strong>), the run bills against that prepaid balance instead. Business includes everything in Pro, plus CDN caching, custom domains, and the org&apos;s Vertex AI budget as an additional billing option — see below.</p>
+
+        <h3>Static Page Hosting</h3>
+        <p>
+          Files in the <code>web/</code> folder on Drive are served as static pages, read directly from Drive on every request (no CDN caching layer on Pro — see Business below for CDN-hosted pages). Every account gets a built-in subdomain (<code>{"{accountSlug}"}.gemihub.net</code>) immediately.
+        </p>
+        <p>File-based routing:</p>
+        <ul>
+          <li><code>web/index.html</code> → <code>/</code></li>
+          <li><code>web/about.html</code> → <code>/about</code></li>
+          <li><code>web/users/[id].html</code> → <code>/users/123</code> (dynamic route)</li>
+        </ul>
+        <p>
+          Any static asset (HTML, CSS, JS, images, fonts) is supported. MIME types are auto-detected. No publish step needed — files go live after Push to Drive.
+        </p>
+
+        <h3>Scheduled Workflows</h3>
+        <p>
+          Run workflows on a cron schedule. Configure in <strong>Settings &gt; Premium Plan &gt; Schedules</strong>:
+        </p>
+        <ul>
+          <li><strong>Cron expression</strong> — 5-field format (minute, hour, day, month, weekday).</li>
+          <li><strong>Timezone</strong> — IANA timezone (e.g., <code>Asia/Tokyo</code>).</li>
+          <li><strong>Variables</strong> — Pass variables to the workflow at execution time.</li>
+          <li><strong>Retry</strong> — Automatic retry on failure (deferred to subsequent ticks).</li>
+          <li><strong>Timeout</strong> — Execution timeout (default 300s, max 600s).</li>
+          <li><strong>Concurrency policy</strong> — Allow or forbid overlapping runs.</li>
+        </ul>
+
         <h2>Business Plan Features</h2>
-        <p>All Lite features are included in the Business plan, plus an organization with shared team projects. The price (¥7,500 / $50 per month, billed per organization) includes a $30/month Vertex AI budget; administrators can purchase additional budget in $10 (¥1,500) units when it runs out, usable until the end of the billing period after purchase. Project storage includes 100 GB per organization and can be expanded once by 500 GB at $30 (¥5,000) per month, for a maximum of 600 GB.</p>
+        <p>All Pro features are included in the Business plan, plus an organization with shared team projects, CDN-hosted pages, and custom domains. The price (¥7,500 / $50 per month, billed per organization) includes a $30/month Vertex AI budget as a further billing option on top of the own-key / personal-balance choice available on Pro; administrators can purchase additional budget in $10 (¥1,500) units when it runs out, usable until the end of the billing period after purchase. Project storage includes 100 GB per organization and can be expanded once by 500 GB at $30 (¥5,000) per month, for a maximum of 600 GB.</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>
@@ -107,18 +139,9 @@ function PremiumEn() {
           Configure the Spreadsheet ID in <strong>Settings &gt; Premium Plan</strong>. Sheets nodes use the tab name and JSON filter syntax.
         </p>
 
-        <h3>Static Page Hosting</h3>
+        <h3>CDN-Hosted Pages</h3>
         <p>
-          Files in the <code>web/</code> folder on Drive are served as static pages via Cloud CDN. Every account gets a built-in subdomain (<code>{"{accountSlug}"}.gemihub.net</code>) immediately.
-        </p>
-        <p>File-based routing:</p>
-        <ul>
-          <li><code>web/index.html</code> → <code>/</code></li>
-          <li><code>web/about.html</code> → <code>/about</code></li>
-          <li><code>web/users/[id].html</code> → <code>/users/123</code> (dynamic route)</li>
-        </ul>
-        <p>
-          Any static asset (HTML, CSS, JS, images, fonts) is supported. MIME types are auto-detected. No publish step needed — files go live after Push to Drive.
+          On Business, the same <code>web/</code> folder is served via Cloud CDN instead of a direct per-request Drive read, for lower latency at higher traffic.
         </p>
 
         <h3>Custom Domains</h3>
@@ -149,19 +172,6 @@ function PremiumEn() {
   })();
 </script>`}</code></pre>
 
-        <h3>Scheduled Workflows</h3>
-        <p>
-          Run workflows on a cron schedule. Configure in <strong>Settings &gt; Premium Plan &gt; Schedules</strong>:
-        </p>
-        <ul>
-          <li><strong>Cron expression</strong> — 5-field format (minute, hour, day, month, weekday).</li>
-          <li><strong>Timezone</strong> — IANA timezone (e.g., <code>Asia/Tokyo</code>).</li>
-          <li><strong>Variables</strong> — Pass variables to the workflow at execution time.</li>
-          <li><strong>Retry</strong> — Automatic retry on failure (deferred to subsequent ticks).</li>
-          <li><strong>Timeout</strong> — Execution timeout (default 300s, max 600s).</li>
-          <li><strong>Concurrency policy</strong> — Allow or forbid overlapping runs.</li>
-        </ul>
-
         <h3>Server-Side Execution</h3>
         <p>
           The <code>script</code> workflow node can execute JavaScript server-side using an isolated V8 sandbox. Each execution runs in a fresh isolate with a 128 MB memory limit and no network/filesystem access.
@@ -182,7 +192,7 @@ function PremiumJa() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">プレミアムプラン</h1>
       <div className={prose}>
         <p>
-          GemiHubのプレミアムプランは、無料のDrive環境にサーバーサイドの機能を追加します。<strong>Lite</strong>では有料のワークフローノードとInteractions APIチャットが利用可能に。<strong>Business</strong>ではGoogle Sheets/Gmail連携、静的ページホスティング、スケジュール実行、カスタムドメインによりWebアプリビルダーとして使えるうえ、チーム用の組織と共有プロジェクトが作成されます（課金はメンバー単位ではなく組織単位）。チーム機能の詳細は<strong>組織と共有プロジェクト</strong>の章を参照してください。
+          GemiHubのプレミアムプランは、無料のDrive環境にサーバーサイドの機能を追加します。<strong>Lite</strong>では有料のワークフローノードとInteractions APIチャットが利用可能に。<strong>Pro</strong>ではスケジュール実行と、自分のDriveから直接配信する静的ページ公開が使えます（組織は不要）。<strong>Business</strong>ではGoogle Sheets/Gmail連携、CDN配信、カスタムドメインによりフルのWebアプリビルダーとして使えるうえ、チーム用の組織と共有プロジェクトが作成されます（課金はメンバー単位ではなく組織単位）。チーム機能の詳細は<strong>組織と共有プロジェクト</strong>の章を参照してください。
         </p>
 
         <h2>プラン一覧</h2>
@@ -193,27 +203,29 @@ function PremiumJa() {
                 <th className="py-2 text-left">機能</th>
                 <th className="py-2 text-center">Free</th>
                 <th className="py-2 text-center">Lite（¥300/月）</th>
+                <th className="py-2 text-center">Pro（¥3,000/月）</th>
                 <th className="py-2 text-center">Business（¥7,500/月）</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td>1ファイル最大サイズ</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
-              <tr><td>Interactions API チャット</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Gmail 送信</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Google カレンダー ノード</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>PDF 生成</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Obsidian 同期トークン</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>一時アップロードURL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Google Sheets CRUD</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>静的ページホスティング（CDN）</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>カスタムドメイン（自動SSL）</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>スケジュール実行</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>サーバーサイド実行</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>AI Webビルダー</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>組織・共有プロジェクト</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Vertex AI（APIキー不要）</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>Vertex AI 月間利用枠</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30/期間</td></tr>
-              <tr><td>共有プロジェクトのストレージ</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB（+500 GB）</td></tr>
+              <tr><td>1ファイル最大サイズ</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
+              <tr><td>Interactions API チャット</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Gmail 送信</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Google カレンダー ノード</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>PDF 生成</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Obsidian 同期トークン</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>一時アップロードURL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>スケジュール実行</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>静的ページホスティング</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓（Drive）</td><td className="text-center">✓（CDN）</td></tr>
+              <tr><td>スケジュール実行のAI課金</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">自分の鍵 or Vertex残高</td><td className="text-center">+組織Vertex予算</td></tr>
+              <tr><td>Google Sheets CRUD</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>カスタムドメイン（自動SSL）</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>サーバーサイド実行</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>AI Webビルダー</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>組織・共有プロジェクト</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Vertex AI（APIキー不要）</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              <tr><td>Vertex AI 月間利用枠</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30/期間</td></tr>
+              <tr><td>共有プロジェクトのストレージ</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB（+500 GB）</td></tr>
             </tbody>
           </table>
         </div>
@@ -260,8 +272,38 @@ function PremiumJa() {
           ファイルアップロード用の一時URLを生成します。外部ツールから認証なしで時間制限付きのファイル読み書きが可能です。
         </p>
 
+        <h2>Proプランの機能</h2>
+        <p>Liteプランの全機能がProプラン（月額 ¥3,000 / $20）に含まれ、さらにスケジュール実行と静的ページ公開が使えます。どちらも組織やGCSプロジェクトを作らず、自分のDriveから直接提供されます。スケジュール実行中のAI呼び出しは、保存済みのGemini APIキー（<strong>設定 &gt; プレミアムプラン</strong>）があればそれを使用し、無ければ個人のVertex AI残高（<strong>設定 &gt; 一般</strong>で購入）に課金されます。BusinessはProの全機能に加え、CDN配信・カスタムドメイン・組織のVertex AI利用枠を追加で提供します（詳細は下記）。</p>
+
+        <h3>静的ページホスティング</h3>
+        <p>
+          Driveの<code>web/</code>フォルダ内のファイルが静的ページとして配信されます。Proではリクエストのたびに直接Driveから読み込みます（CDNキャッシュ層はありません — CDN配信はBusinessを参照）。アカウント作成時にサブドメイン（<code>{"{accountSlug}"}.gemihub.net</code>）が即時発行されます。
+        </p>
+        <p>ファイルベースルーティング：</p>
+        <ul>
+          <li><code>web/index.html</code> → <code>/</code></li>
+          <li><code>web/about.html</code> → <code>/about</code></li>
+          <li><code>web/users/[id].html</code> → <code>/users/123</code>（動的ルート）</li>
+        </ul>
+        <p>
+          HTML、CSS、JS、画像、フォントなど、あらゆる静的アセットに対応。MIMEタイプは自動検出されます。公開ステップは不要 — ドライブ反映後すぐにファイルが公開されます。
+        </p>
+
+        <h3>スケジュール実行</h3>
+        <p>
+          cronスケジュールでワークフローを自動実行。<strong>設定 &gt; プレミアムプラン &gt; スケジュール</strong>で設定：
+        </p>
+        <ul>
+          <li><strong>cron式</strong> — 5フィールド形式（分、時、日、月、曜日）。</li>
+          <li><strong>タイムゾーン</strong> — IANAタイムゾーン（例：<code>Asia/Tokyo</code>）。</li>
+          <li><strong>変数</strong> — 実行時にワークフローへ変数を渡す。</li>
+          <li><strong>リトライ</strong> — 失敗時の自動再試行（次回のスケジューラ実行時に繰り延べ）。</li>
+          <li><strong>タイムアウト</strong> — 実行タイムアウト（デフォルト300秒、最大600秒）。</li>
+          <li><strong>同時実行ポリシー</strong> — 重複実行を許可または禁止。</li>
+        </ul>
+
         <h2>Businessプランの機能</h2>
-        <p>Liteプランの全機能がBusinessプランに含まれ、さらにチームでプロジェクトを共有できる組織が作成されます。料金（月額 ¥7,500 / $50、組織単位）には月 $30 分の Vertex AI 利用枠が含まれ、不足時は管理者が $10（¥1,500）単位で追加購入でき、追加分は購入した請求期間と次の期間の終わりまで利用できます。プロジェクト用ストレージは組織あたり100GBまで含まれ、1回だけ500GB（月額 $30 / ¥5,000）追加できます（合計最大600GB）。</p>
+        <p>Proプランの全機能がBusinessプランに含まれ、さらにチームでプロジェクトを共有できる組織、CDN配信、カスタムドメインが使えます。料金（月額 ¥7,500 / $50、組織単位）には月 $30 分の Vertex AI 利用枠が含まれます（Proの「自分の鍵 or 個人Vertex残高」に加えた、もう一つの課金手段です）。不足時は管理者が $10（¥1,500）単位で追加購入でき、追加分は購入した請求期間と次の期間の終わりまで利用できます。プロジェクト用ストレージは組織あたり100GBまで含まれ、1回だけ500GB（月額 $30 / ¥5,000）追加できます（合計最大600GB）。</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>
@@ -277,18 +319,9 @@ function PremiumJa() {
           <strong>設定 &gt; プレミアムプラン</strong> でスプレッドシートIDを設定します。Sheetsノードはタブ名とJSONフィルタ構文を使用します。
         </p>
 
-        <h3>静的ページホスティング</h3>
+        <h3>CDN配信</h3>
         <p>
-          Driveの<code>web/</code>フォルダ内のファイルがCloud CDN経由で静的ページとして配信されます。アカウント作成時にサブドメイン（<code>{"{accountSlug}"}.gemihub.net</code>）が即時発行されます。
-        </p>
-        <p>ファイルベースルーティング：</p>
-        <ul>
-          <li><code>web/index.html</code> → <code>/</code></li>
-          <li><code>web/about.html</code> → <code>/about</code></li>
-          <li><code>web/users/[id].html</code> → <code>/users/123</code>（動的ルート）</li>
-        </ul>
-        <p>
-          HTML、CSS、JS、画像、フォントなど、あらゆる静的アセットに対応。MIMEタイプは自動検出されます。公開ステップは不要 — ドライブ反映後すぐにファイルが公開されます。
+          Businessでは同じ<code>web/</code>フォルダが、リクエストごとの直接Drive読み込みではなくCloud CDN経由で配信されます。トラフィックが多い場合により低レイテンシです。
         </p>
 
         <h3>カスタムドメイン</h3>
@@ -318,19 +351,6 @@ function PremiumJa() {
     document.getElementById("app").innerHTML = \`Welcome, \${user.email}\`;
   })();
 </script>`}</code></pre>
-
-        <h3>スケジュール実行</h3>
-        <p>
-          cronスケジュールでワークフローを自動実行。<strong>設定 &gt; プレミアムプラン &gt; スケジュール</strong>で設定：
-        </p>
-        <ul>
-          <li><strong>cron式</strong> — 5フィールド形式（分、時、日、月、曜日）。</li>
-          <li><strong>タイムゾーン</strong> — IANAタイムゾーン（例：<code>Asia/Tokyo</code>）。</li>
-          <li><strong>変数</strong> — 実行時にワークフローへ変数を渡す。</li>
-          <li><strong>リトライ</strong> — 失敗時の自動再試行（次回のスケジューラ実行時に繰り延べ）。</li>
-          <li><strong>タイムアウト</strong> — 実行タイムアウト（デフォルト300秒、最大600秒）。</li>
-          <li><strong>同時実行ポリシー</strong> — 重複実行を許可または禁止。</li>
-        </ul>
 
         <h3>サーバーサイド実行</h3>
         <p>

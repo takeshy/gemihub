@@ -10,6 +10,21 @@ import {
 } from "~/services/hubwork-accounts.server";
 import { removeDomain } from "~/services/hubwork-domain.server";
 
+/**
+ * Resolve which plan a Stripe price id corresponds to. Used to reconcile
+ * Firestore's stored plan against a subscription price change made outside
+ * our own checkout flow (e.g. the Stripe Billing Portal, if its
+ * configuration allows switching products) — without this, an account could
+ * end up billed at one plan while still entitled to another.
+ */
+function planFromPriceId(priceId: string | undefined): "lite" | "pro" | "business" | undefined {
+  if (!priceId) return undefined;
+  if (priceId === process.env.STRIPE_PRICE_ID_LITE || priceId === process.env.STRIPE_PRICE_ID_LITE_USD) return "lite";
+  if (priceId === process.env.STRIPE_PRICE_ID_PRO || priceId === process.env.STRIPE_PRICE_ID_PRO_USD) return "pro";
+  if (priceId === process.env.STRIPE_PRICE_ID_BUSINESS || priceId === process.env.STRIPE_PRICE_ID_BUSINESS_USD) return "business";
+  return undefined;
+}
+
 export async function action({ request }: Route.ActionArgs) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -59,8 +74,8 @@ export async function action({ request }: Route.ActionArgs) {
         const orgId = session.metadata.orgId || "";
         const units = Math.max(1, Math.min(20, parseInt(session.metadata.units || "1", 10) || 1));
         if (orgId) {
-          const { addAiBudgetTopUp, VERTEX_TOPUP_UNIT_USD } = await import("~/services/ai-budget.server");
-          await addAiBudgetTopUp(orgId, units * VERTEX_TOPUP_UNIT_USD, session.id);
+          const { addAiBudgetTopUp, VERTEX_TOPUP_UNIT_CREDIT_USD } = await import("~/services/ai-budget.server");
+          await addAiBudgetTopUp(orgId, units * VERTEX_TOPUP_UNIT_CREDIT_USD, session.id);
         }
         break;
       }
@@ -77,11 +92,11 @@ export async function action({ request }: Route.ActionArgs) {
           console.error(`[stripe-webhook] personal-vertex-topup ${session.id} has no email to credit`);
           break;
         }
-        const { addPersonalAiBudgetTopUp, VERTEX_TOPUP_UNIT_USD } = await import("~/services/ai-budget.server");
+        const { addPersonalAiBudgetTopUp, VERTEX_TOPUP_UNIT_CREDIT_USD } = await import("~/services/ai-budget.server");
         const { emailToUid } = await import("~/services/organizations.server");
         const credited = await addPersonalAiBudgetTopUp(
           emailToUid(email),
-          units * VERTEX_TOPUP_UNIT_USD,
+          units * VERTEX_TOPUP_UNIT_CREDIT_USD,
           session.id,
         );
         if (!credited) {
@@ -92,7 +107,22 @@ export async function action({ request }: Route.ActionArgs) {
 
       const rootFolderId = session.metadata?.rootFolderId || "";
       const accountSlug = session.metadata?.accountSlug || "";
-      const planType = (session.metadata?.plan === "lite" ? "lite" : "business") as "lite" | "business";
+      // Missing plan metadata means a legacy pre-Pro session (Business used
+      // to be the only paid plan besides Lite) — default to business for
+      // compatibility with those old Checkout Sessions. Any other,
+      // unrecognized value is a bug upstream (checkout.tsx validates plan
+      // before creating the Session) and must not silently grant Business
+      // entitlements.
+      const rawPlan = session.metadata?.plan;
+      let planType: "lite" | "pro" | "business";
+      if (rawPlan === undefined) {
+        planType = "business";
+      } else if (rawPlan === "lite" || rawPlan === "pro" || rawPlan === "business") {
+        planType = rawPlan;
+      } else {
+        console.error(`[stripe-webhook] checkout.session.completed ${session.id} has unrecognized plan metadata: ${rawPlan}`);
+        break;
+      }
       const currency = (session.metadata?.currency === "usd" ? "usd" : "jpy") as "jpy" | "usd";
       const email = session.customer_details?.email || "";
       const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id || "";
@@ -228,6 +258,20 @@ export async function action({ request }: Route.ActionArgs) {
             } catch (e) {
               console.warn(`[stripe-webhook] Failed to remove custom domain for ${account.id}:`, e);
             }
+          }
+          // Keep Firestore's plan in sync with whatever Stripe is actually
+          // billing, in case the price changed outside our own checkout
+          // flow's guards (e.g. via the Billing Portal).
+          const newPlan = planFromPriceId(subscription.items.data[0]?.price?.id);
+          if (
+            newPlan &&
+            (account.plan === "lite" || account.plan === "pro" || account.plan === "business") &&
+            newPlan !== account.plan
+          ) {
+            if (account.plan === "business" && newPlan === "pro") {
+              console.warn(`[stripe-webhook] account ${account.id} moved from business to pro outside the app's own checkout flow — plan reconciled to match billing, but organization data was not deprovisioned and needs manual review`);
+            }
+            await updateAccount(account.id, { plan: newPlan });
           }
           await setAccountBillingStatus(account.id, billingStatus);
         }

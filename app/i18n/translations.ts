@@ -1263,6 +1263,7 @@ export interface TranslationStrings {
   "settings.hubwork.additionalBusinessDescription": string;
   "settings.hubwork.additionalBusinessButton": string;
   "settings.hubwork.upgradeToPro": string;
+  "settings.hubwork.upgradeToProPlan": string;
   "settings.hubwork.upgradeButton": string;
   "settings.hubwork.priceMonthSuffix": string;
   "settings.hubwork.featureInteractionsApiChat": string;
@@ -1275,10 +1276,13 @@ export interface TranslationStrings {
   "settings.hubwork.featureAllLiteFeatures": string;
   "settings.hubwork.featureGoogleSheetsCrud": string;
   "settings.hubwork.featureStaticPageHosting": string;
+  "settings.hubwork.featureStaticPageHostingDrive": string;
   "settings.hubwork.featureCustomDomains": string;
   "settings.hubwork.featureScheduledWorkflows": string;
   "settings.hubwork.featureServerSideExecution": string;
   "settings.hubwork.featureAiWebBuilder": string;
+  "settings.hubwork.scheduleAiBillingNote": string;
+  "settings.hubwork.scheduleAiBillingLink": string;
   "settings.hubwork.slugLabel": string;
   "settings.hubwork.slugRequired": string;
   "settings.hubwork.slugInvalid": string;
@@ -1388,6 +1392,7 @@ export interface TranslationStrings {
   "settings.general.vertexBalance": string;
   "settings.general.vertexBalanceEmpty": string;
   "settings.general.buyVertexCredit": string;
+  "settings.general.vertexTopupCreditNote": string;
   "settings.general.purchaseHistory": string;
   "settings.general.historyDate": string;
   "settings.general.historyAmount": string;
@@ -2668,6 +2673,7 @@ const en: TranslationStrings = {
   "settings.hubwork.additionalBusinessDescription": "Business is purchased per organization. You can own and switch between multiple Business organizations from the same account.",
   "settings.hubwork.additionalBusinessButton": "Purchase another Business organization",
   "settings.hubwork.upgradeToPro": "Upgrade to Business",
+  "settings.hubwork.upgradeToProPlan": "Upgrade to Pro",
   "settings.hubwork.upgradeButton": "Upgrade",
   "settings.hubwork.priceMonthSuffix": "/month",
   "settings.hubwork.featureInteractionsApiChat": "Interactions API Chat",
@@ -2680,10 +2686,13 @@ const en: TranslationStrings = {
   "settings.hubwork.featureAllLiteFeatures": "All Premium features",
   "settings.hubwork.featureGoogleSheetsCrud": "Google Sheets CRUD",
   "settings.hubwork.featureStaticPageHosting": "Static Page Hosting (CDN)",
+  "settings.hubwork.featureStaticPageHostingDrive": "Static page hosting (built-in subdomain)",
   "settings.hubwork.featureCustomDomains": "Custom Domains (auto SSL)",
   "settings.hubwork.featureScheduledWorkflows": "Scheduled Workflows",
   "settings.hubwork.featureServerSideExecution": "Server-Side Execution",
   "settings.hubwork.featureAiWebBuilder": "AI Web Builder",
+  "settings.hubwork.scheduleAiBillingNote": "Scheduled workflows run with your Gemini API key. Without one, they use the personal Vertex AI balance from",
+  "settings.hubwork.scheduleAiBillingLink": "Settings > General",
   "settings.hubwork.slugLabel": "Your subdomain",
   "settings.hubwork.slugRequired": "Please enter a subdomain",
   "settings.hubwork.slugInvalid": "3+ chars, lowercase letters, numbers, and hyphens only",
@@ -2793,6 +2802,7 @@ const en: TranslationStrings = {
   "settings.general.vertexBalance": "Current balance",
   "settings.general.vertexBalanceEmpty": "Purchase credits to start using Vertex AI",
   "settings.general.buyVertexCredit": "Buy credits",
+  "settings.general.vertexTopupCreditNote": "Each unit charges $10 (¥1,500) and credits $9 of AI budget — the difference covers payment processing fees.",
   "settings.general.purchaseHistory": "Purchase history",
   "settings.general.historyDate": "Date",
   "settings.general.historyAmount": "Amount",
@@ -4073,6 +4083,7 @@ const ja: TranslationStrings = {
   "settings.hubwork.additionalBusinessDescription": "Businessは組織単位の契約です。同じアカウントで複数のBusiness組織を購入し、切り替えて利用できます。",
   "settings.hubwork.additionalBusinessButton": "Business組織を追加購入する",
   "settings.hubwork.upgradeToPro": "Businessにアップグレード",
+  "settings.hubwork.upgradeToProPlan": "Proにアップグレード",
   "settings.hubwork.upgradeButton": "アップグレード",
   "settings.hubwork.priceMonthSuffix": "/月",
   "settings.hubwork.featureInteractionsApiChat": "Interactions APIチャット",
@@ -4085,10 +4096,13 @@ const ja: TranslationStrings = {
   "settings.hubwork.featureAllLiteFeatures": "Premiumの全機能",
   "settings.hubwork.featureGoogleSheetsCrud": "Google Sheets CRUD",
   "settings.hubwork.featureStaticPageHosting": "静的ページ配信（CDN）",
+  "settings.hubwork.featureStaticPageHostingDrive": "静的ページ公開（ビルトインサブドメイン）",
   "settings.hubwork.featureCustomDomains": "カスタムドメイン（自動SSL）",
   "settings.hubwork.featureScheduledWorkflows": "スケジュール実行",
   "settings.hubwork.featureServerSideExecution": "サーバーサイド実行",
   "settings.hubwork.featureAiWebBuilder": "AI Web Builder",
+  "settings.hubwork.scheduleAiBillingNote": "スケジュール実行はGemini APIキーを使用します。未設定の場合、一般設定で購入した個人Vertex AI残高を利用します：",
+  "settings.hubwork.scheduleAiBillingLink": "設定 > 一般",
   "settings.hubwork.slugLabel": "サブドメイン",
   "settings.hubwork.slugRequired": "サブドメインを入力してください",
   "settings.hubwork.slugInvalid": "3文字以上、小文字英数字とハイフンのみ",
@@ -4198,6 +4212,7 @@ const ja: TranslationStrings = {
   "settings.general.vertexBalance": "現在の残高",
   "settings.general.vertexBalanceEmpty": "クレジットを購入してVertex AIを利用開始",
   "settings.general.buyVertexCredit": "クレジット購入",
+  "settings.general.vertexTopupCreditNote": "1ユニットあたり$10（¥1,500）が請求され、AI残高には$9分クレジットされます（決済手数料相当の差額を含みます）。",
   "settings.general.purchaseHistory": "購入履歴",
   "settings.general.historyDate": "日付",
   "settings.general.historyAmount": "金額",
