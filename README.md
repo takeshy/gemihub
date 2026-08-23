@@ -120,18 +120,18 @@ You need Node.js 24+, a Google Cloud OAuth client, and a Gemini API key. The ful
 
 ## Plans
 
-GemiHub is MIT-licensed and fully usable for free with your own Gemini API key. The hosted service adds two paid plans; see [docs/architecture/premium.md](docs/architecture/premium.md) for details.
+GemiHub is MIT-licensed and fully usable for free with your own Gemini API key. The hosted service adds three paid plans; see [docs/architecture/premium.md](docs/architecture/premium.md) for details.
 
-| | Free | Premium — ¥300/month (≈$2) | Business — ¥7,500/month (≈$50), per organization |
-|---|---|---|---|
-| Everything above | ✓ | ✓ | ✓ |
-| Upload limit | 20 MB/file | 5 GB/file | 5 GB/file |
-| Gmail send and Google Calendar workflow nodes | — | ✓ | ✓ |
-| PDF generation, external sync token, temp edit URL | — | ✓ | ✓ |
-| Interactions API chat (function tools + RAG + Web Search together) | — | ✓ | ✓ |
-| Google Sheets workflow nodes | — | — | ✓ |
-| Shared organization on Cloud Storage + Vertex AI | — | — | 100 GB, $30/month AI budget included |
-| Page hosting from `web/` — `{slug}.gemihub.net`, custom domains, workflow APIs, scheduled workflows | — | — | ✓ |
+| | Free | Premium — ¥300/month (≈$2) | Pro — ¥3,000/month (≈$20) | Business — ¥7,500/month (≈$50), per organization |
+|---|---|---|---|---|
+| Everything above | ✓ | ✓ | ✓ | ✓ |
+| Upload limit | 20 MB/file | 5 GB/file | 5 GB/file | 5 GB/file |
+| Gmail send and Google Calendar workflow nodes | — | ✓ | ✓ | ✓ |
+| PDF generation, external sync token, temp edit URL | — | ✓ | ✓ | ✓ |
+| Interactions API chat (function tools + RAG + Web Search together) | — | ✓ | ✓ | ✓ |
+| Scheduled workflows + page hosting from `web/` (`{slug}.gemihub.net`) | — | — | ✓, served from your own Drive | ✓, plus CDN, custom domains, workflow APIs |
+| Google Sheets workflow nodes | — | — | — | ✓ |
+| Shared organization on Cloud Storage + Vertex AI | — | — | — | 100 GB, $30/month AI budget included |
 
 Don't want to manage a Gemini API key? Turn on **personal Vertex AI** in Settings and chat runs on GemiHub's Vertex connection against a prepaid balance you top up in $10 (¥1,500) units — no expiry, available on any plan. A Business organization's included $30/month AI budget can be topped up the same way.
 

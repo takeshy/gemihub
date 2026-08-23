@@ -120,18 +120,18 @@ npm run dev            # http://localhost:8132
 
 ## プラン
 
-GemiHub は MIT ライセンスで、自分の Gemini API キーがあれば無料ですべての基本機能を使えます。ホスティング版には有料プランが 2 つあります（詳細は [docs/architecture/premium.md](docs/architecture/premium.md)）。
+GemiHub は MIT ライセンスで、自分の Gemini API キーがあれば無料ですべての基本機能を使えます。ホスティング版には有料プランが 3 つあります（詳細は [docs/architecture/premium.md](docs/architecture/premium.md)）。
 
-| | 無料 | Premium — 月額 ¥300（約 $2） | Business — 月額 ¥7,500（約 $50）／組織単位 |
-|---|---|---|---|
-| 上記の全機能 | ✓ | ✓ | ✓ |
-| アップロード上限 | 1ファイル20 MB | 1ファイル5 GB | 1ファイル5 GB |
-| Gmail 送信・Google カレンダーのワークフローノード | — | ✓ | ✓ |
-| PDF 生成・外部同期トークン・一時編集 URL | — | ✓ | ✓ |
-| Interactions API チャット（ファンクションツール + RAG + Web 検索の同時利用） | — | ✓ | ✓ |
-| Google Sheets ワークフローノード | — | — | ✓ |
-| Cloud Storage + Vertex AI の共有組織 | — | — | 100 GB・月 $30 の AI 利用枠込み |
-| `web/` からのページ配信 — `{slug}.gemihub.net`、カスタムドメイン、ワークフロー API、スケジュール実行 | — | — | ✓ |
+| | 無料 | Premium — 月額 ¥300（約 $2） | Pro — 月額 ¥3,000（約 $20） | Business — 月額 ¥7,500（約 $50）／組織単位 |
+|---|---|---|---|---|
+| 上記の全機能 | ✓ | ✓ | ✓ | ✓ |
+| アップロード上限 | 1ファイル20 MB | 1ファイル5 GB | 1ファイル5 GB | 1ファイル5 GB |
+| Gmail 送信・Google カレンダーのワークフローノード | — | ✓ | ✓ | ✓ |
+| PDF 生成・外部同期トークン・一時編集 URL | — | ✓ | ✓ | ✓ |
+| Interactions API チャット（ファンクションツール + RAG + Web 検索の同時利用） | — | ✓ | ✓ | ✓ |
+| スケジュール実行 + `web/` からのページ配信（`{slug}.gemihub.net`） | — | — | ✓（自分のDriveから配信） | ✓（CDN・カスタムドメイン・ワークフローAPIも） |
+| Google Sheets ワークフローノード | — | — | — | ✓ |
+| Cloud Storage + Vertex AI の共有組織 | — | — | — | 100 GB・月 $30 の AI 利用枠込み |
 
 Gemini API キーを自分で用意したくない場合は、設定で**パーソナル Vertex AI** を有効にすると、GemiHub の Vertex 接続でチャットが動きます。料金は $10（¥1,500）単位で前払いする残高から消費され、有効期限はなく、どのプランでも利用できます。Business の月 $30 の AI 利用枠も同じ方法で追加購入できます。
 
