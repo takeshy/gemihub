@@ -7,6 +7,7 @@ import { renderMarkdownToPrintableHtml, renderHtmlToPrintableHtml } from "~/serv
 import { getSettings, saveSettings } from "~/services/user-settings.server";
 import { upsertFileInMeta, setFileSharedInMeta, readRemoteSyncMeta } from "~/services/sync-meta.server";
 import { deleteSingleFileFromRag } from "~/services/file-search.server";
+import { publicFilePath } from "~/services/public-link.server";
 import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 
 export async function handleGemihubCommandNode(
@@ -125,7 +126,7 @@ export async function handleGemihubCommandNode(
             await setFileSharedInMeta(accessToken, folderId, imgFileId, true);
             replacements.set(
               `/api/drive/files?action=raw&fileId=${imgFileId}`,
-              `/public/file/${imgFileId}/${encodeURIComponent(imgMeta.name)}`,
+              publicFilePath(imgFileId, imgMeta.name),
             );
           }
           let updatedContent = fileContent;

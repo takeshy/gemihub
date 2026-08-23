@@ -4,6 +4,7 @@ import React from "react";
 import ReactDOM from "react-dom";
 import type { PluginAPI, PluginView, PluginSettingsTab } from "~/types/plugin";
 import { registerWidget as registerDashboardWidget } from "~/dashboard/widgets/registry";
+import { assertPluginPathAllowed, isPluginDeniedPath } from "~/services/plugin-file-guard";
 
 interface PluginAPICallbacks {
   onRegisterView: (view: PluginView) => void;
@@ -140,24 +141,42 @@ export function createPluginAPI(
   }
 
   if (hasPermission("drive")) {
+    // Resolve a file id to its path so the credential guard can be applied to
+    // id-addressed calls, not just name-addressed ones.
+    const pathForFileId = async (fileId: string): Promise<string | undefined> => {
+      // `new:` placeholders carry the path in the id itself, and their cache
+      // entry may already be gone once migration ran.
+      if (fileId.startsWith("new:")) return fileId.slice(4);
+      const { getCachedFile, getCachedRemoteMeta } = await import("~/services/indexeddb-cache");
+      const cached = await getCachedFile(fileId);
+      if (cached?.fileName) return cached.fileName;
+      const meta = await getCachedRemoteMeta();
+      return meta?.files[fileId]?.name;
+    };
+
     api.drive = {
       async readFile(fileId: string) {
+        assertPluginPathAllowed(await pathForFileId(fileId));
         const { readFileLocal } = await import("~/services/drive-local");
         return readFileLocal(fileId);
       },
 
       async searchFiles(query: string) {
         const { searchFilesLocal } = await import("~/services/drive-local");
-        return searchFilesLocal(query);
+        const results = await searchFilesLocal(query);
+        return results.filter((r) => !isPluginDeniedPath(r.name));
       },
 
       async listFiles(folder?: string) {
         const { listFilesLocal, mimeTypeFromFileName } = await import("~/services/drive-local");
         const { files } = await listFilesLocal(folder, { limit: 1000 });
-        return files.map((f) => ({ id: f.id, name: f.name, mimeType: mimeTypeFromFileName(f.name) }));
+        return files
+          .filter((f) => !isPluginDeniedPath(f.name))
+          .map((f) => ({ id: f.id, name: f.name, mimeType: mimeTypeFromFileName(f.name) }));
       },
 
       async createFile(name: string, content: string | ArrayBuffer) {
+        assertPluginPathAllowed(name);
         if (content instanceof ArrayBuffer) {
           const { saveBinaryFileLocal } = await import("~/services/drive-local");
           const base64 = arrayBufferToBase64(content);
@@ -186,6 +205,7 @@ export function createPluginAPI(
       },
 
       async updateFile(fileId: string, content: string | ArrayBuffer) {
+        assertPluginPathAllowed(await pathForFileId(fileId));
         const { getCachedFile } = await import("~/services/indexeddb-cache");
         let cached = await getCachedFile(fileId);
         if (!cached && fileId.startsWith("new:")) {

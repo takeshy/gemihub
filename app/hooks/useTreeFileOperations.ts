@@ -772,8 +772,11 @@ export function useTreeFileOperations({
           const data = await res.json();
           if (data.meta) await updateTreeFromMeta(data.meta);
           try {
-            const link = `${window.location.origin}/public/file/${item.id}/${encodeURIComponent(item.name)}`;
-            await navigator.clipboard.writeText(link);
+            // The server mints the signed path — the proxy refuses links the
+            // client assembles on its own.
+            if (data.publicPath) {
+              await navigator.clipboard.writeText(`${window.location.origin}${data.publicPath}`);
+            }
           } catch { /* clipboard may fail in insecure context */ }
           alert(t("contextMenu.published"));
         } else {
@@ -815,14 +818,34 @@ export function useTreeFileOperations({
 
   const handleCopyLink = useCallback(
     async (fileId: string) => {
-      const name = remoteMeta[fileId]?.name?.split("/").pop() ?? fileId;
-      const link = `${window.location.origin}/public/file/${fileId}/${encodeURIComponent(name)}`;
+      // Files published before links were signed have no publicPath in meta —
+      // ask the server to mint one rather than handing out a URL that 403s.
+      let publicPath = remoteMeta[fileId]?.publicPath;
+      if (!publicPath) {
+        try {
+          const res = await fetch("/api/drive/files", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "publicLink", fileId }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            publicPath = data.publicPath;
+            if (data.meta) await updateTreeFromMeta(data.meta);
+          }
+        } catch { /* fall through to the failure alert below */ }
+      }
+      if (!publicPath) {
+        alert(t("contextMenu.copyLinkFailed"));
+        return;
+      }
+      const link = `${window.location.origin}${publicPath}`;
       try {
         await navigator.clipboard.writeText(link);
       } catch { /* clipboard may fail in insecure context */ }
       alert(link);
     },
-    [remoteMeta]
+    [remoteMeta, updateTreeFromMeta, t]
   );
 
   const handleConvertMarkdownToPdf = useCallback(

@@ -29,8 +29,8 @@ Right-click a file or folder in the file tree (or tap the `⋯` button on mobile
 | Download | Download file locally (cache-first, falls back to API) |
 | Convert to PDF | Convert Markdown/HTML file to PDF, saved to `temporaries/` |
 | Convert to HTML | Convert Markdown file to HTML, saved to `temporaries/` |
-| Publish | Make the file publicly accessible via a shareable link (URL auto-copied) |
-| Copy Link | Copy the public URL of a published file to clipboard |
+| Publish | Make the file publicly accessible via a signed shareable link (URL auto-copied) |
+| Copy Link | Copy the public URL of a published file to clipboard (minted server-side) |
 | Unpublish | Revoke public sharing for the file |
 | Encrypt / Decrypt | Encrypt (appends `.encrypted`) or decrypt the file |
 | Clear Cache | Delete the IndexedDB cache (warns if there are unsaved changes) |
@@ -67,6 +67,41 @@ Icons on the right side of the FILES sidebar header:
 - **Convert to PDF/HTML**: Shown only for Markdown or HTML files
 - **Publish / Unpublish / Copy Link**: Shown for non-encrypted files, based on current publish state
 - **Clear Cache (file)**: Shown only when a cache entry exists for the file
+
+---
+
+## Public Links
+
+**Publish** grants Drive's `anyone with the link` reader permission and hands
+back a link served by GemiHub itself:
+
+```
+/public/file/{fileId}/{fileName}?s={signature}
+```
+
+The route (`public.file.$fileId.$fileName.tsx`) is unauthenticated — that is the
+point of publishing, and anyone holding the link opens it without signing in.
+The `s` parameter is not viewer authentication; it is an HMAC over the file id
+(`public-link.server.ts`, keyed by `SESSION_SECRET`) proving GemiHub minted the
+link for a file its owner published. Without it the route would proxy ANY Drive
+file id, which lets a third party serve their own HTML or JS from this app's
+origin and reach the IDE's IndexedDB cache and same-origin APIs.
+
+| Request | Result |
+|---------|--------|
+| Signed | Served with its own content type and `CSP: sandbox allow-scripts …` |
+| Unsigned, passive content (images, PDF, CSS, text) | Served with `CSP: sandbox` and `nosniff` — keeps links published before signing working |
+| Unsigned, script-capable (`.html`, `.htm`, `.js`, `.mjs`, `.svg`) | 403, asking the owner to re-publish |
+
+Published pages still render and run their own scripts; the sandbox CSP only
+denies them `allow-same-origin`, so they cannot read this app's storage or call
+`/api/*` with the viewer's cookies.
+
+The signed path is stored as `publicPath` on the file's `_sync-meta.json` entry
+when it is published (`setFileSharedInMeta`), so every device can show and copy
+the link offline. Files published before links were signed have no `publicPath`;
+**Copy Link** mints one through `/api/drive/files` (`action: "publicLink"`).
+Rotating `SESSION_SECRET` invalidates every published link.
 
 ---
 

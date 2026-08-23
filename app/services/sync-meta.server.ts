@@ -15,6 +15,7 @@ import {
   DriveApiError,
 } from "./google-drive.server";
 import { SYNC_META_FILE_NAME } from "./sync-diff";
+import { publicFilePath } from "./public-link.server";
 
 export { SYNC_META_FILE_NAME, computeSyncDiff } from "./sync-diff";
 export type { FileSyncMeta, SyncMeta, SyncDiff } from "./sync-diff";
@@ -476,6 +477,11 @@ export async function setFileSharedInMeta(
   if (meta.files[fileId]) {
     meta.files[fileId].shared = shared;
     meta.files[fileId].webViewLink = shared ? webViewLink : undefined;
+    // The public proxy refuses unsigned links for script-capable content, so
+    // the signed path is minted here and travels with the meta to every device.
+    meta.files[fileId].publicPath = shared
+      ? publicFilePath(fileId, meta.files[fileId].name)
+      : undefined;
   }
   meta.lastUpdatedAt = new Date().toISOString();
   await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);

@@ -374,6 +374,31 @@ function MyPanel({ api, fileId, fileName }) {
 - `require()` shim only provides `react`, `react-dom`, and `react-dom/client`
 - Plugin code runs in the browser, not on the server
 
+#### Credential boundary
+
+`PluginAPI` never exposes the decrypted Gemini API key (`api-key-cache.ts`) or
+the decrypted RSA private key and encryption password (`crypto-cache.ts`), and
+there is no "decrypt this for me" call — a plugin sees `.encrypted` files only
+as ciphertext. `plugin-file-guard.ts` additionally refuses `api.drive` access to
+the files that would make an offline attack on those credentials possible, or
+that would let one plugin rewrite another:
+
+| Path | Why |
+|------|-----|
+| `settings.json`, `_encrypted-auth.json` | hold `encryptedApiKey`, `encryptedPrivateKey`, and the PBKDF2 salt |
+| `plugins/**` | another plugin's code — writable code is privilege escalation |
+| `_sync-meta.json` | the sync registry; rewriting it corrupts push/pull state |
+
+Reads, writes, listings, and searches are all filtered, including
+id-addressed calls (the id is resolved to its path first).
+
+This is a boundary on the API surface, not a sandbox: plugin code shares the
+page's realm, so a hostile plugin can still patch globals such as `fetch` and
+observe what the host itself sends. Isolating plugins would require moving them
+out of the realm (worker or sandboxed iframe with a postMessage bridge), the way
+workflow `script` nodes already run. `plugin-file-guard.test.ts` fails the build
+if the API surface grows a member that carries credential material.
+
 ### Local Development
 
 In development mode (`NODE_ENV !== "production"`), plugins can be loaded directly from the local filesystem without installing via GitHub. Place your plugin files in the `plugins/{id}/` directory at the project root:

@@ -14,6 +14,7 @@ import {
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
 import { collectPushCandidates, collectTrackedIds } from "~/hooks/sync-utils";
 import { computeSyncDiff } from "~/services/sync-diff";
+import { useStalePendingEdits } from "~/hooks/useStalePendingEdits";
 import { SyncDiffDialog } from "./SyncDiffDialog";
 import type { FileListItem } from "./SyncDiffDialog";
 
@@ -55,6 +56,7 @@ export function SyncStatusBar({
   const [dialogFiles, setDialogFiles] = useState<FileListItem[]>([]);
   const [dialogLoading, setDialogLoading] = useState(false);
   const pushCount = localModifiedCount;
+  const stalePending = useStalePendingEdits();
   const pullDialogTriggerRef = useRef(pullDialogTrigger);
 
   const openDiffDialog = useCallback(async (type: "push" | "pull") => {
@@ -233,6 +235,21 @@ export function SyncStatusBar({
           </span>
         )}
       </button>
+
+      {/* Long-unpushed local edits — they exist only in IndexedDB until a Push */}
+      {pushCount > 0 && stalePending.oldestEditAt && (
+        <button
+          onClick={() => openDiffDialog("push")}
+          disabled={isBusy}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-sm text-amber-600 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
+          title={t("sync.stalePushWarning")
+            .replace("{days}", String(stalePending.days))
+            .replace("{date}", new Date(stalePending.oldestEditAt).toLocaleDateString())}
+        >
+          <AlertTriangle size={ICON.SM} />
+          {!compact && <span className="text-xs">{stalePending.days}d</span>}
+        </button>
+      )}
 
       {/* Conflict indicator */}
       {conflictCount > 0 && (

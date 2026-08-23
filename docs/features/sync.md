@@ -31,6 +31,7 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes.
 - **Push Badge**: Count of locally modified files, excluding system/history files and files whose content was reverted to the synced state (no net change).
 - **Pull Badge**: Count of pending remote work — updates to already-cached files (`toPull`), conflicts, and files deleted on remote (`localOnly`). Brand-new remote files are **not** counted here; they are auto-registered as uncached entries during background polling and surface directly in the file tree.
+- **Stale-change warning**: An amber triangle with a day count appears next to the badges when the oldest unpushed edit is more than 7 days old (`useStalePendingEdits.ts`, `STALE_PUSH_WARNING_DAYS`). Local edits live only in IndexedDB until a Push, and `editHistory` is the *only* record that a file changed — the checksum in sync meta still describes the last-synced state. If that store is evicted (storage pressure, Safari's ITP, "clear site data"), the edits stop looking modified and the next Pull overwrites them silently. Clicking the warning opens the Push list.
 - **Nature of Change**: Clicking a badge shows a file list with icons indicating the change type:
   - <kbd>✎</kbd> (Blue): Modified file
   - <kbd>🗑</kbd> (Red): Deleted on remote

@@ -26,6 +26,7 @@ import {
   ensureSubFolder,
 } from "~/services/google-drive.server";
 import { renderHtmlToPrintableHtml, renderMarkdownToPrintableHtml } from "~/services/markdown-pdf.server";
+import { publicFilePath } from "~/services/public-link.server";
 import { getSettings } from "~/services/user-settings.server";
 import {
   encryptFileContent,
@@ -951,7 +952,7 @@ export async function action({ request }: Route.ActionArgs) {
             await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, imgFileId, true);
             replacements.set(
               `/api/drive/files?action=raw&fileId=${imgFileId}`,
-              `/public/file/${imgFileId}/${encodeURIComponent(imgMeta.name)}`
+              publicFilePath(imgFileId, imgMeta.name)
             );
           }
 
@@ -966,7 +967,33 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       const pubMeta = await setFileSharedInMeta(validTokens.accessToken, validTokens.rootFolderId, fileId, true, webViewLink);
-      return logAndReturn({ webViewLink, meta: { lastUpdatedAt: pubMeta.lastUpdatedAt, files: pubMeta.files } });
+      return logAndReturn({
+        webViewLink,
+        publicPath: pubMeta.files[fileId]?.publicPath ?? publicFilePath(fileId, fileMeta.name),
+        meta: { lastUpdatedAt: pubMeta.lastUpdatedAt, files: pubMeta.files },
+      });
+    }
+    // Mints a signed link for a file published before signing existed, so
+    // "Copy Link" does not hand out a URL the proxy will refuse.
+    case "publicLink": {
+      if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });
+      const meta = await readRemoteSyncMeta(validTokens.accessToken, validTokens.rootFolderId);
+      const entry = meta?.files[fileId];
+      if (!entry) return logAndReturn({ error: "File not tracked in sync meta" }, { status: 404 });
+      if (!entry.shared) return logAndReturn({ error: "File is not published" }, { status: 409 });
+      const linkMeta = entry.publicPath
+        ? meta!
+        : await setFileSharedInMeta(
+            validTokens.accessToken,
+            validTokens.rootFolderId,
+            fileId,
+            true,
+            entry.webViewLink
+          );
+      return logAndReturn({
+        publicPath: linkMeta.files[fileId]?.publicPath ?? publicFilePath(fileId, entry.name),
+        meta: { lastUpdatedAt: linkMeta.lastUpdatedAt, files: linkMeta.files },
+      });
     }
     case "unpublish": {
       if (!fileId) return logAndReturn({ error: "Missing fileId" }, { status: 400 });

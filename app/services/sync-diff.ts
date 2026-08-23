@@ -12,6 +12,8 @@ export interface FileSyncMeta {
   createdTime?: string;
   shared?: boolean;
   webViewLink?: string;
+  /** Signed origin-relative link for `/public/file/...` (published files only). */
+  publicPath?: string;
   size?: string;
 }
 

@@ -4,6 +4,7 @@
 // Uses a singleton DB connection for performance.
 
 import { isEncryptedFile } from "./crypto-core";
+import type { FileSyncMeta } from "./sync-diff";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
 
 const DB_NAME = "gemihub-cache";
@@ -68,7 +69,9 @@ export interface CachedRemoteMeta {
   id: "current"; // primary key (fixed key, always 1 record)
   rootFolderId: string;
   lastUpdatedAt: string;
-  files: Record<string, { name: string; mimeType: string; md5Checksum: string; modifiedTime: string; createdTime?: string; shared?: boolean; webViewLink?: string; size?: string }>;
+  // Mirrors the remote `_sync-meta.json` entries — reuse the shared shape so
+  // fields added there (publicPath, …) cannot silently drop out of the cache.
+  files: Record<string, FileSyncMeta>;
   cachedAt: number;
 }
 

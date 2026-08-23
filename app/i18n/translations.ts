@@ -659,6 +659,7 @@ export interface TranslationStrings {
   "contextMenu.publish": string;
   "contextMenu.unpublish": string;
   "contextMenu.copyLink": string;
+  "contextMenu.copyLinkFailed": string;
   "contextMenu.published": string;
   "contextMenu.unpublished": string;
   "contextMenu.linkCopied": string;
@@ -1065,6 +1066,7 @@ export interface TranslationStrings {
 
   // Sync diff dialog
   "sync.pushLabel": string;
+  "sync.stalePushWarning": string;
   "sync.pullLabel": string;
   "sync.pushChanges": string;
   "sync.pullChanges": string;
@@ -2069,6 +2071,7 @@ const en: TranslationStrings = {
   "contextMenu.publish": "Publish to Web",
   "contextMenu.unpublish": "Unpublish",
   "contextMenu.copyLink": "Copy Share Link",
+  "contextMenu.copyLinkFailed": "Could not create a share link. Re-publish the file and try again.",
   "contextMenu.published": "Published! Link copied to clipboard.",
   "contextMenu.unpublished": "File has been unpublished.",
   "contextMenu.linkCopied": "Link copied to clipboard.",
@@ -2475,6 +2478,7 @@ const en: TranslationStrings = {
 
   // Sync diff dialog
   "sync.pushLabel": "Push to Drive",
+  "sync.stalePushWarning": "Local changes have been waiting {days} days (oldest: {date}). They exist only in this browser until you Push — clearing site data would lose them.",
   "sync.pullLabel": "Pull to Local",
   "sync.pushChanges": "Push Changes",
   "sync.pullChanges": "Pull Changes",
@@ -3479,6 +3483,7 @@ const ja: TranslationStrings = {
   "contextMenu.publish": "ウェブに公開",
   "contextMenu.unpublish": "公開を解除",
   "contextMenu.copyLink": "共有リンクをコピー",
+  "contextMenu.copyLinkFailed": "共有リンクを作成できませんでした。ファイルを再度公開してからお試しください。",
   "contextMenu.published": "公開しました！リンクをクリップボードにコピーしました。",
   "contextMenu.unpublished": "公開を解除しました。",
   "contextMenu.linkCopied": "リンクをクリップボードにコピーしました。",
@@ -3885,6 +3890,7 @@ const ja: TranslationStrings = {
 
   // Sync diff dialog
   "sync.pushLabel": "ドライブ反映",
+  "sync.stalePushWarning": "未反映のローカル変更が{days}日間残っています（最古: {date}）。Pushするまでこのブラウザ内にしか存在せず、サイトデータが消えると失われます。",
   "sync.pullLabel": "ローカル反映",
   "sync.pushChanges": "ドライブ反映 — 変更一覧",
   "sync.pullChanges": "ローカル反映 — 変更一覧",
