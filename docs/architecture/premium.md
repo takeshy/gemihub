@@ -959,7 +959,7 @@ Admin dashboard at `/hubwork/admin` for managing accounts.
 | `STRIPE_PRICE_ID_LITE_USD` | Optional. Stripe Price ID for the Lite plan, USD ($2/month) — omit to keep USD-locale checkout on the base price |
 | `STRIPE_PRICE_ID_PRO_USD` | Optional. USD override for Pro ($20/month); not required — omit to bill USD via the base price's currency options |
 | `STRIPE_PRICE_ID_BUSINESS_USD` | Optional. Stripe Price ID for the Business plan, USD ($50/month) — omit to keep USD-locale checkout on the base price |
-| `STRIPE_PRICE_ID_VERTEX_TOPUP` | Stripe Price ID for one Vertex AI budget top-up unit, JPY (¥1,500 = $10 of budget). Must match `VERTEX_TOPUP_UNIT_USD` |
+| `STRIPE_PRICE_ID_VERTEX_TOPUP` | Stripe Price ID for one Vertex AI budget top-up unit, JPY (¥1,500 charged, $9 credited). Must match `VERTEX_TOPUP_UNIT_USD` |
 | `STRIPE_PRICE_ID_VERTEX_TOPUP_USD` | Optional. The same top-up unit priced in USD ($10) |
 | `STRIPE_PRICE_ID_STORAGE_ADDON` | Stripe Price ID for one 500 GB storage add-on, JPY (¥5,000/month) |
 | `STRIPE_PRICE_ID_STORAGE_ADDON_USD` | Optional. The same add-on priced in USD ($30/month) |

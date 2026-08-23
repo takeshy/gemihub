@@ -123,7 +123,7 @@ function PremiumEn() {
         </ul>
 
         <h2>Business Plan Features</h2>
-        <p>All Pro features are included in the Business plan, plus an organization with shared team projects, CDN-hosted pages, and custom domains. The price (¥7,500 / $50 per month, billed per organization) includes a $30/month Vertex AI budget as a further billing option on top of the own-key / personal-balance choice available on Pro; administrators can purchase additional budget in $10 (¥1,500) units when it runs out, usable until the end of the billing period after purchase. Project storage includes 100 GB per organization and can be expanded once by 500 GB at $30 (¥5,000) per month, for a maximum of 600 GB.</p>
+        <p>All Pro features are included in the Business plan, plus an organization with shared team projects, CDN-hosted pages, and custom domains. The price (¥7,500 / $50 per month, billed per organization) includes a $30/month Vertex AI budget as a further billing option on top of the own-key / personal-balance choice available on Pro; administrators can purchase additional budget in ¥1,500 ($9 credited) units when it runs out, usable until the end of the billing period after purchase. Project storage includes 100 GB per organization and can be expanded once by 500 GB at $30 (¥5,000) per month, for a maximum of 600 GB.</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>
@@ -303,7 +303,7 @@ function PremiumJa() {
         </ul>
 
         <h2>Businessプランの機能</h2>
-        <p>Proプランの全機能がBusinessプランに含まれ、さらにチームでプロジェクトを共有できる組織、CDN配信、カスタムドメインが使えます。料金（月額 ¥7,500 / $50、組織単位）には月 $30 分の Vertex AI 利用枠が含まれます（Proの「自分の鍵 or 個人Vertex残高」に加えた、もう一つの課金手段です）。不足時は管理者が $10（¥1,500）単位で追加購入でき、追加分は購入した請求期間と次の期間の終わりまで利用できます。プロジェクト用ストレージは組織あたり100GBまで含まれ、1回だけ500GB（月額 $30 / ¥5,000）追加できます（合計最大600GB）。</p>
+        <p>Proプランの全機能がBusinessプランに含まれ、さらにチームでプロジェクトを共有できる組織、CDN配信、カスタムドメインが使えます。料金（月額 ¥7,500 / $50、組織単位）には月 $30 分の Vertex AI 利用枠が含まれます（Proの「自分の鍵 or 個人Vertex残高」に加えた、もう一つの課金手段です）。不足時は管理者が ¥1,500（$9分クレジット）単位で追加購入でき、追加分は購入した請求期間と次の期間の終わりまで利用できます。プロジェクト用ストレージは組織あたり100GBまで含まれ、1回だけ500GB（月額 $30 / ¥5,000）追加できます（合計最大600GB）。</p>
 
         <h3>Google Sheets CRUD</h3>
         <p>

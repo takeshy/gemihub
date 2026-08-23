@@ -89,10 +89,10 @@ function SettingsEn() {
 
         <h2>Premium Plan</h2>
         <ul>
-          <li>Subscribe to the Lite or Business plan via Stripe.</li>
-          <li>Configure Spreadsheet ID for Google Sheets nodes.</li>
-          <li>Set up custom domain and view domain status.</li>
-          <li>Manage scheduled workflows (cron, timezone, retry, timeout).</li>
+          <li>Subscribe to the Lite, Pro, or Business plan via Stripe.</li>
+          <li>Configure Spreadsheet ID for Google Sheets nodes (Business).</li>
+          <li>Set up custom domain and view domain status (Business).</li>
+          <li>Manage scheduled workflows (cron, timezone, retry, timeout) (Pro and Business).</li>
           <li>Access Stripe Billing Portal for subscription management.</li>
         </ul>
 
@@ -207,10 +207,10 @@ function SettingsJa() {
 
         <h2>プレミアムプラン</h2>
         <ul>
-          <li>StripeでLiteまたはBusinessプランに登録。</li>
-          <li>Google Sheetsノード用のスプレッドシートIDを設定。</li>
-          <li>カスタムドメインの設定とドメインステータスの確認。</li>
-          <li>スケジュール実行の管理（cron、タイムゾーン、リトライ、タイムアウト）。</li>
+          <li>StripeでLite・Pro・Businessいずれかのプランに登録。</li>
+          <li>Google Sheetsノード用のスプレッドシートIDを設定（Business）。</li>
+          <li>カスタムドメインの設定とドメインステータスの確認（Business）。</li>
+          <li>スケジュール実行の管理（cron、タイムゾーン、リトライ、タイムアウト）（Pro・Business）。</li>
           <li>Stripe Billing Portalでサブスクリプション管理。</li>
         </ul>
 
