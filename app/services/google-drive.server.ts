@@ -1,5 +1,6 @@
 import type { SessionTokens } from "./session.server";
 import { SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME } from "./sync-diff";
+import { isGoogleWorkspaceMimeType } from "./sync-client-utils";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -217,7 +218,10 @@ export async function listFiles(
   return allFiles;
 }
 
-// List user files in rootFolder (excludes folders and system files)
+// List user files in rootFolder (excludes folders, system files, and Google
+// Workspace native files — Docs/Sheets/Slides have no downloadable binary
+// content via alt=media, so tracking them in sync meta only produces
+// unfulfillable pull requests later; see readFile below).
 export async function listUserFiles(
   accessToken: string,
   rootFolderId: string,
@@ -227,6 +231,7 @@ export async function listUserFiles(
   return allFiles.filter(
     (f) =>
       f.mimeType !== "application/vnd.google-apps.folder" &&
+      !isGoogleWorkspaceMimeType(f.mimeType) &&
       !SYSTEM_FILES.has(f.name)
   );
 }

@@ -139,9 +139,18 @@ export async function action({ request }: Route.ActionArgs) {
   switch (actionType) {
     case "pullDirect": {
       // Download file contents only — no meta read/write on server
-      const fileIds = body.fileIds as string[];
+      const requestedFileIds = body.fileIds as string[];
       const mimeTypes = (body.mimeTypes ?? {}) as Record<string, string>;
       const fileNames = (body.fileNames ?? {}) as Record<string, string>;
+      // Google Workspace native files (Docs/Sheets/Slides) have no
+      // downloadable binary content via alt=media — attempting to read one
+      // 403s and, since parallelProcess has no per-item error isolation,
+      // would otherwise fail the entire batch for every other requested
+      // file too. listUserFiles excludes these from sync meta going
+      // forward, but a fresh remote listing already reflected on the client
+      // (or meta written before that fix) can still reference one, so skip
+      // defensively here as well.
+      const fileIds = requestedFileIds.filter((id) => !isGoogleWorkspaceMimeType(mimeTypes[id]));
       const files = await parallelProcess(fileIds, async (fileId) => {
         if (shouldTreatAsBinaryFile(fileNames[fileId], mimeTypes[fileId])) {
           const content = await readFileBase64(validTokens.accessToken, fileId);
