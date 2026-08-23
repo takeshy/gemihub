@@ -8,6 +8,16 @@ import {
 import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
 import { isBinaryMimeType, isLargeFile } from "~/services/sync-client-utils";
 
+/** Prefer the server's JSON `error` message (e.g. "File not found") over a generic fallback. */
+async function driveErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json();
+    return typeof body?.error === "string" ? body.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function useFileWithCache(
   fileId: string | null,
   refreshKey?: number,
@@ -93,7 +103,7 @@ export function useFileWithCache(
         const metaRes = await fetch(
           `/api/drive/files?action=metadata&fileId=${id}`
         );
-        if (!metaRes.ok) throw new Error("Failed to fetch metadata");
+        if (!metaRes.ok) throw new Error(await driveErrorMessage(metaRes, "Failed to fetch metadata"));
         const meta = await metaRes.json();
 
         // 3. If cache matches, we're done
@@ -109,7 +119,7 @@ export function useFileWithCache(
         const readRes = await fetch(
           `/api/drive/files?action=read&fileId=${id}`
         );
-        if (!readRes.ok) throw new Error("Failed to fetch file");
+        if (!readRes.ok) throw new Error(await driveErrorMessage(readRes, "Failed to fetch file"));
         const data = await readRes.json();
 
         const md5 = data.md5Checksum ?? "";

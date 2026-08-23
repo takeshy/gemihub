@@ -3,6 +3,7 @@ import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import {
   type DriveFile,
+  DriveApiError,
   readFile,
   readFileBase64,
   readFileRaw,
@@ -92,7 +93,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const folderId = url.searchParams.get("folderId");
   logCtx.action = action ?? undefined;
 
-  switch (action) {
+  try {
+    switch (action) {
     case "list": {
       if (folderId) {
         const files = await listFiles(validTokens.accessToken, folderId);
@@ -164,6 +166,21 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
     default:
       return logAndReturn({ error: "Unknown action" }, { status: 400 });
+    }
+  } catch (err) {
+    // A file deleted/moved out from under a stale reference (a link, a
+    // dashboard widget, a workflow node) is normal usage, not a server bug —
+    // surface it as a clean 404/403 instead of an unhandled-exception 500
+    // that pollutes error logs for every occurrence.
+    if (err instanceof DriveApiError) {
+      if (err.status === 404) {
+        return logAndReturn({ error: "File not found. It may have been deleted or moved." }, { status: 404 });
+      }
+      if (err.status === 403) {
+        return logAndReturn({ error: "Access to this file was denied." }, { status: 403 });
+      }
+    }
+    throw err;
   }
 }
 
