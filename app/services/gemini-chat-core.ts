@@ -485,7 +485,6 @@ export async function* chatWithToolsStream(
   let lastLimitExtensionPromptLimit: number | null = null;
   let geminiTools: Tool[] | undefined;
 
-  const ragEnabled = ragStoreIds && ragStoreIds.length > 0;
   const normalizedRagStoreIds = ragStoreIds
     ?.map((id) => normalizeFileSearchStoreName(id))
     .filter((id): id is string => !!id);
@@ -494,7 +493,7 @@ export async function* chatWithToolsStream(
   if (webSearchEnabled) {
     geminiTools = [{ googleSearch: {} }];
   } else if (!options?.disableTools) {
-    if (tools.length > 0 && !ragEnabled) {
+    if (tools.length > 0) {
       geminiTools = toolsToGeminiFormat(tools);
     }
     if (normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {

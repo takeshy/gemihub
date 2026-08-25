@@ -64,12 +64,9 @@ export interface RagContext {
 }
 
 /**
- * Retrieve RAG context via the generateContent API (file_search tool).
- * The Interactions API does not support the file_search tool (returns 501
- * not_implemented), so RAG retrieval is done as a pre-processing step using
- * the generateContent API. The retrieved contexts are injected into the
- * system prompt for the subsequent Interactions API call, preserving both
- * RAG and function calling capabilities.
+ * Retrieve RAG context via generateContent when a caller needs explicit
+ * pre-retrieval. The main Interactions path now sends File Search and custom
+ * function tools together natively.
  */
 export async function retrieveRagContext(
   apiKey: string,

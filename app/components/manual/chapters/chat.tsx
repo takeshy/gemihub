@@ -34,7 +34,7 @@ function ChatEn() {
         <h3>Model-Specific Limitations</h3>
         <ul>
           <li><strong>Gemma models</strong> — Do not support function calling (tool use) or extended thinking. When a Gemma model is selected, all tools (Drive, MCP, RAG, Web Search) are automatically disabled.</li>
-          <li><strong>Flash Lite + RAG</strong> — When RAG is enabled with a Flash Lite model, Drive and MCP tools are disabled. Flash Lite cannot combine function calling tools with RAG file search in a single request.</li>
+          <li><strong>RAG + tools</strong> — Gemini 3 models can combine RAG File Search with Drive and MCP function tools. Drive search is disabled by default to avoid redundant retrieval, but can be enabled in tool settings.</li>
         </ul>
 
         <h2>Function Calling (Agentic AI)</h2>
@@ -131,7 +131,7 @@ function ChatJa() {
         <h3>モデル固有の制限事項</h3>
         <ul>
           <li><strong>Gemmaモデル</strong> — ファンクションコール（ツール使用）および拡張思考に非対応です。Gemmaモデル選択時は、すべてのツール（Drive、MCP、RAG、Web検索）が自動的に無効化されます。</li>
-          <li><strong>Flash Lite + RAG</strong> — Flash LiteモデルでRAGを有効にすると、DriveツールとMCPツールが無効化されます。Flash Liteは1つのリクエスト内でファンクションコールツールとRAGファイル検索を同時に使用できません。</li>
+          <li><strong>RAG＋ツール</strong> — Gemini 3モデルでは、RAG File SearchとDrive・MCPのfunction toolsを併用できます。重複検索を避けるためDrive検索は既定で無効ですが、ツール設定から有効化できます。</li>
         </ul>
 
         <h2>ファンクションコール（エージェント型AI）</h2>

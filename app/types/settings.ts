@@ -251,9 +251,11 @@ export function getDriveToolModeConstraint(
   if (isGemma4(model) && ragSetting === "__websearch__") {
     return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockGemma4WebSearch" };
   }
-  // fileSearch + functionDeclarations not supported by Gemini API
   if (ragSetting && ragSetting !== "__websearch__") {
-    return { forcedMode: "none", defaultMode: "none", locked: true, reasonKey: "chat.toolModeLockRag" };
+    // Gemini 3 models can combine File Search and custom function tools. Avoid
+    // redundant lexical Drive searches by default, while leaving the mode
+    // user-editable so read/write tools and optional Drive search stay usable.
+    return { forcedMode: null, defaultMode: "noSearch", locked: false };
   }
   return { forcedMode: null, defaultMode: "all", locked: false };
 }
