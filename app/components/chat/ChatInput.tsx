@@ -13,6 +13,7 @@ import {
   Loader2,
   Music,
   Film,
+  Globe2,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
@@ -614,6 +615,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   const selectedModelInfo = models.find((m) => m.name === selectedModel);
   const ragSettingKeys = ragSettings ? Object.keys(ragSettings) : [];
+  const enabledMcpServers = mcpServers.filter((server) =>
+    enabledMcpServerIds.includes(server.id || server.name)
+  );
 
   if (isCollapsed) {
     return (
@@ -648,6 +652,38 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 <X size={10} />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* MCP servers enabled for this chat */}
+        {enabledMcpServers.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {enabledMcpServers.map((server) => {
+              const serverId = server.id || server.name;
+              return (
+                <div
+                  key={serverId}
+                  title={`MCP Server · ${server.name}`}
+                  className="flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-xs text-violet-700 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-300"
+                >
+                  <Wrench size={ICON.SM} />
+                  <span className="max-w-[200px] truncate">{server.name}</span>
+                  {onEnabledMcpServerIdsChange && (
+                    <button
+                      type="button"
+                      onClick={() => onEnabledMcpServerIdsChange(
+                        enabledMcpServerIds.filter((id) => id !== serverId)
+                      )}
+                      disabled={disabled || driveToolModeLocked}
+                      className="ml-0.5 rounded-full p-0.5 text-violet-400 hover:bg-violet-200 hover:text-violet-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-violet-800 dark:hover:text-violet-200"
+                      aria-label={`Remove ${server.name} from this chat`}
+                    >
+                      <X size={10} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -694,6 +730,27 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         >
           {/* Left buttons (vertical stack) */}
           <div className="flex flex-shrink-0 flex-col items-center gap-1 self-end">
+            {/* Provider-native Web Search toggle */}
+            {onWebSearchChange && (
+              <button
+                type="button"
+                onClick={() => onWebSearchChange(!webSearchEnabled)}
+                disabled={disabled || isStreaming || !supportsWebSearch(selectedModel)}
+                className={`rounded-md p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  webSearchEnabled && supportsWebSearch(selectedModel)
+                    ? "bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                    : "text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                }`}
+                aria-label={`Web Search ${webSearchEnabled ? "on" : "off"}`}
+                aria-pressed={webSearchEnabled && supportsWebSearch(selectedModel)}
+                title={supportsWebSearch(selectedModel)
+                  ? `Web Search: ${webSearchEnabled ? "ON" : "OFF"}`
+                  : "Web Search is unavailable for this model"}
+              >
+                <Globe2 size={ICON.LG} />
+              </button>
+            )}
+
             {/* File attachment button */}
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -992,19 +1049,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             )}
           </div>
 
-          {/* Web Search sits above RAG in one column. */}
+          {/* RAG selector */}
           <div className="flex flex-col items-start gap-1.5">
-            {onWebSearchChange && supportsWebSearch(selectedModel) && (
-              <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={webSearchEnabled}
-                  onChange={(event) => onWebSearchChange(event.currentTarget.checked)}
-                  disabled={isStreaming}
-                />
-                <span>Web Search</span>
-              </label>
-            )}
             {onRagSettingChange && ragSettings && (
               <select
                 value={selectedRagSetting ?? ""}
