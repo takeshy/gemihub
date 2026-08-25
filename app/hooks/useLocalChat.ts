@@ -25,7 +25,7 @@ import {
   type UserSettings,
 } from "~/types/settings";
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
-import type { DriveEvent } from "~/engine/local-executor";
+import type { DriveEditProposal, DriveEvent } from "~/engine/local-executor";
 import type { ExecutionLog } from "~/engine/types";
 import {
   executeSkillWorkflowTool,
@@ -60,6 +60,7 @@ export interface LocalChatOptions {
 
 export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
   onDriveEvent?: (event: DriveEvent) => void;
+  onProposeDriveEdit?: (proposal: DriveEditProposal) => Promise<boolean>;
   onMcpApp?: (app: McpAppInfo) => void;
   onSkillWorkflowLog?: (log: ExecutionLog) => void;
 }
@@ -232,6 +233,7 @@ export async function* executeLocalChat(
         args,
         {
           onDriveEvent: (event) => callbacks?.onDriveEvent?.(event),
+          onProposeDriveEdit: (proposal) => callbacks?.onProposeDriveEdit?.(proposal) ?? Promise.resolve(true),
         },
         abortSignal,
       );

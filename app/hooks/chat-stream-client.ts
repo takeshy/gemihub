@@ -16,6 +16,7 @@ import {
   type UserSettings,
 } from "~/types/settings";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall, McpAppInfo } from "~/types/chat";
+import type { DriveEditProposal } from "~/engine/local-executor";
 import type { DriveEvent } from "~/engine/local-executor";
 import type { ExecutionLog } from "~/engine/types";
 import { isDriveToolMediaResult } from "~/services/gemini-content-builders";
@@ -50,6 +51,7 @@ import {
  */
 export interface LocalChatCallbacks extends SkillWorkflowCallbacks {
   onDriveEvent?: (event: DriveEvent) => void;
+  onProposeDriveEdit?: (proposal: DriveEditProposal) => Promise<boolean>;
   onMcpApp?: (app: McpAppInfo) => void;
   onSkillWorkflowLog?: (log: ExecutionLog) => void;
 }
@@ -167,6 +169,15 @@ async function executeLocalStorageWriteTool(
         dirty: false,
       }
     : undefined);
+  if (name === "update_drive_file" && base && callbacks?.onProposeDriveEdit) {
+    const accepted = await callbacks.onProposeDriveEdit({
+      fileId: relativePath,
+      fileName: relativePath,
+      oldContent: base.content,
+      newContent: content,
+    });
+    if (!accepted) return { error: "Edit was rejected by the user.", cancelled: true };
+  }
   const next: CachedObject = base
     ? {
         ...base,
@@ -309,7 +320,10 @@ function buildToolDispatcher(
         const result = await executeLocalDriveTool(
           name,
           args,
-          { onDriveEvent: (event) => callbacks?.onDriveEvent?.(event) },
+          {
+            onDriveEvent: (event) => callbacks?.onDriveEvent?.(event),
+            onProposeDriveEdit: (proposal) => callbacks?.onProposeDriveEdit?.(proposal) ?? Promise.resolve(true),
+          },
           abortSignal,
         );
         // Strip the echoed content before it goes back to the model.

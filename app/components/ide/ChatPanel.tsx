@@ -23,6 +23,8 @@ import {
 import type { TranslationStrings } from "~/i18n/translations";
 import { MessageList } from "~/components/chat/MessageList";
 import { ChatInput, type ChatInputHandle } from "~/components/chat/ChatInput";
+import { EditConfirmationDialog } from "~/components/chat/EditConfirmationDialog";
+import type { DriveEditProposal } from "~/engine/local-executor";
 import { OkfUpdateDialog } from "~/components/chat/OkfUpdateDialog";
 import { createNewDashboard, dashboardPath, listDashboardFiles } from "~/dashboard/dashboardFile";
 import { requestOpenDashboard } from "~/dashboard/pendingDashboardOpen";
@@ -252,6 +254,17 @@ export function ChatPanel({
   onGoToDashboard,
 }: ChatPanelProps) {
   const { t, language: uiLanguage } = useI18n();
+  const [editProposal, setEditProposal] = useState<{
+    proposal: DriveEditProposal;
+    resolve: (accepted: boolean) => void;
+  } | null>(null);
+  const confirmDriveEdit = useCallback((proposal: DriveEditProposal) =>
+    new Promise<boolean>((resolve) => setEditProposal({ proposal, resolve })), []);
+  const resolveDriveEdit = useCallback((accepted: boolean) => {
+    if (!editProposal) return;
+    editProposal.resolve(accepted);
+    setEditProposal(null);
+  }, [editProposal]);
   const {
     skills,
     activeSkillIds,
@@ -1141,6 +1154,7 @@ export function ChatPanel({
           onMcpApp: (app: McpAppInfo) => {
             mcpApps = [...mcpApps, app];
           },
+          onProposeDriveEdit: confirmDriveEdit,
           onSkillWorkflowStart,
           onSkillWorkflowEnd,
           onSkillWorkflowLog,
@@ -1493,6 +1507,7 @@ export function ChatPanel({
       onSkillWorkflowStart,
       onSkillWorkflowEnd,
       onSkillWorkflowLog,
+      confirmDriveEdit,
       t,
       uiLanguage,
     ]
@@ -1908,6 +1923,15 @@ export function ChatPanel({
           salt={settings.encryption.salt}
           onUnlock={handleCryptoUnlock}
           onCancel={() => { setShowCryptoPrompt(false); setPendingEncryptedContent(null); }}
+        />
+      )}
+
+      {editProposal && (
+        <EditConfirmationDialog
+          proposal={editProposal.proposal}
+          language={uiLanguage}
+          onConfirm={() => resolveDriveEdit(true)}
+          onCancel={() => resolveDriveEdit(false)}
         />
       )}
 

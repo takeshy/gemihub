@@ -21,7 +21,7 @@ import {
   setLocalSyncMeta,
   type CachedRemoteMeta,
 } from "./indexeddb-cache";
-import type { DriveEvent } from "~/engine/local-executor";
+import type { DriveEditProposal, DriveEvent } from "~/engine/local-executor";
 
 const GEMINI_MEDIA_PREFIXES = ["image/", "audio/", "video/"];
 const GEMINI_MEDIA_EXACT = new Set(["application/pdf"]);
@@ -48,6 +48,7 @@ function isTextualMimeType(mimeType: string): boolean {
 
 interface LocalDriveToolCallbacks {
   onDriveEvent?: (event: DriveEvent) => void;
+  onProposeDriveEdit?: (proposal: DriveEditProposal) => Promise<boolean>;
 }
 
 type RenameResult =
@@ -345,6 +346,19 @@ export async function executeLocalDriveTool(
       const meta = await getCachedRemoteMeta();
       const fileMeta = meta?.files[fileId];
       const fileName = fileMeta?.name || fileId;
+
+      const oldContent = await readFileLocal(fileId);
+      if (callbacks?.onProposeDriveEdit) {
+        const accepted = await callbacks.onProposeDriveEdit({
+          fileId,
+          fileName,
+          oldContent,
+          newContent: content,
+        });
+        if (!accepted) {
+          return { error: "Edit was rejected by the user.", cancelled: true };
+        }
+      }
 
       await writeFileLocal(fileName, content, { existingFileId: fileId });
 

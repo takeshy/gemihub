@@ -146,7 +146,10 @@ function buildToolDispatcher(
       const result = await executeLocalDriveTool(
         name,
         args,
-        { onDriveEvent: (event) => callbacks?.onDriveEvent?.(event) },
+        {
+          onDriveEvent: (event) => callbacks?.onDriveEvent?.(event),
+          onProposeDriveEdit: (proposal) => callbacks?.onProposeDriveEdit?.(proposal) ?? Promise.resolve(true),
+        },
         abortSignal,
       );
       // Strip large fields for token savings

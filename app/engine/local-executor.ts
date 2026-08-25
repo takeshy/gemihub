@@ -63,6 +63,13 @@ export interface DriveEvent {
   modifiedTime?: string;
 }
 
+export interface DriveEditProposal {
+  fileId: string;
+  fileName: string;
+  oldContent: string;
+  newContent: string;
+}
+
 export interface LocalExecuteOptions {
   workflowId: string;
   workflowName?: string;
