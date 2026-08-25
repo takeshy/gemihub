@@ -593,8 +593,8 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
           )}
 
           {/* RAG sources (assistant only) */}
-          {!isUser && message.ragUsed && message.ragSources && message.ragSources.length > 0 && (
-            <RagSourcesList sources={message.ragSources} />
+          {!isUser && message.ragUsed && (
+            <RagSourcesList sources={message.ragSources ?? []} />
           )}
 
           {/* Web search indicator (assistant only) */}

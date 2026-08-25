@@ -484,6 +484,7 @@ export async function* chatWithToolsStream(
   let functionCallCount = 0;
   let lastLimitExtensionPromptLimit: number | null = null;
   let geminiTools: Tool[] | undefined;
+  let ragInvocationDetected = false;
 
   const normalizedRagStoreIds = ragStoreIds
     ?.map((id) => normalizeFileSearchStoreName(id))
@@ -621,6 +622,9 @@ export async function* chatWithToolsStream(
         if (!groundingEmitted && candidates && candidates.length > 0) {
           const groundingMetadata = candidates[0]?.groundingMetadata;
           if (groundingMetadata) {
+            if (!webSearchEnabled && normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {
+              ragInvocationDetected = true;
+            }
             if (groundingMetadata.groundingChunks) {
               for (const gc of groundingMetadata.groundingChunks) {
                 const ctx = gc.retrievedContext;
@@ -646,7 +650,7 @@ export async function* chatWithToolsStream(
         break;
       }
 
-      if (accumulatedSources.length > 0 && !groundingEmitted) {
+      if ((accumulatedSources.length > 0 || ragInvocationDetected) && !groundingEmitted) {
         if (webSearchEnabled) {
           yield { type: "web_search_used", ragSources: accumulatedSources };
         } else {
