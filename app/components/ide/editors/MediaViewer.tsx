@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense, type ReactNod
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
-import { getCachedFile, setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta, setCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { deleteCachedFile, getCachedFile, setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta, setCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { applyBinaryTempFile, isImageFileName } from "~/services/sync-client-utils";
 import { performTempUpload } from "~/services/temp-upload";
 import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
-import { guessMimeType, bytesToBase64, base64ToBytes } from "~/utils/media-utils";
+import { guessMimeType, bytesToBase64, base64ToBytes, hasPdfHeader } from "~/utils/media-utils";
 import { useEditorContext } from "~/contexts/EditorContext";
 import { IdeDocumentMemo } from "./IdeDocumentMemo";
 import type { PdfViewerHandle } from "~/components/shared/PdfViewer";
@@ -76,9 +76,21 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
         setSrc(url);
       };
 
+      let loadedFromCache = false;
       if (cached?.encoding === "base64" && cached.content) {
-        showBlob(base64ToBytes(cached.content).buffer as ArrayBuffer);
-      } else {
+        try {
+          const bytes = base64ToBytes(cached.content);
+          if (mediaType === "pdf" && !hasPdfHeader(bytes)) {
+            throw new Error("Cached PDF header is invalid");
+          }
+          showBlob(bytes.buffer as ArrayBuffer);
+          loadedFromCache = true;
+        } catch (cacheError) {
+          console.warn("Discarding invalid cached binary file.", cacheError);
+          await deleteCachedFile(fileId).catch(() => undefined);
+        }
+      }
+      if (!loadedFromCache) {
         // Fetch binary and cache to IndexedDB for offline use
         try {
           const res = await fetch(`/api/drive/files?action=raw&fileId=${fileId}`);
@@ -90,6 +102,10 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
           const arrayBuffer = await res.arrayBuffer();
           if (cancelled) return;
           const bytes = new Uint8Array(arrayBuffer);
+          if (mediaType === "pdf" && !hasPdfHeader(bytes)) {
+            setError(t("pdf.openFailed"));
+            return;
+          }
           // Cache in IndexedDB for offline use
           await setCachedFile({
             fileId,

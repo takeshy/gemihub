@@ -129,13 +129,15 @@ const PdfViewer = forwardRef<PdfViewerHandle, {
     if (!data || !container) return;
 
     let cancelled = false;
+    let loadingTask: ReturnType<typeof getDocument> | null = null;
     void (async () => {
       try {
         // pdf.js >= 5 removed the eval-based font path entirely, so no
         // isEvalSupported opt-out is needed here.
         // Copy the bytes: getDocument transfers the buffer to the worker,
         // which would detach the caller's (possibly cached) array.
-        const doc = await getDocument({ data: data.slice() }).promise;
+        loadingTask = getDocument({ data: data.slice() });
+        const doc = await loadingTask.promise;
         if (cancelled || generation !== generationRef.current) {
           doc.loadingTask.destroy().catch(() => undefined);
           return;
@@ -154,6 +156,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, {
 
     return () => {
       cancelled = true;
+      loadingTask?.destroy().catch(() => undefined);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);

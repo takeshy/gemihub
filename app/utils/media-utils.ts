@@ -43,3 +43,20 @@ export function base64ToBytes(base64: string): Uint8Array {
   }
   return bytes;
 }
+
+/** PDF headers may be preceded by a small binary comment or whitespace. */
+export function hasPdfHeader(bytes: Uint8Array): boolean {
+  const limit = Math.min(bytes.length - 4, 1024);
+  for (let i = 0; i <= limit; i++) {
+    if (
+      bytes[i] === 0x25 &&
+      bytes[i + 1] === 0x50 &&
+      bytes[i + 2] === 0x44 &&
+      bytes[i + 3] === 0x46 &&
+      bytes[i + 4] === 0x2d
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
