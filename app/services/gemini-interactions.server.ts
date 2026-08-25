@@ -16,7 +16,7 @@ import {
 } from "@google/genai";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall, Attachment, WebSearchSource } from "~/types/chat";
 import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
-import { mustUseWebSearchOnly, supportsWebSearch } from "~/types/settings";
+import { supportsWebSearch } from "~/types/settings";
 import { formatFileSearchSource, MODEL_PRICING, SEARCH_GROUNDING_COST } from "./gemini-chat-core";
 import { DEFAULT_SAFETY_SETTINGS } from "./gemini.server";
 
@@ -203,7 +203,11 @@ export function buildInteractionsTools(
 ): Interactions.Tool[] {
   const result: Interactions.Tool[] = [];
   const effectiveWebSearch = webSearchEnabled && (!model || supportsWebSearch(model));
-  const includeFunctionTools = !(model && mustUseWebSearchOnly(model) && effectiveWebSearch);
+  // The Interactions API currently rejects the tool_config required to mix a
+  // server-side built-in tool with client-executed function tools. Keep Google
+  // Search exclusive, matching the Vertex generateContent path, instead of
+  // sending an unsupported tool_config and failing the whole request.
+  const includeFunctionTools = !effectiveWebSearch;
 
   if (includeFunctionTools) {
     for (const tool of tools) {
@@ -542,14 +546,6 @@ export async function* streamInteraction(
   }
   if (params.tools && params.tools.length > 0) {
     createParams.tools = params.tools;
-
-    const hasFunctionTools = params.tools.some((tool) => tool.type === "function");
-    const hasBuiltInTools = params.tools.some((tool) => tool.type !== "function");
-    if (hasFunctionTools && hasBuiltInTools) {
-      createParams.tool_config = {
-        include_server_side_tool_invocations: true,
-      };
-    }
   }
   if (params.previousInteractionId) {
     createParams.previous_interaction_id = params.previousInteractionId;
