@@ -144,6 +144,8 @@ function normalizeFileSearchStoreName(storeName: string | null | undefined): str
 interface FileSearchRetrievedContext {
   uri?: string;
   title?: string;
+  fileName?: string;
+  file_name?: string;
   pageNumber?: number;
   page_number?: number;
   mediaId?: string;
@@ -167,6 +169,8 @@ function getCustomMetadataValue(ctx: FileSearchRetrievedContext, key: string): s
 export function formatFileSearchSource(ctx: FileSearchRetrievedContext): string | null {
   const title =
     ctx.title ||
+    ctx.fileName ||
+    ctx.file_name ||
     getCustomMetadataValue(ctx, "file_path") ||
     getCustomMetadataValue(ctx, "path") ||
     getCustomMetadataValue(ctx, "file_name") ||

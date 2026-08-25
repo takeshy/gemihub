@@ -49,6 +49,11 @@ test("formatFileSearchSource includes page and media citation details", () => {
   );
 });
 
+test("formatFileSearchSource accepts Interactions API file_name fields", () => {
+  assert.equal(formatFileSearchSource({ file_name: "docs/reference.pdf", page_number: 2 }), "docs/reference.pdf (p.2)");
+  assert.equal(formatFileSearchSource({ fileName: "notes/design.md" }), "notes/design.md");
+});
+
 test("getOrCreateStore lists File Search stores with API page size limit", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];

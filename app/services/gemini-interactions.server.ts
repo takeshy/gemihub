@@ -632,6 +632,8 @@ export async function* streamInteraction(
               if ("result" in delta && Array.isArray(delta.result)) {
                 for (const r of delta.result as Array<{
                   title?: string;
+                  fileName?: string;
+                  file_name?: string;
                   uri?: string;
                   pageNumber?: number;
                   page_number?: number;
@@ -642,6 +644,8 @@ export async function* streamInteraction(
                 }>) {
                   const source = formatFileSearchSource({
                     title: r.title,
+                    fileName: r.fileName,
+                    file_name: r.file_name,
                     uri: r.uri,
                     pageNumber: r.pageNumber,
                     page_number: r.page_number,

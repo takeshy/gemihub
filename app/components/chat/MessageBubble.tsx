@@ -316,6 +316,17 @@ function ToolCallBadges({
 }
 
 function RagSourcesList({ sources }: { sources: string[] }) {
+  const openRagSource = async (source: string) => {
+    const withoutSuffix = source.replace(/ \((?:p\.\d+|image)(?:, (?:p\.\d+|image))*\)$/, "");
+    const fileName = withoutSuffix.split("/").pop() || withoutSuffix;
+    const meta = await getCachedRemoteMeta().catch(() => null);
+    const matches = Object.entries(meta?.files ?? {}).filter(([, file]) => file.name === fileName);
+    if (matches.length === 1) {
+      const [fileId, file] = matches[0];
+      await openDriveFileById(fileId, file.name);
+    }
+  };
+
   return (
     <div className="mb-2 flex flex-wrap items-center gap-1">
       <span className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-green-700">
@@ -323,14 +334,16 @@ function RagSourcesList({ sources }: { sources: string[] }) {
         RAG
       </span>
       {sources.map((source, i) => (
-        <span
+        <button
+          type="button"
           key={i}
-          className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300"
+          onClick={() => void openRagSource(source)}
+          className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 hover:bg-green-200 hover:underline dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
           title={source}
         >
           <FileText size={10} />
           {source.split("/").pop() || source}
-        </span>
+        </button>
       ))}
     </div>
   );
