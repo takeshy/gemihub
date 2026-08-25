@@ -87,10 +87,8 @@ export function RagTab({
     const sel = overrides?.selectedRagSetting !== undefined ? overrides.selectedRagSetting : selectedRagSetting;
     const topK = overrides?.ragTopK ?? ragTopK;
     const hasGemihub = !!rs[DEFAULT_RAG_STORE_KEY];
-    const hasSettings = Object.keys(rs).length > 0;
     const fd = new FormData();
     fd.set("_action", "saveRag");
-    fd.set("ragEnabled", hasSettings ? "on" : "off");
     fd.set("ragTopK", String(topK));
     fd.set("ragSettings", JSON.stringify(rs));
     fd.set("selectedRagSetting", sel || "");
@@ -204,10 +202,8 @@ export function RagTab({
     setSyncMsg(null);
     try {
       const hasGemihub = !!rs[DEFAULT_RAG_STORE_KEY];
-      const hasSettings = Object.keys(rs).length > 0;
       const fd = new FormData();
       fd.set("_action", "saveRag");
-      fd.set("ragEnabled", hasSettings ? "on" : "off");
       fd.set("ragTopK", String(ragTopK));
       fd.set("ragSettings", JSON.stringify(rs));
       fd.set("selectedRagSetting", key);

@@ -518,7 +518,6 @@ export async function action({ request }: Route.ActionArgs) {
             { status: 400 },
           );
         }
-        const ragEnabled = formData.get("ragEnabled") === "on";
         const ragTopK = Math.min(20, Math.max(1, Number(formData.get("ragTopK")) || 5));
         const ragSettingsJson = formData.get("ragSettings") as string;
         let ragSettings: Record<string, RagSetting>;
@@ -535,7 +534,6 @@ export async function action({ request }: Route.ActionArgs) {
 
         const updatedSettings: UserSettings = {
           ...currentSettings,
-          ragEnabled,
           ragTopK,
           ragSettings,
           selectedRagSetting,

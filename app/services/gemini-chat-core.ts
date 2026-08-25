@@ -168,11 +168,11 @@ function getCustomMetadataValue(ctx: FileSearchRetrievedContext, key: string): s
 
 export function formatFileSearchSource(ctx: FileSearchRetrievedContext): string | null {
   const title =
-    ctx.title ||
-    ctx.fileName ||
-    ctx.file_name ||
     getCustomMetadataValue(ctx, "file_path") ||
     getCustomMetadataValue(ctx, "path") ||
+    ctx.fileName ||
+    ctx.file_name ||
+    ctx.title ||
     getCustomMetadataValue(ctx, "file_name") ||
     getCustomMetadataValue(ctx, "basename") ||
     ctx.uri;
@@ -489,11 +489,19 @@ export async function* chatWithToolsStream(
   let lastLimitExtensionPromptLimit: number | null = null;
   let geminiTools: Tool[] | undefined;
   let ragInvocationDetected = false;
+  let emittedRagSourceCount = -1;
 
   const normalizedRagStoreIds = ragStoreIds
     ?.map((id) => normalizeFileSearchStoreName(id))
     .filter((id): id is string => !!id);
   const webSearchEnabled = options?.webSearchEnabled ?? false;
+  if (normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {
+    console.info("[RAG debug][chat api] request", {
+      model,
+      ragStoreIds: normalizedRagStoreIds,
+      functionToolCount: tools.length,
+    });
+  }
 
   if (webSearchEnabled) {
     geminiTools = [{ googleSearch: {} }];
@@ -623,8 +631,14 @@ export async function* chatWithToolsStream(
           }
         }
 
-        if (!groundingEmitted && candidates && candidates.length > 0) {
+        if (candidates && candidates.length > 0) {
           const groundingMetadata = candidates[0]?.groundingMetadata;
+          if (normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {
+            console.info("[RAG debug][chat api] response chunk", {
+              hasGroundingMetadata: !!groundingMetadata,
+              groundingChunkCount: groundingMetadata?.groundingChunks?.length ?? 0,
+            });
+          }
           if (groundingMetadata) {
             if (!webSearchEnabled && normalizedRagStoreIds && normalizedRagStoreIds.length > 0) {
               ragInvocationDetected = true;
@@ -639,6 +653,15 @@ export async function* chatWithToolsStream(
                   accumulatedSources.push(source);
                 }
               }
+            }
+            if (
+              !webSearchEnabled &&
+              ragInvocationDetected &&
+              (!groundingEmitted || accumulatedSources.length > emittedRagSourceCount)
+            ) {
+              yield { type: "rag_used", ragSources: [...accumulatedSources] };
+              groundingEmitted = true;
+              emittedRagSourceCount = accumulatedSources.length;
             }
           }
         }

@@ -54,6 +54,13 @@ test("formatFileSearchSource accepts Interactions API file_name fields", () => {
   assert.equal(formatFileSearchSource({ fileName: "notes/design.md" }), "notes/design.md");
 });
 
+test("formatFileSearchSource prefers the registered file path over a basename", () => {
+  assert.equal(formatFileSearchSource({
+    file_name: "reference.pdf",
+    customMetadata: [{ key: "file_path", stringValue: "books/reference.pdf" }],
+  }), "books/reference.pdf");
+});
+
 test("getOrCreateStore lists File Search stores with API page size limit", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];

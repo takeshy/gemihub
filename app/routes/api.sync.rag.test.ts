@@ -9,7 +9,6 @@ test("ragRegister -> ragSave -> ragRetryPending uses bytes", async () => {
   const settings: any = {
     ragRegistrationOnPush: true,
     ragSettings: {},
-    ragEnabled: false,
     selectedRagSetting: null,
   };
 
@@ -101,7 +100,6 @@ test("ragRegister skips ineligible extension on server side", async () => {
   const settings: any = {
     ragRegistrationOnPush: true,
     ragSettings: {},
-    ragEnabled: false,
     selectedRagSetting: null,
   };
 
@@ -156,7 +154,6 @@ test("excluded pending entries are cleaned and never retried", async () => {
         files: {},
       },
     },
-    ragEnabled: false,
     selectedRagSetting: null,
   };
 
@@ -270,7 +267,6 @@ test("ragSave keeps excluded tracking as pending when remote delete fails", asyn
         },
       },
     },
-    ragEnabled: true,
     selectedRagSetting: DEFAULT_RAG_STORE_KEY,
   };
 
@@ -337,7 +333,6 @@ test("ragRetryPending includes excluded registered entries and keeps them pendin
         },
       },
     },
-    ragEnabled: true,
     selectedRagSetting: DEFAULT_RAG_STORE_KEY,
   };
 
@@ -406,7 +401,6 @@ test("ragSave does not overwrite pending fileId with null pending update", async
         },
       },
     },
-    ragEnabled: true,
     selectedRagSetting: DEFAULT_RAG_STORE_KEY,
   };
 

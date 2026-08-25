@@ -193,9 +193,8 @@ export async function handleRagAction(
       ragSetting.files ??= {};
       const excludePatterns = ragSetting.excludePatterns || [];
 
-      // Enable RAG if we have newly registered (not just pending) files
+      // Select the default store if we have newly registered files.
       if (updates.some((u) => u.ragFileInfo.status === "registered")) {
-        settings.ragEnabled = true;
         if (!settings.selectedRagSetting) {
           settings.selectedRagSetting = storeKey;
         }
@@ -349,7 +348,6 @@ export async function handleRagAction(
       }
 
       if (retriedCount > 0) {
-        retrySettings.ragEnabled = true;
         if (!retrySettings.selectedRagSetting) {
           retrySettings.selectedRagSetting = retryStoreKey;
         }

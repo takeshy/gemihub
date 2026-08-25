@@ -8,7 +8,6 @@ export const settingsFixture: UserSettings = {
   dashboardEnabled: true,
   ragFeatureEnabled: true,
   webpageBuilderEnabled: true,
-  ragEnabled: true,
   ragTopK: 8,
   ragSettings: {
     gemihub: {

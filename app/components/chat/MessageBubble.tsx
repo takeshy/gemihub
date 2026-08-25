@@ -5,6 +5,7 @@ import { ICON } from "~/utils/icon-sizes";
 import type { Message, Attachment, GeneratedImage, ToolCall, ToolResult, StreamChunkUsage, WebSearchSource } from "~/types/chat";
 import { useI18n } from "~/i18n/context";
 import { useSkills } from "~/contexts/SkillContext";
+import { useEditorContext } from "~/contexts/EditorContext";
 import { McpAppRenderer } from "./McpAppRenderer";
 import { setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { guessMimeType } from "~/utils/media-utils";
@@ -316,35 +317,56 @@ function ToolCallBadges({
 }
 
 function RagSourcesList({ sources }: { sources: string[] }) {
-  const openRagSource = async (source: string) => {
-    const withoutSuffix = source.replace(/ \((?:p\.\d+|image)(?:, (?:p\.\d+|image))*\)$/, "");
-    const fileName = withoutSuffix.split("/").pop() || withoutSuffix;
-    const meta = await getCachedRemoteMeta().catch(() => null);
-    const matches = Object.entries(meta?.files ?? {}).filter(([, file]) => file.name === fileName);
-    if (matches.length === 1) {
-      const [fileId, file] = matches[0];
-      await openDriveFileById(fileId, file.name);
-    }
+  const { fileList } = useEditorContext();
+
+  const splitRagSource = (source: string) => {
+    const match = source.match(/^(.*?)( \((?:p\.\d+|image)(?:, (?:p\.\d+|image))*\))$/);
+    return { filePath: match?.[1] ?? source, citation: match?.[2] ?? "" };
   };
+
+  const resolveRagSource = (source: string) => {
+    const { filePath: withoutSuffix } = splitRagSource(source);
+    const normalizedPath = withoutSuffix.replace(/^\/+/, "");
+    const fileName = withoutSuffix.split("/").pop() || withoutSuffix;
+    const pathMatches = fileList.filter((file) => file.path.replace(/^\/+/, "") === normalizedPath);
+    if (pathMatches.length === 1) return pathMatches[0];
+    const nameMatches = fileList.filter((file) => file.name === fileName);
+    return nameMatches.length === 1 ? nameMatches[0] : null;
+  };
+
+  if (sources.length === 0) return null;
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-1">
-      <span className="inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-green-700">
-        <BookOpen size={10} />
-        RAG
-      </span>
-      {sources.map((source, i) => (
-        <button
-          type="button"
-          key={i}
-          onClick={() => void openRagSource(source)}
-          className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 hover:bg-green-200 hover:underline dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
-          title={source}
-        >
-          <FileText size={10} />
-          {source.split("/").pop() || source}
-        </button>
-      ))}
+      {sources.map((source, i) => {
+        const target = resolveRagSource(source);
+        const { filePath, citation } = splitRagSource(source);
+        const fileLabel = filePath.split("/").pop() || filePath;
+        const fileContent = (
+          <>
+            <FileText size={10} />
+            {fileLabel}
+          </>
+        );
+        return (
+          <span key={i} className="inline-flex items-center text-xs text-green-700 dark:text-green-300" title={source}>
+            {target ? (
+              <button
+                type="button"
+                onClick={() => void openDriveFileById(target.id, target.name)}
+                className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 hover:bg-green-200 hover:underline dark:bg-green-900/30 dark:hover:bg-green-900/50"
+              >
+                {fileContent}
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 dark:bg-green-900/30">
+                {fileContent}
+              </span>
+            )}
+            {citation && <span className="ml-1">{citation.trim()}</span>}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -605,8 +627,18 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
             />
           )}
 
-          {/* RAG sources (assistant only) */}
+          {/* RAG activity uses the same visual language as function tools. */}
           {!isUser && message.ragUsed && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                <BookOpen size={10} />
+                RAG
+              </span>
+            </div>
+          )}
+
+          {/* RAG sources (assistant only) */}
+          {!isUser && message.ragUsed && message.ragSources && message.ragSources.length > 0 && (
             <RagSourcesList sources={message.ragSources ?? []} />
           )}
 

@@ -1006,14 +1006,26 @@ export function ChatPanel({
         ragFeatureEnabled && effectiveRagSetting && !isWebSearch
           ? settings.ragSettings[effectiveRagSetting]
           : null;
+      // Resolve the API path before any RAG diagnostics or async preparation
+      // so hot-reloaded code cannot observe these flags in a later TDZ.
+      const useInteractions = settings.apiPlan === "paid" && !isImageGenerationModel(effectiveModel);
+      const usePersonalVertex = !projectSelection && settings.usePersonalVertex === true;
       const ragStoreIds =
-        settings.ragEnabled && ragSetting
+        ragSetting
           ? ragSetting.isExternal
             ? ragSetting.storeIds
             : ragSetting.storeId
               ? [ragSetting.storeId]
               : []
           : [];
+      console.info("[RAG debug][client] prepared request", {
+        selectedRagSetting,
+        effectiveRagSetting,
+        ragSettingFound: !!ragSetting,
+        ragSettingType: ragSetting?.isExternal ? "external" : "internal",
+        ragStoreIds,
+        projectSelection: !!projectSelection,
+      });
 
       const effectiveMcpIds = functionToolsForcedOff
         ? []
@@ -1033,6 +1045,14 @@ export function ChatPanel({
       let generatedImages: GeneratedImage[] = [];
       let mcpApps: McpAppInfo[] = [];
       const savedWebFiles = new Map<string, { path: string; action: "created" | "updated" }>();
+
+      // Selecting a configured store means RAG is enabled for this request.
+      // Show that immediately; server events enrich the chip with actual
+      // referenced files when File Search returns results.
+      if (ragStoreIds.length > 0) {
+        ragUsed = true;
+        if (isActive()) setStreamingRagUsed(true);
+      }
       let finalMessagesForReview: Message[] | null = null;
 
       try {
@@ -1097,16 +1117,14 @@ export function ChatPanel({
           .join("\n\n") || undefined;
         const skillWorkflows = getActiveSkillWorkflows(extraSkillIds);
 
-        // Paid plan (non-image models) → Interactions API via server
-        const useInteractions = settings.apiPlan === "paid" && !isImageGenerationModel(effectiveModel);
-        // Personal Vertex: Drive-mount users who opted into Vertex AI with a
-        // prepaid budget. Takes priority over Interactions/API-key when no
-        // org project is selected.
-        // streamWithTools handles image models (responseModalities), so there
-        // is no reason to exclude them — doing so dropped an image request
-        // back onto the API-key path, which a personal-Vertex user has no key
-        // for.
-        const usePersonalVertex = !projectSelection && settings.usePersonalVertex === true;
+        // Paid plan uses Interactions; personal Vertex takes priority for a
+        // Drive-mount user who opted into it.
+        console.info("[RAG debug][client] selected API path", {
+          useInteractions,
+          usePersonalVertex,
+          projectSelection: !!projectSelection,
+          ragStoreIds,
+        });
 
         const chatCallbacks = {
           onDriveEvent: (event: import("~/engine/local-executor").DriveEvent) => {
@@ -1284,6 +1302,7 @@ export function ChatPanel({
               }
               break;
             case "rag_used":
+              console.info("[RAG debug][client] received rag_used", chunk.ragSources ?? []);
               ragUsed = true;
               ragSources = chunk.ragSources || [];
               if (isActive()) {
@@ -1315,6 +1334,11 @@ export function ChatPanel({
               if (isActive()) setStreamingContent(accumulatedContent);
               break;
             case "done": {
+              console.info("[RAG debug][client] finalizing assistant message", {
+                ragUsed,
+                ragSources,
+                ragStoreIds,
+              });
               webSearchSources = chunk.webSearchSources ?? webSearchSources;
               const assistantMessage: Message = {
                 role: "assistant",

@@ -192,6 +192,14 @@ export async function action({ request }: Route.ActionArgs) {
     ragStoreIds,
     clampedTopK,
   );
+  if (ragStoreIds && ragStoreIds.length > 0) {
+    console.info("[RAG debug][interactions route] request", {
+      model,
+      ragStoreIds,
+      toolTypes: interactionsTools.map((tool) => (tool as { type?: string }).type),
+      isResume: !!toolResults,
+    });
+  }
   const interactionModel = getInteractionModel(model, hasFunctionTools(interactionsTools));
 
   const input = toolResults

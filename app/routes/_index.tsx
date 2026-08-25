@@ -819,11 +819,10 @@ function IDEContent({
   }, [activeFileId, fileList]);
 
   const ragStoreIds = useMemo(() => {
-    if (!settings.ragEnabled) return [];
     const rs = settings.ragSettings?.["gemihub"];
     if (!rs?.storeId) return [];
     return [rs.storeId];
-  }, [settings.ragEnabled, settings.ragSettings]);
+  }, [settings.ragSettings]);
 
   // Silent workflow execution status (for shortcut-triggered background execution)
   const [silentExecStatus, setSilentExecStatus] = useState<{ id: string; name: string; state: "running" | "done" | "error" } | null>(null);

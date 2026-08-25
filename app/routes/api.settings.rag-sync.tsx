@@ -145,7 +145,6 @@ export async function action({ request }: Route.ActionArgs) {
         // Update settings with sync results
         const hasRegistered = Object.values(result.newFiles).some((f) => f.status === "registered");
         if (hasRegistered) {
-          settings.ragEnabled = true;
           if (!settings.selectedRagSetting) {
             settings.selectedRagSetting = settingName;
           }

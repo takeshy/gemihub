@@ -570,6 +570,11 @@ export async function* streamInteraction(
 
     for await (const event of stream) {
       const eventType = (event as { event_type?: string }).event_type;
+      if (params.ragStoreIds && params.ragStoreIds.length > 0) {
+        const stepType = (event as { step?: { type?: string }; delta?: { type?: string } }).step?.type
+          ?? (event as { delta?: { type?: string } }).delta?.type;
+        console.info("[RAG debug][interactions stream] event", { eventType, stepType });
+      }
 
       switch (eventType) {
         case "interaction.created": {
@@ -595,6 +600,10 @@ export async function* streamInteraction(
             }
           } else if (step?.type === "file_search_call") {
             fileSearchUsed = true;
+            if (!ragEmitted) {
+              ragEmitted = true;
+              yield { type: "rag_used", ragSources: [] };
+            }
           }
           break;
         }
@@ -619,6 +628,54 @@ export async function* streamInteraction(
                 }
               }
               break;
+
+            case "text_annotation_delta": {
+              const annotations = Array.isArray(delta.annotations)
+                ? delta.annotations as Array<{
+                    type?: string;
+                    file_name?: string;
+                    source?: string;
+                    document_uri?: string;
+                    page_number?: number;
+                    media_id?: string;
+                    custom_metadata?: Record<string, unknown> | Array<{
+                      key?: string;
+                      stringValue?: string;
+                      string_value?: string;
+                      numericValue?: number;
+                      numeric_value?: number;
+                    }>;
+                  }>
+                : [];
+              let sourceAdded = false;
+              for (const annotation of annotations) {
+                if (annotation.type !== "file_citation") continue;
+                fileSearchUsed = true;
+                const customMetadata = Array.isArray(annotation.custom_metadata)
+                  ? annotation.custom_metadata
+                  : Object.entries(annotation.custom_metadata ?? {}).map(([key, value]) => ({
+                      key,
+                      stringValue: typeof value === "string" ? value : JSON.stringify(value),
+                    }));
+                const source = formatFileSearchSource({
+                  file_name: annotation.file_name,
+                  title: annotation.source,
+                  uri: annotation.document_uri,
+                  page_number: annotation.page_number,
+                  media_id: annotation.media_id,
+                  customMetadata,
+                });
+                if (source && !accumulatedSources.includes(source)) {
+                  accumulatedSources.push(source);
+                  sourceAdded = true;
+                }
+              }
+              if (sourceAdded) {
+                ragEmitted = true;
+                yield { type: "rag_used", ragSources: [...accumulatedSources] };
+              }
+              break;
+            }
 
             case "arguments_delta":
               if ("arguments" in delta && delta.arguments) {
@@ -658,6 +715,8 @@ export async function* streamInteraction(
                   }
                 }
               }
+              ragEmitted = true;
+              yield { type: "rag_used", ragSources: [...accumulatedSources] };
               break;
 
             case "google_search_result":

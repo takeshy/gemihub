@@ -623,7 +623,6 @@ export interface UserSettings {
   mcpServers: McpServerConfig[];
   encryption: EncryptionSettings;
   editHistory: EditHistorySettings;
-  ragEnabled: boolean;
   ragTopK: number;
   ragSettings: Record<string, RagSetting>;
   selectedRagSetting: string | null;
@@ -774,7 +773,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   mcpServers: [],
   encryption: DEFAULT_ENCRYPTION_SETTINGS,
   editHistory: DEFAULT_EDIT_HISTORY_SETTINGS,
-  ragEnabled: false,
   ragTopK: 5,
   ragSettings: {},
   selectedRagSetting: null,
