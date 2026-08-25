@@ -579,6 +579,8 @@ export interface TranslationStrings {
   "settings.rag.syncFailed": string;
   "settings.rag.noResponseBody": string;
   "settings.rag.syncError": string;
+  "settings.rag.aqKeyUnsupportedTitle": string;
+  "settings.rag.aqKeyUnsupportedDescription": string;
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": string;
@@ -900,6 +902,7 @@ export interface TranslationStrings {
 
   // Workflow
   "workflow.nodeComment": string;
+  "workflow.showProgress": string;
   "workflow.pushRequired": string;
   "workflow.retryFromHere": string;
   "workflow.retryFromError": string;
@@ -1991,6 +1994,8 @@ const en: TranslationStrings = {
   "settings.rag.syncFailed": "Sync failed.",
   "settings.rag.noResponseBody": "No response body.",
   "settings.rag.syncError": "Sync error.",
+  "settings.rag.aqKeyUnsupportedTitle": "RAG is unavailable with this Gemini API key",
+  "settings.rag.aqKeyUnsupportedDescription": "Gemini File Search does not currently accept AQ-format authorization keys. RAG settings and synchronization are disabled until Google adds compatibility or OAuth/ADC authentication is configured.",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "Encrypt Chat History",
@@ -2312,6 +2317,7 @@ const en: TranslationStrings = {
 
   // Workflow
   "workflow.nodeComment": "Comment",
+  "workflow.showProgress": "Show progress",
   "workflow.pushRequired": "Push to sync changes with server before executing",
   "workflow.retryFromHere": "Retry from here",
   "workflow.retryFromError": "Retry from error",
@@ -3403,6 +3409,8 @@ const ja: TranslationStrings = {
   "settings.rag.syncFailed": "同期に失敗しました。",
   "settings.rag.noResponseBody": "レスポンスがありません。",
   "settings.rag.syncError": "同期エラー。",
+  "settings.rag.aqKeyUnsupportedTitle": "このGemini APIキーではRAGを利用できません",
+  "settings.rag.aqKeyUnsupportedDescription": "Gemini File Searchは現在、AQ.で始まる認証キーに対応していません。Google側で互換性が提供されるか、OAuth / ADC認証に対応するまで、RAGの設定と同期は無効です。",
 
   // Encryption (integrated into General tab)
   "settings.encryption.encryptChat": "チャット履歴を暗号化",
@@ -3724,6 +3732,7 @@ const ja: TranslationStrings = {
 
   // Workflow
   "workflow.nodeComment": "コメント",
+  "workflow.showProgress": "進捗を表示",
   "workflow.pushRequired": "Pushしてサーバー側に反映しないと実行できません",
   "workflow.retryFromHere": "ここからリトライ",
   "workflow.retryFromError": "エラーからリトライ",

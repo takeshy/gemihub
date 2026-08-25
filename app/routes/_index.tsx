@@ -1312,6 +1312,7 @@ function IDEContent({
       <div className={`h-full flex flex-col ${rightPanel === "chat" && !activePluginSidebarView ? "" : "hidden"}`}>
         <ChatPanel
           settings={settings}
+          rootFolderId={rootFolderId}
           hasApiKey={hasGeminiApiKey}
           hasEncryptedApiKey={hasEncryptedApiKey}
           onNeedUnlock={() => setShowPasswordPrompt(true)}

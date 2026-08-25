@@ -2,7 +2,7 @@ import type { Route } from "./+types/api.settings.rag-sync";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
 import { getSettings, saveSettings } from "~/services/user-settings.server";
-import { FILE_SEARCH_EMBEDDING_MODEL, smartSync, getOrCreateStore } from "~/services/file-search.server";
+import { FILE_SEARCH_EMBEDDING_MODEL, smartSync, getOrCreateStore, isUnsupportedFileSearchApiKey } from "~/services/file-search.server";
 
 // ---------------------------------------------------------------------------
 // POST -- RAG sync with SSE progress
@@ -28,6 +28,12 @@ export async function action({ request }: Route.ActionArgs) {
   if (!apiKey) {
     return Response.json(
       { error: "Gemini API key not configured" },
+      { status: 400, headers: responseHeaders }
+    );
+  }
+  if (isUnsupportedFileSearchApiKey(apiKey)) {
+    return Response.json(
+      { error: "RAG is unavailable because Gemini File Search does not currently accept AQ-format authorization keys." },
       { status: 400, headers: responseHeaders }
     );
   }

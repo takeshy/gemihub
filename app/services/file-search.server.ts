@@ -11,6 +11,10 @@ export const FILE_SEARCH_EMBEDDING_MODEL = "models/gemini-embedding-2";
 const FILE_SEARCH_STORES_PAGE_SIZE = 20;
 const FILE_SEARCH_STORE_PREFIX = "fileSearchStores/";
 
+export function isUnsupportedFileSearchApiKey(apiKey: string | null | undefined): boolean {
+  return /^AQ\./i.test(apiKey?.trim() ?? "");
+}
+
 export interface SyncResult {
   uploaded: string[];
   skipped: string[];
@@ -96,6 +100,12 @@ async function fileSearchRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
+  if (/^(?:ya29\.|Bearer\s+)/i.test(apiKey.trim())) {
+    throw new Error(
+      "Gemini File Search requires a Gemini API key from Google AI Studio; " +
+      "the configured credential is a Google OAuth access token. Replace the API key in Settings > General."
+    );
+  }
   // API key goes in a header, never the URL — query strings end up in access
   // logs, proxies, and Referer headers.
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${path}`, {
@@ -108,6 +118,21 @@ async function fileSearchRequest<T>(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|Expected OAuth 2 access token/i.test(text)) {
+      if (isUnsupportedFileSearchApiKey(apiKey)) {
+        throw new Error(
+          "Gemini File Search rejected the registered AQ-format Gemini API key " +
+          "(ACCESS_TOKEN_TYPE_UNSUPPORTED). This is a Google Gemini API authentication compatibility issue, " +
+          "not a missing GemiHub key. Try a Gemini API key created for generativelanguage.googleapis.com " +
+          "in Google Cloud, or retry after Google enables File Search for this auth-key type."
+        );
+      }
+      throw new Error(
+        "Gemini File Search rejected the registered Gemini API key " +
+        "(ACCESS_TOKEN_TYPE_UNSUPPORTED). Verify that the key is enabled for the Gemini API " +
+        "(generativelanguage.googleapis.com), then replace or unlock it in Settings > General."
+      );
+    }
     throw new Error(`Gemini File Search API error ${res.status}: ${text || res.statusText}`);
   }
   return await res.json() as T;

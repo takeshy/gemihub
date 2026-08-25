@@ -41,6 +41,7 @@ import type { EnterpriseSessionContext } from "~/types/enterprise";
 import { PluginProvider } from "~/contexts/PluginContext";
 import { isActivePremiumAccount } from "~/types/hubwork";
 import { resolveSubmittedGeminiApiKey } from "~/utils/settings-api-key";
+import { isUnsupportedFileSearchApiKey } from "~/services/file-search.server";
 import {
   SettingsTemplate,
   isSettingsTabId,
@@ -221,6 +222,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     {
       settings: { ...mergedSettings, language: effectiveLanguage },
       hasApiKey: !!validTokens.geminiApiKey,
+      hasUnsupportedRagApiKey: isUnsupportedFileSearchApiKey(validTokens.geminiApiKey),
       maskedKey: validTokens.geminiApiKey ? maskApiKey(validTokens.geminiApiKey) : null,
       hasHubworkScopes,
       rootFolderId: validTokens.rootFolderId,
@@ -507,6 +509,15 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       case "saveRag": {
+        if (isUnsupportedFileSearchApiKey(validTokens.geminiApiKey)) {
+          return jsonWithCookie(
+            {
+              success: false,
+              message: "RAG is unavailable because Gemini File Search does not currently accept AQ-format authorization keys.",
+            },
+            { status: 400 },
+          );
+        }
         const ragEnabled = formData.get("ragEnabled") === "on";
         const ragTopK = Math.min(20, Math.max(1, Number(formData.get("ragTopK")) || 5));
         const ragSettingsJson = formData.get("ragSettings") as string;
@@ -831,7 +842,7 @@ clientLoader.hydrate = true as const;
 // ---------------------------------------------------------------------------
 
 export default function Settings() {
-  const { settings, hasApiKey, maskedKey, hasHubworkScopes, rootFolderId, enterprise, hasOrganizations, showEnterpriseTab, enterpriseError } = useLoaderData<typeof loader>();
+  const { settings, hasApiKey, hasUnsupportedRagApiKey, maskedKey, hasHubworkScopes, rootFolderId, enterprise, hasOrganizations, showEnterpriseTab, enterpriseError } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
 
@@ -895,6 +906,7 @@ export default function Settings() {
         <SettingsTemplate
           settings={settings}
           hasApiKey={hasApiKey}
+          hasUnsupportedRagApiKey={hasUnsupportedRagApiKey}
           maskedKey={maskedKey}
           hasHubworkScopes={hasHubworkScopes}
           rootFolderId={rootFolderId}

@@ -132,6 +132,7 @@ export interface McpToolInfo {
     ui?: {
       resourceUri: string;
     };
+    "ui/resourceUri"?: string;
   };
 }
 
@@ -165,7 +166,19 @@ export interface McpAppResult {
     ui?: {
       resourceUri: string;
     };
+    "ui/resourceUri"?: string;
   };
+}
+
+export interface McpAppCsp {
+  connectDomains?: string[];
+  connect_domains?: string[];
+  resourceDomains?: string[];
+  resource_domains?: string[];
+  frameDomains?: string[];
+  frame_domains?: string[];
+  baseUriDomains?: string[];
+  base_uri_domains?: string[];
 }
 
 export interface McpAppUiResource {
@@ -173,6 +186,11 @@ export interface McpAppUiResource {
   mimeType: string;
   text?: string;
   blob?: string;
+  _meta?: {
+    ui?: {
+      csp?: McpAppCsp;
+    };
+  };
 }
 
 // API Plan

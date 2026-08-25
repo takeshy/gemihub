@@ -206,6 +206,11 @@ export interface McpToolExecutionResult {
   mcpApp?: McpAppInfo;
 }
 
+export function getMcpAppResourceUri(meta?: McpToolInfo["_meta"] | McpAppInfo["toolResult"]["_meta"]): string | undefined {
+  const uri = meta?.ui?.resourceUri ?? meta?.["ui/resourceUri"];
+  return typeof uri === "string" && uri.startsWith("ui://") ? uri : undefined;
+}
+
 /**
  * Build a tool map from server configs, matching obsidian-gemini-helper's createMcpToolExecutor pattern.
  * Maps prefixed tool names to { server, mcpToolName (original name) }.
@@ -305,11 +310,12 @@ async function executeToolOnServer(
         : appResult.content);
 
     // Check for MCP App UI metadata - check result first, then tool definition as fallback
-    let resourceUri = appResult._meta?.ui?.resourceUri;
+    let resourceUri = getMcpAppResourceUri(appResult._meta);
     if (!resourceUri && server.tools) {
       const toolInfo = server.tools.find((t) => t.name === actualToolName);
-      if (toolInfo?._meta?.ui?.resourceUri) {
-        resourceUri = toolInfo._meta.ui.resourceUri;
+      const toolResourceUri = getMcpAppResourceUri(toolInfo?._meta);
+      if (toolResourceUri) {
+        resourceUri = toolResourceUri;
         // Also set on appResult so client has access
         if (!appResult._meta) appResult._meta = {};
         if (!appResult._meta.ui) appResult._meta.ui = { resourceUri };

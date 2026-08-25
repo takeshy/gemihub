@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { McpClient, MCP_PROTOCOL_VERSION } from "./mcp-client.server";
+import { McpClient, MCP_APPS_CLIENT_CAPABILITIES, MCP_PROTOCOL_VERSION } from "./mcp-client.server";
 
 interface CapturedRequest {
   httpMethod: string;
@@ -71,7 +71,7 @@ test("uses a complete stateless 2026-07-28 request envelope", async (t) => {
       name: "gemihub",
       version: "1.0.0",
     });
-    assert.deepEqual(meta["io.modelcontextprotocol/clientCapabilities"], {});
+    assert.deepEqual(meta["io.modelcontextprotocol/clientCapabilities"], MCP_APPS_CLIENT_CAPABILITIES);
   }
 });
 
@@ -132,6 +132,8 @@ test("falls back to the legacy initialize lifecycle and closes its session", asy
     ["server/discover", "initialize", "notifications/initialized", "tools/list", "DELETE"]
   );
   assert.equal(requests[1].headers.get("MCP-Protocol-Version"), null);
+  const initializeParams = requests[1].body?.params as Record<string, unknown>;
+  assert.deepEqual(initializeParams.capabilities, MCP_APPS_CLIENT_CAPABILITIES);
   for (const request of requests.slice(2)) {
     assert.equal(request.headers.get("Mcp-Session-Id"), "legacy-session");
     assert.equal(request.headers.get("MCP-Protocol-Version"), "2024-11-05");

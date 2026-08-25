@@ -28,6 +28,13 @@ import { AutocompletePopup } from "./AutocompletePopup";
 import { SkillSelector } from "./SkillSelector";
 import { OkfSelector } from "./OkfSelector";
 import type { OkfBundle } from "~/services/okf-loader";
+import {
+  appendPromptHistory,
+  isCaretOnFirstLine,
+  isCaretOnLastLine,
+  parsePromptHistory,
+  promptHistoryStorageKey,
+} from "./chat-prompt-history";
 
 export interface ChatInputHandle {
   /** Fills the composer with draft text and focuses it, without sending. */
@@ -43,6 +50,8 @@ interface ChatInputProps {
   ragSettings?: Record<string, RagSetting>;
   selectedRagSetting?: string | null;
   onRagSettingChange?: (name: string | null) => void;
+  webSearchEnabled?: boolean;
+  onWebSearchChange?: (enabled: boolean) => void;
   onStop?: () => void;
   isStreaming?: boolean;
   driveToolMode?: DriveToolMode;
@@ -69,6 +78,7 @@ interface ChatInputProps {
   activeOkfBundleIds?: string[];
   onToggleOkfBundle?: (bundleId: string) => void;
   onRefreshOkfBundles?: () => void;
+  historyScope: string;
 }
 
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024; // 20MB
@@ -172,6 +182,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   ragSettings,
   selectedRagSetting,
   onRagSettingChange,
+  webSearchEnabled = false,
+  onWebSearchChange,
   onStop,
   isStreaming,
   driveToolMode = "all",
@@ -198,6 +210,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   activeOkfBundleIds = [],
   onToggleOkfBundle,
   onRefreshOkfBundles,
+  historyScope,
 }: ChatInputProps, ref) {
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -207,6 +220,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [pendingOverrides, setPendingOverrides] = useState<ChatOverrides | null>(null);
   const [dismissedFileId, setDismissedFileId] = useState<string | null>(null);
+  const [promptHistory, setPromptHistory] = useState<string[]>([]);
 
   // Reset dismissed state when switching chats (lastFileIdInMessages changes)
   useEffect(() => {
@@ -217,13 +231,43 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
+  const historyIndexRef = useRef<number | null>(null);
+  const historyDraftRef = useRef("");
+
+  useEffect(() => {
+    try {
+      setPromptHistory(parsePromptHistory(localStorage.getItem(promptHistoryStorageKey(historyScope))));
+    } catch {
+      setPromptHistory([]);
+    }
+    historyIndexRef.current = null;
+    historyDraftRef.current = "";
+  }, [historyScope]);
+
+  const rememberPrompt = useCallback((prompt: string) => {
+    setPromptHistory((previous) => {
+      const next = appendPromptHistory(previous, prompt);
+      try {
+        localStorage.setItem(promptHistoryStorageKey(historyScope), JSON.stringify(next));
+      } catch {
+        // History is an optional convenience; storage denial must not block chat.
+      }
+      return next;
+    });
+  }, [historyScope]);
+
+  const resetHistoryNavigation = useCallback(() => {
+    historyIndexRef.current = null;
+    historyDraftRef.current = "";
+  }, []);
 
   useImperativeHandle(ref, () => ({
     setDraft: (text: string) => {
       setContent(text);
+      resetHistoryNavigation();
       requestAnimationFrame(() => textareaRef.current?.focus());
     },
-  }), []);
+  }), [resetHistoryNavigation]);
 
   const { t } = useI18n();
 
@@ -304,6 +348,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     if (!trimmed && attachments.length === 0) return;
     if (disabled || isStreaming) return;
 
+    if (trimmed) rememberPrompt(trimmed);
+    resetHistoryNavigation();
+
     // Intercept /compact command
     if (trimmed === "/compact" && onCompact) {
       if (messageCount >= 2) {
@@ -360,9 +407,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     // Resolve @filename references against the final effective drive tool mode,
     // including model/RAG-driven forced constraints.
     const effectiveModel = effectiveOverrides?.model || selectedModel;
-    const effectiveSearchSetting =
-      effectiveOverrides?.searchSetting !== undefined
-        ? effectiveOverrides.searchSetting
+    const effectiveSearchSetting = effectiveOverrides?.searchSetting !== undefined
+      ? effectiveOverrides.searchSetting
+      : webSearchEnabled
+        ? "__websearch__"
         : selectedRagSetting;
     const requestedMode = effectiveOverrides?.driveToolMode ?? driveToolMode;
     const effectiveMode =
@@ -388,7 +436,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, shouldAutoContextActiveFile, onCompact, messageCount, skills]);
+  }, [content, attachments, disabled, isStreaming, onSend, editorCtx, pendingOverrides, driveToolMode, selectedModel, selectedRagSetting, webSearchEnabled, shouldAutoContextActiveFile, onCompact, messageCount, skills, rememberPrompt, resetHistoryNavigation]);
 
   const handleAutocompleteSelect = useCallback(
     (item: AutocompleteItem) => {
@@ -477,12 +525,42 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           return;
         }
       }
+      if (
+        !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
+        && promptHistory.length > 0
+        && e.currentTarget.selectionStart === e.currentTarget.selectionEnd
+      ) {
+        const caret = e.currentTarget.selectionStart;
+        if (e.key === "ArrowUp" && isCaretOnFirstLine(content, caret)) {
+          e.preventDefault();
+          if (historyIndexRef.current === null) historyDraftRef.current = content;
+          const nextIndex = historyIndexRef.current === null
+            ? promptHistory.length - 1
+            : Math.max(0, historyIndexRef.current - 1);
+          historyIndexRef.current = nextIndex;
+          const nextPrompt = promptHistory[nextIndex];
+          setContent(nextPrompt);
+          requestAnimationFrame(() => textareaRef.current?.setSelectionRange(nextPrompt.length, nextPrompt.length));
+          return;
+        }
+        if (e.key === "ArrowDown" && historyIndexRef.current !== null && isCaretOnLastLine(content, caret)) {
+          e.preventDefault();
+          const nextIndex = historyIndexRef.current + 1;
+          const nextPrompt = nextIndex >= promptHistory.length
+            ? historyDraftRef.current
+            : promptHistory[nextIndex];
+          historyIndexRef.current = nextIndex >= promptHistory.length ? null : nextIndex;
+          setContent(nextPrompt);
+          requestAnimationFrame(() => textareaRef.current?.setSelectionRange(nextPrompt.length, nextPrompt.length));
+          return;
+        }
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend, autocomplete, handleAutocompleteSelect]
+    [handleSend, autocomplete, handleAutocompleteSelect, promptHistory, content]
   );
 
   const handleFileSelect = useCallback(
@@ -782,6 +860,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
               onChange={(e) => {
                 const val = e.target.value;
                 setContent(val);
+                historyIndexRef.current = null;
                 // Clear overrides if user modifies text after command selection
                 if (pendingOverrides && !val.startsWith("/")) {
                   // Keep overrides - user may be editing the template
@@ -868,8 +947,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           />
         )}
 
-        {/* Model selector and RAG selector row */}
-        <div className="mt-2 flex items-center gap-3">
+        {/* Model selector and mutually exclusive search controls. */}
+        <div className="mt-2 flex items-start gap-3">
           {/* Model selector */}
           <div ref={modelDropdownRef} className="relative">
             <button
@@ -913,25 +992,37 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             )}
           </div>
 
-          {/* RAG / Web Search selector */}
-          {onRagSettingChange && (
-            <select
-              value={selectedRagSetting ?? ""}
-              onChange={(e) =>
-                onRagSettingChange(e.target.value || null)
-              }
-              disabled={isStreaming}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-            >
-              <option value="">No RAG</option>
-              {supportsWebSearch(selectedModel) && <option value="__websearch__">Web Search</option>}
-              {ragSettingKeys.map((name) => (
-                <option key={name} value={name}>
-                  RAG: {name}
-                </option>
-              ))}
-            </select>
-          )}
+          {/* Web Search sits above RAG in one column. */}
+          <div className="flex flex-col items-start gap-1.5">
+            {onWebSearchChange && supportsWebSearch(selectedModel) && (
+              <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={webSearchEnabled}
+                  onChange={(event) => onWebSearchChange(event.currentTarget.checked)}
+                  disabled={isStreaming}
+                />
+                <span>Web Search</span>
+              </label>
+            )}
+            {onRagSettingChange && ragSettings && (
+              <select
+                value={selectedRagSetting ?? ""}
+                onChange={(e) =>
+                  onRagSettingChange(e.target.value || null)
+                }
+                disabled={isStreaming}
+                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+              >
+                <option value="">RAG: None</option>
+                {ragSettingKeys.map((name) => (
+                  <option key={name} value={name}>
+                    RAG: {name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
       </div>

@@ -27,7 +27,13 @@ function normalizeOkfRoot(value: string): string {
   return value.trim().replace(/^\/+|\/+$/g, "") || DEFAULT_OKF_ROOT;
 }
 
-export function RagTab({ settings }: { settings: UserSettings }) {
+export function RagTab({
+  settings,
+  disabledByApiKey = false,
+}: {
+  settings: UserSettings;
+  disabledByApiKey?: boolean;
+}) {
   const fetcher = useFetcher();
   const { t } = useI18n();
 
@@ -284,6 +290,20 @@ export function RagTab({ settings }: { settings: UserSettings }) {
     const registered = files.filter((f) => f.status === "registered").length;
     return { total, registered, pending: total - registered };
   }, [ragSettings]);
+
+  if (disabledByApiKey) {
+    return (
+      <SectionCard>
+        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          <Database size={18} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold">{t("settings.rag.aqKeyUnsupportedTitle")}</p>
+            <p className="mt-1">{t("settings.rag.aqKeyUnsupportedDescription")}</p>
+          </div>
+        </div>
+      </SectionCard>
+    );
+  }
 
   return (
     <SectionCard>

@@ -88,7 +88,7 @@ function IdeScene({ mode, language = "ja", organization = false }: { mode: Mode;
   ];
   const rightPanel = workflowMode
     ? <WorkflowPropsPanel activeFileId="weekly" activeFileName="weekly-content-report.yaml" onNewWorkflow={() => undefined} onSelectFile={() => undefined} settings={settings} externalExecStatus={mode === "execution" ? { fileId: "weekly", state: "done" } : null} externalLogs={mode === "execution" ? executionLogs : undefined} />
-    : <Suspense fallback={<div className="p-4 text-sm text-gray-500">Loading chat…</div>}><ChatPanel settings={settings} hasApiKey slashCommands={settings.slashCommands} /></Suspense>;
+    : <Suspense fallback={<div className="p-4 text-sm text-gray-500">Loading chat…</div>}><ChatPanel settings={settings} rootFolderId="storybook-root" hasApiKey slashCommands={settings.slashCommands} /></Suspense>;
 
   const syncFiles: FileListItem[] = mode === "pull" ? [
     { id: "weekly", name: "Workflows/weekly-content-report.yaml", type: "modified" },

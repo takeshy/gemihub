@@ -224,6 +224,7 @@ async function runWebpageAutoReview(args: RunAutoReviewArgs): Promise<void> {
 
 interface ChatPanelProps {
   settings: UserSettings;
+  rootFolderId: string;
   hasApiKey: boolean;
   hasEncryptedApiKey?: boolean;
   onNeedUnlock?: () => void;
@@ -239,6 +240,7 @@ interface ChatPanelProps {
 
 export function ChatPanel({
   settings,
+  rootFolderId,
   hasApiKey,
   hasEncryptedApiKey = false,
   onNeedUnlock,
@@ -383,18 +385,26 @@ export function ChatPanel({
     }
   }, [availableModels, selectedModel]);
 
-  // RAG is an advanced, opt-in feature. Web search shares this selector and
-  // stays available regardless.
+  // RAG is an advanced, opt-in feature. Web Search is an independent control.
   const ragFeatureEnabled = settings.ragFeatureEnabled ?? false;
   const [selectedRagSetting, setSelectedRagSetting] = useState<string | null>(() => {
     try {
       const stored = localStorage.getItem("gemihub:selectedRagSetting");
-      if (stored === "__websearch__") return stored;
+      if (stored === "__websearch__") return null;
       if (stored !== null) return (settings.ragFeatureEnabled ?? false) ? stored || null : null;
     } catch { /* ignore */ }
     return null;
   });
-  const initialConstraint = getDriveToolModeConstraint(defaultModel, selectedRagSetting);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("gemihub:webSearchEnabled") === "true"
+        || localStorage.getItem("gemihub:selectedRagSetting") === "__websearch__";
+    } catch { return false; }
+  });
+  const initialConstraint = getDriveToolModeConstraint(
+    defaultModel,
+    webSearchEnabled ? "__websearch__" : selectedRagSetting,
+  );
   const [driveToolMode, setDriveToolMode] = useState<DriveToolMode>(
     initialConstraint.forcedMode ?? initialConstraint.defaultMode
   );
@@ -844,8 +854,8 @@ export function ChatPanel({
 
   // ---- Constraint-based auto-control ----
   const toolConstraint = useMemo(
-    () => getDriveToolModeConstraint(selectedModel, selectedRagSetting),
-    [selectedModel, selectedRagSetting]
+    () => getDriveToolModeConstraint(selectedModel, webSearchEnabled ? "__websearch__" : selectedRagSetting),
+    [selectedModel, selectedRagSetting, webSearchEnabled]
   );
 
   const applyConstraint = useCallback(
@@ -867,12 +877,27 @@ export function ChatPanel({
 
   const handleRagSettingChange = useCallback(
     (name: string | null) => {
-      if (name === "__websearch__" && !supportsWebSearch(selectedModel)) {
-        name = null;
-      }
       setSelectedRagSetting(name);
       try { localStorage.setItem("gemihub:selectedRagSetting", name ?? ""); } catch { /* ignore */ }
+      if (name) {
+        setWebSearchEnabled(false);
+        try { localStorage.setItem("gemihub:webSearchEnabled", "false"); } catch { /* ignore */ }
+      }
       applyConstraint(selectedModel, name);
+    },
+    [selectedModel, applyConstraint]
+  );
+
+  const handleWebSearchChange = useCallback(
+    (enabled: boolean) => {
+      const next = enabled && supportsWebSearch(selectedModel);
+      setWebSearchEnabled(next);
+      try { localStorage.setItem("gemihub:webSearchEnabled", String(next)); } catch { /* ignore */ }
+      if (next) {
+        setSelectedRagSetting(null);
+        try { localStorage.setItem("gemihub:selectedRagSetting", ""); } catch { /* ignore */ }
+      }
+      applyConstraint(selectedModel, next ? "__websearch__" : null);
     },
     [selectedModel, applyConstraint]
   );
@@ -880,9 +905,13 @@ export function ChatPanel({
   const handleModelChange = useCallback(
     (model: ModelType) => {
       setSelectedModel(model);
-      applyConstraint(model, selectedRagSetting);
+      if (webSearchEnabled && !supportsWebSearch(model)) {
+        setWebSearchEnabled(false);
+        try { localStorage.setItem("gemihub:webSearchEnabled", "false"); } catch { /* ignore */ }
+      }
+      applyConstraint(model, webSearchEnabled && supportsWebSearch(model) ? "__websearch__" : selectedRagSetting);
     },
-    [selectedRagSetting, applyConstraint]
+    [selectedRagSetting, webSearchEnabled, applyConstraint]
   );
 
   // ---- Send message ----
@@ -929,14 +958,18 @@ export function ChatPanel({
           effectiveModel = fallbackImage.name;
         }
       }
-      let effectiveRagSetting = overrides?.searchSetting !== undefined ? overrides.searchSetting : selectedRagSetting;
-      if (effectiveRagSetting === "__websearch__" && !supportsWebSearch(effectiveModel)) {
-        effectiveRagSetting = null;
-      }
+      const hasSearchOverride = overrides?.searchSetting !== undefined;
+      const overrideSearchSetting = overrides?.searchSetting;
+      const isWebSearch = supportsWebSearch(effectiveModel) && (
+        hasSearchOverride ? overrideSearchSetting === "__websearch__" : webSearchEnabled
+      );
+      const effectiveRagSetting = hasSearchOverride
+        ? overrideSearchSetting === "__websearch__" ? null : (overrideSearchSetting ?? null)
+        : isWebSearch ? null : selectedRagSetting;
       const requestedDriveToolMode = overrides?.driveToolMode || driveToolMode;
       const effectiveConstraint = getDriveToolModeConstraint(
         effectiveModel,
-        effectiveRagSetting
+        isWebSearch ? "__websearch__" : effectiveRagSetting
       );
       const effectiveDriveToolMode =
         effectiveConstraint.forcedMode ?? requestedDriveToolMode;
@@ -968,8 +1001,6 @@ export function ChatPanel({
       abortControllerRef.current = abortController;
 
       const { isActive, saveResult, cleanup: cleanupStream } = createStreamSession();
-
-      const isWebSearch = effectiveRagSetting === "__websearch__" && supportsWebSearch(effectiveModel);
 
       const ragSetting =
         ragFeatureEnabled && effectiveRagSetting && !isWebSearch
@@ -1422,6 +1453,7 @@ export function ChatPanel({
       messages,
       selectedModel,
       selectedRagSetting,
+      webSearchEnabled,
       driveToolMode,
       enabledMcpServerIds,
       availableMcpServers,
@@ -1797,6 +1829,7 @@ export function ChatPanel({
       <ChatInput
         ref={chatInputRef}
         onSend={handleSend}
+        historyScope={enterpriseSelection?.projectId || rootFolderId}
         // A Gemini API key is only needed on the Drive mount with the free
         // plan: an org project runs on the tenant's Vertex AI and the paid
         // plan goes through the server-side Interactions proxy.
@@ -1807,6 +1840,8 @@ export function ChatPanel({
         ragSettings={ragFeatureEnabled && Object.keys(settings.ragSettings ?? {}).length > 0 ? settings.ragSettings : undefined}
         selectedRagSetting={selectedRagSetting}
         onRagSettingChange={handleRagSettingChange}
+        webSearchEnabled={webSearchEnabled}
+        onWebSearchChange={handleWebSearchChange}
         onStop={handleStop}
         isStreaming={isStreaming}
         driveToolMode={driveToolMode}

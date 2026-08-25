@@ -67,11 +67,14 @@ export async function executeSkillWorkflowTool(
 
 
   const workflowFileName = match.workflow.path.split("/").pop() || match.workflow.name || workflowId;
-  callbacks?.onSkillWorkflowStart?.(fileId, workflowFileName);
+  const showProgress = workflow.options?.showProgress !== false;
+  if (showProgress) callbacks?.onSkillWorkflowStart?.(fileId, workflowFileName);
 
   const savedFiles: Array<{ fileName: string; action: "created" | "updated" }> = [];
   const executionCallbacks: LocalExecuteCallbacks = {
-    onLog: (log) => callbacks?.onSkillWorkflowLog?.(log),
+    onLog: (log) => {
+      if (showProgress) callbacks?.onSkillWorkflowLog?.(log);
+    },
     onDriveEvent: (event) => {
       if (event.type === "created" || event.type === "updated") {
         savedFiles.push({ fileName: event.fileName, action: event.type });
@@ -108,7 +111,7 @@ export async function executeSkillWorkflowTool(
     for (const [k, v] of result.context.variables) resultVars[k] = v;
 
     const finalStatus = result.historyRecord?.status || "completed";
-    callbacks?.onSkillWorkflowEnd?.(fileId, finalStatus);
+    if (showProgress) callbacks?.onSkillWorkflowEnd?.(fileId, finalStatus);
 
     // If a node inside the workflow threw, local-executor records status="error"
     // but does NOT rethrow. Surface that as an error-shape result so the chat
@@ -133,7 +136,7 @@ export async function executeSkillWorkflowTool(
     };
   } catch (error) {
     console.error("[skill-workflow] execution failed:", workflowFileName, error);
-    callbacks?.onSkillWorkflowEnd?.(fileId, "error");
+    if (showProgress) callbacks?.onSkillWorkflowEnd?.(fileId, "error");
     // Match llm-hub's contract: return error-shape with workflowPath so the
     // chat UI can offer the "Open workflow" recovery button.
     return {

@@ -4,6 +4,7 @@ import {
   calculateChecksum,
   getOrCreateStore,
   FILE_SEARCH_EMBEDDING_MODEL,
+  isUnsupportedFileSearchApiKey,
   normalizeFileSearchStoreName,
 } from "./file-search.server.ts";
 import { isRagEligible } from "~/constants/rag";
@@ -28,6 +29,13 @@ test("normalizeFileSearchStoreName accepts raw store ids and full resource names
   assert.equal(normalizeFileSearchStoreName("abc123"), "fileSearchStores/abc123");
   assert.equal(normalizeFileSearchStoreName("fileSearchStores/abc123"), "fileSearchStores/abc123");
   assert.equal(normalizeFileSearchStoreName("  "), null);
+});
+
+test("AQ-format authorization keys are identified as unsupported by File Search", () => {
+  assert.equal(isUnsupportedFileSearchApiKey("AQ.example"), true);
+  assert.equal(isUnsupportedFileSearchApiKey("  aq.example  "), true);
+  assert.equal(isUnsupportedFileSearchApiKey("AIza-example"), false);
+  assert.equal(isUnsupportedFileSearchApiKey(undefined), false);
 });
 
 test("formatFileSearchSource includes page and media citation details", () => {
@@ -68,4 +76,42 @@ test("getOrCreateStore lists File Search stores with API page size limit", async
 
   assert.equal(storeName, "fileSearchStores/existing");
   assert.equal(new URL(requestedUrls[0]).searchParams.get("pageSize"), "20");
+});
+
+test("getOrCreateStore rejects OAuth access tokens with actionable guidance", async () => {
+  await assert.rejects(
+    () => getOrCreateStore("ya29.oauth-token", "test-store"),
+    /requires a Gemini API key.*OAuth access token.*Settings > General/i,
+  );
+});
+
+test("getOrCreateStore explains an API OAuth credential mismatch", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    error: {
+      code: 401,
+      status: "UNAUTHENTICATED",
+      details: [{ reason: "ACCESS_TOKEN_TYPE_UNSUPPORTED" }],
+    },
+  }), { status: 401 });
+
+  await assert.rejects(
+    () => getOrCreateStore("opaque-credential", "test-store"),
+    /registered Gemini API key.*enabled for the Gemini API/i,
+  );
+});
+
+test("getOrCreateStore identifies Google's AQ-key compatibility failure", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => new Response(
+    '{"error":{"details":[{"reason":"ACCESS_TOKEN_TYPE_UNSUPPORTED"}]}}',
+    { status: 401 },
+  );
+
+  await assert.rejects(
+    () => getOrCreateStore("AQ.registered-gemini-key", "test-store"),
+    /AQ-format Gemini API key.*Google Gemini API authentication compatibility issue/i,
+  );
 });

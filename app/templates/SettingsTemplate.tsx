@@ -60,6 +60,7 @@ export function isSettingsTabId(value: string | null): value is SettingsTabId {
 export interface SettingsTemplateProps {
   settings: UserSettings;
   hasApiKey: boolean;
+  hasUnsupportedRagApiKey?: boolean;
   maskedKey: string | null;
   hasHubworkScopes: boolean;
   rootFolderId: string;
@@ -79,6 +80,7 @@ export interface SettingsTemplateProps {
 export function SettingsTemplate({
   settings,
   hasApiKey,
+  hasUnsupportedRagApiKey = false,
   maskedKey,
   hasHubworkScopes,
   rootFolderId,
@@ -174,7 +176,9 @@ export function SettingsTemplate({
         )}
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
-        {activeTab === "rag" && (settings.ragFeatureEnabled ?? false) && <RagTab settings={settings} />}
+        {activeTab === "rag" && (settings.ragFeatureEnabled ?? false) && (
+          <RagTab settings={settings} disabledByApiKey={hasUnsupportedRagApiKey} />
+        )}
         {activeTab === "commands" && <CommandsTab settings={settings} />}
         {activeTab === "plugins" && <PluginsTab settings={settings} />}
         {activeTab === "shortcuts" && <ShortcutsTab settings={settings} />}

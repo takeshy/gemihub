@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronDown, ChevronRight, AppWindow, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { McpAppResult, McpAppUiResource } from "~/types/settings";
+import { applyMcpAppCsp } from "./mcp-app-csp";
 
 interface McpAppRendererProps {
   serverId?: string;
@@ -100,9 +101,12 @@ export function McpAppRenderer({
   const [fetching, setFetching] = useState(false);
   const [maximized, setMaximized] = useState(false);
 
-  const resourceUri = toolResult._meta?.ui?.resourceUri;
+  const resourceUri = toolResult._meta?.ui?.resourceUri ?? toolResult._meta?.["ui/resourceUri"];
   const effectiveResource = initialUiResource || fetchedResource;
-  const htmlContent = getHtmlContent(effectiveResource);
+  const rawHtmlContent = getHtmlContent(effectiveResource);
+  const htmlContent = rawHtmlContent && effectiveResource
+    ? applyMcpAppCsp(rawHtmlContent, effectiveResource)
+    : null;
 
   // Client-side resource fetch fallback when server-side fetch failed
   useEffect(() => {

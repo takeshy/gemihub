@@ -263,16 +263,17 @@ function WorkflowNodeListView({
   const displayStatus: typeof executionStatus = useExternalDisplay
     ? (externalExecStatus.state === "running" ? "running" : externalExecStatus.state === "done" ? "completed" : "error")
     : executionStatus;
+  const showProgress = workflow?.options?.showProgress !== false;
 
   // Auto-show logs when external logs arrive
   const prevExternalLogCountRef = useRef(0);
   useEffect(() => {
     const count = (isExternalExec && executionStatus === "idle") ? (externalLogs?.length ?? 0) : 0;
-    if (count > 0 && prevExternalLogCountRef.current === 0) {
+    if (showProgress && count > 0 && prevExternalLogCountRef.current === 0) {
       setShowLogs(true);
     }
     prevExternalLogCountRef.current = count;
-  }, [externalLogs?.length, isExternalExec, executionStatus]);
+  }, [externalLogs?.length, isExternalExec, executionStatus, showProgress]);
 
   // Drag and drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -468,7 +469,7 @@ function WorkflowNodeListView({
 
   // Execution – local workflow execution
   const startExecution = useCallback(async (body?: { startNodeId: string; initialVariables: Record<string, string | number> }) => {
-    setShowLogs(true);
+    setShowLogs(workflow?.options?.showProgress !== false);
 
     if (!rawYaml) {
       setExecutionStatus("error");
@@ -497,7 +498,7 @@ function WorkflowNodeListView({
         } catch { /* ignore */ }
       }
     }
-  }, [rawYaml, localExecution, onSelectFile, workflowName]);
+  }, [rawYaml, localExecution, onSelectFile, workflowName, workflow?.options?.showProgress]);
 
   const stopExecution = useCallback(() => {
     localExecution.stop();
@@ -547,14 +548,14 @@ function WorkflowNodeListView({
 
   // Current executing nodeId from logs
   const currentNodeId =
-    displayStatus === "running" && displayLogs.length > 0
+    showProgress && displayStatus === "running" && displayLogs.length > 0
       ? displayLogs[displayLogs.length - 1].nodeId
       : null;
   const completedNodeIds = new Set(
-    displayLogs.filter((l) => l.status === "success").map((l) => l.nodeId)
+    showProgress ? displayLogs.filter((l) => l.status === "success").map((l) => l.nodeId) : []
   );
   const errorNodeIds = new Set(
-    displayLogs.filter((l) => l.status === "error").map((l) => l.nodeId)
+    showProgress ? displayLogs.filter((l) => l.status === "error").map((l) => l.nodeId) : []
   );
 
   if (rawContent === null && !fileError && !error) {
@@ -597,6 +598,24 @@ function WorkflowNodeListView({
           )}
         </div>
       </div>
+
+      {workflow && (
+        <label className="flex cursor-pointer items-center gap-2 border-b border-gray-200 px-3 py-1.5 text-xs text-gray-600 dark:border-gray-800 dark:text-gray-400">
+          <input
+            type="checkbox"
+            checked={showProgress}
+            onChange={(event) => {
+              const next = event.currentTarget.checked;
+              if (!next) setShowLogs(false);
+              void saveWorkflow({
+                ...workflow,
+                options: { ...workflow.options, showProgress: next },
+              });
+            }}
+          />
+          <span>{nodeListT("workflow.showProgress")}</span>
+        </label>
+      )}
 
       {/* Node List */}
       <div className="flex-1 overflow-y-auto py-1">
@@ -779,7 +798,7 @@ function WorkflowNodeListView({
       </div>
 
       {/* Execution Logs (collapsible) */}
-      {displayLogs.length > 0 && (
+      {showProgress && displayLogs.length > 0 && (
         <div className="border-t border-gray-200 dark:border-gray-800">
           <button
             onClick={() => setShowLogs(!showLogs)}

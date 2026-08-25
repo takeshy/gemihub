@@ -85,8 +85,17 @@ interface McpToolCallResult {
     ui?: {
       resourceUri: string;
     };
+    "ui/resourceUri"?: string;
   };
 }
+
+export const MCP_APPS_CLIENT_CAPABILITIES = {
+  extensions: {
+    "io.modelcontextprotocol/ui": {
+      mimeTypes: ["text/html;profile=mcp-app"],
+    },
+  },
+} as const;
 
 /** The newest MCP revision implemented by this client. */
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
@@ -112,6 +121,7 @@ interface McpResourceReadResult {
     mimeType?: string;
     text?: string;
     blob?: string;
+    _meta?: McpAppUiResource["_meta"];
   }>;
 }
 
@@ -154,7 +164,7 @@ export class McpClient {
             ...(isRecord(params?._meta) ? params._meta : {}),
             "io.modelcontextprotocol/protocolVersion": MCP_PROTOCOL_VERSION,
             "io.modelcontextprotocol/clientInfo": CLIENT_INFO,
-            "io.modelcontextprotocol/clientCapabilities": {},
+            "io.modelcontextprotocol/clientCapabilities": MCP_APPS_CLIENT_CAPABILITIES,
           },
         }
       : params;
@@ -298,7 +308,7 @@ export class McpClient {
   ): Promise<void> {
     const result = (await this.sendRequestRaw("initialize", {
       protocolVersion: requestedVersion,
-      capabilities: {},
+      capabilities: MCP_APPS_CLIENT_CAPABILITIES,
       clientInfo: CLIENT_INFO,
     }, undefined, abortSignal, "legacy-initialize")) as McpInitializeResult;
 
@@ -470,6 +480,7 @@ export class McpClient {
           mimeType: content.mimeType || "text/html",
           text: content.text,
           blob: content.blob,
+          _meta: content._meta,
         };
       }
 
