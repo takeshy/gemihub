@@ -84,6 +84,9 @@ export interface KanbanWidgetConfig {
   title?: string;
   statusProperty?: string;
   titleProperty?: string;
+  dueProperty?: string;
+  startedProperty?: string;
+  completedProperty?: string;
   columns?: Array<string | KanbanColumnConfig>;
   showUnspecified?: boolean;
   /** Persisted visual card order by row id/file id. */

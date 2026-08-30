@@ -411,6 +411,26 @@ export interface TranslationStrings {
   "dashboard.kanbanTagFilter": string;
   "dashboard.kanbanAllTags": string;
   "dashboard.kanbanClearTagFilter": string;
+  "dashboard.kanbanAiCreate": string;
+  "dashboard.kanbanAiDescription": string;
+  "dashboard.kanbanAiGenerate": string;
+  "dashboard.kanbanAiApply": string;
+  "dashboard.kanbanAiResult": string;
+  "dashboard.kanbanAttachmentDownload": string;
+  "dashboard.kanbanAttachmentMissing": string;
+  "dashboard.kanbanAttachmentPreview": string;
+  "dashboard.kanbanTaskAttachmentAdd": string;
+  "dashboard.kanbanTaskAttachments": string;
+  "dashboard.kanbanTaskChecklist": string;
+  "dashboard.kanbanTaskChecklistAdd": string;
+  "dashboard.kanbanTaskChecklistItem": string;
+  "dashboard.kanbanTaskCompleted": string;
+  "dashboard.kanbanTaskDescription": string;
+  "dashboard.kanbanTaskDue": string;
+  "dashboard.kanbanTaskEdit": string;
+  "dashboard.kanbanTaskNew": string;
+  "dashboard.kanbanTaskStarted": string;
+  "dashboard.kanbanTaskStatus": string;
 
   "workspace.openExternal": string;
   "workspace.reload": string;
@@ -1825,6 +1845,26 @@ const en: TranslationStrings = {
   "dashboard.kanbanTagFilter": "Filter by tag",
   "dashboard.kanbanAllTags": "All tags",
   "dashboard.kanbanClearTagFilter": "Clear tag filter",
+  "dashboard.kanbanAiCreate": "Create with AI",
+  "dashboard.kanbanAiDescription": "Describe the tasks in natural language. Review the generated JSON before creating them.",
+  "dashboard.kanbanAiGenerate": "Generate",
+  "dashboard.kanbanAiApply": "Create tasks",
+  "dashboard.kanbanAiResult": "Generated tasks (JSON)",
+  "dashboard.kanbanAttachmentDownload": "Download attachment",
+  "dashboard.kanbanAttachmentMissing": "The attachment file could not be found.",
+  "dashboard.kanbanAttachmentPreview": "Preview attachment",
+  "dashboard.kanbanTaskAttachmentAdd": "Add files",
+  "dashboard.kanbanTaskAttachments": "Attachments",
+  "dashboard.kanbanTaskChecklist": "Checklist",
+  "dashboard.kanbanTaskChecklistAdd": "Add item",
+  "dashboard.kanbanTaskChecklistItem": "Checklist item",
+  "dashboard.kanbanTaskCompleted": "Completed",
+  "dashboard.kanbanTaskDescription": "Description",
+  "dashboard.kanbanTaskDue": "Due date",
+  "dashboard.kanbanTaskEdit": "Edit task",
+  "dashboard.kanbanTaskNew": "New task",
+  "dashboard.kanbanTaskStarted": "Started",
+  "dashboard.kanbanTaskStatus": "Status",
 
   "workspace.openExternal": "Open in Google",
   "workspace.reload": "Reload",
@@ -3240,6 +3280,26 @@ const ja: TranslationStrings = {
   "dashboard.kanbanTagFilter": "タグで絞り込み",
   "dashboard.kanbanAllTags": "すべてのタグ",
   "dashboard.kanbanClearTagFilter": "タグ絞り込みを解除",
+  "dashboard.kanbanAiCreate": "AIで作成",
+  "dashboard.kanbanAiDescription": "作りたいTaskを自然文で入力してください。生成されたJSONを確認してからTaskを作成します。",
+  "dashboard.kanbanAiGenerate": "生成",
+  "dashboard.kanbanAiApply": "Taskを作成",
+  "dashboard.kanbanAiResult": "生成されたTask（JSON）",
+  "dashboard.kanbanAttachmentDownload": "添付ファイルをダウンロード",
+  "dashboard.kanbanAttachmentMissing": "添付ファイルが見つかりません。",
+  "dashboard.kanbanAttachmentPreview": "添付ファイルをプレビュー",
+  "dashboard.kanbanTaskAttachmentAdd": "ファイルを追加",
+  "dashboard.kanbanTaskAttachments": "添付ファイル",
+  "dashboard.kanbanTaskChecklist": "チェックリスト",
+  "dashboard.kanbanTaskChecklistAdd": "項目を追加",
+  "dashboard.kanbanTaskChecklistItem": "チェック項目",
+  "dashboard.kanbanTaskCompleted": "終了日",
+  "dashboard.kanbanTaskDescription": "説明",
+  "dashboard.kanbanTaskDue": "期限",
+  "dashboard.kanbanTaskEdit": "Taskを編集",
+  "dashboard.kanbanTaskNew": "新しいTask",
+  "dashboard.kanbanTaskStarted": "着手日",
+  "dashboard.kanbanTaskStatus": "ステータス",
 
   "workspace.openExternal": "Googleで開く",
   "workspace.reload": "再読み込み",
