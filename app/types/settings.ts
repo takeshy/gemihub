@@ -641,6 +641,8 @@ export interface UserSettings {
   apiKeySalt: string;
   shortcutKeys: ShortcutKeyBinding[];
   showManagementFolders: boolean;
+  maxSavedChatHistories: number;
+  manualChatSaveFolder: string;
   /**
    * Advanced features, opt-in from Settings > General. The default experience
    * stays deliberately simple: dashboards, workflows, and RAG only appear once
@@ -791,6 +793,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   apiKeySalt: "",
   shortcutKeys: [],
   showManagementFolders: false,
+  maxSavedChatHistories: 100,
+  manualChatSaveFolder: "",
   dashboardEnabled: false,
   workflowEnabled: false,
   ragFeatureEnabled: false,

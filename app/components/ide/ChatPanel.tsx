@@ -321,6 +321,7 @@ export function ChatPanel({
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatListOpen, setChatListOpen] = useState(false);
   const [saveMarkdownState, setSaveMarkdownState] = useState<"idle" | "saving" | "saved">("idle");
+  const savedMarkdownFilesRef = useRef(new Map<string, string>());
   const abortControllerRef = useRef<AbortController | null>(null);
   const MAX_BACKGROUND_STREAMS = 3;
   // AbortControllers for background (detached) streams, capped at MAX_BACKGROUND_STREAMS.
@@ -707,23 +708,25 @@ export function ChatPanel({
             setActiveChatCreatedAt(createdAt);
             if (fileId) setActiveChatFileId(fileId);
           }
-          setHistories((prev) => [
-            {
+          setHistories((prev) => {
+            const next = [{
               id: chatId,
               fileId: fileId || prev.find((h) => h.id === chatId)?.fileId || "",
               title: chatHistory.title,
               createdAt: chatHistory.createdAt,
               updatedAt: chatHistory.updatedAt,
               isEncrypted: chatHistory.isEncrypted,
-            },
-            ...prev.filter((h) => h.id !== chatId),
-          ]);
+            }, ...prev.filter((h) => h.id !== chatId)];
+            return settings.maxSavedChatHistories > 0
+              ? next.slice(0, settings.maxSavedChatHistories)
+              : next;
+          });
         }
       } catch {
         // ignore
       }
     },
-    []
+    [settings.maxSavedChatHistories]
   );
 
   // Foreground save (convenience wrapper matching old signature)
@@ -1538,31 +1541,25 @@ export function ChatPanel({
     if (saveMarkdownState !== "idle" || messages.length === 0) return;
     setSaveMarkdownState("saving");
     try {
-      const lines: string[] = [];
       const title =
         histories.find((h) => h.id === activeChatId)?.title || "Chat";
-      lines.push(`# ${title}\n`);
-      for (const msg of messages) {
-        const ts = new Date(msg.timestamp).toLocaleString();
-        if (msg.role === "user") {
-          lines.push(`## User (${ts})\n`);
-        } else {
-          lines.push(
-            `## AI${msg.model ? ` [${msg.model}]` : ""} (${ts})\n`
-          );
-        }
-        if (msg.content) lines.push(msg.content + "\n");
-        lines.push("---\n");
-      }
-      const content = lines.join("\n");
+      const content = messages.map((msg) =>
+        `## ${msg.role === "user" ? "User" : (msg.model || "AI")}\n\n${msg.content.trim()}`
+      ).join("\n\n");
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
-      const fileName = `chat-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.md`;
+      const dateTime = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const safeTitle = title.replace(/[\\/:*?"<>|#^[\]\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Chat";
+      const folder = (settings.manualChatSaveFolder || "").trim().replace(/^\/+|\/+$/g, "");
+      const fileName = `${folder ? `${folder}/` : ""}${dateTime}_${safeTitle}.md`;
+      const chatKey = activeChatId || String(messages[0].timestamp);
+      const existingFileId = savedMarkdownFilesRef.current.get(chatKey);
       const res = await fetch("/api/drive/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "create",
+          action: existingFileId ? "update" : "create",
+          fileId: existingFileId,
           name: fileName,
           content,
           mimeType: "text/markdown",
@@ -1571,6 +1568,7 @@ export function ChatPanel({
       if (!res.ok) throw new Error("Failed to save");
       const data = await res.json();
       const file = data.file;
+      savedMarkdownFilesRef.current.set(chatKey, file.id);
       // Cache locally so it doesn't appear in Pull diff
       await setCachedFile({
         fileId: file.id,
@@ -1600,7 +1598,7 @@ export function ChatPanel({
       console.error("Failed to save chat as markdown:", e);
       setSaveMarkdownState("idle");
     }
-  }, [saveMarkdownState, messages, histories, activeChatId]);
+  }, [saveMarkdownState, messages, histories, activeChatId, settings.manualChatSaveFolder]);
 
   // ---- Compact conversation ----
   const handleCompact = useCallback(async () => {

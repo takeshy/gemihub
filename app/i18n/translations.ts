@@ -513,6 +513,12 @@ export interface TranslationStrings {
   "settings.general.defaultModel": string;
   "settings.general.usePlanDefault": string;
   "settings.general.systemPrompt": string;
+  "settings.general.chatSettings": string;
+  "settings.general.maxSavedChatHistories": string;
+  "settings.general.maxSavedChatHistoriesDescription": string;
+  "settings.general.manualChatSaveFolder": string;
+  "settings.general.manualChatSaveFolderDescription": string;
+  "settings.general.driveRoot": string;
   "settings.general.systemPromptPlaceholder": string;
   "settings.general.language": string;
   "settings.general.fontSize": string;
@@ -1928,6 +1934,12 @@ const en: TranslationStrings = {
   "settings.general.defaultModel": "Default Model",
   "settings.general.usePlanDefault": "Use plan default",
   "settings.general.systemPrompt": "System Prompt",
+  "settings.general.chatSettings": "Chat",
+  "settings.general.maxSavedChatHistories": "Maximum saved chat histories",
+  "settings.general.maxSavedChatHistoriesDescription": "Use 0 for unlimited.",
+  "settings.general.manualChatSaveFolder": "Manual chat save folder",
+  "settings.general.manualChatSaveFolderDescription": "Folder used by Save as note. Leave blank for the Drive root.",
+  "settings.general.driveRoot": "Drive root",
   "settings.general.systemPromptPlaceholder": "Optional system-level instructions for the AI...",
   "settings.general.language": "Language",
   "settings.general.fontSize": "Font Size",
@@ -3343,6 +3355,12 @@ const ja: TranslationStrings = {
   "settings.general.defaultModel": "デフォルトモデル",
   "settings.general.usePlanDefault": "プランのデフォルトを使用",
   "settings.general.systemPrompt": "システムプロンプト",
+  "settings.general.chatSettings": "チャット",
+  "settings.general.maxSavedChatHistories": "チャット履歴の最大保存件数",
+  "settings.general.maxSavedChatHistoriesDescription": "0の場合は無制限です。",
+  "settings.general.manualChatSaveFolder": "チャットの手動保存先",
+  "settings.general.manualChatSaveFolderDescription": "「ノートとして保存」で使うフォルダです。空欄の場合はDrive直下です。",
+  "settings.general.driveRoot": "Drive直下",
   "settings.general.systemPromptPlaceholder": "AIへのシステムレベルの指示（任意）...",
   "settings.general.language": "言語",
   "settings.general.fontSize": "フォントサイズ",

@@ -75,8 +75,10 @@ export async function vertexAction(request: Request) {
     }
 
     let encryption;
+    let maxSavedChatHistories = 100;
     try {
       const settings = await getSettingsForTenant(ctx);
+      maxSavedChatHistories = settings.maxSavedChatHistories ?? 100;
       encryption = getEncryptionParams(settings, "chat");
       if (encryption) {
         chatHistory.isEncrypted = true;
@@ -91,6 +93,14 @@ export async function vertexAction(request: Request) {
     }
 
     const fileId = await saveChatForTenant(ctx, chatHistory, encryption);
+    if (maxSavedChatHistories > 0) {
+      const histories = await listChatHistoriesForTenant(ctx);
+      await Promise.all(
+        histories
+          .slice(maxSavedChatHistories)
+          .map((history) => deleteChatForTenant(ctx, history.id)),
+      );
+    }
     return Response.json({ success: true, fileId });
   }
 

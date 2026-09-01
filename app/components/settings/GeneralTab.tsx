@@ -59,6 +59,8 @@ export function GeneralTab({
   );
   const [systemPrompt, setSystemPrompt] = useState(settings.systemPrompt);
   const [showManagementFolders, setShowManagementFolders] = useState(settings.showManagementFolders ?? false);
+  const [maxSavedChatHistories, setMaxSavedChatHistories] = useState(settings.maxSavedChatHistories ?? 100);
+  const [manualChatSaveFolder, setManualChatSaveFolder] = useState(settings.manualChatSaveFolder ?? "");
   const [dashboardEnabled, setDashboardEnabled] = useState(settings.dashboardEnabled ?? false);
   const [workflowEnabled, setWorkflowEnabled] = useState(settings.workflowEnabled ?? false);
   const [ragFeatureEnabled, setRagFeatureEnabled] = useState(settings.ragFeatureEnabled ?? false);
@@ -426,6 +428,32 @@ export function GeneralTab({
               </label>
             ))}
           </div>
+        </div>
+
+        <div className="mb-6 rounded-md border border-gray-200 p-4 dark:border-gray-700">
+          <h3 className="mb-3 text-sm font-semibold">{t("settings.general.chatSettings")}</h3>
+          <Label htmlFor="maxSavedChatHistories">{t("settings.general.maxSavedChatHistories")}</Label>
+          <input
+            id="maxSavedChatHistories"
+            name="maxSavedChatHistories"
+            type="number"
+            min={0}
+            step={1}
+            value={maxSavedChatHistories}
+            onChange={(e) => setMaxSavedChatHistories(Math.max(0, Number.parseInt(e.target.value, 10) || 0))}
+            className={inputClass}
+          />
+          <p className="mb-3 text-xs text-gray-500">{t("settings.general.maxSavedChatHistoriesDescription")}</p>
+          <Label htmlFor="manualChatSaveFolder">{t("settings.general.manualChatSaveFolder")}</Label>
+          <input
+            id="manualChatSaveFolder"
+            name="manualChatSaveFolder"
+            value={manualChatSaveFolder}
+            onChange={(e) => setManualChatSaveFolder(e.target.value)}
+            placeholder={t("settings.general.driveRoot")}
+            className={inputClass}
+          />
+          <p className="text-xs text-gray-500">{t("settings.general.manualChatSaveFolderDescription")}</p>
         </div>
 
         {/* Model */}

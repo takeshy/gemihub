@@ -17,6 +17,9 @@ function ChatEn() {
         <p>
           The Chat panel is your interface for conversing with Google Gemini AI. It supports real-time streaming responses, automatic tool use, file attachments, and custom slash commands.
         </p>
+        <p>
+          Switch the right sidebar between normal and wide layouts with one click. Save as note exports compact Markdown named <code>YYYYMMDD-HHmmss_Chat title.md</code>; saving the same chat again updates that file. Automatic history keeps 100 chats by default, or unlimited when set to 0.
+        </p>
 
         <h2>Basic Usage</h2>
         <ul>
@@ -113,6 +116,9 @@ function ChatJa() {
       <div className={prose}>
         <p>
           チャットパネルは、Google Gemini AIとの対話インターフェースです。リアルタイムストリーミング応答、自動ツール使用、ファイル添付、カスタムスラッシュコマンドに対応しています。
+        </p>
+        <p>
+          右サイドバーは通常幅と拡張幅をワンクリックで切り替えられます。「ノートとして保存」は <code>YYYYMMDD-HHmmss_チャットタイトル.md</code> 形式のコンパクトなMarkdownを出力し、同じチャットの再保存時は上書きします。自動履歴は初期値100件、0で無制限です。
         </p>
 
         <h2>基本的な使い方</h2>

@@ -287,6 +287,11 @@ export async function action({ request }: Route.ActionArgs) {
         const fontSize = Number(formData.get("fontSize")) as FontSize || currentSettings.fontSize;
         const theme = (formData.get("theme") as Theme) || currentSettings.theme || "system";
         const showManagementFolders = formData.get("showManagementFolders") === "on";
+        const maxSavedChatHistories = Math.max(0, Number.parseInt(String(formData.get("maxSavedChatHistories") ?? "100"), 10) || 0);
+        const manualChatSaveFolder = String(formData.get("manualChatSaveFolder") ?? "").trim().replace(/^\/+|\/+$/g, "");
+        if (manualChatSaveFolder.split("/").some((part) => part === "." || part === "..")) {
+          return jsonWithCookie({ success: false, message: "Invalid manual chat save folder" });
+        }
         const dashboardEnabled = formData.get("dashboardEnabled") === "on";
         const workflowEnabled = formData.get("workflowEnabled") === "on";
         const ragFeatureEnabled = formData.get("ragFeatureEnabled") === "on";
@@ -344,6 +349,8 @@ export async function action({ request }: Route.ActionArgs) {
           fontSize,
           theme,
           showManagementFolders,
+          maxSavedChatHistories,
+          manualChatSaveFolder,
           dashboardEnabled,
           workflowEnabled,
           ragFeatureEnabled,

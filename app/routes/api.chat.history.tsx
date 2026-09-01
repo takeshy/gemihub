@@ -64,8 +64,10 @@ export async function action({ request }: Route.ActionArgs) {
       }
 
       let encryption;
+      let maxSavedChatHistories = 100;
       try {
         const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
+        maxSavedChatHistories = settings.maxSavedChatHistories ?? 100;
         encryption = getEncryptionParams(settings, "chat");
         if (encryption) {
           chatHistory.isEncrypted = true;
@@ -86,6 +88,13 @@ export async function action({ request }: Route.ActionArgs) {
         chatHistory,
         encryption
       );
+
+      if (maxSavedChatHistories > 0) {
+        const histories = await listChatHistories(validTokens.accessToken, validTokens.rootFolderId);
+        await Promise.all(histories.slice(maxSavedChatHistories).map((history) =>
+          deleteChat(validTokens.accessToken, validTokens.rootFolderId, history.fileId)
+        ));
+      }
 
       return Response.json({ success: true, fileId }, { headers: responseHeaders });
     }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { PanelRightClose, PanelRight, X } from "lucide-react";
+import { Maximize2, Minimize2, PanelRightClose, PanelRight, X } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 
 interface RightSidebarProps {
@@ -20,6 +20,7 @@ export function RightSidebar({ children, isMobile = false, mobileOpen = false, o
   const [collapsed, setCollapsed] = useState(false);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const isDragging = useRef(false);
+  const normalWidth = useRef(DEFAULT_WIDTH);
   const hydrated = useRef(false);
 
   // Restore from localStorage after hydration
@@ -108,6 +109,21 @@ export function RightSidebar({ children, isMobile = false, mobileOpen = false, o
         >
           {collapsed ? <PanelRight size={ICON.LG} /> : <PanelRightClose size={ICON.LG} />}
         </button>
+        {!collapsed && (
+          <button
+            onClick={() => {
+              if (width >= MAX_WIDTH) setWidth(normalWidth.current);
+              else {
+                normalWidth.current = width;
+                setWidth(MAX_WIDTH);
+              }
+            }}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title={width >= MAX_WIDTH ? "Narrow panel" : "Widen panel"}
+          >
+            {width >= MAX_WIDTH ? <Minimize2 size={ICON.LG} /> : <Maximize2 size={ICON.LG} />}
+          </button>
+        )}
       </div>
       {!collapsed && (
         <div className="flex-1 overflow-hidden flex flex-col">{children}</div>
