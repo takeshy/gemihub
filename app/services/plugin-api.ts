@@ -111,7 +111,7 @@ export function createPluginAPI(
                 ? { attachments: m.attachments }
                 : {}),
             })),
-            model: chatOpts?.model || "gemini-3.7-flash",
+            model: chatOpts?.model || "gemini-3.8-flash",
             systemPrompt: chatOpts?.systemPrompt,
           }),
         });

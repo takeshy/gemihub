@@ -392,8 +392,8 @@ export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   // Gemma 4: thinking is built-in (always on), config parameters not supported
   if (modelLower.includes("gemma")) return undefined;
-  // Gemini 3.7+ and 3.5 Flash Lite use thinkingLevel; thinkingBudget is unsupported.
-  if (modelLower.includes("gemini-3.7-flash")) {
+  // Gemini 3.8 Flash and 3.5 Flash Lite use thinkingLevel; thinkingBudget is unsupported.
+  if (modelLower.includes("gemini-3.8-flash")) {
     return enableThinking
       ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
       : { thinkingLevel: ThinkingLevel.LOW };

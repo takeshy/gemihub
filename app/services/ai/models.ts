@@ -9,7 +9,7 @@
 // Model pricing per token (USD) for the genai-key provider.
 // Source: https://ai.google.dev/pricing
 export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "gemini-3.7-flash":       { input: 1.50 / 1e6, output: 7.50 / 1e6 },
+  "gemini-3.8-flash":       { input: 1.50 / 1e6, output: 7.50 / 1e6 },
   "gemini-3.5-flash-lite": { input: 0.30 / 1e6, output: 2.50 / 1e6 },
   "gemini-3.1-pro-preview": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
   "gemini-3.1-pro-preview-customtools": { input: 2.00 / 1e6, output: 12.00 / 1e6 },
@@ -44,7 +44,7 @@ export function hasVertexPrice(model: string): boolean {
 
 // Grounding with Google Search cost per prompt (USD)
 export const SEARCH_GROUNDING_COST: Record<string, number> = {
-  "gemini-3.7-flash": 14 / 1000,
+  "gemini-3.8-flash": 14 / 1000,
   "gemini-3.1-pro-preview": 14 / 1000,
   "gemini-3.1-pro-preview-customtools": 14 / 1000,
   "gemini-3-pro-image-preview": 14 / 1000,
@@ -59,7 +59,7 @@ export const SEARCH_GROUNDING_COST: Record<string, number> = {
  */
 export const VERTEX_MODELS = {
   pro: "gemini-3.1-pro-preview",
-  flash: "gemini-3.7-flash",
+  flash: "gemini-3.8-flash",
   flashLite: "gemini-3.5-flash-lite",
   gemma4: "gemma-4-31b-it",
   gemma4Moe: "gemma-4-26b-a4b-it",

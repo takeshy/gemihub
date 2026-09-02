@@ -30,7 +30,7 @@ function ctxWith(allowedModels: string[]): ProjectAccessContext {
 test("assertModelAllowed: empty list permits the built-in defaults", () => {
   const ctx = ctxWith([]);
   assert.doesNotThrow(() => assertModelAllowed(ctx, "gemini-3.1-pro-preview"));
-  assert.doesNotThrow(() => assertModelAllowed(ctx, "gemini-3.7-flash"));
+  assert.doesNotThrow(() => assertModelAllowed(ctx, "gemini-3.8-flash"));
   assert.doesNotThrow(() => assertModelAllowed(ctx, "gemini-3.5-flash-lite"));
   assert.doesNotThrow(() => assertModelAllowed(ctx, "gemma-4-31b-it"));
   assert.doesNotThrow(() => assertModelAllowed(ctx, "gemma-4-26b-a4b-it"));
@@ -38,6 +38,7 @@ test("assertModelAllowed: empty list permits the built-in defaults", () => {
 
 test("assertModelAllowed: deprecated Flash models resolve to the default", () => {
   const ctx = ctxWith([]);
+  assert.doesNotThrow(() => assertModelAllowed(ctx, "gemini-3.7-flash"));
   assert.doesNotThrow(() => assertModelAllowed(ctx, "gemini-3.6-flash"));
   assert.doesNotThrow(() => assertModelAllowed(ctx, "gemini-3.5-flash"));
 });

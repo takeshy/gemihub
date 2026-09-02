@@ -214,8 +214,9 @@ export function isGemma4(model: string): boolean {
 export function normalizeDeprecatedModelName(model: unknown): ModelType | null | undefined {
   if (model === null || model === undefined) return model;
   if (model === "gemini-3-pro-preview") return "gemini-3.1-pro-preview";
-  if (model === "gemini-3.6-flash") return "gemini-3.7-flash";
-  if (model === "gemini-3.5-flash") return "gemini-3.7-flash";
+  if (model === "gemini-3.7-flash") return "gemini-3.8-flash";
+  if (model === "gemini-3.6-flash") return "gemini-3.8-flash";
+  if (model === "gemini-3.5-flash") return "gemini-3.8-flash";
   if (model === "gemini-3.1-flash-lite-preview" || model === "gemini-3.1-flash-lite") {
     return "gemini-3.5-flash-lite";
   }
@@ -289,7 +290,7 @@ export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
 
 // Model types
 export type ModelType =
-  | "gemini-3.7-flash"
+  | "gemini-3.8-flash"
   | "gemini-3.1-pro-preview"
   | "gemini-3.1-pro-preview-customtools"
   | "gemini-3.5-flash-lite"
@@ -307,14 +308,14 @@ export interface ModelInfo {
 
 export const PAID_MODELS: ModelInfo[] = [
   {
-    name: "gemini-3.7-flash",
-    displayName: "Gemini 3.7 Flash",
+    name: "gemini-3.8-flash",
+    displayName: "Gemini 3.8 Flash",
     description: "Latest fast model with 1M context (recommended)",
   },
   {
     name: "gemini-3.1-pro-preview",
     displayName: "Gemini 3.1 Pro Preview",
-    description: "Flagship model with 1M context. Highest quality, but older and slower than 3.7 Flash",
+    description: "Flagship model with 1M context. Highest quality, but older and slower than 3.8 Flash",
   },
   {
     name: "gemini-3.1-pro-preview-customtools",
@@ -352,8 +353,8 @@ export const PAID_MODELS: ModelInfo[] = [
 
 export const FREE_MODELS: ModelInfo[] = [
   {
-    name: "gemini-3.7-flash",
-    displayName: "Gemini 3.7 Flash",
+    name: "gemini-3.8-flash",
+    displayName: "Gemini 3.8 Flash",
     description: "Latest fast model with 1M context (recommended)",
   },
   {
@@ -404,7 +405,7 @@ export function isImageGenerationModel(modelName: ModelType): boolean {
 
 // Default models by plan
 export const DEFAULT_MODEL_FREE: ModelType = "gemma-4-31b-it";
-export const DEFAULT_MODEL_PAID: ModelType = "gemini-3.7-flash";
+export const DEFAULT_MODEL_PAID: ModelType = "gemini-3.8-flash";
 
 export function getDefaultModelForPlan(plan: ApiPlan): ModelType {
   return plan === "paid" ? DEFAULT_MODEL_PAID : DEFAULT_MODEL_FREE;

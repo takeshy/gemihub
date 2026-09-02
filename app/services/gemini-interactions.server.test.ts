@@ -17,7 +17,7 @@ test("Google Search is exclusive in Interactions API requests", () => {
   const tools = buildInteractionsTools(
     [functionTool],
     true,
-    "gemini-3.7-flash",
+    "gemini-3.8-flash",
   );
 
   assert.deepEqual(tools, [{ type: "google_search" }]);
@@ -27,7 +27,7 @@ test("function tools remain enabled without Google Search", () => {
   const tools = buildInteractionsTools(
     [functionTool],
     false,
-    "gemini-3.7-flash",
+    "gemini-3.8-flash",
   );
 
   assert.equal(tools.length, 1);

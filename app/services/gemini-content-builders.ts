@@ -211,7 +211,7 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
  *
  * Notes from production:
  *   - Gemma: thinking is built-in, `thinkingConfig` is not accepted at all.
- *   - Gemini 3.7 Flash and 3.5 Flash Lite use `thinkingLevel` (categorical)
+ *   - Gemini 3.8 Flash and 3.5 Flash Lite use `thinkingLevel` (categorical)
  *     instead of `thinkingBudget` (integer).
  *   - gemini-3-pro / gemini-3.1-pro: thinking is mandatory; you cannot
  *     opt out with thinkingBudget: 0.
@@ -219,7 +219,7 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
 export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
   const modelLower = model.toLowerCase();
   if (modelLower.includes("gemma")) return undefined;
-  if (modelLower.includes("gemini-3.7-flash")) {
+  if (modelLower.includes("gemini-3.8-flash")) {
     return enableThinking
       ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
       : { thinkingLevel: ThinkingLevel.LOW };

@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-09-03
+* **Update**: Gemini 3.8 Flash replaces 3.7 Flash as the recommended default model across chat, search, workflows, plugins, and Vertex AI. Existing 3.7 selections migrate automatically, and the price remains unchanged.
+
 ## 2026-08-22
 * **Fix**: `/public/file/:fileId/:fileName` served ANY Drive file id from the app's own origin with no CSP, while every sibling proxy route (`api.storage.read`, `api.temp-edit`, `drive-compat`) sandboxes its output. A third party could publish their own HTML on Drive and have it execute on this origin — reaching the IDE's IndexedDB cache (every cached file, edit history, encrypted settings) and `/api/*` with the viewer's cookies. Public links are now signed (`public-link.server.ts`, HMAC over the file id keyed by `SESSION_SECRET`, stored as `publicPath` in `_sync-meta.json` and minted on demand by `action: "publicLink"` for older published files), every response carries a sandbox CSP plus `nosniff`, and an unsigned request for script-capable content (`.html`, `.htm`, `.js`, `.mjs`, `.svg`) is refused with a 403 that asks for a re-publish. Unsigned passive content (images, PDF, CSS, text) still serves, so images baked into already-published pages keep working. Publishing remains anonymous-readable — the signature proves GemiHub minted the link, it does not authenticate the viewer (`architecture/utils.md`).
 * **New**: The sync bar warns when unpushed local edits have been sitting for more than 7 days. `editHistory` in IndexedDB is the only record that a file changed locally, so losing that store (storage eviction, ITP, "clear site data") makes the edits invisible to Push and lets the next Pull overwrite them (`features/sync.md`).
