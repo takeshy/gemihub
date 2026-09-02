@@ -9,6 +9,7 @@ import {
   deleteEditHistoryEntry,
   getLocalSyncMeta,
   setLocalSyncMeta,
+  activeProjectMountParam,
   type CachedTreeNode,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit } from "~/services/edit-history-local";
@@ -662,12 +663,30 @@ export function useTreeFileCreate({
       ? selectedFolderId.slice("vfolder:".length)
       : "";
     const fullName = folderPath ? `${folderPath}/${fileName}` : fileName;
+    const projectMount = activeProjectMountParam();
 
     // Check for duplicate
     const existing = findFileByPath(treeItems, fullName);
     if (existing) {
       const msg = t("contextMenu.fileAlreadyExists").replace("{name}", fileName);
       if (!confirm(msg)) return;
+      // Project mounts are local-first. Updating the mount cache marks the
+      // object dirty so Storage Sync can push it; sending a Drive request here
+      // would target the user's personal Drive and leave this tree unchanged.
+      if (projectMount) {
+        await saveLocalEdit(existing.id, fullName, initialContent);
+        await setCachedFile({
+          fileId: existing.id,
+          content: initialContent,
+          md5Checksum: "",
+          modifiedTime: new Date().toISOString(),
+          cachedAt: Date.now(),
+          fileName: fullName,
+        });
+        window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: existing.id } }));
+        onSelectFile(existing.id, existing.name, existing.mimeType);
+        return;
+      }
       // Overwrite existing file
       try {
         const res = await fetch("/api/drive/files", {
@@ -692,7 +711,9 @@ export function useTreeFileCreate({
     }
 
     // Generate temporary ID — Drive file is created in the background below
-    const tempId = `new:${fullName}`;
+    // Drive uses a temporary ID until its background create finishes. On a
+    // project mount the relative path is the permanent file identity.
+    const tempId = projectMount ? fullName : `new:${fullName}`;
     const mimeType = fileName.endsWith(".yaml") || fileName.endsWith(".yml")
       ? "text/yaml"
       : "text/plain";
@@ -797,6 +818,14 @@ export function useTreeFileCreate({
 
     // Open the file immediately
     onSelectFile(tempId, baseName, mimeType);
+
+    // Project files stay local-first and are uploaded by Storage Sync. Never
+    // fall through to the Drive endpoint, which cannot create this mount's
+    // object and previously made the + dialog appear to do nothing.
+    if (projectMount) {
+      window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: tempId } }));
+      return;
+    }
 
     // Create Drive file in background — migrate IDs when done
     fetch("/api/drive/files", {
