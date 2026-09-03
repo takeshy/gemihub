@@ -23,9 +23,18 @@ export function EditConfirmationDialog({ proposal, language, onConfirm, onCancel
   const ja = language === "ja";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="chat-edit-confirm-title" className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-gray-900">
-        <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+    <div
+      className="fixed inset-0 z-[100] flex items-start justify-center overflow-hidden bg-black/50 px-2 pt-2 sm:items-center sm:p-4"
+      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chat-edit-confirm-title"
+        className="flex w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-gray-900"
+        style={{ maxHeight: "calc(100dvh - env(safe-area-inset-bottom, 0px) - 1rem)" }}
+      >
+        <div className="shrink-0 border-b border-gray-200 px-4 py-3 sm:px-5 sm:py-4 dark:border-gray-700">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 id="chat-edit-confirm-title" className="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -39,7 +48,7 @@ export function EditConfirmationDialog({ proposal, language, onConfirm, onCancel
         <div className="min-h-0 flex-1 overflow-auto bg-gray-50 p-3 dark:bg-gray-950">
           <DiffView diff={diff} viewMode={viewMode} />
         </div>
-        <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-3 dark:border-gray-700">
+        <div className="flex shrink-0 justify-end gap-2 border-t border-gray-200 px-4 py-3 sm:px-5 dark:border-gray-700">
           <button type="button" onClick={onCancel} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800">
             {ja ? "キャンセル" : "Cancel"}
           </button>
