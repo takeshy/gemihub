@@ -14,6 +14,7 @@ import {
   type ModelType,
   type DriveToolMode,
   type UserSettings,
+  type GeminiReasoningEffort,
 } from "~/types/settings";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall, McpAppInfo } from "~/types/chat";
 import type { DriveEditProposal } from "~/engine/local-executor";
@@ -71,7 +72,7 @@ export interface ChatStreamOptions {
   mcpServerIds: string[];
   ragStoreIds?: string[];
   webSearchEnabled?: boolean;
-  enableThinking?: boolean;
+  reasoningEffort?: GeminiReasoningEffort;
   maxFunctionCalls?: number;
   functionCallWarningThreshold?: number;
   ragTopK?: number;
@@ -559,7 +560,7 @@ export async function* executeChatStream(
     mcpServerIds,
     ragStoreIds,
     webSearchEnabled = false,
-    enableThinking,
+    reasoningEffort,
     maxFunctionCalls = DEFAULT_MAX_FUNCTION_CALLS,
     functionCallWarningThreshold,
     ragTopK,
@@ -709,7 +710,7 @@ export async function* executeChatStream(
       mcpServerIds,
       ragStoreIds,
       webSearchEnabled,
-      enableThinking,
+      reasoningEffort,
       settings: ragTopK != null ? { ragTopK } : undefined,
       requirePlanApproval,
       extraToolDefinitions: extraToolDefinitions.length > 0 ? extraToolDefinitions : undefined,

@@ -23,6 +23,7 @@ import {
   type ModelType,
   type DriveToolMode,
   type UserSettings,
+  type GeminiReasoningEffort,
 } from "~/types/settings";
 import type { Message, StreamChunk, McpAppInfo } from "~/types/chat";
 import type { DriveEditProposal, DriveEvent } from "~/engine/local-executor";
@@ -46,7 +47,7 @@ export interface LocalChatOptions {
   mcpServerIds: string[];
   ragStoreIds?: string[];
   webSearchEnabled?: boolean;
-  enableThinking?: boolean;
+  reasoningEffort?: GeminiReasoningEffort;
   maxFunctionCalls?: number;
   functionCallWarningThreshold?: number;
   ragTopK?: number;
@@ -97,7 +98,7 @@ export async function* executeLocalChat(
     mcpServerIds,
     ragStoreIds,
     webSearchEnabled = false,
-    enableThinking,
+    reasoningEffort,
     maxFunctionCalls,
     functionCallWarningThreshold,
     ragTopK,
@@ -354,7 +355,7 @@ export async function* executeLocalChat(
     ragStoreIds,
     {
       webSearchEnabled,
-      enableThinking,
+      reasoningEffort,
       functionCallLimits:
         maxFunctionCalls !== undefined || functionCallWarningThreshold !== undefined
           ? { maxFunctionCalls, functionCallWarningThreshold, requestLimitExtension: requestFunctionCallLimitExtension }

@@ -440,9 +440,7 @@ export interface TranslationStrings {
   "chat.noHistory": string;
   "chat.confirmDelete": string;
   "chat.mcpToolsLabel": string;
-  "chat.alwaysThinkLabel": string;
-  "chat.thinkFlash": string;
-  "chat.thinkFlashLite": string;
+  "chat.reasoningEffort": string;
   "chat.toolModeLockGemma4WebSearch": string;
   "chat.toolModeLockWebSearch": string;
   "chat.toolModeLockRag": string;
@@ -473,7 +471,6 @@ export interface TranslationStrings {
   // Welcome hints
   "chat.welcomeTitle": string;
   "chat.welcomeHint": string;
-  "chat.welcomeThinking": string;
   "chat.welcomeImage": string;
   "chat.welcomeCompact": string;
   "chat.welcomeNewChat": string;
@@ -1860,9 +1857,7 @@ const en: TranslationStrings = {
   "chat.noHistory": "No chat history",
   "chat.confirmDelete": "Delete this chat?",
   "chat.mcpToolsLabel": "MCP Tools",
-  "chat.alwaysThinkLabel": "Always Think",
-  "chat.thinkFlash": "Flash",
-  "chat.thinkFlashLite": "Flash Lite",
+  "chat.reasoningEffort": "Reasoning effort",
   "chat.toolModeLockGemma4WebSearch": "Gemma 4 cannot use function calling with Web Search",
   "chat.toolModeLockWebSearch": "Drive tools are disabled during Web Search",
   "chat.toolModeLockRag": "Drive tools are unavailable for this RAG and model combination",
@@ -1893,7 +1888,6 @@ const en: TranslationStrings = {
   // Welcome hints
   "chat.welcomeTitle": "Start a conversation with AI",
   "chat.welcomeHint": "Ask questions about your files, create new ones, or search your Drive.",
-  "chat.welcomeThinking": "Use words like \"think\" or \"analyze\" to enable deep thinking mode",
   "chat.welcomeImage": "Use \"generate image\" or \"create image\" to auto-switch to image model",
   "chat.welcomeCompact": "Type /compact to compress a long conversation into a new chat",
   "chat.welcomeNewChat": "Gemini has no memory, so the entire chat history is sent each time. Always click + to start a new chat when changing topics",
@@ -3281,9 +3275,7 @@ const ja: TranslationStrings = {
   "chat.noHistory": "チャット履歴はありません",
   "chat.confirmDelete": "このチャットを削除しますか？",
   "chat.mcpToolsLabel": "MCPツール",
-  "chat.alwaysThinkLabel": "常に思考",
-  "chat.thinkFlash": "Flash",
-  "chat.thinkFlashLite": "Flash Lite",
+  "chat.reasoningEffort": "推論 effort",
   "chat.toolModeLockGemma4WebSearch": "Gemma 4はWeb Searchとファンクションコールを同時に使用できません",
   "chat.toolModeLockWebSearch": "Web Search中はDriveツールは無効です",
   "chat.toolModeLockRag": "このRAGとモデルの組み合わせではDriveツールを利用できません",
@@ -3314,7 +3306,6 @@ const ja: TranslationStrings = {
   // Welcome hints
   "chat.welcomeTitle": "AIとの会話を始めましょう",
   "chat.welcomeHint": "ファイルについて質問したり、新規作成したり、Drive内を検索できます。",
-  "chat.welcomeThinking": "「考えて」「分析して」などのキーワードで深い思考モードが有効になります",
   "chat.welcomeImage": "「画像を生成」「generate image」で自動的に画像モデルに切り替わります",
   "chat.welcomeCompact": "/compact で長い会話を要約して新しいチャットに引き継げます",
   "chat.welcomeNewChat": "Geminiは記憶ができないため、毎回このチャットの全会話を送信します。話題を変える時は必ず + ボタンで新しいチャットを始めてください",

@@ -19,6 +19,7 @@ import {
 import type { Message } from "~/types/chat";
 import type {
   ModelType,
+  GeminiReasoningEffort,
   ToolDefinition,
   ToolPropertyDefinition,
 } from "~/types/settings";
@@ -216,23 +217,18 @@ export function toolsToGeminiFormat(tools: ToolDefinition[]): Tool[] {
  *   - gemini-3-pro / gemini-3.1-pro: thinking is mandatory; you cannot
  *     opt out with thinkingBudget: 0.
  */
-export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
+export function getThinkingConfig(
+  model: ModelType,
+  requested: GeminiReasoningEffort | boolean = "default",
+) {
   const modelLower = model.toLowerCase();
   if (modelLower.includes("gemma")) return undefined;
-  if (modelLower.includes("gemini-3.8-flash")) {
-    return enableThinking
-      ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
-      : { thinkingLevel: ThinkingLevel.LOW };
-  }
-  if (modelLower.includes("gemini-3.5-flash-lite")) {
-    if (!enableThinking) return undefined;
-    return { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH };
-  }
-  const thinkingRequired =
-    modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
-  if (!enableThinking && !thinkingRequired) return { thinkingBudget: 0 };
-  if (modelLower === "gemini-2.5-flash-lite") {
-    return { includeThoughts: true, thinkingBudget: -1 };
-  }
-  return { includeThoughts: true };
+  const reasoningEffort = typeof requested === "boolean" ? (requested ? "high" : "none") : requested;
+  if (reasoningEffort === "default") return undefined;
+  const level = reasoningEffort === "none"
+    ? (modelLower.includes("flash-lite") ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW)
+    : reasoningEffort === "minimal" && modelLower.includes("pro")
+    ? ThinkingLevel.LOW
+    : reasoningEffort.toUpperCase() as ThinkingLevel;
+  return { includeThoughts: true, thinkingLevel: level };
 }

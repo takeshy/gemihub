@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BookOpen, Brain, ImageIcon, LayoutDashboard, Minimize2, Plus, Globe, Users, Calendar, Code } from "lucide-react";
+import { BookOpen, ImageIcon, LayoutDashboard, Minimize2, Plus, Globe, Users, Calendar, Code } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { MessageBubble } from "./MessageBubble";
 import type { Message, ToolCall } from "~/types/chat";
@@ -14,7 +14,6 @@ interface MessageListProps {
   streamingRagUsed?: boolean;
   streamingWebSearchUsed?: boolean;
   isStreaming?: boolean;
-  alwaysThink?: boolean;
   isPro?: boolean;
   onBuildWebApp?: () => void;
   onGoToDashboard?: () => void;
@@ -31,7 +30,6 @@ export function MessageList({
   streamingRagUsed,
   streamingWebSearchUsed,
   isStreaming,
-  alwaysThink,
   isPro,
   onBuildWebApp,
   onGoToDashboard,
@@ -120,14 +118,6 @@ export function MessageList({
                   {t("chat.welcomeHint")}
                 </p>
                 <div className="grid grid-cols-2 gap-3 text-left">
-                  {!alwaysThink && (
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
-                      <Brain size={ICON.LG} className="mb-1.5 text-purple-500" />
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {t("chat.welcomeThinking")}
-                      </p>
-                    </div>
-                  )}
                   <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
                     <ImageIcon size={ICON.LG} className="mb-1.5 text-blue-500" />
                     <p className="text-xs text-gray-600 dark:text-gray-400">

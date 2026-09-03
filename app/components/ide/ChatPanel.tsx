@@ -9,7 +9,7 @@ import type {
   GeneratedImage,
   McpAppInfo,
 } from "~/types/chat";
-import type { ModelInfo, UserSettings, ModelType, DriveToolMode, SlashCommand } from "~/types/settings";
+import type { ModelInfo, UserSettings, ModelType, DriveToolMode, SlashCommand, GeminiReasoningEffort } from "~/types/settings";
 
 import {
   getAvailableModels,
@@ -30,7 +30,7 @@ import { createNewDashboard, dashboardPath, listDashboardFiles } from "~/dashboa
 import { requestOpenDashboard } from "~/dashboard/pendingDashboardOpen";
 import { isGemihubOkfBundleName } from "~/services/gemihub-okf-manifest";
 import { useI18n } from "~/i18n/context";
-import { shouldUseImageModel, shouldEnableThinking } from "~/utils/keyword-detection";
+import { shouldUseImageModel } from "~/utils/keyword-detection";
 import { isImageGenerationModel } from "~/types/settings";
 import { isEncryptedFile, decryptWithPrivateKey, decryptFileContent } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
@@ -443,17 +443,7 @@ export function ChatPanel({
     return [];
   });
 
-  // Thinking toggles for Flash / Flash Lite models
-  const [thinkFlash, setThinkFlash] = useState(false);
-  const [thinkFlashLite, setThinkFlashLite] = useState(true);
-
-  // Resolve thinking toggle for a given model name
-  const getThinkingToggle = useCallback((model: string): boolean | undefined => {
-    const m = model.toLowerCase();
-    if (m.includes("flash-lite")) return thinkFlashLite ? true : undefined;
-    if (m.includes("flash") && !m.includes("pro")) return thinkFlash ? true : undefined;
-    return undefined;
-  }, [thinkFlash, thinkFlashLite]);
+  const [reasoningEffort, setReasoningEffort] = useState<GeminiReasoningEffort>("default");
 
   // Persist MCP selection to localStorage
   useEffect(() => {
@@ -1196,7 +1186,7 @@ export function ChatPanel({
                 mcpServerIds: effectiveMcpIds,
                 ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
                 webSearchEnabled: isWebSearch,
-                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                reasoningEffort,
                 maxFunctionCalls: 50,
                 functionCallWarningThreshold: 10,
                 ragTopK: settings.ragTopK,
@@ -1225,7 +1215,7 @@ export function ChatPanel({
                 mcpServerIds: effectiveMcpIds,
                 ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
                 webSearchEnabled: isWebSearch,
-                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                reasoningEffort,
                 maxFunctionCalls: 50,
                 functionCallWarningThreshold: 10,
                 ragTopK: settings.ragTopK,
@@ -1250,7 +1240,7 @@ export function ChatPanel({
                 mcpServerIds: effectiveMcpIds,
                 ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
                 webSearchEnabled: isWebSearch,
-                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                reasoningEffort,
                 maxFunctionCalls: 50,
                 functionCallWarningThreshold: 10,
                 ragTopK: settings.ragTopK,
@@ -1275,7 +1265,7 @@ export function ChatPanel({
                 mcpServerIds: effectiveMcpIds,
                 ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
                 webSearchEnabled: isWebSearch,
-                enableThinking: getThinkingToggle(effectiveModel) === true || shouldEnableThinking(content),
+                reasoningEffort,
                 maxFunctionCalls: 50,
                 functionCallWarningThreshold: 10,
                 ragTopK: settings.ragTopK,
@@ -1500,7 +1490,7 @@ export function ChatPanel({
       availableMcpServers,
       settings,
       createStreamSession,
-      getThinkingToggle,
+      reasoningEffort,
       activateSkill,
       getActiveSkillsSystemPrompt,
       getActiveSkillWorkflows,
@@ -1843,7 +1833,6 @@ export function ChatPanel({
         streamingRagUsed={streamingRagUsed}
         streamingWebSearchUsed={streamingWebSearchUsed}
         isStreaming={isStreaming}
-        alwaysThink={getThinkingToggle(selectedModel) === true}
         isPro={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}
         {...((settings.webpageBuilderEnabled ?? false)
           ? { onBuildWebApp: () => handleSend("", undefined, { skillId: "webpage-builder" }) }
@@ -1898,10 +1887,8 @@ export function ChatPanel({
         lastFileIdInMessages={lastFileIdInMessages}
         driveToolModeLocked={toolConstraint.locked}
         driveToolModeReasonKey={toolConstraint.reasonKey as keyof TranslationStrings | undefined}
-        thinkFlash={thinkFlash}
-        thinkFlashLite={thinkFlashLite}
-        onThinkFlashChange={setThinkFlash}
-        onThinkFlashLiteChange={setThinkFlashLite}
+        reasoningEffort={reasoningEffort}
+        onReasoningEffortChange={setReasoningEffort}
         onCompact={handleCompact}
         isCompacting={isCompacting}
         messageCount={messages.length}

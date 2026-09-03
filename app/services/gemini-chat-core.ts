@@ -20,7 +20,7 @@ import {
   type Chat,
 } from "@google/genai";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall, GeneratedImage, WebSearchSource } from "~/types/chat";
-import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
+import type { ToolDefinition, ToolPropertyDefinition, ModelType, GeminiReasoningEffort } from "~/types/settings";
 
 // Default safety settings per Gemini best practices
 // Using BLOCK_MEDIUM_AND_ABOVE as a balanced default
@@ -102,6 +102,8 @@ export interface ChatWithToolsOptions {
   functionCallLimits?: FunctionCallLimitOptions;
   disableTools?: boolean;
   webSearchEnabled?: boolean;
+  reasoningEffort?: GeminiReasoningEffort;
+  /** Legacy workflow compatibility. Chat uses reasoningEffort. */
   enableThinking?: boolean;
 }
 
@@ -388,24 +390,19 @@ function toStreamChunkUsage(usage: ExtractedUsage | undefined): StreamChunkUsage
   };
 }
 
-export function getThinkingConfig(model: ModelType, enableThinking?: boolean) {
+export function getThinkingConfig(model: ModelType, requested: GeminiReasoningEffort | boolean = "default") {
   const modelLower = model.toLowerCase();
   // Gemma 4: thinking is built-in (always on), config parameters not supported
   if (modelLower.includes("gemma")) return undefined;
   // Gemini 3.8 Flash and 3.5 Flash Lite use thinkingLevel; thinkingBudget is unsupported.
-  if (modelLower.includes("gemini-3.8-flash")) {
-    return enableThinking
-      ? { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH }
-      : { thinkingLevel: ThinkingLevel.LOW };
-  }
-  if (modelLower.includes("gemini-3.5-flash-lite")) {
-    if (!enableThinking) return undefined;
-    return { includeThoughts: true, thinkingLevel: ThinkingLevel.HIGH };
-  }
-  // gemini-3-pro models require thinking — cannot set thinkingBudget: 0
-  const thinkingRequired = modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
-  if (!enableThinking && !thinkingRequired) return { thinkingBudget: 0 };
-  return { includeThoughts: true };
+  const reasoningEffort = typeof requested === "boolean" ? (requested ? "high" : "none") : requested;
+  if (reasoningEffort === "default") return undefined;
+  const level = reasoningEffort === "none"
+    ? (modelLower.includes("flash-lite") ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW)
+    : reasoningEffort === "minimal" && modelLower.includes("pro")
+    ? ThinkingLevel.LOW
+    : reasoningEffort.toUpperCase() as ThinkingLevel;
+  return { includeThoughts: true, thinkingLevel: level };
 }
 
 /**
@@ -524,7 +521,10 @@ export async function* chatWithToolsStream(
 
   const historyMessages = messages.slice(0, -1);
   const history = messagesToContents(historyMessages);
-  const thinkingConfig = getThinkingConfig(model, options?.enableThinking);
+  const thinkingConfig = getThinkingConfig(
+    model,
+    options?.reasoningEffort ?? options?.enableThinking ?? "default",
+  );
 
   const chat: Chat = ai.chats.create({
     model,

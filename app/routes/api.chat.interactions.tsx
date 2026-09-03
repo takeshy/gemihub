@@ -43,7 +43,7 @@ const InteractionsChatRequestSchema = z.object({
   driveToolMode: z.enum(["all", "noSearch", "none"]).optional(),
   mcpServerIds: z.array(z.string()).optional(),
   webSearchEnabled: z.boolean().optional(),
-  enableThinking: z.boolean().optional(),
+  reasoningEffort: z.enum(["default", "none", "minimal", "low", "medium", "high"]).optional(),
   settings: z.object({
     ragTopK: z.number().optional(),
   }).optional(),
@@ -116,7 +116,7 @@ export async function action({ request }: Route.ActionArgs) {
   const driveToolMode = validData.driveToolMode ?? "all";
   const requestedMcpServerIds = validData.mcpServerIds ?? [];
   const webSearchEnabled = validData.webSearchEnabled && supportsWebSearch(model);
-  const enableThinking = validData.enableThinking;
+  const reasoningEffort = validData.reasoningEffort;
   const toolResults = validData.toolResults as ToolResultInput[] | undefined;
   const currentInteractionId = validData.currentInteractionId;
   const previousInteractionId = validData.previousInteractionId;
@@ -206,7 +206,7 @@ export async function action({ request }: Route.ActionArgs) {
     ? buildToolResultInput(toolResults)
     : buildInteractionInput(messages, previousInteractionId);
 
-  const generationConfig = buildGenerationConfig(model, enableThinking);
+  const generationConfig = buildGenerationConfig(model, reasoningEffort);
 
   const interactionId = toolResults ? currentInteractionId : previousInteractionId;
 

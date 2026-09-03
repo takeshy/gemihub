@@ -30,7 +30,7 @@ const ChatRequestSchema = z.object({
     headers: z.record(z.string(), z.string()).optional(),
   }).passthrough()).optional(),
   webSearchEnabled: z.boolean().optional(),
-  enableThinking: z.boolean().optional(),
+  reasoningEffort: z.enum(["default", "none", "minimal", "low", "medium", "high"]).optional(),
   apiPlan: z.string().optional(),
   settings: z.object({
     maxFunctionCalls: z.number().optional(),
@@ -103,7 +103,7 @@ export async function action({ request }: Route.ActionArgs) {
   const enableMcp = validData.enableMcp;
   const requestedMcpServers = validData.mcpServers as McpServerConfig[] | undefined;
   const webSearchEnabled = validData.webSearchEnabled && supportsWebSearch(model);
-  const enableThinking = validData.enableThinking;
+  const reasoningEffort = validData.reasoningEffort;
   const requestSettings = validData.settings;
   const requestedMcpServerIds = (requestedMcpServers || [])
     .map((s) => s.id)
@@ -291,7 +291,7 @@ export async function action({ request }: Route.ActionArgs) {
                 functionCallWarningThreshold: 10,
               },
               webSearchEnabled,
-              enableThinking,
+              reasoningEffort,
             }
           );
         }

@@ -55,7 +55,7 @@ const ChatRequestSchema = z.object({
     headers: z.record(z.string(), z.string()).optional(),
   }).passthrough()).optional(),
   webSearchEnabled: z.boolean().optional(),
-  enableThinking: z.boolean().optional(),
+  reasoningEffort: z.enum(["default", "none", "minimal", "low", "medium", "high"]).optional(),
   requirePlanApproval: z.boolean().optional(),
   settings: z.object({
     maxFunctionCalls: z.number().optional(),
@@ -110,7 +110,7 @@ export async function handleVertexChatAction(
   const rawDriveToolMode = validData.driveToolMode;
   const requestedMcpServers = validData.mcpServers as McpServerConfig[] | undefined;
   const webSearchEnabled = validData.webSearchEnabled && supportsWebSearch(model);
-  const enableThinking = validData.enableThinking;
+  const reasoningEffort = validData.reasoningEffort;
   const requirePlanApproval = validData.requirePlanApproval === true;
   const requestSettings = validData.settings;
   const requestedMcpServerIds = validData.mcpServerIds && validData.mcpServerIds.length > 0
@@ -367,7 +367,7 @@ export async function handleVertexChatAction(
           tools,
           systemPrompt: effectiveSystemPrompt,
           webSearchEnabled,
-          enableThinking,
+          reasoningEffort,
           maxFunctionCalls: requestSettings?.maxFunctionCalls,
           executeToolCall,
           delegateToolNames,

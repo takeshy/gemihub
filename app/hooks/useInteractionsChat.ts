@@ -17,6 +17,7 @@ import {
   type ModelType,
   type DriveToolMode,
   type UserSettings,
+  type GeminiReasoningEffort,
 } from "~/types/settings";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall } from "~/types/chat";
 import { isDriveToolMediaResult } from "~/services/gemini-chat-core";
@@ -36,7 +37,7 @@ export interface InteractionsChatOptions {
   mcpServerIds: string[];
   ragStoreIds?: string[];
   webSearchEnabled?: boolean;
-  enableThinking?: boolean;
+  reasoningEffort?: GeminiReasoningEffort;
   maxFunctionCalls?: number;
   functionCallWarningThreshold?: number;
   ragTopK?: number;
@@ -370,7 +371,7 @@ export async function* executeInteractionsChat(
     mcpServerIds,
     ragStoreIds,
     webSearchEnabled = false,
-    enableThinking,
+    reasoningEffort,
     maxFunctionCalls = DEFAULT_MAX_FUNCTION_CALLS,
     functionCallWarningThreshold,
     ragTopK,
@@ -496,7 +497,7 @@ export async function* executeInteractionsChat(
       mcpServerIds,
       ragStoreIds,
       webSearchEnabled,
-      enableThinking,
+      reasoningEffort,
       settings: ragTopK != null ? { ragTopK } : undefined,
       extraToolDefinitions: extraToolDefinitions.length > 0 ? extraToolDefinitions : undefined,
     };

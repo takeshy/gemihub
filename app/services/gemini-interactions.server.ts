@@ -15,7 +15,7 @@ import {
   type Tool,
 } from "@google/genai";
 import type { Message, StreamChunk, StreamChunkUsage, ToolCall, Attachment, WebSearchSource } from "~/types/chat";
-import type { ToolDefinition, ToolPropertyDefinition, ModelType } from "~/types/settings";
+import type { ToolDefinition, ToolPropertyDefinition, ModelType, GeminiReasoningEffort } from "~/types/settings";
 import { supportsWebSearch } from "~/types/settings";
 import { formatFileSearchSource, MODEL_PRICING, SEARCH_GROUNDING_COST } from "./gemini-chat-core";
 import { DEFAULT_SAFETY_SETTINGS } from "./gemini.server";
@@ -392,24 +392,18 @@ type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
 export function buildGenerationConfig(
   model: ModelType,
-  enableThinking?: boolean,
+  reasoningEffort: GeminiReasoningEffort = "default",
 ): Interactions.GenerationConfig | undefined {
   const modelLower = model.toLowerCase();
   // Gemma 4: thinking is built-in (always on), config parameters not supported
   if (modelLower.includes("gemma")) return undefined;
 
-  const thinkingRequired = modelLower.includes("gemini-3-pro") || modelLower.includes("gemini-3.1-pro");
-  let thinkingLevel: ThinkingLevel;
-
-  if (thinkingRequired) {
-    thinkingLevel = "high";
-  } else if (modelLower.includes("gemini-3.8-flash") || modelLower.includes("gemini-3.5-flash-lite")) {
-    thinkingLevel = enableThinking ? "high" : "low";
-  } else if (!enableThinking) {
-    thinkingLevel = "minimal";
-  } else {
-    thinkingLevel = "high";
-  }
+  if (reasoningEffort === "default") return undefined;
+  const thinkingLevel: ThinkingLevel = reasoningEffort === "none"
+    ? (modelLower.includes("flash-lite") ? "minimal" : "low")
+    : reasoningEffort === "minimal" && modelLower.includes("pro")
+    ? "low"
+    : reasoningEffort;
 
   return {
     thinking_level: thinkingLevel,

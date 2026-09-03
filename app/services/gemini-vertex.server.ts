@@ -26,7 +26,7 @@ import type {
   StreamChunkUsage,
   ToolCall,
 } from "~/types/chat";
-import type { ModelType, ToolDefinition } from "~/types/settings";
+import type { ModelType, ToolDefinition, GeminiReasoningEffort } from "~/types/settings";
 import type { TenantInfo } from "~/types/enterprise";
 import { createVertexClient, getVertexAccessToken } from "./vertex-ai.server";
 import {
@@ -59,6 +59,7 @@ export interface VertexCallParams {
   messages: Message[];
   systemPrompt?: string;
   enableThinking?: boolean;
+  reasoningEffort?: GeminiReasoningEffort;
   billing?: AiBillingContext;
 }
 
@@ -141,7 +142,7 @@ export async function* streamCompact(
 
   const ai = await createVertexClient(params.tenant);
   const contents = messagesToContents(params.messages);
-  const thinkingConfig = getThinkingConfig(params.model, params.enableThinking);
+  const thinkingConfig = getThinkingConfig(params.model, params.reasoningEffort ?? params.enableThinking ?? "default");
 
   try {
     const response = await ai.models.generateContentStream({
@@ -208,7 +209,7 @@ export async function generateCompact(params: VertexCallParams): Promise<Generat
 
   const ai = await createVertexClient(params.tenant);
   const contents = messagesToContents(params.messages);
-  const thinkingConfig = getThinkingConfig(params.model, params.enableThinking);
+  const thinkingConfig = getThinkingConfig(params.model, params.reasoningEffort ?? params.enableThinking ?? "default");
 
   const result = await callWithVertexRetry(async () => {
     const response = await ai.models.generateContent({
@@ -255,7 +256,7 @@ export async function generateStructured<T = unknown>(
 ): Promise<GenerateStructuredResult<T>> {
   if (params.billing) await assertAiBudgetAvailable(params.billing);
   const ai = await createVertexClient(params.tenant);
-  const thinkingConfig = getThinkingConfig(params.model, params.enableThinking);
+  const thinkingConfig = getThinkingConfig(params.model, params.reasoningEffort ?? params.enableThinking ?? "default");
   const { mode } = chooseSchemaMode(params.schema);
 
   const messages =
@@ -982,7 +983,7 @@ export async function* streamWithTools(
   }
 
   const history = messagesToContents(params.messages.slice(0, -1));
-  const thinkingConfig = getThinkingConfig(params.model, params.enableThinking);
+  const thinkingConfig = getThinkingConfig(params.model, params.reasoningEffort ?? params.enableThinking ?? "default");
 
   const initialMessage: Part[] = [];
   if (lastMessage.role === "user") {

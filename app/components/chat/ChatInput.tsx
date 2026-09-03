@@ -18,8 +18,8 @@ import {
 import { ICON } from "~/utils/icon-sizes";
 import type { Attachment } from "~/types/chat";
 import type { SkillMetadata } from "~/types/skill";
-import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, McpServerConfig } from "~/types/settings";
-import { getDriveToolModeConstraint, supportsWebSearch } from "~/types/settings";
+import type { ModelType, ModelInfo, RagSetting, DriveToolMode, SlashCommand, McpServerConfig, GeminiReasoningEffort } from "~/types/settings";
+import { getDriveToolModeConstraint, supportsWebSearch, isGemma4, isImageGenerationModel } from "~/types/settings";
 import type { ChatOverrides } from "~/components/ide/ChatPanel";
 import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
@@ -63,10 +63,8 @@ interface ChatInputProps {
   slashCommands?: (SlashCommand & { execute?: (args: string) => Promise<string> })[];
   driveToolModeLocked?: boolean;
   driveToolModeReasonKey?: keyof TranslationStrings;
-  thinkFlash?: boolean;
-  thinkFlashLite?: boolean;
-  onThinkFlashChange?: (value: boolean) => void;
-  onThinkFlashLiteChange?: (value: boolean) => void;
+  reasoningEffort?: GeminiReasoningEffort;
+  onReasoningEffortChange?: (value: GeminiReasoningEffort) => void;
   lastFileIdInMessages?: string | null;
   onCompact?: () => void;
   isCompacting?: boolean;
@@ -195,10 +193,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   slashCommands = [],
   driveToolModeLocked = false,
   driveToolModeReasonKey,
-  thinkFlash = false,
-  thinkFlashLite = true,
-  onThinkFlashChange,
-  onThinkFlashLiteChange,
+  reasoningEffort = "default",
+  onReasoningEffortChange,
   lastFileIdInMessages = null,
   onCompact,
   isCompacting = false,
@@ -877,20 +873,24 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         })}
                       </>
                     )}
-                    {onThinkFlashChange && onThinkFlashLiteChange && (
+                    {onReasoningEffortChange && !isImageGenerationModel(selectedModel) && !isGemma4(selectedModel) && (
                       <>
                         <div className="mx-3 my-1 border-t border-gray-200 dark:border-gray-700" />
                         <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                          {t("chat.alwaysThinkLabel")}
+                          {t("chat.reasoningEffort")}
                         </div>
-                        <label className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-                          <input type="checkbox" checked={thinkFlash} onChange={(e) => onThinkFlashChange(e.target.checked)} className="h-3 w-3" />
-                          <span>{t("chat.thinkFlash")}</span>
-                        </label>
-                        <label className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">
-                          <input type="checkbox" checked={thinkFlashLite} onChange={(e) => onThinkFlashLiteChange(e.target.checked)} className="h-3 w-3" />
-                          <span>{t("chat.thinkFlashLite")}</span>
-                        </label>
+                        <select
+                          value={reasoningEffort}
+                          onChange={(e) => onReasoningEffortChange(e.target.value as GeminiReasoningEffort)}
+                          className="mx-3 mb-2 w-[calc(100%-1.5rem)] rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                        >
+                          <option value="default">default</option>
+                          <option value="none">none / minimum</option>
+                          {!selectedModel.includes("pro") && <option value="minimal">minimal</option>}
+                          <option value="low">low</option>
+                          <option value="medium">medium</option>
+                          <option value="high">high</option>
+                        </select>
                       </>
                     )}
                   </div>

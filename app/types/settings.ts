@@ -195,6 +195,7 @@ export interface McpAppUiResource {
 
 // API Plan
 export type ApiPlan = "paid" | "free";
+export type GeminiReasoningEffort = "default" | "none" | "minimal" | "low" | "medium" | "high";
 
 // Drive Tool Mode
 export type DriveToolMode = "all" | "noSearch" | "none";
