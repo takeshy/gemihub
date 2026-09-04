@@ -873,26 +873,6 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         })}
                       </>
                     )}
-                    {onReasoningEffortChange && !isImageGenerationModel(selectedModel) && !isGemma4(selectedModel) && (
-                      <>
-                        <div className="mx-3 my-1 border-t border-gray-200 dark:border-gray-700" />
-                        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                          {t("chat.reasoningEffort")}
-                        </div>
-                        <select
-                          value={reasoningEffort}
-                          onChange={(e) => onReasoningEffortChange(e.target.value as GeminiReasoningEffort)}
-                          className="mx-3 mb-2 w-[calc(100%-1.5rem)] rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-                        >
-                          <option value="default">default</option>
-                          <option value="none">none / minimum</option>
-                          {!selectedModel.includes("pro") && <option value="minimal">minimal</option>}
-                          <option value="low">low</option>
-                          <option value="medium">medium</option>
-                          <option value="high">high</option>
-                        </select>
-                      </>
-                    )}
                   </div>
                 )}
               </div>
@@ -1048,6 +1028,25 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
               </div>
             )}
           </div>
+
+          {/* Reasoning effort selector */}
+          {onReasoningEffortChange && !isImageGenerationModel(selectedModel) && !isGemma4(selectedModel) && (
+            <select
+              value={reasoningEffort}
+              onChange={(e) => onReasoningEffortChange(e.target.value as GeminiReasoningEffort)}
+              disabled={isStreaming}
+              title={t("chat.reasoningEffort")}
+              aria-label={t("chat.reasoningEffort")}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
+            >
+              <option value="default">default</option>
+              <option value="none">none</option>
+              {!selectedModel.includes("pro") && <option value="minimal">minimal</option>}
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          )}
 
           {/* RAG selector */}
           <div className="flex flex-col items-start gap-1.5">
