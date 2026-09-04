@@ -19,6 +19,9 @@ export interface KanbanBoardDefinition {
   title?: string;
   statusProperty?: string;
   titleProperty?: string;
+  dueProperty?: string;
+  startedProperty?: string;
+  completedProperty?: string;
   columns?: Array<string | KanbanColumnConfig>;
   showUnspecified?: boolean;
   displayFields?: Array<string | KanbanDisplayFieldConfig>;

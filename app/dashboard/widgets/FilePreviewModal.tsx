@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLink, X, Loader2 } from "lucide-react";
+import { ExternalLink, X, Loader2, PenLine } from "lucide-react";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext } from "~/contexts/EditorContext";
 import { useFileWithCache } from "~/hooks/useFileWithCache";
@@ -15,14 +15,17 @@ import { isMarkdownFile } from "~/utils/frontmatter";
 import { MarkdownFileEditor, type MdEditMode } from "~/components/ide/editors/MarkdownFileEditor";
 import { getCachedFile, setCachedFile } from "~/services/indexeddb-cache";
 import { bytesToBase64, base64ToBytes, guessMimeType } from "~/utils/media-utils";
+import { EpubFileViewer } from "~/components/ide/editors/EpubFileViewer";
 
-type MediaKind = "image" | "audio" | "video" | "pdf";
+type MediaKind = "image" | "audio" | "video" | "pdf" | "epub" | "html";
 
 function mediaKind(name: string): MediaKind | null {
   if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(name)) return "image";
   if (/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(name)) return "audio";
   if (/\.(mp4|webm|ogv|mov|m4v)$/i.test(name)) return "video";
   if (/\.pdf$/i.test(name)) return "pdf";
+  if (/\.epub$/i.test(name)) return "epub";
+  if (/\.html?$/i.test(name)) return "html";
   return null;
 }
 
@@ -35,6 +38,7 @@ export function FilePreviewModal({
   fileId,
   fileName,
   initialMode,
+  onEdit,
   onNavigate,
   onClose,
 }: {
@@ -42,6 +46,8 @@ export function FilePreviewModal({
   fileName: string;
   /** Override the first markdown editor mode for this open. */
   initialMode?: MdEditMode;
+  /** Open a rich task editor instead of the generic Markdown editor. */
+  onEdit?: () => void;
   /** Open the file in the editor (the actual navigation). */
   onNavigate: () => void;
   onClose: () => void;
@@ -76,6 +82,16 @@ export function FilePreviewModal({
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-200">
             {displayName}
           </span>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              title={t("dashboard.kanbanTaskEdit")}
+              className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            >
+              <PenLine size={16} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onNavigate}
@@ -99,7 +115,11 @@ export function FilePreviewModal({
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-4">
-            {kind ? (
+            {kind === "epub" ? (
+              <div className="flex h-[70vh] min-h-0 overflow-hidden">
+                <EpubFileViewer fileId={fileId} fileName={fileName} />
+              </div>
+            ) : kind ? (
               <BinaryPreviewBody fileId={fileId} fileName={fileName} kind={kind} />
             ) : (
               <TextPreviewBody fileId={fileId} />
@@ -246,5 +266,6 @@ function BinaryPreviewBody({ fileId, fileName, kind }: { fileId: string; fileNam
   if (kind === "image") return <img src={src} alt={fileName} className="mx-auto max-h-[70vh] max-w-full rounded-md object-contain" />;
   if (kind === "audio") return <audio src={src} controls className="w-full" />;
   if (kind === "video") return <video src={src} controls className="max-h-[70vh] w-full rounded-md" />;
+  if (kind === "html") return <iframe src={src} title={fileName} sandbox="allow-same-origin" className="h-[70vh] w-full border-0" />;
   return <iframe src={src} title={fileName} className="h-[70vh] w-full border-0" />;
 }

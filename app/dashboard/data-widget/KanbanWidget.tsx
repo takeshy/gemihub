@@ -2,10 +2,20 @@
 // property and writes status changes back to the file frontmatter on drop.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { CalendarDays, CheckSquare, Paperclip, PenLine, Plus, Sparkles, X } from "lucide-react";
 import yaml from "js-yaml";
 import { getCachedFile } from "~/services/indexeddb-cache";
-import { findFileByNameLocal, findFileByNameLocalLoose, readFileLocal, writeFileLocal } from "~/services/drive-local";
+import {
+  findFileByNameLocal,
+  findFileByNameLocalLoose,
+  mimeTypeFromFileName,
+  readFileBinaryLocal,
+  readFileLocal,
+  renameFileLocal,
+  saveBinaryFileLocal,
+  writeFileLocal,
+} from "~/services/drive-local";
 import { updateFrontmatterKey } from "../frontmatter-writeback";
 import { parseKanbanFile, type KanbanBoardDefinition } from "./kanban-file";
 import { DASHBOARD_KANBAN_FILE_UPDATED_EVENT } from "./kanban-events";
@@ -17,6 +27,16 @@ import { useI18n } from "~/i18n/context";
 import { FilePreviewModal } from "../widgets/FilePreviewModal";
 import type { MdEditMode } from "~/components/ide/editors/MarkdownFileEditor";
 import { appendSystemTimeline } from "~/services/system-timeline";
+import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
+import { bytesToBase64, base64ToBytes } from "~/utils/media-utils";
+import { KanbanTaskModal, type KanbanTaskInput } from "./KanbanTaskModal";
+import {
+  type KanbanAttachment,
+  isCompletionColumn,
+  parseKanbanTaskBody,
+  replaceKanbanTaskBody,
+} from "./kanban-task";
+import { generateKanbanTasks, parseKanbanAiTasks } from "./kanban-ai";
 
 const UNSPECIFIED = "__unspecified__";
 const DEFAULT_COLUMNS: KanbanColumnConfig[] = [
@@ -90,6 +110,26 @@ function sanitizeFileName(name: string): string {
     .replace(/\s+/g, " ")
     .replace(/^\.+/, "")
     .trim();
+}
+
+function localIsoDate(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function updateFrontmatterKeys(content: string, values: Record<string, unknown>): string | null {
+  let next = content;
+  for (const [key, value] of Object.entries(values)) {
+    const result = updateFrontmatterKey(next, key, value);
+    if (!result) return null;
+    next = result.content;
+  }
+  return next;
+}
+
+function canPreviewAttachment(path: string): boolean {
+  return /\.(?:avif|bmp|epub|gif|html?|jpe?g|markdown|md|pdf|png|svg|txt|webp)$/i.test(path);
 }
 
 function joinPath(folder: string, fileName: string): string {
@@ -198,6 +238,9 @@ export default function KanbanWidget({
   const boardTitle = (def.title ?? "").trim();
   const statusProperty = def.statusProperty || "status";
   const titleProperty = def.titleProperty || "title";
+  const dueProperty = def.dueProperty || "due";
+  const startedProperty = def.startedProperty || "started";
+  const completedProperty = def.completedProperty || "completed";
   const displayFields = useMemo(() => normalizeDisplayFields(def.displayFields), [def.displayFields]);
   const configuredColumns = useMemo(() => normalizeColumns(def.columns), [def.columns]);
   const showUnspecified = def.showUnspecified !== false;
@@ -214,8 +257,8 @@ export default function KanbanWidget({
     Array.isArray(cfg.cardOrder) ? cfg.cardOrder.filter((id): id is string => typeof id === "string") : [],
   );
   const [showNewCard, setShowNewCard] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newStatus, setNewStatus] = useState(configuredColumns[0]?.value ?? "");
+  const [editingRow, setEditingRow] = useState<DataRow | null>(null);
+  const [showAI, setShowAI] = useState(false);
   const [previewRow, setPreviewRow] = useState<DataRow | null>(null);
   const [previewInitialMode, setPreviewInitialMode] = useState<MdEditMode | undefined>(undefined);
   const [selectedTag, setSelectedTag] = useState("");
@@ -242,11 +285,6 @@ export default function KanbanWidget({
     return () => window.removeEventListener("dashboard-data-changed", handler);
   }, [loadData]);
 
-  useEffect(() => {
-    if (configuredColumns.length > 0 && !configuredColumns.some((col) => col.value === newStatus)) {
-      setNewStatus(configuredColumns[0].value);
-    }
-  }, [configuredColumns, newStatus]);
 
   const baseFilteredRows = useMemo(
     () =>
@@ -396,9 +434,18 @@ export default function KanbanWidget({
     try {
       const cached = await getCachedFile(row.fileId);
       if (!cached) throw new Error(t("dashboard.fileNotFound"));
-      const result = updateFrontmatterKey(cached.content, statusProperty, nextValue);
-      if (result === null) throw new Error(t("dashboard.unparseableFrontmatter"));
-      await writeFileLocal(cached.fileName ?? row.fileName!, result.content, {
+      const nextIndex = configuredColumns.findIndex((column) => column.value === nextValue);
+      const values: Record<string, unknown> = { [statusProperty]: nextValue };
+      if (nextIndex > 0 && !row.cells[startedProperty]) values[startedProperty] = localIsoDate();
+      if (nextIndex >= 0 && isCompletionColumn(String(nextValue), configuredColumns[nextIndex].label || "")) {
+        if (!row.cells[startedProperty]) values[startedProperty] = localIsoDate();
+        values[completedProperty] = localIsoDate();
+      } else {
+        values[completedProperty] = null;
+      }
+      const content = updateFrontmatterKeys(cached.content, values);
+      if (content === null) throw new Error(t("dashboard.unparseableFrontmatter"));
+      await writeFileLocal(cached.fileName ?? row.fileName!, content, {
         existingFileId: row.fileId,
       });
       const cardTitle = scalar(getCellValue(row, titleProperty)) || row.fileName || t("dashboard.kanbanUntitled");
@@ -427,8 +474,34 @@ export default function KanbanWidget({
     }
   };
 
-  const createCard = async () => {
-    const title = newTitle.trim() || t("dashboard.kanbanNewCardName");
+  const storeAttachments = async (notePath: string, files: File[]): Promise<KanbanAttachment[]> => {
+    if (files.length === 0) return [];
+    const slash = notePath.lastIndexOf("/");
+    const noteFolder = slash >= 0 ? notePath.slice(0, slash) : "";
+    const noteName = notePath.slice(slash + 1).replace(/\.md(?:own)?$/i, "");
+    const attachmentFolder = [noteFolder, "Attachments", sanitizeFileName(noteName)].filter(Boolean).join("/");
+    const stored: KanbanAttachment[] = [];
+    for (const source of files) {
+      const safeName = source.name.replace(/[\\/:*?"<>|#[\]]/g, "-").trim() || "attachment";
+      const dot = safeName.lastIndexOf(".");
+      const stem = dot > 0 ? safeName.slice(0, dot) : safeName;
+      const extension = dot > 0 ? safeName.slice(dot) : "";
+      let path = `${attachmentFolder}/${safeName}`;
+      for (let index = 2; await findFileByNameLocal(path); index += 1) {
+        path = `${attachmentFolder}/${stem} ${index}${extension}`;
+      }
+      await saveBinaryFileLocal(
+        path,
+        bytesToBase64(new Uint8Array(await source.arrayBuffer())),
+        source.type || mimeTypeFromFileName(path),
+      );
+      stored.push({ path, label: source.name });
+    }
+    return stored;
+  };
+
+  const createCard = async (input: KanbanTaskInput) => {
+    const title = input.title.trim() || t("dashboard.kanbanNewCardName");
     const base = sanitizeFileName(title) || t("dashboard.kanbanNewCardName");
     let candidate = `${base}.md`;
     let index = 2;
@@ -439,20 +512,33 @@ export default function KanbanWidget({
     setError(null);
     try {
       const path = joinPath(folder, candidate);
+      const attachments = await storeAttachments(path, input.files);
+      let content = buildNewCardContent({
+        title,
+        titleProperty,
+        statusProperty,
+        status: input.status,
+      });
+      content = replaceKanbanTaskBody(content, {
+        description: input.description,
+        checklist: input.checklist,
+        attachments: [...input.attachments, ...attachments],
+      });
+      const column = configuredColumns.find((item) => item.value === input.status);
+      const values: Record<string, unknown> = { [dueProperty]: input.due || null };
+      if (column && isCompletionColumn(input.status, column.label || "")) {
+        values[startedProperty] = localIsoDate();
+        values[completedProperty] = localIsoDate();
+      }
+      content = updateFrontmatterKeys(content, values) ?? content;
       const result = await writeFileLocal(
         path,
-        buildNewCardContent({
-          title,
-          titleProperty,
-          statusProperty,
-          status: newStatus,
-        }),
+        content,
       );
       void appendSystemTimeline(
-        `> [!kanban] Kanban · ${title}\n> [[${path}|${title}]]\n\n${t("dashboard.kanbanNewCardCreate")}: ${newStatus}`,
+        `> [!kanban] Kanban · ${title}\n> [[${path}|${title}]]\n\n${t("dashboard.kanbanNewCardCreate")}: ${input.status}`,
       ).catch((timelineError) => console.error("Failed to record Kanban card in Timeline", timelineError));
       setShowNewCard(false);
-      setNewTitle("");
       await loadData();
       window.dispatchEvent(
         new CustomEvent("dashboard-data-changed", {
@@ -466,6 +552,71 @@ export default function KanbanWidget({
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.kanbanNewCardError"));
     }
+  };
+
+  const editCard = async (input: KanbanTaskInput) => {
+    if (!editingRow?.fileId || !editingRow.fileName) return;
+    const cached = await getCachedFile(editingRow.fileId);
+    if (!cached) throw new Error(t("dashboard.fileNotFound"));
+    const attachments = await storeAttachments(editingRow.fileName, input.files);
+    const nextIndex = configuredColumns.findIndex((column) => column.value === input.status);
+    const values: Record<string, unknown> = {
+      [statusProperty]: input.status,
+      [dueProperty]: input.due || null,
+    };
+    if (titleProperty && titleProperty !== "file.name") values[titleProperty] = input.title;
+    if (nextIndex > 0 && !editingRow.cells[startedProperty]) values[startedProperty] = localIsoDate();
+    if (nextIndex >= 0 && isCompletionColumn(input.status, configuredColumns[nextIndex].label || "")) {
+      if (!editingRow.cells[startedProperty]) values[startedProperty] = localIsoDate();
+      if (!editingRow.cells[completedProperty]) values[completedProperty] = localIsoDate();
+    } else {
+      values[completedProperty] = null;
+    }
+    let content = updateFrontmatterKeys(cached.content, values);
+    if (content === null) throw new Error(t("dashboard.unparseableFrontmatter"));
+    content = replaceKanbanTaskBody(content, {
+      description: input.description,
+      checklist: input.checklist,
+      attachments: [...input.attachments, ...attachments],
+    });
+    let nextPath = editingRow.fileName;
+    await writeFileLocal(nextPath, content, { existingFileId: editingRow.fileId });
+    if (titleProperty === "file.name") {
+      const slash = nextPath.lastIndexOf("/");
+      const directory = slash >= 0 ? nextPath.slice(0, slash + 1) : "";
+      const base = sanitizeFileName(input.title) || t("dashboard.kanbanNewCardName");
+      let candidate = `${directory}${base}.md`;
+      for (let index = 2; await findFileByNameLocal(candidate); index += 1) {
+        if (candidate === nextPath) break;
+        candidate = `${directory}${base} ${index}.md`;
+      }
+      if (candidate !== nextPath) {
+        await renameFileLocal(editingRow.fileId, candidate);
+        nextPath = candidate;
+      }
+    }
+    setEditingRow(null);
+    await loadData();
+    window.dispatchEvent(new CustomEvent("dashboard-data-changed", { detail: { folder } }));
+  };
+
+  const openAttachment = async (attachment: KanbanAttachment) => {
+    const found = await findFileByNameLocalLoose(attachment.path);
+    if (!found) throw new Error(t("dashboard.kanbanAttachmentMissing"));
+    if (canPreviewAttachment(found.name)) {
+      setPreviewInitialMode(undefined);
+      setPreviewRow({ id: found.id, fileId: found.id, fileName: found.name, cells: {} });
+      return;
+    }
+    const bytes = base64ToBytes(await readFileBinaryLocal(found.id));
+    const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes)], {
+      type: found.mimeType || mimeTypeFromFileName(found.name),
+    }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = attachment.label || found.name.split("/").pop() || "attachment";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   if (loading) {
@@ -546,6 +697,18 @@ export default function KanbanWidget({
         )}
         <button
           type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowAI(true);
+          }}
+          className="inline-flex flex-shrink-0 items-center gap-1 rounded-md border border-blue-300 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-950"
+          title={t("dashboard.kanbanAiCreate")}
+        >
+          <Sparkles size={13} />
+          {t("dashboard.kanbanAiCreate")}
+        </button>
+        <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             setShowNewCard(true);
@@ -594,6 +757,10 @@ export default function KanbanWidget({
               <div className="flex min-h-6 flex-1 flex-col gap-1.5 overflow-y-auto">
                 {column.rows.map((row) => {
                   const title = scalar(getCellValue(row, titleProperty)) || row.fileName || t("dashboard.kanbanUntitled");
+                  const task = parseKanbanTaskBody(row.fileContent ?? "");
+                  const due = scalar(row.cells[dueProperty]).slice(0, 10);
+                  const completed = scalar(row.cells[completedProperty]).slice(0, 10);
+                  const checklistDone = task.checklist.filter((item) => item.completed).length;
                   return (
                     <article
                       key={row.id}
@@ -635,9 +802,30 @@ export default function KanbanWidget({
                             : ""
                       }`}
                     >
-                      <div className="break-words font-medium leading-snug text-gray-900 dark:text-gray-100">
-                        {title}
+                      <div className="flex items-start gap-1.5">
+                        <div className="min-w-0 flex-1 break-words font-medium leading-snug text-gray-900 dark:text-gray-100 [&_p]:m-0">
+                          <GfmMarkdownPreview content={title} />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setEditingRow(row);
+                          }}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-800"
+                          title={t("dashboard.kanbanTaskEdit")}
+                        >
+                          <PenLine size={13} />
+                        </button>
                       </div>
+                      {(due || completed || task.checklist.length > 0 || task.attachments.length > 0) && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-gray-500 dark:text-gray-400">
+                          {due && <span className={`inline-flex items-center gap-0.5 ${!completed && due < localIsoDate() ? "font-semibold text-red-500" : ""}`}><CalendarDays size={11} />{due}</span>}
+                          {task.checklist.length > 0 && <span className="inline-flex items-center gap-0.5"><CheckSquare size={11} />{checklistDone}/{task.checklist.length}</span>}
+                          {task.attachments.length > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip size={11} />{task.attachments.length}</span>}
+                          {completed && <span className="inline-flex items-center gap-0.5 text-emerald-600"><CheckSquare size={11} />{completed}</span>}
+                        </div>
+                      )}
                       {displayFields.length > 0 && (
                         <dl className="mt-1.5 space-y-1">
                           {displayFields.map(({ field, label, maxLength }) => {
@@ -653,6 +841,24 @@ export default function KanbanWidget({
                           })}
                         </dl>
                       )}
+                      {task.attachments.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {task.attachments.map((attachment) => (
+                            <button
+                              type="button"
+                              key={attachment.path}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void openAttachment(attachment).catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)));
+                              }}
+                              className="inline-flex max-w-full items-center gap-1 truncate rounded-full border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[9px] text-gray-500 hover:border-blue-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                              title={canPreviewAttachment(attachment.path) ? t("dashboard.kanbanAttachmentPreview") : t("dashboard.kanbanAttachmentDownload")}
+                            >
+                              <Paperclip size={10} /><span className="truncate">{attachment.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </article>
                   );
                 })}
@@ -663,73 +869,43 @@ export default function KanbanWidget({
       )}
 
       {showNewCard && (
-        <div
-          className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 p-3 backdrop-blur-[1px]"
-          onClick={() => setShowNewCard(false)}
-        >
-          <form
-            className="w-full max-w-xs rounded-lg border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900"
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void createCard();
-            }}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {t("dashboard.kanbanNewCardTitle")}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowNewCard(false)}
-                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-                title={t("common.close")}
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <label className="mb-2 block text-xs font-medium text-gray-600 dark:text-gray-400">
-              {t("dashboard.kanbanNewCardNameLabel")}
-              <input
-                autoFocus
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder={t("dashboard.kanbanNewCardName")}
-                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              />
-            </label>
-            <label className="mb-3 block text-xs font-medium text-gray-600 dark:text-gray-400">
-              {t("dashboard.kanbanNewCardColumn")}
-              <select
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value)}
-                className="mt-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              >
-                {configuredColumns.map((column) => (
-                  <option key={column.value} value={column.value}>
-                    {column.label || column.value}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowNewCard(false)}
-                className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-              >
-                {t("common.cancel")}
-              </button>
-              <button
-                type="submit"
-                className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-              >
-                {t("dashboard.kanbanNewCardCreate")}
-              </button>
-            </div>
-          </form>
-        </div>
+        <KanbanTaskModal
+          mode="new"
+          columns={configuredColumns}
+          onSubmit={createCard}
+          onClose={() => setShowNewCard(false)}
+        />
+      )}
+
+      {editingRow && (
+        <KanbanTaskModal
+          mode="edit"
+          columns={configuredColumns}
+          initial={{
+            title: scalar(getCellValue(editingRow, titleProperty)) || editingRow.fileName?.split("/").pop()?.replace(/\.md(?:own)?$/i, "") || "",
+            status: scalar(editingRow.cells[statusProperty]),
+            due: scalar(editingRow.cells[dueProperty]).slice(0, 10),
+            ...parseKanbanTaskBody(editingRow.fileContent ?? ""),
+          }}
+          onSubmit={editCard}
+          onClose={() => setEditingRow(null)}
+        />
+      )}
+
+      {showAI && (
+        <KanbanAiModal
+          onApply={async (tasks) => {
+            for (const task of tasks) {
+              await createCard({
+                ...task,
+                status: configuredColumns[0]?.value ?? "",
+                attachments: [],
+                files: [],
+              });
+            }
+          }}
+          onClose={() => setShowAI(false)}
+        />
       )}
 
       {previewRow?.fileId && previewRow.fileName && (
@@ -737,6 +913,14 @@ export default function KanbanWidget({
           fileId={previewRow.fileId}
           fileName={previewRow.fileName}
           initialMode={previewInitialMode}
+          onEdit={rows.some((row) => row.fileId === previewRow.fileId)
+            ? () => {
+                const row = rows.find((item) => item.fileId === previewRow.fileId);
+                setPreviewRow(null);
+                setPreviewInitialMode(undefined);
+                if (row) setEditingRow(row);
+              }
+            : undefined}
           onNavigate={() => {
             navigateToFile(previewRow);
             setPreviewRow(null);
@@ -749,6 +933,69 @@ export default function KanbanWidget({
         />
       )}
     </div>
+  );
+}
+
+function KanbanAiModal({ onApply, onClose }: {
+  onApply: (tasks: ReturnType<typeof parseKanbanAiTasks>) => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const [instruction, setInstruction] = useState("");
+  const [result, setResult] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 p-4" onMouseDown={onClose}>
+      <form
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-900 shadow-2xl dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!instruction.trim() || busy) return;
+          setBusy(true);
+          setError("");
+          void generateKanbanTasks(instruction, localIsoDate())
+            .then(setResult)
+            .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <header className="flex items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+          <Sparkles size={16} className="text-blue-500" />
+          <strong className="flex-1 text-sm">{t("dashboard.kanbanAiCreate")}</strong>
+          <button type="button" onClick={onClose} className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-800"><X size={16} /></button>
+        </header>
+        <div className="grid min-h-0 gap-4 overflow-auto p-4 text-xs">
+          <label className="grid gap-1.5">{t("dashboard.kanbanAiDescription")}<textarea autoFocus rows={5} value={instruction} onChange={(event) => setInstruction(event.target.value)} className="resize-y rounded border border-gray-300 bg-white p-2 dark:border-gray-700 dark:bg-gray-800" /></label>
+          {result && <label className="grid gap-1.5">{t("dashboard.kanbanAiResult")}<textarea rows={10} value={result} onChange={(event) => setResult(event.target.value)} spellCheck={false} className="resize-y rounded border border-gray-300 bg-white p-2 font-mono dark:border-gray-700 dark:bg-gray-800" /></label>}
+          {error && <p className="text-red-500">{error}</p>}
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+          <button type="button" onClick={onClose} className="rounded border px-3 py-1.5 text-xs">{t("common.cancel")}</button>
+          {!result ? (
+            <button type="submit" disabled={busy || !instruction.trim()} className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">{busy ? `${t("dashboard.kanbanAiGenerate")}…` : t("dashboard.kanbanAiGenerate")}</button>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => {
+              setBusy(true);
+              setError("");
+              void Promise.resolve(onApply(parseKanbanAiTasks(result))).then(onClose).catch((caught: unknown) => {
+                setError(caught instanceof Error ? caught.message : String(caught));
+                setBusy(false);
+              });
+            }} className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">{busy ? `${t("dashboard.kanbanAiApply")}…` : t("dashboard.kanbanAiApply")}</button>
+          )}
+        </footer>
+      </form>
+    </div>,
+    document.body,
   );
 }
 
