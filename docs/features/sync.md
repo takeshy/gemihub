@@ -16,7 +16,7 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 - **Local-first Soft Delete**: Deleted files disappear locally immediately and are queued for the next Push, which moves them to a recoverable `trash/` folder on Drive
 - **Conflict Resolution**: Choose local or remote version with automatic backup
 - **Full Push / Full Pull**: Bulk sync for initial setup or recovery
-- **Untracked File Management**: Detect, restore, or delete orphaned remote files
+- **Untracked File Management**: Detect, restore, or delete orphaned remote files (since 2026-09-04, `GET /api/sync` also registers untracked root files automatically — see below)
 - **Trash & Conflict Backup Management**: Restore or permanently delete trashed files and conflict backups
 
 ## Commands
@@ -25,11 +25,11 @@ Manual push/pull synchronization between the browser (IndexedDB) and Google Driv
 |---------|-------------|
 | **Push** | Upload local changes (incremental) |
 | **Pull** | Download remote changes (incremental) |
-| **Full Push** | Upload all modified files + merge metadata into remote |
+| **Full Push** | Upload every cached file whose checksum differs from Drive + merge metadata into remote |
 | **Full Pull** | Download entire remote vault (skip matching hashes) |
 
 Header buttons: Push and Pull buttons are always visible. Badge shows count of pending changes.
-- **Push Badge**: Count of locally modified files, excluding system/history files and files whose content was reverted to the synced state (no net change).
+- **Push Badge**: Count of locally modified files (excluding system/history files and files whose content was reverted to the synced state) plus queued soft deletions. The Push dialog lists the same set: modified/new files and, as <kbd>🗑</kbd> rows, the files the push is about to move to `trash/` (their diff shows the Drive content being removed; there is no "Open" button since the local copy is already gone).
 - **Pull Badge**: Count of pending remote work — updates to already-cached files (`toPull`), conflicts, and files deleted on remote (`localOnly`). Brand-new remote files are **not** counted here; they are auto-registered as uncached entries during background polling and surface directly in the file tree.
 - **Stale-change warning**: An amber triangle with a day count appears next to the badges when the oldest unpushed edit is more than 7 days old (`useStalePendingEdits.ts`, `STALE_PUSH_WARNING_DAYS`). Local edits live only in IndexedDB until a Push, and `editHistory` is the *only* record that a file changed — the checksum in sync meta still describes the last-synced state. If that store is evicted (storage pressure, Safari's ITP, "clear site data"), the edits stop looking modified and the next Pull overwrites them silently. Clicking the warning opens the Push list.
 - **Nature of Change**: Clicking a badge shows a file list with icons indicating the change type:
@@ -54,13 +54,16 @@ File contents are cached in the IndexedDB `files` store. All edits update this c
 
 ### Background Polling
 
-The client polls for remote changes every 5 minutes while the app is active and idle. When a fresh `_sync-meta.json` is fetched:
+The client polls for remote changes every 5 minutes while the app is active and idle, and additionally re-checks when the tab becomes visible again (throttled to once per 30 s) or the browser comes back online — the Pull button is disabled while the badge reads 0, so a user returning to the tab would otherwise wait a full interval. When a fresh `_sync-meta.json` is fetched:
 
-1. **Cached remote meta is refreshed** (preserving any local-only `new:` entries).
-2. **New remote files are auto-registered** into local sync meta as metadata-only (uncached) entries. The tree picks them up on the next `tree-meta-updated` event; content is fetched lazily the first time the user opens the file. This is what keeps the Pull badge from inflating just because another device added files.
-3. **A persistent toast is shown** whenever new entries are auto-registered and a prior sync exists. It lists every new file path (sorted) and stays until the user manually dismisses it, so additions buried deep in the tree are not missed. First-ever fetches skip the toast since every file would otherwise qualify as "new".
-4. **`tree-meta-updated` is dispatched** when either the remote meta's `lastUpdatedAt` changed or new entries were registered, so remote-side renames/deletions/additions appear without requiring a manual Pull.
-5. **Pull / Push counts are recomputed.**
+1. **Queued deletions that lost to a remote edit are cancelled.** A soft-deleted file whose Drive checksum (or name) no longer matches the local baseline was modified on another device after the deletion was queued. The reservation is dropped, the file re-enters the cached remote meta (and therefore the tree) as an ordinary pending pull, and a persistent toast lists the affected paths. Push applies the same rule before its pre-check, so the pull dialog opened from a "Pull first" rejection actually lists the file. Without this the file was hidden from the badge and dialog (pending-deleted ids are filtered out of the cached remote meta) while the push pre-check, which reads the raw remote meta, kept rejecting.
+2. **Cached remote meta is refreshed** (preserving any local-only `new:` entries).
+3. **New remote files are auto-registered** into local sync meta as metadata-only (uncached) entries. The tree picks them up on the next `tree-meta-updated` event; content is fetched lazily the first time the user opens the file. This is what keeps the Pull badge from inflating just because another device added files.
+4. **A persistent toast is shown** whenever new entries are auto-registered and a prior sync exists. It lists every new file path (sorted) and stays until the user manually dismisses it, so additions buried deep in the tree are not missed. First-ever fetches skip the toast since every file would otherwise qualify as "new".
+5. **`tree-meta-updated` is dispatched** when the remote meta's `lastUpdatedAt` changed, new entries were registered, or a deletion was cancelled, so remote-side renames/deletions/additions appear without requiring a manual Pull.
+6. **Pull / Push counts are recomputed.**
+
+Local sync meta is updated as a **delta** through `patchLocalSyncMeta` (one IndexedDB readwrite transaction that reads the current record, applies the mutation, and writes it back). Polling and Pull used to read the meta once, await per-file cache reads or downloads, then write the whole snapshot back — any entry written in between (a `new:` → Drive migration, a file created from the tree) was lost, and the migrated file was later re-registered as uncached. Push already merged against a fresh read; all three now do.
 
 ### Sync Diff
 
@@ -87,7 +90,7 @@ Where:
 - `localChanged = locallyModifiedFileIds.has(fileId)` — the `editHistory` store tracks which files have been edited locally since the last sync
 - `remoteChanged = localMeta.md5Checksum !== remoteMeta.md5Checksum || localMeta.name !== remoteMeta.name` — remote meta diverges from local meta when another device has pushed changes (detects both content and name changes)
 
-No live Drive API listing is needed: the `drive.file` scope ensures only GemiHub can modify these files, so `_sync-meta.json` is always authoritative.
+No live Drive API listing is needed during the diff: the `drive.file` scope ensures only GemiHub-family clients can modify these files, so `_sync-meta.json` is treated as authoritative. `GET /api/sync` keeps it that way by reconciling the meta against one root listing before returning it: entries whose file is gone, trashed, or moved out of the root are removed (verified by id, so a partial listing cannot manufacture deletions), and root files missing from the meta are added (`addUntrackedFilesToSyncMeta`). The latter covers an external client (Desktop/Obsidian plugin) that uploaded files but crashed before writing the meta; such files used to stay invisible until the user ran "Detect untracked files".
 
 ---
 
@@ -124,7 +127,7 @@ Uploads locally-changed files to remote.
    │       │   ├─ Use the client-supplied diff for edit history (Drive-read fallback only when unavailable)
    │       │   ├─ Skip upload if content is identical to remote (optimization)
    │       │   └─ Update file on Drive
-   │       ├─ Write _sync-meta.json once via syncMetaFileId (skip findFileByExactName)
+   │       ├─ Re-read the latest _sync-meta.json, merge only this push's entries, write once
    │       ├─ Save remote edit history in background (best-effort)
    │       └─ Return results + updated remoteMeta
    ├─ Update IndexedDB cache with new md5/modifiedTime
@@ -171,7 +174,7 @@ Downloads remotely-changed files to local cache. Brand-new remote files are regi
 2. **Collect conflicts** (including edit-delete conflicts) — they are shown in the conflict UI after the non-conflict work below completes
 3. **Clean up `localOnly` files** — files tracked in local sync meta but deleted on remote (moved to trash on another device) are removed from IndexedDB cache, edit history, and local sync meta. Entries that exist only in editHistory (new local files awaiting push) and `new:` placeholders are left untouched.
 4. **Combine** `toPull` + `remoteOnly` arrays
-5. **Skip download for entries that need no content**: `remoteOnly` (new remote files), binary files on mobile, files larger than 100 MB, sync-excluded paths, and files whose cached content already matches the remote checksum (lazy-fetched while local meta was stale). Their metadata is still written to local sync meta so the tree displays them and they stop counting as pending.
+5. **Skip download for entries that need no content**: `remoteOnly` (new remote files), binary files on mobile, files larger than 20 MB (`LARGE_FILE_CACHE_THRESHOLD`), sync-excluded paths, and files whose cached content already matches the remote checksum (lazy-fetched while local meta was stale). Their metadata is still written to local sync meta so the tree displays them and they stop counting as pending. When a binary-on-mobile or over-limit file **already has a stale cached copy, that copy is deleted** — reads trust the cache unconditionally, so it would otherwise be served forever; the file lazy-fetches on next open, as after Full Pull. For an already-current file whose remote name changed, the cache record's `fileName` is updated so the push dialog and exclusion checks see the new path.
 6. **Download remaining files** in parallel (max 5 concurrent)
 7. **Update IndexedDB cache** with downloaded files (for text files, `addCommitBoundary` is called before updating to preserve edit history session boundaries)
 8. **Update local sync meta** with new checksums
@@ -210,7 +213,7 @@ A file is **uncached** when its metadata is tracked in local sync meta but no en
 |--------|--------|
 | Background polling auto-register | New remote files discovered between syncs |
 | Incremental Pull | `remoteOnly` entries from the diff |
-| Mobile / large-file skip | Binary files on mobile, files over 100 MB |
+| Mobile / large-file skip | Binary files on mobile, files over 20 MB |
 
 When the user opens an uncached file, `useFileWithCache` fetches the content from Drive, writes it into the cache, and dispatches a `file-cached` event that the file tree uses to update its indicator. No additional sync work is required.
 
@@ -231,16 +234,15 @@ Downloads all remote files, skipping those with matching hashes.
 
 ### Flow
 
-1. **Build `skipHashes`** from all IndexedDB cached files (`fileId → md5Checksum`)
-2. **Rebuild remote meta** from Drive API (full scan)
-3. **Filter out** system files (`_sync-meta.json`, `settings.json`)
-4. **Skip** files where `skipHashes[fileId] === remoteMeta.md5Checksum`
-5. **Download** all non-skipped files in parallel (max 5 concurrent)
-6. **Update IndexedDB cache** with downloaded files
-7. **Delete stale cache** — remove cached files that no longer exist on remote
-8. **Clear all local edit history** (remote is authoritative)
-9. **Replace local sync meta** entirely with remote meta
-10. **Fire "sync-complete" event** and update localModifiedCount
+1. **Rebuild remote meta** from Drive API (full scan)
+2. **Filter out** system files (`_sync-meta.json`, `settings.json`) and Google Workspace native files
+3. **Skip** binary content on mobile and files over 20 MB (the client deliberately sends no `skipHashes`: a cached checksum is the last remote baseline and can still match after the local bytes were edited, so every eligible file is fetched before edit history is cleared)
+4. **Download** all non-skipped files in parallel (max 5 concurrent)
+5. **Update IndexedDB cache** with downloaded files
+6. **Delete stale cache** — remove cached files that no longer exist on remote, plus mobile-binary / over-limit entries
+7. **Clear all local edit history** (remote is authoritative)
+8. **Replace local sync meta** entirely with remote meta
+9. **Fire "sync-complete" event** and update localModifiedCount
 
 ### When to Use
 
@@ -254,9 +256,11 @@ Downloads all remote files, skipping those with matching hashes.
 
 Uploads every eligible file currently present in the local cache directly to Drive and merges metadata. **This is a destructive operation** — it does not check for conflicts or remote changes before overwriting. Cached copies replace their remote counterparts without conflict detection.
 
+Files that are clean (no edit history) **and** whose last-synced checksum still matches the cached remote meta are skipped: their bytes are identical to Drive, and re-uploading them only bumped `modifiedTime`, which every other device then saw as a spurious pull. Files missing from the remote meta (trashed or moved outside the root) are still sent and recreated with a new id.
+
 ### Flow
 
-1. **Batch upload** — all eligible cached files are sent in a single `pushFiles` API call; server updates Drive files in parallel (max 5 concurrent), reads/writes `_sync-meta.json` once, and saves remote edit history in background
+1. **Batch upload** — all eligible cached files are sent in a single `pushFiles` API call with `forceRecreate: true`; server updates Drive files in parallel (max 5 concurrent), reads/writes `_sync-meta.json` once, and saves remote edit history in background
 2. **Update IndexedDB** — cache and LocalSyncMeta updated with new md5/modifiedTime from server response
 3. **Clear edit history** — if all eligible files were pushed, clear all edit history; otherwise clear per-file for successfully pushed files only
 4. **Fire "sync-complete" event** and update localModifiedCount
@@ -349,6 +353,18 @@ If you have local files that you don't want overwritten by a Pull, you can use T
 
 ---
 
+## Renames
+
+Renames are **not** local-first. Push uploads content by file id and never renames, and background polling rewrites the cached remote meta from Drive's name, so a cache-only rename would silently revert on the next poll or push. Every rename path therefore goes to Drive immediately and mirrors the returned `_sync-meta.json` entry into both the cached remote meta and local sync meta:
+
+| Caller | Path |
+|--------|------|
+| File tree rename / folder rename / drag-move | `bulkRename` API → `updateTreeFromMeta` |
+| Chat `rename_drive_file` / `bulk_rename_drive_files` | `renameRemoteFiles` + `applyRemoteMetaForFiles` (`drive-local.ts`) |
+| Kanban card title, Secret Manager move, dashboard rename (`renameFileLocal`) | Same helpers as the chat tools; throws when Drive rejects the rename |
+
+The one exception is a `new:` placeholder that has not been migrated yet: it is renamed in the cache only, and the pending migration uploads it under the current cached name.
+
 ## Chat-Initiated File Operations
 
 When Gemini AI uses `update_drive_file` or `create_drive_file` tools in chat, file operations follow a local-first pattern to stay consistent with push/pull sync.
@@ -440,7 +456,7 @@ Located in Settings → Sync tab, organized into sections:
 | Action | Description |
 |--------|-------------|
 | Manage Temp Files | Browse and manage temporary files on Drive |
-| Detect Untracked Files | Find remote files not tracked in local cache |
+| Detect Untracked Files | Find remote files not tracked in `_sync-meta.json` (normally empty now that `GET /api/sync` registers them; still useful to permanently delete strays) |
 | Trash | Restore or permanently delete trashed files |
 | Conflict Backups | Manage conflict backup files from sync resolution |
 
@@ -516,11 +532,11 @@ Browser (IndexedDB)          Server                Google Drive
 
 | Action | Method | Description |
 |--------|--------|-------------|
-| *(loader)* | GET | Return `remoteMeta`, `syncMetaFileId`, and file list |
+| *(loader)* | GET | Return the reconciled `remoteMeta`, `syncMetaFileId`, and file list (one `_sync-meta.json` lookup serves both) |
 | `pullDirect` | POST | Download file contents for specified IDs (no meta read/write) |
 | `resolve` | POST | Resolve conflict (backup loser, update Drive file and meta) |
 | `fullPull` | POST | Download all remote files (skip matching) |
-| `pushFiles` | POST | Batch update multiple files on Drive in parallel; accepts `remoteMeta` and `syncMetaFileId` from client to skip redundant meta reads/lookups |
+| `pushFiles` | POST | Batch update multiple files on Drive in parallel; accepts the client's `remoteMeta` snapshot to skip a redundant meta read and to revalidate each file against Drive before uploading |
 | `clearConflicts` | POST | Delete all files in conflict folder |
 | `detectUntracked` | POST | Find files on Drive not in sync meta |
 | `deleteUntracked` | POST | Delete specified untracked files |

@@ -9,6 +9,8 @@ import {
   setCachedFile,
   getCachedRemoteMeta,
   setCachedRemoteMeta,
+  getLocalSyncMeta,
+  setLocalSyncMeta,
   renameCachedFile,
   deleteCachedFile,
   deleteEditHistoryEntry,
@@ -517,15 +519,100 @@ export async function deleteFileLocal(fileId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function renameFileLocal(fileId: string, newName: string): Promise<void> {
-  await renameCachedFile(fileId, newName);
+  if (fileId.startsWith("new:")) {
+    // Not on Drive yet: the pending migration uploads under the cached name.
+    await renameCachedFile(fileId, newName);
+    const meta = await getCachedRemoteMeta();
+    if (meta && meta.files[fileId]) {
+      meta.files[fileId].name = newName;
+      await setCachedRemoteMeta(meta);
+    }
+    return;
+  }
 
-  // Update CachedRemoteMeta
-  const meta = await getCachedRemoteMeta();
-  if (meta && meta.files[fileId]) {
-    meta.files[fileId].name = newName;
-    await setCachedRemoteMeta(meta);
+  // Already on Drive. Push only uploads content by id and never renames, and
+  // background polling rewrites CachedRemoteMeta from the remote name, so a
+  // cache-only rename would silently revert on the next poll or push. Rename
+  // on Drive right away and mirror the returned meta into both local tables —
+  // the same path the file tree and the chat rename tool use.
+  const data = await renameRemoteFiles([{ fileId, name: newName }]);
+  if (data.error) throw new Error(data.error);
+  if (data.failedFileIds?.includes(fileId)) {
+    throw new Error(`Failed to rename file on Drive: ${fileId}`);
+  }
+  await applyRemoteMetaForFiles(data.meta, [fileId]);
+  await renameCachedFile(fileId, newName);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("tree-meta-updated"));
   }
 }
+
+// ---------------------------------------------------------------------------
+// Remote rename helpers (shared with drive-tools-local.ts)
+// ---------------------------------------------------------------------------
+
+export type BulkRenameApiResponse = {
+  results?: Array<{ fileId: string; ok: boolean }>;
+  failedFileIds?: string[];
+  meta?: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] };
+  error?: string;
+};
+
+export async function applyRemoteMetaForFiles(
+  remoteMeta: BulkRenameApiResponse["meta"],
+  fileIds: string[],
+): Promise<void> {
+  if (!remoteMeta) return;
+
+  const cachedRemote = await getCachedRemoteMeta();
+  if (cachedRemote) {
+    await setCachedRemoteMeta({
+      ...cachedRemote,
+      lastUpdatedAt: remoteMeta.lastUpdatedAt,
+      files: {
+        ...cachedRemote.files,
+        ...Object.fromEntries(
+          fileIds
+            .map((fileId) => [fileId, remoteMeta.files[fileId]] as const)
+            .filter((entry): entry is readonly [string, CachedRemoteMeta["files"][string]] => !!entry[1]),
+        ),
+      },
+      cachedAt: Date.now(),
+    });
+  }
+
+  const localSyncMeta = await getLocalSyncMeta();
+  if (localSyncMeta) {
+    for (const fileId of fileIds) {
+      const entry = remoteMeta.files[fileId];
+      if (!entry) continue;
+      localSyncMeta.files[fileId] = {
+        md5Checksum: entry.md5Checksum,
+        modifiedTime: entry.modifiedTime,
+        name: entry.name,
+        size: entry.size,
+      };
+    }
+    localSyncMeta.lastUpdatedAt = remoteMeta.lastUpdatedAt;
+    await setLocalSyncMeta(localSyncMeta);
+  }
+}
+
+export async function renameRemoteFiles(
+  files: Array<{ fileId: string; name: string }>,
+): Promise<BulkRenameApiResponse> {
+  const res = await fetch("/api/drive/files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "bulkRename", files }),
+  });
+  const data = await res.json().catch(() => ({})) as BulkRenameApiResponse;
+  if (!res.ok) {
+    return { error: data.error || `bulkRename failed with HTTP ${res.status}` };
+  }
+  return data;
+}
+
 
 // ---------------------------------------------------------------------------
 // Binary file writing (for drive-save node)

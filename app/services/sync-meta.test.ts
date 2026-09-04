@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  addUntrackedFilesToSyncMeta,
   isFileRemovedFromSyncRoot,
   mergeSyncMetaSnapshots,
   pickSyncMetaToKeep,
@@ -153,4 +154,25 @@ test("isFileRemovedFromSyncRoot preserves files still in the sync root", () => {
   };
 
   assert.equal(isFileRemovedFromSyncRoot(driveFile, "root"), false);
+});
+
+test("addUntrackedFilesToSyncMeta registers root files missing from the meta without touching tracked ones", () => {
+  const meta: SyncMeta = {
+    lastUpdatedAt: "2026-01-01T00:00:00.000Z",
+    files: {
+      tracked: { name: "a.md", mimeType: "text/markdown", md5Checksum: "old", modifiedTime: "t0", shared: true, publicPath: "/p" },
+    },
+  };
+  const listing: DriveFile[] = [
+    { id: "tracked", name: "a.md", mimeType: "text/markdown", md5Checksum: "new-but-ignored", modifiedTime: "t1" },
+    { id: "orphan", name: "notes/b.md", mimeType: "text/markdown", md5Checksum: "b", modifiedTime: "t2", createdTime: "t2", size: "12" },
+  ];
+  assert.deepEqual(addUntrackedFilesToSyncMeta(meta, listing), ["orphan"]);
+  // Tracked entry is the meta's business (push/pull diff), not the listing's.
+  assert.equal(meta.files.tracked.md5Checksum, "old");
+  assert.equal(meta.files.tracked.publicPath, "/p");
+  assert.deepEqual(meta.files.orphan, {
+    name: "notes/b.md", mimeType: "text/markdown", md5Checksum: "b", modifiedTime: "t2", createdTime: "t2", size: "12",
+  });
+  assert.deepEqual(addUntrackedFilesToSyncMeta(meta, listing), []);
 });

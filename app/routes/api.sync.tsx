@@ -16,7 +16,6 @@ import {
   renameFile,
   ensureSubFolder,
   listFiles,
-  findFileByExactName,
 } from "~/services/google-drive.server";
 import {
   isTextFileName,
@@ -26,7 +25,7 @@ import {
 } from "~/services/sync-client-utils";
 import {
   readRemoteSyncMeta,
-  readReconciledRemoteSyncMeta,
+  readReconciledRemoteSyncMetaWithFile,
   writeRemoteSyncMeta,
   rebuildSyncMeta,
   saveConflictBackup,
@@ -80,11 +79,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 
   // Reconcile the sync snapshot with Drive so external deletes/moves appear as
-  // pull changes instead of leaving stale metadata behind.
-  const syncMetaFile = await findFileByExactName(
-    validTokens.accessToken, SYNC_META_FILE_NAME, validTokens.rootFolderId
-  );
-  const remoteMeta = await readReconciledRemoteSyncMeta(
+  // pull changes instead of leaving stale metadata behind. One name lookup
+  // serves both the meta read and the returned file id.
+  const { meta: remoteMeta, syncMetaFileId } = await readReconciledRemoteSyncMetaWithFile(
     validTokens.accessToken,
     validTokens.rootFolderId
   );
@@ -93,7 +90,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   emitLog(logCtx, 200);
   return jsonWithCookie({
     remoteMeta,
-    syncMetaFileId: syncMetaFile?.id ?? null,
+    syncMetaFileId,
     files: Object.entries(remoteMeta.files).map(([id, f]) => ({
       id,
       name: f.name,

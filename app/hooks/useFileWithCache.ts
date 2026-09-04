@@ -3,6 +3,7 @@ import {
   getCachedFile,
   setCachedFile,
   deleteCachedFile,
+  deleteEditHistoryEntry,
   activeProjectMountParam,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
@@ -341,12 +342,17 @@ export function useFileWithCache(
     }
   }, [fileId, fetchFile]);
 
-  // Force refresh: clear cache first so fetchFile hits the remote
+  // Force refresh: clear cache first so fetchFile hits the remote. The local
+  // edit history describes diffs against the content just discarded; keeping
+  // it would leave the file flagged as modified and later push a bogus diff
+  // reconstructed against the freshly downloaded remote content.
   const forceRefresh = useCallback(async () => {
     if (fileId) {
       setLoading(true);
       setContent(null);
       await deleteCachedFile(fileId);
+      await deleteEditHistoryEntry(fileId);
+      window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId } }));
       await fetchFile(fileId);
     }
   }, [fileId, fetchFile]);

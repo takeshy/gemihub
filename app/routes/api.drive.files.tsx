@@ -630,7 +630,12 @@ export async function action({ request }: Route.ActionArgs) {
             modifiedTime: r.file.modifiedTime ?? "",
             createdTime: r.file.createdTime,
             ...(bulkMeta.files[r.fileId]?.shared != null
-              ? { shared: bulkMeta.files[r.fileId].shared, webViewLink: bulkMeta.files[r.fileId].webViewLink }
+              ? {
+                  shared: bulkMeta.files[r.fileId].shared,
+                  webViewLink: bulkMeta.files[r.fileId].webViewLink,
+                  // Signed public link survives a rename (the id is unchanged)
+                  publicPath: bulkMeta.files[r.fileId].publicPath,
+                }
               : {}),
           };
         }

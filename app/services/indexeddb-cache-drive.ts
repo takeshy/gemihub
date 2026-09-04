@@ -421,6 +421,54 @@ export async function setLocalSyncMeta(meta: LocalSyncMeta): Promise<void> {
   await txPut(db, "syncMeta", meta);
 }
 
+/**
+ * Read-modify-write LocalSyncMeta inside a single readwrite transaction.
+ *
+ * Long-running flows (pull, background polling) used to read the meta at the
+ * start, await network/cache work, then write the whole snapshot back — any
+ * entry written in between (pending-file migration, tree file creation) was
+ * silently lost. `mutate` runs synchronously against the *current* stored
+ * value and returns true when the meta changed. When no meta exists yet an
+ * empty one is created only if `createIfMissing` is set.
+ */
+export async function patchLocalSyncMeta(
+  mutate: (meta: LocalSyncMeta) => boolean,
+  options: { createIfMissing?: boolean } = {},
+): Promise<LocalSyncMeta | undefined> {
+  if (typeof indexedDB === "undefined") return undefined;
+  const db = await getDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("syncMeta", "readwrite");
+    const store = tx.objectStore("syncMeta");
+    let result: LocalSyncMeta | undefined;
+    const req = store.get("current");
+    req.onsuccess = () => {
+      let meta = req.result as LocalSyncMeta | undefined;
+      if (!meta) {
+        if (!options.createIfMissing) return;
+        meta = { id: "current", lastUpdatedAt: new Date().toISOString(), files: {} };
+      }
+      let changed = false;
+      try {
+        changed = mutate(meta);
+      } catch (err) {
+        tx.abort();
+        reject(err);
+        return;
+      }
+      result = meta;
+      if (changed) {
+        meta.lastUpdatedAt = new Date().toISOString();
+        store.put(meta);
+      }
+    };
+    req.onerror = () => tx.abort();
+    tx.oncomplete = () => resolve(result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
+  });
+}
+
 export async function removeLocalSyncMetaEntry(fileId: string): Promise<void> {
   if (typeof indexedDB === "undefined") return;
   try {

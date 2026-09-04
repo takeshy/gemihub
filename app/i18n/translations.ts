@@ -770,6 +770,7 @@ export interface TranslationStrings {
   "settings.sync.pruneError": string;
   "settings.sync.failedToLoadStats": string;
   "sync.newFilesDetected": string;
+  "sync.deletionCancelledByRemote": string;
 
   // Temp diff modal
   "tempDiff.title": string;
@@ -2208,6 +2209,7 @@ const en: TranslationStrings = {
   "settings.sync.pruneError": "Prune error.",
   "settings.sync.failedToLoadStats": "Failed to load stats.",
   "sync.newFilesDetected": "{count} new file(s) on Drive:\n{names}",
+  "sync.deletionCancelledByRemote": "{count} file(s) you deleted were modified on another device. The deletion was cancelled and the remote version is pending Pull:\n{names}",
 
   // Temp diff modal
   "tempDiff.title": "Temp File Comparison",
@@ -3646,6 +3648,7 @@ const ja: TranslationStrings = {
   "settings.sync.pruneError": "整理中にエラーが発生しました。",
   "settings.sync.failedToLoadStats": "統計の読み込みに失敗しました。",
   "sync.newFilesDetected": "Drive に新しいファイルが {count} 件あります:\n{names}",
+  "sync.deletionCancelledByRemote": "削除したファイル {count} 件が他のデバイスで変更されていました。削除を取り消し、リモート版を Pull 待ちにしました:\n{names}",
 
   // Temp diff modal
   "tempDiff.title": "一時ファイルの比較",

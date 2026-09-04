@@ -17,6 +17,7 @@ import {
   getPendingDeletions,
   deletePendingDeletion,
   bulkRemoveLocalSyncMetaEntries,
+  patchLocalSyncMeta,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache-drive";
 import { addCommitBoundary, getPushHistoryDiff, hasNetContentChange } from "~/services/edit-history-local";
@@ -38,6 +39,7 @@ import {
   filterActionablePull,
   resurrectDeletedFileAsNew,
   updateCachedRemoteMetaFromSyncMeta,
+  cancelPendingDeletionsChangedOnRemote,
 } from "./sync-utils";
 
 export interface ConflictInfo {
@@ -135,19 +137,34 @@ export function useSync() {
   // Listen for file-modified events to update counts in real-time
   useEffect(() => {
     if (projectActive) return;
-    const handler = () => { refreshSyncCounts(); };
+    // "file-modified" fires on every debounced auto-save. Recomputing the
+    // counts reverse-applies the edit history of every dirty file, so coalesce
+    // bursts instead of running that scan once per keystroke batch.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedHandler = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void refreshSyncCounts();
+      }, 250);
+    };
+    const immediateHandler = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      void refreshSyncCounts();
+    };
     const correctionHandler = (e: Event) => {
       const { type, count } = (e as CustomEvent).detail;
       if (type === "pull") setRemoteModifiedCount(count);
       else if (type === "push") setLocalModifiedCount(count);
     };
-    window.addEventListener("file-modified", handler);
-    window.addEventListener("sync-complete", handler);
+    window.addEventListener("file-modified", debouncedHandler);
+    window.addEventListener("sync-complete", immediateHandler);
     window.addEventListener("sync-counts-corrected", correctionHandler);
     refreshSyncCounts();
     return () => {
-      window.removeEventListener("file-modified", handler);
-      window.removeEventListener("sync-complete", handler);
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("file-modified", debouncedHandler);
+      window.removeEventListener("sync-complete", immediateHandler);
       window.removeEventListener("sync-counts-corrected", correctionHandler);
     };
   }, [refreshSyncCounts, projectActive]);
@@ -171,8 +188,14 @@ export function useSync() {
       if (remoteMeta) {
         const existingCached = await getCachedRemoteMeta();
         const remoteChanged = existingCached?.lastUpdatedAt !== remoteMeta.lastUpdatedAt;
+        const localMeta = await getLocalSyncMeta();
+        const localFiles = localMeta?.files ?? {};
+        // A queued deletion loses to a remote edit made after it was queued.
+        // Cancel the reservation so the file re-enters CachedRemoteMeta below
+        // and shows up as a pending pull instead of being hidden.
+        const { remaining: pendingDeletionIds, cancelled: cancelledDeletions } =
+          await cancelPendingDeletionsChangedOnRemote(localFiles, remoteMeta.files);
         // Preserve local-only "new:" entries that haven't been migrated to Drive yet
-        const pendingDeletionIds = new Set((await getPendingDeletions()).map((entry) => entry.fileId));
         const mergedFiles = Object.fromEntries(
           Object.entries(remoteMeta.files).filter(([id]) => !pendingDeletionIds.has(id)),
         );
@@ -194,8 +217,6 @@ export function useSync() {
         // Auto-register new remote files into localSyncMeta as uncached entries.
         // Without this, newly-created files on Drive would inflate the pull badge.
         // Tree is always visible; content is lazy-fetched by useFileWithCache.
-        const localMeta = await getLocalSyncMeta();
-        const localFiles = localMeta?.files ?? {};
         const newEntries: Record<string, LocalSyncMeta["files"][string]> = {};
         for (const [id, f] of Object.entries(remoteMeta.files)) {
           if (pendingDeletionIds.has(id)) continue;
@@ -223,16 +244,20 @@ export function useSync() {
         const newCount = Object.keys(newEntries).length;
         const metaChanged = newCount > 0 || staleIds.length > 0;
         if (metaChanged) {
-          const updatedFiles = { ...localFiles, ...newEntries };
-          for (const id of staleIds) {
-            delete updatedFiles[id];
-            await deleteEditHistoryEntry(id);
-          }
-          await setLocalSyncMeta({
-            id: "current",
-            lastUpdatedAt: new Date().toISOString(),
-            files: updatedFiles,
-          });
+          for (const id of staleIds) await deleteEditHistoryEntry(id);
+          // Apply as a delta against the *current* stored meta: the per-file
+          // cache reads above take a while, and a migration or file creation
+          // that landed meanwhile must not be clobbered by a stale snapshot.
+          await patchLocalSyncMeta((meta) => {
+            let changed = false;
+            for (const [id, entry] of Object.entries(newEntries)) {
+              if (!meta.files[id]) { meta.files[id] = entry; changed = true; }
+            }
+            for (const id of staleIds) {
+              if (meta.files[id]) { delete meta.files[id]; changed = true; }
+            }
+            return changed;
+          }, { createIfMissing: newCount > 0 });
         }
 
         // Toast when a previous sync exists — the first ever fetch would flag the
@@ -257,9 +282,22 @@ export function useSync() {
           }
         }
 
+        if (cancelledDeletions.length > 0) {
+          const names = cancelledDeletions
+            .map((id) => remoteMeta.files[id]?.name ?? localFiles[id]?.name ?? id)
+            .sort();
+          window.dispatchEvent(new CustomEvent("show-toast", {
+            detail: {
+              key: "sync.deletionCancelledByRemote",
+              params: { count: names.length, names: names.join("\n") },
+              durationMs: 0,
+            },
+          }));
+        }
+
         // Rebuild tree when the remote meta changed or we auto-registered/cleaned entries.
         // No detail → handler re-reads CachedRemoteMeta + localMeta itself.
-        if (remoteChanged || metaChanged) {
+        if (remoteChanged || metaChanged || cancelledDeletions.length > 0) {
           window.dispatchEvent(new Event("tree-meta-updated"));
         }
       }
@@ -271,12 +309,29 @@ export function useSync() {
     }
   }, [refreshSyncCounts]);
 
-  // Poll remote changes every 5 minutes + initial check
+  // Poll remote changes every 5 minutes + initial check. Also re-check when the
+  // tab becomes visible again or the network comes back: the Pull button is
+  // disabled while the badge reads 0, so without this a user returning to the
+  // tab could wait a full interval before another device's push shows up.
   useEffect(() => {
     if (projectActive) return;
     checkRemoteChanges();
     const interval = setInterval(checkRemoteChanges, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    let lastVisibilityCheck = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastVisibilityCheck < 30 * 1000) return;
+      lastVisibilityCheck = Date.now();
+      void checkRemoteChanges();
+    };
+    const onOnline = () => { void checkRemoteChanges(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+    };
   }, [checkRemoteChanges, projectActive]);
 
   const push = useCallback(async () => {
@@ -301,6 +356,11 @@ export function useSync() {
       // 2. Get local state
       const localMeta = (await getLocalSyncMeta()) ?? null;
       const modifiedIds = await getLocallyModifiedFileIds();
+
+      // Queued deletions whose Drive file changed since they were queued are
+      // cancelled here (same rule as background polling) so that the pull
+      // dialog opened from the rejection below actually lists the file.
+      await cancelPendingDeletionsChangedOnRemote(localMeta?.files ?? {}, remoteMeta?.files ?? {});
 
       // 3. Compute diff client-side
       const diff = computeSyncDiff(localMeta, remoteMeta, modifiedIds);
@@ -512,7 +572,7 @@ export function useSync() {
       remoteMeta = data.remoteMeta as SyncMeta | null;
 
       // 2. Get local state
-      let localMeta = (await getLocalSyncMeta()) ?? null;
+      const localMeta = (await getLocalSyncMeta()) ?? null;
       const modifiedIds = await getLocallyModifiedFileIds();
 
       // 3. Compute diff client-side
@@ -555,41 +615,32 @@ export function useSync() {
         : [];
       const localOnlyReal = deletedRemotely.filter(id => !ignoredIds?.has(id));
       let resurrectedAny = false;
-      if (ignoredDeletions.length > 0) {
-        const updatedMetaForKeep: LocalSyncMeta = localMeta ?? {
-          id: "current",
-          lastUpdatedAt: new Date().toISOString(),
-          files: {},
-        };
-        for (const fid of ignoredDeletions) {
-          const newId = await resurrectDeletedFileAsNew(fid, localMetaFiles[fid]?.name);
-          if (!newId) {
-            // Nothing cached to keep — apply the deletion like any other.
-            await deleteCachedFile(fid);
-          }
-          await deleteEditHistoryEntry(fid);
-          delete updatedMetaForKeep.files[fid];
-          if (newId) resurrectedAny = true;
-        }
-        updatedMetaForKeep.lastUpdatedAt = new Date().toISOString();
-        await setLocalSyncMeta(updatedMetaForKeep);
-        localMeta = updatedMetaForKeep;
-      }
-      let baseMeta: LocalSyncMeta | null = localMeta;
-      if (localOnlyReal.length > 0) {
-        const updatedMetaForDelete: LocalSyncMeta = localMeta ?? {
-          id: "current",
-          lastUpdatedAt: new Date().toISOString(),
-          files: {},
-        };
-        for (const fid of localOnlyReal) {
+      const removedMetaIds: string[] = [];
+      for (const fid of ignoredDeletions) {
+        const newId = await resurrectDeletedFileAsNew(fid, localMetaFiles[fid]?.name);
+        if (!newId) {
+          // Nothing cached to keep — apply the deletion like any other.
           await deleteCachedFile(fid);
-          await deleteEditHistoryEntry(fid);
-          delete updatedMetaForDelete.files[fid];
         }
-        updatedMetaForDelete.lastUpdatedAt = new Date().toISOString();
-        await setLocalSyncMeta(updatedMetaForDelete);
-        baseMeta = updatedMetaForDelete;
+        await deleteEditHistoryEntry(fid);
+        removedMetaIds.push(fid);
+        if (newId) resurrectedAny = true;
+      }
+      for (const fid of localOnlyReal) {
+        await deleteCachedFile(fid);
+        await deleteEditHistoryEntry(fid);
+        removedMetaIds.push(fid);
+      }
+      if (removedMetaIds.length > 0) {
+        // Delta against the stored meta (not the snapshot read above) so
+        // entries written concurrently by migration/file creation survive.
+        await patchLocalSyncMeta((meta) => {
+          let changed = false;
+          for (const fid of removedMetaIds) {
+            if (meta.files[fid]) { delete meta.files[fid]; changed = true; }
+          }
+          return changed;
+        });
       }
 
       // 6. Download non-conflict files via pullDirect
@@ -623,13 +674,10 @@ export function useSync() {
       );
       const filesToPull = allFilesToPull.filter(id => !ignoredModifiedIds.has(id));
 
-      const updatedMeta: LocalSyncMeta = baseMeta ?? {
-        id: "current",
-        lastUpdatedAt: new Date().toISOString(),
-        files: {},
-      };
+      // LocalSyncMeta entries to upsert once the pull has been applied.
+      const upsertEntries: LocalSyncMeta["files"] = {};
 
-      if (filesToPull.length > 0 || ignoredModifiedIds.size > 0) {
+      if (filesToPull.length > 0) {
         const isMobile = window.matchMedia("(max-width: 768px)").matches;
 
         // Skip downloading: new remote files (uncached by design), binary on
@@ -657,13 +705,28 @@ export function useSync() {
           const isNewRemote = remoteOnlySet.has(id);
           const skippedMobile = isMobile && shouldTreatAsBinaryFile(rm?.name, rm?.mimeType);
           const skippedLarge = isLargeFile(rm?.size);
-          if (isNewRemote || skippedMobile || skippedLarge || metadataOnlyIds.has(id)) {
-            updatedMeta.files[id] = {
-              md5Checksum: rm?.md5Checksum ?? "",
-              modifiedTime: rm?.modifiedTime ?? "",
-              name: rm?.name,
-              size: rm?.size,
-            };
+          if (!(isNewRemote || skippedMobile || skippedLarge || metadataOnlyIds.has(id))) continue;
+          upsertEntries[id] = {
+            md5Checksum: rm?.md5Checksum ?? "",
+            modifiedTime: rm?.modifiedTime ?? "",
+            name: rm?.name,
+            size: rm?.size,
+          };
+          if (isNewRemote) continue;
+          const cached = await getCachedFile(id);
+          if (!cached) continue;
+          if (metadataOnlyIds.has(id)) {
+            // Content is already current; a remote rename still has to reach
+            // the cache record, which push/badge code reads the name from.
+            if (rm?.name && cached.fileName !== rm.name) {
+              await setCachedFile({ ...cached, fileName: rm.name });
+            }
+          } else {
+            // Download skipped (binary on mobile / over the size limit) but a
+            // stale copy is cached. Reads trust the cache unconditionally, so
+            // the old bytes would be served forever; drop them and let the
+            // file lazy-fetch on next open — the same rule Full Pull applies.
+            await deleteCachedFile(id);
           }
         }
 
@@ -689,7 +752,7 @@ export function useSync() {
               fileName: rm?.name,
               ...(file.encoding ? { encoding: file.encoding } : {}),
             });
-            updatedMeta.files[file.fileId] = {
+            upsertEntries[file.fileId] = {
               md5Checksum: rm?.md5Checksum ?? "",
               modifiedTime: rm?.modifiedTime ?? "",
               name: rm?.name,
@@ -698,17 +761,15 @@ export function useSync() {
           }
         }
 
-      }
-
-      // 8. Save localMeta only for applied pulls. Ignored entries deliberately
-      // retain their old checksum/name and therefore remain pending.
-      if (filesToPull.length > 0) {
+        // 8. Save localMeta only for applied pulls. Ignored entries deliberately
+        // retain their old checksum/name and therefore remain pending.
         // Pulling a newer remote version explicitly cancels a queued deletion
         // for that file; the remote copy becomes authoritative again.
         await Promise.all(filesToPull.map((id) => deletePendingDeletion(id)));
-        updatedMeta.lastUpdatedAt = new Date().toISOString();
-        await setLocalSyncMeta(updatedMeta);
-        baseMeta = updatedMeta;
+        await patchLocalSyncMeta((meta) => {
+          for (const [id, entry] of Object.entries(upsertEntries)) meta.files[id] = entry;
+          return true;
+        }, { createIfMissing: true });
       }
 
       if (remoteMeta) await updateCachedRemoteMetaFromSyncMeta(remoteMeta);

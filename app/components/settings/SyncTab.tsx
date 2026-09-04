@@ -16,6 +16,7 @@ import { useI18n } from "~/i18n/context";
 import {
   isSyncExcludedPath,
   getSyncCompletionStatus,
+  SYNC_EXCLUDED_FILE_NAMES,
 } from "~/services/sync-client-utils";
 import { SectionCard, NotifyDialog } from "~/components/settings/shared";
 import { TempFilesDialog } from "~/components/settings/TempFilesDialog";
@@ -83,15 +84,31 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
         getCachedRemoteMeta,
         setCachedRemoteMeta,
         deleteEditHistoryEntry,
+        getLocallyModifiedFileIds,
       } = await import("~/services/indexeddb-cache");
       const { ragRegisterInBackground } = await import("~/services/rag-sync");
       const allCached = await getAllCachedFiles();
       const cachedRemote = await getCachedRemoteMeta();
+      const modifiedIds = await getLocallyModifiedFileIds();
 
       const pushedFiles: Array<{ fileId: string; content: string; fileName: string; encoding?: "base64" }> = [];
+      let unchangedCount = 0;
       for (const cached of allCached) {
         const fileName = cached.fileName ?? cachedRemote?.files?.[cached.fileId]?.name ?? cached.fileId;
         if (isSyncExcludedPath(fileName)) continue;
+        // Clean file whose last-synced checksum still matches Drive: the bytes
+        // are identical, so re-uploading would only bump modifiedTime on Drive
+        // and make every other device see a spurious pull for it.
+        const remoteEntry = cachedRemote?.files?.[cached.fileId];
+        if (
+          !cached.fileId.startsWith("new:")
+          && !modifiedIds.has(cached.fileId)
+          && cached.md5Checksum
+          && remoteEntry?.md5Checksum === cached.md5Checksum
+        ) {
+          unchangedCount++;
+          continue;
+        }
         pushedFiles.push({
           fileId: cached.fileId,
           content: cached.content,
@@ -152,6 +169,8 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
           for (const [id, f] of Object.entries(
             data.remoteMeta.files as Record<string, { md5Checksum?: string; modifiedTime?: string; name?: string; size?: string }>
           )) {
+            // System files never belong in local sync meta (same rule as Full Pull)
+            if (f.name && SYNC_EXCLUDED_FILE_NAMES.has(f.name)) continue;
             files[id] = {
               md5Checksum: f.md5Checksum ?? "",
               modifiedTime: f.modifiedTime ?? "",
@@ -191,6 +210,9 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
         }
       } else if (allCached.length === 0) {
         setNotifyDialog({ message: t("settings.sync.noCachedFiles"), variant: "info" });
+      } else if (unchangedCount > 0) {
+        // Everything eligible already matches Drive — nothing to upload.
+        setNotifyDialog({ message: t("settings.sync.fullPushCompleted"), variant: "info" });
       } else {
         setNotifyDialog({ message: t("settings.sync.noSyncEligibleFiles"), variant: "info" });
       }

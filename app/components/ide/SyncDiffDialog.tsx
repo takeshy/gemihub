@@ -204,8 +204,9 @@ export function SyncDiffDialog({
           </span>
 
           {/* Open button (hidden in pull dialog: previewing an unpulled
-              file would let the user edit without a sync baseline) */}
-          {onSelectFile && type === "push" && (
+              file would let the user edit without a sync baseline; hidden for
+              queued deletions: the local copy is already gone) */}
+          {onSelectFile && type === "push" && f.type !== "deleted" && (
             <button
               onClick={() => {
                 onClose();

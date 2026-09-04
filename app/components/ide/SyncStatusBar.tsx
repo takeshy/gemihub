@@ -9,6 +9,7 @@ import {
   getCachedFile,
   getLocallyModifiedFileIds,
   getLocalSyncMeta,
+  getPendingDeletions,
   pruneOrphanedEditHistory,
 } from "~/services/indexeddb-cache";
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
@@ -121,7 +122,18 @@ export function SyncStatusBar({
 
       if (type === "push") {
         const remoteFiles = remoteMeta?.files ?? {};
-        const files = await collectPushCandidates(modifiedIds, remoteFiles);
+        const files: FileListItem[] = await collectPushCandidates(modifiedIds, remoteFiles);
+        // Queued soft deletions are part of the push badge count
+        // (useSync.refreshSyncCounts); list them too so the dialog and the
+        // badge agree and the user sees what the push is about to trash.
+        const pendingDeletions = await getPendingDeletions();
+        for (const entry of pendingDeletions) {
+          const name = entry.fileName
+            || localMeta?.files[entry.fileId]?.name
+            || entry.fileId;
+          files.push({ id: entry.fileId, name, type: "deleted" });
+        }
+        files.sort((a, b) => a.name.localeCompare(b.name));
         setDialogFiles(files);
         window.dispatchEvent(new CustomEvent("sync-counts-corrected", {
           detail: { type, count: files.length }

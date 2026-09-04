@@ -5,11 +5,38 @@ import {
   setCachedFile,
   setCachedRemoteMeta,
   getPendingDeletions,
+  deletePendingDeletion,
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { hasNetContentChange } from "~/services/edit-history-local";
 import { isSyncExcludedPath } from "~/services/sync-client-utils";
 import { type SyncDiff, type SyncMeta } from "~/services/sync-diff";
+import { findPendingDeletionsChangedOnRemote } from "~/services/sync-push-guard";
+
+/**
+ * Drop queued soft deletions whose Drive file changed after they were queued.
+ *
+ * The badge/dialog hide pending-deleted files from CachedRemoteMeta, while the
+ * push pre-check looks at the raw remote meta. Without this reconciliation a
+ * remotely-edited file would be invisible in the pull UI yet still reject the
+ * push with "Pull first". Cancelling the reservation lets the file re-enter
+ * CachedRemoteMeta as an ordinary toPull entry (localMeta still holds the old
+ * checksum), which is exactly what the documented Pull behaviour does anyway.
+ *
+ * Returns the ids that remain queued plus the ids that were cancelled.
+ */
+export async function cancelPendingDeletionsChangedOnRemote(
+  localFiles: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string }>,
+  remoteFiles: Record<string, { name?: string; md5Checksum?: string; modifiedTime?: string }>,
+): Promise<{ remaining: Set<string>; cancelled: string[] }> {
+  const pending = (await getPendingDeletions()).map((entry) => entry.fileId);
+  const cancelled = findPendingDeletionsChangedOnRemote(pending, localFiles, remoteFiles);
+  if (cancelled.length > 0) {
+    await Promise.all(cancelled.map((id) => deletePendingDeletion(id)));
+  }
+  const cancelledSet = new Set(cancelled);
+  return { remaining: new Set(pending.filter((id) => !cancelledSet.has(id))), cancelled };
+}
 
 export function toLocalSyncMeta(remoteMeta: {
   lastUpdatedAt: string;

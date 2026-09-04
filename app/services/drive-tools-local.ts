@@ -10,17 +10,12 @@ import {
   searchFilesLocal,
   writeFileLocal,
   renameFileLocal,
+  renameRemoteFiles,
+  applyRemoteMetaForFiles,
   findFileByNameLocal,
   getRemoteMetaFiles,
 } from "./drive-local";
-import {
-  getCachedRemoteMeta,
-  getLocalSyncMeta,
-  renameCachedFile,
-  setCachedRemoteMeta,
-  setLocalSyncMeta,
-  type CachedRemoteMeta,
-} from "./indexeddb-cache";
+import { getCachedRemoteMeta, renameCachedFile } from "./indexeddb-cache";
 import type { DriveEditProposal, DriveEvent } from "~/engine/local-executor";
 
 const GEMINI_MEDIA_PREFIXES = ["image/", "audio/", "video/"];
@@ -54,68 +49,6 @@ interface LocalDriveToolCallbacks {
 type RenameResult =
   | { id: string; name: string; oldName?: string; unchanged?: boolean }
   | { error: string; fileId?: string };
-
-type BulkRenameApiResponse = {
-  results?: Array<{ fileId: string; ok: boolean }>;
-  failedFileIds?: string[];
-  meta?: { lastUpdatedAt: string; files: CachedRemoteMeta["files"] };
-  error?: string;
-};
-
-async function applyRemoteMetaForFiles(
-  remoteMeta: BulkRenameApiResponse["meta"],
-  fileIds: string[],
-): Promise<void> {
-  if (!remoteMeta) return;
-
-  const cachedRemote = await getCachedRemoteMeta();
-  if (cachedRemote) {
-    await setCachedRemoteMeta({
-      ...cachedRemote,
-      lastUpdatedAt: remoteMeta.lastUpdatedAt,
-      files: {
-        ...cachedRemote.files,
-        ...Object.fromEntries(
-          fileIds
-            .map((fileId) => [fileId, remoteMeta.files[fileId]] as const)
-            .filter((entry): entry is readonly [string, CachedRemoteMeta["files"][string]] => !!entry[1]),
-        ),
-      },
-      cachedAt: Date.now(),
-    });
-  }
-
-  const localSyncMeta = await getLocalSyncMeta();
-  if (localSyncMeta) {
-    for (const fileId of fileIds) {
-      const entry = remoteMeta.files[fileId];
-      if (!entry) continue;
-      localSyncMeta.files[fileId] = {
-        md5Checksum: entry.md5Checksum,
-        modifiedTime: entry.modifiedTime,
-        name: entry.name,
-        size: entry.size,
-      };
-    }
-    localSyncMeta.lastUpdatedAt = remoteMeta.lastUpdatedAt;
-    await setLocalSyncMeta(localSyncMeta);
-  }
-}
-
-async function renameRemoteFiles(
-  files: Array<{ fileId: string; name: string }>,
-): Promise<BulkRenameApiResponse> {
-  const res = await fetch("/api/drive/files", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "bulkRename", files }),
-  });
-  const data = await res.json().catch(() => ({})) as BulkRenameApiResponse;
-  if (!res.ok) {
-    return { error: data.error || `bulkRename failed with HTTP ${res.status}` };
-  }
-  return data;
-}
 
 const SCHEMA_FILE_PATH = "web/__gemihub/schema.md";
 

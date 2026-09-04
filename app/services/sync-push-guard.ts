@@ -38,3 +38,25 @@ export function remoteChangedSincePushSnapshot(
     && expected.modifiedTime !== current.modifiedTime,
   );
 }
+
+/**
+ * Pending soft deletions whose Drive file changed after the deletion was
+ * queued. The queued deletion loses: the remote edit is newer than the local
+ * decision, so the reservation must be cancelled and the file must surface as
+ * a pending pull again instead of staying hidden behind the deletion filter.
+ */
+export function findPendingDeletionsChangedOnRemote(
+  pendingFileIds: Iterable<string>,
+  localFiles: Record<string, PushSnapshotEntry | undefined>,
+  remoteFiles: Record<string, PushSnapshotEntry | undefined>,
+): string[] {
+  const cancelled: string[] = [];
+  for (const id of pendingFileIds) {
+    const base = localFiles[id];
+    const current = remoteFiles[id];
+    // No base revision (never synced) or gone from remote: the deletion stands.
+    if (!base || !current) continue;
+    if (remoteChangedSincePushSnapshot(base, current)) cancelled.push(id);
+  }
+  return cancelled;
+}

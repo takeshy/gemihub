@@ -198,22 +198,95 @@ export function isFileRemovedFromSyncRoot(file: DriveFile, rootFolderId: string)
 }
 
 /**
+ * Register root-folder files that `_sync-meta.json` does not know about.
+ *
+ * An external client (Desktop/Obsidian plugin) uploads files first and writes
+ * the meta once at the end; a crash in between leaves live files that the
+ * meta-driven diff never sees. Those clients self-heal on their next run by
+ * listing Drive, so GemiHub's reconciliation does the same instead of waiting
+ * for the user to run "Detect untracked files". `driveFiles` is a root listing
+ * (folders, Workspace-native files and system files already filtered out).
+ * Existing entries are never touched. Returns the added file ids.
+ */
+export function addUntrackedFilesToSyncMeta(meta: SyncMeta, driveFiles: DriveFile[]): string[] {
+  const added: string[] = [];
+  for (const f of driveFiles) {
+    if (meta.files[f.id]) continue;
+    meta.files[f.id] = {
+      name: f.name,
+      mimeType: f.mimeType,
+      md5Checksum: f.md5Checksum ?? "",
+      modifiedTime: f.modifiedTime ?? "",
+      createdTime: f.createdTime,
+      size: f.size,
+    };
+    added.push(f.id);
+  }
+  return added;
+}
+
+/**
  * Read sync metadata and reconcile entries against the actual Drive root.
  *
  * listUserFiles intentionally excludes trashed files. A missing entry is
  * therefore verified by ID before it is removed from _sync-meta.json, so a
  * partial or inconsistent list response cannot manufacture remote deletions.
+ * Root files missing from the meta are added (see addUntrackedFilesToSyncMeta).
  */
 export async function readReconciledRemoteSyncMeta(
   accessToken: string,
   rootFolderId: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
-  const remoteMeta = await readRemoteSyncMeta(accessToken, rootFolderId, options);
-  if (!remoteMeta) {
-    return rebuildSyncMeta(accessToken, rootFolderId, options);
-  }
+  const { meta } = await readReconciledRemoteSyncMetaWithFile(accessToken, rootFolderId, options);
+  return meta;
+}
 
+/**
+ * Same as readReconciledRemoteSyncMeta, but also returns the Drive id of the
+ * `_sync-meta.json` file found on the way, so callers that need the id do not
+ * have to issue a second name lookup against Drive.
+ */
+export async function readReconciledRemoteSyncMetaWithFile(
+  accessToken: string,
+  rootFolderId: string,
+  options: SyncMetaOperationOptions = {}
+): Promise<{ meta: SyncMeta; syncMetaFileId: string | null }> {
+  const { file: metaFile, meta: consolidatedMeta } = await findOrConsolidateSyncMetaFile(
+    accessToken,
+    rootFolderId,
+    options
+  );
+  let remoteMeta: SyncMeta | null = null;
+  if (metaFile) {
+    if (consolidatedMeta) {
+      remoteMeta = consolidatedMeta;
+    } else {
+      try {
+        remoteMeta = JSON.parse(await readFile(accessToken, metaFile.id, options)) as SyncMeta;
+      } catch {
+        remoteMeta = null;
+      }
+    }
+  }
+  if (!remoteMeta) {
+    // First run or unreadable meta: rebuild creates the file, so look it up once more.
+    const rebuilt = await rebuildSyncMeta(accessToken, rootFolderId, options);
+    const { file } = await findOrConsolidateSyncMetaFile(accessToken, rootFolderId, options);
+    return { meta: rebuilt, syncMetaFileId: file?.id ?? null };
+  }
+  return {
+    meta: await reconcileRemoteSyncMeta(accessToken, rootFolderId, remoteMeta, options),
+    syncMetaFileId: metaFile?.id ?? null,
+  };
+}
+
+async function reconcileRemoteSyncMeta(
+  accessToken: string,
+  rootFolderId: string,
+  remoteMeta: SyncMeta,
+  options: SyncMetaOperationOptions,
+): Promise<SyncMeta> {
   const driveFiles = await listUserFiles(accessToken, rootFolderId, options);
   const driveFileIds = new Set(driveFiles.map((file) => file.id));
   const staleIds = Object.keys(remoteMeta.files).filter((id) => !driveFileIds.has(id));
@@ -234,10 +307,12 @@ export async function readReconciledRemoteSyncMeta(
     }
   }
 
-  if (removedIds.length > 0) {
-    for (const id of removedIds) {
-      delete remoteMeta.files[id];
-    }
+  for (const id of removedIds) {
+    delete remoteMeta.files[id];
+  }
+  const addedIds = addUntrackedFilesToSyncMeta(remoteMeta, driveFiles);
+
+  if (removedIds.length > 0 || addedIds.length > 0) {
     remoteMeta.lastUpdatedAt = new Date().toISOString();
     await writeRemoteSyncMeta(accessToken, rootFolderId, remoteMeta, options);
   }
@@ -326,6 +401,9 @@ export async function rebuildSyncMeta(
       createdTime: f.createdTime,
       shared: prev?.shared,
       webViewLink: prev?.webViewLink,
+      // The signed public path is minted once by setFileSharedInMeta; a
+      // rebuild (Full Pull, missing meta) must not drop it.
+      publicPath: prev?.publicPath,
       size: f.size,
     };
   }
