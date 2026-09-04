@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { createTwoFilesPatch } from "diff";
 import type { DriveEditProposal } from "~/engine/local-executor";
 import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
@@ -22,7 +23,7 @@ export function EditConfirmationDialog({ proposal, language, onConfirm, onCancel
   ), [proposal]);
   const ja = language === "ja";
 
-  return (
+  const dialog = (
     <div
       className="fixed inset-0 z-[100] flex items-start justify-center overflow-hidden bg-black/50 px-2 pt-2 sm:items-center sm:p-4"
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
@@ -59,4 +60,13 @@ export function EditConfirmationDialog({ proposal, language, onConfirm, onCancel
       </div>
     </div>
   );
+
+  // The mobile panel carousel uses a transform. A fixed-position descendant of
+  // that carousel is positioned against the full three-panel strip and clipped
+  // by it, so the dialog spills into the editor and its footer can disappear.
+  // Portaling to body keeps the overlay relative to the visible viewport.
+  if (typeof document !== "undefined") {
+    return createPortal(dialog, document.body);
+  }
+  return dialog;
 }
