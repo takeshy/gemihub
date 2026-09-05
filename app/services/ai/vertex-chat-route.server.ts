@@ -1,3 +1,5 @@
+import { streamMcpApproval, sameMcpServer } from "~/services/mcp-approval.server";
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 /**
  * Vertex chat SSE handler for org project mounts. api.chat.tsx delegates
  * here when the request body carries a projectId; the legacy key-based SSE
@@ -45,7 +47,7 @@ const ChatRequestSchema = z.object({
   systemPrompt: z.string().optional(),
   ragStoreIds: z.array(z.string()).optional(),
   enableDriveTools: z.boolean().optional(),
-  driveToolMode: z.enum(["all", "noSearch", "none"]).optional(),
+  driveToolMode: z.enum(["all", "noSearch", "readOnly", "none"]).optional(),
   enableMcp: z.boolean().optional(),
   mcpServerIds: z.array(z.string()).optional(),
   mcpServers: z.array(z.object({
@@ -193,7 +195,9 @@ export async function handleVertexChatAction(
   const tools: ToolDefinition[] = [];
 
   if (driveToolMode !== "none") {
-    if (driveToolMode === "noSearch") {
+    if (driveToolMode === "readOnly") {
+      tools.push(...DRIVE_TOOL_DEFINITIONS.filter(tool => isReadOnlyDriveTool(tool.name)));
+    } else if (driveToolMode === "noSearch") {
       tools.push(...DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name)));
     } else {
       tools.push(...DRIVE_TOOL_DEFINITIONS);
@@ -311,6 +315,7 @@ export async function handleVertexChatAction(
         }
 
         if (driveToolNames.has(name)) {
+          if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
           const result = await executeStorageTool(
             name,
             args,
@@ -349,7 +354,7 @@ export async function handleVertexChatAction(
         }
 
         if (mcpToolNames.has(name) && resolvedMcpServers) {
-          const result = await executeMcpTool(resolvedMcpServers, name, args);
+          const result = await executeMcpTool(resolvedMcpServers, name, args, request.signal, streamMcpApproval(validTokens, sendChunk, async (server, tool) => { const latest = await getSettingsForTenantStrict(ctx); const target = latest.mcpServers.find(item => sameMcpServer(item, server)); if (!target) throw new Error("MCP server settings changed during approval"); target.allowedTools = [...new Set([...(target.allowedTools || []), tool])]; await saveSettingsForTenant(ctx, latest); server.allowedTools = target.allowedTools; }, request.signal));
           if (result.mcpApp) {
             sendChunk({ type: "mcp_app", mcpApp: result.mcpApp });
           }

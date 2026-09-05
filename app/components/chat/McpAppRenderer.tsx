@@ -1,3 +1,4 @@
+import { fetchWithMcpApproval } from "~/hooks/mcp-approval-client";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronDown, ChevronRight, AppWindow, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
@@ -38,7 +39,7 @@ async function callMcpTool(
   toolName: string,
   args: Record<string, unknown>
 ): Promise<McpAppResult> {
-  const res = await fetch("/api/mcp/tool-call", {
+  const res = await fetchWithMcpApproval("/api/mcp/tool-call", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ serverId, serverUrl, serverHeaders, toolName, args }),

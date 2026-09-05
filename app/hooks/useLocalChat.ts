@@ -1,3 +1,5 @@
+import { fetchWithMcpApproval } from "~/hooks/mcp-approval-client";
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 /**
  * Local chat execution hook.
  * Calls Gemini API directly from the browser using gemini-chat-core.ts.
@@ -121,7 +123,9 @@ export async function* executeLocalChat(
 
   // Drive tools
   if (driveToolMode !== "none") {
-    if (driveToolMode === "noSearch") {
+    if (driveToolMode === "readOnly") {
+      tools.push(...DRIVE_TOOL_DEFINITIONS.filter(tool => isReadOnlyDriveTool(tool.name)));
+    } else if (driveToolMode === "noSearch") {
       tools.push(
         ...DRIVE_TOOL_DEFINITIONS.filter(
           (t) => !DRIVE_SEARCH_TOOL_NAMES.has(t.name),
@@ -131,13 +135,13 @@ export async function* executeLocalChat(
       tools.push(...DRIVE_TOOL_DEFINITIONS);
     }
   }
-  tools.push(...TIMELINE_TOOL_DEFINITIONS);
+  tools.push(...TIMELINE_TOOL_DEFINITIONS.filter(tool => driveToolMode !== "readOnly" || isReadOnlyDriveTool(tool.name)));
 
   // MCP tools (fetch definitions via proxy)
   let mcpToolDefs: ToolDefinition[] = [];
   if (mcpServerIds.length > 0) {
     try {
-      const res = await fetch("/api/workflow/mcp-proxy", {
+      const res = await fetchWithMcpApproval("/api/workflow/mcp-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -229,6 +233,7 @@ export async function* executeLocalChat(
     }
 
     if (driveToolNames.has(name)) {
+      if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
       const result = await executeLocalDriveTool(
         name,
         args,
@@ -253,12 +258,13 @@ export async function* executeLocalChat(
     }
 
     if (timelineToolNames.has(name)) {
+      if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Timeline writes are disabled in read-only mode" };
       return executeTimelineTool(name, args);
     }
 
     if (mcpToolNames.has(name) && mcpServerIds.length > 0) {
       try {
-        const res = await fetch("/api/workflow/mcp-proxy", {
+        const res = await fetchWithMcpApproval("/api/workflow/mcp-proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

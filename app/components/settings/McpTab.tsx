@@ -72,6 +72,7 @@ export function McpTab({ settings }: { settings: UserSettings }) {
   const [testResults, setTestResults] = useState<Record<number, { ok: boolean; msg: string }>>({});
   const [addTestResult, setAddTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [addTesting, setAddTesting] = useState(false);
+  const [testing, setTesting] = useState<Set<number>>(new Set());
   const [detailServer, setDetailServer] = useState<McpServerConfig | null>(null);
 
   // --- OAuth redirect-flow completion (mobile fallback) ---
@@ -629,7 +630,8 @@ export function McpTab({ settings }: { settings: UserSettings }) {
 
   const testConnection = useCallback(async (idx: number) => {
     const server = servers[idx];
-    if (!server) return;
+    if (!server || testing.has(idx)) return;
+    setTesting(current => new Set(current).add(idx));
     setTestResults((prev) => ({ ...prev, [idx]: { ok: false, msg: "Testing..." } }));
     try {
       const res = await fetch("/api/settings/mcp-test", {
@@ -729,8 +731,10 @@ export function McpTab({ settings }: { settings: UserSettings }) {
       const updated = servers.map((s, i) => i === idx ? { ...s, tools: undefined } : s);
       setServers(updated);
       saveServers(updated);
+    } finally {
+      setTesting(current => { const next = new Set(current); next.delete(idx); return next; });
     }
-  }, [servers, startOAuthFlow, saveServers, t]);
+  }, [servers, startOAuthFlow, saveServers, t, testing]);
 
   const reauthorize = useCallback(async (idx: number) => {
     const server = servers[idx];
@@ -763,10 +767,14 @@ export function McpTab({ settings }: { settings: UserSettings }) {
 
       <div className="space-y-3 mb-6">
         {servers.map((server, idx) => (
-          <div
+          <fieldset disabled={testing.size > 0 || addTesting}
             key={idx}
             className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50"
           >
+            <div className="text-xs">
+              <label><input type="checkbox" checked={server.autoApprove ?? false} onChange={event => { const updated = servers.map(item => item === server ? { ...item, autoApprove: event.target.checked } : item); setServers(updated); saveServers(updated); }} />Always approve / 常に承認（確認を省略）</label>
+              <div>Allowed tools / 許可リスト{(server.allowedTools ?? []).map(tool => <div key={tool}>{tool}<button type="button" onClick={() => { const updated = servers.map(item => item === server ? { ...item, allowedTools: item.allowedTools?.filter(name => name !== tool) } : item); setServers(updated); saveServers(updated); }}>Remove / 削除</button></div>)}</div>
+            </div>
             <button
               type="button"
               onClick={() => setDetailServer(server)}
@@ -834,13 +842,13 @@ export function McpTab({ settings }: { settings: UserSettings }) {
                 </button>
               )}
             </div>
-          </div>
+          </fieldset>
         ))}
       </div>
 
       {/* Add server inline form */}
       {adding ? (
-        <div className="mb-6 p-4 border border-blue-200 dark:border-blue-800 rounded-md bg-blue-50/50 dark:bg-blue-900/10 space-y-3">
+        <fieldset disabled={addTesting || testing.size > 0} className="mb-6 p-4 border border-blue-200 dark:border-blue-800 rounded-md bg-blue-50/50 dark:bg-blue-900/10 space-y-3">
           <div>
             <Label htmlFor="mcp-name">{t("settings.mcp.name")}</Label>
             <input
@@ -904,7 +912,7 @@ export function McpTab({ settings }: { settings: UserSettings }) {
               {t("common.cancel")}
             </button>
           </div>
-        </div>
+        </fieldset>
       ) : (
         <button
           type="button"

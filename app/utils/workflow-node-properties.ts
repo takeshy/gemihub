@@ -44,7 +44,8 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "prompt", label: "Prompt", required: true, multiline: true, placeholder: "Summarize the following text: {{input}}" },
         { key: "model", label: "Model", required: false, options: ALL_MODEL_OPTIONS },
         { key: "ragSetting", label: "RAG / Search", required: false, options: ["__none__", "__websearch__", ...(context?.ragSettingNames || [])], defaultValue: "__none__" },
-        { key: "driveToolMode", label: "Drive Tools", required: false, options: ["none", "all", "noSearch"], defaultValue: "none" },
+        { key: "confirm", label: "Confirm MCP tool calls", required: false, options: ["true", "false"], defaultValue: "true" },
+        { key: "driveToolMode", label: "Drive Tools", required: false, options: ["none", "all", "noSearch", "readOnly"], defaultValue: "none" },
         { key: "mcpServers", label: "MCP Servers", required: false, placeholder: context?.mcpServerIds?.length ? context.mcpServerIds.join(", ") : "mcp_server_id_1,mcp_server_id_2" },
         { key: "enableThinking", label: "Enable Thinking", required: false, toggle: true, defaultValue: "true" },
         { key: "attachments", label: "Attachments", required: false, placeholder: "imageVar,fileVar" },
@@ -168,6 +169,7 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
       ];
     case "mcp":
       return [
+        { key: "confirm", label: "Confirm MCP tool calls", required: false, options: ["true", "false"], defaultValue: "true" },
         { key: "url", label: "Server URL", required: true, placeholder: "http://localhost:3001" },
         { key: "tool", label: "Tool", required: true, placeholder: "tool_name" },
         { key: "args", label: "Arguments", required: false, multiline: true, placeholder: '{"key": "value"}' },

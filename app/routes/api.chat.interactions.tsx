@@ -1,3 +1,4 @@
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 import type { Route } from "./+types/api.chat.interactions";
 import { z } from "zod";
 import { requireAuth } from "~/services/session.server";
@@ -40,7 +41,7 @@ const InteractionsChatRequestSchema = z.object({
   systemPrompt: z.string().optional(),
   previousInteractionId: z.string().optional(),
   ragStoreIds: z.array(z.string()).optional(),
-  driveToolMode: z.enum(["all", "noSearch", "none"]).optional(),
+  driveToolMode: z.enum(["all", "noSearch", "readOnly", "none"]).optional(),
   mcpServerIds: z.array(z.string()).optional(),
   webSearchEnabled: z.boolean().optional(),
   reasoningEffort: z.enum(["default", "none", "minimal", "low", "medium", "high"]).optional(),
@@ -127,7 +128,9 @@ export async function action({ request }: Route.ActionArgs) {
 
   // Drive tools
   if (driveToolMode !== "none") {
-    if (driveToolMode === "noSearch") {
+    if (driveToolMode === "readOnly") {
+      tools.push(...DRIVE_TOOL_DEFINITIONS.filter(tool => isReadOnlyDriveTool(tool.name)));
+    } else if (driveToolMode === "noSearch") {
       tools.push(...DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name)));
     } else {
       tools.push(...DRIVE_TOOL_DEFINITIONS);

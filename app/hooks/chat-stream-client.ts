@@ -1,3 +1,5 @@
+import { fetchWithMcpApproval, answerMcpApproval } from "~/hooks/mcp-approval-client";
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 /**
  * Client-side chat stream orchestrator for `/api/chat`.
  *
@@ -256,12 +258,14 @@ async function* parseSSEStream(
         buffer = buffer.slice(lineEnd + 2);
 
         if (line.startsWith("data: ")) {
-          try {
-            const chunk = JSON.parse(line.slice(6)) as StreamChunk;
-            yield chunk;
-          } catch {
-            // Skip malformed JSON
+          let chunk: StreamChunk;
+          try { chunk = JSON.parse(line.slice(6)) as StreamChunk; }
+          catch { continue; }
+          if (chunk.type === "mcp_approval" && chunk.mcpApproval) {
+            await answerMcpApproval(chunk.mcpApproval, abortSignal);
+            continue;
           }
+          yield chunk;
         }
       }
     }
@@ -281,6 +285,7 @@ function buildToolDispatcher(
   callbacks?: LocalChatCallbacks,
   abortSignal?: AbortSignal,
   options?: {
+    driveToolMode?: DriveToolMode;
     requirePlanApproval?: boolean;
     canUseProxy?: boolean;
     settings?: UserSettings;
@@ -314,6 +319,7 @@ function buildToolDispatcher(
     }
 
     if (name === "create_drive_file" || name === "update_drive_file") {
+      if (options?.driveToolMode === "readOnly") return { error: "Drive writes are disabled in read-only mode" };
       // Personal Vertex runs on the Drive mount, whose local-first writes go
       // through drive-tools-local (IndexedDB + editHistory). The project
       // storage cache below needs a projectId this path does not have.
@@ -355,6 +361,7 @@ function buildToolDispatcher(
     }
 
     if (name === "read_timeline" || name === "append_timeline") {
+      if (options?.driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Timeline writes are disabled in read-only mode" };
       return executeTimelineTool(name, args);
     }
 
@@ -493,7 +500,7 @@ function buildToolDispatcher(
     // MCP tools — route via server proxy
     if (mcpServerIds.length > 0) {
       try {
-        const res = await fetch("/api/workflow/mcp-proxy", {
+        const res = await fetchWithMcpApproval("/api/workflow/mcp-proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -585,6 +592,7 @@ export async function* executeChatStream(
     callbacks,
     abortSignal,
     {
+      driveToolMode,
       requirePlanApproval,
       canUseProxy,
       settings,
@@ -599,7 +607,7 @@ export async function* executeChatStream(
   // Build extra tool definitions (client-only tools) to send to server
   const extraToolDefinitions: ToolDefinition[] = [];
   extraToolDefinitions.push(...buildOkfDocumentTool(activeOkfBundleIds));
-  extraToolDefinitions.push(...TIMELINE_TOOL_DEFINITIONS);
+  extraToolDefinitions.push(...TIMELINE_TOOL_DEFINITIONS.filter(tool => driveToolMode !== "readOnly" || isReadOnlyDriveTool(tool.name)));
   extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
   extraToolDefinitions.push({
     name: "get_workflow_spec",

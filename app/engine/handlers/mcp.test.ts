@@ -81,6 +81,7 @@ test("handleMcpNode propagates serverHeaders into returned MCP app info", async 
     id: "mcp-1",
     type: "mcp",
     properties: {
+      confirm: "false",
       url: "https://mcp.example/server",
       tool: "demo_tool",
       headers: "{\"Authorization\":\"Bearer secret-token\"}",
@@ -111,4 +112,18 @@ test("handleMcpNode propagates serverHeaders into returned MCP app info", async 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("workflow MCP requires approval before sending tools/call; rejection sends nothing", async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => { requests++; throw new Error("unexpected network call"); };
+  const node: WorkflowNode = { id: "guarded", type: "mcp", properties: { url: "https://mcp.example/server", tool: "write", args: "{}" } };
+  const context: ExecutionContext = { variables: new Map(), logs: [] };
+  const service = { driveAccessToken: "", driveRootFolderId: "" };
+  try {
+    await assert.rejects(handleMcpNode(node, context, service), /approval required/);
+    await assert.rejects(handleMcpNode(node, context, { ...service, mcpApproval: async () => { throw new Error("denied"); } }), /denied/);
+    assert.equal(requests, 0);
+  } finally { globalThis.fetch = originalFetch; }
 });

@@ -1,3 +1,4 @@
+import { explicitMcpApproval, rememberMcpTool, McpApprovalRequiredError } from "~/services/mcp-approval.server";
 import type { Route } from "./+types/api.workflow.execute-node";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
@@ -127,6 +128,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const serviceContext: ServiceContext = {
+    mcpApproval: explicitMcpApproval(body.mcpApprovalDecision, (server, tool) => rememberMcpTool(validTokens.accessToken, validTokens.rootFolderId, server, tool), body.mcpApprovedCall),
     driveAccessToken: validTokens.accessToken,
     driveRootFolderId: validTokens.rootFolderId,
     driveHistoryFolderId: driveContext.historyFolderId,
@@ -225,6 +227,7 @@ export async function action({ request }: Route.ActionArgs) {
 
     return Response.json({ variables: updatedVars, logs, driveEvents }, { headers: responseHeaders });
   } catch (err) {
+    if (err instanceof McpApprovalRequiredError) return err.response();
     const errorMessage = err instanceof Error ? err.message : String(err);
     return Response.json(
       { error: errorMessage, logs, driveEvents },

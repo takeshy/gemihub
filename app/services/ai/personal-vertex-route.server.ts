@@ -1,3 +1,5 @@
+import { streamMcpApproval, rememberMcpTool } from "~/services/mcp-approval.server";
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 /**
  * Personal Vertex chat SSE handler for Drive-mount users who have opted into
  * Vertex AI with a prepaid budget (no org project required). api.chat.tsx
@@ -51,7 +53,7 @@ const ChatRequestSchema = z.object({
   systemPrompt: z.string().optional(),
   ragStoreIds: z.array(z.string()).optional(),
   enableDriveTools: z.boolean().optional(),
-  driveToolMode: z.enum(["all", "noSearch", "none"]).optional(),
+  driveToolMode: z.enum(["all", "noSearch", "readOnly", "none"]).optional(),
   enableMcp: z.boolean().optional(),
   mcpServerIds: z.array(z.string()).optional(),
   mcpServers: z
@@ -229,7 +231,9 @@ export async function handlePersonalVertexChatAction(
   const tools: ToolDefinition[] = [];
 
   if (driveToolMode !== "none") {
-    if (driveToolMode === "noSearch") {
+    if (driveToolMode === "readOnly") {
+      tools.push(...DRIVE_TOOL_DEFINITIONS.filter(tool => isReadOnlyDriveTool(tool.name)));
+    } else if (driveToolMode === "noSearch") {
       tools.push(
         ...DRIVE_TOOL_DEFINITIONS.filter(
           (t) => !DRIVE_SEARCH_TOOL_NAMES.has(t.name),
@@ -352,6 +356,7 @@ export async function handlePersonalVertexChatAction(
         // Reads/searches only — the write tools never reach here, they are in
         // delegateToolNames and execute in the browser.
         if (driveToolNames.has(name)) {
+          if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
           return executeDriveTool(
             name,
             args,
@@ -361,7 +366,7 @@ export async function handlePersonalVertexChatAction(
         }
 
         if (mcpToolNames.has(name) && resolvedMcpServers) {
-          const result = await executeMcpTool(resolvedMcpServers, name, args);
+          const result = await executeMcpTool(resolvedMcpServers, name, args, request.signal, streamMcpApproval(validTokens, sendChunk, (server, tool) => rememberMcpTool(validTokens.accessToken, validTokens.rootFolderId, server, tool), request.signal));
           if (result.mcpApp) {
             sendChunk({ type: "mcp_app", mcpApp: result.mcpApp });
           }

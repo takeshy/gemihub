@@ -237,6 +237,7 @@ export interface PromptCallbacks {
 
 // Service context injected into handlers (replaces Obsidian App/Plugin)
 export interface ServiceContext {
+  mcpApproval?: import("~/services/mcp-approval.server").McpApproval;
   driveAccessToken: string;
   driveRootFolderId: string;
   driveHistoryFolderId: string;

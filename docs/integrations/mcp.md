@@ -333,3 +333,8 @@ Chat / Workflow                │
 | `/api/mcp/resource-read` | POST | Proxy resource read for iframe |
 | `/api/settings/mcp-test` | POST | Test server connection, list tools, OAuth discovery |
 | `/api/settings/mcp-oauth-token` | POST | Exchange OAuth authorization code for tokens |
+
+
+## MCP permissions and read-only tools
+
+MCP tool calls require approval by default. The dialog shows the server name, tool name and execution arguments. Choose Allow once, Always allow this tool, or Deny; dismissing the dialog denies execution. Server settings provide an Always approve option (off by default) and a removable allowed-tool list. Workflow `command` and `mcp` nodes can use `confirm: "false"` to skip MCP approval for that node, including automatic runs. Later MCP App interactions follow the server settings again. Read-only mode allows built-in reading, listing and searching, and blocks built-in writes (including timeline append). External MCP and skill/workflow operations retain their own permissions. Connection tests disable editing while running and display errors for correction.

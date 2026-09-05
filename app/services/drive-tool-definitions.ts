@@ -148,3 +148,7 @@ export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
 ];
+
+export function isReadOnlyDriveTool(name: string): boolean {
+  return ["read_drive_file", "search_drive_files", "list_drive_files", "read_timeline"].includes(name);
+}

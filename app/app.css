@@ -183,3 +183,7 @@ body.tree-dragging iframe {
 .textLayer.selecting .endOfContent {
   top: 0;
 }
+
+.mcp-approval-dialog { max-width: 90vw; width: 640px; padding: 24px; background: var(--bg-primary, white); color: var(--text-primary, black); border-radius: 8px; }
+.mcp-approval-dialog pre { max-height: 45vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mcp-approval-dialog button { margin: 8px; padding: 8px; border: 1px solid gray; }

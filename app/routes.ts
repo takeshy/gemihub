@@ -2,6 +2,7 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
   index("routes/_index.tsx"),
+  route("api/mcp/approval", "routes/api.mcp.approval.tsx"),
   route("lp", "routes/lp.tsx"),
   route("lp/ja", "routes/lp.tsx", { id: "lp-ja" }),
   route("terms", "routes/terms.tsx"),

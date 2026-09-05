@@ -797,10 +797,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         {t(driveToolModeReasonKey)}
                       </div>
                     )}
-                    {(["all", "noSearch", "none"] as const).map((mode) => {
+                    {(["all", "noSearch", "readOnly", "none"] as const).map((mode) => {
                       const labels: Record<DriveToolMode, string> = {
                         all: "All tools",
                         noSearch: "No search",
+                        readOnly: "Read only / 読み取り専用",
                         none: "None",
                       };
                       return (

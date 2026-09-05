@@ -1,3 +1,4 @@
+import { explicitMcpApproval, rememberMcpTool, McpApprovalRequiredError } from "~/services/mcp-approval.server";
 /**
  * MCP proxy for local workflow execution.
  * The command node's local handler calls this to get MCP tool definitions
@@ -23,6 +24,7 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
   } catch (err) {
+    if (err instanceof McpApprovalRequiredError) return err.response();
     return Response.json(
       { error: `Failed to load settings: ${err instanceof Error ? err.message : String(err)}` },
       { status: 500, headers: responseHeaders }
@@ -44,6 +46,7 @@ export async function action({ request }: Route.ActionArgs) {
         const tools = await getMcpToolDefinitions(enabledServers, request.signal);
         return Response.json({ tools }, { headers: responseHeaders });
       } catch (err) {
+    if (err instanceof McpApprovalRequiredError) return err.response();
         return Response.json(
           { error: err instanceof Error ? err.message : "Failed to get MCP tool definitions" },
           { status: 500, headers: responseHeaders }
@@ -66,12 +69,13 @@ export async function action({ request }: Route.ActionArgs) {
       );
 
       try {
-        const result = await executeMcpTool(enabledServers, toolName, args || {}, request.signal);
+        const result = await executeMcpTool(enabledServers, toolName, args || {}, request.signal, body.skipMcpApproval === true ? async () => {} : explicitMcpApproval(body.mcpApprovalDecision, (server, tool) => rememberMcpTool(validTokens.accessToken, validTokens.rootFolderId, server, tool), body.mcpApprovedCall));
         return Response.json({
           textResult: result.textResult,
           mcpApp: result.mcpApp,
         }, { headers: responseHeaders });
       } catch (err) {
+    if (err instanceof McpApprovalRequiredError) return err.response();
         return Response.json(
           { error: err instanceof Error ? err.message : "MCP tool execution failed" },
           { status: 500, headers: responseHeaders }

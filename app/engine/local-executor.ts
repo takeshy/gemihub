@@ -1,3 +1,4 @@
+import { answerMcpApproval, fetchWithMcpApproval } from "~/hooks/mcp-approval-client";
 /**
  * Client-side workflow executor.
  *
@@ -157,7 +158,7 @@ async function executeServerNode(
     requestBody.promptResponse = promptResponse;
   }
 
-  const res = await fetch("/api/workflow/execute-node", {
+  const res = await fetchWithMcpApproval("/api/workflow/execute-node", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody),
@@ -967,6 +968,8 @@ async function executeWorkflowOnServer(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let eventType = "";
+  let eventData = "";
   let finalResult: LocalExecuteResult | null = null;
 
   const historyRecord: ExecutionRecord = {
@@ -986,9 +989,6 @@ async function executeWorkflowOnServer(
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
 
-    let eventType = "";
-    let eventData = "";
-
     for (const line of lines) {
       if (line.startsWith("event: ")) {
         eventType = line.slice(7);
@@ -997,7 +997,9 @@ async function executeWorkflowOnServer(
       } else if (line === "" && eventType && eventData) {
         try {
           const parsed = JSON.parse(eventData);
-          if (eventType === "log") {
+          if (eventType === "mcp_approval") {
+            await answerMcpApproval(parsed, options.abortSignal);
+          } else if (eventType === "log") {
             callbacks.onLog({
               nodeId: parsed.nodeId,
               nodeType: parsed.nodeType,

@@ -1,3 +1,4 @@
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
 import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat.server";
@@ -154,7 +155,9 @@ export async function handleCommandNode(
 
   // Drive tools
   if (driveToolMode !== "none") {
-    if (driveToolMode === "noSearch") {
+    if (driveToolMode === "readOnly") {
+      tools.push(...DRIVE_TOOL_DEFINITIONS.filter(tool => isReadOnlyDriveTool(tool.name)));
+    } else if (driveToolMode === "noSearch") {
       tools.push(...DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name)));
     } else {
       tools.push(...DRIVE_TOOL_DEFINITIONS);
@@ -200,6 +203,7 @@ export async function handleCommandNode(
       throw new Error("Execution cancelled");
     }
     if (driveToolNames.has(name)) {
+      if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
       return executeDriveTool(
         name,
         args,
@@ -213,7 +217,8 @@ export async function handleCommandNode(
         enabledMcpServers,
         name,
         args,
-        serviceContext.abortSignal
+        serviceContext.abortSignal,
+        node.properties["confirm"] === "false" ? async () => {} : serviceContext.mcpApproval
       );
       if (result.mcpApp) collectedMcpApps.push(result.mcpApp);
       return result.textResult;

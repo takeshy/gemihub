@@ -1,3 +1,4 @@
+import { requireMcpApproval, explicitMcpApproval, rememberMcpTool, McpApprovalRequiredError } from "~/services/mcp-approval.server";
 import type { Route } from "./+types/api.mcp.tool-call";
 import { requireAuth } from "~/services/session.server";
 import { getValidTokens } from "~/services/google-auth.server";
@@ -46,6 +47,7 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     validateMcpServerUrl(serverUrl);
   } catch (error) {
+    if (error instanceof McpApprovalRequiredError) return error.response();
     emitLog(logCtx, 400, { error: error instanceof Error ? error.message : "Invalid server URL" });
     return Response.json(
       {
@@ -84,6 +86,7 @@ export async function action({ request }: Route.ActionArgs) {
     const config: McpServerConfig = matchedServer;
     const tokenBefore = JSON.stringify(matchedServer.oauthTokens ?? null);
 
+    await requireMcpApproval(config, toolName, args || {}, explicitMcpApproval(body.mcpApprovalDecision, (server, tool) => rememberMcpTool(validTokens.accessToken, validTokens.rootFolderId, server, tool), body.mcpApprovedCall));
     const client = await getOrCreateClient(config);
     const result = await client.callToolWithUi(toolName, args || {});
 
@@ -94,6 +97,7 @@ export async function action({ request }: Route.ActionArgs) {
     emitLog(logCtx, 200);
     return Response.json(result, { headers: responseHeaders });
   } catch (error) {
+    if (error instanceof McpApprovalRequiredError) return error.response();
     emitLog(logCtx, 200, { error: error instanceof Error ? error.message : "MCP tool call failed" });
     return Response.json(
       {

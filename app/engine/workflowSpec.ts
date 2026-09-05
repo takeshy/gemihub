@@ -213,7 +213,8 @@ Execute LLM prompt via Gemini API with optional tools.
 - **prompt** (required): Prompt template (supports {{variables}})
 - **model** (optional): Model override${modelList}
 - **ragSetting** (optional): "__websearch__", "__none__", or RAG setting name${commandRagSection}
-- **driveToolMode** (optional): "all", "noSearch", "none" (default: "none")
+- **driveToolMode** (optional): "all", "noSearch", "readOnly", "none" (default: "none"). readOnly allows built-in reading/listing/searching and blocks writes; MCP and skills keep separate permissions.
+- **confirm** (optional): "true" (default) or "false". False skips MCP approval for this node, including automatic runs; otherwise server auto-approval/allowed-tool settings apply.
 - **mcpServers** (optional): Comma-separated MCP server IDs${mcpServerList}
 - **enableThinking** (optional): "true" (default) or "false". Enable deep thinking mode
 - **systemPrompt** (optional): System prompt override
@@ -698,6 +699,7 @@ function buildMcpSection(mcpServers?: McpServerConfig[]): string {
   if (enabled.length === 0) {
     return `#### mcp
 Call MCP server tool via HTTP (Streamable HTTP transport).
+- **confirm** (optional): "true" (default) or "false". False skips MCP approval for this node only. Otherwise server approval settings apply. Headless runs require pre-approved tools or confirm: false; subsequent MCP App interactions follow normal server settings.
 - **url** (required): MCP server endpoint URL
 - **tool** (required): Tool name
 - **args** (optional): JSON arguments
@@ -742,6 +744,7 @@ Call MCP server tool via HTTP (Streamable HTTP transport).
 
   return `#### mcp
 Call MCP server tool via HTTP (Streamable HTTP transport).
+- **confirm** (optional): "true" (default) or "false". False skips MCP approval for this node only. Otherwise server approval settings apply. Headless runs require pre-approved tools or confirm: false; subsequent MCP App interactions follow normal server settings.
 - **url** (required): MCP server endpoint URL
 - **tool** (required): Tool name
 - **args** (optional): JSON arguments

@@ -1,3 +1,4 @@
+import { requireMcpApproval, sameMcpServer } from "~/services/mcp-approval.server";
 import type { WorkflowNode, ExecutionContext, ServiceContext } from "../types";
 import type { McpAppInfo } from "~/types/chat";
 import type { McpAppResult, McpAppUiResource, McpServerConfig } from "~/types/settings";
@@ -71,6 +72,14 @@ export async function handleMcpNode(
   }
 
   try {
+    if (node.properties["confirm"] !== "false") {
+      const approvalServer = matchedServer ? { ...matchedServer, headers: { ...matchedServer.headers, ...headers } } : { name: url, url, headers };
+      if (matchedServer && !sameMcpServer(matchedServer, approvalServer)) {
+        approvalServer.autoApprove = false;
+        approvalServer.allowedTools = [];
+      }
+      await requireMcpApproval(approvalServer, toolName, args, serviceContext.mcpApproval);
+    }
     const callResult = await client.callToolWithUi(
       toolName,
       args,

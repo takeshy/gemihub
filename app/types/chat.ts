@@ -76,6 +76,7 @@ export interface Message {
 
 // Streaming chunk types
 export interface StreamChunk {
+  mcpApproval?: { id: string; server: string; tool: string; args: Record<string, unknown> };
   type:
     | "text"
     | "thinking"
@@ -87,6 +88,7 @@ export interface StreamChunk {
     | "web_search_used"
     | "image_generated"
     | "mcp_app"
+    | "mcp_approval"
     | "drive_file_updated"
     | "drive_file_created"
     | "requires_action";

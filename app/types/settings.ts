@@ -21,6 +21,8 @@ export interface OAuthTokens {
 
 // MCP (Model Context Protocol) server configuration
 export interface McpServerConfig {
+  autoApprove?: boolean;
+  allowedTools?: string[];
   id?: string;
   name: string;
   url: string;
@@ -198,7 +200,7 @@ export type ApiPlan = "paid" | "free";
 export type GeminiReasoningEffort = "default" | "none" | "minimal" | "low" | "medium" | "high";
 
 // Drive Tool Mode
-export type DriveToolMode = "all" | "noSearch" | "none";
+export type DriveToolMode = "all" | "noSearch" | "readOnly" | "none";
 
 export interface DriveToolModeConstraint {
   forcedMode: DriveToolMode | null;

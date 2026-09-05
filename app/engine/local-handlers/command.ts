@@ -1,3 +1,5 @@
+import { fetchWithMcpApproval } from "~/hooks/mcp-approval-client";
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 /**
  * Local command node handler.
  * Calls Gemini API directly from the browser using gemini-chat-core.ts.
@@ -103,7 +105,9 @@ export async function handleCommandNodeLocal(
 
   // Drive tools
   if (driveToolMode !== "none") {
-    if (driveToolMode === "noSearch") {
+    if (driveToolMode === "readOnly") {
+      tools.push(...DRIVE_TOOL_DEFINITIONS.filter(tool => isReadOnlyDriveTool(tool.name)));
+    } else if (driveToolMode === "noSearch") {
       tools.push(...DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name)));
     } else {
       tools.push(...DRIVE_TOOL_DEFINITIONS);
@@ -118,7 +122,7 @@ export async function handleCommandNodeLocal(
   let mcpToolDefs: ToolDefinition[] = [];
   if (!functionToolsForcedOff && mcpServerIds.length > 0) {
     try {
-      const res = await fetch("/api/workflow/mcp-proxy", {
+      const res = await fetchWithMcpApproval("/api/workflow/mcp-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "getToolDefinitions", mcpServerIds }),
@@ -148,6 +152,7 @@ export async function handleCommandNodeLocal(
     if (abortSignal?.aborted) throw new Error("Execution cancelled");
 
     if (driveToolNames.has(name)) {
+      if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
       return executeLocalDriveTool(name, args, {
         onDriveEvent: (event) => driveEvents.push(event),
       }, abortSignal);
@@ -155,11 +160,12 @@ export async function handleCommandNodeLocal(
 
     if (mcpToolNames.has(name) && mcpServerIds.length > 0) {
       try {
-        const res = await fetch("/api/workflow/mcp-proxy", {
+        const res = await fetchWithMcpApproval("/api/workflow/mcp-proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "executeTool",
+            skipMcpApproval: node.properties["confirm"] === "false",
             mcpServerIds,
             toolName: name,
             args,

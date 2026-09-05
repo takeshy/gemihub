@@ -1,3 +1,4 @@
+import { streamMcpApproval, rememberMcpTool } from "~/services/mcp-approval.server";
 import type { Route } from "./+types/api.workflow.execute-full";
 import { z } from "zod";
 import { requireAuth } from "~/services/session.server";
@@ -104,6 +105,13 @@ export async function action({ request }: Route.ActionArgs) {
       const send = (event: string, data: unknown) => {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
+
+      if (promptMode !== "headless") {
+        serviceContext.mcpApproval = streamMcpApproval(tokens,
+          chunk => send("mcp_approval", chunk.mcpApproval),
+          (server, tool) => rememberMcpTool(tokens.accessToken, tokens.rootFolderId, server, tool),
+          abortController.signal);
+      }
 
       const onLog = (log: ExecutionLog) => {
         send("log", {

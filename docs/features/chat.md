@@ -308,3 +308,8 @@ The Interactions API endpoint does not support CORS, so browser-side calls are n
 | `/api/chat/history` | GET | List chat histories |
 | `/api/chat/history` | POST | Save chat history |
 | `/api/chat/history` | DELETE | Delete chat history |
+
+
+## MCP permissions and read-only tools
+
+MCP tool calls require approval by default. The dialog shows the server name, tool name and execution arguments. Choose Allow once, Always allow this tool, or Deny; dismissing the dialog denies execution. Server settings provide an Always approve option (off by default) and a removable allowed-tool list. Workflow `command` and `mcp` nodes can use `confirm: "false"` to skip MCP approval for that node, including automatic runs. Later MCP App interactions follow the server settings again. Read-only mode allows built-in reading, listing and searching, and blocks built-in writes (including timeline append). External MCP and skill/workflow operations retain their own permissions. Connection tests disable editing while running and display errors for correction.

@@ -308,6 +308,7 @@ export function CommandsTab({ settings }: CommandsTabProps) {
             >
               <option value="">{t("settings.commands.noOverride")}</option>
               <option value="all">All tools</option>
+              <option value="readOnly">Read only / 読み取り専用</option>
               <option value="noSearch">No search</option>
               <option value="none">None</option>
             </select>

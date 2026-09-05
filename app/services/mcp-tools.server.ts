@@ -1,3 +1,4 @@
+import { requireMcpApproval, McpApprovalRequiredError, type McpApproval } from "./mcp-approval.server";
 // MCP tools integration with Gemini Function Calling
 
 import { McpClient } from "./mcp-client.server";
@@ -60,6 +61,13 @@ export async function getOrCreateClient(config: McpServerConfig): Promise<McpCli
   return client;
 }
 
+async function discardMcpClient(server: McpServerConfig): Promise<void> {
+  const key = getClientKey(server);
+  const client = mcpClients.get(key);
+  mcpClients.delete(key);
+  await client?.close().catch(() => {});
+}
+
 /**
  * Populate the cached tool list for MCP servers imported by an Agent Plugin.
  * Installation remains successful if an endpoint is temporarily unavailable;
@@ -77,6 +85,7 @@ export async function hydrateAgentPluginMcpTools(
       const client = await getOrCreateClient(server);
       server.tools = await client.listTools();
     } catch (error) {
+      await discardMcpClient(server);
       const message = error instanceof Error ? error.message : "Connection failed";
       warnings.push(`Could not discover MCP tools for ${server.name}: ${message}`);
     }
@@ -110,6 +119,7 @@ export async function getMcpToolDefinitions(
         allTools.push(toolDef);
       }
     } catch (error) {
+      await discardMcpClient(server);
       if (
         abortSignal?.aborted ||
         (error instanceof Error && /cancelled|aborted/i.test(error.message))
@@ -240,7 +250,8 @@ export async function executeMcpTool(
   mcpServers: McpServerConfig[],
   toolName: string,
   args: Record<string, unknown>,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  approval?: McpApproval
 ): Promise<McpToolExecutionResult> {
   // Build tool map for lookup (matches obsidian pattern)
   const toolMap = buildToolMap(mcpServers);
@@ -279,22 +290,24 @@ export async function executeMcpTool(
       // Ignore lookup failures and try the sanitized name as a last resort
     }
 
-    return executeToolOnServer(server, actualToolName, args, abortSignal);
+    return executeToolOnServer(server, actualToolName, args, abortSignal, approval);
   }
 
-  return executeToolOnServer(entry.server, entry.mcpToolName, args, abortSignal);
+  return executeToolOnServer(entry.server, entry.mcpToolName, args, abortSignal, approval);
 }
 
 async function executeToolOnServer(
   server: McpServerConfig,
   actualToolName: string,
   args: Record<string, unknown>,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  approval?: McpApproval
 ): Promise<McpToolExecutionResult> {
   if (abortSignal?.aborted) {
     throw new Error("Execution cancelled");
   }
   try {
+    await requireMcpApproval(server, actualToolName, args, approval);
     const client = await getOrCreateClient(server);
     const appResult = await client.callToolWithUi(actualToolName, args, undefined, abortSignal);
 
@@ -342,6 +355,7 @@ async function executeToolOnServer(
 
     return { textResult, mcpApp };
   } catch (error) {
+    if (error instanceof McpApprovalRequiredError) throw error;
     if (
       abortSignal?.aborted ||
       (error instanceof Error && /cancelled|aborted/i.test(error.message))

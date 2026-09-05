@@ -1,3 +1,5 @@
+import { fetchWithMcpApproval, answerMcpApproval } from "~/hooks/mcp-approval-client";
+import { isReadOnlyDriveTool } from "~/services/drive-tool-definitions";
 /**
  * Interactions API chat hook.
  * Calls the server-side /api/chat/interactions SSE endpoint,
@@ -78,12 +80,14 @@ async function* parseSSEStream(
         buffer = buffer.slice(lineEnd + 2);
 
         if (line.startsWith("data: ")) {
-          try {
-            const chunk = JSON.parse(line.slice(6)) as StreamChunk;
-            yield chunk;
-          } catch {
-            // Skip malformed JSON
+          let chunk: StreamChunk;
+          try { chunk = JSON.parse(line.slice(6)) as StreamChunk; }
+          catch { continue; }
+          if (chunk.type === "mcp_approval" && chunk.mcpApproval) {
+            await answerMcpApproval(chunk.mcpApproval, abortSignal);
+            continue;
           }
+          yield chunk;
         }
       }
     }
@@ -120,7 +124,7 @@ function buildToolDispatcher(
   // Drive tools
   const driveTools = driveToolMode === "none"
     ? []
-    : driveToolMode === "noSearch"
+    : driveToolMode === "readOnly" ? DRIVE_TOOL_DEFINITIONS.filter(tool => isReadOnlyDriveTool(tool.name)) : driveToolMode === "noSearch"
       ? DRIVE_TOOL_DEFINITIONS.filter(t => !DRIVE_SEARCH_TOOL_NAMES.has(t.name))
       : DRIVE_TOOL_DEFINITIONS;
   const driveToolNames = new Set(driveTools.map(t => t.name));
@@ -144,6 +148,7 @@ function buildToolDispatcher(
 
     // Drive tools — execute locally (IndexedDB)
     if (driveToolNames.has(name)) {
+      if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
       const result = await executeLocalDriveTool(
         name,
         args,
@@ -166,6 +171,7 @@ function buildToolDispatcher(
     }
 
     if (timelineToolNames.has(name)) {
+      if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Timeline writes are disabled in read-only mode" };
       return executeTimelineTool(name, args);
     }
 
@@ -305,7 +311,7 @@ function buildToolDispatcher(
     // MCP tools — route via server proxy
     if (mcpServerIds.length > 0) {
       try {
-        const res = await fetch("/api/workflow/mcp-proxy", {
+        const res = await fetchWithMcpApproval("/api/workflow/mcp-proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -403,7 +409,7 @@ export async function* executeInteractionsChat(
   // Build extra tool definitions (client-only tools) to send to server
   const extraToolDefinitions: ToolDefinition[] = [];
   extraToolDefinitions.push(...buildOkfDocumentTool(activeOkfBundleIds));
-  extraToolDefinitions.push(...TIMELINE_TOOL_DEFINITIONS);
+  extraToolDefinitions.push(...TIMELINE_TOOL_DEFINITIONS.filter(tool => driveToolMode !== "readOnly" || isReadOnlyDriveTool(tool.name)));
   extraToolDefinitions.push(EXECUTE_JAVASCRIPT_TOOL);
   extraToolDefinitions.push({
     name: "get_workflow_spec",
