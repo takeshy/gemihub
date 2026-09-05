@@ -1,7 +1,10 @@
 import { generateWorkflowStream } from "~/services/gemini-vertex.server";
 import { getWorkflowSpecification, buildWorkflowUserPrompt } from "~/engine/workflowSpec";
 import { getSettingsForTenant } from "~/services/user-settings-tenant.server";
-import { DEFAULT_MODEL_PAID as DEFAULT_MODEL, getEnabledMcpServers, type ModelType, type Language } from "~/types/settings";
+import { DEFAULT_MODEL_PAID as DEFAULT_MODEL, getEnabledMcpServers, type ModelType, type Language, type UserSettings } from "~/types/settings";
+import type { TenantInfo } from "~/types/enterprise";
+import type { AiBillingContext } from "~/services/ai-budget.server";
+import { isPersonalVertexModelAllowed, type PersonalVertexRun } from "./personal-vertex.server";
 import type { ExecutionStep } from "~/engine/types";
 import {
   buildPlanSystemPrompt,
@@ -22,49 +25,38 @@ import {
 
 type Phase = "generate" | "plan" | "review" | "refine";
 
+interface GenerationBody {
+  projectId?: string;
+  phase?: Phase;
+  mode?: "create" | "modify";
+  name?: string;
+  description?: string;
+  currentYaml?: string;
+  existingInstructions?: string;
+  workflowFilePath?: string;
+  model?: ModelType;
+  history?: Array<{ role: "user" | "model"; text: string }>;
+  executionSteps?: ExecutionStep[];
+  skillMode?: boolean;
+  skillFolderName?: string;
+  plan?: string;
+  generatedYaml?: string;
+  previousYaml?: string;
+  previousExplanation?: string;
+  review?: ReviewResult;
+}
+
+/** Where the generation runs and who pays: an org tenant or a personal Vertex run. */
+interface GenerationRun {
+  tenant: TenantInfo;
+  billing?: AiBillingContext;
+  settings?: UserSettings;
+}
+
 export async function vertexAction(request: Request) {
   const logCtx = createLogContext(request, "/api/workflow/ai-generate", "");
-
-  const body = await request.json();
-  const {
-    projectId,
-    phase = "generate",
-    mode = "create",
-    name,
-    description,
-    currentYaml,
-    existingInstructions,
-    workflowFilePath,
-    model,
-    history,
-    executionSteps,
-    skillMode,
-    skillFolderName,
-    plan,
-    generatedYaml,
-    previousYaml,
-    previousExplanation,
-    review,
-  } = body as {
-    projectId?: string;
-    phase?: Phase;
-    mode?: "create" | "modify";
-    name?: string;
-    description?: string;
-    currentYaml?: string;
-    existingInstructions?: string;
-    workflowFilePath?: string;
-    model?: ModelType;
-    history?: Array<{ role: "user" | "model"; text: string }>;
-    executionSteps?: ExecutionStep[];
-    skillMode?: boolean;
-    skillFolderName?: string;
-    plan?: string;
-    generatedYaml?: string;
-    previousYaml?: string;
-    previousExplanation?: string;
-    review?: ReviewResult;
-  };
+  const body = (await request.json()) as GenerationBody;
+  const { projectId, description, model } = body;
 
   if (!description) {
     emitLog(logCtx, 400, { error: "Missing description" });
@@ -102,6 +94,59 @@ export async function vertexAction(request: Request) {
   } catch {
     // Use defaults if settings can't be loaded
   }
+
+  return streamGeneration(logCtx, { ...body, description }, {
+    tenant: ctx.tenant,
+    billing: ctx.tenant.vertexBillingMode === "customer" ? undefined : { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
+    settings,
+  });
+}
+
+/**
+ * Drive-mount user who selected personal Vertex AI in settings: same
+ * generation, run on their prepaid balance or their own project.
+ */
+export async function personalVertexAction(request: Request, run: PersonalVertexRun, settings: UserSettings) {
+  const logCtx = createLogContext(request, "/api/workflow/ai-generate", "");
+  const body = (await request.json()) as GenerationBody;
+  if (!body.description) {
+    emitLog(logCtx, 400, { error: "Missing description" });
+    return Response.json({ error: "Missing description" }, { status: 400 });
+  }
+  const selectedModel: ModelType = (body.model || DEFAULT_MODEL) as ModelType;
+  if (!isPersonalVertexModelAllowed(selectedModel)) {
+    emitLog(logCtx, 403, { error: `model not available on personal Vertex: ${selectedModel}` });
+    return Response.json({ error: `model "${selectedModel}" is not available on personal Vertex AI` }, { status: 403 });
+  }
+  return streamGeneration(logCtx, { ...body, description: body.description }, { tenant: run.tenant, billing: run.billing, settings });
+}
+
+function streamGeneration(
+  logCtx: ReturnType<typeof createLogContext>,
+  body: GenerationBody & { description: string },
+  run: GenerationRun,
+): Response {
+  const {
+    phase = "generate",
+    mode = "create",
+    name,
+    description,
+    currentYaml,
+    existingInstructions,
+    workflowFilePath,
+    model,
+    history,
+    executionSteps,
+    skillMode,
+    skillFolderName,
+    plan,
+    generatedYaml,
+    previousYaml,
+    previousExplanation,
+    review,
+  } = body;
+  const selectedModel: ModelType = (model || DEFAULT_MODEL) as ModelType;
+  const settings = run.settings;
 
   const locale: Language = (settings?.language as Language) ?? "en";
 
@@ -170,7 +215,7 @@ export async function vertexAction(request: Request) {
   emitLog(logCtx, 200);
 
   const encoder = new TextEncoder();
-  const tenant = ctx.tenant;
+  const tenant = run.tenant;
   const stream = new ReadableStream({
     async start(controller) {
       try {
@@ -180,7 +225,7 @@ export async function vertexAction(request: Request) {
           tenant,
           selectedModel,
           history,
-          ctx.tenant.vertexBillingMode === "customer" ? undefined : { orgId: ctx.orgId, uid: ctx.uid, scope: "org" },
+          run.billing,
         )) {
           const data = JSON.stringify(chunk);
           controller.enqueue(

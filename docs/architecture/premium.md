@@ -620,19 +620,20 @@ Scheduled execution never touches the organization's Vertex budget. The
 `command` / `gemihub-command` nodes resolve their model credentials in this
 order:
 
-1. `account.encryptedGeminiApiKey` — the account's own Gemini API key
-   (encrypted server-side when schedules are registered). Used first.
-2. Without a key, a Drive-mount account with
-   `settings.personalVertexSource === "prepaid"` runs on our Vertex project,
-   billed against the user's **personal** prepaid balance
-   (`users/{uid}/aiBalance/balance`). The balance is asserted before each node
-   (`assertAiBudgetAvailable`) and usage is recorded afterwards; an exhausted
-   balance fails the run into the normal retry/lastError flow.
+1. A Drive-mount account with `settings.usePersonalVertex` on runs on personal
+   Vertex AI (`personalVertexRunForSchedule`), whether or not a key is also
+   stored — the same "Vertex only" rule as interactive use. The `prepaid`
+   source runs on our Vertex project against the user's **personal** balance
+   (`users/{uid}/aiBalance/balance`): asserted before each node
+   (`assertAiBudgetAvailable`), recorded afterwards, and an exhausted balance
+   fails the run into the normal retry/lastError flow. The `own` source runs on
+   the user's own project through the refresh token stored at connect time.
+2. Otherwise `account.encryptedGeminiApiKey` — the account's own Gemini API
+   key (encrypted server-side when schedules are registered).
 3. Neither configured → the run fails with "Gemini API key not configured".
 
 The org Vertex budget (`scope: "org"`, Business chat) is unrelated to any of
-this. `personalVertexSource === "own"` (the user's own GCP project) is not
-supported for unattended scheduled runs.
+this.
 
 ### Source of Truth
 

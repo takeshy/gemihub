@@ -537,6 +537,11 @@ export function GeneralTab({
             <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
               {t("settings.general.enableVertexAiDescription")}
             </p>
+            {/* "Vertex only": every AI feature follows this tab, so the user
+                should know the stored key is inert rather than a fallback. */}
+            <p className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+              {t("settings.general.vertexOnlyNote")}
+            </p>
             <div className="mb-4 flex gap-2">
               <button type="button" onClick={() => setPersonalVertexSource("prepaid")} className={`${personalVertexSource === "prepaid" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-300"} rounded-lg border px-3 py-2 text-sm dark:bg-gray-900`}>
                 {t("settings.general.vertexPrepaid")}

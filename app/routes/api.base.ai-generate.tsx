@@ -2,6 +2,8 @@ import type { Route } from "./+types/api.base.ai-generate";
 import { requireAuth } from "~/services/session.server";
 import { generateWorkflow } from "~/services/gemini.server";
 import { compileBase } from "~/bases/index";
+import { getSettings } from "~/services/user-settings.server";
+import { personalVertexRunForUser } from "~/services/ai/personal-vertex.server";
 import BASE_SKILL_MD from "~/services/gemihub-skill-templates/base/SKILL.md?raw";
 import BASE_REF_FUNCTIONS from "~/services/gemihub-skill-templates/base/references/functions.md?raw";
 import BASE_REF_VIEWS from "~/services/gemihub-skill-templates/base/references/views.md?raw";
@@ -38,6 +40,21 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
   const tokens = await requireAuth(request);
+  // "Vertex only": a Drive-mount user who selected personal Vertex AI never
+  // touches the key path, even if a key is still stored.
+  {
+    const personalSettings = await getSettings(tokens.accessToken, tokens.rootFolderId).catch(() => null);
+    let run;
+    try {
+      run = personalVertexRunForUser(tokens.email, personalSettings);
+    } catch (err) {
+      return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
+    }
+    if (run) {
+      const { personalVertexAction } = await import("~/services/ai/vertex-base-ai-generate.server");
+      return personalVertexAction(request, run);
+    }
+  }
   if (!tokens.geminiApiKey) {
     return Response.json(
       { error: "Gemini API key not configured. Please set it in Settings." },

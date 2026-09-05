@@ -10,6 +10,7 @@ import { executeWorkflow } from "~/engine/executor";
 import type { WorkflowInput, ServiceContext, ExecutionLog, WorkflowNodeType } from "~/engine/types";
 import { google } from "googleapis";
 import { getAccountByRootFolderId } from "~/services/hubwork-accounts.server";
+import { personalVertexRunForUser } from "~/services/ai/personal-vertex.server";
 
 const MAX_WORKFLOW_YAML_SIZE = 512 * 1024; // 512KB
 
@@ -80,11 +81,20 @@ export async function action({ request }: Route.ActionArgs) {
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({ access_token: tokens.accessToken });
 
+  // "Vertex only": a user who selected personal Vertex AI runs LLM nodes on
+  // it and the stored Gemini API key stays unused.
+  let personalVertex;
+  try {
+    personalVertex = personalVertexRunForUser(tokens.email, settings) ?? undefined;
+  } catch (err) {
+    throw new Response(err instanceof Error ? err.message : String(err), { status: 400 });
+  }
   const serviceContext: ServiceContext = {
     driveAccessToken: tokens.accessToken,
     driveRootFolderId: tokens.rootFolderId,
     driveHistoryFolderId: driveContext.historyFolderId,
-    geminiApiKey: tokens.geminiApiKey,
+    geminiApiKey: personalVertex ? undefined : tokens.geminiApiKey,
+    personalVertex,
     abortSignal: abortController.signal,
     settings,
   };

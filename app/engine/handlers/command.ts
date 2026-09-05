@@ -3,7 +3,6 @@ import type { WorkflowNode, ExecutionContext, ServiceContext, FileExplorerData, 
 import { replaceVariables } from "./utils";
 import { chatWithToolsStream, generateImageStream } from "~/services/gemini-chat.server";
 import { streamWithTools } from "~/services/gemini-vertex.server";
-import type { TenantInfo } from "~/types/enterprise";
 import type { StreamChunk } from "~/types/chat";
 import {
   DRIVE_TOOL_DEFINITIONS,
@@ -15,18 +14,16 @@ import {
   executeMcpTool,
 } from "~/services/mcp-tools.server";
 import {
-  AVAILABLE_MODELS,
   getDefaultModelForPlan,
   getDriveToolModeConstraint,
   getEnabledMcpServers,
   isImageGenerationModel,
-  normalizeDeprecatedModelName,
   type ToolDefinition,
   type ModelType,
 } from "~/types/settings";
 import { getOrCreateStore } from "~/services/file-search.server";
 import { readFileRaw } from "~/services/google-drive.server";
-import { isVertexModelPriced } from "~/services/ai-budget.server";
+import { assertPersonalVertexModel, PERSONAL_MAX_FUNCTION_CALLS } from "~/services/ai/personal-vertex.server";
 import type { Message, Attachment, McpAppInfo } from "~/types/chat";
 
 export interface CommandToolCall {
@@ -42,31 +39,6 @@ export interface CommandNodeResult {
   ragSources?: string[];
   webSearchSources?: string[];
   attachmentNames?: string[];
-}
-
-/**
- * Same guardrails as the interactive personal-Vertex chat route
- * (`personal-vertex-route.server.ts`): an unpriced model would draw the
- * user's balance down at the unpriced-fallback rate while Google bills the
- * real (often much higher) rate, and a single run must not be able to spend
- * the whole balance in one unattended, unbounded tool-call loop.
- */
-const PERSONAL_VERTEX_ALLOWED_MODELS: ReadonlySet<string> = new Set(
-  AVAILABLE_MODELS.map((model) => model.name),
-);
-const PERSONAL_VERTEX_MAX_FUNCTION_CALLS = 15;
-
-/**
- * Tenant for personal (non-org) Vertex AI runs: our own GCP project, same
- * construction as the prepaid branch of the chat route's `personalTenant`.
- */
-function personalPrepaidVertexTenant(): TenantInfo {
-  return {
-    gcsBucket: "",
-    region: process.env.DEFAULT_TENANT_REGION || "global",
-    vertexProjectId: process.env.GCP_PROJECT_ID || "",
-    vertexLocation: process.env.VERTEX_LOCATION || process.env.DEFAULT_TENANT_REGION || "global",
-  };
 }
 
 export async function handleCommandNode(
@@ -85,13 +57,14 @@ export async function handleCommandNode(
   const prompt = replaceVariables(promptTemplate, context);
   const originalPrompt = prompt;
 
-  const apiKey = serviceContext.geminiApiKey;
-  // Without a BYO key, a personal Vertex billing scope lets the node run on
-  // our Vertex project against the user's prepaid balance (asserted before
-  // execution and recorded afterwards by the Vertex stream itself). An empty
-  // balance throws AiBudgetExceededError from that assertion.
-  const personalBilling = !apiKey ? serviceContext.personalVertexBilling : undefined;
-  if (!apiKey && !personalBilling) throw new Error("Gemini API key not configured");
+  // A user who selected personal Vertex AI runs on it even if a Gemini API
+  // key is still stored: "Vertex only" is the setting, the key is inert. The
+  // prepaid source asserts the balance before execution and records usage
+  // afterwards inside the Vertex stream; an empty balance throws
+  // AiBudgetExceededError from that assertion.
+  const personalVertex = serviceContext.personalVertex;
+  const apiKey = personalVertex ? undefined : serviceContext.geminiApiKey;
+  if (!apiKey && !personalVertex) throw new Error("Gemini API key not configured");
 
   const settings = serviceContext.settings;
 
@@ -101,12 +74,7 @@ export async function handleCommandNode(
     ? replaceVariables(modelProp, context)
     : settings?.selectedModel || getDefaultModelForPlan(settings?.apiPlan ?? "paid")) as ModelType;
 
-  if (personalBilling) {
-    const normalizedModel = normalizeDeprecatedModelName(modelName) ?? modelName;
-    if (!PERSONAL_VERTEX_ALLOWED_MODELS.has(normalizedModel) || !isVertexModelPriced(normalizedModel)) {
-      throw new Error(`Model "${modelName}" is not available on the personal Vertex AI balance`);
-    }
-  }
+  if (personalVertex) assertPersonalVertexModel(modelName);
 
   // Resolve RAG store IDs
   const ragSettingProp = node.properties["ragSetting"] || "";
@@ -304,15 +272,15 @@ export async function handleCommandNode(
   if (isImageGenerationModel(modelName)) {
     // The Vertex stream handles image models natively (responseModalities)
     // and yields the same chunk shapes.
-    const imageGenerator = personalBilling
+    const imageGenerator = personalVertex
       ? streamWithTools({
-          tenant: personalPrepaidVertexTenant(),
+          tenant: personalVertex.tenant,
           model: modelName,
           messages,
           tools: [],
           systemPrompt,
           executeToolCall: async () => ({ error: "No tools available for image generation" }),
-          billing: { ...personalBilling, scope: "personal" },
+          billing: personalVertex.billing,
         })
       : generateImageStream(apiKey!, messages, modelName, systemPrompt);
     let fullResponse = "";
@@ -350,18 +318,18 @@ export async function handleCommandNode(
   // Call the AI and collect the full response. The key path uses the Gemini
   // API (with RAG via File Search); the personal Vertex path has no File
   // Search client, so ragStoreIds are not passed there.
-  const generator: AsyncGenerator<StreamChunk> = personalBilling
+  const generator: AsyncGenerator<StreamChunk> = personalVertex
     ? streamWithTools({
-        tenant: personalPrepaidVertexTenant(),
+        tenant: personalVertex.tenant,
         model: modelName,
         messages,
         tools,
         systemPrompt,
         webSearchEnabled,
         enableThinking: node.properties["enableThinking"] !== "false",
-        maxFunctionCalls: PERSONAL_VERTEX_MAX_FUNCTION_CALLS,
+        maxFunctionCalls: PERSONAL_MAX_FUNCTION_CALLS,
         executeToolCall,
-        billing: { ...personalBilling, scope: "personal" },
+        billing: personalVertex.billing,
       })
     : chatWithToolsStream(
         apiKey!,

@@ -7,10 +7,14 @@
  */
 
 import type { HubworkAccount } from "~/types/hubwork";
-import { emailToUid } from "./organizations.server";
+import type { UserSettings } from "~/types/settings";
 import { AiBudgetExceededError } from "./ai-budget.server";
+import { personalVertexRunForUser, type PersonalVertexRun } from "./ai/personal-vertex.server";
 
-type UserSettingsShape = { personalVertexSource?: "prepaid" | "own" };
+type UserSettingsShape = Pick<
+  UserSettings,
+  "usePersonalVertex" | "personalVertexSource" | "personalVertexProjectId" | "personalVertexLocation"
+>;
 
 /** Scheduled execution covers Pro (Drive mount) and Business/granted (org GCS). */
 export function selectScheduledAccounts(accounts: Iterable<HubworkAccount>): HubworkAccount[] {
@@ -20,17 +24,18 @@ export function selectScheduledAccounts(accounts: Iterable<HubworkAccount>): Hub
 }
 
 /**
- * AI billing for a scheduled run when the account has no stored Gemini API
- * key: with the prepaid setting, nodes execute on our Vertex project against
- * the user's personal balance (`emailToUid` is the balance key).
+ * Personal Vertex AI for a scheduled run. An account that selected Vertex AI
+ * in settings runs on it whether or not a Gemini API key is also stored —
+ * the same "Vertex only" rule as the interactive routes. Prepaid runs on our
+ * project against the user's balance (`emailToUid` is the balance key); the
+ * own-project source uses the refresh token stored at connect time, so it
+ * works unattended too. Undefined means "use the API key path".
  */
-export function personalVertexBillingForSchedule(
-  settings: Pick<UserSettingsShape, "personalVertexSource"> | undefined | null,
+export function personalVertexRunForSchedule(
+  settings: UserSettingsShape | undefined | null,
   email: string,
-): { uid: string } | undefined {
-  if (settings?.personalVertexSource !== "prepaid") return undefined;
-  const uid = emailToUid(email);
-  return uid ? { uid } : undefined;
+): PersonalVertexRun | undefined {
+  return personalVertexRunForUser(email, settings) ?? undefined;
 }
 
 /**

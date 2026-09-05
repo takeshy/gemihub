@@ -1441,6 +1441,7 @@ export interface TranslationStrings {
   "settings.general.vertexOauthDesktopError": string;
   "settings.general.vertexOauthRedirectUri": string;
   "settings.general.vertexOauthClientRequired": string;
+  "settings.general.vertexOnlyNote": string;
   "settings.general.vertexBalance": string;
   "settings.general.vertexBalanceEmpty": string;
   "settings.general.buyVertexCredit": string;
@@ -2903,6 +2904,7 @@ const en: TranslationStrings = {
   "settings.general.vertexOauthDesktopError": "This JSON is for a Desktop application. Create a Web application OAuth client and register {url} as an authorized redirect URI.",
   "settings.general.vertexOauthRedirectUri": "Authorized redirect URI: {url}",
   "settings.general.vertexOauthClientRequired": "Upload an OAuth client JSON to enable Connect with Google.",
+  "settings.general.vertexOnlyNote": "While Vertex AI is selected, chat, workflow LLM nodes, AI generation, plugins, and scheduled runs all use Vertex AI. A saved Gemini API key is kept but not used. RAG (File Search) is unavailable.",
   "settings.general.vertexBalance": "Current balance",
   "settings.general.vertexBalanceEmpty": "Purchase credits to start using Vertex AI",
   "settings.general.buyVertexCredit": "Buy credits",
@@ -4365,6 +4367,7 @@ const ja: TranslationStrings = {
   "settings.general.vertexOauthDesktopError": "これは「デスクトップアプリ」用JSONです。「ウェブアプリケーション」を作成し、{url} を承認済みリダイレクトURIに登録してください。",
   "settings.general.vertexOauthRedirectUri": "承認済みリダイレクトURI: {url}",
   "settings.general.vertexOauthClientRequired": "OAuthクライアントJSONを読み込むと「Googleで接続」が有効になります。",
+  "settings.general.vertexOnlyNote": "Vertex AIを選択中は、チャット・ワークフローのLLMノード・AI生成・プラグイン・スケジュール実行のすべてがVertex AIで動作します。保存済みのGemini APIキーは保持されますが使用されません。RAG（File Search）は利用できません。",
   "settings.general.vertexBalance": "現在の残高",
   "settings.general.vertexBalanceEmpty": "クレジットを購入してVertex AIを利用開始",
   "settings.general.buyVertexCredit": "クレジット購入",

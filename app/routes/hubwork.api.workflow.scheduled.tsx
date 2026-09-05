@@ -5,7 +5,7 @@ import { getSettings } from "~/services/user-settings.server";
 import { mountContextForHubworkAccount } from "~/services/storage/account-mount.server";
 import { listObjectsForSync, readObject } from "~/services/storage/provider.server";
 import {
-  personalVertexBillingForSchedule,
+  personalVertexRunForSchedule,
   personalVertexExhaustedEmail,
   selectScheduledAccounts,
   shouldNotifyPersonalVertexExhausted,
@@ -116,21 +116,19 @@ export async function action({ request }: Route.ActionArgs) {
         }
       }
 
+      // Personal Vertex AI wins over a stored key when the user selected it
+      // ("Vertex only"). The command node asserts the prepaid balance before
+      // running and records usage afterwards; an empty balance throws and is
+      // handled by the regular retry/lastError flow below.
+      const personalVertex = mountCtx.gcs ? undefined : personalVertexRunForSchedule(settings, account.email);
       const serviceContext: ServiceContext = {
         driveAccessToken: accessToken,
         driveRootFolderId: rootFolderId,
         driveHistoryFolderId: "",
         settings,
-        geminiApiKey,
+        geminiApiKey: personalVertex ? undefined : geminiApiKey,
+        personalVertex,
       };
-
-      // No BYO key: fall back to the personal Vertex prepaid balance when the
-      // user opted into it. The command node asserts the balance before
-      // running and records usage afterwards; an empty balance throws and is
-      // handled by the regular retry/lastError flow below.
-      if (!geminiApiKey) {
-        serviceContext.personalVertexBilling = personalVertexBillingForSchedule(settings, account.email);
-      }
 
       const hubworkSpreadsheetId = settings?.hubwork?.spreadsheets?.[0]?.id;
       if (hubworkSpreadsheetId) {

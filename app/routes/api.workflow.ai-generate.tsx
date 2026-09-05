@@ -16,6 +16,7 @@ import {
   type ReviewResult,
 } from "~/services/ai-workflow-generation.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
+import { personalVertexRunForUser } from "~/services/ai/personal-vertex.server";
 
 type Phase = "generate" | "plan" | "review" | "refine";
 
@@ -31,6 +32,24 @@ export async function action({ request }: Route.ActionArgs) {
   }
   const tokens = await requireAuth(request);
   const logCtx = createLogContext(request, "/api/workflow/ai-generate", tokens.rootFolderId);
+
+  // "Vertex only": a Drive-mount user who selected personal Vertex AI never
+  // touches the key path, even if a key is still stored.
+  {
+    const personalSettings = await getSettings(tokens.accessToken, tokens.rootFolderId).catch(() => null);
+    let run;
+    try {
+      run = personalVertexRunForUser(tokens.email, personalSettings);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      emitLog(logCtx, 400, { error: message });
+      return Response.json({ error: message }, { status: 400 });
+    }
+    if (run && personalSettings) {
+      const { personalVertexAction } = await import("~/services/ai/vertex-workflow-ai-generate.server");
+      return personalVertexAction(request, run, personalSettings);
+    }
+  }
 
   if (!tokens.geminiApiKey) {
     emitLog(logCtx, 400, { error: "Gemini API key not configured" });

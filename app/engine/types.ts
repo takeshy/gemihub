@@ -243,11 +243,15 @@ export interface ServiceContext {
   driveHistoryFolderId: string;
   geminiApiKey?: string;
   /**
-   * Personal Vertex prepaid billing scope, used by AI nodes when
-   * `geminiApiKey` is absent (e.g. scheduled runs opted into the personal
-   * Vertex balance instead of a BYO key).
+   * Personal (non-org) Vertex AI for the user who selected it in settings.
+   * When set, AI nodes run on this tenant and ignore `geminiApiKey`; the
+   * billing scope is present for the prepaid source and absent for the
+   * user's own project. Resolved by `personalVertexRunForUser`.
    */
-  personalVertexBilling?: { uid: string };
+  personalVertex?: {
+    tenant: import("~/types/enterprise").TenantInfo;
+    billing?: { uid: string; scope: "personal" };
+  };
   abortSignal?: AbortSignal;
   editHistorySettings?: import("~/types/settings").EditHistorySettings;
   settings?: import("~/types/settings").UserSettings;

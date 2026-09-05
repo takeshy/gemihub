@@ -10,6 +10,7 @@ import type {
   ExecutionContext,
 } from "~/engine/types";
 import { getSettings } from "~/services/user-settings.server";
+import { handleCommandNode } from "~/engine/handlers/command";
 import { handleMcpNode } from "~/engine/handlers/mcp";
 import { handleRagSyncNode } from "~/engine/handlers/ragSync";
 import { handleGemihubCommandNode } from "~/engine/handlers/gemihubCommand";
@@ -17,11 +18,15 @@ import { handleSheetReadNode, handleSheetWriteNode, handleSheetUpdateNode, handl
 import { handleGmailSendNode } from "~/engine/handlers/hubworkGmail";
 import { handleCalendarListNode, handleCalendarCreateNode, handleCalendarUpdateNode, handleCalendarDeleteNode } from "~/engine/handlers/hubworkCalendar";
 import { getAccountByRootFolderId } from "~/services/hubwork-accounts.server";
+import { personalVertexRunForUser } from "~/services/ai/personal-vertex.server";
 
 // Server-only node types that this endpoint handles
 // (most node types are now handled locally by local-executor.ts)
 const SERVER_NODE_TYPES = new Set<WorkflowNodeType>([
   "mcp", "rag-sync", "gemihub-command",
+  // Only when the user selected personal Vertex AI: the browser cannot hold
+  // Vertex credentials, so the local executor delegates LLM nodes here.
+  "command",
   // Hubwork nodes (paid feature, server-only)
   "sheet-read", "sheet-write", "sheet-update", "sheet-delete", "gmail-send",
   "calendar-list", "calendar-create", "calendar-update", "calendar-delete",
@@ -127,12 +132,26 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
+  let personalVertex;
+  try {
+    personalVertex = personalVertexRunForUser(validTokens.email, settings) ?? undefined;
+  } catch (err) {
+    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400, headers: responseHeaders });
+  }
+  if (nodeType === "command" && !personalVertex) {
+    return Response.json(
+      { error: "command nodes run in the browser unless personal Vertex AI is selected" },
+      { status: 400, headers: responseHeaders }
+    );
+  }
+
   const serviceContext: ServiceContext = {
     mcpApproval: explicitMcpApproval(body.mcpApprovalDecision, (server, tool) => rememberMcpTool(validTokens.accessToken, validTokens.rootFolderId, server, tool), body.mcpApprovedCall),
     driveAccessToken: validTokens.accessToken,
     driveRootFolderId: validTokens.rootFolderId,
     driveHistoryFolderId: driveContext.historyFolderId,
-    geminiApiKey: validTokens.geminiApiKey,
+    geminiApiKey: personalVertex ? undefined : validTokens.geminiApiKey,
+    personalVertex,
     abortSignal: abortController.signal,
     editHistorySettings: settings?.editHistory,
     settings,
@@ -167,6 +186,26 @@ export async function action({ request }: Route.ActionArgs) {
   // Execute the server-side node and return JSON
   try {
     switch (nodeType) {
+      case "command": {
+        const cmdResult = await handleCommandNode(node, context, serviceContext);
+        // Mirror the server executor's per-node logging so the browser's run
+        // log shows the same tool/RAG/web-search lines as a local command node.
+        const pushLog = (message: string, input?: Record<string, unknown>, output?: unknown) =>
+          logs.push({ nodeId: node.id, nodeType: node.type, message, status: "info", timestamp: new Date().toISOString(), input, output });
+        if (cmdResult.attachmentNames && cmdResult.attachmentNames.length > 0) pushLog(`Attachments: ${cmdResult.attachmentNames.join(", ")}`);
+        for (const tc of cmdResult.toolCalls ?? []) pushLog(`Tool: ${tc.name}`, tc.args, tc.result);
+        if (cmdResult.ragSources && cmdResult.ragSources.length > 0) pushLog(`RAG sources: ${cmdResult.ragSources.join(", ")}`);
+        if (cmdResult.webSearchSources && cmdResult.webSearchSources.length > 0) pushLog(`Web search: ${cmdResult.webSearchSources.join(", ")}`);
+        const saveTo = node.properties["saveTo"];
+        logs.push({
+          nodeId: node.id, nodeType: node.type, message: `LLM completed (${cmdResult.usedModel})`, status: "success",
+          timestamp: new Date().toISOString(),
+          input: { prompt: node.properties["prompt"], model: cmdResult.usedModel },
+          output: saveTo ? context.variables.get(saveTo) : undefined,
+          mcpApps: cmdResult.mcpApps,
+        });
+        break;
+      }
       case "mcp":
         await handleMcpNode(node, context, serviceContext);
         break;

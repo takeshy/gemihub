@@ -649,6 +649,20 @@ export async function executeWorkflowLocally(
         // ── Client-side: Command (LLM) ─────────────────────────────────
         case "command": {
           if (options.abortSignal?.aborted) throw new Error("Execution cancelled");
+          // Personal Vertex AI: the browser holds no Vertex credential, so the
+          // node runs server-side via /api/workflow/execute-node (same
+          // delegation as mcp/rag-sync). The stored Gemini API key is unused.
+          if (options.settings?.usePersonalVertex === true) {
+            const cmdPrompt = (node.properties["prompt"] || "").substring(0, 50);
+            log(node.id, node.type, `Executing LLM (Vertex AI): ${cmdPrompt}...`, "info");
+            await executeServerNode(node, context, options.workflowId, callbacks, options.abortSignal);
+            const cmdSaveTo = node.properties["saveTo"];
+            const cmdOutput = cmdSaveTo ? context.variables.get(cmdSaveTo) : undefined;
+            addHistoryStep(node.id, node.type, { prompt: node.properties["prompt"] }, cmdOutput);
+            const nextCmd = getNextNodes(workflow, node.id);
+            for (const id of nextCmd.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
+            break;
+          }
           // Try in-memory cache as fallback (e.g., sub-workflow where parent had no command nodes)
           const apiKey = options.geminiApiKey || getCachedApiKey();
           if (!apiKey) {

@@ -28,13 +28,16 @@ import {
   getEnabledMcpServers,
   supportsWebSearch,
 } from "~/types/settings";
-import type { ToolDefinition, McpServerConfig, ModelType, UserSettings } from "~/types/settings";
+import type { ToolDefinition, McpServerConfig, ModelType } from "~/types/settings";
 import type { Message, StreamChunk } from "~/types/chat";
-import type { TenantInfo } from "~/types/enterprise";
 import { createLogContext, emitLog } from "../logger.server";
 import { requireRateLimit } from "../rate-limiter.server";
-import { isVertexModelPriced } from "../ai-budget.server";
-import { AVAILABLE_MODELS, normalizeDeprecatedModelName } from "~/types/settings";
+import {
+  isPersonalVertexModelAllowed,
+  resolvePersonalVertexRun,
+  PERSONAL_MAX_FUNCTION_CALLS,
+  type PersonalVertexRun,
+} from "./personal-vertex.server";
 
 const ChatRequestSchema = z.object({
   personalVertex: z.boolean().optional(),
@@ -88,40 +91,6 @@ const ChatRequestSchema = z.object({
     .optional(),
 });
 
-/**
- * Personal Vertex runs on OUR Google Cloud project against a prepaid balance,
- * so the model has to be one we both offer and can price. Deriving the set
- * from what settings can actually select keeps the two in step — an earlier
- * VERTEX_MODELS-based list rejected `gemini-3.1-pro-preview-customtools`,
- * which the paid plan offers, so every message 403'd with no way to tell why.
- * The price check still blocks anything we cannot bill: an unpriced model
- * would be drawn down at the Pro-tier fallback while Google charges us the
- * real rate, up to ten times more for an image model.
- */
-const PERSONAL_ALLOWED_MODELS: ReadonlySet<string> = new Set(
-  AVAILABLE_MODELS.map((model) => model.name),
-);
-
-/**
- * A single request must not be able to run away with the balance, so the
- * prepaid path caps tool rounds well below the 50 the org path allows.
- */
-const PERSONAL_MAX_FUNCTION_CALLS = 15;
-
-/** Build a TenantInfo from service-wide environment defaults. */
-function personalTenant(uid: string, settings: UserSettings): TenantInfo {
-  const own = settings.personalVertexSource === "own";
-  return {
-    gcsBucket: "",
-    region: process.env.DEFAULT_TENANT_REGION || "global",
-    vertexProjectId: own ? settings.personalVertexProjectId?.trim() : process.env.GCP_PROJECT_ID || "",
-    vertexLocation: own
-      ? settings.personalVertexLocation?.trim() || "global"
-      : process.env.VERTEX_LOCATION || process.env.DEFAULT_TENANT_REGION || "global",
-    ...(own ? { vertexOAuthUserId: uid, vertexBillingMode: "customer" as const } : {}),
-  };
-}
-
 export async function handlePersonalVertexChatAction(
   request: Request,
   body: unknown,
@@ -167,8 +136,7 @@ export async function handlePersonalVertexChatAction(
           .filter((id): id is string => typeof id === "string" && id.length > 0);
   const enableMcp = validData.enableMcp ?? requestedMcpServerIds.length > 0;
 
-  const normalizedModel = normalizeDeprecatedModelName(model) ?? model;
-  if (!PERSONAL_ALLOWED_MODELS.has(normalizedModel) || !isVertexModelPriced(normalizedModel)) {
+  if (!isPersonalVertexModelAllowed(model)) {
     emitLog(logCtx, 403, { error: `model not available on personal Vertex: ${model}` });
     return new Response(
       JSON.stringify({ error: `model "${model}" is not available on personal Vertex AI` }),
@@ -202,9 +170,11 @@ export async function handlePersonalVertexChatAction(
   }
 
   const personalSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
-  const usesOwnVertex = personalSettings.personalVertexSource === "own";
-  if (usesOwnVertex && !personalSettings.personalVertexProjectId?.trim()) {
-    return new Response(JSON.stringify({ error: "Set a Google Cloud project ID before using your own Vertex AI." }), {
+  let personalRun: PersonalVertexRun;
+  try {
+    personalRun = resolvePersonalVertexRun(uid, personalSettings);
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
       status: 400,
       headers: { "Content-Type": "application/json", ...responseHeaders },
     });
@@ -312,7 +282,7 @@ export async function handlePersonalVertexChatAction(
   };
   emitLog(logCtx, 200);
 
-  const tenant = personalTenant(uid, personalSettings);
+  const tenant = personalRun.tenant;
 
   // Create SSE stream
   const abortSignal = request.signal;
@@ -391,7 +361,7 @@ export async function handlePersonalVertexChatAction(
           ),
           executeToolCall,
           delegateToolNames,
-          billing: usesOwnVertex ? undefined : { uid, scope: "personal" },
+          billing: personalRun.billing,
         })) {
           sendChunk(chunk);
         }

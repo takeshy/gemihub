@@ -77,6 +77,17 @@ export async function action({ request }: Route.ActionArgs) {
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;
   const logCtx = createLogContext(request, "/api/chat", validTokens.rootFolderId);
 
+  // Callers that do not know about providers (plugin `api.gemini.chat`, older
+  // clients) still land on the user's selected provider: with personal Vertex
+  // AI selected, the key path is never used even if a key is stored.
+  {
+    const settings = await getSettings(validTokens.accessToken, validTokens.rootFolderId).catch(() => null);
+    if (settings?.usePersonalVertex === true) {
+      const { handlePersonalVertexChatAction } = await import("~/services/ai/personal-vertex-route.server");
+      return handlePersonalVertexChatAction(request, rawBody);
+    }
+  }
+
   const apiKey = validTokens.geminiApiKey;
   if (!apiKey) {
     emitLog(logCtx, 400, { error: "Gemini API key not configured" });

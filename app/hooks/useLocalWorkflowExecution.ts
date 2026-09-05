@@ -168,7 +168,10 @@ export function useLocalWorkflowExecution(workflowId: string) {
       const executionMode = settings?.apiPlan === "paid" ? "server" : "local";
       let geminiApiKey = getCachedApiKey() || undefined;
 
-      if (executionMode === "local" && hasCommandNode && !geminiApiKey && settings?.encryptedApiKey && settings?.apiKeySalt) {
+      // With personal Vertex AI selected, command nodes are delegated to the
+      // server and the stored key is never needed — do not ask for it.
+      const usesPersonalVertex = settings?.usePersonalVertex === true;
+      if (executionMode === "local" && hasCommandNode && !usesPersonalVertex && !geminiApiKey && settings?.encryptedApiKey && settings?.apiKeySalt) {
         if (!promptCallbacks.promptForPassword) throw new Error("Password prompt not available");
         const password = await promptCallbacks.promptForPassword("Enter password");
         if (!password) throw new Error("API key unlock cancelled");

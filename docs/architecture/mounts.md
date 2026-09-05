@@ -50,6 +50,23 @@ GemiHub balance is touched. The JSON must list `{origin}/auth/vertex/callback`
 among its authorized redirect URIs; a Desktop-application JSON is rejected
 with a hint to create a Web application client instead.
 
+Selecting Vertex AI is a **"Vertex only"** switch, not a fallback order. With
+`usePersonalVertex` on, every AI feature on the Drive mount runs on the
+personal run resolved by `personalVertexRunForUser`
+(`app/services/ai/personal-vertex.server.ts`), and a Gemini API key that is
+still stored is ignored:
+
+| Feature | Path with personal Vertex selected |
+|---|---|
+| Chat | `POST /api/chat` with `personalVertex: true` (ChatPanel), or any `/api/chat` call without `projectId` — the route reads settings and dispatches to `personal-vertex-route.server.ts`, which is how plugin `api.gemini.chat` lands on Vertex |
+| Workflow `command` node (interactive, dashboard, silent, skill) | `local-executor` delegates the node to `POST /api/workflow/execute-node` (now accepts `command` only when personal Vertex is selected); no API-key unlock prompt |
+| Paid server execution (`execute-full`) and scheduled runs | `ServiceContext.personalVertex` is set and `geminiApiKey` cleared; the own-project source works unattended through the stored refresh token |
+| AI workflow generation, `.base` AI edit | `personalVertexAction` in the `vertex-*-ai-generate.server.ts` handlers |
+| RAG / File Search, `rag-sync` node | Unavailable — they need a Gemini API key |
+
+Model choice is held to `isPersonalVertexModelAllowed` (priced models only) and
+tool rounds are capped at `PERSONAL_MAX_FUNCTION_CALLS` (15) on every path.
+
 Key modules: `app/services/storage/` (providers, `resolveMount`,
 `drive-compat.server.ts`), `app/services/indexeddb-cache.ts` (mount-aware
 dispatcher), `app/services/ai/` (Vertex handlers, `models.ts` registry),
