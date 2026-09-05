@@ -1,32 +1,20 @@
 import { fetchWithMcpApproval } from "~/hooks/mcp-approval-client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { ChevronDown, ChevronRight, AppWindow, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import type { McpAppResult, McpAppUiResource } from "~/types/settings";
 import { applyMcpAppCsp } from "./mcp-app-csp";
+import { createMcpAppBridge } from "./mcp-app-bridge";
 
 interface McpAppRendererProps {
   serverId?: string;
   serverUrl: string;
   serverHeaders?: Record<string, string>;
   toolResult: McpAppResult;
+  toolInput?: Record<string, unknown>;
   uiResource?: McpAppUiResource | null;
   expanded?: boolean;
   onToggleExpand?: () => void;
-}
-
-interface JsonRpcRequest {
-  jsonrpc: "2.0";
-  id: number | string;
-  method: string;
-  params?: unknown;
-}
-
-interface JsonRpcResponse {
-  jsonrpc: "2.0";
-  id: number | string;
-  result?: unknown;
-  error?: { code: number; message: string; data?: unknown };
 }
 
 /**
@@ -91,12 +79,14 @@ export function McpAppRenderer({
   serverUrl,
   serverHeaders,
   toolResult,
+  toolInput,
   uiResource: initialUiResource,
   expanded = false,
   onToggleExpand,
 }: McpAppRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loaded, setLoaded] = useState(false);
+  const [appHeight, setAppHeight] = useState(400);
   const [error, setError] = useState<string | null>(null);
   const [fetchedResource, setFetchedResource] = useState<McpAppUiResource | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -138,80 +128,43 @@ export function McpAppRenderer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [maximized]);
 
-  // Handle messages from iframe
-  const handleMessage = useCallback(
-    async (event: MessageEvent) => {
-      const iframe = iframeRef.current;
-      if (!iframe?.contentWindow || event.source !== iframe.contentWindow) return;
+  // Register before the iframe scripts can start their initialization handshake.
+  useLayoutEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    let active = true;
+    const handleMessage = createMcpAppBridge({
+      send: (message) => {
+        if (active) iframe.contentWindow?.postMessage(message, "*");
+      },
+      toolResult,
+      toolInput,
+      hostContext: () => ({
+        theme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+        locale: document.documentElement.lang || "en",
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        platform: "web",
+        displayMode: "inline",
+        availableDisplayModes: ["inline"],
+        containerDimensions: { width: iframe.clientWidth, maxHeight: 800 },
+      }),
+      callTool: (name, args) => callMcpTool(serverId, serverUrl, serverHeaders, name, args),
+      readResource: (uri) => readMcpResource(serverId, serverUrl, serverHeaders, uri),
+      resize: (height) => { if (active) setAppHeight(height); },
+    });
+    const listener = (event: MessageEvent) => {
+      if (event.source !== iframe.contentWindow) return;
+      void handleMessage(event.data);
+    };
+    window.addEventListener("message", listener);
+    return () => {
+      active = false;
+      window.removeEventListener("message", listener);
+    };
+  }, [expanded, htmlContent, toolResult, toolInput, serverId, serverUrl, serverHeaders]);
 
-      const message = event.data as JsonRpcRequest;
-      if (!message || message.jsonrpc !== "2.0" || !message.method) return;
-
-      const sendResponse = (response: JsonRpcResponse) => {
-        iframe.contentWindow?.postMessage(response, "*");
-      };
-
-      try {
-        switch (message.method) {
-          case "tools/call": {
-            const params = message.params as {
-              name: string;
-              arguments?: Record<string, unknown>;
-            };
-            const result = await callMcpTool(
-              serverId,
-              serverUrl,
-              serverHeaders,
-              params.name,
-              params.arguments || {}
-            );
-            sendResponse({
-              jsonrpc: "2.0",
-              id: message.id,
-              result,
-            });
-            break;
-          }
-
-          case "context/update": {
-            sendResponse({
-              jsonrpc: "2.0",
-              id: message.id,
-              result: { ok: true },
-            });
-            break;
-          }
-
-          default:
-            sendResponse({
-              jsonrpc: "2.0",
-              id: message.id,
-              error: {
-                code: -32601,
-                message: `Method not found: ${message.method}`,
-              },
-            });
-        }
-      } catch (err) {
-        sendResponse({
-          jsonrpc: "2.0",
-          id: message.id,
-          error: {
-            code: -32000,
-            message: err instanceof Error ? err.message : "Internal error",
-          },
-        });
-      }
-    },
-    [serverId, serverUrl, serverHeaders]
-  );
-
-  useEffect(() => {
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [handleMessage]);
-
-  // Send initial tool result to iframe on load
+  // Keep the old notification for legacy apps; standard apps receive their
+  // result only after ui/notifications/initialized.
   const handleIframeLoad = useCallback(() => {
     setLoaded(true);
     const iframe = iframeRef.current;
@@ -268,8 +221,8 @@ export function McpAppRenderer({
           onError={() => setError("Failed to load MCP App")}
           className={`w-full border-0 ${maximized ? "flex-1" : ""}`}
           style={{
-            height: maximized ? undefined : "400px",
-            display: loaded ? "block" : "none",
+            height: maximized ? undefined : `${appHeight}px`,
+            visibility: loaded ? "visible" : "hidden",
           }}
           title="MCP App"
         />

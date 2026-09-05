@@ -709,6 +709,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming 
               serverUrl={mcpApp.serverUrl}
               serverHeaders={mcpApp.serverHeaders}
               toolResult={mcpApp.toolResult}
+              toolInput={mcpApp.toolInput}
               uiResource={mcpApp.uiResource}
               expanded={!collapsedMcpApps.has(index)}
               onToggleExpand={() => toggleMcpAppExpand(index)}

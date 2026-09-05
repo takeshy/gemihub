@@ -49,6 +49,7 @@ export function McpAppModal({ mcpApps, onClose }: McpAppModalProps) {
               serverUrl={app.serverUrl}
               serverHeaders={app.serverHeaders}
               toolResult={app.toolResult}
+              toolInput={app.toolInput}
               uiResource={app.uiResource}
               expanded={expandedApps.has(i)}
               onToggleExpand={() => toggleApp(i)}

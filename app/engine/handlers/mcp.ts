@@ -130,7 +130,7 @@ export async function handleMcpNode(
         // UI resource fetch is non-fatal
       }
 
-      mcpAppInfo = buildMcpAppInfo(matchedServer, url, headers, toolResult, uiResource);
+      mcpAppInfo = { ...buildMcpAppInfo(matchedServer, url, headers, toolResult, uiResource), toolInput: args };
     }
 
     return mcpAppInfo;

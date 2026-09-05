@@ -105,6 +105,7 @@ test("handleMcpNode propagates serverHeaders into returned MCP app info", async 
     assert.equal(context.variables.get("toolOutput"), "false");
     assert.ok(result);
     assert.equal(result?.serverUrl, "https://mcp.example/server");
+    assert.deepEqual(result?.toolInput, { q: "hello" });
     assert.deepEqual(result?.serverHeaders, {
       Authorization: "Bearer secret-token",
     });

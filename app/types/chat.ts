@@ -14,6 +14,7 @@ export interface McpAppInfo {
   serverUrl: string;
   serverHeaders?: Record<string, string>;
   toolResult: McpAppResult;
+  toolInput?: Record<string, unknown>;
   uiResource?: McpAppUiResource | null;
 }
 

@@ -349,6 +349,7 @@ async function executeToolOnServer(
         serverUrl: server.url,
         serverHeaders: server.headers,
         toolResult: appResult,
+        toolInput: args,
         uiResource,
       };
     }
