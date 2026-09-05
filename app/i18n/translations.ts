@@ -542,6 +542,20 @@ export interface TranslationStrings {
   "settings.general.theme": string;
 
   // MCP tab
+  "settings.mcp.autoApprove": string;
+  "settings.mcp.approvalHint": string;
+  "settings.mcp.allowedTools": string;
+  "settings.mcp.removeAllowedTool": string;
+  "settings.mcp.noAllowedTools": string;
+  "mcpApproval.title": string;
+  "mcpApproval.description": string;
+  "mcpApproval.server": string;
+  "mcpApproval.tool": string;
+  "mcpApproval.arguments": string;
+  "mcpApproval.rememberHint": string;
+  "mcpApproval.deny": string;
+  "mcpApproval.always": string;
+  "mcpApproval.once": string;
   "settings.mcp.noServers": string;
   "settings.mcp.addServer": string;
   "settings.mcp.name": string;
@@ -1981,6 +1995,20 @@ const en: TranslationStrings = {
   "settings.general.theme": "Theme",
 
   // MCP tab
+  "settings.mcp.autoApprove": "Always approve (skip confirmation)",
+  "settings.mcp.approvalHint": "When off, each call requires confirmation except for tools in the allowlist. Remove a tool below to require confirmation again.",
+  "settings.mcp.allowedTools": "Allowed tools",
+  "settings.mcp.removeAllowedTool": "Remove",
+  "settings.mcp.noAllowedTools": "No tools are allowed without confirmation.",
+  "mcpApproval.title": "Allow tool execution?",
+  "mcpApproval.description": "Review the tool and its arguments before allowing this request.",
+  "mcpApproval.server": "Server",
+  "mcpApproval.tool": "Tool",
+  "mcpApproval.arguments": "Arguments",
+  "mcpApproval.rememberHint": "Always allow adds this tool to this server’s allowlist. You can remove it in MCP settings.",
+  "mcpApproval.deny": "Deny",
+  "mcpApproval.always": "Always allow this tool",
+  "mcpApproval.once": "Allow once",
   "settings.mcp.noServers": "No MCP servers configured.",
   "settings.mcp.addServer": "Add Server",
   "settings.mcp.name": "Name",
@@ -3420,6 +3448,20 @@ const ja: TranslationStrings = {
   "settings.general.theme": "テーマ",
 
   // MCP tab
+  "settings.mcp.autoApprove": "常に承認（確認を省略）",
+  "settings.mcp.approvalHint": "オフの場合も、許可リスト内のツールは確認を省略します。再び確認するには、リストから削除してください。",
+  "settings.mcp.allowedTools": "許可リスト",
+  "settings.mcp.removeAllowedTool": "削除",
+  "settings.mcp.noAllowedTools": "確認を省略するツールはありません。",
+  "mcpApproval.title": "ツールの実行を許可しますか？",
+  "mcpApproval.description": "実行するツールと引数を確認してください。",
+  "mcpApproval.server": "サーバー",
+  "mcpApproval.tool": "ツール",
+  "mcpApproval.arguments": "実行引数",
+  "mcpApproval.rememberHint": "「このツールを常に許可」を選ぶと、このサーバーの許可リストに追加します。MCP設定から解除できます。",
+  "mcpApproval.deny": "拒否",
+  "mcpApproval.always": "このツールを常に許可",
+  "mcpApproval.once": "今回だけ許可",
   "settings.mcp.noServers": "MCPサーバーは設定されていません。",
   "settings.mcp.addServer": "サーバーを追加",
   "settings.mcp.name": "名前",

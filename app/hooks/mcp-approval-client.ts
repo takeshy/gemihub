@@ -1,20 +1,90 @@
-export function requestMcpDecision(server: string, tool: string, args: Record<string, unknown>, canRemember: boolean, signal?: AbortSignal): Promise<"once" | "always" | "deny"> {
+import { t } from "~/i18n/translations";
+
+type McpDecision = "once" | "always" | "deny";
+
+export function requestMcpDecision(server: string, tool: string, args: Record<string, unknown>, canRemember: boolean, signal?: AbortSignal): Promise<McpDecision> {
   return new Promise(resolve => {
-    const dialog = document.createElement("dialog"); dialog.className = "mcp-approval-dialog";
-    const title = document.createElement("h2"); title.textContent = "Approve MCP tool call / MCP実行の承認";
-    const label = document.createElement("p"); label.textContent = `${server} / ${tool}`;
-    const pre = document.createElement("pre"); pre.textContent = JSON.stringify(args, null, 2);
-    dialog.append(title, label, pre);
+    const language = document.documentElement.lang.startsWith("ja") ? "ja" : "en";
+    const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string) => {
+      const node = document.createElement(tag);
+      node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const dialog = element("dialog", "mcp-approval-dialog");
+    const titleId = `mcp-approval-${crypto.randomUUID()}`;
+    dialog.setAttribute("aria-labelledby", titleId);
+    dialog.setAttribute("aria-describedby", `${titleId}-description`);
+
+    const header = element("div", "mcp-approval-header");
+    const heading = element("div", "mcp-approval-heading");
+    const badge = element("span", "mcp-approval-badge", "MCP");
+    const title = element("h2", "mcp-approval-title", t(language, "mcpApproval.title"));
+    title.id = titleId;
+    heading.append(badge, title);
+    const close = element("button", "mcp-approval-close", "×");
+    close.type = "button";
+    close.setAttribute("aria-label", t(language, "common.close"));
+    header.append(heading, close);
+
+    const body = element("div", "mcp-approval-body");
+    const description = element("p", "mcp-approval-description", t(language, "mcpApproval.description"));
+    description.id = `${titleId}-description`;
+    const info = element("dl", "mcp-approval-info");
+    for (const [label, value] of [[t(language, "mcpApproval.server"), server], [t(language, "mcpApproval.tool"), tool]]) {
+      const row = element("div", "mcp-approval-info-row");
+      row.append(element("dt", "mcp-approval-label", label), element("dd", "mcp-approval-value", value));
+      info.append(row);
+    }
+    const details = element("details", "mcp-approval-details");
+    details.open = true;
+    details.append(
+      element("summary", "mcp-approval-summary", t(language, "mcpApproval.arguments")),
+      element("pre", "mcp-approval-arguments", JSON.stringify(args, null, 2)),
+    );
+    body.append(description, info, details);
+    if (canRemember) body.append(element("p", "mcp-approval-hint", t(language, "mcpApproval.rememberHint")));
+
+    let finished = false;
+    const previouslyFocused = document.activeElement;
     const onAbort = () => finish("deny");
-    const finish = (value: "once" | "always" | "deny") => { signal?.removeEventListener("abort", onAbort); dialog.remove(); resolve(value); };
+    const finish = (value: McpDecision) => {
+      if (finished) return;
+      finished = true;
+      signal?.removeEventListener("abort", onAbort);
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus({ preventScroll: true });
+      resolve(value);
+    };
     if (signal?.aborted) { finish("deny"); return; }
     signal?.addEventListener("abort", onAbort, { once: true });
-    for (const [value, text] of [["deny", "Deny / 拒否"], ["once", "Allow once / 今回だけ許可"], ...(canRemember ? [["always", "Always allow this tool / 常に許可"]] : [])] as ["once" | "always" | "deny", string][]) {
-      const button = document.createElement("button"); button.textContent = text; button.onclick = () => finish(value); dialog.append(button);
+    close.onclick = () => finish("deny");
+
+    const footer = element("div", "mcp-approval-footer");
+    const choices: [McpDecision, string][] = [
+      ["deny", t(language, "mcpApproval.deny")],
+      ...(canRemember ? [["always", t(language, "mcpApproval.always")] as [McpDecision, string]] : []),
+      ["once", t(language, "mcpApproval.once")],
+    ];
+    for (const [value, label] of choices) {
+      const button = element("button", `mcp-approval-button mcp-approval-button-${value}`, label);
+      button.type = "button";
+      // Opening the dialog must not make Enter approve an unseen request.
+      if (value === "deny") button.autofocus = true;
+      button.onclick = () => finish(value);
+      footer.append(button);
     }
-    dialog.oncancel = () => finish("deny"); dialog.onclose = () => finish("deny");
-    dialog.onclick = event => { if (event.target === dialog) { const r = dialog.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) finish("deny"); } };
-    document.body.append(dialog); dialog.showModal();
+    dialog.append(header, body, footer);
+    dialog.oncancel = event => { event.preventDefault(); finish("deny"); };
+    dialog.onclose = () => finish("deny");
+    dialog.onclick = event => {
+      if (event.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) finish("deny");
+    };
+    document.body.append(dialog);
+    dialog.showModal();
   });
 }
 

@@ -73,7 +73,8 @@ export function McpTab({ settings }: { settings: UserSettings }) {
   const [addTestResult, setAddTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [addTesting, setAddTesting] = useState(false);
   const [testing, setTesting] = useState<Set<number>>(new Set());
-  const [detailServer, setDetailServer] = useState<McpServerConfig | null>(null);
+  const [detailServerIndex, setDetailServerIndex] = useState<number | null>(null);
+  const detailServer = detailServerIndex === null ? undefined : servers[detailServerIndex];
 
   // --- OAuth redirect-flow completion (mobile fallback) ---
   const oauthResumeRef = useRef(false);
@@ -769,18 +770,14 @@ export function McpTab({ settings }: { settings: UserSettings }) {
         {servers.map((server, idx) => (
           <fieldset disabled={testing.size > 0 || addTesting}
             key={idx}
-            className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50"
+            className="flex min-w-0 items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50"
           >
-            <div className="text-xs">
-              <label><input type="checkbox" checked={server.autoApprove ?? false} onChange={event => { const updated = servers.map(item => item === server ? { ...item, autoApprove: event.target.checked } : item); setServers(updated); saveServers(updated); }} />Always approve / 常に承認（確認を省略）</label>
-              <div>Allowed tools / 許可リスト{(server.allowedTools ?? []).map(tool => <div key={tool}>{tool}<button type="button" onClick={() => { const updated = servers.map(item => item === server ? { ...item, allowedTools: item.allowedTools?.filter(name => name !== tool) } : item); setServers(updated); saveServers(updated); }}>Remove / 削除</button></div>)}</div>
-            </div>
             <button
               type="button"
-              onClick={() => setDetailServer(server)}
+              onClick={() => setDetailServerIndex(idx)}
               className="flex-1 min-w-0 text-left cursor-pointer hover:opacity-70 transition-opacity"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                   {server.name}
                 </p>
@@ -791,7 +788,7 @@ export function McpTab({ settings }: { settings: UserSettings }) {
                   </span>
                 )}
                 {server.agentPlugin && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                  <span className="inline-flex max-w-full items-center break-all px-1.5 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                     Agent Plugin: {server.agentPlugin.pluginName}
                   </span>
                 )}
@@ -804,7 +801,7 @@ export function McpTab({ settings }: { settings: UserSettings }) {
               )}
               {testResults[idx] && (
                 <p
-                  className={`text-xs mt-1 ${
+                  className={`text-xs mt-1 break-all ${
                     testResults[idx].ok ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                   }`}
                 >
@@ -812,7 +809,7 @@ export function McpTab({ settings }: { settings: UserSettings }) {
                 </p>
               )}
             </button>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               {server.oauthTokens && (
                 <button
                   type="button"
@@ -925,7 +922,16 @@ export function McpTab({ settings }: { settings: UserSettings }) {
       )}
 
       {detailServer && (
-        <McpServerDetailModal server={detailServer} onClose={() => setDetailServer(null)} />
+        <McpServerDetailModal
+          server={detailServer}
+          onClose={() => setDetailServerIndex(null)}
+          disabled={testing.size > 0 || addTesting || fetcher.state !== "idle"}
+          onChange={(changes) => {
+            const updated = servers.map((server, idx) => idx === detailServerIndex ? { ...server, ...changes } : server);
+            setServers(updated);
+            saveServers(updated);
+          }}
+        />
       )}
 
     </SectionCard>
@@ -939,16 +945,21 @@ export function McpTab({ settings }: { settings: UserSettings }) {
 export function McpServerDetailModal({
   server,
   onClose,
+  onChange,
+  disabled,
 }: {
   server: McpServerConfig;
   onClose: () => void;
+  onChange: (changes: Pick<McpServerConfig, "autoApprove" | "allowedTools">) => void;
+  disabled: boolean;
 }) {
+  const { t } = useI18n();
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50" onClick={onClose}>
       <div
-        className="mx-4 w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col"
+        className="mx-4 min-w-0 w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-900 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -968,7 +979,40 @@ export function McpServerDetailModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 [overflow-wrap:anywhere]">
+          <fieldset disabled={disabled} className="min-w-0 mb-4 space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-700 disabled:opacity-60">
+            <label className="flex items-start gap-2 text-sm text-gray-900 dark:text-gray-100">
+              <input
+                type="checkbox"
+                checked={server.autoApprove ?? false}
+                onChange={(event) => onChange({ autoApprove: event.target.checked })}
+                className="mt-1 shrink-0"
+              />
+              {t("settings.mcp.autoApprove")}
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.mcp.approvalHint")}</p>
+            <div>
+              <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-gray-300">{t("settings.mcp.allowedTools")}</p>
+              {(server.allowedTools ?? []).length > 0 ? (
+                <ul className="space-y-2">
+                  {server.allowedTools!.map((tool) => (
+                    <li key={tool} className="flex items-start gap-2 text-xs">
+                      <span className="min-w-0 flex-1 font-mono text-gray-700 dark:text-gray-300">{tool}</span>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ allowedTools: server.allowedTools?.filter((name) => name !== tool) })}
+                        className="shrink-0 text-red-600 hover:underline dark:text-red-400"
+                      >
+                        {t("settings.mcp.removeAllowedTool")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t("settings.mcp.noAllowedTools")}</p>
+              )}
+            </div>
+          </fieldset>
           {server.tools && server.tools.length > 0 ? (
             <div>
               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
