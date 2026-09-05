@@ -36,6 +36,24 @@ import {
 import { hasVertexPrice } from "~/services/ai/models";
 
 
+interface PersonalVertexOAuthStatus {
+  connected: boolean;
+  connectedEmail: string | null;
+  clientConfigured: boolean;
+  projectId: string | null;
+}
+
+async function personalVertexApi(method: "POST" | "DELETE", body?: object): Promise<PersonalVertexOAuthStatus> {
+  const response = await fetch("/api/personal-vertex/connection", {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({})) as { error?: string; oauthStatus?: PersonalVertexOAuthStatus };
+  if (!response.ok || !data.oauthStatus) throw new Error(data.error || `HTTP ${response.status}`);
+  return data.oauthStatus;
+}
+
 export function GeneralTab({
   settings,
   hasApiKey,
@@ -69,7 +87,9 @@ export function GeneralTab({
   const [personalVertexSource, setPersonalVertexSource] = useState<"prepaid" | "own">(settings.personalVertexSource === "own" ? "own" : "prepaid");
   const [personalVertexProjectId, setPersonalVertexProjectId] = useState(settings.personalVertexProjectId || "");
   const [personalVertexLocation, setPersonalVertexLocation] = useState(settings.personalVertexLocation || "global");
-  const [personalVertexOAuth, setPersonalVertexOAuth] = useState<{ connected: boolean; connectedEmail: string | null } | null>(null);
+  const [personalVertexOAuth, setPersonalVertexOAuth] = useState<PersonalVertexOAuthStatus | null>(null);
+  const [personalVertexBusy, setPersonalVertexBusy] = useState(false);
+  const [personalVertexNotice, setPersonalVertexNotice] = useState<string | null>(null);
   const [personalBalance, setPersonalBalance] = useState<number | null>(null);
   // null until the balance endpoint answers; false on a self-hosted install
   // with no Firestore, where there is no prepaid balance to sell or spend.
@@ -161,6 +181,42 @@ export function GeneralTab({
       .then((data) => setPersonalVertexOAuth(data?.oauthStatus ?? null))
       .catch(() => setPersonalVertexOAuth(null));
   }, []);
+
+  const uploadPersonalVertexOAuthJson = async (file: File) => {
+    setPersonalVertexBusy(true);
+    setPersonalVertexNotice(null);
+    try {
+      const callbackUrl = `${window.location.origin}/auth/vertex/callback`;
+      const document = JSON.parse(await file.text()) as { web?: { client_id?: string; client_secret?: string; project_id?: string; redirect_uris?: string[] }; installed?: unknown };
+      if (!document.web && document.installed) throw new Error(t("settings.general.vertexOauthDesktopError").replace("{url}", callbackUrl));
+      const web = document.web;
+      if (!web?.client_id || !web.client_secret || !web.project_id || !Array.isArray(web.redirect_uris)) {
+        throw new Error(t("settings.general.vertexOauthJsonError"));
+      }
+      const status = await personalVertexApi("POST", { clientId: web.client_id, clientSecret: web.client_secret, projectId: web.project_id, redirectUris: web.redirect_uris });
+      setPersonalVertexOAuth(status);
+      // The OAuth client usually lives in the same project the user wants to
+      // run Vertex on, so prefill the execution project when it is still empty.
+      if (!personalVertexProjectId.trim()) setPersonalVertexProjectId(web.project_id);
+      setPersonalVertexNotice(t("settings.general.vertexOauthJsonSaved"));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPersonalVertexBusy(false);
+    }
+  };
+
+  const disconnectPersonalVertex = async () => {
+    setPersonalVertexBusy(true);
+    setPersonalVertexNotice(null);
+    try {
+      setPersonalVertexOAuth(await personalVertexApi("DELETE"));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPersonalVertexBusy(false);
+    }
+  };
 
   // Show error dialog, reload confirm (API key change), or success banner.
   // Use a ref for `t` so the effect only re-runs when fetcher.data changes,
@@ -500,17 +556,40 @@ export function GeneralTab({
                   <input id="personalVertexLocation" className={inputClass} value={personalVertexLocation} onChange={(event) => setPersonalVertexLocation(event.target.value)} placeholder="global" />
                 </div>
                 <p className="text-xs text-gray-500">{t("settings.general.vertexOwnBillingNote")}</p>
-                {personalVertexOAuth?.connected ? (
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-green-600">{t("settings.general.vertexConnected").replace("{email}", personalVertexOAuth.connectedEmail || "")}</span>
-                    <button type="button" className="text-red-600 hover:underline" onClick={async () => {
-                      const response = await fetch("/api/personal-vertex/connection", { method: "DELETE" });
-                      if (response.ok) setPersonalVertexOAuth({ connected: false, connectedEmail: null });
-                    }}>{t("settings.general.vertexDisconnect")}</button>
+                {/* Same two-step flow as the desktop app: the user's own OAuth
+                    client JSON first, then Google consent with that client.
+                    The service's OAuth client is never used for a project
+                    the service does not own, so Connect stays disabled until
+                    a client is stored. */}
+                <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-950/30">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100">{t("settings.general.vertexOauthJsonTitle")}</h4>
+                  <p className="mt-1 text-xs text-gray-500">{t("settings.general.vertexOauthJsonDescription")}</p>
+                  {personalVertexOAuth?.clientConfigured && personalVertexOAuth.projectId && (
+                    <p className="mt-2 text-xs text-gray-500">{t("settings.general.vertexOauthClientProject").replace("{project}", personalVertexOAuth.projectId)}</p>
+                  )}
+                  {personalVertexNotice && <p className="mt-2 text-xs text-green-600">{personalVertexNotice}</p>}
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                    <label className={`inline-block cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 ${personalVertexBusy ? "pointer-events-none opacity-50" : ""}`}>
+                      {t("settings.general.vertexOauthJsonSelect")}
+                      <input type="file" accept="application/json,.json" className="hidden" disabled={personalVertexBusy} onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void uploadPersonalVertexOAuthJson(file);
+                      }} />
+                    </label>
+                    {personalVertexOAuth?.connected ? (
+                      <>
+                        <span className="text-green-600">{t("settings.general.vertexConnected").replace("{email}", personalVertexOAuth.connectedEmail || "")}</span>
+                        <button type="button" className="text-red-600 hover:underline" disabled={personalVertexBusy} onClick={() => void disconnectPersonalVertex()}>{t("settings.general.vertexDisconnect")}</button>
+                      </>
+                    ) : personalVertexOAuth?.clientConfigured ? (
+                      <a href="/auth/vertex/start?personal=1" className="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{t("settings.general.vertexConnect")}</a>
+                    ) : (
+                      <span className="text-xs text-gray-500">{t("settings.general.vertexOauthClientRequired")}</span>
+                    )}
                   </div>
-                ) : (
-                  <a href="/auth/vertex/start?personal=1" className="inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">{t("settings.general.vertexConnect")}</a>
-                )}
+                  <p className="mt-2 text-xs text-gray-500">{t("settings.general.vertexOauthRedirectUri").replace("{url}", typeof window === "undefined" ? "/auth/vertex/callback" : `${window.location.origin}/auth/vertex/callback`)}</p>
+                </div>
               </div>
             )}
             {/* Model — the API key tab's selector is unmounted here, and the

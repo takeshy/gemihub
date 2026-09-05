@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-09-05
+* **Update**: "My Google Cloud project" (personal Vertex AI on the Drive mount) now requires the user's own OAuth client JSON, like the desktop app. Settings > General > Vertex AI gained an "Upload OAuth client JSON" step (Web application client, redirect URI `/auth/vertex/callback`); "Connect with Google" is enabled only once a client is stored, and `/auth/vertex/start?personal=1` rejects a personal connection without one, so the service-wide OAuth client is never used to mint tokens for a project the service does not own. `POST /api/personal-vertex/connection` stores the client (`users/{uid}.vertexOAuthClient`, encrypted) and the org/service route shares the same validation (`parseVertexOAuthClientInput`). The execution project ID is prefilled from the JSON when empty (`architecture/mounts.md`).
+
 ## 2026-09-04
 * **Fix**: `renameFileLocal` on a file that already existed on Drive only rewrote the IndexedDB cache and cached remote meta. Push never sends names and background polling rewrote the cached meta from Drive, so Kanban card renames, Secret Manager moves, and dashboard renames silently reverted within one poll. Real ids now rename on Drive immediately through the same `bulkRename` + meta-mirror path the file tree and chat tools use; `new:` placeholders keep the cache-only behaviour (`features/sync.md`).
 * **Fix**: An incremental Pull that skipped a download (binary on mobile, file over 20 MB) still recorded the new checksum but left the stale cached copy in place; since reads trust the cache, the old bytes were shown indefinitely. The stale copy is now deleted so the file lazy-fetches on next open, matching Full Pull. A pull that only carried a remote rename now also updates the cache record's `fileName`.

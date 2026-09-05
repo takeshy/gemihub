@@ -135,12 +135,44 @@ function statusOf(record: VertexOAuthRecord): VertexOAuthStatus {
   };
 }
 
-function redirectUri(request?: Request): string {
+export function redirectUri(request?: Request): string {
   if (process.env.VERTEX_OAUTH_REDIRECT_URI) return process.env.VERTEX_OAUTH_REDIRECT_URI;
   if (!request) throw new Error("VERTEX_OAUTH_REDIRECT_URI is required");
   const url = new URL(request.url);
   const protocol = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
   return `${protocol}://${url.host}/auth/vertex/callback`;
+}
+
+const PROJECT_ID_RE = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/;
+
+export interface VertexOAuthClientInput {
+  clientId: string;
+  clientSecret: string;
+  projectId: string;
+}
+
+/**
+ * Validate the fields the browser extracts from a Google "Web application"
+ * OAuth client JSON. Shared by the org/service and personal routes so both
+ * enforce the same shape and the same redirect-URI registration check.
+ */
+export function parseVertexOAuthClientInput(
+  body: { clientId?: unknown; clientSecret?: unknown; projectId?: unknown; redirectUris?: unknown },
+  request: Request,
+): { ok: true; input: VertexOAuthClientInput } | { ok: false; error: string } {
+  if (
+    typeof body.clientId !== "string" || !body.clientId.trim().endsWith(".apps.googleusercontent.com") ||
+    typeof body.clientSecret !== "string" || body.clientSecret.trim().length < 8 ||
+    typeof body.projectId !== "string" || !PROJECT_ID_RE.test(body.projectId.trim()) ||
+    !Array.isArray(body.redirectUris) || !body.redirectUris.every((value) => typeof value === "string")
+  ) {
+    return { ok: false, error: "有効なウェブアプリ用OAuthクライアントJSONを選択してください" };
+  }
+  const uri = redirectUri(request);
+  if (!body.redirectUris.includes(uri)) {
+    return { ok: false, error: `OAuthクライアントにリダイレクトURI ${uri} を追加してください` };
+  }
+  return { ok: true, input: { clientId: body.clientId, clientSecret: body.clientSecret, projectId: body.projectId } };
 }
 
 /** Target of an OAuth flow: the service default, or one organization. */
@@ -228,7 +260,7 @@ export async function saveVertexOAuthToken(
 
 export async function saveOrganizationVertexOAuthClient(
   orgId: string,
-  input: { clientId: string; clientSecret: string; projectId: string },
+  input: VertexOAuthClientInput,
 ) {
   await saveVertexOAuthClient({ scope: "org", orgId }, input);
 }
@@ -239,8 +271,8 @@ export async function saveOrganizationVertexOAuthClient(
  * connection and requires a fresh Google consent flow.
  */
 export async function saveVertexOAuthClient(
-  target: VertexOAuthTarget,
-  input: { clientId: string; clientSecret: string; projectId: string },
+  target: AnyVertexOAuthTarget,
+  input: VertexOAuthClientInput,
 ) {
   const vertexOAuthClient: StoredVertexOAuthClient = {
     clientId: input.clientId.trim(),
@@ -252,8 +284,7 @@ export async function saveVertexOAuthClient(
   // Configuring a client for one organization means it wants its own
   // connection; without this the org would keep resolving to the default.
   if (target.scope === "org") payload.vertexOAuthSource = "own";
-  const ref = target.scope === "service" ? serviceRef() : orgRef(target.orgId);
-  await ref.set(payload, { merge: true });
+  await targetRef(target).set(payload, { merge: true });
 }
 
 /** Switch an organization between the service default and its own connection. */
@@ -296,8 +327,18 @@ export async function getServiceVertexOAuthStatus(): Promise<VertexOAuthStatus> 
   return statusOf(await serviceRecord());
 }
 
+/**
+ * A personal connection runs against the user's OWN Google Cloud project, so
+ * it must use an OAuth client the user uploaded (as the desktop app does);
+ * the service-wide client from the environment never counts as configured.
+ */
 export async function getUserVertexOAuthStatus(uid: string): Promise<VertexOAuthStatus> {
-  return statusOf(await targetRecord({ scope: "user", uid }));
+  const record = await targetRecord({ scope: "user", uid });
+  return { ...statusOf(record), clientConfigured: Boolean(record.client) };
+}
+
+export async function hasUserVertexOAuthClient(uid: string): Promise<boolean> {
+  return Boolean((await targetRecord({ scope: "user", uid })).client);
 }
 
 export async function getUserVertexGoogleAuthOptions(uid: string) {

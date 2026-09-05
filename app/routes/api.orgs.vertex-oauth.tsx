@@ -20,19 +20,11 @@ import {
   disconnectVertexOAuth,
   getOrganizationVertexOAuthStatus,
   getServiceVertexOAuthStatus,
+  parseVertexOAuthClientInput,
   saveVertexOAuthClient,
   setOrganizationVertexOAuthSource,
   type VertexOAuthTarget,
 } from "~/services/vertex-oauth.server";
-
-const PROJECT_ID_RE = /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/;
-
-function expectedRedirectUri(request: Request): string {
-  if (process.env.VERTEX_OAUTH_REDIRECT_URI) return process.env.VERTEX_OAUTH_REDIRECT_URI;
-  const url = new URL(request.url);
-  const protocol = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
-  return `${protocol}://${url.host}/auth/vertex/callback`;
-}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const orgId = new URL(request.url).searchParams.get("orgId")?.trim() ?? "";
@@ -89,25 +81,11 @@ export async function action({ request }: Route.ActionArgs) {
       return Response.json({ ok: true, source: body.source });
     }
 
-    if (
-      typeof body.clientId !== "string" || !body.clientId.trim().endsWith(".apps.googleusercontent.com") ||
-      typeof body.clientSecret !== "string" || body.clientSecret.trim().length < 8 ||
-      typeof body.projectId !== "string" || !PROJECT_ID_RE.test(body.projectId.trim()) ||
-      !Array.isArray(body.redirectUris) || !body.redirectUris.every((value) => typeof value === "string")
-    ) {
-      return Response.json({ error: "有効なウェブアプリ用OAuthクライアントJSONを選択してください" }, { status: 400 });
-    }
-    const redirectUri = expectedRedirectUri(request);
-    if (!body.redirectUris.includes(redirectUri)) {
-      return Response.json({ error: `OAuthクライアントにリダイレクトURI ${redirectUri} を追加してください` }, { status: 400 });
-    }
-    await saveVertexOAuthClient(target, {
-      clientId: body.clientId,
-      clientSecret: body.clientSecret,
-      projectId: body.projectId,
-    });
-    auditFromRoute({ orgId: auditOrgId, uid: actor.uid, email: actor.email, action: "settings.update", resourceType: "organization", resourceId: auditOrgId, metadata: { scope: "vertex_oauth_client", projectId: body.projectId }, request, statusCode: 200 });
-    return Response.json({ ok: true, projectId: body.projectId });
+    const parsed = parseVertexOAuthClientInput(body, request);
+    if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+    await saveVertexOAuthClient(target, parsed.input);
+    auditFromRoute({ orgId: auditOrgId, uid: actor.uid, email: actor.email, action: "settings.update", resourceType: "organization", resourceId: auditOrgId, metadata: { scope: "vertex_oauth_client", projectId: parsed.input.projectId }, request, statusCode: 200 });
+    return Response.json({ ok: true, projectId: parsed.input.projectId });
   }
 
   await disconnectVertexOAuth(target);

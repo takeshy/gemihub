@@ -31,6 +31,25 @@ with no Google Cloud credentials) never sees any of the organization surface.
 | AI | `genai-key` (default), personal prepaid `vertex`, or customer-owned `vertex` | organization `vertex` or customer-owned `vertex`; server SSE, no Gemini API key |
 | RAG | Gemini File Search with `genai-key`; unavailable with personal Vertex | Firestore vector search (`ragChunks`) |
 
+### Customer-owned Vertex AI (Drive mount)
+
+"My Google Cloud project" in Settings > General > Vertex AI mirrors the
+desktop app's two-step flow: the user first uploads a **Web application**
+OAuth client JSON exported from their own Google Cloud project (`POST
+/api/personal-vertex/connection`, validated by `parseVertexOAuthClientInput`
+and stored encrypted as `users/{uid}.vertexOAuthClient`), then runs the
+Google consent flow with that client (`/auth/vertex/start?personal=1`,
+`cloud-platform` scope, PKCE). The service-wide OAuth client from the
+environment is never used for a project the service does not own:
+`getUserVertexOAuthStatus` reports `clientConfigured` only from the stored
+client, the start route rejects a personal connection without one, and
+uploading a new client drops the existing refresh token because a token is
+bound to its issuer. Chat then runs `personal-vertex-route.server.ts` with
+`vertexBillingMode: "customer"`, so charges land on the user's project and no
+GemiHub balance is touched. The JSON must list `{origin}/auth/vertex/callback`
+among its authorized redirect URIs; a Desktop-application JSON is rejected
+with a hint to create a Web application client instead.
+
 Key modules: `app/services/storage/` (providers, `resolveMount`,
 `drive-compat.server.ts`), `app/services/indexeddb-cache.ts` (mount-aware
 dispatcher), `app/services/ai/` (Vertex handlers, `models.ts` registry),

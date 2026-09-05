@@ -1432,6 +1432,15 @@ export interface TranslationStrings {
   "settings.general.vertexConnected": string;
   "settings.general.vertexConnect": string;
   "settings.general.vertexDisconnect": string;
+  "settings.general.vertexOauthJsonTitle": string;
+  "settings.general.vertexOauthJsonDescription": string;
+  "settings.general.vertexOauthClientProject": string;
+  "settings.general.vertexOauthJsonSelect": string;
+  "settings.general.vertexOauthJsonSaved": string;
+  "settings.general.vertexOauthJsonError": string;
+  "settings.general.vertexOauthDesktopError": string;
+  "settings.general.vertexOauthRedirectUri": string;
+  "settings.general.vertexOauthClientRequired": string;
   "settings.general.vertexBalance": string;
   "settings.general.vertexBalanceEmpty": string;
   "settings.general.buyVertexCredit": string;
@@ -2885,6 +2894,15 @@ const en: TranslationStrings = {
   "settings.general.vertexConnected": "Connected as {email}",
   "settings.general.vertexConnect": "Connect with Google",
   "settings.general.vertexDisconnect": "Disconnect",
+  "settings.general.vertexOauthJsonTitle": "Google OAuth client",
+  "settings.general.vertexOauthJsonDescription": "Upload a Web application OAuth client JSON from your own Google Cloud project, then connect with Google. Its project ID identifies the OAuth client and may differ from the Vertex AI project ID above.",
+  "settings.general.vertexOauthClientProject": "OAuth client project: {project}",
+  "settings.general.vertexOauthJsonSelect": "Upload OAuth client JSON",
+  "settings.general.vertexOauthJsonSaved": "OAuth client JSON saved. Now connect with Google.",
+  "settings.general.vertexOauthJsonError": "Select an OAuth client JSON for a Google Cloud Web application.",
+  "settings.general.vertexOauthDesktopError": "This JSON is for a Desktop application. Create a Web application OAuth client and register {url} as an authorized redirect URI.",
+  "settings.general.vertexOauthRedirectUri": "Authorized redirect URI: {url}",
+  "settings.general.vertexOauthClientRequired": "Upload an OAuth client JSON to enable Connect with Google.",
   "settings.general.vertexBalance": "Current balance",
   "settings.general.vertexBalanceEmpty": "Purchase credits to start using Vertex AI",
   "settings.general.buyVertexCredit": "Buy credits",
@@ -4338,6 +4356,15 @@ const ja: TranslationStrings = {
   "settings.general.vertexConnected": "{email} として接続済み",
   "settings.general.vertexConnect": "Googleで接続",
   "settings.general.vertexDisconnect": "連携解除",
+  "settings.general.vertexOauthJsonTitle": "Google OAuthクライアント",
+  "settings.general.vertexOauthJsonDescription": "自分のGoogle Cloudプロジェクトで作成した「ウェブアプリケーション」用OAuthクライアントJSONを読み込んでから、Googleで接続します。JSON内のプロジェクトIDはOAuthクライアントの所属先であり、上のVertex AIプロジェクトIDとは別でも構いません。",
+  "settings.general.vertexOauthClientProject": "OAuthクライアントのプロジェクト: {project}",
+  "settings.general.vertexOauthJsonSelect": "OAuthクライアントJSONを読み込む",
+  "settings.general.vertexOauthJsonSaved": "OAuthクライアントJSONを保存しました。続けてGoogleで接続してください。",
+  "settings.general.vertexOauthJsonError": "Google Cloudの「ウェブアプリケーション」用OAuthクライアントJSONを選択してください。",
+  "settings.general.vertexOauthDesktopError": "これは「デスクトップアプリ」用JSONです。「ウェブアプリケーション」を作成し、{url} を承認済みリダイレクトURIに登録してください。",
+  "settings.general.vertexOauthRedirectUri": "承認済みリダイレクトURI: {url}",
+  "settings.general.vertexOauthClientRequired": "OAuthクライアントJSONを読み込むと「Googleで接続」が有効になります。",
   "settings.general.vertexBalance": "現在の残高",
   "settings.general.vertexBalanceEmpty": "クレジットを購入してVertex AIを利用開始",
   "settings.general.buyVertexCredit": "クレジット購入",
