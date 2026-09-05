@@ -6,7 +6,7 @@ import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally, type DriveEvent } from "~/engine/local-executor";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { getCachedLoaderDataInMemory } from "~/services/loader-data-memory";
-import { getCachedApiKey, setCachedApiKey } from "~/services/api-key-cache";
+import { getCachedApiKey, setCachedApiKey, ensureCachedApiKey } from "~/services/api-key-cache";
 import { getCachedLoaderData } from "~/services/indexeddb-cache";
 import { decryptPrivateKey } from "~/services/crypto-core";
 
@@ -166,7 +166,7 @@ export function useLocalWorkflowExecution(workflowId: string) {
       // Ensure Gemini API key is available for command nodes
       const hasCommandNode = Array.from(workflow.nodes.values()).some(n => n.type === "command");
       const executionMode = settings?.apiPlan === "paid" ? "server" : "local";
-      let geminiApiKey = getCachedApiKey() || undefined;
+      let geminiApiKey = getCachedApiKey() || (await ensureCachedApiKey()) || undefined;
 
       // With personal Vertex AI selected, command nodes are delegated to the
       // server and the stored key is never needed — do not ask for it.

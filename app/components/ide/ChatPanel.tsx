@@ -40,7 +40,7 @@ import {
   getLocalSyncMeta,
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
-import { getCachedApiKey } from "~/services/api-key-cache";
+import { getCachedApiKey, ensureCachedApiKey } from "~/services/api-key-cache";
 import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
 import { executeChatStream } from "~/hooks/chat-stream-client";
 import { VERTEX_MODELS } from "~/services/ai/models";
@@ -925,7 +925,9 @@ export function ChatPanel({
     async (content: string, attachments?: Attachment[], overrides?: ChatOverrides) => {
       // Paid plan uses server-side API key; free plan needs local key
       const isPaidPlan = settings.apiPlan === "paid";
-      const localApiKey = getCachedApiKey();
+      // After a reload the in-memory copy is gone but the session still holds
+      // the unlocked key; refill from it before falling back to the prompt.
+      const localApiKey = getCachedApiKey() ?? (await ensureCachedApiKey());
       // Inside an org project no Gemini API key is needed — chat runs on the
       // tenant's Vertex AI.
       const projectSelection = enterpriseSelectionRef.current;

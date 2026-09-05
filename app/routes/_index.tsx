@@ -22,7 +22,7 @@ import { parseWorkflowYaml } from "~/engine/parser";
 import { executeWorkflowLocally } from "~/engine/local-executor";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { readFileLocal } from "~/services/drive-local";
-import { getCachedApiKey } from "~/services/api-key-cache";
+import { getCachedApiKey, ensureCachedApiKey } from "~/services/api-key-cache";
 import { compareSkillVersions, WEBPAGE_BUILDER_SKILL_VERSION } from "~/services/hubwork-skill-version";
 
 import { Header, type RightPanelId } from "~/components/ide/Header";
@@ -400,6 +400,12 @@ function IDELayout({
   rootFolderMismatch: { canonicalRootFolderId: string } | null;
 }) {
   const [hasGeminiApiKey, setHasGeminiApiKey] = useState(initialHasGeminiApiKey);
+  // The session already holds the unlocked key: warm the in-memory copy so
+  // chat and local workflows do not ask for the password again after a
+  // reload. Failures are silent — the prompt still works as before.
+  useEffect(() => {
+    if (hasGeminiApiKey) void ensureCachedApiKey();
+  }, [hasGeminiApiKey]);
   useApplySettings(settings.language ?? "en", settings.fontSize, settings.theme);
 
   // Right panel state — supports "chat", "workflow", or "plugin:{viewId}" for plugin sidebar views

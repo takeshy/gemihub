@@ -17,6 +17,7 @@ export default [
   route("auth/google/callback", "routes/auth.google.callback.tsx"),
   route("auth/logout", "routes/auth.logout.tsx"),
   route("api/auth/unlock", "routes/api.auth.unlock.tsx"),
+  route("api/auth/api-key", "routes/api.auth.api-key.tsx"),
   route("api/session/me", "routes/api.session.me.tsx"),
   route("settings", "routes/settings.tsx"),
   // Organizations (multi-tenant orgs/projects — gated on isFirestoreAvailable)

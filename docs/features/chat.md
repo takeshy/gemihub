@@ -35,6 +35,20 @@ Chat uses SSE-compatible chunk types. The execution path depends on the user's A
 
 The legacy server-side `/api/chat` SSE endpoint exists as a fallback.
 
+### Unlocking the API key
+
+The Gemini API key is stored in `settings.json` encrypted with the user's
+password, so it has to be unlocked before the browser can call Gemini
+directly. Unlocking (`POST /api/auth/unlock`) decrypts it once and stores it in
+the session cookie (30 days) as well as in an in-memory browser cache
+(`api-key-cache.ts`). The in-memory copy dies with the page, so
+`ensureCachedApiKey` refills it from the session through
+`GET /api/auth/api-key` — chat, local workflow execution, and headless
+dashboard/silent runs all call it before falling back to a password prompt.
+The result is one password prompt per session rather than one per page load;
+nothing new is persisted, and the endpoint refuses any request that is not
+same-origin. A locked session (never unlocked, or expired) still prompts.
+
 ### Chunk Types
 
 | Type | Description |

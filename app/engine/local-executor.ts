@@ -41,7 +41,7 @@ import { handlePromptFileNodeLocal, handleDriveFilePickerNodeLocal } from "./loc
 import { handleWorkflowNodeLocal } from "./local-handlers/workflow";
 import { handleCommandNodeLocal } from "./local-handlers/command";
 import { handleScriptNodeLocal } from "./local-handlers/script";
-import { getCachedApiKey } from "~/services/api-key-cache";
+import { getCachedApiKey, ensureCachedApiKey } from "~/services/api-key-cache";
 
 const MAX_WHILE_ITERATIONS = 1000;
 const MAX_TOTAL_STEPS = 100000;
@@ -663,8 +663,10 @@ export async function executeWorkflowLocally(
             for (const id of nextCmd.reverse()) stack.push({ nodeId: id, iterationCount: 0 });
             break;
           }
-          // Try in-memory cache as fallback (e.g., sub-workflow where parent had no command nodes)
-          const apiKey = options.geminiApiKey || getCachedApiKey();
+          // Fall back to the in-memory cache (sub-workflow where the parent had
+          // no command nodes), then to the session's unlocked key (headless
+          // dashboard/silent/skill runs after a reload).
+          const apiKey = options.geminiApiKey || getCachedApiKey() || (await ensureCachedApiKey());
           if (!apiKey) {
             throw new Error("Gemini API key not available for local execution");
           }
