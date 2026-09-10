@@ -808,6 +808,19 @@ export function GeneralTab({
           {t("settings.general.encryptionSection")}
         </h3>
 
+        <div className="mb-4">
+          <Label htmlFor="secretManagerFolder">{t("secretManager.folder")}</Label>
+          <input
+            id="secretManagerFolder"
+            name="secretManagerFolder"
+            defaultValue={settings.secretManagerFolder ?? "Secrets"}
+            required
+            placeholder="Secrets"
+            className={inputClass}
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("secretManager.folderHint")}</p>
+        </div>
+
         <div className="mb-4 flex items-center gap-3">
           <input
             type="checkbox"

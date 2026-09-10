@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useI18n } from "~/i18n/context";
 import type { ConfigEditorProps } from "../../types";
-import type { SecretManagerConfig } from "../../secret-manager";
+import { normalizeSecretFolder, type SecretManagerConfig } from "../../secret-manager";
 import { FolderPicker } from "./FolderPicker";
 
 export function SecretManagerConfigEditor({ config, onChange }: ConfigEditorProps) {
@@ -14,9 +14,14 @@ export function SecretManagerConfigEditor({ config, onChange }: ConfigEditorProp
         {t("secretManager.folder")}
       </label>
       <FolderPicker
-        value={cfg.folder ?? ""}
+        required
+        placeholder="Secrets"
+        value={cfg.folder ?? "Secrets"}
         onChange={(folder) => onChange({ ...cfg, folder })}
       />
+      {!normalizeSecretFolder(cfg.folder ?? "Secrets") && (
+        <p role="alert" className="text-xs text-red-500">{t("secretManager.folderRequired")}</p>
+      )}
       <p className="text-xs text-gray-400 dark:text-gray-500">
         {t("secretManager.folderHint")}
       </p>

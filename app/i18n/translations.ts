@@ -137,6 +137,7 @@ export interface TranslationStrings {
   "secretManager.updateFailed": string;
   "secretManager.folder": string;
   "secretManager.folderHint": string;
+  "secretManager.folderRequired": string;
   "secretManager.publicMetadata": string;
   "secretManager.addField": string;
   "secretManager.fieldName": string;
@@ -1596,8 +1597,9 @@ const en: TranslationStrings = {
   "secretManager.invalidName": "Enter a valid secret name.",
   "secretManager.createFailed": "Failed to create the secret.",
   "secretManager.updateFailed": "Failed to update the secret.",
-  "secretManager.folder": "Secrets folder",
-  "secretManager.folderHint": "Leave blank to list all encrypted files. New secrets are created in this folder.",
+  "secretManager.folder": "Secrets folder (required)",
+  "secretManager.folderHint": "Only encrypted files in this folder and its subfolders are listed. New secrets are created here.",
+  "secretManager.folderRequired": "Specify a secrets folder in Settings before using Secret Manager. For a dashboard widget, use its widget settings.",
   "secretManager.publicMetadata": "Visible fields",
   "secretManager.addField": "Add field",
   "secretManager.fieldName": "Field (e.g. email)",
@@ -3059,8 +3061,9 @@ const ja: TranslationStrings = {
   "secretManager.invalidName": "有効なシークレット名を入力してください。",
   "secretManager.createFailed": "シークレットを作成できませんでした。",
   "secretManager.updateFailed": "シークレットを更新できませんでした。",
-  "secretManager.folder": "シークレットフォルダ",
-  "secretManager.folderHint": "空欄の場合はすべての暗号化ファイルを表示します。新規シークレットはこのフォルダに作成されます。",
+  "secretManager.folder": "シークレットフォルダ（必須）",
+  "secretManager.folderHint": "指定フォルダとそのサブフォルダ内の暗号化ファイルのみを表示します。新規シークレットもこのフォルダに作成されます。",
+  "secretManager.folderRequired": "設定でシークレットフォルダを指定してください。ダッシュボードの場合はウィジェット設定で指定してください。",
   "secretManager.publicMetadata": "公開フィールド",
   "secretManager.addField": "フィールドを追加",
   "secretManager.fieldName": "項目名（例: email）",

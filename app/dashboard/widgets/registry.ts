@@ -101,8 +101,9 @@ registerWidget({
   type: "secret-manager",
   label: "Secret Manager",
   icon: React.createElement(LockKeyhole, { size: 16 }),
-  defaultConfig: { folder: "" },
+  defaultConfig: { folder: "Secrets" },
   render: (config, ctx) => React.createElement(SecretManagerWidget, {
+    key: (config as { folder?: string } | undefined)?.folder ?? "",
     config,
     encryptionSettings: ctx.encryptionSettings,
   }),

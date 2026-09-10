@@ -1,5 +1,5 @@
 export interface SecretManagerConfig {
-  /** Empty means every .encrypted file in the workspace. */
+  /** Required to browse or create secrets. Empty disables the manager. */
   folder?: string;
 }
 
@@ -22,6 +22,7 @@ export function secretFilePath(folder: string, inputName: string, directory = ""
     .slice(0, 120);
   if (!name) throw new Error("Invalid secret name");
   const normalizedFolder = normalizeSecretFolder(folder);
+  if (!normalizedFolder) throw new Error("Secrets folder required");
   const normalizedDirectory = normalizeSecretFolder(directory);
   const parent = [normalizedFolder, normalizedDirectory].filter(Boolean).join("/");
   return `${parent ? `${parent}/` : ""}${name}.encrypted`;

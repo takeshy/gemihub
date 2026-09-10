@@ -190,9 +190,10 @@ The `secret-manager` widget manages encrypted values as normal local-first `.enc
 
 ```yaml
 config:
-  folder: Secrets       # optional root; blank lists all encrypted files
+  folder: Secrets       # default: Secrets; required; searches only this folder and its descendants
 ```
 
+- **Folder required** — the launcher uses the Secrets folder in Settings → General → Encryption. Dashboard widgets use their own folder setting. The default folder is `Secrets`. An explicitly empty folder disables listing and creation; only the configured folder and its descendants are read.
 - **Create and organize** — create a named secret in the configured root or a nested directory. The value is encrypted with the keys configured in Settings and written through `writeFileLocal`; it reaches Drive on the next Push. When online, duplicate paths are checked against Drive as well as the local tree.
 - **Browse and search** — `.encrypted` files are shown in a directory tree built by `buildSecretTree` (`secret-manager.ts`): directories always sort before files, both alphabetically, at every level, and nesting is capped at 2 directory levels (deeper existing paths collapse into the deepest allowed directory's file list). Each row shows the modified time instead of the full path. Search matches the file name, description, and optional visible metadata fields.
 - **Move by drag-and-drop** — dragging a secret onto a directory row (or onto empty list space, to move it back to the root) renames it via `renameFileLocal`, local-first like any other move; a name collision at the target aborts the move with an inline error.

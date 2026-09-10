@@ -1417,6 +1417,7 @@ function IDEContent({
         initialTool={launcherTool}
         timelineComposerOpen={timelineComposerOpen}
         encryptionSettings={settings.encryption}
+        secretManagerFolder={settings.secretManagerFolder ?? "Secrets"}
         onClose={() => setLauncherOpen(false)}
       />
 

@@ -28,12 +28,14 @@ export function ToolLauncher({
   initialTool,
   timelineComposerOpen = false,
   encryptionSettings,
+  secretManagerFolder,
   onClose,
 }: {
   open: boolean;
   initialTool?: LauncherTool | null;
   timelineComposerOpen?: boolean;
   encryptionSettings: EncryptionSettings;
+  secretManagerFolder: string;
   onClose: () => void;
 }) {
   const { language } = useI18n();
@@ -182,7 +184,8 @@ export function ToolLauncher({
           )}
           {tool === "secret-manager" && (
             <SecretManagerWidget
-              config={{ folder: "" }}
+              key={secretManagerFolder}
+              config={{ folder: secretManagerFolder }}
               encryptionSettings={encryptionSettings}
             />
           )}

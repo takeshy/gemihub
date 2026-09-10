@@ -39,6 +39,7 @@ function CalendarLauncherScene({ language = "ja" }: { language?: Language }) {
             open
             initialTool="calendar"
             encryptionSettings={settingsFixture.encryption}
+            secretManagerFolder={settingsFixture.secretManagerFolder}
             onClose={() => undefined}
           />
         ) : null}

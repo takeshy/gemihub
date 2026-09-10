@@ -626,6 +626,7 @@ export interface UserSettings {
   selectedModel: ModelType | null;
   mcpServers: McpServerConfig[];
   encryption: EncryptionSettings;
+  secretManagerFolder: string;
   editHistory: EditHistorySettings;
   ragTopK: number;
   ragSettings: Record<string, RagSetting>;
@@ -778,6 +779,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   selectedModel: null,
   mcpServers: [],
   encryption: DEFAULT_ENCRYPTION_SETTINGS,
+  secretManagerFolder: "Secrets",
   editHistory: DEFAULT_EDIT_HISTORY_SETTINGS,
   ragTopK: 5,
   ragSettings: {},

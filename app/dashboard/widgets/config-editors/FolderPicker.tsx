@@ -6,13 +6,15 @@ import { useI18n } from "~/i18n/context";
 interface FolderPickerProps {
   value: string;
   onChange: (folder: string) => void;
+  required?: boolean;
+  placeholder?: string;
 }
 
 /**
  * Folder picker using virtual folders from CachedRemoteMeta.
  * Shows a breadcrumb-style selector with drill-down navigation.
  */
-export function FolderPicker({ value, onChange }: FolderPickerProps) {
+export function FolderPicker({ value, onChange, required, placeholder }: FolderPickerProps) {
   const { t } = useI18n();
   const [currentParent, setCurrentParent] = useState<string>("");
   const [folders, setFolders] = useState<string[]>([]);
@@ -54,7 +56,8 @@ export function FolderPicker({ value, onChange }: FolderPickerProps) {
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={t("dashboard.rootFolderPlaceholder")}
+          required={required}
+          placeholder={placeholder ?? t("dashboard.rootFolderPlaceholder")}
           className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
         <button

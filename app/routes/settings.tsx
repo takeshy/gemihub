@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { normalizeSecretFolder } from "~/dashboard/secret-manager";
 import { data, redirect, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import type { Route } from "./+types/settings";
 import { requireAuth, getSession, commitSession, setGeminiApiKey, setTokens } from "~/services/session.server";
@@ -292,6 +293,12 @@ export async function action({ request }: Route.ActionArgs) {
         if (manualChatSaveFolder.split("/").some((part) => part === "." || part === "..")) {
           return jsonWithCookie({ success: false, message: "Invalid manual chat save folder" });
         }
+        const secretManagerFolder = normalizeSecretFolder(String(formData.get("secretManagerFolder") ?? currentSettings.secretManagerFolder ?? "Secrets"));
+        if (formData.has("secretManagerFolder") && !secretManagerFolder) {
+          return jsonWithCookie({ success: false, message: language === "ja"
+            ? "シークレットフォルダを指定してください。"
+            : "Specify a secrets folder." });
+        }
         const dashboardEnabled = formData.get("dashboardEnabled") === "on";
         const workflowEnabled = formData.get("workflowEnabled") === "on";
         const ragFeatureEnabled = formData.get("ragFeatureEnabled") === "on";
@@ -351,6 +358,7 @@ export async function action({ request }: Route.ActionArgs) {
           showManagementFolders,
           maxSavedChatHistories,
           manualChatSaveFolder,
+          secretManagerFolder,
           dashboardEnabled,
           workflowEnabled,
           ragFeatureEnabled,

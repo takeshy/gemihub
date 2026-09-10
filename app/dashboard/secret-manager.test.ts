@@ -6,7 +6,9 @@ test("secretFilePath creates a safe encrypted path in the configured folder", ()
   assert.equal(secretFilePath(" Secrets/API ", "Production token"), "Secrets/API/Production token.encrypted");
   assert.equal(secretFilePath("Secrets", "Production token", " Services/API "), "Secrets/Services/API/Production token.encrypted");
   assert.equal(secretFilePath("Secrets", "Production token", "../Services/./API"), "Secrets/Services/API/Production token.encrypted");
-  assert.equal(secretFilePath("", "deploy.encrypted"), "deploy.encrypted");
+  for (const folder of ["", " ", "/", "./", "../", "\\"]) {
+    assert.throws(() => secretFilePath(folder, "deploy.encrypted"), /Secrets folder required/);
+  }
   assert.equal(secretFilePath("Secrets", "../bad/name"), "Secrets/bad-name.encrypted");
 });
 

@@ -87,7 +87,7 @@ function relativeSecretPath(path: string, folder: string): string {
 export default function SecretManagerWidget({ config, encryptionSettings: encryption }: SecretManagerWidgetProps) {
   const { t } = useI18n();
   const cfg = (config ?? {}) as SecretManagerConfig;
-  const folder = normalizeSecretFolder(cfg.folder ?? "");
+  const folder = normalizeSecretFolder(cfg.folder ?? "Secrets");
   const encryptionReady = Boolean(
     encryption?.publicKey && encryption.encryptedPrivateKey && encryption.salt,
   );
@@ -109,7 +109,11 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
   const [moveError, setMoveError] = useState("");
 
   const refresh = useCallback(async () => {
-    const result = await listFilesLocal(folder || undefined, {
+    if (!folder) {
+      setEntries([]);
+      return;
+    }
+    const result = await listFilesLocal(folder, {
       limit: 100000,
       sortBy: "name",
       sortOrder: "asc",
@@ -361,6 +365,14 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
 
   const renderNode = (node: SecretTreeNode<SecretEntry>): ReactNode =>
     node.kind === "dir" ? renderDirNode(node) : renderSecretEntry(node.entry);
+
+  if (!folder) {
+    return (
+      <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
+        {t("secretManager.folderRequired")}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white dark:bg-gray-900">
