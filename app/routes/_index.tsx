@@ -1402,7 +1402,6 @@ function IDEContent({
         onLogoClick={isMobile ? () => setMobileView("files") : clearActiveFile}
         onOpenLauncher={() => openLauncher(null)}
         onOpenTimelineComposer={() => openLauncher("timeline", true)}
-        onCreateFile={() => window.dispatchEvent(new CustomEvent("create-file-requested"))}
         onOpenSecretManager={() => openLauncher("secret-manager")}
         onOpenHome={() => {
           setRightPanel("chat");

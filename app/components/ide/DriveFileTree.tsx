@@ -634,13 +634,6 @@ export function DriveFileTree({
     [handleImportClick, handleImportGoogleWorkspaceClick, handleImportGoogleWorkspacePickerClick, t]
   );
 
-  // Listen for create-file-requested event (from the mobile header)
-  useEffect(() => {
-    const handler = () => handleCreateFile();
-    window.addEventListener("create-file-requested", handler);
-    return () => window.removeEventListener("create-file-requested", handler);
-  }, [handleCreateFile]);
-
   // Auto-clear progress after 3 seconds when all done
   useEffect(() => {
     if (progress.length === 0) return;

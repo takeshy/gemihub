@@ -13,7 +13,6 @@ import {
   LockKeyhole,
   Rocket,
   Menu,
-  FilePlus,
   PenLine,
 } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
@@ -52,7 +51,6 @@ interface HeaderProps {
   onOpenTimelineComposer?: () => void;
   onOpenSecretManager?: () => void;
   onOpenHome?: () => void;
-  onCreateFile?: () => void;
   /** Workflow is an advanced, opt-in feature (Settings > General). */
   workflowEnabled?: boolean;
 }
@@ -83,7 +81,6 @@ export function Header({
   onOpenTimelineComposer,
   onOpenSecretManager,
   onOpenHome,
-  onCreateFile,
   workflowEnabled = false,
 }: HeaderProps) {
   const { t } = useI18n();
@@ -198,17 +195,6 @@ export function Header({
             aria-label={t("header.quickTimeline")}
           >
             <PenLine size={ICON.MD} />
-          </button>
-        )}
-        {isMobile && onCreateFile && (
-          <button
-            type="button"
-            onClick={onCreateFile}
-            className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-            title={t("fileTree.newFile")}
-            aria-label={t("fileTree.newFile")}
-          >
-            <FilePlus size={ICON.MD} />
           </button>
         )}
         {isMobile && (
