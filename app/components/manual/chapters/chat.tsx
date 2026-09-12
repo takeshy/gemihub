@@ -23,7 +23,7 @@ function ChatEn() {
 
         <h2>Basic Usage</h2>
         <ul>
-          <li>Type your message in the input box and press Enter (or click Send).</li>
+          <li>On desktop, press Enter to send and Shift+Enter for a new line. On mobile, Enter inserts a new line; tap the Send icon to send.</li>
           <li>Responses stream in real-time. You can stop generation at any time.</li>
           <li>The AI sees the currently open file as context (you can dismiss this).</li>
           <li>Click <strong>New Chat</strong> to start a fresh conversation. Previous chats are saved in the history dropdown.</li>
@@ -123,7 +123,7 @@ function ChatJa() {
 
         <h2>基本的な使い方</h2>
         <ul>
-          <li>入力ボックスにメッセージを入力してEnterキーを押す（または送信ボタンをクリック）。</li>
+          <li>PCではEnterキーで送信、Shift+Enterで改行します。スマートフォンではEnterキーで改行し、送信アイコンをタップして送信します。</li>
           <li>応答はリアルタイムでストリーミングされます。いつでも生成を停止できます。</li>
           <li>AIは現在開いているファイルをコンテキストとして認識します（この参照は解除可能）。</li>
           <li><strong>新しいチャット</strong>をクリックして新しい会話を開始。過去のチャットは履歴ドロップダウンに保存されます。</li>

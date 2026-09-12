@@ -25,6 +25,7 @@ import { useI18n } from "~/i18n/context";
 import type { TranslationStrings } from "~/i18n/translations";
 import { useEditorContext, type FileListItem, type SelectionInfo } from "~/contexts/EditorContext";
 import { useAutocomplete, type AutocompleteItem } from "~/hooks/useAutocomplete";
+import { useIsMobile } from "~/hooks/useIsMobile";
 import { AutocompletePopup } from "./AutocompletePopup";
 import { SkillSelector } from "./SkillSelector";
 import { OkfSelector } from "./OkfSelector";
@@ -209,6 +210,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   onRefreshOkfBundles,
   historyScope,
 }: ChatInputProps, ref) {
+  const isMobile = useIsMobile();
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -509,7 +511,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       // Autocomplete intercepts first
-      if (autocomplete.visible) {
+      if (autocomplete.visible && !(isMobile && e.key === "Enter")) {
         const consumed = autocomplete.handleKeyDown(e);
         if (consumed) {
           // Tab/Enter should select the item
@@ -552,12 +554,12 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           return;
         }
       }
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (!isMobile && e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend, autocomplete, handleAutocompleteSelect, promptHistory, content]
+    [handleSend, autocomplete, handleAutocompleteSelect, promptHistory, content, isMobile]
   );
 
   const handleFileSelect = useCallback(
