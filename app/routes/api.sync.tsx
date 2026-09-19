@@ -37,7 +37,7 @@ import { parallelProcess } from "~/utils/parallel";
 import { saveEdit, saveEditDiff } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
-import { indexUniqueRemotePaths, remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
+import { findAmbiguousPushPaths, indexUniqueRemotePaths, remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
 import { deleteSingleFileFromRag } from "~/services/file-search.server";
 import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
 
@@ -671,9 +671,13 @@ export async function action({ request }: Route.ActionArgs) {
         && file.name !== ENCRYPTED_AUTH_FILE_NAME
       );
       const { byPath: currentRootFilesByPath, duplicates } = indexUniqueRemotePaths(userRootFiles);
-      if (duplicates.length > 0) {
+      const ambiguousPaths = findAmbiguousPushPaths(
+        files, new Set(currentRootFilesById.keys()), duplicates, forceRecreate,
+      );
+      if (ambiguousPaths.length > 0) {
+        logCtx.details = { reason: "ambiguous-push-path", duplicatePathCount: ambiguousPaths.length };
         return logAndReturn(
-          { error: `Google Drive contains duplicate file paths: ${duplicates.join(", ")}` },
+          { error: `Google Drive contains duplicate file paths: ${ambiguousPaths.join(", ")}` },
           { status: 409 },
         );
       }

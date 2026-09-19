@@ -1,10 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  findAmbiguousPushPaths,
   findPendingDeletionsChangedOnRemote,
   indexUniqueRemotePaths,
   remoteChangedSincePushSnapshot,
 } from "./sync-push-guard";
+
+test("normal Push addresses files by ID even when Drive has duplicate paths", () => {
+  assert.deepEqual(findAmbiguousPushPaths(
+    [{ fileId: "a", fileName: "same.md" }], new Set(["a", "b"]), ["same.md"], false,
+  ), []);
+});
+
+test("Full Push permits valid IDs and unrelated duplicate paths", () => {
+  assert.deepEqual(findAmbiguousPushPaths(
+    [{ fileId: "a", fileName: "same.md" }, { fileId: "stale", fileName: "unique.md" }],
+    new Set(["a", "b"]), ["same.md", "other.md"], true,
+  ), []);
+});
+
+test("Full Push rejects an ambiguous replacement for a stale ID", () => {
+  assert.deepEqual(findAmbiguousPushPaths(
+    [{ fileId: "stale", fileName: "same.md" }], new Set(["a", "b"]), ["same.md"], true,
+  ), ["same.md"]);
+});
+
+test("deletion-only Push is not blocked by duplicate paths", () => {
+  assert.deepEqual(findAmbiguousPushPaths([], new Set(["a", "b"]), ["same.md"], false), []);
+});
 
 test("indexes unique Drive paths and reports duplicates", () => {
   const indexed = indexUniqueRemotePaths([

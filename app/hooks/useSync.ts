@@ -471,7 +471,13 @@ export function useSync() {
             remoteMeta,
           }),
         });
-        if (!pushRes.ok) throw new Error("Failed to push files");
+        if (!pushRes.ok) {
+          const details = await pushRes.json().catch(() => null);
+          const message = typeof details?.error === "string"
+            ? details.error
+            : "Failed to push files";
+          throw new Error(`${message} (HTTP ${pushRes.status})`);
+        }
         const pushData = await pushRes.json();
         skippedCount = Array.isArray(pushData.skippedFileIds)
           ? pushData.skippedFileIds.length

@@ -17,6 +17,20 @@ export function indexUniqueRemotePaths<T extends { id: string; name: string }>(f
   return { byPath, duplicates: [...duplicates].sort((a, b) => a.localeCompare(b)) };
 }
 
+/** Only stale-ID Full Push needs a unique path to choose a replacement. */
+export function findAmbiguousPushPaths(
+  files: Array<{ fileId: string; fileName?: string }>,
+  currentIds: ReadonlySet<string>,
+  duplicatePaths: string[],
+  forceRecreate: boolean,
+): string[] {
+  if (!forceRecreate) return [];
+  const duplicates = new Set(duplicatePaths);
+  return [...new Set(files
+    .filter((file) => !currentIds.has(file.fileId) && file.fileName && duplicates.has(file.fileName))
+    .map((file) => file.fileName!))].sort();
+}
+
 /** True when Drive changed after the client performed its push preflight. */
 export function remoteChangedSincePushSnapshot(
   expected: PushSnapshotEntry | undefined,

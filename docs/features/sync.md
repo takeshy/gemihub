@@ -122,6 +122,8 @@ Uploads locally-changed files to remote.
    ├─ POST /api/sync { action: "pushFiles", files, deleteFileIds, remoteMeta }
    │   └─ Server:
    │       ├─ Use client-provided remoteMeta (skip re-reading _sync-meta.json)
+   │       ├─ Address ordinary updates/deletions by file ID; duplicate Drive names do not block Push
+   │       │   └─ Full Push rejects duplicate paths only when a missing ID needs an ambiguous name-based replacement
    │       ├─ Move reserved deletions to trash while uploads run
    │       ├─ For each file (parallel, max 5 concurrent):
    │       │   ├─ Use the client-supplied diff for edit history (Drive-read fallback only when unavailable)

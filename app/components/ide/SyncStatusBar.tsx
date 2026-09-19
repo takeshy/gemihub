@@ -277,9 +277,12 @@ export function SyncStatusBar({
 
       {/* Error / warning (pushRejected is handled by a dedicated dialog) */}
       {error && syncStatus === "error" && error !== "settings.sync.pushRejected" && (
-        <span className="text-xs text-red-500 truncate max-w-[120px]" title={error}>
-          Sync error
-        </span>
+        <details className="relative text-xs text-red-500">
+          <summary className="cursor-pointer" title={error}>Sync error</summary>
+          <div role="alert" className="absolute right-0 top-full z-50 mt-1 w-72 max-w-[80vw] whitespace-normal break-words rounded border border-red-200 bg-white p-3 shadow-lg dark:border-red-900 dark:bg-gray-900">
+            {error}
+          </div>
+        </details>
       )}
       {error && syncStatus === "warning" && (
         <span className="text-xs text-amber-600 truncate max-w-[160px] dark:text-amber-400" title={error}>
