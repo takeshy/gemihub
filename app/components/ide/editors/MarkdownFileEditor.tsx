@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
-import { Loader2, Eye, PenLine, Code, Plus } from "lucide-react";
+import { Loader2, Eye, PenLine, Code, Plus, MoreVertical, ListOrdered, History, GitCompareArrows, Upload, Download } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
@@ -102,6 +102,14 @@ export function MarkdownFileEditor({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const wysiwygWrapRef = useRef<HTMLDivElement>(null);
+  const scrollRatioRef = useRef(0);
+  const [rawScrollTop, setRawScrollTop] = useState(0);
+  const [showLineNumbers, setShowLineNumbers] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem("gemihub-editor-line-numbers") !== "false";
+  });
+  const [compactMenuOpen, setCompactMenuOpen] = useState(false);
   const [showWikiLinkPicker, setShowWikiLinkPicker] = useState(false);
   const wikiLinkStartRef = useRef<number>(0);
 
@@ -116,7 +124,7 @@ export function MarkdownFileEditor({
     const el = headerRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
-      setCompactHeader(el.clientWidth < 480);
+      setCompactHeader(el.clientWidth < 560);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -238,6 +246,43 @@ export function MarkdownFileEditor({
   const [mode, setMode] = useState<MdEditMode>(initialMode);
   const currentFilePath = editorCtx.fileList.find((file) => file.id === fileId)?.path || fileName;
 
+  const getWysiwygScroller = useCallback((): HTMLElement | null => {
+    const editable = wysiwygWrapRef.current?.querySelector<HTMLElement>('[contenteditable="true"]');
+    if (!editable) return null;
+    let node: HTMLElement | null = editable;
+    while (node && node !== wysiwygWrapRef.current) {
+      const style = window.getComputedStyle(node);
+      if (/(auto|scroll)/.test(style.overflowY)) return node;
+      node = node.parentElement;
+    }
+    return editable;
+  }, []);
+
+  const getModeScroller = useCallback((value: MdEditMode): HTMLElement | null => {
+    if (value === "preview") return previewRef.current;
+    if (value === "raw") return textareaRef.current;
+    return getWysiwygScroller();
+  }, [getWysiwygScroller]);
+
+  const switchMode = useCallback((nextMode: MdEditMode) => {
+    const current = getModeScroller(mode);
+    if (current) {
+      const max = current.scrollHeight - current.clientHeight;
+      scrollRatioRef.current = max > 0 ? current.scrollTop / max : 0;
+    }
+    setCompactMenuOpen(false);
+    setMode(nextMode);
+  }, [getModeScroller, mode]);
+
+  const toggleLineNumbers = useCallback(() => {
+    setShowLineNumbers((current) => {
+      const next = !current;
+      window.localStorage.setItem("gemihub-editor-line-numbers", String(next));
+      return next;
+    });
+    setCompactMenuOpen(false);
+  }, []);
+
   // Report every effective mode change (explicit toggles AND internal resets
   // like file switches / wiki-heading jumps) so hosts tracking the mode for
   // memo anchoring never desync. Fires once on mount with the initial mode.
@@ -282,6 +327,16 @@ export function MarkdownFileEditor({
       onInternalLinkClick?: (target: string) => void;
     }> | null
   >(null);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const target = getModeScroller(mode);
+      if (!target) return;
+      target.scrollTop = scrollRatioRef.current * Math.max(0, target.scrollHeight - target.clientHeight);
+      if (mode === "raw") setRawScrollTop(target.scrollTop);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mode, MarkdownEditorComponent, getModeScroller]);
 
   useEffect(() => {
     const prev = prevFileIdRef.current;
@@ -481,11 +536,11 @@ export function MarkdownFileEditor({
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {headerLeft && <div className="min-w-0 flex-1">{headerLeft}</div>}
             {/* Mode selector */}
-            <div className="flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden shrink-0">
+            {!compactHeader && <div className="flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden shrink-0">
               {modes.map((m) => (
                 <button
                   key={m.key}
-                  onClick={() => setMode(m.key)}
+                  onClick={() => switchMode(m.key)}
                   className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors ${
                     mode === m.key
                       ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
@@ -494,13 +549,24 @@ export function MarkdownFileEditor({
                   title={m.label}
                 >
                   {m.icon}
-                  {!compactHeader && <span>{m.label}</span>}
+                  <span>{m.label}</span>
                 </button>
               ))}
-            </div>
+            </div>}
+            {!compactHeader && mode === "raw" && (
+              <button
+                type="button"
+                onClick={toggleLineNumbers}
+                className="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                title={showLineNumbers ? t("mainViewer.hideLineNumbers") : t("mainViewer.showLineNumbers")}
+              >
+                <ListOrdered size={ICON.SM} />
+                {showLineNumbers ? t("mainViewer.hideLineNumbers") : t("mainViewer.showLineNumbers")}
+              </button>
+            )}
           </div>
 
-          {!hideToolbarActions && (
+          {!hideToolbarActions && !compactHeader && (
             <EditorToolbarActions
               onDiffClick={onDiffClick}
               onHistoryClick={onHistoryClick}
@@ -509,6 +575,51 @@ export function MarkdownFileEditor({
               uploading={uploading}
               extraActions={toolbarExtra}
             />
+          )}
+          {compactHeader && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setCompactMenuOpen((open) => !open)}
+                className="flex items-center rounded border border-gray-300 px-1.5 py-1 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                title={t("mainViewer.moreActions")}
+                aria-label={t("mainViewer.moreActions")}
+                aria-expanded={compactMenuOpen}
+              >
+                <MoreVertical size={ICON.SM} />
+              </button>
+              {compactMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setCompactMenuOpen(false)} />
+                  <div className="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{t("mainViewer.viewMode")}</div>
+                    {modes.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => switchMode(item.key)}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 ${mode === item.key ? "text-blue-600 dark:text-blue-300" : "text-gray-700 dark:text-gray-200"}`}
+                      >
+                        {item.icon}{item.label}
+                      </button>
+                    ))}
+                    {mode === "raw" && (
+                      <button type="button" onClick={toggleLineNumbers} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                        <ListOrdered size={ICON.SM} />
+                        {showLineNumbers ? t("mainViewer.hideLineNumbers") : t("mainViewer.showLineNumbers")}
+                      </button>
+                    )}
+                    {!hideToolbarActions && <div className="border-t border-gray-200 pt-1 dark:border-gray-700">
+                      {toolbarExtra && <div onClick={() => setCompactMenuOpen(false)} className="[&_button]:!flex [&_button]:w-full [&_button]:border-0 [&_button]:px-3 [&_button]:py-1.5">{toolbarExtra}</div>}
+                      {onHistoryClick && <button type="button" onClick={() => { onHistoryClick(); setCompactMenuOpen(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"><History size={ICON.SM} />{t("editHistory.menuLabel")}</button>}
+                      {onDiffClick && <button type="button" onClick={() => { onDiffClick(); setCompactMenuOpen(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"><GitCompareArrows size={ICON.SM} />{t("mainViewer.diff")}</button>}
+                      <button type="button" disabled={uploading} onClick={() => { handleTempUpload(); setCompactMenuOpen(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-700"><Upload size={ICON.SM} />{t("contextMenu.tempUpload")}</button>
+                      <button type="button" onClick={() => { handleTempDownload(); setCompactMenuOpen(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"><Download size={ICON.SM} />{t("contextMenu.tempDownload")}</button>
+                    </div>}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -553,6 +664,7 @@ export function MarkdownFileEditor({
           <WysiwygSelectionTracker setActiveSelection={editorCtx.setActiveSelection}>
             {MarkdownEditorComponent ? (
               <div
+                ref={wysiwygWrapRef}
                 className="flex-1 min-h-0 flex flex-col overflow-hidden"
                 onKeyDownCapture={markWysiwygEdited}
                 onPointerDownCapture={markWysiwygEdited}
@@ -579,7 +691,16 @@ export function MarkdownFileEditor({
       )}
 
       {mode === "raw" && (
-        <div className="flex-1 p-4">
+        <div className="flex min-h-0 flex-1 p-4">
+          {showLineNumbers && (
+            <div aria-hidden="true" className="w-12 shrink-0 overflow-hidden rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 py-4 text-right font-mono text-sm leading-relaxed text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500">
+              <div style={{ transform: `translateY(-${rawScrollTop}px)` }}>
+                {Array.from({ length: content.split("\n").length }, (_, index) => (
+                  <div key={index} className="pr-2">{index + 1}</div>
+                ))}
+              </div>
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={content.replace(/^\u00A0$/gm, "")}
@@ -593,7 +714,9 @@ export function MarkdownFileEditor({
               }
             }}
             onSelect={handleSelect}
-            className="w-full h-full font-mono text-sm leading-relaxed bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100"
+            onScroll={(event) => setRawScrollTop(event.currentTarget.scrollTop)}
+            wrap="off"
+            className={`min-w-0 flex-1 font-mono text-sm leading-relaxed bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 dark:text-gray-100 ${showLineNumbers ? "rounded-r-lg" : "rounded-lg"}`}
             spellCheck={false}
           />
           <QuickOpenDialog

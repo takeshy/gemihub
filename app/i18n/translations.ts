@@ -158,6 +158,10 @@ export interface TranslationStrings {
   "mainViewer.modifiedTime": string;
   "mainViewer.mimeType": string;
   "mainViewer.download": string;
+  "mainViewer.moreActions": string;
+  "mainViewer.viewMode": string;
+  "mainViewer.showLineNumbers": string;
+  "mainViewer.hideLineNumbers": string;
 
   // Base editor
   "base.viewDisplay": string;
@@ -1612,6 +1616,10 @@ const en: TranslationStrings = {
   "dashboard.alignHorizontal": "Arrange in columns",
   "dashboard.alignVertical": "Arrange in rows",
   "mainViewer.raw": "Raw",
+  "mainViewer.moreActions": "More actions",
+  "mainViewer.viewMode": "View mode",
+  "mainViewer.showLineNumbers": "Show line numbers",
+  "mainViewer.hideLineNumbers": "Hide line numbers",
   "mainViewer.diff": "Diff",
   "mainViewer.diffTarget": "Select file to compare",
   "mainViewer.binaryFile": "Binary file",
@@ -3076,6 +3084,10 @@ const ja: TranslationStrings = {
   "dashboard.alignHorizontal": "横に整列",
   "dashboard.alignVertical": "縦に整列",
   "mainViewer.raw": "Raw",
+  "mainViewer.moreActions": "その他の操作",
+  "mainViewer.viewMode": "表示モード",
+  "mainViewer.showLineNumbers": "行番号を表示",
+  "mainViewer.hideLineNumbers": "行番号を非表示",
   "mainViewer.diff": "比較",
   "mainViewer.diffTarget": "比較するファイルを選択",
   "mainViewer.binaryFile": "バイナリファイル",
