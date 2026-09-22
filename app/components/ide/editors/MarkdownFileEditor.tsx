@@ -116,15 +116,15 @@ export function MarkdownFileEditor({
   // Compact header when the editor column itself is narrow (e.g. a dashboard
   // file widget with the memo panel open). A viewport breakpoint can't see
   // this — the window stays wide while the editor shrinks — so measure the
-  // header row and drop the mode-button labels below the threshold instead
-  // of letting the toggle overflow and get clipped.
+  // header row. In compact mode the mode selector gets its own row: the three
+  // modes must remain visible instead of competing with the memo/actions row.
   const headerRef = useRef<HTMLDivElement>(null);
   const [compactHeader, setCompactHeader] = useState(false);
   useEffect(() => {
     const el = headerRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
-      setCompactHeader(el.clientWidth < 560);
+      setCompactHeader(el.clientWidth < 720);
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -531,7 +531,7 @@ export function MarkdownFileEditor({
       {!hideHeader && (
         <div
           ref={headerRef}
-          className="flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
+          className={`flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${compactHeader ? "flex-wrap" : ""}`}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {headerLeft && <div className="min-w-0 flex-1">{headerLeft}</div>}
@@ -576,7 +576,7 @@ export function MarkdownFileEditor({
               extraActions={toolbarExtra}
             />
           )}
-          {compactHeader && (
+          {compactHeader && (mode === "raw" || !hideToolbarActions) && (
             <div className="relative shrink-0">
               <button
                 type="button"
@@ -592,17 +592,6 @@ export function MarkdownFileEditor({
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setCompactMenuOpen(false)} />
                   <div className="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">{t("mainViewer.viewMode")}</div>
-                    {modes.map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => switchMode(item.key)}
-                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 ${mode === item.key ? "text-blue-600 dark:text-blue-300" : "text-gray-700 dark:text-gray-200"}`}
-                      >
-                        {item.icon}{item.label}
-                      </button>
-                    ))}
                     {mode === "raw" && (
                       <button type="button" onClick={toggleLineNumbers} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
                         <ListOrdered size={ICON.SM} />
@@ -619,6 +608,26 @@ export function MarkdownFileEditor({
                   </div>
                 </>
               )}
+            </div>
+          )}
+          {compactHeader && (
+            <div className="order-last flex w-full items-center overflow-hidden rounded-md border border-gray-300 dark:border-gray-600">
+              {modes.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => switchMode(item.key)}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-2 py-1 text-xs transition-colors ${
+                    mode === item.key
+                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                      : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                  }`}
+                  title={item.label}
+                >
+                  <span className="shrink-0">{item.icon}</span>
+                  <span className="truncate">{item.label}</span>
+                </button>
+              ))}
             </div>
           )}
         </div>
