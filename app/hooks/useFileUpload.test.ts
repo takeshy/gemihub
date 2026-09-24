@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildUploadFormData, getUploadFileName, type UploadFile } from "./useFileUpload";
+import {
+  buildUploadFormData,
+  getUploadFileName,
+  uploadFileDirectToDrive,
+  type UploadFile,
+} from "./useFileUpload";
 import { parallelProcess } from "~/utils/parallel";
 
 test("parallel upload forms keep each client path paired with its own content", async () => {
@@ -38,4 +43,47 @@ test("parallel upload forms keep each client path paired with its own content", 
     content,
     deferMeta: "true",
   })));
+});
+
+test("direct upload sends only session metadata through the app and file bytes to Drive", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ input: string; init?: RequestInit }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ input: url, init });
+    if (url === "/api/drive/upload-resumable") {
+      return Response.json({ uploadUrl: "https://drive.example/upload/session" });
+    }
+    return Response.json({
+      id: "drive-id",
+      name: "book.epub",
+      mimeType: "application/epub+zip",
+      md5Checksum: "checksum",
+    });
+  };
+
+  try {
+    const file = new File(["epub-content"], "book.epub", { type: "application/epub+zip" });
+    const uploaded = await uploadFileDirectToDrive(file, {
+      folderId: "root",
+      clientName: "books/book.epub",
+    });
+
+    assert.equal(uploaded.id, "drive-id");
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].input, "/api/drive/upload-resumable");
+    assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {
+      intent: "create-session",
+      folderId: "root",
+      clientPath: "books/book.epub",
+      fileName: "book.epub",
+      mimeType: "application/epub+zip",
+      size: file.size,
+    });
+    assert.equal(calls[1].input, "https://drive.example/upload/session");
+    assert.equal(calls[1].init?.method, "PUT");
+    assert.equal(calls[1].init?.body, file);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

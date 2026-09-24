@@ -60,6 +60,53 @@ export function buildUploadFormData(
   return formData;
 }
 
+export async function uploadFileDirectToDrive(
+  file: File,
+  options: {
+    folderId: string;
+    clientName: string;
+    namePrefix?: string;
+    replaceFileId?: string;
+  },
+): Promise<UploadedFile> {
+  // Only the small session-creation request goes through Cloud Run. Sending
+  // the file itself straight to Drive avoids proxy request-size limits and
+  // keeps large uploads from occupying a Cloud Run instance twice (receive +
+  // forward).
+  const sessionResponse = await fetch("/api/drive/upload-resumable", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      intent: "create-session",
+      folderId: options.folderId,
+      clientPath: options.clientName,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+      namePrefix: options.namePrefix,
+      replaceFileId: options.replaceFileId,
+    }),
+  });
+  const session = await sessionResponse.json().catch(() => ({})) as {
+    uploadUrl?: string;
+    error?: string;
+  };
+  if (!sessionResponse.ok || !session.uploadUrl) {
+    throw new Error(session.error || "Could not start upload");
+  }
+
+  const uploadResponse = await fetch(session.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  const uploaded = await uploadResponse.json().catch(() => ({})) as UploadedFile & { error?: { message?: string } };
+  if (!uploadResponse.ok || !uploaded.id) {
+    throw new Error(uploaded.error?.message || `Upload failed (${uploadResponse.status})`);
+  }
+  return uploaded;
+}
+
 async function finalizeUploadMetadata(folderId: string, files: UploadedFile[]): Promise<Set<string>> {
   const failedIds = new Set<string>();
   if (files.length === 0) return failedIds;
@@ -196,38 +243,19 @@ export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_L
         }
       }
 
-      const deferMeta = validFiles.length > 1;
       const results = await parallelProcess(validFiles, async (f) => {
         const clientName = getUploadFileName(f);
         try {
           const replaceFileId = replaceMap?.[clientName] || replaceMap?.[f.name];
-          const formData = buildUploadFormData(f, {
+          const completed = await uploadFileDirectToDrive(f, {
             folderId,
             clientName,
             namePrefix,
             replaceFileId,
-            deferMeta,
           });
-
-          const uploadRes = await fetch("/api/drive/upload-resumable", {
-            method: "POST",
-            body: formData,
-          });
-          const uploadData = await uploadRes.json().catch(() => ({}));
-          if (!uploadRes.ok || !uploadData.file) {
-            const error = uploadData.error || "Upload failed";
-            failedNames.add(clientName);
-            failedNames.add(f.name);
-            setProgress((prev) =>
-              prev.map((p) => (p.name === clientName ? { ...p, status: "error", error } : p))
-            );
-            return { file: f, clientName, error };
-          }
-
-          const completed = uploadData.file as UploadedFile;
           return { file: f, clientName, completed };
-        } catch {
-          const error = "Network error";
+        } catch (cause) {
+          const error = cause instanceof Error ? cause.message : "Network error";
           failedNames.add(clientName);
           failedNames.add(f.name);
           setProgress((prev) =>
@@ -240,9 +268,7 @@ export function useFileUpload(sizeLimitBytes: number | null = FREE_UPLOAD_SIZE_L
       }, UPLOAD_CONCURRENCY);
 
       const completedFiles = results.flatMap((result) => result.completed ? [result.completed] : []);
-      const metadataFailures = deferMeta
-        ? await finalizeUploadMetadata(folderId, completedFiles)
-        : new Set<string>();
+      const metadataFailures = await finalizeUploadMetadata(folderId, completedFiles);
 
       for (const result of results) {
         const { file, clientName, completed } = result;
