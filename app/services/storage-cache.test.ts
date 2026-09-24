@@ -23,6 +23,7 @@ import {
   getLocalSyncEntry,
   getRemoteSyncSnapshot,
   listLocalConflictBackups,
+  deleteLocalConflictBackup,
   listCachedObjectsForMount,
   listDirtyObjectsForMount,
   listLocalSyncEntriesForMount,
@@ -236,6 +237,17 @@ test("conflict backups are browser-local and tenant scoped", async () => {
   assert.equal(a[0].content, "losing local value");
   assert.equal(a[0].encoding, "utf-8");
   assert.equal((await listLocalConflictBackups("orgB/proj1")).length, 1);
+});
+
+test("deleteLocalConflictBackup removes only that backup", async () => {
+  const keep = await saveLocalConflictBackup({
+    mountKey: "orgA/proj1", relativePath: "a.md", content: "a", encoding: "utf-8", contentType: "text/markdown",
+  });
+  const drop = await saveLocalConflictBackup({
+    mountKey: "orgA/proj1", relativePath: "b.md", content: "b", encoding: "utf-8", contentType: "text/markdown",
+  });
+  await deleteLocalConflictBackup(drop.id);
+  assert.deepEqual((await listLocalConflictBackups("orgA/proj1")).map((backup) => backup.id), [keep.id]);
 });
 
 // ---------------------------------------------------------------------------

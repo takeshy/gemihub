@@ -368,6 +368,12 @@ export async function listLocalConflictBackups(
   });
 }
 
+export async function deleteLocalConflictBackup(id: string): Promise<void> {
+  await txPromise(STORE_CONFLICT_BACKUPS, "readwrite", async (_tx, stores) => {
+    await reqPromise(stores[STORE_CONFLICT_BACKUPS].delete(id));
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Local sync metadata (last-known md5 / revision per object)
 // ---------------------------------------------------------------------------

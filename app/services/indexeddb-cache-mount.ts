@@ -28,6 +28,8 @@ import {
   queueStorageDeletion,
   listPendingStorageDeletions,
   deletePendingStorageDeletion,
+  listLocalConflictBackups as listStorageConflictBackups,
+  deleteLocalConflictBackup as deleteStorageConflictBackup,
   type CachedObject,
 } from "./storage-cache";
 import type {
@@ -36,6 +38,7 @@ import type {
   CachedFileTree,
   CachedRemoteMeta,
   CachedTreeNode,
+  ConflictBackup,
   LocalSyncMeta,
   PendingDeletion,
 } from "./indexeddb-cache-drive";
@@ -76,6 +79,27 @@ export async function getPendingDeletions(): Promise<PendingDeletion[]> {
     fileName: entry.relativePath,
     queuedAt: entry.queuedAt,
   }));
+}
+
+/** Project-mount conflict backups in the Drive-cache shape, newest first. */
+export async function listLocalConflictBackups(): Promise<ConflictBackup[]> {
+  const mountKey = activeProjectMountKey();
+  if (!mountKey) return [];
+  const backups = await listStorageConflictBackups(mountKey);
+  return backups
+    .map((backup) => ({
+      id: backup.id,
+      fileId: backup.relativePath,
+      fileName: backup.relativePath,
+      content: backup.content,
+      ...(backup.encoding === "base64" ? { encoding: "base64" as const } : {}),
+      createdAt: backup.createdAt,
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function deleteLocalConflictBackup(id: string): Promise<void> {
+  await deleteStorageConflictBackup(id);
 }
 
 export async function deletePendingDeletion(fileId: string): Promise<void> {

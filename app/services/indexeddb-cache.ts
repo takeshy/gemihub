@@ -67,6 +67,11 @@ export const applyPushedFileMetadata: typeof drive.applyPushedFileMetadata =
   drive.applyPushedFileMetadata;
 export const saveLocalConflictBackup: typeof drive.saveLocalConflictBackup =
   drive.saveLocalConflictBackup;
+// Conflict resolution on either mount keeps the losing version in its own DB.
+export const listLocalConflictBackups: typeof drive.listLocalConflictBackups = () =>
+  onMount() ? mount.listLocalConflictBackups() : drive.listLocalConflictBackups();
+export const deleteLocalConflictBackup: typeof drive.deleteLocalConflictBackup = (id) =>
+  onMount() ? mount.deleteLocalConflictBackup(id) : drive.deleteLocalConflictBackup(id);
 export const queuePendingDeletion: typeof drive.queuePendingDeletion = (entry) =>
   onMount() ? mount.queuePendingDeletion(entry) : drive.queuePendingDeletion(entry);
 export const getPendingDeletions: typeof drive.getPendingDeletions = () =>

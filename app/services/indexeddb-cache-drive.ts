@@ -351,6 +351,24 @@ export async function saveLocalConflictBackup(
   await txPut(db, "conflictBackups", { ...backup, id, createdAt });
 }
 
+/** Browser-local conflict backups, newest first. */
+export async function listLocalConflictBackups(): Promise<ConflictBackup[]> {
+  if (typeof indexedDB === "undefined") return [];
+  try {
+    const db = await getDB();
+    const backups = await txGetAll<ConflictBackup>(db, "conflictBackups");
+    return backups.sort((a, b) => b.createdAt - a.createdAt);
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteLocalConflictBackup(id: string): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const db = await getDB();
+  await txDelete(db, "conflictBackups", id);
+}
+
 export async function getAllCachedFiles(): Promise<CachedFile[]> {
   if (typeof indexedDB === "undefined") return [];
   try {

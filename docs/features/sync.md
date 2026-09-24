@@ -282,17 +282,25 @@ Conflicts occur during Push or Pull when both local and remote versions of a fil
 
 | Choice | What Happens |
 |--------|--------------|
-| **Keep Local** | Back up remote to `sync_conflicts/`, upload local content to Drive, update remote meta |
-| **Keep Remote** | Back up local to `sync_conflicts/`, download remote content to IndexedDB |
+| **Keep Local** | Upload local content to Drive and update remote meta. The server reads the overwritten Drive content first and returns it; the browser stores it as a conflict backup in IndexedDB |
+| **Keep Remote** | Store the local content as a conflict backup in IndexedDB first, then download remote content to the cache |
 
 After resolution:
 - The resolved file's edit history entry is cleared
 - Local sync meta is partially merged — only the resolved file's entry is updated from the server's remote meta (other remote changes are not applied until the next Pull)
 - localModifiedCount is updated
 
-The unselected version is always backed up for manual merging if needed. Binary files round-trip through base64: the winning content is uploaded with a binary update/create, and binary backups are written as real binary files (not base64 text).
+The unselected version is always kept as a **browser-local conflict backup** (the `conflictBackups` store of the IndexedDB cache — `gemihub-cache` on the Drive mount, `gemihub-storage` on a project mount). Nothing is written to Drive, so:
+
+- the backup exists only in the browser that resolved the conflict — it does not sync to other devices;
+- it is listed, previewed, restored and deleted in Settings → Sync → Conflict Backups ("In this browser");
+- it is deleted together with the cache (e.g. when the root folder is changed).
+
+Binary files round-trip through base64: the winning content is uploaded with a binary update/create, and a binary backup keeps its base64 content with `encoding: "base64"`.
 
 ### Backup Naming
+
+Backups written as files — Drive `sync_conflicts/` (when the root folder is changed, see `migrateRootFolder`) and the plugins' local `GemiHub/conflict-backups/` folders — are named:
 
 ```
 {encodeURIComponent(path)}_{YYYYMMDD_HHmmss_mmm}.{ext}   (UTC)
@@ -425,12 +433,16 @@ If a caller edits the file again (via `writeFileLocal(fileName, content, { exist
 
 ### Scenario 1: Conflict — Need Both Versions
 
-When a conflict occurs, you choose Keep Local or Keep Remote, but the other version is always saved to `sync_conflicts/`.
+When a conflict occurs, you choose Keep Local or Keep Remote; the other version is kept in this browser's IndexedDB (`conflictBackups`, see [Conflict Resolution](#conflict-resolution)).
 
 **To merge manually:**
-1. Settings → Sync → Conflict Backups → Manage
-2. Select the backup file, edit the restore name if needed
-3. Click Restore — the backup is created as a new file in the root folder
+1. In the same browser that resolved the conflict (the backup is not on Drive or other devices), open Settings → Sync → Conflict Backups → Manage
+2. Under "In this browser", expand a backup to preview it, select it, and edit the restore name if needed. The default is the original path with a conflict marker (`notes/daily (conflict 2026-09-25 1530).md`), so it never collides with the file that won
+3. Click Restore — the backup becomes a new local file (the same local-first path as any new file, uploaded on the next Push) and is removed from the list. Restore refuses a name that already exists instead of overwriting it
+
+Do not clear the cache before restoring — it deletes the backups. If the browser-local copy is gone, Google Drive's version history for the file ("Manage versions") may still hold the overwritten revision.
+
+Backups in Drive `sync_conflicts/` (created when the root folder is changed, or by older GemiHub versions' conflict resolution) are listed in the same dialog under "Google Drive (sync_conflicts/)" (Drive mount only): select the backup, edit the restore name if needed, and click Restore — the backup is created as a new file in the root folder.
 
 ### Scenario 2: Recover a Deleted File
 
@@ -462,7 +474,7 @@ Located in Settings → Sync tab, organized into sections:
 | Manage Temp Files | Browse and manage temporary files on Drive |
 | Detect Untracked Files | Find remote files not tracked in `_sync-meta.json` (normally empty now that `GET /api/sync` registers them; still useful to permanently delete strays) |
 | Trash | Restore or permanently delete trashed files |
-| Conflict Backups | Manage conflict backup files from sync resolution |
+| Conflict Backups | Two sections: **In this browser** — versions overwritten by conflict resolution (IndexedDB `conflictBackups`; preview, restore as a new file, delete); **Google Drive (sync_conflicts/)** — backup files written when the root folder is changed or by older versions (Drive mount only) |
 
 ### Edit History
 | Action | Description |
@@ -550,7 +562,7 @@ The script refuses uncommitted or unpushed library changes and then runs `npm in
 | `app/services/edit-history-local.ts` | Client-side edit history (reverse-apply diffs, revert detection, net change check) |
 | `app/services/edit-history.server.ts` | Server-side edit history (Drive `.history.json` read/write) |
 | `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |
-| `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog (restore/rename/delete) |
+| `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog: browser-local backups (`listLocalConflictBackups` / `deleteLocalConflictBackup`, restore via `writeFileLocal` / `saveBinaryFileLocal`) and Drive `sync_conflicts/` (restore/rename/delete) |
 | `app/services/history-meta.server.ts` | History listing metadata (`_meta.json`) read/write/rebuild for chat, execution, and request history folders |
 | `app/services/sync-diff.ts` | Re-exports `computeSyncDiff` and the `SyncMeta` types from `gemihub-sync-core/protocol` (also re-exported by `sync-meta.server.ts`) |
 | `app/services/sync-push-guard.ts` | Re-exports the push guards from `gemihub-sync-core/protocol` |

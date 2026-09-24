@@ -1090,6 +1090,16 @@ export interface TranslationStrings {
   "trash.deleteFailed": string;
   "trash.restoreFailed": string;
   "trash.conflictInfo": string;
+  "trash.localBackupsTitle": string;
+  "trash.localBackupsInfo": string;
+  "trash.noLocalBackups": string;
+  "trash.driveBackupsTitle": string;
+  "trash.restoreNameExists": string;
+  "trash.restoreNameEmpty": string;
+  "trash.deleteBackupConfirm": string;
+  "trash.showPreview": string;
+  "trash.hidePreview": string;
+  "trash.binaryBackup": string;
 
   // Conflict dialog
   "conflict.title": string;
@@ -2557,7 +2567,17 @@ const en: TranslationStrings = {
   "trash.permanentDeleteWarning": "This action cannot be undone.",
   "trash.deleteFailed": "Failed to delete files.",
   "trash.restoreFailed": "Failed to restore files.",
-  "trash.conflictInfo": "Conflict backups created during sync resolution.",
+  "trash.conflictInfo": "Backups in Google Drive's sync_conflicts/ folder (created when the root folder is changed, or by older versions).",
+  "trash.localBackupsTitle": "In this browser",
+  "trash.localBackupsInfo": "Versions overwritten by conflict resolution. They are kept only in this browser and are deleted when the cache is cleared. Restoring creates a new file that is uploaded on the next Push.",
+  "trash.noLocalBackups": "No conflict backups in this browser.",
+  "trash.driveBackupsTitle": "Google Drive (sync_conflicts/)",
+  "trash.restoreNameExists": "A file with this name already exists. Change the restore name: {name}",
+  "trash.restoreNameEmpty": "Enter a restore name.",
+  "trash.deleteBackupConfirm": "Delete the selected backups? This cannot be undone.",
+  "trash.showPreview": "Preview",
+  "trash.hidePreview": "Hide preview",
+  "trash.binaryBackup": "Binary file (no preview)",
 
   // Conflict dialog
   "conflict.title": "Sync Conflicts ({count})",
@@ -4025,7 +4045,17 @@ const ja: TranslationStrings = {
   "trash.permanentDeleteWarning": "この操作は元に戻せません。",
   "trash.deleteFailed": "ファイルの削除に失敗しました。",
   "trash.restoreFailed": "ファイルの復元に失敗しました。",
-  "trash.conflictInfo": "同期コンフリクト解決時に作成されたバックアップです。",
+  "trash.conflictInfo": "Google Drive の sync_conflicts/ フォルダにあるバックアップです（ルートフォルダの変更時や、以前のバージョンで作成されたもの）。",
+  "trash.localBackupsTitle": "このブラウザ内",
+  "trash.localBackupsInfo": "コンフリクト解決で上書きされたバージョンです。このブラウザにだけ保存され、キャッシュを消去すると削除されます。復元すると新しいファイルとして作成され、次の Push で Drive にアップロードされます。",
+  "trash.noLocalBackups": "このブラウザ内にコンフリクトバックアップはありません。",
+  "trash.driveBackupsTitle": "Google Drive（sync_conflicts/）",
+  "trash.restoreNameExists": "同じ名前のファイルがすでにあります。復元名を変更してください: {name}",
+  "trash.restoreNameEmpty": "復元名を入力してください。",
+  "trash.deleteBackupConfirm": "選択したバックアップを削除しますか？この操作は元に戻せません。",
+  "trash.showPreview": "プレビュー",
+  "trash.hidePreview": "プレビューを閉じる",
+  "trash.binaryBackup": "バイナリファイル（プレビューなし）",
 
   // Conflict dialog
   "conflict.title": "同期コンフリクト ({count})",
