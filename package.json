@@ -11,7 +11,7 @@
     "lint:fix": "eslint app/ --fix",
     "precommit": "npm run typecheck && npm run lint && npm run build",
     "test": "tsx --test 'app/**/*.test.ts'",
-    "test:sync-diff": "tsx --test app/services/sync-meta.server.test.ts app/services/sync-client-utils.test.ts",
+    "test:sync-diff": "tsx --test app/services/sync-client-utils.test.ts app/services/sync-diff-storage.test.ts",
     "test:parser": "tsx --test app/engine/parser.test.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
@@ -27,6 +27,7 @@
     "diff": "^8.0.3",
     "esbuild": "^0.27.5",
     "fflate": "^0.8.3",
+    "gemihub-sync-core": "github:takeshy/gemihub-sync-core#737c53f8f5e46a0b9a8b81cdab070272732b6de1",
     "googleapis": "^171.3.0",
     "isbot": "^5.1.31",
     "isolated-vm": "^6.1.2",
@@ -79,6 +80,7 @@
   "allowScripts": {
     "isolated-vm@6.1.2": true,
     "protobufjs@7.6.3": true,
-    "esbuild@0.27.5": true
+    "esbuild@0.27.5": true,
+    "github:takeshy/gemihub-sync-core#737c53f8f5e46a0b9a8b81cdab070272732b6de1": true
   }
 }

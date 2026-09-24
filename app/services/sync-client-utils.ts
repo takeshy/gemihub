@@ -1,167 +1,22 @@
 import { setCachedFile, type LocalSyncMeta, type CachedRemoteMeta } from "~/services/indexeddb-cache";
-import { SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME } from "~/services/sync-diff";
 
-export const SYNC_EXCLUDED_FILE_NAMES = new Set([SYNC_META_FILE_NAME, SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME]);
-export const SYNC_EXCLUDED_PREFIXES = [
-  "history/",
-  "trash/",
-  "sync_conflicts/",
-  "__TEMP__/",
-  "plugins/",
-];
-
-export function isGoogleWorkspaceMimeType(mimeType: string | undefined | null): boolean {
-  return Boolean(mimeType?.startsWith("application/vnd.google-apps."));
-}
-
-// GCS project paths carry the managed root as a literal prefix
-// ("gemihub/history/…"), while Drive paths are relative to the gemihub root
-// folder and never include it. Strip it so both identities share one rule.
-const SYNC_MANAGED_ROOT_PREFIXES = ["gemihub/"];
-
-export function isProjectInternalPath(fileName: string): boolean {
-  const normalized = fileName.replace(/^\/+/, "");
-  if (SYNC_EXCLUDED_FILE_NAMES.has(normalized)) return true;
-  return SYNC_EXCLUDED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
-}
-
-export function isSyncExcludedPath(fileName: string): boolean {
-  const normalized = fileName.replace(/^\/+/, "");
-  const candidates = [normalized];
-  for (const prefix of SYNC_MANAGED_ROOT_PREFIXES) {
-    if (normalized.startsWith(prefix)) {
-      candidates.push(normalized.slice(prefix.length));
-    }
-  }
-  return candidates.some(isProjectInternalPath);
-}
-
-const BINARY_APPLICATION_TYPES = new Set([
-  "application/pdf",
-  "application/epub+zip",
-  "application/zip",
-  "application/gzip",
-  "application/x-tar",
-  "application/x-gzip",
-  "application/x-bzip2",
-  "application/x-7z-compressed",
-  "application/x-rar-compressed",
-  "application/octet-stream",
-  "application/wasm",
-]);
-
-const BINARY_APPLICATION_PREFIXES = [
-  "application/vnd.openxmlformats-",  // docx, xlsx, pptx
-  "application/vnd.ms-",              // doc, xls, ppt
-  "application/vnd.oasis.opendocument.", // odt, ods, odp
-];
-
-const BINARY_FILE_EXTENSIONS = new Set([
-  "epub",
-  "doc",
-  "docx",
-  "xls",
-  "xlsx",
-  "ppt",
-  "pptx",
-  "odt",
-  "ods",
-  "odp",
-  "zip",
-  "gz",
-  "tar",
-  "bz2",
-  "7z",
-  "rar",
-  "wasm",
-]);
-
-const TEXT_FILE_EXTENSIONS = new Set([
-  "base",
-  "kanban",
-  "css",
-  "csv",
-  "dashboard",
-  "html",
-  "js",
-  "json",
-  "jsx",
-  "md",
-  "mjs",
-  "ts",
-  "tsx",
-  "txt",
-  "xml",
-  "yaml",
-  "yml",
-]);
-
-export function isBinaryMimeType(mimeType: string | undefined | null): boolean {
-  if (!mimeType) return false;
-  if (
-    mimeType.startsWith("image/") ||
-    mimeType.startsWith("video/") ||
-    mimeType.startsWith("audio/") ||
-    mimeType.startsWith("font/")
-  ) return true;
-  if (BINARY_APPLICATION_TYPES.has(mimeType)) return true;
-  return BINARY_APPLICATION_PREFIXES.some((p) => mimeType.startsWith(p));
-}
-
-export function isBinaryFileName(fileName: string | undefined | null): boolean {
-  const ext = fileName?.toLowerCase().split(".").pop() ?? "";
-  return BINARY_FILE_EXTENSIONS.has(ext);
-}
-
-export function isTextFileName(fileName: string | undefined | null): boolean {
-  const ext = fileName?.toLowerCase().split(".").pop() ?? "";
-  return TEXT_FILE_EXTENSIONS.has(ext);
-}
-
-export function shouldTreatAsBinaryFile(
-  fileName: string | undefined | null,
-  mimeType: string | undefined | null
-): boolean {
-  if (isBinaryMimeType(mimeType)) return !isTextFileName(fileName);
-  return isBinaryFileName(fileName) || (fileName ? isImageFileName(fileName) : false);
-}
-
-/**
- * Heuristic: check if content looks like binary data.
- * Inspects the first 512 characters for non-printable characters
- * (excluding \t, \n, \r). If >= 10% are control chars, treat as binary.
- */
-export function looksLikeBinary(content: string): boolean {
-  const sample = content.slice(0, 512);
-  if (sample.length === 0) return false;
-  let controlCount = 0;
-  for (let i = 0; i < sample.length; i++) {
-    const code = sample.charCodeAt(i);
-    // Allow tab (9), newline (10), carriage return (13)
-    if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
-      controlCount++;
-    }
-  }
-  return controlCount / sample.length >= 0.1;
-}
-
-/** Files larger than this threshold are not cached in IndexedDB (20 MB). */
-export const LARGE_FILE_CACHE_THRESHOLD = 20 * 1024 * 1024;
-
-/** Returns true if the file exceeds the cache size threshold. */
-export function isLargeFile(size: string | undefined | null): boolean {
-  if (!size) return false;
-  const bytes = Number(size);
-  return !Number.isNaN(bytes) && bytes > LARGE_FILE_CACHE_THRESHOLD;
-}
-
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"]);
-
-/** Check if a file name has an image extension (for thumbnail display). */
-export function isImageFileName(name: string): boolean {
-  const ext = name.toLowerCase().split(".").pop() || "";
-  return IMAGE_EXTENSIONS.has(ext);
-}
+// Path / binary classification rules are shared with the other GemiHub
+// clients through gemihub-sync-core.
+export {
+  SYNC_EXCLUDED_FILE_NAMES,
+  SYNC_EXCLUDED_PREFIXES,
+  isGoogleWorkspaceMimeType,
+  isProjectInternalPath,
+  isSyncExcludedPath,
+  isBinaryMimeType,
+  isBinaryFileName,
+  isTextFileName,
+  shouldTreatAsBinaryFile,
+  looksLikeBinary,
+  LARGE_FILE_CACHE_THRESHOLD,
+  isLargeFile,
+  isImageFileName,
+} from "gemihub-sync-core/paths";
 
 /**
  * Upload binary content directly to Google Drive, update IndexedDB cache,
