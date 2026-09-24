@@ -23,6 +23,7 @@ import {
   setCachedObject,
   setLocalSyncEntry,
   setRemoteSyncSnapshot,
+  updateCachedObject,
   type CachedObject,
   type LocalSyncEntry,
   type RemoteSyncSnapshot,
@@ -308,7 +309,7 @@ export async function fullPullFromRemote(
 
   const paths = Object.keys(remote.entries).filter((path) => !isSyncExcludedPath(path));
   for (const path of paths) {
-    await pullObject(mount, mountKey, path);
+    await pullObject(mount, mountKey, path, { overwriteDirty: true });
   }
 
   return {
@@ -323,6 +324,7 @@ export async function pullObject(
   mount: string,
   mountKey: string,
   relativePath: string,
+  options?: { overwriteDirty?: boolean },
 ): Promise<CachedObject> {
   if (isSyncExcludedPath(relativePath)) {
     throw new StorageSyncError("object is excluded from sync", 400, relativePath);
@@ -341,7 +343,20 @@ export async function pullObject(
     cachedAt: Date.now(),
     dirty: false,
   };
-  await setCachedObject(cached);
+  // Unpushed local edits (including ones made while this download was in
+  // flight) are never clobbered by an ordinary pull; the caller surfaces them
+  // as a conflict instead. Only Full Pull is authoritative over dirty copies.
+  let refused = false;
+  await updateCachedObject(mountKey, cached.objectPath, (current) => {
+    if (current?.dirty && !options?.overwriteDirty) {
+      refused = true;
+      return undefined;
+    }
+    return cached;
+  });
+  if (refused) {
+    throw new StorageSyncError("object has unpushed local changes", 409, relativePath);
+  }
   await setLocalSyncEntry(toLocalSyncEntry(cached));
   return cached;
 }
@@ -396,7 +411,7 @@ export async function pushObject(
     }),
   });
 
-  const updated: CachedObject = {
+  const pushed: CachedObject = {
     ...cached,
     syncedContent: cached.content,
     md5Hash: result.object.md5Hash,
@@ -404,9 +419,23 @@ export async function pushObject(
     dirty: false,
     cachedAt: Date.now(),
   };
-  await setCachedObject(updated);
-  await setLocalSyncEntry(toLocalSyncEntry(updated));
-  return updated;
+  // Re-read inside one transaction: an edit made while the write was in
+  // flight keeps its content and stays dirty, now based on the pushed revision.
+  const stored = await updateCachedObject(mountKey, cached.objectPath, (current) => {
+    if (!current) return undefined;
+    if (current.content === cached.content && current.encoding === cached.encoding) {
+      return pushed;
+    }
+    return {
+      ...current,
+      syncedContent: cached.content,
+      md5Hash: pushed.md5Hash,
+      revision: pushed.revision,
+      dirty: true,
+    };
+  });
+  await setLocalSyncEntry(toLocalSyncEntry(pushed));
+  return stored ?? pushed;
 }
 
 // ---------------------------------------------------------------------------
@@ -440,10 +469,11 @@ export async function dropLocal(
   mountKey: string,
   relativePath: string,
 ): Promise<void> {
-  const cached = await getCachedObject(mountKey, objectPathForCachedFile(mountKey, relativePath));
-  if (cached) await deleteCachedObject(mountKey, cached.objectPath);
-  // The local-sync key is the same as the cache key.
-  if (cached) await deleteLocalSyncEntry(mountKey, cached.objectPath);
+  const objectPath = objectPathForCachedFile(mountKey, relativePath);
+  await deleteCachedObject(mountKey, objectPath);
+  // The local-sync key is the same as the cache key. Drop it even when nothing
+  // is cached, so a stale base does not keep reporting a remote deletion.
+  await deleteLocalSyncEntry(mountKey, objectPath);
 }
 
 function toLocalSyncEntry(obj: CachedObject): LocalSyncEntry {

@@ -20,7 +20,7 @@ import {
   objectPathForCachedFile,
   saveLocalConflictBackup,
   setLocalSyncEntry,
-  setCachedObject,
+  updateCachedObject,
   listPendingStorageDeletions,
   deletePendingStorageDeletion,
   deleteLocalSyncEntry,
@@ -125,7 +125,7 @@ export function useStorageSync() {
         });
         const pendingDeletions = await listPendingStorageDeletions(mountKey);
         setLocalModifiedCount(diff.toPush.length + diff.localOnly.length + pendingDeletions.length);
-        setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length);
+        setRemoteModifiedCount(diff.toPull.length + diff.remoteOnly.length + diff.deletedOnRemote.length);
         const legacyConflicts = diffToLegacyConflicts(diff);
         setConflicts(legacyConflicts);
         if (legacyConflicts.length > 0) setSyncStatus("conflict");
@@ -202,14 +202,21 @@ export function useStorageSync() {
         const changedDeletion = pendingDeletions.some((entry) => {
           const base = localBase.entries[entry.relativePath];
           const current = remote.entries[entry.relativePath];
-          return base && current && base.revision !== current.revision;
+          if (!base || !current) return false;
+          // Bases written without a revision (older setLocalSyncMeta) fall
+          // back to the content hash instead of blocking Push forever.
+          return base.revision
+            ? base.revision !== current.revision
+            : base.md5Hash !== current.md5Hash;
         });
         if (changedDeletion) {
           await refreshCounts(true);
           fail("settings.sync.pushRejected");
           return;
         }
-        const deleteRes = await fetch("/api/drive/files", {
+        // Pin the mount explicitly: the session cookie can point at another
+        // project (another tab, or a lagging workspace switch).
+        const deleteRes = await fetch(`/api/drive/files?${new URLSearchParams({ mount })}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -309,12 +316,36 @@ export function useStorageSync() {
         setCachingProgress({ total, done: 0 });
         let done = 0;
         for (const path of toPull) {
-          await pullObject(mount, mountKey, path);
+          try {
+            await pullObject(mount, mountKey, path);
+          } catch (err) {
+            // Edited locally while the pull was running: keep the edit. The
+            // refreshCounts below reports it as a conflict.
+            if (err instanceof StorageSyncError && err.status === 409) {
+              done += 1;
+              setCachingProgress({ total, done });
+              continue;
+            }
+            throw err;
+          }
           const pending = (await listPendingStorageDeletions(mountKey))
             .find((entry) => entry.relativePath === path);
           if (pending) await deletePendingStorageDeletion(mountKey, pending.objectPath);
           done += 1;
           setCachingProgress({ total, done });
+        }
+        // Apply deletions made by other members. The local copy is clean
+        // (dirty copies are edit-delete conflicts), so nothing unpushed is lost.
+        const removed = diff.deletedOnRemote.filter((p) => !ignoredIds?.has(p));
+        if (removed.length > 0) {
+          const pendingByPath = new Map(
+            (await listPendingStorageDeletions(mountKey)).map((entry) => [entry.relativePath, entry]),
+          );
+          for (const path of removed) {
+            await dropLocal(mountKey, path);
+            const pending = pendingByPath.get(path);
+            if (pending) await deletePendingStorageDeletion(mountKey, pending.objectPath);
+          }
         }
         setLastSyncTime(new Date().toISOString());
         await refreshCounts(true);
@@ -346,7 +377,7 @@ export function useStorageSync() {
   //   - "remote" → drop local cache, then pull fresh from server.
   // ---------------------------------------------------------------------------
   const resolveConflict = useCallback(
-    async (fileId: string, resolution: "local" | "remote") => {
+    async (fileId: string, resolution: "local" | "remote", isEditDelete?: boolean) => {
       if (!mount || !mountKey) {
         fail(NOT_SELECTED_ERROR);
         return;
@@ -373,7 +404,16 @@ export function useStorageSync() {
             });
           }
           await dropLocal(mountKey, fileId);
-          await pullObject(mount, mountKey, fileId);
+          // Edit-delete: accepting the remote side means accepting the
+          // deletion, so there is nothing to pull.
+          if (!isEditDelete) {
+            try {
+              await pullObject(mount, mountKey, fileId);
+            } catch (err) {
+              // Deleted remotely after the conflict was detected.
+              if (!(err instanceof StorageSyncError && err.status === 404)) throw err;
+            }
+          }
         } else {
           // Force-push: write through api.storage.write without ifRevisionMatch.
           // pushObject would refuse to clobber a newer server copy; we want to.
@@ -383,19 +423,26 @@ export function useStorageSync() {
           } else {
             const params = new URLSearchParams({ mount, path: fileId, format: "json" });
             const remoteRes = await fetch(`/api/storage/read?${params.toString()}`);
-            if (!remoteRes.ok) throw new Error(`HTTP ${remoteRes.status}: ${await remoteRes.text()}`);
-            const remote = (await remoteRes.json()) as {
-              content: string;
-              encoding?: "utf-8" | "base64";
-              object: { relativePath: string; contentType: string };
-            };
-            await saveLocalConflictBackup({
-              mountKey,
-              relativePath: remote.object.relativePath,
-              content: remote.content,
-              encoding: remote.encoding ?? "utf-8",
-              contentType: remote.object.contentType,
-            });
+            // 404 = edit-delete conflict: the object is re-created from the
+            // local copy and there is no remote value to back up.
+            const remoteMissing = remoteRes.status === 404;
+            if (!remoteRes.ok && !remoteMissing) {
+              throw new Error(`HTTP ${remoteRes.status}: ${await remoteRes.text()}`);
+            }
+            if (!remoteMissing) {
+              const remote = (await remoteRes.json()) as {
+                content: string;
+                encoding?: "utf-8" | "base64";
+                object: { relativePath: string; contentType: string };
+              };
+              await saveLocalConflictBackup({
+                mountKey,
+                relativePath: remote.object.relativePath,
+                content: remote.content,
+                encoding: remote.encoding ?? "utf-8",
+                contentType: remote.object.contentType,
+              });
+            }
             const res = await fetch("/api/storage/write", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -414,12 +461,26 @@ export function useStorageSync() {
             };
             const updated = {
               ...cached,
+              syncedContent: cached.content,
               md5Hash: object.md5Hash,
               revision: object.revision,
               dirty: false,
               cachedAt: Date.now(),
             };
-            await setCachedObject(updated);
+            // Same rule as pushObject: an edit made during the write stays dirty.
+            await updateCachedObject(mountKey, updated.objectPath, (current) => {
+              if (!current) return undefined;
+              if (current.content === cached.content && current.encoding === cached.encoding) {
+                return updated;
+              }
+              return {
+                ...current,
+                syncedContent: cached.content,
+                md5Hash: updated.md5Hash,
+                revision: updated.revision,
+                dirty: true,
+              };
+            });
             // This force-write bypasses pushObject, so record the returned GCS
             // revision explicitly. Otherwise the next diff sees no local
             // base and classifies the just-resolved object as remote-only.

@@ -11,6 +11,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect } from "react";
 import type { EnterpriseSelectionView } from "~/types/enterprise";
 import { setActiveTimelineAuthor } from "~/services/timeline-author";
+import { setActiveProjectSelection } from "~/services/active-project";
 
 interface EnterpriseContextValue {
   selection: EnterpriseSelectionView | null;
@@ -30,7 +31,7 @@ const EnterpriseContext = createContext<EnterpriseContextValue>({
 // On the client this must run before descendants' passive effects: the
 // compatibility file APIs synchronously read the active selection while their
 // dashboard loaders mount. useEffect would leave one commit where the previous
-// project's localStorage value is still visible after a hard project switch.
+// project's selection is still visible after a hard project switch.
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -55,15 +56,7 @@ export function EnterpriseProvider({
 }: EnterpriseProviderProps) {
   useIsomorphicLayoutEffect(() => {
     setActiveTimelineAuthor(currentUserId, currentUserEmail);
-    if (typeof localStorage === "undefined") return;
-    if (selection) {
-      localStorage.setItem(
-        "gemihub-active-tenant-project",
-        JSON.stringify({ orgId: selection.orgId, projectId: selection.projectId }),
-      );
-    } else {
-      localStorage.removeItem("gemihub-active-tenant-project");
-    }
+    setActiveProjectSelection(selection);
   }, [selection, currentUserId, currentUserEmail]);
 
   return (

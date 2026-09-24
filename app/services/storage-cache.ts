@@ -234,6 +234,27 @@ export async function setCachedObject(obj: CachedObject): Promise<void> {
   });
 }
 
+/**
+ * Read-modify-write one cached object inside a single transaction, so a
+ * concurrent local edit cannot land between the read and the write. `update`
+ * returns the record to store, or undefined to leave the store untouched.
+ */
+export async function updateCachedObject(
+  mountKey: string,
+  objectPath: string,
+  update: (current: CachedObject | undefined) => CachedObject | undefined,
+): Promise<CachedObject | undefined> {
+  return txPromise(STORE_OBJECTS, "readwrite", async (_tx, stores) => {
+    const store = stores[STORE_OBJECTS];
+    const current = await reqPromise(
+      store.get([mountKey, objectPath]) as IDBRequest<CachedObject | undefined>,
+    );
+    const next = update(current);
+    if (next) await reqPromise(store.put(next));
+    return next;
+  });
+}
+
 export async function deleteCachedObject(
   mountKey: string,
   objectPath: string,

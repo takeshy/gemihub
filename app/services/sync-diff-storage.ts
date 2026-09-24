@@ -44,6 +44,8 @@ export interface StorageSyncDiff {
   localOnly: string[];
   /** New remotely; never been pulled. */
   remoteOnly: string[];
+  /** Synced before, clean locally, and since deleted on the server. */
+  deletedOnRemote: string[];
 }
 
 /**
@@ -70,6 +72,7 @@ export function computeStorageSyncDiff(
   const editDeleteConflicts: string[] = [];
   const localOnly: string[] = [];
   const remoteOnly: string[] = [];
+  const deletedOnRemote: string[] = [];
 
   const allPaths = new Set<string>();
   for (const k of Object.keys(baseEntries)) allPaths.add(k);
@@ -91,16 +94,29 @@ export function computeStorageSyncDiff(
       continue;
     }
     if (!hasBase && hasRemote) {
-      // Remote we've never pulled
-      remoteOnly.push(path);
+      if (isLocallyModified) {
+        // Created locally while someone else pushed the same path: both
+        // sides are new, so neither may silently overwrite the other.
+        conflicts.push({
+          objectPath: path,
+          localMd5: "",
+          remoteMd5: remoteEntry.md5Hash,
+          baseRevision: "",
+          remoteRevision: remoteEntry.revision,
+        });
+      } else {
+        // Remote we've never pulled
+        remoteOnly.push(path);
+      }
       continue;
     }
     if (hasBase && !hasRemote) {
       // Server lost it (deleted by another client)
       if (isLocallyModified) {
         editDeleteConflicts.push(path);
+      } else {
+        deletedOnRemote.push(path);
       }
-      // else: silently drop from local — caller decides whether to delete cache.
       continue;
     }
     // hasBase && hasRemote
@@ -120,5 +136,5 @@ export function computeStorageSyncDiff(
     // else: clean and unchanged — no-op
   }
 
-  return { toPush, toPull, conflicts, editDeleteConflicts, localOnly, remoteOnly };
+  return { toPush, toPull, conflicts, editDeleteConflicts, localOnly, remoteOnly, deletedOnRemote };
 }

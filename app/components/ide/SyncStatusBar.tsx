@@ -90,6 +90,7 @@ export function SyncStatusBar({
                 // is genuinely pending work and the badge counts it.
                 ...diff.toPull.map((path) => entry(path, "modified")),
                 ...diff.remoteOnly.map((path) => entry(path, "modified")),
+                ...diff.deletedOnRemote.map((path) => entry(path, "deleted")),
                 ...diff.editDeleteConflicts.map((path) => entry(path, "editDeleted")),
                 ...diff.conflicts.map((conflict) => entry(conflict.objectPath, "conflict")),
               ];

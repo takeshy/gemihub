@@ -110,3 +110,20 @@ test("mixed scenario", () => {
   assert.equal(diff.conflicts.length, 1);
   assert.equal(diff.conflicts[0].objectPath, "conflict");
 });
+
+test("clean local + remote deleted: reported as deletedOnRemote", () => {
+  const base = snap({ "a.md": { md5: "h1" } });
+  const diff = computeStorageSyncDiff(base, snap({}));
+  assert.deepEqual(diff.deletedOnRemote, ["a.md"]);
+  assert.deepEqual(diff.editDeleteConflicts, []);
+});
+
+test("new local file vs same path pushed remotely: conflict, not remoteOnly", () => {
+  const remote = snap({ "plan.md": { md5: "r1", gen: "7" } });
+  const diff = computeStorageSyncDiff(null, remote, new Set(["plan.md"]));
+  assert.deepEqual(diff.remoteOnly, []);
+  assert.equal(diff.conflicts.length, 1);
+  assert.equal(diff.conflicts[0].objectPath, "plan.md");
+  assert.equal(diff.conflicts[0].baseRevision, "");
+  assert.equal(diff.conflicts[0].remoteRevision, "7");
+});

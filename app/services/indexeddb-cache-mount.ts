@@ -8,6 +8,7 @@
  */
 
 import { isEncryptedFile } from "./crypto-core";
+import { getActiveProjectSelection } from "./active-project";
 import {
   deleteCachedObject,
   deleteEditHistory,
@@ -41,33 +42,19 @@ import type {
 import { isMarkdownFile, parseFrontmatter } from "~/utils/frontmatter";
 
 /**
- * The active project mountKey, mirrored to localStorage by
- * EnterpriseProvider's layout effect (before descendants' passive effects
- * run) so this module-level, non-React code can read it synchronously.
+ * The active project mountKey for this tab (see active-project.ts: per-tab
+ * module state recorded by EnterpriseProvider's layout effect, before
+ * descendants' passive effects run).
  */
 export function activeProjectMountKey(): string | null {
-  if (typeof localStorage === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("gemihub-active-tenant-project");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { orgId?: string; projectId?: string };
-    return parsed.orgId && parsed.projectId ? `gcs:${parsed.orgId}/${parsed.projectId}` : null;
-  } catch {
-    return null;
-  }
+  const selection = getActiveProjectSelection();
+  return selection ? `gcs:${selection.orgId}/${selection.projectId}` : null;
 }
 
 /** The server-facing mount parameter for the active project, if any. */
 export function activeProjectMountParam(): string | null {
-  if (typeof localStorage === "undefined") return null;
-  try {
-    const raw = localStorage.getItem("gemihub-active-tenant-project");
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { orgId?: string; projectId?: string };
-    return parsed.orgId && parsed.projectId ? `project:${parsed.orgId}/${parsed.projectId}` : null;
-  } catch {
-    return null;
-  }
+  const selection = getActiveProjectSelection();
+  return selection ? `project:${selection.orgId}/${selection.projectId}` : null;
 }
 
 export async function queuePendingDeletion(entry: PendingDeletion): Promise<void> {
@@ -317,13 +304,22 @@ export async function getLocalSyncMeta(): Promise<LocalSyncMeta | undefined> {
 export async function setLocalSyncMeta(meta: LocalSyncMeta): Promise<void> {
   const mountKey = activeProjectMountKey();
   if (!mountKey) return;
+  // LocalSyncMeta has no revision field. Callers typically read the meta,
+  // change a few entries and write all of it back, so keep the stored GCS
+  // revision whenever the content hash is unchanged — blanking it would make
+  // every base look stale (e.g. queued deletions always fail their revision
+  // check and Push is rejected forever).
+  const existing = new Map(
+    (await listLocalSyncEntriesForMount(mountKey)).map((entry) => [entry.relativePath, entry]),
+  );
   for (const [fileId, entry] of Object.entries(meta.files)) {
+    const prev = existing.get(fileId);
     await setLocalSyncEntry({
       mountKey,
       objectPath: objectPathForCachedFile(mountKey, fileId),
       relativePath: fileId,
       md5Hash: entry.md5Checksum,
-      revision: "",
+      revision: prev && prev.md5Hash === entry.md5Checksum ? prev.revision : "",
       updatedAt: new Date(entry.modifiedTime || Date.now()).getTime(),
     });
   }

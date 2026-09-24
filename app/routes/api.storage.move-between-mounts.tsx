@@ -112,10 +112,14 @@ export async function action({ request }: Route.ActionArgs) {
 
     // GCS → GCS: native server-side copy (no byte round-trip).
     if (sourceCtx.kind === "gcs-project" && targetCtx.kind === "gcs-project" && sourceCtx.gcs && targetCtx.gcs) {
-      const objects = await moveObjectsBetweenProjects(sourceCtx.gcs, targetCtx.gcs, moves, {
-        keepSource,
+      const { objects, sourcesNotDeleted } = await moveObjectsBetweenProjects(
+        sourceCtx.gcs, targetCtx.gcs, moves, { keepSource },
+      );
+      return Response.json({
+        ok: true,
+        objects: objects.map(gcsObjectToMeta),
+        ...(sourcesNotDeleted.length > 0 ? { sourcesNotDeleted } : {}),
       });
-      return Response.json({ ok: true, objects: objects.map(gcsObjectToMeta) });
     }
 
     // Cross-provider (Drive ↔ GCS): explicit byte transfer. Copy EVERYTHING

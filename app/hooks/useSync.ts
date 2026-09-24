@@ -5,6 +5,7 @@ import {
   setLocalSyncMeta,
   getCachedFile,
   setCachedFile,
+  applyPushedFileMetadata,
   deleteCachedFile,
   getAllCachedFileIds,
   clearAllEditHistory,
@@ -490,18 +491,19 @@ export function useSync() {
         await bulkRemoveLocalSyncMetaEntries(deletedIds);
         if (failedDeletionIds.size > 0) skippedCount += failedDeletionIds.size;
 
-        // Update IndexedDB cache with new checksums/timestamps
+        // Update IndexedDB cache with new checksums/timestamps. The dirty
+        // marker is cleared atomically and only when the cache still holds the
+        // pushed snapshot — edits made while the request was in flight stay
+        // dirty so the next Push uploads them.
+        const pushedContentById = new Map(filesToPush.map((f) => [f.fileId, f.content]));
         for (const r of pushData.results as Array<{ fileId: string; md5Checksum: string; modifiedTime: string }>) {
           pushedResultIds.add(r.fileId);
-          const cached = await getCachedFile(r.fileId);
-          if (cached) {
-            await setCachedFile({
-              ...cached,
-              md5Checksum: r.md5Checksum,
-              modifiedTime: r.modifiedTime,
-              cachedAt: Date.now(),
-            });
-          }
+          const pushedContent = pushedContentById.get(r.fileId);
+          if (pushedContent === undefined) continue;
+          await applyPushedFileMetadata(r.fileId, pushedContent, {
+            md5Checksum: r.md5Checksum,
+            modifiedTime: r.modifiedTime,
+          });
         }
 
         // Merge only the pushed files' entries into localSyncMeta. The
@@ -534,10 +536,6 @@ export function useSync() {
         }
       }
 
-      // Clear edit history only for files that were actually pushed successfully
-      for (const fileId of pushedResultIds) {
-        await deleteEditHistoryEntry(fileId);
-      }
       // Clear edit history for reverted files (content matches synced state, no actual diff)
       for (const fileId of revertedIds) {
         await deleteEditHistoryEntry(fileId);
@@ -745,9 +743,24 @@ export function useSync() {
           if (!pullRes.ok) throw new Error("Failed to pull changes");
           const pullData = await pullRes.json();
 
-          // 7. Update IndexedDB with content + metadata from remoteMeta
+          // 7. Update IndexedDB with content + metadata from remoteMeta.
+          // A file edited locally while the download was in flight must not be
+          // overwritten: leave its baseline untouched and surface a conflict.
+          const modifiedDuringPull = await getLocallyModifiedFileIds();
           for (const file of pullData.files as Array<{ fileId: string; content: string; encoding?: "base64" }>) {
             const rm = remoteFiles[file.fileId];
+            if (modifiedDuringPull.has(file.fileId) && !modifiedIds.has(file.fileId)) {
+              const local = localMeta?.files[file.fileId];
+              allConflicts.push({
+                fileId: file.fileId,
+                fileName: rm?.name ?? file.fileId,
+                localChecksum: local?.md5Checksum ?? "",
+                remoteChecksum: rm?.md5Checksum ?? "",
+                localModifiedTime: local?.modifiedTime ?? "",
+                remoteModifiedTime: rm?.modifiedTime ?? "",
+              });
+              continue;
+            }
             if (!file.encoding) await addCommitBoundary(file.fileId);
             await setCachedFile({
               fileId: file.fileId,
@@ -881,8 +894,19 @@ export function useSync() {
           await saveLocalConflictBackup(data.backup);
         }
 
-        // If remote wins, update local cache with remote content
+        // If remote wins, update local cache with remote content. Content
+        // edited after the backup above was taken would otherwise vanish, so
+        // back up the latest local value too when it changed meanwhile.
         if (choice === "remote" && data.file) {
+          const latest = await getCachedFile(fileId);
+          if (latest && latest.content !== localContent) {
+            await saveLocalConflictBackup({
+              fileId,
+              fileName: latest.fileName || fileName || fileId,
+              content: latest.content,
+              ...(latest.encoding ? { encoding: latest.encoding } : {}),
+            });
+          }
           // Binary content has no text edit history — skip the commit boundary
           if (!data.file.encoding) await addCommitBoundary(data.file.fileId);
           await setCachedFile({
@@ -902,9 +926,20 @@ export function useSync() {
         }
 
         // If local wins, update cache md5/modifiedTime from server response
+        let historyHandled = false;
         if (choice === "local" && data.file && cached) {
           if (isEditDelete && data.file.fileId !== fileId) {
-            // Edit-delete: server created a new file with a new ID
+            // Edit-delete: server created a new file with a new ID holding the
+            // uploaded snapshot. An edit made meanwhile is kept as a backup.
+            const latest = await getCachedFile(fileId);
+            if (latest && latest.content !== cached.content) {
+              await saveLocalConflictBackup({
+                fileId,
+                fileName: latest.fileName || fileName || fileId,
+                content: latest.content,
+                ...(latest.encoding ? { encoding: latest.encoding } : {}),
+              });
+            }
             await deleteCachedFile(fileId);
             await setCachedFile({
               fileId: data.file.fileId,
@@ -916,17 +951,18 @@ export function useSync() {
               ...(cached.encoding ? { encoding: cached.encoding } : {}),
             });
           } else {
-            await setCachedFile({
-              ...cached,
+            // Re-reads the cache inside one transaction: an edit made while the
+            // resolve request was in flight keeps its content and dirty marker.
+            await applyPushedFileMetadata(fileId, cached.content, {
               md5Checksum: data.file.md5Checksum,
               modifiedTime: data.file.modifiedTime,
-              cachedAt: Date.now(),
             });
+            historyHandled = true;
           }
         }
 
         // Clear edit history for the resolved file (conflict is resolved)
-        await deleteEditHistoryEntry(fileId);
+        if (!historyHandled) await deleteEditHistoryEntry(fileId);
 
         // Update local sync meta from remote meta (merge to preserve local-only entries)
         if (data.remoteMeta) {

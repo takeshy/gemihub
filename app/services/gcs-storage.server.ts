@@ -261,7 +261,9 @@ export async function listObjects(
  * native copy + delete sequence (server-side copy is a single API call,
  * no bytes transit our server). Returns the new object's metadata.
  *
- * Throws GcsObjectNotFoundError if the source is missing.
+ * Throws GcsObjectNotFoundError if the source is missing and
+ * GcsPreconditionFailedError if the destination already exists — a rename
+ * never overwrites another object.
  *
  * Note: the `preconditionOpts.ifGenerationMatch` on `File.copy()` applies
  * to the *destination* (refusing to clobber an existing dst with that
@@ -274,6 +276,9 @@ export async function renameObject(
   fromRelativePath: string,
   toRelativePath: string,
 ): Promise<StoredObject> {
+  if (ctx.organizationReadOnly) {
+    throw new OrganizationReadOnlyError(ctx.organizationDeleteAfter);
+  }
   if (fromRelativePath === toRelativePath) {
     const existing = await readObjectMetadata(ctx, fromRelativePath);
     if (!existing) throw new GcsObjectNotFoundError(objectPathOf(ctx, fromRelativePath));
@@ -284,9 +289,13 @@ export async function renameObject(
   const src = bucket.file(objectPathOf(ctx, fromRelativePath));
   const dst = bucket.file(objectPathOf(ctx, toRelativePath));
   try {
-    await src.copy(dst);
+    // ifGenerationMatch: 0 on the destination = "only if it does not exist".
+    await src.copy(dst, { preconditionOpts: { ifGenerationMatch: 0 } });
   } catch (err) {
     if (isNotFound(err)) throw new GcsObjectNotFoundError(objectPathOf(ctx, fromRelativePath));
+    if (isPreconditionFailed(err)) {
+      throw new GcsPreconditionFailedError(objectPathOf(ctx, toRelativePath), 0);
+    }
     throw err;
   }
   // Source delete is best-effort — if it fails, the rename has succeeded
@@ -306,7 +315,7 @@ export async function moveObjectsBetweenProjects(
   targetCtx: ProjectAccessContext,
   moves: Array<{ from: string; to: string }>,
   options: { keepSource?: boolean } = {},
-): Promise<StoredObject[]> {
+): Promise<{ objects: StoredObject[]; sourcesNotDeleted: string[] }> {
   if (targetCtx.organizationReadOnly || (!options.keepSource && sourceCtx.organizationReadOnly)) {
     throw new OrganizationReadOnlyError(
       targetCtx.organizationDeleteAfter ?? sourceCtx.organizationDeleteAfter,
@@ -324,7 +333,9 @@ export async function moveObjectsBetweenProjects(
     for (const move of moves) {
       const source = sourceBucket.file(objectPathOf(sourceCtx, move.from));
       const target = targetBucket.file(objectPathOf(targetCtx, move.to));
-      await source.copy(target);
+      // Never clobber an existing destination (the route's existence check
+      // runs earlier and cannot close the race on its own).
+      await source.copy(target, { preconditionOpts: { ifGenerationMatch: 0 } });
       const [metadata] = await target.getMetadata();
       copied.push({
         source,
@@ -338,14 +349,25 @@ export async function moveObjectsBetweenProjects(
     if (isNotFound(err)) {
       throw new GcsObjectNotFoundError("cross-project source object");
     }
+    if (isPreconditionFailed(err)) {
+      throw new GcsPreconditionFailedError("cross-project destination object", 0);
+    }
     throw err;
   }
 
   // keepSource = a copy: every destination exists, leave the originals alone.
+  // Every copy already succeeded, so a failed source delete leaves a
+  // duplicate, never a lost file: report it instead of failing the move.
+  const sourcesNotDeleted: string[] = [];
   if (!options.keepSource) {
-    await Promise.all(copied.map(({ source }) => source.delete()));
+    const results = await Promise.allSettled(copied.map(({ source }) => source.delete()));
+    results.forEach((result, i) => {
+      if (result.status === "rejected" && !isNotFound(result.reason)) {
+        sourcesNotDeleted.push(moves[i].from);
+      }
+    });
   }
-  return copied.map(({ object }) => object);
+  return { objects: copied.map(({ object }) => object), sourcesNotDeleted };
 }
 
 /** Used by sync diff: only the metadata required to compare hashes. Walks all pages. */
