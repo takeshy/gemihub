@@ -35,8 +35,8 @@ import {
   encryptPrivateKey,
   decryptPrivateKey,
   generateKeyPair,
-  encryptData,
 } from "~/services/crypto-core";
+import { buildEncryptedAuthFile, encodeMigrationToken } from "gemihub-sync-core/auth";
 import { EnterpriseProvider } from "~/contexts/EnterpriseContext";
 import type { EnterpriseSessionContext } from "~/types/enterprise";
 import { PluginProvider } from "~/contexts/PluginContext";
@@ -637,10 +637,10 @@ export async function action({ request }: Route.ActionArgs) {
         }
 
         // Generate external sync token (XOR-encoded accessToken + rootFolderId)
-        const payload = JSON.stringify({ a: validTokens.accessToken, r: validTokens.rootFolderId });
-        const buf = Buffer.from(payload);
-        for (let i = 0; i < buf.length; i++) buf[i] ^= 0x5a;
-        const migrationToken = buf.toString("hex");
+        const migrationToken = encodeMigrationToken({
+          accessToken: validTokens.accessToken,
+          rootFolderId: validTokens.rootFolderId,
+        });
 
         // If encryption is set up, also export _encrypted-auth.json to Drive
         const enc = currentSettings.encryption;
@@ -648,17 +648,11 @@ export async function action({ request }: Route.ActionArgs) {
           const url = new URL(request.url);
           const proto = request.headers.get("x-forwarded-proto") || url.protocol.replace(":", "");
           const apiOrigin = `${proto}://${url.host}`;
-          const authPayload = JSON.stringify({
-            refreshToken: validTokens.refreshToken,
-            apiOrigin,
-          });
-          const encrypted = await encryptData(authPayload, enc.publicKey);
-
-          const authFileContent = JSON.stringify({
-            data: encrypted,
-            encryptedPrivateKey: enc.encryptedPrivateKey,
-            salt: enc.salt,
-          }, null, 2);
+          const authFile = await buildEncryptedAuthFile(
+            { refreshToken: validTokens.refreshToken, apiOrigin },
+            { publicKey: enc.publicKey, encryptedPrivateKey: enc.encryptedPrivateKey, salt: enc.salt },
+          );
+          const authFileContent = JSON.stringify(authFile, null, 2);
           const { findFileByExactName, createFile, updateFile } = await import("~/services/google-drive.server");
           const existingFile = await findFileByExactName(
             validTokens.accessToken, ENCRYPTED_AUTH_FILE_NAME, validTokens.rootFolderId
