@@ -1,5 +1,10 @@
 // Sync meta service - manages remote sync metadata for push/pull synchronization
 // Also serves as the file registry for flat Drive storage.
+//
+// Reading, duplicate consolidation, reconciliation and writing of
+// `_sync-meta.json` are shared with Obsidian and Desktop through
+// gemihub-sync-core; this module binds them to GemiHub's Drive functions and
+// keeps the existing function names.
 
 import {
   listUserFiles,
@@ -12,9 +17,7 @@ import {
   deleteFile,
   ensureSubFolder,
   type DriveFile,
-  DriveApiError,
 } from "./google-drive.server";
-import { SYNC_META_FILE_NAME } from "./sync-diff";
 import { publicFilePath } from "./public-link.server";
 import {
   addUntrackedFilesToSyncMeta,
@@ -23,6 +26,11 @@ import {
   pickSyncMetaToKeep,
   refreshDriftedSyncMetaEntries,
 } from "gemihub-sync-core/protocol";
+import {
+  createSyncMetaStore,
+  removeFilesFromMeta,
+  upsertDriveFileInMeta,
+} from "gemihub-sync-core/sync-meta";
 import { buildConflictBackupName } from "gemihub-sync-core/conflict";
 
 // Pure reconciliation helpers live in gemihub-sync-core; re-exported so
@@ -44,106 +52,46 @@ interface SyncMetaOperationOptions {
   signal?: AbortSignal;
 }
 
-interface ConsolidatedSyncMetaFile {
-  file: DriveFile | null;
-  meta: SyncMeta | null;
-}
-
-async function deleteDuplicateSyncMetaFile(accessToken: string, fileId: string): Promise<void> {
-  try {
-    await deleteFile(accessToken, fileId);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("404")) return;
-    throw error;
-  }
-}
+// Bound through this module's imports (not the shared client directly) so the
+// store follows whatever google-drive.server provides, including test doubles.
+const store = createSyncMetaStore({
+  findFilesByExactName: (...args) => findFilesByExactName(...args),
+  readFile: (...args) => readFile(...args),
+  updateFile: (...args) => updateFile(...args),
+  createFile: (...args) => createFile(...args),
+  deleteFile: (...args) => deleteFile(...args),
+  listUserFiles: (...args) => listUserFiles(...args),
+  getFileMetadata: (...args) => getFileMetadata(...args),
+});
 
 /**
- * Find the single _sync-meta.json file in rootFolderId.
- * Drive doesn't enforce unique filenames; concurrent pushes or bulk ops can
- * create duplicates (findFileByExactName + createFile race). When duplicates
- * are detected, merge their contents into a single authoritative file before
- * permanently deleting the extras.
+ * Find the single _sync-meta.json file in rootFolderId, merging and deleting
+ * duplicates (concurrent writers can race findFileByExactName + createFile).
  */
-export async function findOrConsolidateSyncMetaFile(
+export function findOrConsolidateSyncMetaFile(
   accessToken: string,
   rootFolderId: string,
   options: SyncMetaOperationOptions = {}
-): Promise<ConsolidatedSyncMetaFile> {
-  const matches = await findFilesByExactName(
-    accessToken,
-    SYNC_META_FILE_NAME,
-    rootFolderId,
-    options
-  );
-  const { keep, discard } = pickSyncMetaToKeep(matches);
-  if (!keep) {
-    return { file: null, meta: null };
-  }
-
-  if (discard.length === 0) {
-    return { file: keep, meta: null };
-  }
-
-  const parsedMetas = await Promise.all(
-    matches.map(async (match) => {
-      try {
-        const content = await readFile(accessToken, match.id, options);
-        return JSON.parse(content) as SyncMeta;
-      } catch {
-        return null;
-      }
-    })
-  );
-  const validMetas = parsedMetas.filter((meta): meta is SyncMeta => meta != null);
-  const mergedMeta = validMetas.length > 0 ? mergeSyncMetaSnapshots(validMetas) : null;
-
-  if (mergedMeta) {
-    await updateFile(
-      accessToken,
-      keep.id,
-      JSON.stringify(mergedMeta, null, 2),
-      "application/json",
-      options
-    );
-  }
-
-  await Promise.all(discard.map((file) => deleteDuplicateSyncMetaFile(accessToken, file.id)));
-  return { file: keep, meta: mergedMeta };
+): Promise<{ file: DriveFile | null; meta: SyncMeta | null }> {
+  return store.findMetaFile(accessToken, rootFolderId, options);
 }
 
 /**
  * Read the remote sync meta file from the root folder
  */
-export async function readRemoteSyncMeta(
+export function readRemoteSyncMeta(
   accessToken: string,
   rootFolderId: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta | null> {
-  const { file: metaFile, meta: consolidatedMeta } = await findOrConsolidateSyncMetaFile(
-    accessToken,
-    rootFolderId,
-    options
-  );
-  if (!metaFile) return null;
-  if (consolidatedMeta) return consolidatedMeta;
-
-  try {
-    const content = await readFile(accessToken, metaFile.id, options);
-    return JSON.parse(content) as SyncMeta;
-  } catch {
-    return null;
-  }
+  return store.read(accessToken, rootFolderId, options);
 }
 
 /**
- * Read sync metadata and reconcile entries against the actual Drive root.
- *
- * listUserFiles intentionally excludes trashed files. A missing entry is
- * therefore verified by ID before it is removed from _sync-meta.json, so a
- * partial or inconsistent list response cannot manufacture remote deletions.
- * Root files missing from the meta are added (see addUntrackedFilesToSyncMeta)
- * and drifted tracked entries are refreshed (see refreshDriftedSyncMetaEntries).
+ * Read sync metadata and reconcile entries against the actual Drive root:
+ * missing entries are verified by ID before removal, drifted entries adopt
+ * the Drive state, and untracked root files are registered. A missing or
+ * unreadable meta is rebuilt from the listing.
  */
 export async function readReconciledRemoteSyncMeta(
   accessToken: string,
@@ -156,81 +104,15 @@ export async function readReconciledRemoteSyncMeta(
 
 /**
  * Same as readReconciledRemoteSyncMeta, but also returns the Drive id of the
- * `_sync-meta.json` file found on the way, so callers that need the id do not
- * have to issue a second name lookup against Drive.
+ * `_sync-meta.json` file found on the way.
  */
 export async function readReconciledRemoteSyncMetaWithFile(
   accessToken: string,
   rootFolderId: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<{ meta: SyncMeta; syncMetaFileId: string | null }> {
-  const { file: metaFile, meta: consolidatedMeta } = await findOrConsolidateSyncMetaFile(
-    accessToken,
-    rootFolderId,
-    options
-  );
-  let remoteMeta: SyncMeta | null = null;
-  if (metaFile) {
-    if (consolidatedMeta) {
-      remoteMeta = consolidatedMeta;
-    } else {
-      try {
-        remoteMeta = JSON.parse(await readFile(accessToken, metaFile.id, options)) as SyncMeta;
-      } catch {
-        remoteMeta = null;
-      }
-    }
-  }
-  if (!remoteMeta) {
-    // First run or unreadable meta: rebuild creates the file, so look it up once more.
-    const rebuilt = await rebuildSyncMeta(accessToken, rootFolderId, options);
-    const { file } = await findOrConsolidateSyncMetaFile(accessToken, rootFolderId, options);
-    return { meta: rebuilt, syncMetaFileId: file?.id ?? null };
-  }
-  return {
-    meta: await reconcileRemoteSyncMeta(accessToken, rootFolderId, remoteMeta, options),
-    syncMetaFileId: metaFile?.id ?? null,
-  };
-}
-
-async function reconcileRemoteSyncMeta(
-  accessToken: string,
-  rootFolderId: string,
-  remoteMeta: SyncMeta,
-  options: SyncMetaOperationOptions,
-): Promise<SyncMeta> {
-  const driveFiles = await listUserFiles(accessToken, rootFolderId, options);
-  const driveFileIds = new Set(driveFiles.map((file) => file.id));
-  const staleIds = Object.keys(remoteMeta.files).filter((id) => !driveFileIds.has(id));
-  const removedIds: string[] = [];
-
-  for (const id of staleIds) {
-    try {
-      const file = await getFileMetadata(accessToken, id, options);
-      if (isFileRemovedFromSyncRoot(file, rootFolderId)) {
-        removedIds.push(id);
-      }
-    } catch (error) {
-      if (error instanceof DriveApiError && error.status === 404) {
-        removedIds.push(id);
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  for (const id of removedIds) {
-    delete remoteMeta.files[id];
-  }
-  const refreshedIds = refreshDriftedSyncMetaEntries(remoteMeta, driveFiles);
-  const addedIds = addUntrackedFilesToSyncMeta(remoteMeta, driveFiles);
-
-  if (removedIds.length > 0 || addedIds.length > 0 || refreshedIds.length > 0) {
-    remoteMeta.lastUpdatedAt = new Date().toISOString();
-    await writeRemoteSyncMeta(accessToken, rootFolderId, remoteMeta, options);
-  }
-
-  return remoteMeta;
+  const { meta, fileId } = await store.readReconciled(accessToken, rootFolderId, options);
+  return { meta: meta!, syncMetaFileId: fileId };
 }
 
 /**
@@ -242,25 +124,7 @@ export async function writeRemoteSyncMeta(
   meta: SyncMeta,
   options: SyncMetaOperationOptions = {}
 ): Promise<void> {
-  const { file: metaFile } = await findOrConsolidateSyncMetaFile(
-    accessToken,
-    rootFolderId,
-    options
-  );
-  const content = JSON.stringify(meta, null, 2);
-
-  if (metaFile) {
-    await updateFile(accessToken, metaFile.id, content, "application/json", options);
-  } else {
-    await createFile(
-      accessToken,
-      SYNC_META_FILE_NAME,
-      content,
-      rootFolderId,
-      "application/json",
-      options
-    );
-  }
+  await store.write(accessToken, rootFolderId, meta, options);
 }
 
 /**
@@ -271,11 +135,9 @@ export async function getFileListFromMeta(
   rootFolderId: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<{ meta: SyncMeta; files: DriveFile[] }> {
-  let meta = await readRemoteSyncMeta(accessToken, rootFolderId, options);
-  if (!meta) {
+  const meta = (await readRemoteSyncMeta(accessToken, rootFolderId, options))
     // First time or missing meta — rebuild from Drive API
-    meta = await rebuildSyncMeta(accessToken, rootFolderId, options);
-  }
+    ?? (await rebuildSyncMeta(accessToken, rootFolderId, options));
   const files: DriveFile[] = Object.entries(meta.files).map(([id, f]) => ({
     id,
     name: f.name,
@@ -289,39 +151,15 @@ export async function getFileListFromMeta(
 }
 
 /**
- * Rebuild sync meta from Drive API (full scan).
- * Used for initial setup, refresh, and sync.
+ * Rebuild sync meta from Drive API (full scan), keeping registry-only fields
+ * (shared, webViewLink, the signed publicPath) of files that still exist.
  */
-export async function rebuildSyncMeta(
+export function rebuildSyncMeta(
   accessToken: string,
   rootFolderId: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
-  // Preserve shared/webViewLink from existing meta
-  const existing = await readRemoteSyncMeta(accessToken, rootFolderId, options);
-  const files = await listUserFiles(accessToken, rootFolderId, options);
-  const meta: SyncMeta = {
-    lastUpdatedAt: new Date().toISOString(),
-    files: {},
-  };
-  for (const f of files) {
-    const prev = existing?.files[f.id];
-    meta.files[f.id] = {
-      name: f.name,
-      mimeType: f.mimeType,
-      md5Checksum: f.md5Checksum ?? "",
-      modifiedTime: f.modifiedTime ?? "",
-      createdTime: f.createdTime,
-      shared: prev?.shared,
-      webViewLink: prev?.webViewLink,
-      // The signed public path is minted once by setFileSharedInMeta; a
-      // rebuild (Full Pull, missing meta) must not drop it.
-      publicPath: prev?.publicPath,
-      size: f.size,
-    };
-  }
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
-  return meta;
+  return store.rebuild(accessToken, rootFolderId, options);
 }
 
 /**
@@ -340,51 +178,31 @@ export async function upsertFileInMeta(
  * Batch version of upsertFileInMeta: read meta once, apply all upserts, write once.
  * Callers that upload files concurrently MUST use this instead of racing
  * per-file upsertFileInMeta calls (last-writer-wins would clobber entries).
+ * Publish state already recorded for a file is kept.
  */
-export async function upsertFilesInMeta(
+export function upsertFilesInMeta(
   accessToken: string,
   rootFolderId: string,
   files: DriveFile[],
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
-  const meta =
-    (await readRemoteSyncMeta(accessToken, rootFolderId, options)) ?? {
-      lastUpdatedAt: new Date().toISOString(),
-      files: {},
-    };
-  for (const file of files) {
-    meta.files[file.id] = {
-      name: file.name,
-      mimeType: file.mimeType,
-      md5Checksum: file.md5Checksum ?? "",
-      modifiedTime: file.modifiedTime ?? "",
-      createdTime: file.createdTime,
-      size: file.size,
-    };
-  }
-  meta.lastUpdatedAt = new Date().toISOString();
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
-  return meta;
+  return store.update(accessToken, rootFolderId, (meta) => {
+    for (const file of files) upsertDriveFileInMeta(meta, file);
+  }, options);
 }
 
 /**
  * Remove a file entry from meta
  */
-export async function removeFileFromMeta(
+export function removeFileFromMeta(
   accessToken: string,
   rootFolderId: string,
   fileId: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
-  const meta =
-    (await readRemoteSyncMeta(accessToken, rootFolderId, options)) ?? {
-      lastUpdatedAt: new Date().toISOString(),
-      files: {},
-    };
-  delete meta.files[fileId];
-  meta.lastUpdatedAt = new Date().toISOString();
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
-  return meta;
+  return store.update(accessToken, rootFolderId, (meta) => {
+    removeFilesFromMeta(meta, [fileId]);
+  }, options);
 }
 
 /**
@@ -398,19 +216,11 @@ export async function removeFileIdsFromMeta(
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta | null> {
   if (fileIds.length === 0) return null;
-  const meta = await readRemoteSyncMeta(accessToken, rootFolderId, options);
-  if (!meta) return null;
-  let changed = false;
-  for (const id of fileIds) {
-    if (meta.files[id]) {
-      delete meta.files[id];
-      changed = true;
-    }
-  }
-  if (!changed) return meta;
-  meta.lastUpdatedAt = new Date().toISOString();
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
-  return meta;
+  const existing = await readRemoteSyncMeta(accessToken, rootFolderId, options);
+  if (!existing) return null;
+  if (!removeFilesFromMeta(existing, fileIds)) return existing;
+  await writeRemoteSyncMeta(accessToken, rootFolderId, existing, options);
+  return existing;
 }
 
 /**
@@ -446,7 +256,7 @@ export async function saveConflictBackup(
 /**
  * Update the shared/webViewLink fields for a file in meta
  */
-export async function setFileSharedInMeta(
+export function setFileSharedInMeta(
   accessToken: string,
   rootFolderId: string,
   fileId: string,
@@ -454,21 +264,13 @@ export async function setFileSharedInMeta(
   webViewLink?: string,
   options: SyncMetaOperationOptions = {}
 ): Promise<SyncMeta> {
-  const meta =
-    (await readRemoteSyncMeta(accessToken, rootFolderId, options)) ?? {
-      lastUpdatedAt: new Date().toISOString(),
-      files: {},
-    };
-  if (meta.files[fileId]) {
-    meta.files[fileId].shared = shared;
-    meta.files[fileId].webViewLink = shared ? webViewLink : undefined;
+  return store.update(accessToken, rootFolderId, (meta) => {
+    const entry = meta.files[fileId];
+    if (!entry) return;
+    entry.shared = shared;
+    entry.webViewLink = shared ? webViewLink : undefined;
     // The public proxy refuses unsigned links for script-capable content, so
     // the signed path is minted here and travels with the meta to every device.
-    meta.files[fileId].publicPath = shared
-      ? publicFilePath(fileId, meta.files[fileId].name)
-      : undefined;
-  }
-  meta.lastUpdatedAt = new Date().toISOString();
-  await writeRemoteSyncMeta(accessToken, rootFolderId, meta, options);
-  return meta;
+    entry.publicPath = shared ? publicFilePath(fileId, entry.name) : undefined;
+  }, options);
 }

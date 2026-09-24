@@ -27,7 +27,7 @@
     "diff": "^8.0.3",
     "esbuild": "^0.27.5",
     "fflate": "^0.8.3",
-    "gemihub-sync-core": "github:takeshy/gemihub-sync-core#e3eccda649bd9906c1253b66e682c900fdb82d3a",
+    "gemihub-sync-core": "github:takeshy/gemihub-sync-core#8d60c4d8d09ae667ae4a057da4aaa2d60c34d3d0",
     "googleapis": "^171.3.0",
     "isbot": "^5.1.31",
     "isolated-vm": "^6.1.2",
