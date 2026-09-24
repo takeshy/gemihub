@@ -5,6 +5,7 @@ import {
   isFileRemovedFromSyncRoot,
   mergeSyncMetaSnapshots,
   pickSyncMetaToKeep,
+  refreshDriftedSyncMetaEntries,
 } from "./sync-meta.server";
 import type { DriveFile } from "./google-drive.server";
 import type { SyncMeta } from "./sync-diff";
@@ -175,4 +176,30 @@ test("addUntrackedFilesToSyncMeta registers root files missing from the meta wit
     name: "notes/b.md", mimeType: "text/markdown", md5Checksum: "b", modifiedTime: "t2", createdTime: "t2", size: "12",
   });
   assert.deepEqual(addUntrackedFilesToSyncMeta(meta, listing), []);
+});
+
+test("refreshDriftedSyncMetaEntries adopts the Drive state for tracked entries that drifted", () => {
+  const meta: SyncMeta = {
+    lastUpdatedAt: "2026-01-01T00:00:00.000Z",
+    files: {
+      drifted: { name: "a.md", mimeType: "text/markdown", md5Checksum: "old", modifiedTime: "t0", shared: true, publicPath: "/p" },
+      renamed: { name: "Old.md", mimeType: "text/markdown", md5Checksum: "same", modifiedTime: "t0" },
+      clean: { name: "c.md", mimeType: "text/markdown", md5Checksum: "c", modifiedTime: "t0" },
+    },
+  };
+  const listing: DriveFile[] = [
+    { id: "drifted", name: "a.md", mimeType: "text/markdown", md5Checksum: "new", modifiedTime: "t1", size: "5" },
+    { id: "renamed", name: "new.md", mimeType: "text/markdown", md5Checksum: "same", modifiedTime: "t0" },
+    // Same content: a modifiedTime-only difference is not drift for Push.
+    { id: "clean", name: "c.md", mimeType: "text/markdown", md5Checksum: "c", modifiedTime: "t9" },
+    { id: "untracked", name: "u.md", mimeType: "text/markdown", md5Checksum: "u", modifiedTime: "t1" },
+  ];
+  assert.deepEqual(refreshDriftedSyncMetaEntries(meta, listing), ["drifted", "renamed"]);
+  assert.deepEqual(meta.files.drifted, {
+    name: "a.md", mimeType: "text/markdown", md5Checksum: "new", modifiedTime: "t1", size: "5", shared: true, publicPath: "/p",
+  });
+  assert.equal(meta.files.renamed.name, "new.md");
+  assert.equal(meta.files.clean.modifiedTime, "t0");
+  assert.equal(meta.files.untracked, undefined);
+  assert.deepEqual(refreshDriftedSyncMetaEntries(meta, listing), []);
 });

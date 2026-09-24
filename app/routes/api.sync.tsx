@@ -25,6 +25,7 @@ import {
 } from "~/services/sync-client-utils";
 import {
   readRemoteSyncMeta,
+  readReconciledRemoteSyncMeta,
   readReconciledRemoteSyncMetaWithFile,
   writeRemoteSyncMeta,
   rebuildSyncMeta,
@@ -991,12 +992,13 @@ export async function action({ request }: Route.ActionArgs) {
       // A pre-upload conflict leaves the file untouched. Return a fresh meta
       // snapshot so the client can immediately surface it as a pull/conflict
       // instead of waiting for the next background poll.
-      if (skippedFileIds.length > 0) {
-        const refreshedMeta = await readRemoteSyncMeta(
+      // Reconciled so a file skipped because the meta drifted from Drive
+      // comes back with the Drive state and is surfaced as a pull/conflict.
+      if (skippedFileIds.length > 0 || deletionResults.failed.length > 0) {
+        pushRemoteMeta = await readReconciledRemoteSyncMeta(
           validTokens.accessToken,
           validTokens.rootFolderId,
         );
-        if (refreshedMeta) pushRemoteMeta = refreshedMeta;
       }
 
       // Save remote edit history in background (best-effort, does not block response)

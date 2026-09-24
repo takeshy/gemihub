@@ -16,6 +16,7 @@ import {
 } from "./google-drive.server";
 import { SYNC_META_FILE_NAME } from "./sync-diff";
 import { publicFilePath } from "./public-link.server";
+import { remoteChangedSincePushSnapshot } from "./sync-push-guard";
 
 export { SYNC_META_FILE_NAME, computeSyncDiff } from "./sync-diff";
 export type { FileSyncMeta, SyncMeta, SyncDiff } from "./sync-diff";
@@ -226,12 +227,42 @@ export function addUntrackedFilesToSyncMeta(meta: SyncMeta, driveFiles: DriveFil
 }
 
 /**
+ * Refresh tracked entries whose Drive file changed without the meta being
+ * updated (another client wrote the file, or a meta write was lost).
+ *
+ * Push revalidates each upload against the live Drive listing using
+ * remoteChangedSincePushSnapshot. Without this refresh a drifted entry is
+ * invisible to the meta-driven diff (no pull, no conflict) yet makes every
+ * Push skip the file forever. Updating it to the Drive state surfaces the
+ * remote change as a normal pull/conflict instead. Registry-only fields
+ * (shared, publicPath, ...) are preserved. Returns the refreshed file ids.
+ */
+export function refreshDriftedSyncMetaEntries(meta: SyncMeta, driveFiles: DriveFile[]): string[] {
+  const refreshed: string[] = [];
+  for (const f of driveFiles) {
+    const existing = meta.files[f.id];
+    if (!existing || !remoteChangedSincePushSnapshot(existing, f)) continue;
+    meta.files[f.id] = {
+      ...existing,
+      name: f.name,
+      mimeType: f.mimeType,
+      md5Checksum: f.md5Checksum ?? "",
+      modifiedTime: f.modifiedTime ?? "",
+      size: f.size ?? existing.size,
+    };
+    refreshed.push(f.id);
+  }
+  return refreshed;
+}
+
+/**
  * Read sync metadata and reconcile entries against the actual Drive root.
  *
  * listUserFiles intentionally excludes trashed files. A missing entry is
  * therefore verified by ID before it is removed from _sync-meta.json, so a
  * partial or inconsistent list response cannot manufacture remote deletions.
- * Root files missing from the meta are added (see addUntrackedFilesToSyncMeta).
+ * Root files missing from the meta are added (see addUntrackedFilesToSyncMeta)
+ * and drifted tracked entries are refreshed (see refreshDriftedSyncMetaEntries).
  */
 export async function readReconciledRemoteSyncMeta(
   accessToken: string,
@@ -310,9 +341,10 @@ async function reconcileRemoteSyncMeta(
   for (const id of removedIds) {
     delete remoteMeta.files[id];
   }
+  const refreshedIds = refreshDriftedSyncMetaEntries(remoteMeta, driveFiles);
   const addedIds = addUntrackedFilesToSyncMeta(remoteMeta, driveFiles);
 
-  if (removedIds.length > 0 || addedIds.length > 0) {
+  if (removedIds.length > 0 || addedIds.length > 0 || refreshedIds.length > 0) {
     remoteMeta.lastUpdatedAt = new Date().toISOString();
     await writeRemoteSyncMeta(accessToken, rootFolderId, remoteMeta, options);
   }
