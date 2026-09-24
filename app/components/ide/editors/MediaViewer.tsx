@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense, type ReactNod
 import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
-import { deleteCachedFile, getCachedFile, setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta, setCachedRemoteMeta } from "~/services/indexeddb-cache";
-import { applyBinaryTempFile, isImageFileName } from "~/services/sync-client-utils";
+import { activeProjectMountParam, deleteCachedFile, getCachedFile, setCachedFile, getLocalSyncMeta, setLocalSyncMeta, getCachedRemoteMeta, setCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { fetchDriveFileDirect } from "~/services/drive-download";
+import { applyBinaryTempFile, isImageFileName, isLargeFile } from "~/services/sync-client-utils";
 import { performTempUpload } from "~/services/temp-upload";
 import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
@@ -91,9 +92,11 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
         }
       }
       if (!loadedFromCache) {
-        // Fetch binary and cache to IndexedDB for offline use
+        // Fetch Drive bytes in the browser; project mounts keep using GCS.
         try {
-          const res = await fetch(`/api/drive/files?action=raw&fileId=${fileId}`);
+          const res = activeProjectMountParam()
+            ? await fetch(`/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}`)
+            : await fetchDriveFileDirect(fileId);
           if (cancelled) return;
           if (!res.ok) {
             setError(t("mainViewer.loadError"));
@@ -106,18 +109,19 @@ export function MediaViewer({ fileId, fileName, mediaType, fileMimeType }: { fil
             setError(t("pdf.openFailed"));
             return;
           }
-          // Cache in IndexedDB for offline use
-          await setCachedFile({
-            fileId,
-            content: bytesToBase64(bytes),
-            md5Checksum: "",
-            modifiedTime: new Date().toISOString(),
-            cachedAt: Date.now(),
-            fileName,
-            encoding: "base64",
-          });
-          if (cancelled) return;
-          window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId } }));
+          if (!isLargeFile(String(bytes.byteLength))) {
+            await setCachedFile({
+              fileId,
+              content: bytesToBase64(bytes),
+              md5Checksum: "",
+              modifiedTime: new Date().toISOString(),
+              cachedAt: Date.now(),
+              fileName,
+              encoding: "base64",
+            });
+            if (cancelled) return;
+            window.dispatchEvent(new CustomEvent("file-cached", { detail: { fileId } }));
+          }
           showBlob(arrayBuffer);
         } catch {
           // Network error (offline) - no cache available

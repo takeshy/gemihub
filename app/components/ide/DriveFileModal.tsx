@@ -5,6 +5,7 @@ import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
 import { HtmlDocumentFrame } from "~/dashboard/widgets/file-widget/HtmlDocumentFrame";
 import { useI18n } from "~/i18n/context";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { downloadDriveFileDirect, fetchDriveFileDirect } from "~/services/drive-download";
 import { ICON } from "~/utils/icon-sizes";
 
 export interface DriveModalFile {
@@ -24,7 +25,7 @@ function isText(file: DriveModalFile): boolean {
     !/\.(png|jpe?g|gif|webp|pdf|epub|zip|mp3|mp4|webm)$/i.test(file.fileName);
 }
 
-function DriveEpubPreview({ file, rawUrl }: { file: DriveModalFile; rawUrl: string }) {
+function DriveEpubPreview({ file }: { file: DriveModalFile }) {
   const { t } = useI18n();
   const [html, setHtml] = useState("");
   const [error, setError] = useState("");
@@ -32,9 +33,10 @@ function DriveEpubPreview({ file, rawUrl }: { file: DriveModalFile; rawUrl: stri
 
   useEffect(() => {
     let cancelled = false;
+    const abortController = new AbortController();
     setHtml("");
     setError("");
-    void fetch(rawUrl)
+    void fetchDriveFileDirect(file.fileId, abortController.signal)
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const bytes = new Uint8Array(await response.arrayBuffer());
@@ -43,8 +45,8 @@ function DriveEpubPreview({ file, rawUrl }: { file: DriveModalFile; rawUrl: stri
         if (!cancelled) setHtml(converted);
       })
       .catch(() => { if (!cancelled) setError(t("mainViewer.loadError")); });
-    return () => { cancelled = true; };
-  }, [file.fileName, rawUrl, t]);
+    return () => { cancelled = true; abortController.abort(); };
+  }, [file.fileId, file.fileName, t]);
 
   if (error) return <div className="flex items-center justify-center p-4 text-sm text-red-500">{error}</div>;
   if (!html) return <div className="flex items-center justify-center"><Loader2 className="animate-spin text-gray-400" /></div>;
@@ -65,6 +67,7 @@ export function DriveFileModal({ file, onClose }: { file: DriveModalFile; onClos
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(isText(file));
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [markdownMode, setMarkdownMode] = useState<"preview" | "raw">("preview");
   const parsedMarkdown = useMemo(() => parseFrontmatter(content), [content]);
 
@@ -124,6 +127,26 @@ export function DriveFileModal({ file, onClose }: { file: DriveModalFile; onClos
               </button>
             </div>
           )}
+          <button
+            type="button"
+            disabled={downloading}
+            onClick={async () => {
+              setDownloading(true);
+              try {
+                await downloadDriveFileDirect(file.fileId, file.fileName);
+              } catch (downloadError) {
+                if (!(downloadError instanceof DOMException && downloadError.name === "AbortError")) {
+                  alert(downloadError instanceof Error ? downloadError.message : t("driveModal.loadFailed"));
+                }
+              } finally {
+                setDownloading(false);
+              }
+            }}
+            className="flex shrink-0 items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
+          >
+            {downloading ? <Loader2 size={ICON.SM} className="animate-spin" /> : <Download size={ICON.SM} />}
+            {t("driveModal.download")}
+          </button>
           <button type="button" onClick={onClose} className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t("conflict.close")}>
             <X size={ICON.LG} />
           </button>
@@ -149,13 +172,10 @@ export function DriveFileModal({ file, onClose }: { file: DriveModalFile; onClos
           ) : file.mimeType === "application/pdf" || file.fileName.toLowerCase().endsWith(".pdf") ? (
             <iframe src={rawUrl} title={file.fileName} className="h-full w-full border-0" />
           ) : file.fileName.toLowerCase().endsWith(".epub") || file.mimeType === "application/epub+zip" ? (
-            <DriveEpubPreview file={file} rawUrl={rawUrl} />
+            <DriveEpubPreview file={file} />
           ) : (
             <div className="flex flex-col items-center justify-center gap-3 text-sm text-gray-500">
               <span>{t("driveModal.previewUnavailable")}</span>
-              <a href={`${rawUrl}&download=1`} className="flex items-center gap-1 rounded border border-gray-300 px-3 py-1.5 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
-                <Download size={ICON.SM} />{t("driveModal.download")}
-              </a>
             </div>
           )}
         </div>

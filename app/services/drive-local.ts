@@ -6,6 +6,7 @@
 
 import {
   getCachedFile,
+  activeProjectMountParam,
   setCachedFile,
   getCachedRemoteMeta,
   setCachedRemoteMeta,
@@ -22,6 +23,7 @@ import {
 } from "./indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "./edit-history-local";
 import { base64Encode } from "~/utils/base64";
+import { fetchDriveFileDirect } from "./drive-download";
 import type { ExecutionContext } from "~/engine/types";
 import { replaceVariables } from "~/engine/handlers/utils";
 
@@ -159,8 +161,10 @@ export async function readFileBinaryLocal(fileId: string): Promise<string> {
     return base64Encode(encoder.encode(cached.content));
   }
 
-  // Cache miss — fetch raw content from server and cache as base64
-  const res = await fetch(`/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}`);
+  // Project mounts use GCS paths; Drive file IDs can be fetched directly.
+  const res = activeProjectMountParam()
+    ? await fetch(`/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}`)
+    : await fetchDriveFileDirect(fileId);
   if (!res.ok) throw new Error(`File not found: ${fileId}`);
   const arrayBuffer = await res.arrayBuffer();
   const b64 = base64Encode(new Uint8Array(arrayBuffer));

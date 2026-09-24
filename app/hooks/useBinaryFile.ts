@@ -4,7 +4,8 @@
 
 import { useEffect, useState } from "react";
 import { readFileBinaryLocal } from "~/services/drive-local";
-import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { activeProjectMountParam, getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { fetchDriveFileDirect } from "~/services/drive-download";
 import { isLargeFile } from "~/services/sync-client-utils";
 import { base64ToBytes } from "~/utils/media-utils";
 
@@ -18,6 +19,7 @@ export function useBinaryFile(fileId: string | null, enabled: boolean, loadError
     setError("");
     if (!fileId || !enabled) return;
     let cancelled = false;
+    const abortController = new AbortController();
     setLoading(true);
     (async () => {
       try {
@@ -25,7 +27,9 @@ export function useBinaryFile(fileId: string | null, enabled: boolean, loadError
         if (isLargeFile(meta?.files[fileId]?.size)) {
           // Too large for the IndexedDB cache (mirrors sync behavior) — stream
           // directly without caching.
-          const res = await fetch(`/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}`);
+          const res = activeProjectMountParam()
+            ? await fetch(`/api/drive/files?action=raw&fileId=${encodeURIComponent(fileId)}`, { signal: abortController.signal })
+            : await fetchDriveFileDirect(fileId, abortController.signal);
           if (!res.ok) throw new Error(`raw fetch failed: ${res.status}`);
           const buf = await res.arrayBuffer();
           if (!cancelled) setBytes(new Uint8Array(buf));
@@ -42,6 +46,7 @@ export function useBinaryFile(fileId: string | null, enabled: boolean, loadError
     })();
     return () => {
       cancelled = true;
+      abortController.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId, enabled]);

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileArchive, Loader2 } from "lucide-react";
 import { useEditorContext } from "~/contexts/EditorContext";
 import { useI18n } from "~/i18n/context";
-import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { activeProjectMountParam, getCachedRemoteMeta } from "~/services/indexeddb-cache";
+import { downloadDriveFileDirect } from "~/services/drive-download";
 
 interface BinaryFileMetadata {
   name?: string;
@@ -44,6 +45,7 @@ export function BinaryFileInfoViewer({
   const [metadata, setMetadata] = useState<BinaryFileMetadata | null>(null);
   const [loading, setLoading] = useState(!fileId.startsWith("new:"));
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     setActiveFileId(fileId);
@@ -132,16 +134,32 @@ export function BinaryFileInfoViewer({
               <dd className="min-w-0 break-words font-mono text-xs text-gray-900 dark:text-gray-100">{mimeType}</dd>
             </dl>
 
-            {downloadHref && (
-              <a
-                href={downloadHref}
-                download={displayName}
-                className="mt-5 inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                <Download size={16} />
-                {t("mainViewer.download")}
+            {downloadHref && (activeProjectMountParam() ? (
+              <a href={downloadHref} download={displayName} className="mt-5 inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                <Download size={16} />{t("mainViewer.download")}
               </a>
-            )}
+            ) : (
+              <button
+                type="button"
+                disabled={downloading}
+                onClick={async () => {
+                  setDownloading(true);
+                  try {
+                    await downloadDriveFileDirect(fileId, displayName);
+                  } catch (downloadError) {
+                    if (!(downloadError instanceof DOMException && downloadError.name === "AbortError")) {
+                      setError(downloadError instanceof Error ? downloadError.message : t("mainViewer.loadError"));
+                    }
+                  } finally {
+                    setDownloading(false);
+                  }
+                }}
+                className="mt-5 inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                {t("mainViewer.download")}
+              </button>
+            ))}
           </>
         )}
       </div>

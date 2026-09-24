@@ -53,6 +53,7 @@ import {
 import { isEncryptedFile } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { downloadDriveFileDirect } from "~/services/drive-download";
 import { collectPushCandidates } from "~/hooks/sync-utils";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FREE_UPLOAD_SIZE_LIMIT_BYTES, useFileUpload } from "~/hooks/useFileUpload";
@@ -778,8 +779,17 @@ export function DriveFileTree({
                 return;
               }
             }
-            // Fallback to API download (binary without cache, or no cache at all)
+            // Cache miss: fetch Drive bytes directly in the browser.
             if (isNewFile) return; // new: files have no server-side data
+            if (!activeProjectMountParam()) {
+              try {
+                await downloadDriveFileDirect(item.id, fileName);
+              } catch (error) {
+                if (error instanceof DOMException && error.name === "AbortError") return;
+                alert(error instanceof Error ? error.message : "Download failed");
+              }
+              return;
+            }
             const a = document.createElement("a");
             a.href = `/api/drive/files?action=raw&fileId=${item.id}`;
             a.download = fileName;
