@@ -11,20 +11,8 @@ export function getMediaType(name: string | null, mimeType: string | null): "pdf
   return null;
 }
 
-export function guessMimeType(fileName: string): string {
-  const ext = fileName.toLowerCase().split(".").pop() || "";
-  const map: Record<string, string> = {
-    canvas: "application/json",
-    base: "text/yaml",
-    kanban: "text/yaml",
-    pdf: "application/pdf",
-    epub: "application/epub+zip",
-    mp4: "video/mp4", webm: "video/webm", ogg: "video/ogg", mov: "video/quicktime", avi: "video/x-msvideo", mkv: "video/x-matroska",
-    mp3: "audio/mpeg", wav: "audio/wav", flac: "audio/flac", aac: "audio/aac", m4a: "audio/mp4", opus: "audio/opus",
-    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", ico: "image/x-icon",
-  };
-  return map[ext] || "application/octet-stream";
-}
+// One MIME table shared with sync and the other GemiHub clients.
+export { guessMimeType } from "gemihub-sync-core/files";
 
 export function bytesToBase64(bytes: Uint8Array): string {
   const CHUNK = 8192;

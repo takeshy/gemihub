@@ -17,6 +17,7 @@ import type { Route } from "./+types/api.storage.tree";
 import { listObjectsForSync } from "~/services/storage/provider.server";
 import { resolveMount } from "~/services/storage/resolve-mount.server";
 import { isProjectInternalPath } from "~/services/sync-client-utils";
+import { fileExtension, guessMimeType as guessSharedMimeType } from "gemihub-sync-core/files";
 import { getSettingsForTenant } from "~/services/user-settings-tenant.server";
 import {
   badRequestResponse,
@@ -39,32 +40,14 @@ interface TreeNode {
 
 const GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet";
 
-const EXTENSION_MIME: Record<string, string> = {
-  md: "text/markdown",
-  markdown: "text/markdown",
-  yaml: "text/yaml",
-  yml: "text/yaml",
-  json: "application/json",
-  txt: "text/plain",
-  html: "text/html",
-  csv: "text/csv",
-  js: "application/javascript",
-  ts: "application/typescript",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  pdf: "application/pdf",
+// Google Workspace shortcut files; everything else uses the shared table.
+const WORKSPACE_SHORTCUT_MIME: Record<string, string> = {
   gdoc: "application/vnd.google-apps.document",
   gsheet: "application/vnd.google-apps.spreadsheet",
 };
 
 function guessMimeType(name: string): string {
-  const dot = name.lastIndexOf(".");
-  if (dot < 0) return "application/octet-stream";
-  const ext = name.slice(dot + 1).toLowerCase();
-  return EXTENSION_MIME[ext] ?? "application/octet-stream";
+  return WORKSPACE_SHORTCUT_MIME[fileExtension(name)] ?? guessSharedMimeType(name);
 }
 
 function buildVirtualTree(files: SyncObjectMeta[]): TreeNode[] {

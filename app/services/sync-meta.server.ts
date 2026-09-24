@@ -23,6 +23,7 @@ import {
   pickSyncMetaToKeep,
   refreshDriftedSyncMetaEntries,
 } from "gemihub-sync-core/protocol";
+import { buildConflictBackupName } from "gemihub-sync-core/conflict";
 
 // Pure reconciliation helpers live in gemihub-sync-core; re-exported so
 // existing imports keep working.
@@ -426,14 +427,8 @@ export async function saveConflictBackup(
   options: SyncMetaOperationOptions & { encoding?: "base64"; mimeType?: string } = {}
 ): Promise<void> {
   const folderId = await ensureSubFolder(accessToken, rootFolderId, conflictFolderName, options);
-  const now = new Date();
-  const ts = now.toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15);
-  // Convert path separators to underscores and insert timestamp before extension
-  const safeName = fileName.replace(/\//g, "_");
-  const dotIdx = safeName.lastIndexOf(".");
-  const backupName = dotIdx > 0
-    ? `${safeName.slice(0, dotIdx)}_${ts}${safeName.slice(dotIdx)}`
-    : `${safeName}_${ts}`;
+  // Shared, reversible name format: every client can restore it to its path.
+  const backupName = buildConflictBackupName(fileName);
   if (options.encoding === "base64") {
     await createFileBinary(
       accessToken,

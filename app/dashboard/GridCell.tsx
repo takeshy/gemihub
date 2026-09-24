@@ -247,8 +247,7 @@ export default function GridCell({
     }
     if (!backingFile) return;
     // No mimeType: like FileListWidget, let MainViewer detect the type from
-    // the file name (media-utils' guessMimeType only knows media extensions
-    // and would mark .md as binary application/octet-stream).
+    // the file name.
     window.dispatchEvent(
       new CustomEvent("plugin-select-file", {
         detail: { fileId: backingFile.id, fileName: backingFile.path || backingFile.name },

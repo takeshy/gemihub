@@ -5,7 +5,7 @@ import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared
 import { useDraggableModal } from "~/hooks/useDraggableModal";
 import { useI18n } from "~/i18n/context";
 import { getCachedFile } from "~/services/indexeddb-cache";
-import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { guessMimeType, shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
 import { isEncryptedFile } from "~/services/crypto-core";
 import { ICON } from "~/utils/icon-sizes";
 import { buildDialogRows, type DialogRow, type DialogGroupRow, type FileListItem } from "~/utils/sync-diff-grouping";
@@ -28,22 +28,9 @@ interface DiffState {
   expanded: boolean;
 }
 
-function guessMimeType(name: string): string {
-  if (name.endsWith(".yaml") || name.endsWith(".yml")) return "text/yaml";
-  if (name.endsWith(".json")) return "application/json";
-  if (name.endsWith(".md")) return "text/markdown";
-  if (name.endsWith(".png")) return "image/png";
-  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
-  if (name.endsWith(".gif")) return "image/gif";
-  if (name.endsWith(".webp")) return "image/webp";
-  if (name.endsWith(".svg")) return "image/svg+xml";
-  if (name.endsWith(".pdf")) return "application/pdf";
-  return "text/plain";
-}
-
 function canShowDiff(name: string): boolean {
   if (name.endsWith(".encrypted")) return false;
-  return !isBinaryMimeType(guessMimeType(name));
+  return !shouldTreatAsBinaryFile(name);
 }
 
 export function SyncDiffDialog({

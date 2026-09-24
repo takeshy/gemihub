@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { X, Trash2, RefreshCw, Loader2 } from "lucide-react";
 import { useI18n } from "~/i18n/context";
+import { parseConflictBackupName } from "gemihub-sync-core/conflict";
 
 interface FileEntry {
   id: string;
@@ -21,9 +22,9 @@ export function ConflictsDialog({ onClose }: ConflictsDialogProps) {
   const [initialLoading, setInitialLoading] = useState(true);
   const [renames, setRenames] = useState<Record<string, string>>({});
 
-  // Strip timestamp from conflict backup names: "file_20260208_123456.md" → "file.md"
+  // Original path from a conflict backup name (any client's format)
   const stripTimestamp = useCallback((name: string) => {
-    return name.replace(/_\d{8}_\d{6}(?=\.)/, "");
+    return parseConflictBackupName(name).originalPath;
   }, []);
 
   const loadFiles = useCallback(async () => {

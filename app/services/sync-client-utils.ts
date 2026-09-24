@@ -1,22 +1,33 @@
 import { setCachedFile, type LocalSyncMeta, type CachedRemoteMeta } from "~/services/indexeddb-cache";
 
-// Path / binary classification rules are shared with the other GemiHub
-// clients through gemihub-sync-core.
+import { isSyncExcludedPath as isCoreSyncExcludedPath } from "gemihub-sync-core/paths";
+
+// Path / file type rules are shared with the other GemiHub clients through
+// gemihub-sync-core.
 export {
   SYNC_EXCLUDED_FILE_NAMES,
   SYNC_EXCLUDED_PREFIXES,
   isGoogleWorkspaceMimeType,
   isProjectInternalPath,
-  isSyncExcludedPath,
+} from "gemihub-sync-core/paths";
+export {
   isBinaryMimeType,
   isBinaryFileName,
   isTextFileName,
   shouldTreatAsBinaryFile,
   looksLikeBinary,
+  guessMimeType,
   LARGE_FILE_CACHE_THRESHOLD,
   isLargeFile,
   isImageFileName,
-} from "gemihub-sync-core/paths";
+} from "gemihub-sync-core/files";
+
+// GCS project paths carry the managed root as a literal prefix
+// ("gemihub/history/…"), while Drive paths are relative to the gemihub root
+// folder and never include it. Strip it so both identities share one rule.
+export function isSyncExcludedPath(fileName: string): boolean {
+  return isCoreSyncExcludedPath(fileName, { managedRootPrefixes: ["gemihub/"] });
+}
 
 /**
  * Upload binary content directly to Google Drive, update IndexedDB cache,

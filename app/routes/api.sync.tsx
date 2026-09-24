@@ -22,6 +22,7 @@ import {
   isGoogleWorkspaceMimeType,
   LARGE_FILE_CACHE_THRESHOLD,
   shouldTreatAsBinaryFile,
+  guessMimeType,
 } from "~/services/sync-client-utils";
 import {
   readRemoteSyncMeta,
@@ -41,31 +42,7 @@ import { createLogContext, emitLog } from "~/services/logger.server";
 import { findAmbiguousPushPaths, indexUniqueRemotePaths, remoteChangedSincePushSnapshot } from "~/services/sync-push-guard";
 import { deleteSingleFileFromRag } from "~/services/file-search.server";
 import { DEFAULT_RAG_STORE_KEY } from "~/types/settings";
-
-function guessMimeType(fileName: string): string {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith(".json")) return "application/json";
-  if (lower.endsWith(".canvas")) return "application/json";
-  if (lower.endsWith(".md")) return "text/markdown";
-  if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "text/yaml";
-  if (lower.endsWith(".base")) return "text/yaml";
-  if (lower.endsWith(".kanban")) return "text/yaml";
-  if (lower.endsWith(".dashboard")) return "text/yaml";
-  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
-  if (lower.endsWith(".csv")) return "text/csv";
-  if (lower.endsWith(".xml")) return "application/xml";
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".gif")) return "image/gif";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".svg")) return "image/svg+xml";
-  if (lower.endsWith(".pdf")) return "application/pdf";
-  if (lower.endsWith(".zip")) return "application/zip";
-  if (lower.endsWith(".mp3")) return "audio/mpeg";
-  if (lower.endsWith(".mp4")) return "video/mp4";
-  if (lower.endsWith(".webm")) return "video/webm";
-  return "text/plain";
-}
+import { parseConflictBackupName } from "gemihub-sync-core/conflict";
 
 // GET: Fetch remote sync meta + current file list
 export async function loader({ request }: Route.LoaderArgs) {
@@ -585,8 +562,8 @@ export async function action({ request }: Route.ActionArgs) {
           // Determine restored name: use provided rename, or strip timestamp prefix
           let restoreName = renames[fileId] ?? meta.name;
           if (!renames[fileId]) {
-            // Strip timestamp like "filename_20260208_123456.md" → "filename.md"
-            restoreName = restoreName.replace(/_\d{8}_\d{6}(?=\.)/, "");
+            // Recover the original path from any client's backup name format
+            restoreName = parseConflictBackupName(restoreName).originalPath;
           }
           // Create new file in root folder
           const newFile = isBinary
