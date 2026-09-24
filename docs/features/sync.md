@@ -295,10 +295,12 @@ The unselected version is always backed up for manual merging if needed. Binary 
 ### Backup Naming
 
 ```
-{filename}_{YYYYMMDD_HHmmss}.{ext}
+{encodeURIComponent(path)}_{YYYYMMDD_HHmmss_mmm}.{ext}   (UTC)
 ```
 
-Example: `notes/daily.md` → `sync_conflicts/notes_daily_20260207_143000.md`
+Example: `notes/daily.md` → `sync_conflicts/notes%2Fdaily_20260207_143000_123.md`
+
+The format is shared by GemiHub web, obsidian-gemihub and gemihub-gdrive (`buildConflictBackupName` in `gemihub-sync-core/conflict`), so a backup written by any client restores to its original path in any other. `parseConflictBackupName` also reads the legacy formats — `notes_daily_20260207_143000.md` (GemiHub) and `notes_daily_20260207_143000_123.md` (Desktop); their `/` → `_` replacement cannot be reversed, so those restore under the flattened name. The Conflict Backups dialog and the `restoreConflict` action use the parser to propose the restore name.
 
 ---
 
@@ -481,12 +483,17 @@ Excluded by name filter in `computeSyncDiff`:
 - `settings.json` — User settings
 - `_encrypted-auth.json` — Encrypted authentication data
 
-Excluded by folder structure — these are actual Google Drive subfolders created via `ensureSubFolder()`. Files inside subfolders are not returned by `listUserFiles(rootFolderId)`. As a safety net, `isSyncExcludedPath()` also filters these prefixes on the client side:
+Excluded by folder structure — these are actual Google Drive subfolders created via `ensureSubFolder()`. Files inside subfolders are not returned by `listUserFiles(rootFolderId)`. As a safety net, `isSyncExcludedPath()` also filters these prefixes on the client side (the folder itself matches too, e.g. `trash`):
 - `history/` — Chat, execution, and request history (including `_meta.json` and `.history.json` files)
 - `trash/` — Soft-deleted files (managed via Trash dialog)
 - `sync_conflicts/` — Conflict backup files (managed via Conflict Backups dialog)
 - `__TEMP__/` — Temporary sync files (managed via Temp Files dialog)
 - `plugins/` — Installed plugin files
+- `GemiHub/conflict-backups/` — Conflict backups kept inside an Obsidian vault by obsidian-gemihub
+
+Excluded at any depth: folders named `.git` or `node_modules` (tooling output, never user content).
+
+These rules come from `gemihub-sync-core/paths` and are identical in every client. Clients add only their own folders through `isSyncExcludedPath(path, options)`: GemiHub web strips the `gemihub/` managed root of project-mount keys (`managedRootPrefixes`), obsidian-gemihub adds the vault config dir, its `GemiHub/` workspace folder, `.trash/` and user exclude patterns, and gemihub-gdrive adds `.llm-hub` and user exclude patterns.
 
 ---
 
@@ -507,6 +514,29 @@ Browser (IndexedDB)          Server                Google Drive
 └──────────────┘      └──────────────┘      └──────────────┘
 ```
 
+### Shared Sync Core (gemihub-sync-core)
+
+The Drive layout and sync protocol are shared with the other GemiHub clients — [obsidian-gemihub](https://github.com/takeshy/obsidian-gemihub) (Obsidian vault ↔ Drive) and gemihub-gdrive (GemiHub Desktop workspace ↔ Drive) — through the [gemihub-sync-core](https://github.com/takeshy/gemihub-sync-core) library. Every rule that must agree across clients lives there as runtime-agnostic TypeScript (browser, Node and Deno; Web Crypto only; no runtime dependencies):
+
+| Entry point | Contents |
+|---|---|
+| `gemihub-sync-core/protocol` | `SyncMeta` types and system file names, `computeSyncDiff`, push guards (`remoteChangedSincePushSnapshot`, duplicate paths, pending-deletion cancellation), reconciliation helpers, `syncMetaSnapshotChanged` |
+| `gemihub-sync-core/sync-meta` | `_sync-meta.json` on Drive (`createSyncMetaStore`): duplicate consolidation, read/write, rebuild, read–modify–write `update`, and `readReconciled` (ID-verified removals, drift refresh, adoption of untracked files). `upsertDriveFileInMeta` keeps publish state |
+| `gemihub-sync-core/drive` | Drive v3 REST client over an injected transport (`createDriveClient`), with one retry policy (429/500/503, Retry-After capped at 10 s) and `DriveApiError` |
+| `gemihub-sync-core/paths` / `files` | Sync exclusion rules; one text/binary/MIME table (`shouldTreatAsBinaryFile`, `guessMimeType`) |
+| `gemihub-sync-core/conflict` | Conflict backup names (see [Backup Naming](#backup-naming)) |
+| `gemihub-sync-core/crypto` / `auth` / `hash` | Hybrid encryption, Migration Tool token and `_encrypted-auth.json`, token refresh messages, pure-JS MD5 (see [Encryption](../architecture/encryption.md)) |
+
+GemiHub keeps its existing module names as thin bindings: `sync-diff.ts` and `sync-push-guard.ts` re-export the protocol; `sync-client-utils.ts` re-exports paths/files (binding `managedRootPrefixes: ["gemihub/"]`); `google-drive.server.ts` runs the shared client over `fetchTransport` and keeps the server-only operations (export, resumable upload, Docs import, publishing); `sync-meta.server.ts` binds the store to `google-drive.server`'s functions so tests can replace them. What stays in GemiHub is environment-specific: IndexedDB caching, the Push/Pull UI and hooks, `/api/sync` actions, and project (GCS) mount sync.
+
+**Dependency and updates.** `package.json` pins an exact commit (`github:takeshy/gemihub-sync-core#<sha>`); npm builds it on install (`prepare`), so `dist/` is not committed and the Docker `dependencies-base` stage installs `git`. To move all clients to a new library commit, push it to the library's `main` and run from the library checkout:
+
+```bash
+npm run sync-plugins -- ../gemihub ../obsidian-gemihub ../gemihub-gdrive
+```
+
+The script refuses uncommitted or unpushed library changes and then runs `npm install --save-exact git+https://…#<sha>` in each client; commit each client's `package.json` and `package-lock.json` afterwards. Tests for the shared rules live in the library (`npm test` there, including a GemiHub-written encryption fixture that pins the on-disk format).
+
 ### Key Files
 
 | File | Role |
@@ -515,16 +545,17 @@ Browser (IndexedDB)          Server                Google Drive
 | `app/hooks/useFileWithCache.ts` | IndexedDB cache-first file reads, auto-save with edit history |
 | `app/routes/api.sync.tsx` | Server-side sync API (18 POST actions + GET loader) |
 | `app/routes/api.drive.files.tsx` | Drive file CRUD (used by push to update files directly; delete moves to trash/) |
-| `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/diff |
+| `app/services/sync-meta.server.ts` | Sync metadata read/write/rebuild/reconcile — binds `gemihub-sync-core/sync-meta` to `google-drive.server` |
 | `app/services/indexeddb-cache.ts` | IndexedDB cache (files, syncMeta, fileTree, editHistory, remoteMeta) |
 | `app/services/edit-history-local.ts` | Client-side edit history (reverse-apply diffs, revert detection, net change check) |
 | `app/services/edit-history.server.ts` | Server-side edit history (Drive `.history.json` read/write) |
 | `app/components/settings/TrashDialog.tsx` | Trash file management dialog (restore/delete) |
 | `app/components/settings/ConflictsDialog.tsx` | Conflict backup management dialog (restore/rename/delete) |
 | `app/services/history-meta.server.ts` | History listing metadata (`_meta.json`) read/write/rebuild for chat, execution, and request history folders |
-| `app/services/sync-diff.ts` | `computeSyncDiff` implementation (re-exported by `sync-meta.server.ts`) |
-| `app/services/sync-client-utils.ts` | `isSyncExcludedPath`, `isBinaryMimeType`, binary temp file upload |
-| `app/services/google-drive.server.ts` | Google Drive API wrapper |
+| `app/services/sync-diff.ts` | Re-exports `computeSyncDiff` and the `SyncMeta` types from `gemihub-sync-core/protocol` (also re-exported by `sync-meta.server.ts`) |
+| `app/services/sync-push-guard.ts` | Re-exports the push guards from `gemihub-sync-core/protocol` |
+| `app/services/sync-client-utils.ts` | Re-exports exclusion and file type rules from `gemihub-sync-core/paths` / `files` (`isSyncExcludedPath`, `shouldTreatAsBinaryFile`, `guessMimeType`, …); binary temp file upload |
+| `app/services/google-drive.server.ts` | Google Drive API wrapper — `gemihub-sync-core/drive` client plus server-only operations |
 | `app/utils/parallel.ts` | Parallel processing utility (concurrency limit) |
 | `app/components/ide/SyncStatusBar.tsx` | Push/Pull badges, diff dialog trigger |
 | `app/components/ide/SyncDiffDialog.tsx` | Push/Pull file list with diff preview; files sharing an ancestor folder collapse into expandable group rows (`app/utils/sync-diff-grouping.ts`) |

@@ -244,11 +244,20 @@ python decrypt.py path/to/file.md.encrypted
 # Enter password when prompted
 ```
 
+## Shared Implementation (gemihub-sync-core)
+
+The encryption code and its on-disk format are shared with obsidian-gemihub and gemihub-gdrive through [gemihub-sync-core](https://github.com/takeshy/gemihub-sync-core), so every client reads and writes the same encrypted files:
+
+- **`gemihub-sync-core/crypto`** — key generation, PBKDF2-protected private key, hybrid RSA-OAEP + AES-GCM encryption, and the encrypted file envelope (frontmatter with `description` / `publicMetadata`). Web Crypto only, so it runs in browsers, Node and Deno. `app/services/crypto-core.ts` re-exports it.
+- **`gemihub-sync-core/auth`** — external sync credentials: the Migration Tool token (`encodeMigrationToken` / `decodeMigrationToken`, hex of `{ a: accessToken, r: rootFolderId }` XOR 0x5a), `_encrypted-auth.json` (`buildEncryptedAuthFile` / `parseEncryptedAuthFile` / `decryptEncryptedAuth`, which rejects non-https `apiOrigin`), and the `/api/obsidian/token` refresh request/response. GemiHub issues the token and file in Settings (`settings.tsx`); the plugins consume them. Refresh requests carry `rootFolderId` so the endpoint can resolve the account that owns the synced folder.
+
+The library's tests decrypt a fixture written by GemiHub's pre-library `crypto-core.ts` (dummy password), which pins the byte layout below: a library change that would make existing encrypted files or `_encrypted-auth.json` unreadable fails there.
+
 ## Key Files
 
 | File | Role |
 |------|------|
-| `app/services/crypto-core.ts` | Encryption/decryption functions (Web Crypto API, shared client/server) |
+| `app/services/crypto-core.ts` | Encryption/decryption functions — re-exports `gemihub-sync-core/crypto` (shared client/server) |
 | `app/services/crypto.server.ts` | Server-side re-export of crypto-core |
 | `app/services/crypto-cache.ts` | In-memory password/private key cache (client-side, per session) |
 | `app/components/ide/EncryptedFileViewer.tsx` | Password prompt + decrypted file editor |

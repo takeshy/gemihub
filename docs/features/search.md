@@ -169,6 +169,6 @@ Errors return JSON with an `error` field (except 405 which returns plain text):
 | `app/components/ide/SearchPanel.tsx` | Search panel UI (Local / Drive / RAG tabs) |
 | `app/components/ide/QuickOpenDialog.tsx` | Quick Open dialog (Cmd+P) |
 | `app/routes/_index.tsx` | Keyboard shortcut registration |
-| `app/services/google-drive.server.ts` | Drive search implementation (`searchFiles()`) |
+| `app/services/google-drive.server.ts` | Drive search (`searchFiles()`, delegating to the shared `gemihub-sync-core/drive` client) |
 | `app/services/indexeddb-cache.ts` | Local search data source (IndexedDB cache) |
 | `app/services/file-search.server.ts` | RAG store management |

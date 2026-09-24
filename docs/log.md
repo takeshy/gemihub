@@ -1,5 +1,12 @@
 # Update Log
 
+## 2026-09-25
+* **Update**: The sync protocol and everything that must agree across GemiHub clients moved into the shared [gemihub-sync-core](https://github.com/takeshy/gemihub-sync-core) library, now also used by obsidian-gemihub and gemihub-gdrive: `_sync-meta.json` diff, push guards, reconciliation and storage (`createSyncMetaStore`), the Drive REST client (`createDriveClient`, retries on 429/500/503 with Retry-After capped at 10 s), exclusion rules, one text/binary/MIME table, conflict backup names, encryption, Migration Tool token / `_encrypted-auth.json`, and MD5. GemiHub's modules keep their names as thin bindings; the dependency is pinned to a commit and updated with the library's `sync-plugins` script. The Docker image now installs `git` for the git-hosted dependency (`features/sync.md` — "Shared Sync Core", `architecture/encryption.md`).
+* **Update**: Conflict backups use one reversible name for every client, `notes%2Fdaily_20260207_143000_123.md`; restoring still reads the legacy GemiHub and Desktop names, so a Desktop backup now restores to its original name in GemiHub (`features/sync.md` — "Backup Naming").
+* **Update**: Sync exclusion now also skips `GemiHub/conflict-backups/` and `.git` / `node_modules` folders at any depth, and a system folder itself (`trash`) (`features/sync.md`).
+* **Update**: One MIME table serves sync, the storage tree, the diff dialog and media viewers — e.g. `.md` passed to the viewer is `text/markdown` instead of `application/octet-stream`; an unknown extension whose Drive MIME type is not conclusive is synced as binary.
+* **Fix**: `upsertFilesInMeta` no longer drops a file's publish state (`shared`, `webViewLink`, `publicPath`) when it updates the entry.
+
 ## 2026-09-24
 * **Fix**: Push no longer reports `skipped N file(s)` forever when `_sync-meta.json` drifted from Drive (a tracked file's md5/name changed without the meta being updated). `GET /api/sync` reconciliation now refreshes such entries from the root listing (`refreshDriftedSyncMetaEntries`), so the remote change surfaces as a pull/conflict, and Push returns the reconciled meta when it skips files or deletions (`features/sync.md`).
 
