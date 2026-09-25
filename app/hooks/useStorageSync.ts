@@ -24,6 +24,7 @@ import {
   listPendingStorageDeletions,
   deletePendingStorageDeletion,
   deleteLocalSyncEntry,
+  deleteEditHistory,
 } from "~/services/storage-cache";
 import {
   detectChanges,
@@ -468,7 +469,7 @@ export function useStorageSync() {
               cachedAt: Date.now(),
             };
             // Same rule as pushObject: an edit made during the write stays dirty.
-            await updateCachedObject(mountKey, updated.objectPath, (current) => {
+            const stored = await updateCachedObject(mountKey, updated.objectPath, (current) => {
               if (!current) return undefined;
               if (current.content === cached.content && current.encoding === cached.encoding) {
                 return updated;
@@ -492,6 +493,7 @@ export function useStorageSync() {
               revision: updated.revision,
               updatedAt: updated.cachedAt,
             });
+            if (!stored?.dirty) await deleteEditHistory(mountKey, fileId).catch(() => {});
           }
         }
         setConflicts((prev) => prev.filter((c) => c.fileId !== fileId));

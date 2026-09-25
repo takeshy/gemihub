@@ -14,6 +14,7 @@
 
 import {
   deleteCachedObject,
+  deleteEditHistory,
   deleteLocalSyncEntry,
   getCachedObject,
   getRemoteSyncSnapshot,
@@ -281,6 +282,7 @@ export async function fullPullFromRemote(
 
     await deleteCachedObject(mountKey, cached.objectPath).catch(() => {});
     await deleteLocalSyncEntry(mountKey, cached.objectPath).catch(() => {});
+    await deleteEditHistory(mountKey, cached.relativePath).catch(() => {});
 
     if (cached.dirty || cached.objectPath.startsWith("new:")) {
       const originalPath = cached.objectPath.startsWith("new:")
@@ -358,6 +360,8 @@ export async function pullObject(
     throw new StorageSyncError("object has unpushed local changes", 409, relativePath);
   }
   await setLocalSyncEntry(toLocalSyncEntry(cached));
+  // The cache now matches the server, so local diffs have no base any more.
+  await deleteEditHistory(mountKey, relativePath).catch(() => {});
   return cached;
 }
 
@@ -435,6 +439,11 @@ export async function pushObject(
     };
   });
   await setLocalSyncEntry(toLocalSyncEntry(pushed));
+  // Local diffs are only needed until the content reaches the server. Keep
+  // them when an edit landed during the write (the object is still dirty).
+  if (!stored || !stored.dirty) {
+    await deleteEditHistory(mountKey, relativePath).catch(() => {});
+  }
   return stored ?? pushed;
 }
 
@@ -471,6 +480,7 @@ export async function dropLocal(
 ): Promise<void> {
   const objectPath = objectPathForCachedFile(mountKey, relativePath);
   await deleteCachedObject(mountKey, objectPath);
+  await deleteEditHistory(mountKey, relativePath).catch(() => {});
   // The local-sync key is the same as the cache key. Drop it even when nothing
   // is cached, so a stale base does not keep reporting a remote deletion.
   await deleteLocalSyncEntry(mountKey, objectPath);

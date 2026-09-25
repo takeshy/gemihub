@@ -98,6 +98,16 @@ Remote entries include metadata: `id`, `timestamp`, `source` (workflow/propose_e
 
 ---
 
+## Project Mount
+
+Inside an org project the same model applies, stored per `mountKey`:
+
+- **Local**: `edit-history-storage.ts` (IndexedDB `gemihub-storage` DB, `editHistory` store keyed by `[mountKey, fileId]`, where `fileId` is the relative path). It uses the same session algorithm as the Drive mount (`computeLocalEditStep` in `app/utils/edit-history-diff.ts`). `useStorageFileWithCache` records the edit **before** updating the cached object and adds a commit boundary when a cached file is opened. The entry is deleted when the cached copy matches the server again: after `pushObject` (unless the file was edited during the write), `pullObject`, a "local wins" conflict resolution, `dropLocal`, or Full Pull.
+- **Remote**: `/api/storage/write` reads the object being replaced (text files only, not sync-excluded, and only when the stored revision matches `ifRevisionMatch`) and appends `old → new` to `gemihub/history/edit/{path}.history.json` in the project's GCS in the background (`edit-history-tenant.server.ts`, project editor settings `editHistory`).
+- The Edit History modal, Prune and Stats pass `projectId`/`orgId` while a project is selected, so they use the project history rather than the user's Drive.
+
+---
+
 ## Viewing History
 
 Right-click a file in the tree → "History" to open the Edit History modal.
@@ -191,12 +201,15 @@ Diff settings:
 
 | File | Role |
 |------|------|
+| `app/utils/edit-history-diff.ts` | Pure diff helpers shared by every layer: `createDiffStr`, `reverseApplyDiff` (ignores file headers, never throws), `reconstructContent`, session step `computeLocalEditStep`, `withCommitBoundary`, `appendRestoreDiff` |
+| `app/services/edit-history-storage.ts` | Project-mount local edit history (same API with explicit `mountKey`) |
+| `app/services/edit-history-tenant.server.ts` | Project-mount remote history in GCS (save, load, clear, prune, stats) |
 | `app/services/edit-history-local.ts` | Client-side edit history: auto-save (`saveLocalEdit`), commit boundary (`addCommitBoundary`), restore (`restoreToHistoryEntry`), reverse-apply diff, net change check (`hasNetContentChange`) |
 | `app/services/edit-history.server.ts` | Server-side edit history: save to Drive `.history.json` on Push, load history, retention policy |
 | `app/services/indexeddb-cache.ts` | IndexedDB stores: `editHistory` CRUD, `CachedEditHistoryEntry` / `EditHistoryDiff` types |
 | `app/hooks/useFileWithCache.ts` | Cache-first file reads, auto-save integration (`saveToCache` calls `saveLocalEdit`), `file-restored` event handler |
 | `app/components/ide/EditHistoryModal.tsx` | History modal UI: display local/remote entries, restore handler, clear remote history |
 | `app/components/shared/DiffView.tsx` | Unified diff visualization component |
-| `app/routes/api.settings.edit-history.tsx` | API: GET remote history, DELETE remote history |
+| `app/routes/api.settings.edit-history.tsx` | API: GET remote history, DELETE remote history (dispatches to the project with `projectId`) |
 | `app/routes/api.settings.edit-history-stats.tsx` | API: GET history stats |
 | `app/routes/api.settings.edit-history-prune.tsx` | API: POST prune old history |

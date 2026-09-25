@@ -4,6 +4,14 @@ import { getValidTokens } from "~/services/google-auth.server";
 import { getStats } from "~/services/edit-history.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
+  {
+    const url = new URL(request.url);
+    const projectId = url.searchParams.get("projectId");
+    if (projectId) {
+      const { tenantStatsLoader } = await import("~/services/ai/tenant-edit-history-route.server");
+      return tenantStatsLoader(request, projectId, url.searchParams.get("orgId") || undefined);
+    }
+  }
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;

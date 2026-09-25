@@ -16,7 +16,10 @@
  */
 
 import type { Route } from "./+types/api.storage.write";
-import { writeObject } from "~/services/storage/provider.server";
+import { readObject, writeObject } from "~/services/storage/provider.server";
+import { isSyncExcludedPath, shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
+import { saveEditForTenant } from "~/services/edit-history-tenant.server";
+import { getSettingsForTenant } from "~/services/user-settings-tenant.server";
 import { resolveMount } from "~/services/storage/resolve-mount.server";
 import {
   BadRequestError,
@@ -87,6 +90,26 @@ export async function action({ request }: Route.ActionArgs) {
         ? new Uint8Array(Buffer.from(body.content, "base64"))
         : new TextEncoder().encode(body.content);
 
+    // Remote edit history (project mount, text files): capture the content
+    // being replaced. Drive-mount history is recorded by /api/sync instead.
+    const historyCtx =
+      ctx.kind === "gcs-project" && ctx.gcs && encoding === "utf-8"
+        && !isSyncExcludedPath(path) && !shouldTreatAsBinaryFile(path, contentType)
+        ? ctx.gcs
+        : null;
+    let previousText: string | null = null;
+    if (historyCtx && ifRevisionMatch !== 0) {
+      try {
+        const { meta, bytes: oldBytes } = await readObject(ctx, path);
+        // A revision mismatch means this write will be rejected anyway.
+        if (ifRevisionMatch === undefined || meta.revision === ifRevisionMatch) {
+          previousText = new TextDecoder("utf-8").decode(oldBytes);
+        }
+      } catch {
+        // New object or unreadable — no history for this write.
+      }
+    }
+
     const object = await writeObject(ctx, path, bytes, {
       ifRevisionMatch,
       contentType,
@@ -106,6 +129,24 @@ export async function action({ request }: Route.ActionArgs) {
         request,
         statusCode: 200,
       });
+    }
+    if (historyCtx && previousText !== null && previousText !== body.content) {
+      const oldContent = previousText;
+      const newContent = body.content;
+      // Best-effort, off the response path (same as Drive push history).
+      void (async () => {
+        try {
+          const settings = await getSettingsForTenant(historyCtx);
+          await saveEditForTenant(historyCtx, settings.editHistory, {
+            path,
+            oldContent,
+            newContent,
+            source: "manual",
+          });
+        } catch (err) {
+          console.warn("[storage.write] edit history save failed:", err);
+        }
+      })();
     }
     return Response.json({ object });
   } catch (err) {

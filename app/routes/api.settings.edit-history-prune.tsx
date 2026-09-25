@@ -9,6 +9,14 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
 
+  {
+    const peek = (await request.clone().json().catch(() => null)) as { projectId?: unknown; orgId?: unknown } | null;
+    if (peek && typeof peek.projectId === "string" && peek.projectId) {
+      const { tenantPruneAction } = await import("~/services/ai/tenant-edit-history-route.server");
+      return tenantPruneAction(request, peek.projectId, typeof peek.orgId === "string" ? peek.orgId : undefined);
+    }
+  }
+
   const tokens = await requireAuth(request);
   const { tokens: validTokens, setCookieHeader } = await getValidTokens(request, tokens);
   const responseHeaders = setCookieHeader ? { "Set-Cookie": setCookieHeader } : undefined;

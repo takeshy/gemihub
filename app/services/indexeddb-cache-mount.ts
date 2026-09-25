@@ -210,6 +210,9 @@ function objectFromCachedFile(
     objectPath: objectPathForCachedFile(mountKey, file.fileId),
     relativePath,
     content: file.content,
+    // Last-synced text: a clean write IS the synced text; a dirty write keeps
+    // the previous one so a later revert can still be detected.
+    syncedContent: file.dirty === false ? file.content : existing?.syncedContent,
     rawContentBase64: file.rawContentBase64,
     encoding: file.encoding === "base64" ? "base64" : "utf-8",
     contentType:

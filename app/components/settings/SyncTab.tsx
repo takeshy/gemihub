@@ -49,7 +49,8 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
   // organization membership does not carry it: a member who wants to sync
   // their personal Drive needs their own Lite (or Business) subscription.
   // The server applies the same two rules.
-  const inOrganizationProject = useEnterpriseSelection() !== null;
+  const enterpriseSelection = useEnterpriseSelection();
+  const inOrganizationProject = enterpriseSelection !== null;
   const hasPremium =
     !!settings.hubwork?.plan
     && settings.hubwork?.billingStatus !== "canceled"
@@ -344,7 +345,13 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
     setActionLoading("prune");
     setPruneMsg(null);
     try {
-      const res = await fetch("/api/settings/edit-history-prune", { method: "POST" });
+      const res = await fetch("/api/settings/edit-history-prune", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(enterpriseSelection
+          ? { projectId: enterpriseSelection.projectId, orgId: enterpriseSelection.orgId }
+          : {}),
+      });
       const resData = await res.json();
       if (!res.ok) {
         setPruneMsg(resData.error || t("settings.sync.pruneFailed"));
@@ -368,12 +375,15 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
     } finally {
       setActionLoading(null);
     }
-  }, [t]);
+  }, [t, enterpriseSelection]);
 
   const handleHistoryStats = useCallback(async () => {
     setActionLoading("historyStats");
     try {
-      const res = await fetch("/api/settings/edit-history-stats");
+      const params = enterpriseSelection
+        ? `?${new URLSearchParams({ projectId: enterpriseSelection.projectId, orgId: enterpriseSelection.orgId })}`
+        : "";
+      const res = await fetch(`/api/settings/edit-history-stats${params}`);
       const data = await res.json();
       setHistoryStats(data);
     } catch {
@@ -381,7 +391,7 @@ export function SyncTab({ settings }: { settings: UserSettings }) {
     } finally {
       setActionLoading(null);
     }
-  }, [t]);
+  }, [t, enterpriseSelection]);
 
   const handleGenerateMigrationToken = useCallback(() => {
     migrationFetcher.submit(

@@ -5,7 +5,6 @@
 // This mirrors the legacy Drive-backed service's naming convention.
 
 import crypto from "node:crypto";
-import * as Diff from "diff";
 import {
   GcsObjectNotFoundError,
   deleteObject,
@@ -15,6 +14,7 @@ import {
 } from "./gcs-storage.server";
 import type { ProjectAccessContext } from "~/types/enterprise";
 import type { EditHistorySettings } from "~/types/settings";
+import { createDiffStr } from "~/utils/edit-history-diff";
 
 const EDIT_PREFIX = "gemihub/history/edit";
 
@@ -78,37 +78,6 @@ async function saveHistoryFile(
 ): Promise<void> {
   const key = pathToObjectKey(filePath);
   await writeObject(ctx, key, JSON.stringify(history, null, 2), "application/json");
-}
-
-function createDiffStr(
-  originalContent: string,
-  modifiedContent: string,
-  contextLines: number
-): { diff: string; stats: { additions: number; deletions: number } } {
-  const patch = Diff.structuredPatch(
-    "original",
-    "modified",
-    originalContent,
-    modifiedContent,
-    undefined,
-    undefined,
-    { context: contextLines }
-  );
-
-  const lines: string[] = [];
-  let additions = 0;
-  let deletions = 0;
-
-  for (const hunk of patch.hunks) {
-    lines.push(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`);
-    for (const line of hunk.lines) {
-      lines.push(line);
-      if (line.startsWith("+") && !line.startsWith("+++")) additions++;
-      else if (line.startsWith("-") && !line.startsWith("---")) deletions++;
-    }
-  }
-
-  return { diff: lines.join("\n"), stats: { additions, deletions } };
 }
 
 export async function saveEditForTenant(

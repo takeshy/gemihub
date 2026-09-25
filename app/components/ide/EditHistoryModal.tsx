@@ -16,6 +16,7 @@ import { reconstructContent, restoreToHistoryEntry, type DiffWithOrigin } from "
 import { useI18n } from "~/i18n/context";
 import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
 import { useDraggableModal } from "~/hooks/useDraggableModal";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 
 interface EditHistoryModalProps {
   fileId: string;
@@ -55,6 +56,13 @@ export function EditHistoryModal({
   const [saving, setSaving] = useState(false);
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>("split");
   const { modalRef, modalStyle, onDragStart } = useDraggableModal();
+  // Inside an org project the file lives on the project mount: remote history
+  // and "Save As" must target that project, not the user's Drive.
+  const selection = useEnterpriseSelection();
+  const projectParams = useMemo(
+    () => (selection ? { projectId: selection.projectId, orgId: selection.orgId } : null),
+    [selection]
+  );
 
   // Load local entries from IndexedDB
   useEffect(() => {
@@ -85,9 +93,8 @@ export function EditHistoryModal({
   const loadRemoteHistory = useCallback(async () => {
     setLoadingRemote(true);
     try {
-      const res = await fetch(
-        `/api/settings/edit-history?filePath=${encodeURIComponent(fullFilePath)}`
-      );
+      const params = new URLSearchParams({ filePath: fullFilePath, ...projectParams });
+      const res = await fetch(`/api/settings/edit-history?${params}`);
       if (res.ok) {
         const data = await res.json();
         const entries = (data.entries || []) as EditHistoryEntry[];
@@ -107,7 +114,7 @@ export function EditHistoryModal({
       setLoadingRemote(false);
       setShowRemote(true);
     }
-  }, [fullFilePath]);
+  }, [fullFilePath, projectParams]);
 
   const handleClearAll = useCallback(async () => {
     if (!confirm(t("editHistory.confirmClearAll"))) return;
@@ -115,13 +122,13 @@ export function EditHistoryModal({
       await fetch("/api/settings/edit-history", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filePath: fullFilePath }),
+        body: JSON.stringify({ filePath: fullFilePath, ...projectParams }),
       });
       setRemoteEntries([]);
     } catch {
       // ignore
     }
-  }, [fullFilePath, t]);
+  }, [fullFilePath, projectParams, t]);
 
   const allEntries = useMemo(
     () =>
@@ -142,7 +149,12 @@ export function EditHistoryModal({
 
       // Reverse diffs NEWER than the target to restore to the state AT this entry
       const diffsToApply: DiffWithOrigin[] = allEntries.slice(0, targetIdx).map((e) => ({ diff: e.diff, origin: e.origin }));
-      const restoredContent = await restoreToHistoryEntry(fileId, cached.content, diffsToApply);
+      let restoredContent: string | null;
+      try {
+        restoredContent = await restoreToHistoryEntry(fileId, cached.content, diffsToApply, fullFilePath);
+      } catch {
+        restoredContent = null;
+      }
       if (restoredContent == null) {
         alert(t("editHistory.restoreFailed"));
         return;
@@ -173,7 +185,7 @@ export function EditHistoryModal({
 
       onClose();
     },
-    [fileId, onClose, allEntries, t]
+    [fileId, fullFilePath, onClose, allEntries, t]
   );
 
   const handleCopy = useCallback(
@@ -186,7 +198,12 @@ export function EditHistoryModal({
 
       // Reverse diffs NEWER than the target to restore to the state AT this entry
       const diffsToApply: DiffWithOrigin[] = allEntries.slice(0, targetIdx).map((e) => ({ diff: e.diff, origin: e.origin }));
-      const restoredContent = reconstructContent(cached.content, diffsToApply);
+      let restoredContent: string | null;
+      try {
+        restoredContent = reconstructContent(cached.content, diffsToApply);
+      } catch {
+        restoredContent = null;
+      }
       if (restoredContent == null) {
         alert(t("editHistory.restoreFailed"));
         return;
@@ -209,7 +226,10 @@ export function EditHistoryModal({
 
     setSaving(true);
     try {
-      const res = await fetch("/api/drive/files", {
+      const query = projectParams
+        ? `?${new URLSearchParams({ mount: `project:${projectParams.orgId}/${projectParams.projectId}` })}`
+        : "";
+      const res = await fetch(`/api/drive/files${query}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create", name, content: saveAsDialog.content }),
@@ -226,7 +246,7 @@ export function EditHistoryModal({
     } finally {
       setSaving(false);
     }
-  }, [saveAsDialog, onFileCreated, onClose]);
+  }, [saveAsDialog, projectParams, onFileCreated, onClose]);
 
   const toggleExpand = useCallback(
     (id: string) => {

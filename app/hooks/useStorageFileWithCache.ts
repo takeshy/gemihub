@@ -18,7 +18,7 @@ import {
   setCachedObject,
   type CachedObject,
 } from "~/services/storage-cache";
-import { saveLocalEdit } from "~/services/edit-history-storage";
+import { addCommitBoundary, saveLocalEdit } from "~/services/edit-history-storage";
 
 function mountKeyOf(selection: { orgId: string; projectId: string } | null): string | null {
   return selection ? `gcs:${selection.orgId}/${selection.projectId}` : null;
@@ -106,6 +106,8 @@ export function useStorageFileWithCache(
             : cached.content;
           setContent(cached.content);
           setLoading(false);
+          // Opening a file starts a new edit-history session.
+          await addCommitBoundary(mountKey, id).catch(() => {});
           return;
         }
         if (currentFileIdRef.current === id) setLoading(true);
@@ -187,6 +189,7 @@ export function useStorageFileWithCache(
               cachedAt: Date.now(),
               dirty,
             };
+        await saveLocalEdit(mountKey, fileId, fileId, newContent).catch(() => {});
         await setCachedObject(next);
         setContent(newContent);
 
@@ -235,8 +238,10 @@ export function useStorageFileWithCache(
               cachedAt: Date.now(),
               dirty,
             };
-        await setCachedObject(next);
+        // Record edit history BEFORE the cache update: saveLocalEdit diffs
+        // against the old cached content.
         await saveLocalEdit(mountKey, fileId, fileId, newContent).catch(() => {});
+        await setCachedObject(next);
         window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId } }));
       } catch {
         /* ignore — UI already reflects the new content */
@@ -264,8 +269,6 @@ export function useStorageFileWithCache(
   }, [fileId, mountKey]);
 
   // file-restored from EditHistoryModal — set local content directly.
-  // Edit-history itself isn't migrated yet; this handler is harmless when
-  // nothing dispatches the event.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;

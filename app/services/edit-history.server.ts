@@ -1,7 +1,6 @@
 // Edit history manager - Drive-based persistence (called at Push time)
 
 import crypto from "node:crypto";
-import * as Diff from "diff";
 import {
   readFile,
   createFile,
@@ -12,6 +11,7 @@ import {
   ensureSubFolder,
 } from "./google-drive.server";
 import type { EditHistorySettings } from "~/types/settings";
+import { createDiffStr } from "~/utils/edit-history-diff";
 
 const EDIT_HISTORY_FOLDER = "files";
 
@@ -118,40 +118,6 @@ async function saveHistoryFile(
   } else {
     await createFile(accessToken, fileName, content, historyFolderId, "application/json");
   }
-}
-
-/**
- * Create a unified diff between two strings
- */
-function createDiffStr(
-  originalContent: string,
-  modifiedContent: string,
-  contextLines: number
-): { diff: string; stats: { additions: number; deletions: number } } {
-  const patch = Diff.structuredPatch(
-    "original",
-    "modified",
-    originalContent,
-    modifiedContent,
-    undefined,
-    undefined,
-    { context: contextLines }
-  );
-
-  const lines: string[] = [];
-  let additions = 0;
-  let deletions = 0;
-
-  for (const hunk of patch.hunks) {
-    lines.push(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`);
-    for (const line of hunk.lines) {
-      lines.push(line);
-      if (line.startsWith("+") && !line.startsWith("+++")) additions++;
-      else if (line.startsWith("-") && !line.startsWith("---")) deletions++;
-    }
-  }
-
-  return { diff: lines.join("\n"), stats: { additions, deletions } };
 }
 
 // --- Public API ---
