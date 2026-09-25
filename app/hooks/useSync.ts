@@ -10,6 +10,7 @@ import {
   getAllCachedFileIds,
   clearAllEditHistory,
   getLocallyModifiedFileIds,
+  getEditHistoryForFile,
   getCachedRemoteMeta,
   setCachedRemoteMeta,
   deleteEditHistoryEntry,
@@ -22,6 +23,7 @@ import {
   type LocalSyncMeta,
 } from "~/services/indexeddb-cache-drive";
 import { addCommitBoundary, getPushHistoryDiff, hasNetContentChange } from "~/services/edit-history-local";
+import { awaitPendingCacheSaves } from "~/services/cache-save-queue";
 import { awaitPendingMigrations } from "~/services/pending-file-migration";
 import { ragRegisterInBackground } from "~/services/rag-sync";
 import { fullPullCacheRecord, type FullPullFilePayload } from "~/services/full-pull-cache";
@@ -54,6 +56,11 @@ export interface ConflictInfo {
 }
 
 export type SyncStatus = "idle" | "pushing" | "pulling" | "conflict" | "warning" | "error";
+
+async function localEditTime(fileId: string): Promise<string> {
+  const history = await getEditHistoryForFile(fileId);
+  return [...(history?.diffs ?? [])].reverse().find((entry) => entry.diff !== "")?.timestamp ?? "";
+}
 
 export function useSync() {
   // Drive push/pull is inert while a project mount is selected — the IDE
@@ -347,6 +354,7 @@ export function useSync() {
       // files still mid-migration would be silently dropped. Waiting here
       // also serializes against concurrent _sync-meta.json writes.
       await awaitPendingMigrations();
+      await awaitPendingCacheSaves();
 
       // 1. Fetch fresh remoteMeta (push always uses latest)
       const syncRes = await fetch("/api/sync");
@@ -568,6 +576,7 @@ export function useSync() {
     setSyncStatus("pulling");
     setError(null);
     try {
+      await awaitPendingCacheSaves();
       // 1. Get fresh remoteMeta from server (always fetch to avoid stale cache)
       let remoteMeta: SyncMeta | null = null;
       const res = await fetch("/api/sync");
@@ -593,13 +602,16 @@ export function useSync() {
             fileName: cached?.fileName || fid,
             localChecksum: localFiles[fid]?.md5Checksum ?? "",
             remoteChecksum: "",
-            localModifiedTime: localFiles[fid]?.modifiedTime ?? "",
+            localModifiedTime: await localEditTime(fid),
             remoteModifiedTime: "",
             isEditDelete: true,
           });
         }
       }
       const allConflicts = [...diff.conflicts, ...editDeleteConflictInfos];
+      for (const conflict of allConflicts) {
+        conflict.localModifiedTime = await localEditTime(conflict.fileId);
+      }
 
       // 5. Clean up localOnly files (deleted on remote).
       // Skip "new:" files and entries that exist only in editHistory — both are
@@ -756,7 +768,7 @@ export function useSync() {
                 fileName: rm?.name ?? file.fileId,
                 localChecksum: local?.md5Checksum ?? "",
                 remoteChecksum: rm?.md5Checksum ?? "",
-                localModifiedTime: local?.modifiedTime ?? "",
+                localModifiedTime: await localEditTime(file.fileId),
                 remoteModifiedTime: rm?.modifiedTime ?? "",
               });
               continue;
@@ -842,6 +854,7 @@ export function useSync() {
       syncLockRef.current = true;
       setError(null);
       try {
+        await awaitPendingCacheSaves();
         const localMeta = (await getLocalSyncMeta()) ?? null;
 
         // Send local content for both choices:

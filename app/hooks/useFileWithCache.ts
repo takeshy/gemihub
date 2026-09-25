@@ -7,6 +7,7 @@ import {
   activeProjectMountParam,
 } from "~/services/indexeddb-cache";
 import { saveLocalEdit, addCommitBoundary } from "~/services/edit-history-local";
+import { queueCacheSave } from "~/services/cache-save-queue";
 import { isBinaryMimeType, isLargeFile } from "~/services/sync-client-utils";
 
 /** Prefer the server's JSON `error` message (e.g. "File not found") over a generic fallback. */
@@ -255,7 +256,7 @@ export function useFileWithCache(
         return;
       }
 
-      try {
+      return queueCacheSave(effectiveFileId, async () => {
         const cached = await getCachedFile(effectiveFileId);
         if (!cached) return; // File was deleted — don't re-create cache or edit history
         const fileName = cached.fileName ?? effectiveFileId;
@@ -287,9 +288,9 @@ export function useFileWithCache(
             new CustomEvent("file-modified", { detail: { fileId: effectiveFileId } })
           );
         }
-      } catch {
+      }).catch(() => {
         // ignore
-      }
+      });
     },
     [fileId]
   );

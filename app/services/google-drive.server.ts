@@ -20,7 +20,12 @@ export { DriveApiError, type DriveFile };
 const ROOT_FOLDER_NAME = process.env.ROOT_FOLDER_NAME || "gemihub";
 const HISTORY_FOLDER = "history";
 
-const drive = createDriveClient(fetchTransport({ timeoutMs: 30_000 }));
+// Google occasionally returns 502/504 from Drive uploads and metadata writes.
+// Treat them like the other transient statuses handled by the shared client;
+// otherwise a single failed request turns a partially completed Push into 500.
+const drive = createDriveClient(fetchTransport({ timeoutMs: 30_000 }), {
+  retryStatuses: [429, 500, 502, 503, 504],
+});
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {

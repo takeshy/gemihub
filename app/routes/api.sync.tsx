@@ -35,7 +35,7 @@ import {
   type SyncMeta,
 } from "~/services/sync-meta.server";
 import { SETTINGS_FILE_NAME, ENCRYPTED_AUTH_FILE_NAME } from "~/services/sync-diff";
-import { parallelProcess } from "~/utils/parallel";
+import { parallelProcess, parallelProcessSettled } from "~/utils/parallel";
 import { saveEdit, saveEditDiff } from "~/services/edit-history.server";
 import { handleRagAction } from "~/services/sync-rag.server";
 import { createLogContext, emitLog } from "~/services/logger.server";
@@ -696,7 +696,7 @@ export async function action({ request }: Route.ActionArgs) {
       })();
 
       // Update files in parallel: read old content, skip upload if unchanged
-      const pushResults = await parallelProcess(files, async ({ fileId, content, fileName, encoding, historyDiff }) => {
+      const uploadResults = await parallelProcessSettled(files, async ({ fileId, content, fileName, encoding, historyDiff }) => {
         const isBinary = encoding === "base64";
 
         // A cached ID can still address a trashed file or a file moved outside
@@ -898,6 +898,18 @@ export async function action({ request }: Route.ActionArgs) {
           throw err;
         }
       }, 5);
+      // Keep successful Drive writes when a sibling upload fails. Otherwise
+      // the entire request becomes 500 after partial writes, with no meta
+      // update, and retry makes the successful files appear as conflicts.
+      const pushResults = uploadResults.map((result, index) => {
+        if (result.status === "fulfilled") return result.value;
+        const fileId = files[index].fileId;
+        console.error("[sync pushFiles] File upload failed", {
+          fileId,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+        return { ok: false as const, fileId, reason: "upload-failed" as const };
+      });
       const deletionResults = await deletionPromise;
 
       type PushSuccess = {
@@ -1039,7 +1051,7 @@ export async function action({ request }: Route.ActionArgs) {
         })();
       }
 
-      logCtx.details = { fileCount: files.length };
+      logCtx.details = { fileCount: files.length, skippedFileCount: skippedFileIds.length };
       return logAndReturn({
         results: successful.map((r) => ({
           fileId: r.fileId,
