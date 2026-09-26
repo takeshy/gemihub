@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions, TextLayer, version, type PDFDocumentProxy } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useI18n } from "~/i18n/context";
 
@@ -136,7 +136,16 @@ const PdfViewer = forwardRef<PdfViewerHandle, {
         // isEvalSupported opt-out is needed here.
         // Copy the bytes: getDocument transfers the buffer to the worker,
         // which would detach the caller's (possibly cached) array.
-        loadingTask = getDocument({ data: data.slice() });
+        // CJK PDFs can require external Adobe character maps even when fonts
+        // are embedded. Serve the resources from the same PDF.js version.
+        const assetBase = `${import.meta.env.BASE_URL}pdfjs/${version}/`;
+        loadingTask = getDocument({
+          data: data.slice(),
+          cMapUrl: `${assetBase}cmaps/`,
+          cMapPacked: true,
+          standardFontDataUrl: `${assetBase}standard_fonts/`,
+          wasmUrl: `${assetBase}wasm/`,
+        });
         const doc = await loadingTask.promise;
         if (cancelled || generation !== generationRef.current) {
           doc.loadingTask.destroy().catch(() => undefined);

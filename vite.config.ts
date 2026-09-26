@@ -1,10 +1,48 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { createLogger, defineConfig, type Logger, type Plugin } from "vite";
 import type { LogLevel, RollupLog } from "rollup";
 import tsconfigPaths from "vite-tsconfig-paths";
+
+/** PDF.js fetches these files by their original names from its worker. */
+function pdfjsAssets(): Plugin {
+  const require = createRequire(import.meta.url);
+  const packagePath = require.resolve("pdfjs-dist/package.json");
+  const { version } = JSON.parse(fs.readFileSync(packagePath, "utf8")) as { version: string };
+  const prefix = `pdfjs/${version}/`;
+  const assets = new Map<string, string>();
+  for (const directory of ["cmaps", "standard_fonts", "wasm"]) {
+    const source = path.join(path.dirname(packagePath), directory);
+    for (const name of fs.readdirSync(source)) {
+      if (fs.statSync(path.join(source, name)).isFile()) {
+        assets.set(`${prefix}${directory}/${name}`, path.join(source, name));
+      }
+    }
+  }
+  return {
+    name: "pdfjs-assets",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = new URL(req.url || "/", "http://localhost").pathname;
+        const source = assets.get(pathname.slice(1));
+        if (!source) return next();
+        const contentType = source.endsWith(".wasm") ? "application/wasm"
+          : source.endsWith(".js") ? "text/javascript" : "application/octet-stream";
+        res.setHeader("Content-Type", contentType);
+        res.end(fs.readFileSync(source));
+      });
+    },
+    generateBundle() {
+      if (this.environment.config.build.ssr) return;
+      for (const [fileName, source] of assets) {
+        this.emitFile({ type: "asset", fileName, source: fs.readFileSync(source) });
+      }
+    },
+  };
+}
 
 /** Serve .wasm plugin assets directly, bypassing Vite's ESM transform. */
 function serveWasmAssets(): Plugin {
@@ -94,7 +132,7 @@ const customLogger: Logger = {
 
 export default defineConfig({
   customLogger,
-  plugins: [hubworkRootPage(), serveWasmAssets(), tailwindcss(), reactRouter(), tsconfigPaths()],
+  plugins: [pdfjsAssets(), hubworkRootPage(), serveWasmAssets(), tailwindcss(), reactRouter(), tsconfigPaths()],
   build: {
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
