@@ -188,7 +188,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     const size = Number(body.size ?? 0);
-    const maxFileSize = await getMaxFileSize(validTokens.rootFolderId);
+    const maxFileSize = await getMaxFileSize(validTokens.rootFolderId, validTokens.email);
     if (!Number.isFinite(size) || size < 0 || size > maxFileSize) {
       const limitMB = Math.round(maxFileSize / 1024 / 1024);
       return Response.json(
@@ -200,6 +200,7 @@ export async function action({ request }: Route.ActionArgs) {
     const safePrefix = sanitizeDrivePath(body.namePrefix || "");
     const uploadName = safePrefix ? `${safePrefix}/${safeName}` : safeName;
     const mimeType = guessUploadMimeType(uploadName, body.mimeType);
+    const uploadOptions = { origin: request.headers.get("Origin") || new URL(request.url).origin };
     let uploadUrl: string;
 
     if (body.replaceFileId) {
@@ -214,7 +215,8 @@ export async function action({ request }: Route.ActionArgs) {
         validTokens.accessToken,
         body.replaceFileId,
         mimeType,
-        size
+        size,
+        uploadOptions
       );
     } else {
       uploadUrl = await createResumableUploadSession(
@@ -222,7 +224,8 @@ export async function action({ request }: Route.ActionArgs) {
         uploadName,
         targetFolderId,
         mimeType,
-        size
+        size,
+        uploadOptions
       );
     }
 

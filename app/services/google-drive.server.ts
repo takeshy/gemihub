@@ -343,7 +343,7 @@ export async function createResumableUploadSession(
   parentId: string,
   mimeType: string = "application/octet-stream",
   contentLength?: number,
-  options: DriveOperationOptions = {}
+  options: DriveOperationOptions & { origin?: string } = {}
 ): Promise<string> {
   const res = await driveRequest(
     `${DRIVE_UPLOAD_API}/files?uploadType=resumable&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
@@ -354,6 +354,8 @@ export async function createResumableUploadSession(
       headers: {
         "Content-Type": "application/json; charset=UTF-8",
         "X-Upload-Content-Type": mimeType,
+        // Bind the session to the browser origin so the final PUT response is readable.
+        ...(options.origin ? { Origin: options.origin } : {}),
         ...(contentLength !== undefined ? { "X-Upload-Content-Length": String(contentLength) } : {}),
       },
       body: JSON.stringify({
@@ -375,7 +377,7 @@ export async function updateResumableUploadSession(
   fileId: string,
   mimeType: string = "application/octet-stream",
   contentLength?: number,
-  options: DriveOperationOptions = {}
+  options: DriveOperationOptions & { origin?: string } = {}
 ): Promise<string> {
   const res = await driveRequest(
     `${DRIVE_UPLOAD_API}/files/${fileId}?uploadType=resumable&fields=id,name,mimeType,modifiedTime,createdTime,webViewLink,md5Checksum,size`,
@@ -386,6 +388,8 @@ export async function updateResumableUploadSession(
       headers: {
         "Content-Type": "application/json; charset=UTF-8",
         "X-Upload-Content-Type": mimeType,
+        // Bind the session to the browser origin so the final PUT response is readable.
+        ...(options.origin ? { Origin: options.origin } : {}),
         ...(contentLength !== undefined ? { "X-Upload-Content-Length": String(contentLength) } : {}),
       },
       body: JSON.stringify({}),
