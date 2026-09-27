@@ -82,6 +82,10 @@ export interface TranslationStrings {
   "mainViewer.saving": string;
   "mainViewer.preview": string;
   "mainViewer.wysiwyg": string;
+  "mainViewer.copyAll": string;
+  "mainViewer.copyAllMarkdown": string;
+  "mainViewer.copied": string;
+  "mainViewer.copyFailed": string;
   "mainViewer.raw": string;
   "pdf.openFailed": string;
   "pdf.prevPage": string;
@@ -1559,6 +1563,10 @@ const en: TranslationStrings = {
   "mainViewer.saving": "Saving...",
   "mainViewer.preview": "Preview",
   "mainViewer.wysiwyg": "WYSIWYG",
+  "mainViewer.copyAll": "Copy all",
+  "mainViewer.copyAllMarkdown": "Copy full Markdown",
+  "mainViewer.copied": "Copied",
+  "mainViewer.copyFailed": "Copy failed",
   "pdf.openFailed": "Failed to open PDF",
   "pdf.prevPage": "Previous page",
   "pdf.nextPage": "Next page",
@@ -3037,6 +3045,10 @@ const ja: TranslationStrings = {
   "mainViewer.saving": "保存中...",
   "mainViewer.preview": "プレビュー",
   "mainViewer.wysiwyg": "WYSIWYG",
+  "mainViewer.copyAll": "全文コピー",
+  "mainViewer.copyAllMarkdown": "Markdown全文をコピー",
+  "mainViewer.copied": "コピーしました",
+  "mainViewer.copyFailed": "コピーできませんでした",
   "pdf.openFailed": "PDFを開けませんでした",
   "pdf.prevPage": "前のページ",
   "pdf.nextPage": "次のページ",

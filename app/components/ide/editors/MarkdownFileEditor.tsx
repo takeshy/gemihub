@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
-import { Loader2, Eye, PenLine, Code, Plus, MoreVertical, ListOrdered, History, GitCompareArrows, Upload, Download } from "lucide-react";
+import { Loader2, Eye, PenLine, Code, Plus, MoreVertical, ListOrdered, History, GitCompareArrows, Upload, Download, Copy, Check, AlertCircle } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { useI18n } from "~/i18n/context";
 import { useEditorContext, type SelectionInfo } from "~/contexts/EditorContext";
@@ -17,6 +17,47 @@ import { WikiEmbed } from "~/components/editor/WikiEmbed";
 import { splitSubpath, slugifyHeading } from "~/utils/wiki-subpath";
 
 const LazyGfmPreview = lazy(() => import("../GfmMarkdownPreview"));
+
+function CopyMarkdownButton({ content, compact }: { content: string; compact: boolean }) {
+  const { t } = useI18n();
+  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
+
+  useEffect(() => {
+    if (status === "idle") return;
+    const timer = setTimeout(() => setStatus("idle"), 2000);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  const copyAll = async () => {
+    setStatus("idle");
+    try {
+      await navigator.clipboard.writeText(content);
+      setStatus("copied");
+    } catch {
+      setStatus("failed");
+    }
+  };
+
+  const feedback = status === "copied"
+    ? t("mainViewer.copied")
+    : status === "failed" ? t("mainViewer.copyFailed") : "";
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={copyAll}
+        className="flex shrink-0 items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+        title={feedback || t("mainViewer.copyAllMarkdown")}
+        aria-label={feedback || t("mainViewer.copyAllMarkdown")}
+      >
+        {status === "copied" ? <Check size={ICON.SM} /> : status === "failed" ? <AlertCircle size={ICON.SM} /> : <Copy size={ICON.SM} />}
+        {!compact && <span>{t("mainViewer.copyAll")}</span>}
+      </button>
+      <span role="status" className="sr-only">{feedback}</span>
+    </>
+  );
+}
 
 function WysiwygSelectionTracker({
   setActiveSelection,
@@ -553,6 +594,7 @@ export function MarkdownFileEditor({
                 </button>
               ))}
             </div>}
+            {!compactHeader && <CopyMarkdownButton key={fileId} content={content} compact={false} />}
             {!compactHeader && mode === "raw" && (
               <button
                 type="button"
@@ -611,23 +653,26 @@ export function MarkdownFileEditor({
             </div>
           )}
           {compactHeader && (
-            <div className="order-last flex w-full items-center overflow-hidden rounded-md border border-gray-300 dark:border-gray-600">
-              {modes.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => switchMode(item.key)}
-                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-2 py-1 text-xs transition-colors ${
-                    mode === item.key
-                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                      : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                  }`}
-                  title={item.label}
-                >
-                  <span className="shrink-0">{item.icon}</span>
-                  <span className="truncate">{item.label}</span>
-                </button>
-              ))}
+            <div className="order-last flex w-full items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-md border border-gray-300 dark:border-gray-600">
+                {modes.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => switchMode(item.key)}
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-1 px-2 py-1 text-xs transition-colors ${
+                      mode === item.key
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                    }`}
+                    title={item.label}
+                  >
+                    <span className="shrink-0">{item.icon}</span>
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+              <CopyMarkdownButton key={fileId} content={content} compact />
             </div>
           )}
         </div>
