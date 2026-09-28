@@ -93,7 +93,7 @@ When enabled, Gemini can call tools during chat. Tool execution happens within t
 
 | Tool | Description |
 |------|-------------|
-| `read_drive_file` | Read file content by ID |
+| `read_drive_file` | Read file content by ID. For a PDF, optional `startPage` / `endPage` send only that inclusive range (an `endPage` past the last page is clamped); the returned file name reports the range and total, e.g. `book (pages 2-3 of 10).pdf`, so a PDF over the 20MB inline limit can be read a few pages at a time |
 | `search_drive_files` | Search by name or content, with optional folder filter |
 | `list_drive_files` | List files and virtual folders |
 | `create_drive_file` | Create a new file (path separators for virtual folders) |

@@ -706,9 +706,10 @@ export async function executeWorkflowLocally(
         case "drive-read": {
           if (options.abortSignal?.aborted) throw new Error("Execution cancelled");
           log(node.id, node.type, `Reading file: ${node.properties["path"] || ""}`, "info");
-          await handleDriveReadNodeLocal(node, context, callbacks.promptCallbacks);
+          const drPdf = await handleDriveReadNodeLocal(node, context, callbacks.promptCallbacks);
           const drSaveTo = node.properties["saveTo"] || "";
-          const drContent = context.variables.get(drSaveTo);
+          // A PDF page read logs its range, not the excerpt bytes.
+          const drContent = drPdf ?? context.variables.get(drSaveTo);
           log(node.id, node.type, `File read`, "success",
             { path: node.properties["path"] }, drContent);
           addHistoryStep(node.id, node.type, { path: node.properties["path"] }, drContent);

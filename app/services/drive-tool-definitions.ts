@@ -18,13 +18,21 @@ export const DRIVE_SEARCH_TOOL_NAMES = new Set([
 export const DRIVE_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "read_drive_file",
-    description: "Read the content of a file from Google Drive by its file ID",
+    description: "Read the content of a file from Google Drive by its file ID. For a PDF, startPage and endPage select an inclusive page range, which also lets a long PDF be read a few pages at a time; the returned file name then reports the pages read and the total page count.",
     parameters: {
       type: "object",
       properties: {
         fileId: {
           type: "string",
           description: "The Google Drive file ID",
+        },
+        startPage: {
+          type: "integer",
+          description: "For PDFs, the 1-based first page to read (inclusive). Defaults to page 1.",
+        },
+        endPage: {
+          type: "integer",
+          description: "For PDFs, the 1-based last page to read (inclusive). Defaults to the final page; a value past it is clamped.",
         },
       },
       required: ["fileId"],

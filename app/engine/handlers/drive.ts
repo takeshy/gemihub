@@ -1,6 +1,8 @@
 import type { WorkflowNode, ExecutionContext, ServiceContext, PromptCallbacks } from "../types";
 import { replaceVariables } from "./utils";
 import { isBinaryMimeType, resolveExistingFile, readBinaryFileAsExplorerData } from "./driveUtils";
+import { readPdfForWorkflow, wantsPdfPages } from "../pdfPages";
+import { extractPdfTextOnServer } from "~/services/pdf-text.server";
 import * as driveService from "~/services/google-drive.server";
 import { saveEdit } from "~/services/edit-history.server";
 import { removeFileFromMeta, upsertFileInMeta } from "~/services/sync-meta.server";
@@ -222,16 +224,21 @@ export async function handleDriveReadNode(
   context: ExecutionContext,
   serviceContext: ServiceContext,
   promptCallbacks?: PromptCallbacks
-): Promise<void> {
+): Promise<Record<string, unknown> | void> {
   const pathRaw = node.properties["path"] || "";
   const saveTo = node.properties["saveTo"];
   const saveMetadataTo = node.properties["saveMetadataTo"];
 
-  if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
   if (!pathRaw.trim()) throw new Error("drive-read node missing 'path' property");
 
   const accessToken = serviceContext.driveAccessToken;
   const file = await resolveExistingFile(pathRaw, context, serviceContext, { tryMdExtension: true });
+  if (wantsPdfPages(node, file.name, file.mimeType)) {
+    const res = await driveService.readFileRaw(accessToken, file.id, { signal: serviceContext.abortSignal });
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return await readPdfForWorkflow(node, context, file, bytes, extractPdfTextOnServer);
+  }
+  if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
 
   if (isBinaryMimeType(file.mimeType)) {
     context.variables.set(

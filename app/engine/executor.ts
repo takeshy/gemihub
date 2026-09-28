@@ -294,9 +294,10 @@ export async function executeWorkflow(
           if (options?.abortSignal?.aborted) throw new Error("Execution cancelled");
           const readPath = node.properties["path"] || "";
           log(node.id, node.type, `Reading file: ${readPath}`, "info");
-          await handleDriveReadNode(node, context, serviceContext, promptCallbacks);
+          const readPdf = await handleDriveReadNode(node, context, serviceContext, promptCallbacks);
           const readSaveTo = node.properties["saveTo"] || "";
-          const readContent = context.variables.get(readSaveTo);
+          // A PDF page read logs its range, not the excerpt bytes.
+          const readContent = readPdf ?? context.variables.get(readSaveTo);
           log(node.id, node.type, `File read`, "success", { path: readPath }, readContent);
           addHistoryStep(node.id, node.type, { path: readPath }, readContent);
           const next = getNextNodes(workflow, node.id);

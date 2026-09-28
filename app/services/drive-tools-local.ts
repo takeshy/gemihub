@@ -16,6 +16,8 @@ import {
   getRemoteMetaFiles,
 } from "./drive-local";
 import { getCachedRemoteMeta, renameCachedFile } from "./indexeddb-cache";
+import { isPdfToolPageRangeSet, pdfPagesMediaResult, pdfToolPageRangeFromArgs } from "./pdf-tool-pages";
+import { base64ToBytes } from "~/utils/media-utils";
 import type { DriveEditProposal, DriveEvent } from "~/engine/local-executor";
 
 const GEMINI_MEDIA_PREFIXES = ["image/", "audio/", "video/"];
@@ -113,6 +115,18 @@ export async function executeLocalDriveTool(
       const meta = await getCachedRemoteMeta();
       const fileMeta = meta?.files[fileId];
       const mimeType = fileMeta?.mimeType || "text/plain";
+      const pageRange = pdfToolPageRangeFromArgs(args);
+      if ("error" in pageRange) return pageRange;
+
+      if (mimeType === "application/pdf" && isPdfToolPageRangeSet(pageRange)) {
+        let bytes: Uint8Array;
+        try {
+          bytes = base64ToBytes(await readFileBinaryLocal(fileId));
+        } catch {
+          return { error: `Failed to read binary file: ${fileId}` };
+        }
+        return await pdfPagesMediaResult(bytes, fileMeta?.name || fileId, pageRange, MAX_INLINE_DATA_BYTES);
+      }
 
       if (isGeminiSupportedMedia(mimeType)) {
         try {
@@ -120,7 +134,7 @@ export async function executeLocalDriveTool(
           // Check size limit (base64 is ~4/3 of raw bytes)
           const estimatedBytes = Math.ceil(base64.length * 3 / 4);
           if (estimatedBytes > MAX_INLINE_DATA_BYTES) {
-            return { error: `File is too large (${Math.round(estimatedBytes / 1024 / 1024)}MB). Maximum supported size is 20MB.` };
+            return { error: `File is too large (${Math.round(estimatedBytes / 1024 / 1024)}MB). Maximum supported size is 20MB.${mimeType === "application/pdf" ? " Read it a few pages at a time with startPage and endPage." : ""}` };
           }
           return {
             __mediaData: {

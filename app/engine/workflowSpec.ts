@@ -238,6 +238,12 @@ Read file from Drive.
 - **path** (required): File name or Drive file ID
 - **saveTo** (required): Variable for content (string)
 - **saveMetadataTo** (optional): Variable for unencrypted public metadata JSON. For encrypted files this contains \`description\` and fields such as \`email\`.
+- PDF page range (only for a PDF; setting any of these switches the node from returning the whole file as FileExplorerData to reading pages):
+  - **startPage** / **endPage** (optional): 1-based inclusive range. Omitted means the first/last page; an endPage past the last page is clamped.
+  - **format** (optional): "text" (default) returns the text layer labelled \`[Page N]\` (empty for scanned pages); "pdf" returns FileExplorerData of an excerpt PDF for command attachments.
+  - **savePageCountTo** (optional): Variable for the total page count. With only savePageCountTo (no saveTo) the node just counts pages, the cheap way to size a loop before it starts.
+  - **saveEndPageTo** (optional): Variable for the last page actually read after clamping.
+  - Use these to process a long PDF a few pages at a time in a while loop.
 
 #### drive-search
 Search files on Drive.

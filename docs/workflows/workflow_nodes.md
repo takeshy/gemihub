@@ -424,6 +424,31 @@ Read content from a Google Drive file.
 - If path looks like a Drive file ID (no extension, >20 chars): reads directly
 - Otherwise: searches by file name, tries with `.md` extension as fallback
 
+**PDF page ranges:** a PDF is normally returned whole as FileExplorerData. Setting any of the properties below reads a page range instead, so a long PDF can be translated or summarized a few pages at a time in a `while` loop. Pages are counted and cut with pdf-lib, and text is extracted with pdf.js, in the browser or on the server depending on where the workflow runs.
+
+```yaml
+- id: count
+  type: drive-read
+  path: "{{pdfPath}}"
+  savePageCountTo: totalPages   # no saveTo: count pages only
+- id: read
+  type: drive-read
+  path: "{{pdfPath}}"
+  startPage: "{{page}}"
+  endPage: "{{endPage}}"
+  saveTo: pageText
+  saveEndPageTo: readTo
+```
+
+| Property | Required | Template | Description |
+|----------|:--------:|:--------:|-------------|
+| `startPage` / `endPage` | No | Yes | 1-based inclusive range. Omitted means the first/last page; an `endPage` past the last page is clamped |
+| `format` | No | Yes | `text` (default): text layer labelled `[Page N]`, empty for scanned pages. `pdf`: FileExplorerData of an excerpt PDF for `command` attachments |
+| `savePageCountTo` | No | No | Variable for the total page count. Without `saveTo` the node only counts pages |
+| `saveEndPageTo` | No | No | Variable for the last page actually read after clamping |
+
+The run log records the page range instead of the excerpt bytes.
+
 ---
 
 ### drive-search

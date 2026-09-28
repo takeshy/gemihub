@@ -14,6 +14,7 @@ import { getFileListFromMeta, upsertFileInMeta } from "./sync-meta.server";
 export { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES } from "./drive-tool-definitions";
 export type { DriveToolMediaResult } from "./gemini-chat-core";
 import type { DriveToolMediaResult } from "./gemini-chat-core";
+import { isPdfToolPageRangeSet, pdfPagesMediaResult, pdfToolPageRangeFromArgs } from "./pdf-tool-pages";
 
 const GEMINI_MEDIA_PREFIXES = ["image/", "audio/", "video/"];
 const GEMINI_MEDIA_EXACT = new Set(["application/pdf"]);
@@ -67,11 +68,18 @@ export async function executeDriveTool(
       if (typeof fileId !== "string" || !fileId) {
         return { error: "read_drive_file: 'fileId' must be a non-empty string" };
       }
+      const pageRange = pdfToolPageRangeFromArgs(args);
+      if ("error" in pageRange) return pageRange;
       const metadata = await getFileMetadata(accessToken, fileId, { signal: abortSignal });
+      if (metadata.mimeType === "application/pdf" && isPdfToolPageRangeSet(pageRange)) {
+        const rawRes = await readFileRaw(accessToken, fileId, { signal: abortSignal });
+        const bytes = new Uint8Array(await rawRes.arrayBuffer());
+        return await pdfPagesMediaResult(bytes, metadata.name, pageRange, MAX_INLINE_DATA_BYTES);
+      }
       if (isGeminiSupportedMedia(metadata.mimeType)) {
         const fileSize = metadata.size ? parseInt(metadata.size, 10) : 0;
         if (fileSize > MAX_INLINE_DATA_BYTES) {
-          return { error: `File is too large (${Math.round(fileSize / 1024 / 1024)}MB). Maximum supported size is 20MB.` };
+          return { error: `File is too large (${Math.round(fileSize / 1024 / 1024)}MB). Maximum supported size is 20MB.${metadata.mimeType === "application/pdf" ? " Read it a few pages at a time with startPage and endPage." : ""}` };
         }
         const rawRes = await readFileRaw(accessToken, fileId, { signal: abortSignal });
         const buf = await rawRes.arrayBuffer();

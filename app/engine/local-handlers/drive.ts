@@ -19,6 +19,9 @@ import {
   findFileByNameLocal,
 } from "~/services/drive-local";
 import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { readPdfForWorkflow, wantsPdfPages } from "../pdfPages";
+import { base64ToBytes } from "~/utils/media-utils";
+import { extractPdfTextInBrowser } from "./pdfText";
 
 function parseDuration(duration: string): number | null {
   const match = duration.match(/^(\d+)\s*(d|h|m)$/);
@@ -40,14 +43,18 @@ export async function handleDriveReadNodeLocal(
   node: WorkflowNode,
   context: ExecutionContext,
   promptCallbacks?: PromptCallbacks,
-): Promise<void> {
+): Promise<Record<string, unknown> | void> {
   const pathRaw = node.properties["path"] || "";
   const saveTo = node.properties["saveTo"];
   const saveMetadataTo = node.properties["saveMetadataTo"];
-  if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
   if (!pathRaw.trim()) throw new Error("drive-read node missing 'path' property");
 
   const file = await resolveFileLocal(pathRaw, context, { tryMdExtension: true });
+  if (wantsPdfPages(node, file.name, file.mimeType)) {
+    const bytes = base64ToBytes(await readFileBinaryLocal(file.id));
+    return await readPdfForWorkflow(node, context, file, bytes, extractPdfTextInBrowser);
+  }
+  if (!saveTo) throw new Error("drive-read node missing 'saveTo' property");
 
   if (isBinaryMimeType(file.mimeType)) {
     // Return as FileExplorerData JSON

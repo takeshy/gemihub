@@ -14,6 +14,7 @@ import type { ProjectAccessContext } from "~/types/enterprise";
 import { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES } from "./drive-tool-definitions";
 import type { DriveToolMediaResult } from "./gemini-content-builders";
 import { hasMinRole } from "./project-acl.server";
+import { isPdfToolPageRangeSet, pdfPagesMediaResult, pdfToolPageRangeFromArgs } from "./pdf-tool-pages";
 
 export { DRIVE_TOOL_DEFINITIONS, DRIVE_SEARCH_TOOL_NAMES };
 export type { DriveToolMediaResult };
@@ -136,12 +137,17 @@ export async function executeStorageTool(
     case "read_drive_file": {
       const fileId = pathArg(args.fileId, "read_drive_file", "fileId");
       if (typeof fileId !== "string") return fileId;
+      const pageRange = pdfToolPageRangeFromArgs(args);
+      if ("error" in pageRange) return pageRange;
       try {
         const { object, bytes } = await readObject(ctx, fileId);
+        if (object.contentType === "application/pdf" && isPdfToolPageRangeSet(pageRange)) {
+          return await pdfPagesMediaResult(new Uint8Array(bytes), fileId, pageRange, MAX_INLINE_DATA_BYTES);
+        }
         if (isGeminiSupportedMedia(object.contentType)) {
           if (object.size > MAX_INLINE_DATA_BYTES) {
             return {
-              error: `File is too large (${Math.round(object.size / 1024 / 1024)}MB). Maximum supported size is 20MB.`,
+              error: `File is too large (${Math.round(object.size / 1024 / 1024)}MB). Maximum supported size is 20MB.${object.contentType === "application/pdf" ? " Read it a few pages at a time with startPage and endPage." : ""}`,
             };
           }
           return {

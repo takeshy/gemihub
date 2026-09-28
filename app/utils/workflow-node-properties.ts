@@ -84,6 +84,11 @@ function getTypeSpecificPropertyDefs(type: WorkflowNodeType, context?: NodePrope
         { key: "path", label: "Path", required: true, placeholder: "notes/input.md" },
         { key: "saveTo", label: "Save To", required: true, placeholder: "fileContent" },
         { key: "saveMetadataTo", label: "Save Public Metadata To", required: false, placeholder: "loginMetadata" },
+        { key: "startPage", label: "PDF Start Page", required: false, placeholder: "{{page}}" },
+        { key: "endPage", label: "PDF End Page", required: false, placeholder: "{{endPage}}" },
+        { key: "format", label: "PDF Format", required: false, options: ["text", "pdf"], defaultValue: "text" },
+        { key: "savePageCountTo", label: "Save PDF Page Count To", required: false, placeholder: "totalPages" },
+        { key: "saveEndPageTo", label: "Save PDF End Page To", required: false, placeholder: "readTo" },
       ];
     case "drive-search":
       return [
