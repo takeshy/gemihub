@@ -41,7 +41,21 @@ resource "google_compute_backend_service" "default" {
 # selection in the HTTPS proxy's certificate map handles per-domain certs.
 resource "google_compute_url_map" "https" {
   name            = "gemini-hub-https"
-  default_service = google_compute_backend_service.default.id
+  default_service = lookup(var.shared_vm_backends, "gemihub", google_compute_backend_service.default.id)
+  dynamic "host_rule" {
+    for_each = { for k, v in var.shared_vm_backends : k => v if k != "gemihub" }
+    content {
+      hosts        = host_rule.key == "geo" ? ["geo.mcp.takeshy.work"] : ["kakeratta.net", "www.kakeratta.net"]
+      path_matcher = "shared-${host_rule.key}"
+    }
+  }
+  dynamic "path_matcher" {
+    for_each = { for k, v in var.shared_vm_backends : k => v if k != "gemihub" }
+    content {
+      name            = "shared-${path_matcher.key}"
+      default_service = path_matcher.value
+    }
+  }
 }
 
 # --- Certificate Manager (supports dynamic custom domain certs) ---

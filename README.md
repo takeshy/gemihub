@@ -172,7 +172,7 @@ Documentation lives in [`docs/`](./docs/) as an OKF bundle — [docs/index.md](.
 | AI | Google Gemini API (`@google/genai`); Vertex AI for organization projects |
 | Storage | Google Drive API (default mount), Cloud Storage (organization projects), Firestore |
 | Auth | Google OAuth 2.0 → session cookies |
-| Infrastructure | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Certificate Manager, Cloud Scheduler, Global HTTPS LB + CDN |
+| Infrastructure | Compute Engine (shared VM), Cloud Build, Artifact Registry, Cloud DNS, Certificate Manager, Cloud Scheduler, Global HTTPS LB + CDN |
 | Editor | wysimark-lite (Slate-based WYSIWYG) |
 
 ## Acknowledgments
@@ -191,3 +191,7 @@ MIT
 ## MCP permissions and read-only tools
 
 MCP tool calls require approval by default. The dialog shows the server name, tool name and execution arguments. Choose Allow once, Always allow this tool, or Deny; dismissing the dialog denies execution. Server settings provide an Always approve option (off by default) and a removable allowed-tool list. Workflow `command` and `mcp` nodes can use `confirm: "false"` to skip MCP approval for that node, including automatic runs. Later MCP App interactions follow the server settings again. Read-only mode allows built-in reading, listing and searching, and blocks built-in writes (including timeline append). External MCP and skill/workflow operations retain their own permissions. Connection tests disable editing while running and display errors for correction.
+
+## Production runtime
+
+Production uses the 4 GiB shared Compute Engine VM `shared-apps` in `geminihub-486523` alongside Kakeratta and Geo MCP. The existing HTTPS load balancer, OAuth, session secrets, Firestore and storage remain in place. `cloudbuild.yaml` deploys immutable images to the VM through IAP; the old Cloud Run service stays at minimum zero for recovery. Operations and recovery are documented in `../kakeratta/infra/shared-vm/README.md`.

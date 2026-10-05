@@ -1,52 +1,46 @@
 steps:
-  # Step 1: Pull the previous image so Docker can reuse dependency/build layers.
-  - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        docker pull '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest' || true
+- name: gcr.io/cloud-builders/docker
+  entrypoint: bash
+  args:
+  - -c
+  - 'docker pull ''${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest''
+    || true
 
-  # Step 2: Build Docker image
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'build'
-      - '--cache-from'
-      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest'
-      - '.'
-
-  # Step 3: Push to Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
-      - '--all-tags'
-      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub'
-
-  # Step 4: Deploy main service to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - '${_SERVICE}'
-      - '--image'
-      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}'
-      - '--region'
-      - '${_REGION}'
-
+    '
+- name: gcr.io/cloud-builders/docker
+  args:
+  - build
+  - --cache-from
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest
+  - -t
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}
+  - -t
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:latest
+  - .
+- name: gcr.io/cloud-builders/docker
+  args:
+  - push
+  - --all-tags
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  entrypoint: gcloud
+  args:
+  - compute
+  - ssh
+  - shared-apps
+  - --project=geminihub-486523
+  - --zone=asia-northeast1-b
+  - --tunnel-through-iap
+  - --ssh-key-file=/tmp/build-ssh
+  - --quiet
+  - --command
+  - sudo python3 /opt/shared-apps/deploy.py --app gemihub --image ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub:${COMMIT_SHA}
 images:
-  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub'
-
+- ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/gemini-hub
 options:
   logging: CLOUD_LOGGING_ONLY
-  machineType: 'E2_HIGHCPU_8'
-
+  machineType: E2_HIGHCPU_8
 substitutions:
   _REGION: asia-northeast1
   _PROJECT_ID: geminihub-486523
-  _SERVICE: gemini-hub
   _REPO: gemini-hub

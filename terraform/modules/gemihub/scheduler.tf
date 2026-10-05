@@ -24,7 +24,7 @@ resource "google_cloud_scheduler_job" "hubwork" {
 
   http_target {
     http_method = "POST"
-    uri         = "${google_cloud_run_v2_service.app.uri}/hubwork/api/workflow/scheduled"
+    uri         = length(var.shared_vm_backends) > 0 ? "https://${var.domain}/hubwork/api/workflow/scheduled" : "${google_cloud_run_v2_service.app.uri}/hubwork/api/workflow/scheduled"
 
     oidc_token {
       service_account_email = google_service_account.hubwork_scheduler.email

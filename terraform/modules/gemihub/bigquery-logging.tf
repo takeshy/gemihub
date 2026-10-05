@@ -12,8 +12,7 @@ resource "google_logging_project_sink" "app_logs" {
   destination = "bigquery.googleapis.com/projects/${var.project_id}/datasets/${google_bigquery_dataset.app_logs.dataset_id}"
 
   filter = join(" AND ", [
-    "resource.type=\"cloud_run_revision\"",
-    "resource.labels.service_name=\"gemini-hub\"",
+    "((resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"gemini-hub\") OR (resource.type=\"gce_instance\" AND labels.service_name=\"gemihub\"))",
     "jsonPayload.logType=\"api_request\"",
   ])
 

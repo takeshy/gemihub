@@ -91,3 +91,9 @@ variable "default_tenant_region" {
   type        = string
   default     = ""
 }
+
+variable "shared_vm_backends" {
+  description = "Existing shared VM backends; empty keeps the Cloud Run deployment."
+  type        = map(string)
+  default     = {}
+}

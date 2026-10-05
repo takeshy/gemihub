@@ -172,7 +172,7 @@ Business は「すべてがあなたの Drive に残る」唯一の例外です�
 | AI | Google Gemini API（`@google/genai`）、組織プロジェクトは Vertex AI |
 | ストレージ | Google Drive API（デフォルトマウント）、Cloud Storage（組織プロジェクト）、Firestore |
 | 認証 | Google OAuth 2.0 → セッションクッキー |
-| インフラ | Cloud Run, Cloud Build, Artifact Registry, Cloud DNS, Certificate Manager, Cloud Scheduler, Global HTTPS LB + CDN |
+| インフラ | Compute Engine (shared VM), Cloud Build, Artifact Registry, Cloud DNS, Certificate Manager, Cloud Scheduler, Global HTTPS LB + CDN |
 | エディタ | wysimark-lite（Slate ベース WYSIWYG） |
 
 ## 謝辞
@@ -191,3 +191,7 @@ MIT
 ## MCP の承認と read-only ツール
 
 MCP ツールは初期状態では実行ごとに承認が必要です。承認画面でサーバー名・ツール名・実行引数を確認し、「今回だけ許可」「このツールを常に許可」「拒否」を選べます。画面を閉じた場合も拒否になります。サーバー設定の「常に承認」は初期状態ではオフです。オンにするとそのサーバーの全ツールを承認なしで実行できます。個別に許可したツールは設定の許可リストから削除できます。ワークフローの `command` / `mcp` ノードで `confirm: "false"` を指定すると、自動実行を含め、そのノードの MCP 承認を省略します。その後の MCP App 操作には通常のサーバー設定が適用されます。read-only モードでは組み込みの読み取り・一覧・検索のみが使え、タイムライン追記を含む書き込みは禁止されます。外部 MCP やスキル内のワークフローはそれぞれの権限設定に従います。接続テスト中は編集操作が無効になり、失敗時のエラーを確認して修正できます。
+
+## 本番環境
+
+本番は `geminihub-486523` の4GiB共有 Compute Engine VM `shared-apps` で、Kakeratta・Geo MCP と同居します。既存の HTTPS ロードバランサ、OAuth、セッション秘密値、Firestore・ストレージを使い続けます。`cloudbuild.yaml` は IAP 経由で VM を更新します。旧 Cloud Run は復旧用に最小インスタンス0で保持します。運用・復旧手順は `../kakeratta/infra/shared-vm/README.md` を参照してください。
