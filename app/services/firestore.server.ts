@@ -9,8 +9,10 @@ let _available: boolean | null = null;
 /**
  * Whether Google Cloud Application Default Credentials are plausibly
  * available. On Cloud Run (`K_SERVICE`) credentials come from the metadata
- * server; elsewhere they require `GOOGLE_APPLICATION_CREDENTIALS` or a
- * gcloud ADC file. Without this guard, every Firestore call in a
+ * server; shared VM containers use an explicitly configured metadata broker
+ * (`GCE_METADATA_HOST` / `GCE_METADATA_IP`). Other environments require
+ * `GOOGLE_APPLICATION_CREDENTIALS` or a gcloud ADC file. Without this guard,
+ * every Firestore call in a
  * credential-less environment (self-hosted / local dev) pays a failed
  * metadata-server lookup and surfaces a noisy NO_ADC_FOUND error, so
  * Hubwork features check this and disable themselves instead.
@@ -29,6 +31,8 @@ export function isFirestoreAvailable(): boolean {
     // crashes the process (background NO_ADC_FOUND).
     _available = Boolean(
       process.env.K_SERVICE || // Cloud Run (metadata-server credentials)
+        process.env.GCE_METADATA_HOST || // Shared VM metadata broker
+        process.env.GCE_METADATA_IP || // Metadata endpoint override
         process.env.GOOGLE_APPLICATION_CREDENTIALS ||
         existsSync(join(gcloudConfigDir, "application_default_credentials.json")),
     );
@@ -40,7 +44,7 @@ export function getFirestore(): Firestore {
   if (!_firestore) {
     if (!isFirestoreAvailable()) {
       throw new Error(
-        "Firestore is not available: no Google Cloud credentials found (Hubwork features require Cloud Run or Application Default Credentials).",
+        "Firestore is not available: no Google Cloud credentials found (Hubwork features require a Google Cloud metadata endpoint or Application Default Credentials).",
       );
     }
     const projectId = process.env.GCP_PROJECT_ID;
