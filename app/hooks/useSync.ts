@@ -846,7 +846,7 @@ export function useSync() {
   }, [syncStatus, conflicts.length]);
 
   const resolveConflict = useCallback(
-    async (fileId: string, choice: "local" | "remote", isEditDelete?: boolean) => {
+    async (fileId: string, choice: "local" | "remote", isEditDelete?: boolean, cancelDeletion = false) => {
       if (projectActiveRef.current) return;
       if (syncLockRef.current) {
         throw new Error("Sync already in progress");
@@ -977,6 +977,10 @@ export function useSync() {
         // Clear edit history for the resolved file (conflict is resolved)
         if (!historyHandled) await deleteEditHistoryEntry(fileId);
 
+        // Restoration also cancels a queued local deletion before refreshing
+        // the tree metadata, which otherwise hides pending-deleted files.
+        if (cancelDeletion) await deletePendingDeletion(fileId);
+
         // Update local sync meta from remote meta (merge to preserve local-only entries)
         if (data.remoteMeta) {
           const existing = await getLocalSyncMeta();
@@ -1030,6 +1034,21 @@ export function useSync() {
     },
     [refreshSyncCounts]
   );
+
+  const restoreFile = useCallback(async (fileId: string) => {
+    if (projectActiveRef.current) throw new Error("Drive restoration is unavailable on this mount");
+    if (syncLockRef.current) throw new Error("Sync already in progress");
+    // Pending new files have no stable Drive identity yet.
+    if (fileId.startsWith("new:")) throw new Error("This file has not been created on Drive yet");
+    const res = await fetch("/api/sync");
+    if (!res.ok) throw new Error("Failed to check Drive state");
+    const data = await res.json();
+    if (!data.remoteMeta?.files) throw new Error("Invalid Drive state");
+    const exists = !!data.remoteMeta.files[fileId];
+    await resolveConflict(fileId, "remote", !exists, true);
+    await checkRemoteChanges();
+    window.dispatchEvent(new Event("sync-complete"));
+  }, [resolveConflict, checkRemoteChanges]);
 
   const fullPull = useCallback(async () => {
     if (projectActiveRef.current) return;
@@ -1219,6 +1238,7 @@ export function useSync() {
     pull,
     resolveConflict,
     fullPull,
+    restoreFile,
     clearError,
     checkRemoteChanges,
     cacheFilesByIds,

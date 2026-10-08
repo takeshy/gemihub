@@ -449,6 +449,7 @@ function IDELayout({
     push,
     pull,
     resolveConflict,
+    restoreFile,
     clearError,
     checkRemoteChanges,
     cacheFilesByIds,
@@ -505,6 +506,7 @@ function IDELayout({
         pull={pull}
         checkRemoteChanges={checkRemoteChanges}
         resolveConflict={resolveConflict}
+        restoreFile={restoreFile}
         showConflictDialog={showConflictDialog}
         setShowConflictDialog={setShowConflictDialog}
         showPasswordPrompt={showPasswordPrompt}
@@ -565,6 +567,7 @@ function IDEContent({
   pull,
   checkRemoteChanges,
   resolveConflict,
+  restoreFile,
   showConflictDialog,
   setShowConflictDialog,
   showPasswordPrompt,
@@ -609,6 +612,7 @@ function IDEContent({
   pull: () => Promise<void>;
   checkRemoteChanges: () => Promise<void>;
   resolveConflict: (fileId: string, resolution: "local" | "remote") => Promise<void>;
+  restoreFile?: (fileId: string) => Promise<void>;
   showConflictDialog: boolean;
   setShowConflictDialog: (v: boolean) => void;
   showPasswordPrompt: boolean;
@@ -1389,6 +1393,7 @@ function IDEContent({
         localModifiedCount={localModifiedCount}
         remoteModifiedCount={remoteModifiedCount}
         onPush={push}
+        onRestoreFile={restoreFile}
         onPull={pull}
         onShowConflicts={() => setShowConflictDialog(true)}
         onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}

@@ -1132,6 +1132,10 @@ export interface TranslationStrings {
   "sync.pullChanges": string;
   "sync.pushDirection": string;
   "sync.pullDirection": string;
+  "sync.restore": string;
+  "sync.restoreHint": string;
+  "sync.restoreConfirm": string;
+  "sync.restoreError": string;
   "sync.openFile": string;
   "sync.noDiff": string;
   "sync.encryptedNoDiff": string;
@@ -2614,6 +2618,10 @@ const en: TranslationStrings = {
   "sync.pullChanges": "Pull Changes",
   "sync.pushDirection": "Local \u2192 Drive",
   "sync.pullDirection": "Drive \u2192 Local",
+  "sync.restore": "Restore",
+  "sync.restoreHint": "Discard local changes and restore the current Drive state",
+  "sync.restoreConfirm": "Restore {name} to its current Drive state? Local changes will be saved as a backup.",
+  "sync.restoreError": "Restore failed. Please check the Drive state and try again.",
   "sync.openFile": "Open",
   "sync.noDiff": "Binary file",
   "sync.encryptedNoDiff": "Encrypted file (diff not available)",
@@ -4096,6 +4104,10 @@ const ja: TranslationStrings = {
   "sync.pullChanges": "ローカル反映 — 変更一覧",
   "sync.pushDirection": "ローカル \u2192 ドライブ",
   "sync.pullDirection": "ドライブ \u2192 ローカル",
+  "sync.restore": "復元",
+  "sync.restoreHint": "ローカルの変更を取り消して、現在のドライブの状態に戻す",
+  "sync.restoreConfirm": "{name} を現在のドライブの状態に戻しますか？ローカルの変更はバックアップに保存されます。",
+  "sync.restoreError": "復元に失敗しました。ドライブの状態を確認して再試行してください。",
   "sync.openFile": "開く",
   "sync.noDiff": "バイナリファイル",
   "sync.encryptedNoDiff": "暗号化ファイル（差分表示不可）",

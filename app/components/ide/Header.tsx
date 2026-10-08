@@ -35,6 +35,7 @@ interface HeaderProps {
   syncConflicts: ConflictInfo[];
   localModifiedCount: number;
   remoteModifiedCount: number;
+  onRestoreFile?: (fileId: string) => Promise<void>;
   onPush: () => void;
   onPull: (ignoredIds?: Set<string>) => void;
   onShowConflicts: () => void;
@@ -65,6 +66,7 @@ export function Header({
   syncConflicts,
   localModifiedCount,
   remoteModifiedCount,
+  onRestoreFile,
   onPush,
   onPull,
   onShowConflicts,
@@ -151,6 +153,7 @@ export function Header({
             error={syncError}
             localModifiedCount={localModifiedCount}
             remoteModifiedCount={remoteModifiedCount}
+            onRestoreFile={onRestoreFile}
             onPush={onPush}
             onPull={onPull}
             onShowConflicts={onShowConflicts}

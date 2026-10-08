@@ -25,6 +25,7 @@ interface SyncStatusBarProps {
   error: string | null;
   localModifiedCount: number;
   remoteModifiedCount: number;
+  onRestoreFile?: (fileId: string) => Promise<void>;
   onPush: () => void;
   onPull: (ignoredIds?: Set<string>) => void;
   onShowConflicts: () => void;
@@ -40,6 +41,7 @@ export function SyncStatusBar({
   error,
   localModifiedCount,
   remoteModifiedCount,
+  onRestoreFile,
   onPush,
   onPull,
   onShowConflicts,
@@ -306,6 +308,10 @@ export function SyncStatusBar({
           onClose={() => setDialogType(null)}
           onSelectFile={onSelectFile}
           onSync={dialogType === "push" ? onPush : (ignoredIds) => onPull(ignoredIds)}
+          onRestoreFile={onRestoreFile ? async (fileId) => {
+            await onRestoreFile(fileId);
+            setDialogFiles((prev) => prev.filter((file) => file.id !== fileId));
+          } : undefined}
           syncDisabled={isBusy}
         />
       )}

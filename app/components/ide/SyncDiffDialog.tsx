@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Folder, Loader2, ExternalLink, ArrowUp, ArrowDown, EyeOff, Eye } from "lucide-react";
+import { X, Plus, Pencil, Trash2, AlertTriangle, ChevronDown, ChevronRight, Folder, Loader2, ExternalLink, ArrowUp, ArrowDown, EyeOff, Eye, RotateCcw } from "lucide-react";
 import { createTwoFilesPatch } from "diff";
 import { DiffView, DiffViewToggle, type DiffViewMode } from "~/components/shared/DiffView";
 import { useDraggableModal } from "~/hooks/useDraggableModal";
@@ -19,6 +19,7 @@ interface SyncDiffDialogProps {
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   onSync?: (ignoredIds?: Set<string>) => void;
   syncDisabled?: boolean;
+  onRestoreFile?: (fileId: string) => Promise<void>;
 }
 
 interface DiffState {
@@ -40,6 +41,7 @@ export function SyncDiffDialog({
   onSelectFile,
   onSync,
   syncDisabled,
+  onRestoreFile,
 }: SyncDiffDialogProps) {
   const { t } = useI18n();
   const [diffStates, setDiffStates] = useState<Record<string, DiffState>>({});
@@ -47,6 +49,9 @@ export function SyncDiffDialog({
   const { modalRef, modalStyle, onDragStart } = useDraggableModal();
   const diffStatesRef = useRef(diffStates);
   useEffect(() => { diffStatesRef.current = diffStates; }, [diffStates]);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const restoreLockRef = useRef(false);
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
   // Group expand/collapse, keyed by folder path. Missing key = collapsed.
   const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({});
@@ -206,6 +211,32 @@ export function SyncDiffDialog({
             </button>
           )}
 
+          {type === "push" && f.type !== "new" && onRestoreFile && (
+            <button
+              disabled={syncDisabled || restoringId !== null}
+              title={t("sync.restoreHint")}
+              onClick={async () => {
+                if (restoreLockRef.current || !window.confirm(t("sync.restoreConfirm").replace("{name}", f.name))) return;
+                restoreLockRef.current = true;
+                setRestoringId(f.id);
+                setRestoreError(null);
+                try {
+                  await onRestoreFile(f.id);
+                  setDiffStates((prev) => { const next = { ...prev }; delete next[f.id]; return next; });
+                } catch {
+                  setRestoreError(t("sync.restoreError"));
+                } finally {
+                  restoreLockRef.current = false;
+                  setRestoringId(null);
+                }
+              }}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
+            >
+              {restoringId === f.id ? <Loader2 size={ICON.SM} className="animate-spin" /> : <RotateCcw size={ICON.SM} />}
+              {t("sync.restore")}
+            </button>
+          )}
+
           {/* Ignore toggle (pull only, not for conflict/editDeleted) */}
           {canIgnore(f.type) && (
             <button
@@ -344,6 +375,7 @@ export function SyncDiffDialog({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
+          {restoreError && <p role="alert" className="mb-3 text-xs text-red-500">{restoreError}</p>}
           {files.length === 0 ? (
             <div className="px-3 py-2 text-xs text-gray-400">No files</div>
           ) : (
@@ -377,7 +409,7 @@ export function SyncDiffDialog({
             {onSync && (
               <button
                 onClick={() => { onClose(); onSync(ignoredIds.size > 0 ? ignoredIds : undefined); }}
-                disabled={syncDisabled}
+                disabled={syncDisabled || restoringId !== null || files.length === 0}
                 className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {type === "push" ? <ArrowUp size={ICON.SM} /> : <ArrowDown size={ICON.SM} />}

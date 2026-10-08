@@ -69,6 +69,8 @@ export function useSyncUI() {
     cacheFilesByIds,
     cachingProgress,
 
+    restoreFile: projectActive ? undefined : driveSync.restoreFile,
+
     // Dialog state
     showConflictDialog,
     setShowConflictDialog,
