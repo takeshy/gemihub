@@ -118,7 +118,6 @@ function PolicyEn() {
         <ul>
           <li>Business name: takeshy.work (trade name)</li>
           <li>Operator: Takeshi Morita</li>
-          <li>Address: Fente Okurayama 101, 964-1 Mamedo-cho, Kohoku-ku, Yokohama-shi, Kanagawa 222-0032, Japan</li>
           <li>Phone: +81-50-1792-0976 (Weekdays 10:00–18:00 JST)</li>
           <li>Email: <a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work@gmail.com</a></li>
         </ul>
@@ -214,7 +213,6 @@ function PolicyJa() {
         <ul>
           <li>事業者名：takeshy.work（屋号）</li>
           <li>運営者：森田 剛志</li>
-          <li>所在地：〒222-0032 神奈川県横浜市港北区大豆戸町964-1 フェンテ大倉山101</li>
           <li>電話番号：050-1792-0976（平日10:00〜18:00）</li>
           <li>メールアドレス：<a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">takeshy.work@gmail.com</a></li>
         </ul>

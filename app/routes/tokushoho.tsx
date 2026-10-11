@@ -62,7 +62,7 @@ function TokushohoJa() {
   const rows: Row[] = [
     { label: "販売事業者", value: "森田 剛志（屋号：takeshy.work）" },
     { label: "運営統括責任者", value: "森田 剛志" },
-    { label: "所在地", value: "〒222-0032 神奈川県横浜市港北区大豆戸町964-1 フェンテ大倉山101" },
+    { label: "所在地", value: "請求があった場合、遅滞なく電子メールにて開示いたします。ご請求は下記のメールアドレスへご連絡ください。" },
     { label: "電話番号", value: "050-1792-0976（受付時間：平日10:00〜18:00）" },
     { label: "メールアドレス", value: (
       <a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">
@@ -118,7 +118,7 @@ function TokushohoEn() {
   const rows: Row[] = [
     { label: "Seller", value: "Takeshi Morita (Trade name: takeshy.work)" },
     { label: "Managing Operator", value: "Takeshi Morita" },
-    { label: "Address", value: "Fente Okurayama 101, 964-1 Mamedo-cho, Kohoku-ku, Yokohama-shi, Kanagawa 222-0032, Japan" },
+    { label: "Address", value: "We will disclose our address by email without delay upon request. Please send your request to the email address below." },
     { label: "Phone", value: "+81-50-1792-0976 (Business hours: Weekdays 10:00–18:00 JST)" },
     { label: "Email", value: (
       <a href="mailto:takeshy.work@gmail.com" className="text-blue-600 hover:underline dark:text-blue-400">
