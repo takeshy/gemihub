@@ -68,6 +68,7 @@ export function prepareTimelineEntryMove(
     remaining,
     originalBlock: entry.raw,
     movedBlock: buildEntryBlock({
+      metadata: entry.metadata,
       createdAt: entry.createdAt,
       id: entry.id,
       pinned: entry.pinned,

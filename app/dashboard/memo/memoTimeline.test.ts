@@ -184,3 +184,12 @@ test("append preserves existing bytes and file stays parseable", () => {
   assert.deepEqual(appended.startsWith(first.trimEnd()), true);
   assert.deepEqual(parseMemoFile(appended).entries.length, 3);
 });
+
+test("body and pin edits preserve unknown author, thread and synchronization metadata", () => {
+  const metadata = { "author-name": "担当", "root-id": "root", "reply-to": "parent", "kakeratta-revision": "r1" };
+  const content = buildEntryBlock({ id: "reply", createdAt: "2026-10-12T00:00:00.000Z", metadata, body: "original" });
+  const edited = replaceEntryBody(content, "reply", "changed")!;
+  const pinned = setEntryPinned(edited, "reply", true)!;
+  assert.equal(parseMemoFile(pinned).entries[0].body, "changed");
+  for (const [key, value] of Object.entries(metadata)) assert.equal(parseMemoFile(pinned).entries[0].metadata?.[key], value);
+});

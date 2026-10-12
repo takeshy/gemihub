@@ -63,6 +63,8 @@ export const getPendingNewFiles: typeof drive.getPendingNewFiles = () =>
 
 // Drive-push-specific: only the Drive push flow calls these, and it is gated
 // off while a project mount is active.
+export const applyTimelineSnapshotCAS = drive.applyTimelineSnapshotCAS;
+
 export const applyPushedFileMetadata: typeof drive.applyPushedFileMetadata =
   drive.applyPushedFileMetadata;
 export const saveLocalConflictBackup: typeof drive.saveLocalConflictBackup =

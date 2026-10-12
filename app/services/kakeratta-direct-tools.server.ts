@@ -8,7 +8,7 @@ export async function getDirectTools(settings: UserSettings, selectedIds: string
   const selected = new Set(selectedIds);
   const servers = getEnabledMcpServers(settings).filter(server => server.id && selected.has(server.id)).map(server => ({ ...server }));
   const discovered = await backend.getMcpToolDefinitions(servers);
-  const approved = new Set(servers.flatMap(server => (server.tools ?? []).filter(tool => server.autoApprove || server.allowedTools?.includes(tool.name)).map(tool => `mcp_${sanitizeMcpIdentifier(deriveMcpServerId(server))}_${sanitizeMcpIdentifier(tool.name)}`)));
+  const approved = new Set(servers.flatMap(server => (server.tools ?? []).filter(tool => !tool.annotations?.applicationOnlyHint && (server.autoApprove || server.allowedTools?.includes(tool.name))).map(tool => `mcp_${sanitizeMcpIdentifier(deriveMcpServerId(server))}_${sanitizeMcpIdentifier(tool.name)}`)));
   const definitions = discovered.filter(tool => approved.has(tool.name));
   await persistTokens?.(servers);
   const allowed = new Set(definitions.map(tool => tool.name));

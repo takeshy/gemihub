@@ -9,6 +9,7 @@ import {
   type CachedRemoteMeta,
 } from "./indexeddb-cache";
 import { findFileByNameLocal, readFileLocal, writeFileLocal } from "./drive-local";
+import { withTimelineFileLock } from "./timeline-local-lock";
 import { migratePendingFiles } from "./pending-file-migration";
 
 interface RemoteFile {
@@ -232,6 +233,11 @@ function scheduleTimelinePush(job: TimelinePushJob): void {
   });
 }
 
+/** Wait for queued pushes before exchanging Timeline snapshots. */
+export async function flushTimelinePushes(): Promise<void> {
+  await Promise.all([...timelinePushQueues.values()]);
+}
+
 /**
  * Update Timeline locally and return immediately after IndexedDB is current.
  * The matching Drive file is pushed in a per-file background queue; no Pull or
@@ -241,15 +247,17 @@ export async function mutateTimelineFile(
   name: string,
   mutate: (current: string) => string | null,
 ): Promise<string> {
-  const local = await findFileByNameLocal(name);
-  const current = local ? await readFileLocal(local.id) : "";
-  const next = mutate(current);
-  if (next == null) throw new Error("Timeline entry no longer exists");
-  await writeFileLocal(name, next, local ? { existingFileId: local.id } : undefined);
-  if (typeof navigator === "undefined" || navigator.onLine) {
-    scheduleTimelinePush({ name, baseContent: current, nextContent: next });
-  }
-  return next;
+  return withTimelineFileLock(name, async () => {
+    const local = await findFileByNameLocal(name);
+    const current = local ? await readFileLocal(local.id) : "";
+    const next = mutate(current);
+    if (next == null) throw new Error("Timeline entry no longer exists");
+    await writeFileLocal(name, next, local ? { existingFileId: local.id } : undefined);
+    if (typeof navigator === "undefined" || navigator.onLine) {
+      scheduleTimelinePush({ name, baseContent: current, nextContent: next });
+    }
+    return next;
+  });
 }
 
 function localDateKey(date: Date): string {

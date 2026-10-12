@@ -127,6 +127,7 @@ export function normalizeSelectedMcpServerIds(
 
 // MCP tool information (from server)
 export interface McpToolInfo {
+  annotations?: { applicationOnlyHint?: boolean; readOnlyHint?: boolean; destructiveHint?: boolean };
   name: string;
   description?: string;
   inputSchema?: Record<string, unknown>;

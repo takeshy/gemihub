@@ -18,6 +18,11 @@ export const KakerattaSettingsSchema = z.object({
   pollEnabled: z.boolean().default(true),
   url: z.string().default(""),
   headers: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().regex(/^[^\r\n]*$/)).default({}),
+  timelineSync: z.object({
+    enabled: z.boolean().default(false),
+    name: z.string().trim().min(1).max(80).regex(/^[^\\/:*?"<>|#[\]\n\r\t]+$/).default("Timeline"),
+    enabledAt: z.string().default(""),
+  }).default({ enabled: false, name: "Timeline", enabledAt: "" }),
   defaultProfile: KakerattaProfileSchema.default({ model: "", readFiles: false, ragSetting: null, webSearch: false }),
   personas: z.record(z.string(), KakerattaProfileSchema).default({}),
   direct: KakerattaDirectSchema.default({ model: "", readFiles: false, ragSetting: null, webSearch: false, enabled: true, mcpServerIds: [] }),

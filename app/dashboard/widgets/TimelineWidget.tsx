@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Code, Image, Loader2, PenLine, Pencil, Pin, Plus, RefreshCw, Search, Send, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Code, Image, Loader2, MessageSquare, PenLine, Pencil, Pin, Plus, RefreshCw, Search, Send, Sparkles, Trash2, X } from "lucide-react";
 import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
 import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { WikiEmbed } from "~/components/editor/WikiEmbed";
@@ -10,6 +10,9 @@ import { findFileByNameLocal, readFileLocal, saveBinaryFileLocal, writeFileLocal
 import { getCachedRemoteMeta } from "~/services/indexeddb-cache";
 import { migratePendingFiles } from "~/services/pending-file-migration";
 import { loadTimelineFromDrive, mutateTimelineFile } from "~/services/timeline-drive";
+import { parseTimeline, changeTimelineEntry, timelineThreads, type TimelineEntry } from "~/services/timeline-format";
+import { timelineAuthorMetadata } from "~/services/timeline-author";
+import { buildEntryBlock } from "../memo/memoTimeline";
 import { slugifyHeading } from "~/utils/wiki-subpath";
 import type { WidgetContext } from "../types";
 import { FilePreviewModal } from "./FilePreviewModal";
@@ -28,19 +31,7 @@ interface TimelineConfig {
   collapseCharLimit?: number;
 }
 
-interface TimelinePost {
-  id: string;
-  createdAt: string;
-  pinned: boolean;
-  content: string;
-  index: number;
-  sourcePath: string;
-}
-
-interface ParsedPostBlock {
-  raw: string;
-  post: TimelinePost | null;
-}
+type TimelinePost = TimelineEntry;
 
 interface PendingImage {
   file: File;
@@ -55,10 +46,6 @@ interface TimelineFilters {
   pinnedOnly: boolean;
 }
 
-const POST_MARKER_RE = /<!--\s*timeline-post:\s*([^>]+?)\s*-->/;
-const ISO_DATE_LINE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
-const POST_ID_RE = /^id:\s*([A-Za-z0-9_-]+)\s*$/i;
-const PINNED_RE = /^pinned:\s*(true|false)\s*$/i;
 const COLLAPSE_LINE_LIMIT = 8;
 const COLLAPSE_CHAR_LIMIT = 520;
 const COLLAPSE_ESTIMATED_CHARS_PER_LINE = 34;
@@ -148,45 +135,7 @@ function dayFilePath(name: string, date: Date): string {
   return `${timelineDir(name)}/${dateKey(date)}.md`;
 }
 
-function parsePostBlock(raw: string, index: number, sourcePath: string): TimelinePost | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const marker = trimmed.match(POST_MARKER_RE);
-  const withoutMarker = trimmed.replace(POST_MARKER_RE, "").trim();
-  const lines = withoutMarker.split(/\r?\n/);
-  const firstLine = lines[0]?.trim() ?? "";
-  const dateFromLine = ISO_DATE_LINE_RE.test(firstLine) ? firstLine : "";
-  const createdAt = marker?.[1]?.trim() || dateFromLine || new Date(0).toISOString();
-  const bodyStart = dateFromLine ? 1 : 0;
-  const maybeId = lines[bodyStart]?.trim() ?? "";
-  const idMatch = maybeId.match(POST_ID_RE);
-  const maybePinned = lines[idMatch ? bodyStart + 1 : bodyStart]?.trim() ?? "";
-  const pinnedMatch = maybePinned.match(PINNED_RE);
-  const contentStart = (idMatch ? bodyStart + 1 : bodyStart) + (pinnedMatch ? 1 : 0);
-  const body = lines.slice(contentStart).join("\n").trim();
-  if (!body) return null;
-  return {
-    id: idMatch?.[1] || `${createdAt}-${index}`,
-    createdAt,
-    pinned: pinnedMatch?.[1]?.toLowerCase() === "true",
-    content: body,
-    index,
-    sourcePath,
-  };
-}
-
-function parsePostBlocks(content: string, sourcePath: string): ParsedPostBlock[] {
-  return content
-    .split(/^\s*---\s*$/m)
-    .map((raw, index) => ({ raw: raw.trim(), post: parsePostBlock(raw, index, sourcePath) }))
-    .filter((block) => block.raw);
-}
-
-function splitPosts(content: string, sourcePath: string): TimelinePost[] {
-  return parsePostBlocks(content, sourcePath)
-    .map((block) => block.post)
-    .filter((post): post is TimelinePost => post !== null);
-}
+const splitPosts = parseTimeline;
 
 function appendPost(content: string, postBlock: string): string {
   const current = content.trim();
@@ -194,40 +143,18 @@ function appendPost(content: string, postBlock: string): string {
   return `${current}\n\n---\n\n${postBlock}\n`;
 }
 
-function serializeBlocks(blocks: ParsedPostBlock[]): string {
-  return blocks.map((block) => block.raw.trim()).filter(Boolean).join("\n\n---\n\n") + "\n";
-}
-
 function replacePostContent(content: string, sourcePath: string, postId: string, nextBody: string): string | null {
-  let changed = false;
-  const blocks = parsePostBlocks(content, sourcePath).map((block) => {
-    if (block.post?.id !== postId) return block;
-    changed = true;
-    return {
-      raw: `${block.post.createdAt}\nid: ${block.post.id}${block.post.pinned ? "\npinned: true" : ""}\n\n${nextBody.trim()}`,
-      post: block.post,
-    };
-  });
-  return changed ? serializeBlocks(blocks) : null;
+  return changeTimelineEntry(content, sourcePath, postId, post => ({ ...post, content: nextBody.trim() }));
 }
 
 function setPostPinnedContent(content: string, sourcePath: string, postId: string, pinned: boolean): string | null {
-  let changed = false;
-  const blocks = parsePostBlocks(content, sourcePath).map((block) => {
-    if (block.post?.id !== postId) return block;
-    changed = true;
-    return {
-      raw: `${block.post.createdAt}\nid: ${block.post.id}${pinned ? "\npinned: true" : ""}\n\n${block.post.content}`,
-      post: { ...block.post, pinned },
-    };
-  });
-  return changed ? serializeBlocks(blocks) : null;
+  return changeTimelineEntry(content, sourcePath, postId, post => ({ ...post, pinned }));
 }
 
 function deletePostContent(content: string, sourcePath: string, postId: string): string | null {
-  const blocks = parsePostBlocks(content, sourcePath);
-  const next = blocks.filter((block) => block.post?.id !== postId);
-  return next.length === blocks.length ? null : serializeBlocks(next);
+  return changeTimelineEntry(content, sourcePath, postId, post => ({
+    ...post, deleted: true, metadata: { ...post.metadata, deleted: "true" },
+  }));
 }
 
 function uniquePostId(date: Date, currentContent: string, sourcePath: string): string {
@@ -347,48 +274,29 @@ async function loadTimelineFiles(
   const to = filters.to || filters.from;
   const dayFiles = Object.entries(meta?.files ?? {})
     .filter(([, entry]) => entry.name.startsWith(prefix) && !entry.name.includes("/attachments/") && /^\d{4}-\d{2}-\d{2}\.md$/.test(entry.name.slice(prefix.length)))
-    .filter(([, entry]) => {
-      const day = entry.name.slice(prefix.length, prefix.length + 10);
-      if (from && day < from) return false;
-      if (to && day > to) return false;
-      return true;
-    })
     .sort((a, b) => b[1].name.localeCompare(a[1].name));
 
   const posts: TimelinePost[] = [];
   for (const [fileId, entry] of dayFiles) {
     try {
-      const dayPosts = splitPosts(await readFileLocal(fileId), entry.name).filter((post) => {
-        const postDay = dateKey(new Date(post.createdAt));
-        if (from && postDay < from) return false;
-        if (to && postDay > to) return false;
-        if (word && !post.content.toLowerCase().includes(word)) return false;
-        if (tagFilter.length > 0) {
-          const postTags = new Set(extractPostTags(post.content).map((tag) => tag.toLowerCase()));
-          if (tagFilter.some((tag) => !postTags.has(tag))) return false;
-        }
-        if (filters.pinnedOnly && !post.pinned) return false;
-        return true;
-      });
-      posts.push(...dayPosts);
-      posts.sort((a, b) => {
-        const byTime = Date.parse(b.createdAt) - Date.parse(a.createdAt);
-        return byTime || b.index - a.index;
-      });
-      if (posts.length >= skip + limit + 1) {
-        posts.length = skip + limit + 1;
-        break;
-      }
+      posts.push(...splitPosts(await readFileLocal(fileId), entry.name));
     } catch {
       // Skip unreadable day files; other days can still render.
     }
   }
-  const selected = posts.slice(skip, skip + limit);
-  selected.sort((a, b) => {
-    const byTime = Date.parse(a.createdAt) - Date.parse(b.createdAt);
-    return byTime || a.index - b.index;
-  });
-  return { posts: selected, fileList: await localFileList(), hasMore: posts.length > skip + limit };
+  const threads = timelineThreads(posts).filter(thread => [thread.root, ...thread.replies].some(post => {
+    if (post.deleted) return false;
+    const day = dateKey(new Date(post.createdAt));
+    if (from && day < from || to && day > to) return false;
+    if (word && !post.content.toLowerCase().includes(word)) return false;
+    const tags = new Set(extractPostTags(post.content).map(tag => tag.toLowerCase()));
+    if (tagFilter.some(tag => !tags.has(tag))) return false;
+    return !filters.pinnedOnly || post.pinned;
+  }));
+  const activity = (thread: typeof threads[number]) => Math.max(...[thread.root, ...thread.replies].map(post => Date.parse(post.createdAt)));
+  threads.sort((a, b) => activity(b) - activity(a) || b.root.id.localeCompare(a.root.id));
+  const selected = threads.slice(skip, skip + limit).reverse();
+  return { posts: selected.flatMap(thread => [thread.root, ...thread.replies]), fileList: await localFileList(), hasMore: threads.length > skip + limit };
 }
 
 function wikiTargetPath(target: string): string {
@@ -432,6 +340,8 @@ export default function TimelineWidget({
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
+  const [replyTarget, setReplyTarget] = useState<TimelinePost | null>(null);
+  const [openThreads, setOpenThreads] = useState<Set<string>>(() => new Set());
   const [draft, setDraft] = useState("");
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -642,6 +552,7 @@ export default function TimelineWidget({
 
   const closeComposer = () => {
     setComposerOpen(false);
+    setReplyTarget(null);
     setDraft("");
     setImages((prev) => {
       prev.forEach((img) => URL.revokeObjectURL(img.previewUrl));
@@ -729,7 +640,17 @@ export default function TimelineWidget({
       const postBody = [body, ...imageLines].filter(Boolean).join("\n\n");
       await mutateTimelineFile(path, (current) => {
         const uniqueId = uniquePostId(now, current, path);
-        return appendPost(current, `${now.toISOString()}\nid: ${uniqueId}\n\n${postBody}`);
+        const metadata = Object.fromEntries(timelineAuthorMetadata().map(line => {
+          const colon = line.indexOf(":");
+          return [line.slice(0, colon), line.slice(colon + 1).trim()];
+        }));
+        metadata.speaker = "user";
+        if (replyTarget) {
+          metadata["root-id"] = replyTarget.rootId;
+          metadata["reply-to"] = replyTarget.id;
+          if (replyTarget.metadata["local-only"] === "true") metadata["local-only"] = "true";
+        }
+        return appendPost(current, buildEntryBlock({ createdAt: now.toISOString(), id: uniqueId, metadata, body: postBody }));
       });
       closeComposer();
       await refresh(loadedCount);
@@ -781,6 +702,12 @@ export default function TimelineWidget({
     );
   }
 
+  const threads = timelineThreads(posts);
+  const visiblePosts = threads.flatMap(thread => openThreads.has(thread.root.id) || filters.word || filters.tags || filters.from || filters.to || filters.pinnedOnly
+    ? [thread.root, ...thread.replies] : [thread.root]);
+  const postsById = new Map(posts.map(post => [post.id, post]));
+  const repliesByRoot = new Map(threads.map(thread => [thread.root.id, thread.replies.length]));
+  const replyLabel = language === "ja" ? "返信" : "Reply";
   const hasFilters = !!(wordInput || filters.word || filters.tags || filters.from || filters.to || filters.pinnedOnly);
 
   return (
@@ -915,10 +842,11 @@ export default function TimelineWidget({
                 </button>
               </div>
             )}
-            {posts.map((post) => (
+            {visiblePosts.map((post) => (
+              <div key={`${post.sourcePath}:${post.id}`} className={post.replyTo ? "ml-5 border-l-2 border-blue-100 dark:border-blue-900" : ""}>
               <TimelinePostView
-                key={`${post.sourcePath}:${post.id}`}
                 post={post}
+                replyToName={post.replyTo ? postsById.get(post.replyTo)?.authorName || (language === "ja" ? "元の投稿" : "Original post") : ""}
                 fileList={previewFileList}
                 language={language}
                 expanded={expandedPosts.has(post.id)}
@@ -941,6 +869,12 @@ export default function TimelineWidget({
                 onAddEditImages={addEditImages}
                 onRemoveEditImage={removeEditImage}
                 onAiRewrite={() => openAiRewrite("edit")}
+                onReply={() => {
+                  setReplyTarget(post);
+                  setComposerOpen(true);
+                  setOpenThreads(prev => new Set(prev).add(post.rootId));
+                }}
+                replyLabel={replyLabel}
                 onEdit={() => startEditing(post)}
                 onCancelEdit={cancelEditing}
                 onSaveEdit={() => saveEditing(post)}
@@ -957,6 +891,19 @@ export default function TimelineWidget({
                 attachImageLabel={t("dashboard.timelineAttachImage")}
                 aiRewriteLabel={t("dashboard.timelineAiEdit")}
               />
+              {!post.replyTo && (repliesByRoot.get(post.id) ?? 0) > 0 && (
+                <button type="button" className="flex items-center gap-1 px-3 pb-2 text-xs text-blue-600 dark:text-blue-300"
+                  onClick={() => setOpenThreads(prev => {
+                    const next = new Set(prev);
+                    if (next.has(post.id)) next.delete(post.id); else next.add(post.id);
+                    return next;
+                  })}>
+                  <MessageSquare size={12} />
+                  {repliesByRoot.get(post.id)} {replyLabel}
+                  {openThreads.has(post.id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                </button>
+              )}
+              </div>
             ))}
           </div>
         )}
@@ -979,6 +926,11 @@ export default function TimelineWidget({
           </div>
         ) : (
           <div>
+            {replyTarget && <div className="mb-2 flex items-center gap-2 rounded bg-blue-50 p-2 text-xs dark:bg-blue-950">
+              <MessageSquare size={12} />
+              <span className="min-w-0 flex-1 truncate">{replyLabel}: {replyTarget.authorName || (language === "ja" ? "あなた" : "You")} — {replyTarget.content}</span>
+              <button type="button" onClick={() => setReplyTarget(null)} aria-label={t("common.cancel")}><X size={14} /></button>
+            </div>}
             <div className="mb-2 flex justify-end">
               <div className="inline-flex rounded-md border border-gray-200 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-800">
                 <span className={`flex items-center gap-1 rounded px-2 py-1 ${composerMode === "raw" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "text-gray-500"}`}>
@@ -1169,6 +1121,9 @@ function TimelinePostViewComponent({
   onAddEditImages,
   onRemoveEditImage,
   onAiRewrite,
+  replyToName,
+  onReply,
+  replyLabel,
   onEdit,
   onCancelEdit,
   onSaveEdit,
@@ -1201,6 +1156,9 @@ function TimelinePostViewComponent({
   onAddEditImages: (files: FileList | null) => void;
   onRemoveEditImage: (index: number) => void;
   onAiRewrite: () => void;
+  replyToName: string;
+  onReply: () => void;
+  replyLabel: string;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -1218,7 +1176,7 @@ function TimelinePostViewComponent({
   aiRewriteLabel: string;
 }) {
   const collapsible = shouldCollapsePost(post.content, fileList, collapseLineLimit, collapseCharLimit);
-  const visibleContent = collapsible && !expanded ? collapsedContent(post.content, fileList, collapseLineLimit, collapseCharLimit) : post.content;
+  const visibleContent = post.deleted ? (language === "ja" ? "削除された投稿" : "Deleted post") : collapsible && !expanded ? collapsedContent(post.content, fileList, collapseLineLimit, collapseCharLimit) : post.content;
   const tags = extractPostTags(post.content);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const editImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -1236,10 +1194,12 @@ function TimelinePostViewComponent({
               timeStyle: "short",
             }).format(new Date(post.createdAt))}
           </time>
-          <span className="truncate font-mono">{post.id}</span>
+          <span className="truncate font-medium">{post.authorName || (language === "ja" ? "あなた" : "You")}</span>
+          {replyToName && <span className="truncate">↪ {replyToName}</span>}
         </div>
-        {!isEditing && (
+        {!isEditing && !post.deleted && (
           <div className="flex shrink-0 items-center gap-1 opacity-60 hover:opacity-100">
+            <button type="button" onClick={onReply} title={replyLabel} className="rounded p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30"><MessageSquare size={12} /></button>
             <button
               type="button"
               onClick={onTogglePinned}
@@ -1256,6 +1216,7 @@ function TimelinePostViewComponent({
             <button
               type="button"
               onClick={onEdit}
+              disabled={post.speaker !== "user"}
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
               title={saveLabel}
             >
@@ -1273,6 +1234,19 @@ function TimelinePostViewComponent({
           </div>
         )}
       </div>
+      {post.metadata["local-only"] === "true" && !post.metadata["conflict-of"] && post.metadata["connection-archived"] !== "true" && <div className="mb-2 text-xs text-gray-500">
+        {language === "ja" ? "ローカルの投稿（同期対象外）" : "Local post (excluded from synchronization)"}
+      </div>}
+      {post.metadata["connection-archived"] === "true" && <div className="mb-2 text-xs text-gray-500">
+        {language === "ja" ? "以前の接続の投稿（同期対象外）" : "Previous connection (kept locally)"}
+      </div>}
+      {post.metadata["conflict-of"] && (
+        <div className="mb-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          {language === "ja"
+            ? post.metadata["conflict-operation"] === "delete" ? "競合した削除 — Kakeratta の投稿を維持しました" : "競合した編集 — GemiHub の変更を保存しています"
+            : post.metadata["conflict-operation"] === "delete" ? "Conflicting deletion — the Kakeratta post was kept" : "Conflicting edit — your GemiHub changes were preserved"}
+        </div>
+      )}
       {isEditing ? (
         <div className="space-y-2">
           <div className="relative">
@@ -1427,6 +1401,19 @@ function TimelinePostViewComponent({
 const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
   if (
     prev.post.id !== next.post.id ||
+    prev.post.pinned !== next.post.pinned ||
+    prev.post.authorName !== next.post.authorName ||
+    prev.post.speaker !== next.post.speaker ||
+    prev.post.replyTo !== next.post.replyTo ||
+    prev.post.rootId !== next.post.rootId ||
+    prev.replyToName !== next.replyToName ||
+    prev.post.deleted !== next.post.deleted ||
+    prev.post.metadata["conflict-operation"] !== next.post.metadata["conflict-operation"] ||
+    prev.post.metadata["conflict-of"] !== next.post.metadata["conflict-of"] ||
+    prev.post.metadata["connection-archived"] !== next.post.metadata["connection-archived"] ||
+    prev.post.metadata["local-only"] !== next.post.metadata["local-only"] ||
+    prev.replyLabel !== next.replyLabel ||
+    prev.saving !== next.saving ||
     prev.post.createdAt !== next.post.createdAt ||
     prev.post.content !== next.post.content ||
     prev.post.sourcePath !== next.post.sourcePath ||

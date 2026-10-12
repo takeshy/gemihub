@@ -10,6 +10,7 @@ import type { KakerattaGenerate } from "~/services/kakeratta-worker";
 import type { KakerattaProfile } from "~/types/kakeratta";
 import { collectKakerattaAnswer } from "~/services/kakeratta-chat";
 import { KakerattaSettingsSchema, resolveKakerattaProfile, getKakerattaRagError } from "~/types/kakeratta";
+import { syncTimelineFromDrive, TimelinePremiumRequired } from "~/services/kakeratta-timeline.server";
 import { getDefaultModelForPlan, getAvailableModels, isImageGenerationModel, supportsWebSearch } from "~/types/settings";
 
 export async function action({ request }: Route.ActionArgs) {
@@ -25,16 +26,27 @@ export async function action({ request }: Route.ActionArgs) {
       const result = await withKakeratta(config, request.signal, call => call("list_personas", {}));
       return Response.json({ personas: result.personas }, { headers });
     }
-    if (body?.operation !== "poll") return Response.json({ error: "Invalid operation" }, { status: 400, headers });
+    if (body?.operation !== "poll" && body?.operation !== "timeline") return Response.json({ error: "Invalid operation" }, { status: 400, headers });
     const config = KakerattaSettingsSchema.parse(settings.kakeratta ?? {});
     if (!config.enabled) return Response.json({ disabled: true }, { headers });
-    const ragError = getKakerattaRagError(config, settings);
-    if (ragError) return Response.json({ error: ragError }, { status: 400, headers });
     // Cross-process ownership is enforced by Kakeratta's atomic claims.
     const controller = beginKakerattaPoll(valid.rootFolderId);
     if (!controller) return Response.json({ busy: true }, { headers });
     try {
       const signal = AbortSignal.any([request.signal, controller.signal, AbortSignal.timeout(240_000)]);
+      if (Array.isArray(body.timelineFiles) && body.timelineFiles.length && body.timelineRootFolderId !== valid.rootFolderId) return Response.json({ error: "Timeline cache belongs to another account. Reload GemiHub before synchronizing." }, { status: 400, headers });
+      let timeline: Awaited<ReturnType<typeof syncTimelineFromDrive>> | { error: string } | undefined;
+      if (config.timelineSync.enabled) {
+        try {
+          timeline = await syncTimelineFromDrive(valid, config, settings.language ?? "en", signal, Array.isArray(body.timelineFiles) ? body.timelineFiles : []);
+        } catch (error) {
+          if (body.operation === "timeline") throw error;
+          timeline = { error: error instanceof TimelinePremiumRequired ? error.message : "Timeline synchronization failed. Your local changes were kept." };
+        }
+      }
+      if (body.operation === "timeline") return Response.json({ timeline }, { headers });
+      const ragError = getKakerattaRagError(config, settings);
+      if (ragError) return Response.json({ error: ragError, timeline }, { status: 400, headers });
       const generate = (resolveProfile: (context: unknown) => KakerattaProfile): KakerattaGenerate => async (messages, systemPrompt, turnSignal, context) => {
         const profile = resolveProfile(context);
         const requestedModel = profile.model || settings.selectedModel || getDefaultModelForPlan(settings.apiPlan);
@@ -76,11 +88,12 @@ export async function action({ request }: Route.ActionArgs) {
         tools: directTools?.definitions,
         executeTool: directTools?.execute,
       } : undefined));
-      return Response.json({ pending: result.pending, submitted: result.submitted, unsubmitted: result.unsubmitted, failed: result.errors.length, requests: result.requests }, { headers });
+      return Response.json({ pending: result.pending, submitted: result.submitted, unsubmitted: result.unsubmitted, failed: result.errors.length, requests: result.requests, timeline }, { headers });
     } finally {
       endKakerattaPoll(valid.rootFolderId);
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof TimelinePremiumRequired) return Response.json({ error: error.message }, { status: 403, headers });
     // Remote errors can contain credential-bearing URLs and headers.
     return Response.json({ error: "Kakeratta connection failed. Check the URL, headers and answer settings." }, { status: 400, headers });
   }

@@ -24,7 +24,7 @@ export async function pollScheduledKakeratta(accounts: HubworkAccount[], schedul
         if (!acquired) continue;
         const tokens = await getTokensForAccount(account);
         const settings = await getSettings(tokens.accessToken, tokens.rootFolderId);
-        if (!settings.kakeratta?.enabled || settings.kakeratta.pollEnabled === false) continue;
+        if (!settings.kakeratta?.enabled || settings.kakeratta.pollEnabled === false && !settings.kakeratta.timelineSync?.enabled) continue;
         const refreshToken = getStoredRefreshToken(account);
         if (!refreshToken) throw new Error("Missing background credentials");
         const request = new Request(new URL("/api/kakeratta", schedulerRequest.url), { method: "POST" });
@@ -36,12 +36,12 @@ export async function pollScheduledKakeratta(accounts: HubworkAccount[], schedul
         const cookie = (await commitSession(session)).split(";")[0];
         const pollRequest = new Request(request.url, {
           method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
-          signal: schedulerRequest.signal, body: JSON.stringify({ operation: "poll" }),
+          signal: schedulerRequest.signal, body: JSON.stringify({ operation: settings.kakeratta.pollEnabled === false ? "timeline" : "poll" }),
         });
         const { action } = await import("~/routes/api.kakeratta");
         const response = await action({ request: pollRequest, params: {}, context: {} } as Parameters<typeof action>[0]);
-        const result = await response.json() as { failed?: number; unsubmitted?: number; requests?: { failed: number; incomplete: number } };
-        const status = response.ok && !result.failed && !result.unsubmitted && !result.requests?.failed && !result.requests?.incomplete ? "completed" : "failed";
+        const result = await response.json() as { failed?: number; unsubmitted?: number; requests?: { failed: number; incomplete: number }; timeline?: { error?: string; pending?: number } };
+        const status = response.ok && !result.failed && !result.unsubmitted && !result.requests?.failed && !result.requests?.incomplete && !result.timeline?.error && !result.timeline?.pending ? "completed" : "failed";
         await updateScheduleRuntime(account.id, scheduleId, { lastError: status === "failed" ? "Kakeratta poll failed" : FieldValue.delete() });
         results.push({ accountId: account.id, status });
       } catch {

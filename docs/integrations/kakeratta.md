@@ -142,3 +142,45 @@ account separately from the selected organization, and verify its owner email.
 - [API](../../app/routes/api.kakeratta.tsx), [protocol worker](../../app/services/kakeratta-worker.ts), and [MCP connection](../../app/services/kakeratta.server.ts)
 - [Read-only reference scope](../../app/services/kakeratta-drive.server.ts)
 - [Premium execution](../../app/services/kakeratta-scheduled.server.ts) and [browser lifecycle](../../app/components/KakerattaConnection.tsx)
+
+## Timeline threads and Premium synchronization
+
+Timeline posts support replies, including replies to a persona's reply. A
+conversation stays together across daily Markdown files. Expand its reply count
+to view the thread; author names and reply targets appear in each message.
+Search and date filters keep the matching conversation together. Editing and
+pinning preserve author, thread and synchronization metadata.
+
+With your own active Premium plan, enable **Timeline synchronization** in the
+Kakeratta settings and choose the Timeline name. Save the settings, then use
+**Synchronize now with saved settings**, or leave the minute-based check enabled.
+The Premium server also synchronizes while GemiHub is closed. The named Timeline
+uses `Dashboards/Timeline/<name>/YYYY-MM-DD.md` in your personal Drive; an
+organization membership does not grant access to this personal synchronization.
+The connected Kakeratta server must include the `sync_timeline` MCP tool.
+
+Posts and replies added after synchronization is enabled follow Kakeratta's
+normal persona routing and provider billing. Older GemiHub posts import without
+waking personas. Backfill runs in pages and resumes on later checks. Known old
+threads are rechecked for edits, deletions and new replies; periodic history
+pages also discover newly imported older posts.
+
+Kakeratta wins a conflicting edit or deletion. GemiHub preserves its losing
+version beside the original as a **conflicting edit** or **conflicting deletion**.
+These copies carry `local-only: true` and are never posted to Kakeratta. If the
+original was deleted in Kakeratta, the preserved GemiHub content becomes a local
+root post. Stable IDs deduplicate retries, and updates/deletions use the last
+acknowledged revision. A new or edited descendant prevents an obsolete deletion
+from removing that conversation.
+
+Changing the URL or authentication key creates a new synchronization scope.
+Content from the previous connection is retained locally and marked as excluded
+from synchronization. It is not forwarded to the new connection. Offline edits
+and edits made while a synchronization response is pending are merged before
+applying the response; an atomic cache check prevents a late response from
+replacing newer content. Drive writes also use a conditional file version.
+Duplicate daily filenames or duplicate post IDs must be resolved before syncing.
+
+Each daily file retains synchronization metadata, including the original
+Kakeratta entry and acknowledged base. `_kakeratta-sync.json` records the history
+cursor. Do not remove these headers while editing the underlying Markdown files.

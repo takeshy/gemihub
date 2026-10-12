@@ -4,7 +4,7 @@ import type { KakerattaCall } from "./kakeratta-worker";
 import type { KakerattaSettings } from "~/types/kakeratta";
 import { KakerattaRejectedError } from "./kakeratta-errors";
 
-const TOOLS = new Set(["list_personas", "list_asks", "claim_ask", "read_for_ask", "submit_answer", "release_ask", "claim_request", "reply_request", "comment_on_entry", "get_timeline", "get_thread", "search_timeline", "list_schedules", "list_notes", "read_note"]);
+const TOOLS = new Set(["sync_timeline", "list_personas", "list_asks", "claim_ask", "read_for_ask", "submit_answer", "release_ask", "claim_request", "reply_request", "comment_on_entry", "get_timeline", "get_thread", "search_timeline", "list_schedules", "list_notes", "read_note"]);
 const polls = new Map<string, AbortController>();
 
 export function beginKakerattaPoll(rootFolderId: string): AbortController | null {

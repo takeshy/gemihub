@@ -115,6 +115,7 @@ export async function getMcpToolDefinitions(
       const serverIdentifier = deriveMcpServerId(server);
 
       for (const tool of tools) {
+        if (tool.annotations?.applicationOnlyHint) continue;
         const toolDef = mcpToolInfoToDefinition(serverIdentifier, server.name, tool);
         allTools.push(toolDef);
       }
@@ -307,6 +308,7 @@ async function executeToolOnServer(
     throw new Error("Execution cancelled");
   }
   try {
+    if (server.tools?.find(tool => tool.name === actualToolName)?.annotations?.applicationOnlyHint) return { textResult: { error: "This application synchronization tool is unavailable to the model" } };
     await requireMcpApproval(server, actualToolName, args, approval);
     const client = await getOrCreateClient(server);
     const appResult = await client.callToolWithUi(actualToolName, args, undefined, abortSignal);

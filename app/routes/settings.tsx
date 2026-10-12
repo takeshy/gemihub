@@ -108,7 +108,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       ) {
         updates.rootFolderId = validTokens.rootFolderId;
       }
-      const kakerattaEnabled = isActivePremiumAccount(personalAccount) && driveSettings.kakeratta?.enabled === true && driveSettings.kakeratta.pollEnabled !== false;
+      const kakerattaEnabled = isActivePremiumAccount(personalAccount) && driveSettings.kakeratta?.enabled === true && (driveSettings.kakeratta.pollEnabled !== false || driveSettings.kakeratta.timelineSync?.enabled === true);
       if (personalAccount.kakerattaEnabled !== kakerattaEnabled) updates.kakerattaEnabled = kakerattaEnabled;
       if (kakerattaEnabled && validTokens.geminiApiKey) updates.encryptedGeminiApiKey = encryptGeminiApiKey(validTokens.geminiApiKey);
       if (Object.keys(updates).length > 0) {
@@ -270,6 +270,14 @@ export async function action({ request }: Route.ActionArgs) {
       case "saveKakeratta": {
         const config = KakerattaSettingsSchema.parse(JSON.parse(String(formData.get("kakeratta") ?? "{}")));
         validateKakerattaUrl(config);
+        if (config.enabled && config.timelineSync.enabled) {
+          const account = await getOwnedPersonalAccount(validTokens);
+          if (!account || !isActivePremiumAccount(account)) return jsonWithCookie({ success: false, message: "Timeline synchronization requires your own active Premium plan." }, { status: 403 });
+        }
+        const previousSync = currentSettings.kakeratta?.timelineSync;
+        config.timelineSync.enabledAt = config.timelineSync.enabled
+          ? previousSync?.enabled && previousSync.name === config.timelineSync.name ? previousSync.enabledAt : new Date().toISOString()
+          : previousSync?.enabledAt ?? "";
         const ragError = getKakerattaRagError(config, currentSettings);
         if (ragError) return jsonWithCookie({ success: false, message: ragError }, { status: 400 });
         stopKakerattaPoll(validTokens.rootFolderId);
@@ -281,10 +289,10 @@ export async function action({ request }: Route.ActionArgs) {
           const { updateAccount, updateRefreshToken, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
           const account = await getOwnedPersonalAccount(validTokens);
           if (account && isActivePremiumAccount(account)) {
-            if (config.enabled && config.pollEnabled && validTokens.refreshToken) await updateRefreshToken(account.id, validTokens.refreshToken);
+            if (config.enabled && (config.pollEnabled || config.timelineSync.enabled) && validTokens.refreshToken) await updateRefreshToken(account.id, validTokens.refreshToken);
             await updateAccount(account.id, {
               rootFolderId: validTokens.rootFolderId,
-              kakerattaEnabled: config.enabled && config.pollEnabled,
+              kakerattaEnabled: config.enabled && (config.pollEnabled || config.timelineSync.enabled),
               ...(config.enabled && validTokens.geminiApiKey ? { encryptedGeminiApiKey: encryptGeminiApiKey(validTokens.geminiApiKey) } : {}),
             });
           }

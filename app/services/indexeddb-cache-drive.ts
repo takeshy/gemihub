@@ -3,6 +3,7 @@
 // unless the caller is Drive-specific by design.
 // Uses a singleton DB connection for performance.
 
+import { createDiffStr } from "~/utils/edit-history-diff";
 import { isEncryptedFile } from "./crypto-core";
 import type { FileSyncMeta } from "./sync-diff";
 import { parseFrontmatter, isMarkdownFile } from "~/utils/frontmatter";
@@ -756,4 +757,62 @@ export async function clearAllCache(): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+/** Apply a synchronized snapshot only if the local content and account still match. */
+export async function applyTimelineSnapshotCAS(input: {
+  file: CachedFile;
+  rootFolderId: string;
+  expectedFileId?: string;
+  expectedContent?: string;
+  remoteContent: string;
+}): Promise<boolean> {
+  const db = await getDB();
+  const diff = createDiffStr(input.remoteContent, input.file.content, 3);
+  const timestamp = new Date().toISOString();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(["files", "editHistory", "remoteMeta", "syncMeta"], "readwrite");
+    const files = tx.objectStore("files");
+    const history = tx.objectStore("editHistory");
+    let matched = false;
+    const account = tx.objectStore("remoteMeta").get("current");
+    account.onsuccess = () => {
+      const meta = account.result as CachedRemoteMeta | undefined;
+      if (meta && meta.rootFolderId !== input.rootFolderId) return;
+      const id = input.expectedFileId ?? input.file.fileId;
+      const request = files.get(id);
+      request.onsuccess = () => {
+        const current = request.result as CachedFile | undefined;
+        if (current?.content !== input.expectedContent) return;
+        const placeholder = files.get(`new:${input.file.fileName}`);
+        placeholder.onsuccess = () => {
+          if (placeholder.result && id !== `new:${input.file.fileName}`) return;
+          const target = files.get(input.file.fileId);
+          target.onsuccess = () => {
+            if (id !== input.file.fileId && target.result) return;
+            matched = true;
+            if (id !== input.file.fileId) { files.delete(id); history.delete(id); }
+            files.put({ ...input.file, frontmatter: parseFrontmatter(input.file.content), fmParsedMtime: Date.parse(input.file.modifiedTime) });
+            if (input.file.content === input.remoteContent) history.delete(input.file.fileId);
+            else history.put({ fileId: input.file.fileId, filePath: input.file.fileName ?? "", diffs: [{ timestamp, diff: diff.diff, stats: diff.stats }] } satisfies CachedEditHistoryEntry);
+            const fileMeta = { name: input.file.fileName ?? "", mimeType: "text/markdown", md5Checksum: input.file.md5Checksum, modifiedTime: input.file.modifiedTime };
+            const remoteFiles = { ...meta?.files };
+            if (id !== input.file.fileId) delete remoteFiles[id];
+            tx.objectStore("remoteMeta").put({ ...(meta ?? { id: "current", rootFolderId: input.rootFolderId, lastUpdatedAt: timestamp, files: {}, cachedAt: Date.now() }), files: { ...remoteFiles, [input.file.fileId]: fileMeta } });
+            const local = tx.objectStore("syncMeta").get("current");
+            local.onsuccess = () => {
+              const sync = local.result as LocalSyncMeta | undefined;
+              const next = { ...(sync ?? { id: "current", lastUpdatedAt: timestamp, files: {} }), files: { ...sync?.files } };
+              if (id !== input.file.fileId) delete next.files[id];
+              next.files[input.file.fileId] = fileMeta;
+              tx.objectStore("syncMeta").put(next);
+            };
+          };
+        };
+      };
+    };
+    tx.oncomplete = () => resolve(matched);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error("Timeline cache transaction aborted"));
+  });
 }

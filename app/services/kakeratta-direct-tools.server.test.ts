@@ -47,3 +47,16 @@ test("OAuth refreshes are persisted during discovery and after direct execution"
   assert.deepEqual(persisted, ["discovered", "executed"]);
   assert.equal(settings.mcpServers[0].oauthTokens.accessToken, "old", "Cached source settings are not mutated");
 });
+
+test("application-only Timeline synchronization is excluded even with auto-approval", async () => {
+  const settings = { ...DEFAULT_USER_SETTINGS, mcpServers: [{ id: "kakeratta", name: "Kakeratta", url: "https://example.com/kakeratta", autoApprove: true }] };
+  const tools = await getDirectTools(settings, ["kakeratta"], {
+    async getMcpToolDefinitions(servers) {
+      servers[0].tools = [{ name: "sync_timeline", annotations: { applicationOnlyHint: true } }];
+      return [{ name: "mcp_kakeratta_sync_timeline", parameters: { type: "object", properties: {} } }];
+    },
+    async executeMcpTool() { throw new Error("Model must not invoke synchronization"); },
+  });
+  assert.equal(tools.definitions.length, 0);
+  assert.ok((await tools.execute("mcp_kakeratta_sync_timeline", {}, new AbortController().signal) as { error?: string }).error);
+});

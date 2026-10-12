@@ -130,6 +130,7 @@ GemiHub は MIT ライセンスで、自分の Gemini API キーがあれば無�
 | PDF 生成・外部同期トークン・一時編集 URL | — | ✓ | ✓ | ✓ |
 | Interactions API チャット（ファンクションツール + RAG + Web 検索の同時利用） | — | ✓ | ✓ | ✓ |
 | [Kakeratta の担当への回答](docs/integrations/kakeratta.md) | GemiHub の画面を開いている間 | 画面を閉じても動作 | 画面を閉じても動作 | 画面を閉じても動作（個人 Drive） |
+| [Kakeratta と Timeline 同期](docs/integrations/kakeratta.md) | — | 投稿・スレッド・担当名 | 投稿・スレッド・担当名 | 個人 Drive |
 | スケジュール実行 + `web/` からのページ配信（`{slug}.gemihub.net`） | — | — | ✓（自分のDriveから配信） | ✓（CDN・カスタムドメイン・ワークフローAPIも） |
 | Google Sheets ワークフローノード | — | — | — | ✓ |
 | Cloud Storage + Vertex AI の共有組織 | — | — | — | 100 GB・月 $30 の AI 利用枠込み |

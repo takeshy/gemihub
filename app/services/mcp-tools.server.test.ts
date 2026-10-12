@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executeMcpTool, getMcpAppResourceUri } from "./mcp-tools.server";
+import { executeMcpTool, getMcpAppResourceUri, getMcpToolDefinitions } from "./mcp-tools.server";
 import { McpApprovalRequiredError } from "./mcp-approval.server";
 import { McpClient } from "./mcp-client.server";
 
@@ -44,4 +44,19 @@ test("chat MCP execution waits for approval when auto-approve is off and the all
   approve();
   assert.deepEqual(await execution, { textResult: "approved result", mcpApp: undefined });
   assert.equal(callTool.mock.callCount(), 1);
+});
+
+
+test("application-only sync tools are neither offered nor executed by chat", async (t) => {
+  t.mock.method(McpClient.prototype, "listTools", async () => [
+    { name: "read", inputSchema: { type: "object" } },
+    { name: "sync_timeline", annotations: { applicationOnlyHint: true }, inputSchema: { type: "object" } },
+  ]);
+  const execute = t.mock.method(McpClient.prototype, "callToolWithUi", async () => { throw new Error("Must not execute an application-only tool"); });
+  const server = { id: "sync_only", name: "Sync only", url: "https://example.com/sync-only", autoApprove: true };
+  const definitions = await getMcpToolDefinitions([server]);
+  assert.deepEqual(definitions.map(tool => tool.name), ["mcp_sync_only_read"]);
+  const result = await executeMcpTool([server], "mcp_sync_only_sync_timeline", {});
+  assert.ok((result.textResult as { error?: string }).error);
+  assert.equal(execute.mock.callCount(), 0);
 });
