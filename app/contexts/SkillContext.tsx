@@ -24,12 +24,17 @@ interface SkillContextValue {
   loading: boolean;
   refreshSkills: () => void;
   getActiveSkillsSystemPrompt: (extraSkillIds?: string[], hubworkAccounts?: Record<string, unknown>) => Promise<string>;
-  getActiveSkillWorkflows: (extraSkillIds?: string[]) => Array<{
-    skillId: string;
-    skillName: string;
-    workflow: SkillWorkflowRef;
-    folderId: string;
-  }>;
+  getActiveSkillWorkflows: (extraSkillIds?: string[]) => SkillWorkflowEntry[];
+  /** Like the active-skill getters, for an explicit set of skills (e.g. Timeline @ai). */
+  getSkillsSystemPrompt: (skillIds: string[], hubworkAccounts?: Record<string, unknown>) => Promise<string>;
+  getSkillWorkflows: (skillIds: string[]) => SkillWorkflowEntry[];
+}
+
+interface SkillWorkflowEntry {
+  skillId: string;
+  skillName: string;
+  workflow: SkillWorkflowRef;
+  folderId: string;
 }
 
 const SkillContext = createContext<SkillContextValue>({
@@ -42,6 +47,8 @@ const SkillContext = createContext<SkillContextValue>({
   refreshSkills: () => {},
   getActiveSkillsSystemPrompt: async () => "",
   getActiveSkillWorkflows: () => [],
+  getSkillsSystemPrompt: async () => "",
+  getSkillWorkflows: () => [],
 });
 
 const STORAGE_KEY = "gemihub:activeSkills";
@@ -146,13 +153,12 @@ export function SkillProvider({
       : activeSkillIds;
   }, [activeSkillIds]);
 
-  const getActiveSkillsSystemPrompt = useCallback(async (extraSkillIds?: string[], hubworkAccounts?: Record<string, unknown>): Promise<string> => {
-    const allIds = mergeSkillIds(extraSkillIds);
-    const activeSkills = skills.filter((s) => allIds.includes(s.id));
-    if (activeSkills.length === 0) return "";
+  const getSkillsSystemPrompt = useCallback(async (skillIds: string[], hubworkAccounts?: Record<string, unknown>): Promise<string> => {
+    const selected = skills.filter((s) => skillIds.includes(s.id));
+    if (selected.length === 0) return "";
 
     const loaded: LoadedSkill[] = [];
-    for (const s of activeSkills) {
+    for (const s of selected) {
       let cached = loadedCacheRef.current.get(s.id);
       if (!cached) {
         cached = await loadSkill(s);
@@ -162,18 +168,12 @@ export function SkillProvider({
     }
 
     return buildSkillSystemPrompt(loaded, hubworkAccounts);
-  }, [skills, mergeSkillIds]);
+  }, [skills]);
 
-  const getActiveSkillWorkflows = useCallback((extraSkillIds?: string[]) => {
-    const allIds = mergeSkillIds(extraSkillIds);
-    const result: Array<{
-      skillId: string;
-      skillName: string;
-      workflow: SkillWorkflowRef;
-      folderId: string;
-    }> = [];
+  const getSkillWorkflows = useCallback((skillIds: string[]) => {
+    const result: SkillWorkflowEntry[] = [];
     for (const s of skills) {
-      if (!allIds.includes(s.id)) continue;
+      if (!skillIds.includes(s.id)) continue;
       for (const wf of s.workflows) {
         result.push({
           skillId: s.id,
@@ -184,7 +184,18 @@ export function SkillProvider({
       }
     }
     return result;
-  }, [skills, mergeSkillIds]);
+  }, [skills]);
+
+  const getActiveSkillsSystemPrompt = useCallback(
+    (extraSkillIds?: string[], hubworkAccounts?: Record<string, unknown>) =>
+      getSkillsSystemPrompt(mergeSkillIds(extraSkillIds), hubworkAccounts),
+    [getSkillsSystemPrompt, mergeSkillIds],
+  );
+
+  const getActiveSkillWorkflows = useCallback(
+    (extraSkillIds?: string[]) => getSkillWorkflows(mergeSkillIds(extraSkillIds)),
+    [getSkillWorkflows, mergeSkillIds],
+  );
 
   return (
     <SkillContext.Provider
@@ -198,6 +209,8 @@ export function SkillProvider({
         refreshSkills: discover,
         getActiveSkillsSystemPrompt,
         getActiveSkillWorkflows,
+        getSkillsSystemPrompt,
+        getSkillWorkflows,
       }}
     >
       {children}

@@ -9,11 +9,10 @@ import type {
   GeneratedImage,
   McpAppInfo,
 } from "~/types/chat";
-import type { ModelInfo, UserSettings, ModelType, DriveToolMode, SlashCommand, GeminiReasoningEffort } from "~/types/settings";
+import type { UserSettings, ModelType, DriveToolMode, SlashCommand, GeminiReasoningEffort } from "~/types/settings";
 
 import {
   getAvailableModels,
-  AVAILABLE_MODELS,
   getDefaultModelForPlan,
   getDriveToolModeConstraint,
   getEnabledMcpServers,
@@ -41,11 +40,10 @@ import {
   setLocalSyncMeta,
 } from "~/services/indexeddb-cache";
 import { getCachedApiKey, ensureCachedApiKey } from "~/services/api-key-cache";
-import { executeLocalChat, chatStream } from "~/hooks/useLocalChat";
-import { executeChatStream } from "~/hooks/chat-stream-client";
-import { VERTEX_MODELS } from "~/services/ai/models";
-import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
+import { chatStream } from "~/hooks/useLocalChat";
+import { availableChatModels, startChatStream, usesInteractions } from "~/hooks/chat-dispatch";
 import { executeInteractionsChat } from "~/hooks/useInteractionsChat";
+import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
 import { processDriveEvent } from "~/utils/drive-file-local";
 import { useSkills } from "~/contexts/SkillContext";
 import { useEditorContext } from "~/contexts/EditorContext";
@@ -373,20 +371,10 @@ export function ChatPanel({
 
   // Project mount: the model list comes from the Vertex catalogue, narrowed
   // by the project's allowedModels; the user's apiPlan does not apply there.
-  const availableModels = useMemo(() => {
-    if (enterpriseSelection) {
-      const vertexNames = Object.values(VERTEX_MODELS) as ModelType[];
-      const allowedNames = enterpriseSelection.allowedModels.length > 0
-        ? vertexNames.filter((name) => enterpriseSelection.allowedModels.includes(name))
-        : vertexNames;
-      return allowedNames.map(
-        (name) =>
-          AVAILABLE_MODELS.find((m) => m.name === name) ??
-          ({ name, displayName: name, description: "" } satisfies ModelInfo),
-      );
-    }
-    return getAvailableModels(settings.apiPlan);
-  }, [enterpriseSelection, settings.apiPlan]);
+  const availableModels = useMemo(
+    () => availableChatModels(enterpriseSelection, settings.apiPlan),
+    [enterpriseSelection, settings.apiPlan],
+  );
   const availableMcpServers = useMemo(() => getEnabledMcpServers(settings), [settings]);
   const defaultModel =
     settings.selectedModel || getDefaultModelForPlan(settings.apiPlan);
@@ -1016,7 +1004,7 @@ export function ChatPanel({
           : null;
       // Resolve the API path before any RAG diagnostics or async preparation
       // so hot-reloaded code cannot observe these flags in a later TDZ.
-      const useInteractions = settings.apiPlan === "paid" && !isImageGenerationModel(effectiveModel);
+      const useInteractions = usesInteractions(settings, effectiveModel);
       const usePersonalVertex = !projectSelection && settings.usePersonalVertex === true;
       const ragStoreIds =
         ragSetting
@@ -1174,111 +1162,32 @@ export function ChatPanel({
           !!planInstruction && !isPlanApprovalMessage(content);
 
         const canUseProxy = true;
-        const generator = projectSelection
-          ? executeChatStream(
-              {
-                projectId: projectSelection.projectId,
-                mountKey: `gcs:${projectSelection.orgId}/${projectSelection.projectId}`,
-                model: effectiveModel,
-                canUseProxy,
-                messages: updatedMessages,
-                systemPrompt: fullSystemPrompt,
-                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
-                driveToolMode: effectiveDriveToolMode,
-                mcpServerIds: effectiveMcpIds,
-                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
-                webSearchEnabled: isWebSearch,
-                reasoningEffort,
-                maxFunctionCalls: 50,
-                functionCallWarningThreshold: 10,
-                ragTopK: settings.ragTopK,
-                abortSignal: abortController.signal,
-                requirePlanApproval: needsPlanApproval,
-                settings,
-                okfRoot: settings.okfRoot,
-                activeOkfBundleIds,
-              },
-              chatCallbacks,
-            )
-          : usePersonalVertex
-          ? executeChatStream(
-              {
-                personalVertex: true,
-                // No mountKey: that namespaces the PROJECT storage cache. A
-                // fabricated one would send skill-workflow file writes into a
-                // namespace nothing else reads. The Drive mount's own cache is
-                // addressed by file id, not by mountKey.
-                model: effectiveModel,
-                canUseProxy,
-                messages: updatedMessages,
-                systemPrompt: fullSystemPrompt,
-                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
-                driveToolMode: effectiveDriveToolMode,
-                mcpServerIds: effectiveMcpIds,
-                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
-                webSearchEnabled: isWebSearch,
-                reasoningEffort,
-                maxFunctionCalls: 50,
-                functionCallWarningThreshold: 10,
-                ragTopK: settings.ragTopK,
-                abortSignal: abortController.signal,
-                requirePlanApproval: needsPlanApproval,
-                settings,
-                okfRoot: settings.okfRoot,
-                activeOkfBundleIds,
-              },
-              chatCallbacks,
-            )
-          : useInteractions
-          ? executeInteractionsChat(
-              {
-                model: effectiveModel,
-                canUseProxy,
-                messages: updatedMessages,
-                systemPrompt: fullSystemPrompt,
-                previousInteractionId,
-                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
-                driveToolMode: effectiveDriveToolMode,
-                mcpServerIds: effectiveMcpIds,
-                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
-                webSearchEnabled: isWebSearch,
-                reasoningEffort,
-                maxFunctionCalls: 50,
-                functionCallWarningThreshold: 10,
-                ragTopK: settings.ragTopK,
-                abortSignal: abortController.signal,
-                requirePlanApproval: needsPlanApproval,
-                geminiApiKey: localApiKey ?? undefined,
-                settings,
-                okfRoot: settings.okfRoot,
-                activeOkfBundleIds,
-              },
-              chatCallbacks,
-            )
-          : executeLocalChat(
-              {
-                apiKey: localApiKey!,
-                canUseProxy,
-                model: effectiveModel,
-                messages: updatedMessages,
-                systemPrompt: fullSystemPrompt,
-                skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
-                driveToolMode: effectiveDriveToolMode,
-                mcpServerIds: effectiveMcpIds,
-                ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
-                webSearchEnabled: isWebSearch,
-                reasoningEffort,
-                maxFunctionCalls: 50,
-                functionCallWarningThreshold: 10,
-                ragTopK: settings.ragTopK,
-                abortSignal: abortController.signal,
-                requirePlanApproval: needsPlanApproval,
-                settings,
-                okfRoot: settings.okfRoot,
-                activeOkfBundleIds,
-              },
-              chatCallbacks,
-            );
+        const generator = startChatStream(
+          {
+            projectSelection,
+            apiKey: localApiKey,
+            previousInteractionId,
+            model: effectiveModel,
+            canUseProxy,
+            messages: updatedMessages,
+            systemPrompt: fullSystemPrompt,
+            skillWorkflows: skillWorkflows.length > 0 ? skillWorkflows : undefined,
+            driveToolMode: effectiveDriveToolMode,
+            mcpServerIds: effectiveMcpIds,
+            ragStoreIds: ragStoreIds.length > 0 ? ragStoreIds : undefined,
+            webSearchEnabled: isWebSearch,
+            reasoningEffort,
+            maxFunctionCalls: 50,
+            functionCallWarningThreshold: 10,
+            ragTopK: settings.ragTopK,
+            abortSignal: abortController.signal,
+            requirePlanApproval: needsPlanApproval,
+            settings,
+            okfRoot: settings.okfRoot,
+            activeOkfBundleIds,
+          },
+          chatCallbacks,
+        );
 
         for await (const chunk of generator) {
           if (abortController.signal.aborted) {

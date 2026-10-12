@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Code, Image, Loader2, MessageSquare, PenLine, Pencil, Pin, Plus, RefreshCw, Search, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, Code, Image, Loader2, MessageSquare, PenLine, Pencil, Pin, Plus, RefreshCw, Search, Send, Settings2, Trash2, X } from "lucide-react";
 import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
 import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
 import { WikiEmbed } from "~/components/editor/WikiEmbed";
@@ -16,7 +16,9 @@ import { buildEntryBlock } from "../memo/memoTimeline";
 import { slugifyHeading } from "~/utils/wiki-subpath";
 import type { WidgetContext } from "../types";
 import { FilePreviewModal } from "./FilePreviewModal";
-import { TimelineAiRewriteDialog } from "./TimelineAiRewriteDialog";
+import { TimelineAiPanel } from "./TimelineAiPanel";
+import { useTimelineAi } from "./useTimelineAi";
+import { hasAiMention, isTimelineAiLookupActive } from "~/services/timeline-ai";
 
 const MarkdownEditor = lazy(() => import("~/components/editor/MarkdownEditor").then((mod) => ({ default: mod.MarkdownEditor })));
 
@@ -260,18 +262,9 @@ async function localFileList(): Promise<FileListItem[]> {
   }));
 }
 
-async function loadTimelineFiles(
-  name: string,
-  limit: number,
-  skip = 0,
-  filters: TimelineFilters = { word: "", tags: "", from: "", to: "", pinnedOnly: false },
-): Promise<{ posts: TimelinePost[]; fileList: FileListItem[]; hasMore: boolean }> {
+async function readAllPosts(name: string): Promise<TimelinePost[]> {
   const meta = await getCachedRemoteMeta();
   const prefix = `${timelineDir(name)}/`;
-  const word = filters.word.trim().toLowerCase();
-  const tagFilter = parseTagFilter(filters.tags);
-  const from = filters.from;
-  const to = filters.to || filters.from;
   const dayFiles = Object.entries(meta?.files ?? {})
     .filter(([, entry]) => entry.name.startsWith(prefix) && !entry.name.includes("/attachments/") && /^\d{4}-\d{2}-\d{2}\.md$/.test(entry.name.slice(prefix.length)))
     .sort((a, b) => b[1].name.localeCompare(a[1].name));
@@ -284,6 +277,20 @@ async function loadTimelineFiles(
       // Skip unreadable day files; other days can still render.
     }
   }
+  return posts;
+}
+
+async function loadTimelineFiles(
+  name: string,
+  limit: number,
+  skip = 0,
+  filters: TimelineFilters = { word: "", tags: "", from: "", to: "", pinnedOnly: false },
+): Promise<{ posts: TimelinePost[]; fileList: FileListItem[]; hasMore: boolean }> {
+  const word = filters.word.trim().toLowerCase();
+  const tagFilter = parseTagFilter(filters.tags);
+  const from = filters.from;
+  const to = filters.to || filters.from;
+  const posts = await readAllPosts(name);
   const threads = timelineThreads(posts).filter(thread => [thread.root, ...thread.replies].some(post => {
     if (post.deleted) return false;
     const day = dateKey(new Date(post.createdAt));
@@ -355,7 +362,11 @@ export default function TimelineWidget({
   const [wordInput, setWordInput] = useState("");
   const [filters, setFilters] = useState<TimelineFilters>({ word: "", tags: "", from: "", to: "", pinnedOnly: false });
   const [previewFile, setPreviewFile] = useState<{ fileId: string; fileName: string } | null>(null);
-  const [aiRewriteTarget, setAiRewriteTarget] = useState<"draft" | "edit" | null>(null);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  // One @ai answer at a time; the ref guards against double submits between renders.
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const aiBusyRef = useRef(false);
+  const timelineAi = useTimelineAi();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -563,6 +574,37 @@ export default function TimelineWidget({
     if (inputRef.current) inputRef.current.value = "";
   };
 
+  /** Read the complete thread and save the AI's answer as a reply in today's file. */
+  const answerPost = async (question: TimelinePost) => {
+    if (aiBusyRef.current) return;
+    aiBusyRef.current = true;
+    setAiBusy(question.id);
+    setOpenThreads((prev) => new Set(prev).add(question.rootId));
+    try {
+      const thread = timelineThreads(await readAllPosts(name))
+        .find((candidate) => [candidate.root, ...candidate.replies].some((post) => post.id === question.id && !post.deleted));
+      if (!thread) throw new Error("The question was deleted");
+      const { content, model } = await timelineAi.answer([thread.root, ...thread.replies], question, language);
+      const now = new Date();
+      const path = dayFilePath(name, now);
+      await mutateTimelineFile(path, (current) => appendPost(current, buildEntryBlock({
+        createdAt: now.toISOString(),
+        id: uniquePostId(now, current, path),
+        // AI replies stay local: Kakeratta only synchronizes user posts.
+        metadata: { speaker: "ai", "author-name": "AI", model, "root-id": thread.root.id, "reply-to": question.id, "local-only": "true" },
+        body: content,
+      })));
+      await refresh(loadedCount);
+      window.dispatchEvent(new CustomEvent("dashboard-data-changed", { detail: { folder: timelineDir(name) } }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`${t("dashboard.timelineAiReplyAnswerError")} ${message === "API_KEY_MISSING" ? t("chat.apiKeyMissing") : message}`);
+    } finally {
+      aiBusyRef.current = false;
+      setAiBusy(null);
+    }
+  };
+
   const startEditing = (post: TimelinePost) => {
     clearEditImages();
     setEditingPostId(post.id);
@@ -579,6 +621,10 @@ export default function TimelineWidget({
   const saveEditing = async (post: TimelinePost) => {
     const body = editDraft.trim();
     if (!body && editImages.length === 0) return;
+    // Saving an @ai post asks the AI again, so wait for any running answer first.
+    const askAi = post.speaker === "user" && hasAiMention(body);
+    if (askAi && aiBusyRef.current) return;
+    let nextBody = "";
     setSavingPostId(post.id);
     setError(null);
     try {
@@ -589,7 +635,7 @@ export default function TimelineWidget({
         const imagePath = await savePostImage(name, new Date(post.createdAt), post.id, pending.file, index);
         imageLines.push(`![[${imagePath}]]`);
       }
-      const nextBody = [body, ...imageLines].filter(Boolean).join("\n\n");
+      nextBody = [body, ...imageLines].filter(Boolean).join("\n\n");
       await mutateTimelineFile(
         post.sourcePath,
         (current) => replacePostContent(current, post.sourcePath, post.id, nextBody),
@@ -598,9 +644,11 @@ export default function TimelineWidget({
       await refresh(loadedCount);
     } catch {
       setError(t("dashboard.writeFailed"));
+      return;
     } finally {
       setSavingPostId(null);
     }
+    if (askAi) await answerPost({ ...post, content: nextBody });
   };
 
   const deletePost = async (post: TimelinePost) => {
@@ -626,6 +674,9 @@ export default function TimelineWidget({
     if (!name || posting) return;
     const body = draft.trim();
     if (!body && images.length === 0) return;
+    const askAi = hasAiMention(body);
+    if (askAi && aiBusyRef.current) return;
+    let created: TimelinePost | null = null;
     setPosting(true);
     setError(null);
     try {
@@ -650,16 +701,20 @@ export default function TimelineWidget({
           metadata["reply-to"] = replyTarget.id;
           if (replyTarget.metadata["local-only"] === "true") metadata["local-only"] = "true";
         }
-        return appendPost(current, buildEntryBlock({ createdAt: now.toISOString(), id: uniqueId, metadata, body: postBody }));
+        const block = buildEntryBlock({ createdAt: now.toISOString(), id: uniqueId, metadata, body: postBody });
+        created = splitPosts(block, path)[0] ?? null;
+        return appendPost(current, block);
       });
       closeComposer();
       await refresh(loadedCount);
       window.dispatchEvent(new CustomEvent("dashboard-data-changed", { detail: { folder: timelineDir(name) } }));
     } catch {
       setError(t("dashboard.writeFailed"));
+      return;
     } finally {
       setPosting(false);
     }
+    if (askAi && created) await answerPost(created);
   };
 
   const togglePinned = async (post: TimelinePost) => {
@@ -688,10 +743,6 @@ export default function TimelineWidget({
   const clearFilters = useCallback(() => {
     setWordInput("");
     setFilters({ word: "", tags: "", from: "", to: "", pinnedOnly: false });
-  }, []);
-
-  const openAiRewrite = useCallback((target: "draft" | "edit") => {
-    setAiRewriteTarget(target);
   }, []);
 
   if (!name) {
@@ -868,7 +919,6 @@ export default function TimelineWidget({
                 collapseCharLimit={collapseCharLimit}
                 onAddEditImages={addEditImages}
                 onRemoveEditImage={removeEditImage}
-                onAiRewrite={() => openAiRewrite("edit")}
                 onReply={() => {
                   setReplyTarget(post);
                   setComposerOpen(true);
@@ -889,7 +939,8 @@ export default function TimelineWidget({
                 saveLabel={t("common.save")}
                 cancelLabel={t("common.cancel")}
                 attachImageLabel={t("dashboard.timelineAttachImage")}
-                aiRewriteLabel={t("dashboard.timelineAiEdit")}
+                aiAnsweringLabel={aiBusy === post.id ? t("dashboard.timelineAiReplyAnswering") : ""}
+                saveBlocked={post.speaker === "user" && aiBusy !== null && hasAiMention(editDraft)}
               />
               {!post.replyTo && (repliesByRoot.get(post.id) ?? 0) > 0 && (
                 <button type="button" className="flex items-center gap-1 px-3 pb-2 text-xs text-blue-600 dark:text-blue-300"
@@ -910,6 +961,7 @@ export default function TimelineWidget({
       </div>
 
       <div className="border-t border-gray-100 p-2 dark:border-gray-800">
+        {!composerOpen && error && <p className="mb-2 text-xs text-red-500">{error}</p>}
         {!composerOpen ? (
           <div className="flex justify-end">
             <button
@@ -939,6 +991,9 @@ export default function TimelineWidget({
                 </span>
               </div>
             </div>
+            {aiPanelOpen && (
+              <TimelineAiPanel choices={timelineAi.choices} settings={timelineAi.aiSettings} onChange={timelineAi.updateAiSettings} />
+            )}
             {composerMode === "wysiwyg" ? (
               <div
                 className="h-28 overflow-hidden rounded-md border border-gray-200 dark:border-gray-700"
@@ -1047,12 +1102,16 @@ export default function TimelineWidget({
                 </label>
                 <button
                   type="button"
-                  onClick={() => openAiRewrite("draft")}
-                  disabled={posting || !draft.trim()}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
-                  title={t("dashboard.timelineAiEdit")}
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => setAiPanelOpen((open) => !open)}
+                  aria-expanded={aiPanelOpen}
+                  className={`relative flex h-8 w-8 items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                    aiPanelOpen ? "bg-gray-100 text-purple-600 dark:bg-gray-800 dark:text-purple-300" : "text-gray-500 dark:text-gray-300"
+                  }`}
+                  title={t("dashboard.timelineAiReplySettings")}
                 >
-                  <Sparkles size={16} />
+                  <Settings2 size={16} />
+                  {isTimelineAiLookupActive(timelineAi.aiSettings) && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-purple-500" />}
                 </button>
               </div>
               <div className="flex items-center gap-1.5">
@@ -1067,7 +1126,7 @@ export default function TimelineWidget({
                 <button
                   type="button"
                   onClick={submitPost}
-                  disabled={posting || (!draft.trim() && images.length === 0)}
+                  disabled={posting || (hasAiMention(draft) && aiBusy !== null) || (!draft.trim() && images.length === 0)}
                   className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {posting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
@@ -1090,16 +1149,6 @@ export default function TimelineWidget({
           onClose={() => setPreviewFile(null)}
         />
       )}
-      {aiRewriteTarget && (
-        <TimelineAiRewriteDialog
-          content={aiRewriteTarget === "draft" ? draft : editDraft}
-          onApply={(next) => {
-            if (aiRewriteTarget === "draft") setDraft(next);
-            else setEditDraft(next);
-          }}
-          onClose={() => setAiRewriteTarget(null)}
-        />
-      )}
     </div>
   );
 }
@@ -1120,7 +1169,6 @@ function TimelinePostViewComponent({
   collapseCharLimit,
   onAddEditImages,
   onRemoveEditImage,
-  onAiRewrite,
   replyToName,
   onReply,
   replyLabel,
@@ -1138,7 +1186,8 @@ function TimelinePostViewComponent({
   saveLabel,
   cancelLabel,
   attachImageLabel,
-  aiRewriteLabel,
+  aiAnsweringLabel,
+  saveBlocked,
 }: {
   post: TimelinePost;
   fileList: FileListItem[];
@@ -1155,7 +1204,6 @@ function TimelinePostViewComponent({
   collapseCharLimit: number;
   onAddEditImages: (files: FileList | null) => void;
   onRemoveEditImage: (index: number) => void;
-  onAiRewrite: () => void;
   replyToName: string;
   onReply: () => void;
   replyLabel: string;
@@ -1173,7 +1221,10 @@ function TimelinePostViewComponent({
   saveLabel: string;
   cancelLabel: string;
   attachImageLabel: string;
-  aiRewriteLabel: string;
+  /** Shown while the AI answers this post; empty otherwise. */
+  aiAnsweringLabel: string;
+  /** Saving would ask the AI while another answer is running. */
+  saveBlocked: boolean;
 }) {
   const collapsible = shouldCollapsePost(post.content, fileList, collapseLineLimit, collapseCharLimit);
   const visibleContent = post.deleted ? (language === "ja" ? "削除された投稿" : "Deleted post") : collapsible && !expanded ? collapsedContent(post.content, fileList, collapseLineLimit, collapseCharLimit) : post.content;
@@ -1194,6 +1245,7 @@ function TimelinePostViewComponent({
               timeStyle: "short",
             }).format(new Date(post.createdAt))}
           </time>
+          {post.speaker === "ai" && <Bot size={12} className="shrink-0 text-purple-500" />}
           <span className="truncate font-medium">{post.authorName || (language === "ja" ? "あなた" : "You")}</span>
           {replyToName && <span className="truncate">↪ {replyToName}</span>}
         </div>
@@ -1234,7 +1286,7 @@ function TimelinePostViewComponent({
           </div>
         )}
       </div>
-      {post.metadata["local-only"] === "true" && !post.metadata["conflict-of"] && post.metadata["connection-archived"] !== "true" && <div className="mb-2 text-xs text-gray-500">
+      {post.metadata["local-only"] === "true" && post.speaker !== "ai" && !post.metadata["conflict-of"] && post.metadata["connection-archived"] !== "true" && <div className="mb-2 text-xs text-gray-500">
         {language === "ja" ? "ローカルの投稿（同期対象外）" : "Local post (excluded from synchronization)"}
       </div>}
       {post.metadata["connection-archived"] === "true" && <div className="mb-2 text-xs text-gray-500">
@@ -1326,15 +1378,6 @@ function TimelinePostViewComponent({
               >
                 <Image size={16} />
               </label>
-              <button
-                type="button"
-                onClick={onAiRewrite}
-                disabled={saving || !editDraft.trim()}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-300 dark:hover:bg-gray-800"
-                title={aiRewriteLabel}
-              >
-                <Sparkles size={16} />
-              </button>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -1348,7 +1391,7 @@ function TimelinePostViewComponent({
               <button
                 type="button"
                 onClick={onSaveEdit}
-                disabled={saving || (!editDraft.trim() && editImages.length === 0)}
+                disabled={saving || saveBlocked || (!editDraft.trim() && editImages.length === 0)}
                 className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {saving && <Loader2 size={12} className="animate-spin" />}
@@ -1394,6 +1437,12 @@ function TimelinePostViewComponent({
           )}
         </>
       )}
+      {aiAnsweringLabel && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-300">
+          <Loader2 size={12} className="animate-spin" />
+          {aiAnsweringLabel}
+        </div>
+      )}
     </article>
   );
 }
@@ -1430,7 +1479,7 @@ const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
     prev.saveLabel !== next.saveLabel ||
     prev.cancelLabel !== next.cancelLabel ||
     prev.attachImageLabel !== next.attachImageLabel ||
-    prev.aiRewriteLabel !== next.aiRewriteLabel
+    prev.aiAnsweringLabel !== next.aiAnsweringLabel
   ) {
     return false;
   }
@@ -1441,7 +1490,8 @@ const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
     return (
       prev.editDraft === next.editDraft &&
       prev.editImages === next.editImages &&
-      prev.saving === next.saving
+      prev.saving === next.saving &&
+      prev.saveBlocked === next.saveBlocked
     );
   }
   return true;

@@ -29,6 +29,7 @@ import { ragRegisterInBackground } from "~/services/rag-sync";
 import { fullPullCacheRecord, type FullPullFilePayload } from "~/services/full-pull-cache";
 import {
   isSyncExcludedPath,
+  isGoogleWorkspaceMimeType,
   shouldTreatAsBinaryFile,
   isLargeFile,
   getSyncCompletionStatus,
@@ -673,7 +674,10 @@ export function useSync() {
       const metadataOnlyIds = new Set<string>();
       for (const id of diff.toPull) {
         const name = remoteFiles[id]?.name;
-        if (name && isSyncExcludedPath(name)) {
+        // Workspace-native files (Docs/Sheets/Slides) have no downloadable
+        // content: pullDirect skips them, so without this they would never
+        // be applied and would stay pending after every pull.
+        if ((name && isSyncExcludedPath(name)) || isGoogleWorkspaceMimeType(remoteFiles[id]?.mimeType)) {
           metadataOnlyIds.add(id);
           continue;
         }

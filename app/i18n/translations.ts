@@ -247,13 +247,18 @@ export interface TranslationStrings {
   "dashboard.timelineEmpty": string;
   "dashboard.timelineLoadOlder": string;
   "dashboard.timelineDeleteConfirm": string;
-  "dashboard.timelineAiEdit": string;
-  "dashboard.timelineAiInstruction": string;
-  "dashboard.timelineAiInstructionPlaceholder": string;
-  "dashboard.timelineAiPreview": string;
-  "dashboard.timelineAiGenerating": string;
-  "dashboard.timelineAiFailed": string;
-  "dashboard.timelineAiCtrlEnter": string;
+  "dashboard.timelineAiReplySettings": string;
+  "dashboard.timelineAiReplyHint": string;
+  "dashboard.timelineAiReplyModel": string;
+  "dashboard.timelineAiReplyDriveRead": string;
+  "dashboard.timelineAiReplySearch": string;
+  "dashboard.timelineAiReplySearchNone": string;
+  "dashboard.timelineAiReplySearchWeb": string;
+  "dashboard.timelineAiReplyMcp": string;
+  "dashboard.timelineAiReplySkills": string;
+  "dashboard.timelineAiReplyAnswering": string;
+  "dashboard.timelineAiReplyAnswerError": string;
+  "dashboard.timelineAiReplyUnavailable": string;
   "dashboard.timelineShowMore": string;
   "dashboard.timelineShowLess": string;
   "dashboard.timelineFilterWord": string;
@@ -1733,13 +1738,18 @@ const en: TranslationStrings = {
   "dashboard.timelineEmpty": "No posts yet",
   "dashboard.timelineLoadOlder": "Show previous",
   "dashboard.timelineDeleteConfirm": "Delete this post?",
-  "dashboard.timelineAiEdit": "Edit with AI",
-  "dashboard.timelineAiInstruction": "Instruction",
-  "dashboard.timelineAiInstructionPlaceholder": "Make it shorter, change the tone, or add a summary",
-  "dashboard.timelineAiPreview": "Rewritten draft",
-  "dashboard.timelineAiGenerating": "Generating…",
-  "dashboard.timelineAiFailed": "Failed to rewrite timeline draft.",
-  "dashboard.timelineAiCtrlEnter": "Ctrl+Enter to generate",
+  "dashboard.timelineAiReplySettings": "@ai reply settings",
+  "dashboard.timelineAiReplyHint": "Mention @ai in a post to get an AI reply in its thread.",
+  "dashboard.timelineAiReplyModel": "Model",
+  "dashboard.timelineAiReplyDriveRead": "Drive files",
+  "dashboard.timelineAiReplySearch": "Search",
+  "dashboard.timelineAiReplySearchNone": "None",
+  "dashboard.timelineAiReplySearchWeb": "Web search",
+  "dashboard.timelineAiReplyMcp": "MCP",
+  "dashboard.timelineAiReplySkills": "Skills",
+  "dashboard.timelineAiReplyAnswering": "AI is answering…",
+  "dashboard.timelineAiReplyAnswerError": "AI reply failed:",
+  "dashboard.timelineAiReplyUnavailable": "AI settings are not loaded yet.",
   "dashboard.timelineShowMore": "Show more",
   "dashboard.timelineShowLess": "Show less",
   "dashboard.timelineFilterWord": "Word",
@@ -3220,13 +3230,18 @@ const ja: TranslationStrings = {
   "dashboard.timelineEmpty": "投稿はまだありません",
   "dashboard.timelineLoadOlder": "前を見る",
   "dashboard.timelineDeleteConfirm": "この投稿を削除しますか？",
-  "dashboard.timelineAiEdit": "AIで編集",
-  "dashboard.timelineAiInstruction": "指示",
-  "dashboard.timelineAiInstructionPlaceholder": "例: 短くする、文体を変える、要約を追加する",
-  "dashboard.timelineAiPreview": "書き換え後の下書き",
-  "dashboard.timelineAiGenerating": "生成中…",
-  "dashboard.timelineAiFailed": "タイムライン下書きの書き換えに失敗しました。",
-  "dashboard.timelineAiCtrlEnter": "Ctrl+Enter で生成",
+  "dashboard.timelineAiReplySettings": "@ai 返信の設定",
+  "dashboard.timelineAiReplyHint": "投稿に @ai を含めると、AIがそのスレッドに返信します。",
+  "dashboard.timelineAiReplyModel": "モデル",
+  "dashboard.timelineAiReplyDriveRead": "Driveファイル",
+  "dashboard.timelineAiReplySearch": "検索",
+  "dashboard.timelineAiReplySearchNone": "なし",
+  "dashboard.timelineAiReplySearchWeb": "Web検索",
+  "dashboard.timelineAiReplyMcp": "MCP",
+  "dashboard.timelineAiReplySkills": "スキル",
+  "dashboard.timelineAiReplyAnswering": "AIが回答中…",
+  "dashboard.timelineAiReplyAnswerError": "AIの返信に失敗しました:",
+  "dashboard.timelineAiReplyUnavailable": "AI設定がまだ読み込まれていません。",
   "dashboard.timelineShowMore": "もっと見る",
   "dashboard.timelineShowLess": "閉じる",
   "dashboard.timelineFilterWord": "Word",
