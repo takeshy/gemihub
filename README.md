@@ -129,6 +129,7 @@ GemiHub is MIT-licensed and fully usable for free with your own Gemini API key. 
 | Gmail send and Google Calendar workflow nodes | — | ✓ | ✓ | ✓ |
 | PDF generation, external sync token, temp edit URL | — | ✓ | ✓ | ✓ |
 | Interactions API chat (function tools + RAG + Web Search together) | — | ✓ | ✓ | ✓ |
+| [Kakeratta persona answers](docs/integrations/kakeratta.md) | While GemiHub is open | Also while closed | Also while closed | Also while closed (personal Drive) |
 | Scheduled workflows + page hosting from `web/` (`{slug}.gemihub.net`) | — | — | ✓, served from your own Drive | ✓, plus CDN, custom domains, workflow APIs |
 | Google Sheets workflow nodes | — | — | — | ✓ |
 | Shared organization on Cloud Storage + Vertex AI | — | — | — | 100 GB, $30/month AI budget included |

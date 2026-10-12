@@ -14,6 +14,7 @@ import { CommandsTab } from "~/components/settings/CommandsTab";
 import { EnterpriseTab } from "~/components/settings/EnterpriseTab";
 import { GeneralTab } from "~/components/settings/GeneralTab";
 import { HubworkTab } from "~/components/settings/HubworkTab";
+import { KakerattaTab } from "~/components/settings/KakerattaTab";
 import { McpTab } from "~/components/settings/McpTab";
 import { PluginsTab } from "~/components/settings/PluginsTab";
 import { RagTab } from "~/components/settings/RagTab";
@@ -29,6 +30,7 @@ export type SettingsTabId =
   | "general"
   | "enterprise"
   | "sync"
+  | "kakeratta"
   | "mcp"
   | "rag"
   | "commands"
@@ -45,6 +47,7 @@ const TABS: {
   { id: "general", labelKey: "settings.tab.general", icon: SettingsIcon },
   { id: "enterprise", labelKey: "settings.tab.enterprise", icon: Building2 },
   { id: "sync", labelKey: "settings.tab.sync", icon: RefreshCw },
+  { id: "kakeratta", labelKey: "settings.tab.kakeratta", icon: Server },
   { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
@@ -175,6 +178,7 @@ export function SettingsTemplate({
           </>
         )}
         {activeTab === "sync" && <SyncTab settings={settings} />}
+        {activeTab === "kakeratta" && <KakerattaTab settings={settings} />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
         {activeTab === "rag" && (settings.ragFeatureEnabled ?? false) && (
           <RagTab settings={settings} disabledByApiKey={hasUnsupportedRagApiKey} />

@@ -9,6 +9,9 @@ import { resolveLanguage } from "~/i18n/resolve-language";
 import { rebuildSyncMeta } from "~/services/sync-meta.server";
 import { ENCRYPTED_AUTH_FILE_NAME } from "~/services/sync-diff";
 import { validateMcpServerUrl } from "~/services/url-validator.server";
+import { KakerattaSettingsSchema, getKakerattaRagError } from "~/types/kakeratta";
+import { getOwnedPersonalAccount } from "~/services/personal-hubwork-account.server";
+import { validateKakerattaUrl, stopKakerattaPoll } from "~/services/kakeratta.server";
 import { GoogleGenAI } from "@google/genai";
 import type {
   UserSettings,
@@ -76,7 +79,6 @@ export async function loader({ request }: Route.LoaderArgs) {
   const driveSettings = await getSettings(validTokens.accessToken, validTokens.rootFolderId);
 
   let hubworkAccount: Awaited<ReturnType<typeof import("~/services/hubwork-accounts.server").getAccountByRootFolderId>> = null;
-  let hubworkAccountMatchedByEmail = false;
   let hubworkLookupSucceeded = true;
   try {
     const { getAccountByOrganization, getAccountByRootFolderId, getAccountByEmail } = await import("~/services/hubwork-accounts.server");
@@ -86,7 +88,6 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Also try matching by email for accounts created via Stripe/admin before user enabled
     if (!validTokens.currentOrgId && !hubworkAccount && validTokens.email) {
       hubworkAccount = await getAccountByEmail(validTokens.email);
-      hubworkAccountMatchedByEmail = !!hubworkAccount;
     }
   } catch (error) {
     hubworkLookupSucceeded = false;
@@ -96,25 +97,28 @@ export async function loader({ request }: Route.LoaderArgs) {
   const hasHubworkScopes = hasRequiredHubworkScopes(grantedScopes);
 
   // Ensure session identity and refresh token for Hubwork accounts without downgrading stored scopes.
-  if (hubworkAccount?.plan) {
-    import("~/services/hubwork-accounts.server").then(({ updateRefreshToken, updateAccount }) => {
-      const updates: Record<string, string> = {};
+  if (hubworkLookupSucceeded) {
+    const personalAccount = await getOwnedPersonalAccount(validTokens).catch(() => null);
+    if (personalAccount?.plan) {
+      const { updateRefreshToken, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
+      const updates: Parameters<typeof updateAccount>[1] = {};
       if (
-        hubworkAccountMatchedByEmail &&
         validTokens.rootFolderId &&
-        hubworkAccount!.rootFolderId !== validTokens.rootFolderId
+        personalAccount.rootFolderId !== validTokens.rootFolderId
       ) {
         updates.rootFolderId = validTokens.rootFolderId;
       }
-      if (!hubworkAccount!.email && validTokens.email) updates.email = validTokens.email;
+      const kakerattaEnabled = isActivePremiumAccount(personalAccount) && driveSettings.kakeratta?.enabled === true && driveSettings.kakeratta.pollEnabled !== false;
+      if (personalAccount.kakerattaEnabled !== kakerattaEnabled) updates.kakerattaEnabled = kakerattaEnabled;
+      if (kakerattaEnabled && validTokens.geminiApiKey) updates.encryptedGeminiApiKey = encryptGeminiApiKey(validTokens.geminiApiKey);
       if (Object.keys(updates).length > 0) {
-        updateAccount(hubworkAccount!.id, updates).catch(() => {});
+        await updateAccount(personalAccount.id, updates).catch(() => {});
       }
 
-      if (validTokens.refreshToken && hasHubworkScopes) {
-        updateRefreshToken(hubworkAccount!.id, validTokens.refreshToken).catch(() => {});
+      if (validTokens.refreshToken && (hasHubworkScopes || kakerattaEnabled)) {
+        await updateRefreshToken(personalAccount.id, validTokens.refreshToken).catch(() => {});
       }
-    });
+    }
   }
   const settings = {
     ...driveSettings,
@@ -263,6 +267,30 @@ export async function action({ request }: Route.ActionArgs) {
   const _action = formData.get("_action") as string;
   try {
     switch (_action) {
+      case "saveKakeratta": {
+        const config = KakerattaSettingsSchema.parse(JSON.parse(String(formData.get("kakeratta") ?? "{}")));
+        validateKakerattaUrl(config);
+        const ragError = getKakerattaRagError(config, currentSettings);
+        if (ragError) return jsonWithCookie({ success: false, message: ragError }, { status: 400 });
+        stopKakerattaPoll(validTokens.rootFolderId);
+        const { activateDirectConnection } = await import("~/services/kakeratta-direct-store.server");
+        await activateDirectConnection(validTokens.rootFolderId, config.url, config.headers);
+        await saveSettings(validTokens.accessToken, validTokens.rootFolderId, { ...currentSettings, kakeratta: config });
+        const { isFirestoreAvailable } = await import("~/services/firestore.server");
+        if (isFirestoreAvailable()) {
+          const { updateAccount, updateRefreshToken, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
+          const account = await getOwnedPersonalAccount(validTokens);
+          if (account && isActivePremiumAccount(account)) {
+            if (config.enabled && config.pollEnabled && validTokens.refreshToken) await updateRefreshToken(account.id, validTokens.refreshToken);
+            await updateAccount(account.id, {
+              rootFolderId: validTokens.rootFolderId,
+              kakerattaEnabled: config.enabled && config.pollEnabled,
+              ...(config.enabled && validTokens.geminiApiKey ? { encryptedGeminiApiKey: encryptGeminiApiKey(validTokens.geminiApiKey) } : {}),
+            });
+          }
+        }
+        return jsonWithCookie({ success: true, message: "Kakeratta settings saved." });
+      }
       case "saveGeneral": {
         const apiPlan = (formData.get("apiPlan") as ApiPlan) || currentSettings.apiPlan;
         // GeneralTab hides the whole Gemini block (the model <select> included)
@@ -472,10 +500,9 @@ export async function action({ request }: Route.ActionArgs) {
           // schedules exist, no copy is kept in Firestore.
           if ((currentSettings.hubwork?.schedules?.length ?? 0) > 0) {
             try {
-              const { getAccountByRootFolderId, getAccountByEmail, updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
-              let hwAccount = await getAccountByRootFolderId(validTokens.rootFolderId);
-              if (!hwAccount && validTokens.email) hwAccount = await getAccountByEmail(validTokens.email);
-              if (hwAccount && (hwAccount.plan === "pro" || hwAccount.plan === "business" || hwAccount.plan === "granted")) {
+              const { updateAccount, encryptGeminiApiKey } = await import("~/services/hubwork-accounts.server");
+              const hwAccount = await getOwnedPersonalAccount(validTokens);
+              if (hwAccount && isActivePremiumAccount(hwAccount)) {
                 await updateAccount(hwAccount.id, { encryptedGeminiApiKey: encryptGeminiApiKey(effectiveApiKey) });
               }
             } catch { /* best-effort */ }
@@ -520,6 +547,7 @@ export async function action({ request }: Route.ActionArgs) {
 
         const updatedSettings: UserSettings = { ...currentSettings, mcpServers };
         await saveSettings(validTokens.accessToken, validTokens.rootFolderId, updatedSettings);
+        stopKakerattaPoll(validTokens.rootFolderId);
         return jsonWithCookie({ success: true, message: "MCP server settings saved." });
       }
 

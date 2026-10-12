@@ -96,6 +96,7 @@ export const SyncOrganizationProject: Story = {
 };
 export const Sync: Story = { args: { activeTab: "sync" } };
 export const Mcp: Story = { args: { activeTab: "mcp" } };
+export const Kakeratta: Story = { args: { activeTab: "kakeratta" } };
 export const Rag: Story = { args: { activeTab: "rag" } };
 export const Commands: Story = { args: { activeTab: "commands" } };
 export const Shortcuts: Story = { args: { activeTab: "shortcuts" } };
@@ -105,6 +106,7 @@ export const Hubwork: Story = { args: { activeTab: "hubwork" } };
 export const GeneralEnglish: Story = { render: () => <StoryRoute initialTab="general" language="en" /> };
 export const SyncEnglish: Story = { render: () => <StoryRoute initialTab="sync" language="en" /> };
 export const McpEnglish: Story = { render: () => <StoryRoute initialTab="mcp" language="en" /> };
+export const KakerattaEnglish: Story = { render: () => <StoryRoute initialTab="kakeratta" language="en" /> };
 export const RagEnglish: Story = { render: () => <StoryRoute initialTab="rag" language="en" /> };
 export const CommandsEnglish: Story = { render: () => <StoryRoute initialTab="commands" language="en" /> };
 export const ShortcutsEnglish: Story = { render: () => <StoryRoute initialTab="shortcuts" language="en" /> };

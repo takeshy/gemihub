@@ -526,6 +526,7 @@ export interface TranslationStrings {
   // Settings page
   "settings.title": string;
   "settings.tab.general": string;
+  "settings.tab.kakeratta": string;
   "settings.tab.mcp": string;
   "settings.tab.rag": string;
   // General tab
@@ -2011,6 +2012,7 @@ const en: TranslationStrings = {
   // Settings
   "settings.title": "Settings",
   "settings.tab.general": "General",
+  "settings.tab.kakeratta": "Kakeratta",
   "settings.tab.mcp": "MCP Servers",
   "settings.tab.rag": "RAG",
 
@@ -3497,6 +3499,7 @@ const ja: TranslationStrings = {
   // Settings
   "settings.title": "設定",
   "settings.tab.general": "一般",
+  "settings.tab.kakeratta": "Kakeratta",
   "settings.tab.mcp": "MCPサーバー",
   "settings.tab.rag": "RAG",
 

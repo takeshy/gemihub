@@ -1,5 +1,6 @@
 # Integrations
 
+* [Kakeratta external agent](kakeratta.md) - Persona answers with read-only GemiHub research, RAG and Web Search; Premium runs while the browser is closed.
 * [MCP (Model Context Protocol)](mcp.md) - MCP server integration; server tools are discovered dynamically and exposed to chat as mcp_{server}_{tool}.
 * [Plugins](plugins.md) - Plugin developer guide: GitHub Release installation, PluginAPI surface, views, slash commands, and storage.
 * [RAG (Retrieval-Augmented Generation)](rag.md) - RAG (Retrieval-Augmented Generation) setup and behavior using Gemini File Search.

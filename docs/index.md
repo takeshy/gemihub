@@ -21,6 +21,7 @@ Welcome to the GemiHub Open Knowledge Format bundle.
 
 ## Integrations
 
+* [Kakeratta external agent](integrations/kakeratta.md) - Persona answers with GemiHub models and read-only research; Premium also runs while the browser is closed.
 * [MCP (Model Context Protocol)](integrations/mcp.md) - MCP server integration; server tools are discovered dynamically and exposed to chat as mcp_{server}_{tool}.
 * [Plugins](integrations/plugins.md) - Plugin developer guide: GitHub Release installation, PluginAPI surface, views, slash commands, and storage.
 * [RAG (Retrieval-Augmented Generation)](integrations/rag.md) - RAG (Retrieval-Augmented Generation) setup and behavior using Gemini File Search.

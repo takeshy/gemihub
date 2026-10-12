@@ -413,6 +413,7 @@ export async function updateAccount(
       | "deleteAfter"
       | "activeScheduleRevision"
       | "encryptedGeminiApiKey"
+      | "kakerattaEnabled"
       | "orgId"
       | "projectId"
     >

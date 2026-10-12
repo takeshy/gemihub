@@ -9,6 +9,17 @@ tags:
 
 GemiHub's premium plans add server-side capability on top of the free Drive experience. Lite unlocks the paid workflow nodes and the Interactions API chat; Business turns GemiHub into a web app builder (Google Sheets/Gmail integration, static page hosting, scheduled workflows, custom domains) **and** provisions an organization with a shared project mount running on Vertex AI. The organization/mount model itself lives in [Storage Mounts & AI Providers](./mounts.md); this document covers the plans, billing, hosting, and scheduling.
 
+## Kakeratta background answers
+
+All active Premium tiers, including Lite, can answer Kakeratta external-agent
+requests while the browser is closed. The existing authenticated minute
+scheduler polls only accounts opted in through `kakerattaEnabled`, independently
+of workflow plan eligibility. Configuration and research belong to the owner's
+personal Drive workspace. Server credentials use the existing encrypted token
+and API key storage, and generation follows the user's API-key or personal
+Vertex AI choice. See [Kakeratta integration](../integrations/kakeratta.md) for
+setup, limits, reference scope, and implementation.
+
 ## Architecture Overview
 
 ```

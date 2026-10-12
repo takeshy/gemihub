@@ -228,6 +228,10 @@ export async function action({ request }: Route.ActionArgs) {
         args: Record<string, unknown>
       ): Promise<unknown> => {
         if (driveToolNames.has(name)) {
+          if (request.headers.get("X-GemiHub-Kakeratta") === "true") {
+            const { executeKakerattaDriveTool } = await import("~/services/kakeratta-drive.server");
+            return executeKakerattaDriveTool(name, args, validTokens.accessToken, validTokens.rootFolderId, request.signal);
+          }
           if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
           const result = await executeDriveTool(
             name,

@@ -1,3 +1,4 @@
+import { KakerattaConnection } from "~/components/KakerattaConnection";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { data, redirect, useLoaderData } from "react-router";
 import type { Route } from "./+types/_index";
@@ -368,6 +369,7 @@ export default function Index() {
       currentUserEmail={data.enterprise.email}
       hasOrganizations={data.hasOrganizations}
     >
+      <KakerattaConnection settings={data.settings} offline={data.isOffline || !!data.rootFolderMismatch} />
       <IDELayout
         settings={data.settings}
         hasGeminiApiKey={data.hasGeminiApiKey}

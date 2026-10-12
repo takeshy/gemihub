@@ -70,6 +70,7 @@ export default [
   route("api/base/ai-generate", "routes/api.base.ai-generate.tsx"),
   route("api/timeline/ai-rewrite", "routes/api.timeline.ai-rewrite.tsx"),
   route("api/chat", "routes/api.chat.tsx"),
+  route("api/kakeratta", "routes/api.kakeratta.tsx"),
   route("api/chat/interactions", "routes/api.chat.interactions.tsx"),
   route("api/chat/compact", "routes/api.chat.compact.tsx"),
   route("api/chat/history", "routes/api.chat.history.tsx"),

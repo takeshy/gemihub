@@ -43,9 +43,11 @@ export async function action({ request }: Route.ActionArgs) {
   await authorizeScheduledRequest(request);
 
   const allActive = await getAllActiveAccounts();
+  const { pollScheduledKakeratta } = await import("~/services/kakeratta-scheduled.server");
+  const kakerattaRun = pollScheduledKakeratta(allActive, request);
   const accounts = selectScheduledAccounts(allActive);
   if (accounts.length === 0) {
-    return Response.json({ executed: 0, message: "No active accounts eligible for scheduled execution" });
+    return Response.json({ executed: 0, kakeratta: await kakerattaRun, message: "No active accounts eligible for scheduled execution" });
   }
 
   const requestUrl = new URL(request.url);
@@ -238,7 +240,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
-  return Response.json({ executed: allResults.length, results: allResults });
+  return Response.json({ executed: allResults.length, results: allResults, kakeratta: await kakerattaRun });
 }
 
 async function authorizeScheduledRequest(request: Request): Promise<void> {

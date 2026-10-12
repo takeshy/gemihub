@@ -327,6 +327,10 @@ export async function handlePersonalVertexChatAction(
         // delegateToolNames and execute in the browser.
         if (driveToolNames.has(name)) {
           if (driveToolMode === "readOnly" && !isReadOnlyDriveTool(name)) return { error: "Drive tool is disabled in read-only mode" };
+          if (request.headers.get("X-GemiHub-Kakeratta") === "true") {
+            const { executeKakerattaDriveTool } = await import("../kakeratta-drive.server");
+            return executeKakerattaDriveTool(name, args, validTokens.accessToken, validTokens.rootFolderId, request.signal);
+          }
           return executeDriveTool(
             name,
             args,

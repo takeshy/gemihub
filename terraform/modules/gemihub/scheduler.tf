@@ -21,6 +21,8 @@ resource "google_cloud_scheduler_job" "hubwork" {
   region    = var.region
   schedule  = "* * * * *"
   time_zone = "UTC"
+  # Includes bounded Kakeratta polling alongside scheduled workflows.
+  attempt_deadline = "320s"
 
   http_target {
     http_method = "POST"

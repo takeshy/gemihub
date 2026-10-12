@@ -36,6 +36,8 @@ export interface HubworkAccount {
   email: string;
   encryptedRefreshToken: string;
   encryptedGeminiApiKey?: string;
+  /** Opt-in index for background Kakeratta polling of the owner's Drive workspace. */
+  kakerattaEnabled?: boolean;
   accountSlug: string;
   defaultDomain: string;
   customDomain?: string;

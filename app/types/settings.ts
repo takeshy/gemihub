@@ -622,6 +622,7 @@ export function isValidShortcutKey(binding: { key: string; ctrlOrMeta: boolean; 
 
 // User settings (stored in Drive as settings.json)
 export interface UserSettings {
+  kakeratta?: import("./kakeratta").KakerattaSettings;
   apiPlan: ApiPlan;
   selectedModel: ModelType | null;
   mcpServers: McpServerConfig[];
