@@ -237,6 +237,7 @@ export function replaceEntryBody(content: string, entryId: string, nextBody: str
   let changed = false;
   const blocks = entries.map((entry) => {
     if (entry.id !== entryId) return entryToBlock(entry);
+    if (entry.metadata?.["kakeratta-id"] && entry.metadata?.["local-only"] !== "true") throw new Error("Edit this post in Kakeratta");
     changed = true;
     if (!entry.parsed) return nextBody.trim();
     return entryToBlock({ ...entry, body: nextBody });
@@ -257,6 +258,8 @@ export function setEntryPinned(content: string, entryId: string, pinned: boolean
 
 export function deleteEntry(content: string, entryId: string): string | null {
   const { source, entries } = parseMemoFile(content);
+  const target = entries.find((entry) => entry.id === entryId);
+  if (target?.metadata?.["kakeratta-id"] && target.metadata["local-only"] !== "true") throw new Error("Delete this post in Kakeratta");
   const remaining = entries.filter((entry) => entry.id !== entryId);
   if (remaining.length === entries.length) return null;
   return serializeMemoFile(source, remaining.map(entryToBlock));

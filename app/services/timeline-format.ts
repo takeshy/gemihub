@@ -66,7 +66,14 @@ export function changeTimelineEntry(content: string, path: string, id: string, c
   const entries = parseTimeline(content, path);
   if (!entries.some(entry => entry.id === id)) return null;
   return serializeMemoFile(parsed.source, entries.map((entry, index) => {
-    if (entry.id === id) return timelineBlock(change(entry));
+    if (entry.id === id) {
+      const next = change(entry);
+      if (entry.metadata["kakeratta-id"] && entry.metadata["local-only"] !== "true" &&
+        (next.content !== entry.content || next.deleted !== entry.deleted)) {
+        throw new Error("Edit this post in Kakeratta");
+      }
+      return timelineBlock(next);
+    }
     return parsed.entries[index].raw;
   }));
 }

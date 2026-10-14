@@ -159,19 +159,14 @@ uses `Dashboards/Timeline/<name>/YYYY-MM-DD.md` in your personal Drive; an
 organization membership does not grant access to this personal synchronization.
 The connected Kakeratta server must include the `sync_timeline` MCP tool.
 
-Posts and replies added after synchronization is enabled follow Kakeratta's
-normal persona routing and provider billing. Older GemiHub posts import without
-waking personas. Backfill runs in pages and resumes on later checks. Known old
-threads are rechecked for edits, deletions and new replies; periodic history
-pages also discover newly imported older posts.
+Synchronization only imports from Kakeratta. Local posts, replies, edits and
+deletions are never sent. Imported posts are read-only: edit or delete them in
+Kakeratta. Pinning and local replies remain available. Backfill runs in pages
+and resumes on later checks. Known threads are rechecked for edits, deletions
+and replies; history pages also discover newly imported older posts.
 
-Kakeratta wins a conflicting edit or deletion. GemiHub preserves its losing
-version beside the original as a **conflicting edit** or **conflicting deletion**.
-These copies carry `local-only: true` and are never posted to Kakeratta. If the
-original was deleted in Kakeratta, the preserved GemiHub content becomes a local
-root post. Stable IDs deduplicate retries, and updates/deletions use the last
-acknowledged revision. A new or edited descendant prevents an obsolete deletion
-from removing that conversation.
+Legacy local changes are preserved as local conflict copies when Kakeratta's
+version is adopted. Stable IDs deduplicate imported records and retries.
 
 Changing the URL or authentication key creates a new synchronization scope.
 Content from the previous connection is retained locally and marked as excluded

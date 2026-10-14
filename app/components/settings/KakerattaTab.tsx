@@ -98,11 +98,11 @@ export function KakerattaTab({ settings }: { settings: UserSettings }) {
       <h3 className="font-semibold">{ja ? "Timeline 同期（Premium）" : "Timeline synchronization (Premium)"}</h3>
       <label className="flex items-center gap-2"><input type="checkbox" checked={config.timelineSync.enabled}
         onChange={e => setConfig({ ...config, timelineSync: { ...config.timelineSync, enabled: e.target.checked } })} />
-        {ja ? "Kakeratta と Timeline を同期する" : "Synchronize Timeline with Kakeratta"}</label>
+        {ja ? "Kakeratta から Timeline に取り込む" : "Import Timeline from Kakeratta"}</label>
       <label className="block">{ja ? "同期する Timeline 名" : "Timeline name"}
         <input className={field} value={config.timelineSync.name} onChange={e => setConfig({ ...config, timelineSync: { ...config.timelineSync, name: e.target.value } })} /></label>
-      <p>{ja ? "投稿・返信・担当名を同期します。競合時は Kakeratta を優先し、GemiHub の変更を競合コピーとして残します。競合コピーは Kakeratta に送信しません。初回の過去投稿の取り込みでは担当を起動しません。" : "Synchronize posts, replies and author names. Kakeratta wins conflicts; your GemiHub changes are kept as local conflict copies and are never sent to Kakeratta. Historical imports do not wake personas."}</p>
-      <p>{ja ? "同期を開始してから追加した投稿や返信では、Kakeratta 側の設定で担当の回答が生成され、その提供元の料金が適用されます。" : "Posts and replies added after enabling synchronization can generate persona answers using your Kakeratta settings and its provider's billing."}</p>
+      <p>{ja ? "Kakeratta の投稿・返信・担当名を取り込みます。こちらの投稿・返信・編集・削除は送信しません。取り込んだ投稿の編集・削除は Kakeratta 側で行ってください。" : "Import posts, replies and author names from Kakeratta. Local posts, replies, edits and deletions are never sent. Edit or delete imported posts in Kakeratta."}</p>
+      <p>{ja ? "過去分はページ単位で取り込み、次回以降の確認で続きます。" : "History imports in pages and continues on subsequent checks."}</p>
       <button type="button" disabled={loading || !settings.kakeratta?.enabled || !settings.kakeratta?.timelineSync?.enabled} onClick={syncNow}>
         {loading ? "…" : ja ? "保存した設定で今すぐ同期" : "Synchronize now with saved settings"}
       </button>

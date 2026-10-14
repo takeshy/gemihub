@@ -532,6 +532,7 @@ export interface TranslationStrings {
   "settings.title": string;
   "settings.tab.general": string;
   "settings.tab.kakeratta": string;
+  "settings.tab.bluesky": string;
   "settings.tab.mcp": string;
   "settings.tab.rag": string;
   // General tab
@@ -2023,6 +2024,7 @@ const en: TranslationStrings = {
   "settings.title": "Settings",
   "settings.tab.general": "General",
   "settings.tab.kakeratta": "Kakeratta",
+  "settings.tab.bluesky": "Bluesky",
   "settings.tab.mcp": "MCP Servers",
   "settings.tab.rag": "RAG",
 
@@ -3515,6 +3517,7 @@ const ja: TranslationStrings = {
   "settings.title": "設定",
   "settings.tab.general": "一般",
   "settings.tab.kakeratta": "Kakeratta",
+  "settings.tab.bluesky": "Bluesky",
   "settings.tab.mcp": "MCPサーバー",
   "settings.tab.rag": "RAG",
 

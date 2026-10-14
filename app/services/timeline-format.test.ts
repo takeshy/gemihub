@@ -59,3 +59,13 @@ test("a legacy-looking marker inside a message stays literal", () => {
   const body = `Example:\n<!-- timeline-post: ${at} -->\nend`;
   assert.equal(parseTimeline(block("post", {}, body), "day.md")[0].content, body);
 });
+
+test("Kakeratta imports reject edits and deletions but permit local pinning", () => {
+  const source = block("imported", { "kakeratta-id": "remote-id" });
+  assert.throws(() => changeTimelineEntry(source, "day.md", "imported", entry => ({ ...entry, content: "changed" })), /Kakeratta/);
+  assert.throws(() => changeTimelineEntry(source, "day.md", "imported", entry => ({ ...entry, deleted: true })), /Kakeratta/);
+  const pinned = changeTimelineEntry(source, "day.md", "imported", entry => ({ ...entry, pinned: true }))!;
+  assert.equal(parseTimeline(pinned, "day.md")[0].pinned, true);
+  const conflict = block("copy", { "local-only": "true", "conflict-of": "imported" });
+  assert.ok(changeTimelineEntry(conflict, "day.md", "copy", entry => ({ ...entry, content: "local" })));
+});

@@ -1,3 +1,7 @@
+import { BlueskyDialog } from "~/components/bluesky/BlueskyDialog";
+import { BlueskyIcon } from "~/components/bluesky/BlueskyIcon";
+import { useBlueskyConnection, webBluesky } from "~/services/bluesky-client";
+import type { BlueskyEntry } from "~/services/bluesky";
 import { lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronUp, Code, Image, Loader2, MessageSquare, PenLine, Pencil, Pin, Plus, RefreshCw, Search, Send, Settings2, Trash2, X } from "lucide-react";
 import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
@@ -339,6 +343,8 @@ export default function TimelineWidget({
       : COLLAPSE_CHAR_LIMIT;
 
   const [posts, setPosts] = useState<TimelinePost[]>([]);
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
   const [loadedCount, setLoadedCount] = useState(latestCount);
   const [hasOlderPosts, setHasOlderPosts] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -350,6 +356,8 @@ export default function TimelineWidget({
   const [replyTarget, setReplyTarget] = useState<TimelinePost | null>(null);
   const [openThreads, setOpenThreads] = useState<Set<string>>(() => new Set());
   const [draft, setDraft] = useState("");
+  const [blueskySelection, setBlueskySelection] = useState<{ entries: BlueskyEntry[]; initialId: string } | null>(null);
+  const blueskyConnection = useBlueskyConnection();
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [savingPostId, setSavingPostId] = useState<string | null>(null);
@@ -748,7 +756,7 @@ export default function TimelineWidget({
   if (!name) {
     return (
       <div className="flex h-full items-center justify-center px-3 text-center text-sm text-gray-400">
-        {t("dashboard.timelineNoFile")}
+      {t("dashboard.timelineNoFile")}
       </div>
     );
   }
@@ -763,6 +771,16 @@ export default function TimelineWidget({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white dark:bg-gray-900">
+      {blueskySelection && (
+        <BlueskyDialog
+          {...blueskySelection}
+          adapter={webBluesky}
+          connection={blueskyConnection}
+          language={language}
+          renderMarkdown={(entry) => <GfmMarkdownPreview content={stripPostTags(entry.content)} fileList={previewFileList} />}
+          onClose={() => setBlueskySelection(null)}
+        />
+      )}
       <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-2 py-1 dark:border-gray-800">
         <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-500 dark:text-gray-400">
           {name}
@@ -925,6 +943,11 @@ export default function TimelineWidget({
                   setOpenThreads(prev => new Set(prev).add(post.rootId));
                 }}
                 replyLabel={replyLabel}
+                onBluesky={blueskyConnection?.connected ? () => {
+                  // Read the latest posts: the memoized post view keeps the first callback it got.
+                  const thread = timelineThreads(postsRef.current).find(thread => [thread.root, ...thread.replies].some(entry => entry.id === post.id));
+                  if (thread) setBlueskySelection({ entries: [thread.root, ...thread.replies].filter(entry => !entry.deleted), initialId: post.id });
+                } : undefined}
                 onEdit={() => startEditing(post)}
                 onCancelEdit={cancelEditing}
                 onSaveEdit={() => saveEditing(post)}
@@ -1172,6 +1195,7 @@ function TimelinePostViewComponent({
   replyToName,
   onReply,
   replyLabel,
+  onBluesky,
   onEdit,
   onCancelEdit,
   onSaveEdit,
@@ -1207,6 +1231,8 @@ function TimelinePostViewComponent({
   replyToName: string;
   onReply: () => void;
   replyLabel: string;
+  /** Present only while a Bluesky account is connected. */
+  onBluesky?: () => void;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -1247,6 +1273,7 @@ function TimelinePostViewComponent({
           </time>
           {post.speaker === "ai" && <Bot size={12} className="shrink-0 text-purple-500" />}
           <span className="truncate font-medium">{post.authorName || (language === "ja" ? "あなた" : "You")}</span>
+          {post.metadata["kakeratta-id"] && post.metadata["local-only"] !== "true" && <span>{language === "ja" ? "Kakeratta・読み取り専用" : "Kakeratta · Read-only"}</span>}
           {replyToName && <span className="truncate">↪ {replyToName}</span>}
         </div>
         {!isEditing && !post.deleted && (
@@ -1265,21 +1292,31 @@ function TimelinePostViewComponent({
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Pin size={12} className={post.pinned ? "fill-current" : ""} />}
             </button>
+            {onBluesky && (
+              <button
+                type="button"
+                onClick={onBluesky}
+                className="rounded p-1 text-gray-400 hover:bg-sky-50 hover:text-sky-500 dark:hover:bg-sky-900/30"
+                title={language === "ja" ? "Blueskyへ投稿" : "Post to Bluesky"}
+              >
+                <BlueskyIcon size={12} />
+              </button>
+            )}
             <button
               type="button"
               onClick={onEdit}
-              disabled={post.speaker !== "user"}
+              disabled={post.speaker !== "user" || (!!post.metadata["kakeratta-id"] && post.metadata["local-only"] !== "true")}
               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-              title={saveLabel}
+              title={post.metadata["kakeratta-id"] && post.metadata["local-only"] !== "true" ? (language === "ja" ? "Kakerattaで編集してください" : "Edit this post in Kakeratta") : saveLabel}
             >
               <Pencil size={12} />
             </button>
             <button
               type="button"
               onClick={onDelete}
-              disabled={saving}
+              disabled={saving || (!!post.metadata["kakeratta-id"] && post.metadata["local-only"] !== "true")}
               className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/30"
-              title="Delete"
+              title={post.metadata["kakeratta-id"] && post.metadata["local-only"] !== "true" ? (language === "ja" ? "Kakerattaで削除してください" : "Delete this post in Kakeratta") : "Delete"}
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
             </button>
@@ -1460,6 +1497,8 @@ const TimelinePostView = memo(TimelinePostViewComponent, (prev, next) => {
     prev.post.metadata["conflict-operation"] !== next.post.metadata["conflict-operation"] ||
     prev.post.metadata["conflict-of"] !== next.post.metadata["conflict-of"] ||
     prev.post.metadata["connection-archived"] !== next.post.metadata["connection-archived"] ||
+    prev.post.metadata["kakeratta-id"] !== next.post.metadata["kakeratta-id"] ||
+    !prev.onBluesky !== !next.onBluesky ||
     prev.post.metadata["local-only"] !== next.post.metadata["local-only"] ||
     prev.replyLabel !== next.replyLabel ||
     prev.saving !== next.saving ||

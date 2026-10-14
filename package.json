@@ -18,6 +18,8 @@
     "okf:package": "node --import tsx scripts/package-gemihub-okf.ts"
   },
   "dependencies": {
+    "@atproto/api": "^0.26.0",
+    "@atproto/oauth-client-node": "^0.5.9",
     "@google-cloud/firestore": "^8.3.0",
     "@google-cloud/storage": "^7.19.0",
     "@google/genai": "^2.13.0",

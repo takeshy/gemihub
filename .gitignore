@@ -26,3 +26,6 @@ terraform/environments/*/.terraform/
 terraform/environments/*/*.tfstate*
 terraform/environments/*/terraform.tfvars
 terraform/environments/*/tfplan
+
+# Bluesky connections (local fallback storage)
+/data/bluesky/

@@ -10,6 +10,8 @@ import {
   Settings as SettingsIcon,
   Terminal,
 } from "lucide-react";
+import { BlueskyIcon } from "~/components/bluesky/BlueskyIcon";
+import { BlueskyTab } from "~/components/settings/BlueskyTab";
 import { CommandsTab } from "~/components/settings/CommandsTab";
 import { EnterpriseTab } from "~/components/settings/EnterpriseTab";
 import { GeneralTab } from "~/components/settings/GeneralTab";
@@ -20,6 +22,7 @@ import { PluginsTab } from "~/components/settings/PluginsTab";
 import { RagTab } from "~/components/settings/RagTab";
 import { ShortcutsTab } from "~/components/settings/ShortcutsTab";
 import { SyncTab } from "~/components/settings/SyncTab";
+import type { ComponentType } from "react";
 import { useIsMobile } from "~/hooks/useIsMobile";
 import { useI18n } from "~/i18n/context";
 import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
@@ -31,6 +34,7 @@ export type SettingsTabId =
   | "enterprise"
   | "sync"
   | "kakeratta"
+  | "bluesky"
   | "mcp"
   | "rag"
   | "commands"
@@ -41,13 +45,14 @@ export type SettingsTabId =
 const TABS: {
   id: SettingsTabId;
   labelKey: keyof TranslationStrings;
-  icon: typeof SettingsIcon;
+  icon: ComponentType<{ size?: number }>;
   desktopOnly?: boolean;
 }[] = [
   { id: "general", labelKey: "settings.tab.general", icon: SettingsIcon },
   { id: "enterprise", labelKey: "settings.tab.enterprise", icon: Building2 },
   { id: "sync", labelKey: "settings.tab.sync", icon: RefreshCw },
   { id: "kakeratta", labelKey: "settings.tab.kakeratta", icon: Server },
+  { id: "bluesky", labelKey: "settings.tab.bluesky", icon: BlueskyIcon },
   { id: "mcp", labelKey: "settings.tab.mcp", icon: Server },
   { id: "rag", labelKey: "settings.tab.rag", icon: Database },
   { id: "commands", labelKey: "settings.tab.commands", icon: Terminal },
@@ -179,6 +184,7 @@ export function SettingsTemplate({
         )}
         {activeTab === "sync" && <SyncTab settings={settings} />}
         {activeTab === "kakeratta" && <KakerattaTab settings={settings} />}
+        {activeTab === "bluesky" && <BlueskyTab />}
         {activeTab === "mcp" && <McpTab settings={settings} />}
         {activeTab === "rag" && (settings.ragFeatureEnabled ?? false) && (
           <RagTab settings={settings} disabledByApiKey={hasUnsupportedRagApiKey} />

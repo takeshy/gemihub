@@ -156,7 +156,7 @@ config:
 
 - **Storage and synchronization** — each day is a Markdown file `Dashboards/Timeline/<name>/<YYYY-MM-DD>.md`; posts are `---`-separated blocks marked with a `<!-- timeline-post: … -->`-style header carrying the ISO timestamp, `id`, and optional `pinned: true`. Image attachments are saved as binary files under `…/attachments/<date>/<postId>_NN.<ext>` and embedded in the post body as Obsidian embeds (`![[…]]`). Online operations read the latest Drive file before applying the change and update Drive immediately. A checksum guard retries when another client changes the file concurrently. The header's reload button manually refreshes that Timeline from Drive. Offline writes remain local and migrate when connectivity returns.
 - **Posting** — the composer accepts text plus image uploads (converted to base64 and saved via `saveBinaryFileLocal`). Posts can be **pinned**, **edited** in place, and deleted. The raw editor offers wiki-link insertion, while WYSIWYG mode uses the shared markdown editor with internal-link previews and embeds.
-- **@ai replies** — a post that mentions `@ai` as a standalone word (not an email address or a longer handle such as `@aid`; Japanese text may touch it, e.g. `教えて@ai`) is answered by the AI as a reply in the same thread once it is saved. The AI reads the whole thread (oldest first, deleted posts skipped) and the reply is appended to today's file with `speaker: ai`, `author-name: AI`, `model`, `root-id` / `reply-to`, and `local-only: true` (Kakeratta only synchronizes user posts, so replies to the AI stay local too). Editing and saving an `@ai` post asks again with the edited text. Only one answer runs at a time: posting or saving another `@ai` post is held while it runs, and the post being answered shows "AI is answering…". Answers run on the same path as chat (`startChatStream` in `app/hooks/chat-dispatch.ts`): the org project's Vertex AI, personal Vertex, the Interactions API (paid plan), or the browser-held API key (free plan). AI replies cannot be edited.
+- **@ai replies** — a post that mentions `@ai` as a standalone word (not an email address or a longer handle such as `@aid`; Japanese text may touch it, e.g. `教えて@ai`) is answered by the AI as a reply in the same thread once it is saved. The AI reads the whole thread (oldest first, deleted posts skipped) and the reply is appended to today's file with `speaker: ai`, `author-name: AI`, `model`, `root-id` / `reply-to`, and `local-only: true` (Kakeratta synchronization only imports; all local posts and replies stay local). Editing and saving an `@ai` post asks again with the edited text. Only one answer runs at a time: posting or saving another `@ai` post is held while it runs, and the post being answered shows "AI is answering…". Answers run on the same path as chat (`startChatStream` in `app/hooks/chat-dispatch.ts`): the org project's Vertex AI, personal Vertex, the Interactions API (paid plan), or the browser-held API key (free plan). AI replies cannot be edited.
 - **@ai reply settings** — the settings button in the composer (next to image attach) opens a panel above the input that stays open while toggling: the **model** (the mount's chat models, image models excluded; default is the chat's default model), **Drive files** (read-only Drive tools), **search** (none, Web Search when the model supports it, or one RAG setting when RAG is enabled), **MCP** servers, and **skills** (instructions and workflows of the chosen skills only, independent of the chat's active skills). Model constraints from chat apply (e.g. function tools forced off). The settings are kept per browser in localStorage (`gemihub:timelineAi`); a dot on the button shows that a lookup is on. Implemented by `TimelineAiPanel.tsx`, `useTimelineAi.ts`, and `app/services/timeline-ai.ts`.
 - **Tags** — inline `#tags` in a post body are extracted into clickable chips shown below the post (the chips are the canonical display; the raw `#tag` tokens are stripped from the rendered body so they aren't shown twice). Clicking a chip filters the feed by that tag.
 - **Filtering & paging** — header controls filter by free-text word, tags, and date range, and toggle pinned-only; older posts load on demand beyond `latestCount`.
@@ -370,3 +370,47 @@ Plugins add custom widget types with `registerWidget(def)` (`widgets/registry.ts
 - `app/bases/`, `app/components/bases/` — `.base` compile/query engine and view renderer used by the `base` widget.
 - `app/dashboard/data-widget/` — `FolderWidget`, `WorkflowWidget`, `KanbanWidget`, `CardsView`, `TableView`, `ViewControls.tsx`, `folder-source.ts`, `filter.ts`, `workflow-runner.ts`, the `Card`/`Table`/`Kanban`/`Workflow` config editors, and shared `config-parts/`.
 - `app/dashboard/frontmatter-writeback.ts`, `frontmatter-cache.ts` — table/base cell writeback.
+
+## Bluesky publication
+
+Connect your own Bluesky account in **Settings → Bluesky** (OAuth on Bluesky's
+own authorization screen; the password is never entered in GemiHub). The popup
+reports the outcome back through a `BroadcastChannel` and closes, and the tab
+shows the connected account. While an account is connected, Timeline posts show
+a Bluesky (butterfly) button; the dialog needs no setup — only the selection.
+Choose which messages of the conversation to publish and, for each, **Text** or
+**Image**. Text strips Timeline-only markup, attaches up to four Workspace
+images (PNG/JPEG/WebP/GIF, converted to JPEG; GIFs become still images) and
+splits long text into a thread without breaking Unicode graphemes or URLs.
+Image publishes a picture of the post as the Timeline renders it (light theme,
+cut into pages, four per post) with only its links as text; posts with code,
+tables, callouts or math default to Image, and a post that cannot be drawn
+falls back to text. What the dialog shows is what is sent. Unselected messages
+and replies added after opening the dialog are excluded, and selected replies
+attach to their closest selected ancestor. Implemented by
+`app/components/bluesky/` and `app/services/bluesky.ts` (ported from GemiHub
+Desktop).
+
+A failed/uncertain response can be retried with the same selection: deterministic
+record keys (valid TIDs derived from the post time and a hash) are checked on Bluesky before creating a record, so confirmed posts
+are reused and the remaining replies continue. **Disconnect** revokes the
+connection. Connections are scoped to the signed-in user and selected workspace.
+
+A deployment with a public HTTPS origin sets `BLUESKY_PUBLIC_URL` (or uses the
+origin of `GOOGLE_REDIRECT_URI`); the app then serves OAuth client metadata at
+`/api/bluesky/client-metadata.json`. An `http://localhost:<port>` or
+`http://127.0.0.1:<port>` origin needs no configuration: it uses an atproto
+loopback client like GemiHub Desktop. Bluesky returns to
+`/auth/bluesky/callback` (on `127.0.0.1` for loopback, which redirects to the
+configured host so the session cookie applies). The callback reads the handle
+from the DID document, since the granted scopes cover only posting and image
+uploads. OAuth tokens stay on the server, encrypted using
+`BLUESKY_STORAGE_SECRET` or `SESSION_SECRET`. Firestore persists and locks
+connections when configured; a single-server installation — or, off Cloud Run,
+credentials that cannot access Firestore (e.g. a developer's ADC) — uses
+`BLUESKY_STATE_DIR` (default `data/bluesky`).
+
+Kakeratta synchronization only imports into Timeline. Imported posts are
+read-only: edit/delete them in Kakeratta; pinning and local replies remain
+available. Local posts, edits, replies and deletions are never uploaded to
+Kakeratta by synchronization.
