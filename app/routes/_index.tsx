@@ -1297,15 +1297,29 @@ function IDEContent({
           ) : null}
         </div>
       ) : (
-        <MainViewer
-          fileId={activeFileId}
-          fileName={activeFileName}
-          fileMimeType={activeFileMimeType}
-          settings={settings}
-          refreshKey={workflowVersion}
-          onFileSelect={handleImageFileSelect}
-          onImageChange={handleImageUpload}
-        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {activeFileId && (activeFilePath || activeFileName) && (
+            <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1 dark:border-gray-800 dark:bg-gray-900">
+              <button
+                type="button"
+                onClick={() => setShowQuickOpen(true)}
+                className="block max-w-full truncate text-left text-xs text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                title={activeFilePath || activeFileName || undefined}
+              >
+                {activeFilePath || activeFileName}
+              </button>
+            </div>
+          )}
+          <MainViewer
+            fileId={activeFileId}
+            fileName={activeFileName}
+            fileMimeType={activeFileMimeType}
+            settings={settings}
+            refreshKey={workflowVersion}
+            onFileSelect={handleImageFileSelect}
+            onImageChange={handleImageUpload}
+          />
+        </div>
       )}
     </PanelErrorBoundary>
   );
@@ -1400,7 +1414,6 @@ function IDEContent({
         onShowConflicts={() => setShowConflictDialog(true)}
         onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
         onQuickOpen={() => setShowQuickOpen(true)}
-        activeFilePath={activeFilePath}
         pluginSidebarViews={sidebarViews}
         pluginMainViews={mainViews}
         isMobile={isMobile}

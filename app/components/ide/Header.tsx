@@ -41,7 +41,6 @@ interface HeaderProps {
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
   onQuickOpen?: () => void;
-  activeFilePath?: string | null;
   pluginSidebarViews?: PluginView[];
   pluginMainViews?: PluginView[];
   isMobile?: boolean;
@@ -72,7 +71,6 @@ export function Header({
   onShowConflicts,
   onSelectFile,
   onQuickOpen,
-  activeFilePath,
   pluginSidebarViews = [],
   pluginMainViews = [],
   isMobile = false,
@@ -170,9 +168,6 @@ export function Header({
             title={t("quickOpen.selectFile")}
           >
             <Search size={ICON.MD} className="shrink-0" />
-            {activeFilePath && (
-              <span className="hidden sm:inline text-xs whitespace-nowrap">{activeFilePath}</span>
-            )}
           </button>
         )}
       </div>
