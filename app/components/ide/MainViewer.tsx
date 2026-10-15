@@ -178,7 +178,7 @@ export function MainViewer({
 
   return (
     <TextBasedViewer
-        fileNavigation={fileNavigation}
+      fileNavigation={fileNavigation}
       fileId={fileId}
       fileName={fileName}
       settings={settings}

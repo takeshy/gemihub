@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import { Header, type RightPanelId } from "~/components/ide/Header";
 import { LeftSidebar } from "~/components/ide/LeftSidebar";
 import { RightSidebar } from "~/components/ide/RightSidebar";
@@ -35,8 +36,9 @@ export function IdeCaptureTemplate({ children, mode, language: _language, leftPa
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <LeftSidebar>{leftPanel}</LeftSidebar>
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="shrink-0 truncate border-b border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
-            {workflowFileMode ? "Workflows/weekly-content-report.yaml" : dashboardMode ? "Dashboards/team-overview.dashboard" : "Notes/project-notes.md"}
+          <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
+            <Search size={16} className="shrink-0" />
+            <span className="truncate">{workflowFileMode ? "Workflows/weekly-content-report.yaml" : dashboardMode ? "Dashboards/team-overview.dashboard" : "Notes/project-notes.md"}</span>
           </div>
           {children}
         </main>
