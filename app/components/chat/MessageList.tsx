@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BookOpen, ImageIcon, LayoutDashboard, Minimize2, Plus, Globe, Users, Calendar, Code } from "lucide-react";
+import { BookOpen, Check, ImageIcon, LayoutDashboard, Minimize2, Plus, Globe, Users, Calendar, Code, Sparkles } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
 import { MessageBubble } from "./MessageBubble";
 import type { Message, ToolCall } from "~/types/chat";
@@ -19,6 +19,14 @@ interface MessageListProps {
   onGoToDashboard?: () => void;
   onCreateDashboard?: () => void;
   onAskAboutGemihub?: () => void;
+  /** Skill suggested for the file open in the editor (empty chat only). */
+  fileSkill?: {
+    fileName: string;
+    kind: "markdown" | "canvas" | "base" | "dashboard";
+    skillName: string;
+    enabled: boolean;
+    onEnable: () => void;
+  } | null;
 }
 
 export function MessageList({
@@ -35,6 +43,7 @@ export function MessageList({
   onGoToDashboard,
   onCreateDashboard,
   onAskAboutGemihub,
+  fileSkill,
 }: MessageListProps) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -140,8 +149,28 @@ export function MessageList({
               </>
             )}
 
-            {(onAskAboutGemihub || onGoToDashboard || onCreateDashboard) && (
+            {(fileSkill || onAskAboutGemihub || onGoToDashboard || onCreateDashboard) && (
               <div className="mt-6 space-y-3 text-left">
+                {fileSkill && (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <Sparkles size={ICON.MD} className="shrink-0 text-amber-500" />
+                      <span className="truncate">{t("chat.fileSkillTitle").replace("{file}", fileSkill.fileName)}</span>
+                    </div>
+                    <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                      {t(`chat.fileSkill.${fileSkill.kind}`).replace("{skill}", fileSkill.skillName)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={fileSkill.onEnable}
+                      disabled={fileSkill.enabled}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-default disabled:opacity-70 disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:disabled:hover:bg-gray-900"
+                    >
+                      {fileSkill.enabled ? <Check size={13} className="text-green-600" /> : <Sparkles size={13} />}
+                      {t(fileSkill.enabled ? "chat.fileSkillEnabled" : "chat.fileSkillEnable").replace("{skill}", fileSkill.skillName)}
+                    </button>
+                  </div>
+                )}
                 {onAskAboutGemihub && (
                   <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
                     <div className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">

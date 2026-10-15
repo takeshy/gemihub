@@ -518,6 +518,13 @@ export interface TranslationStrings {
   "chat.helpDescription": string;
   "chat.askAboutGemihub": string;
   "chat.askAboutGemihubDraft": string;
+  "chat.fileSkillTitle": string;
+  "chat.fileSkill.markdown": string;
+  "chat.fileSkill.canvas": string;
+  "chat.fileSkill.base": string;
+  "chat.fileSkill.dashboard": string;
+  "chat.fileSkillEnable": string;
+  "chat.fileSkillEnabled": string;
   "chat.dashboardTitle": string;
   "chat.dashboardDescription": string;
   "chat.openCurrentDashboard": string;
@@ -2010,6 +2017,13 @@ const en: TranslationStrings = {
   "chat.helpDescription": "Enable the GemiHub OKF help bundle (if installed) and ask about features, settings, workflows, search, and dashboards.",
   "chat.askAboutGemihub": "Ask about GemiHub",
   "chat.askAboutGemihubDraft": "How do I use GemiHub?",
+  "chat.fileSkillTitle": "Editing {file}",
+  "chat.fileSkill.markdown": "Turn on the {skill} skill when you ask for edits, so frontmatter, callouts, Mermaid diagrams, tables and links keep valid GemiHub Markdown syntax.",
+  "chat.fileSkill.canvas": "Turn on the {skill} skill when you ask for edits, so nodes and edges stay valid JSON Canvas.",
+  "chat.fileSkill.base": "Turn on the {skill} skill when you ask for edits, so views, filters and formulas follow the Base format.",
+  "chat.fileSkill.dashboard": "Turn on the {skill} skill when you ask for edits, so widgets and layout follow the dashboard format.",
+  "chat.fileSkillEnable": "Use the {skill} skill",
+  "chat.fileSkillEnabled": "The {skill} skill is on",
   "chat.dashboardTitle": "Dashboards",
   "chat.dashboardDescription": "Dashboards collect files, workflows, and widgets into one editable workspace.",
   "chat.openCurrentDashboard": "Open Dashboard",
@@ -3503,6 +3517,13 @@ const ja: TranslationStrings = {
   "chat.helpDescription": "GemiHub OKFヘルプバンドル（導入済みの場合）を有効にして、機能・設定・ワークフロー・検索・ダッシュボードについて質問できます。",
   "chat.askAboutGemihub": "GemiHubについて質問する",
   "chat.askAboutGemihubDraft": "GemiHubの使い方を教えて",
+  "chat.fileSkillTitle": "{file} を編集するとき",
+  "chat.fileSkill.markdown": "編集を頼むときは「{skill}」スキルを有効にすると、フロントマター・コールアウト・Mermaid図・表・リンクなど GemiHub の Markdown 記法に沿って編集できます。",
+  "chat.fileSkill.canvas": "編集を頼むときは「{skill}」スキルを有効にすると、ノードやエッジを正しい JSON Canvas 形式のまま編集できます。",
+  "chat.fileSkill.base": "編集を頼むときは「{skill}」スキルを有効にすると、ビュー・フィルター・数式を Base の形式に沿って編集できます。",
+  "chat.fileSkill.dashboard": "編集を頼むときは「{skill}」スキルを有効にすると、ウィジェットやレイアウトをダッシュボードの形式に沿って編集できます。",
+  "chat.fileSkillEnable": "「{skill}」スキルを使う",
+  "chat.fileSkillEnabled": "「{skill}」スキルは有効です",
   "chat.dashboardTitle": "ダッシュボード",
   "chat.dashboardDescription": "ダッシュボードはファイル・ワークフロー・ウィジェットを1つの編集可能なワークスペースにまとめます。",
   "chat.openCurrentDashboard": "ダッシュボードを開く",

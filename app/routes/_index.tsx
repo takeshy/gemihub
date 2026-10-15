@@ -9,7 +9,7 @@ import { getSettings } from "~/services/user-settings.server";
 import { getLocalPlugins } from "~/services/local-plugins.server";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "~/types/settings";
 import { resolveLanguage } from "~/i18n/resolve-language";
-import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, WifiOff, AlertTriangle, Loader2, Check, AlertCircle } from "lucide-react";
+import { FolderOpen, FileText, MessageSquare, GitBranch, Puzzle, Search, WifiOff, AlertTriangle, Loader2, Check, AlertCircle } from "lucide-react";
 import { I18nProvider, useI18n } from "~/i18n/context";
 import { useApplySettings } from "~/hooks/useApplySettings";
 import { invalidateIndexCache, registerIndexCacheInvalidator } from "~/utils/index-cache";
@@ -1288,6 +1288,19 @@ function IDEContent({
 
   const leftSidebarContent = showSearch ? searchPanelContent : fileTreeContent;
 
+  const fileNavigation = (
+    <button
+      type="button"
+      onClick={() => setShowQuickOpen(true)}
+      className="flex min-w-0 max-w-full items-center gap-1 rounded px-1 py-0.5 text-left text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+      title={activeFilePath || activeFileName || t("quickOpen.selectFile")}
+      aria-label={t("quickOpen.selectFile")}
+    >
+      <Search size={ICON.MD} className="shrink-0" />
+      <span className="truncate">{activeFilePath || activeFileName || t("quickOpen.selectFile")}</span>
+    </button>
+  );
+
   const mainViewerContent = (
     <PanelErrorBoundary fallbackLabel="Error loading main viewer">
       {activePluginMainView ? (
@@ -1298,19 +1311,13 @@ function IDEContent({
         </div>
       ) : (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {activeFileId && (activeFilePath || activeFileName) && (
+          {!activeFileName?.toLowerCase().endsWith(".md") && (
             <div className="shrink-0 border-b border-gray-200 bg-white px-3 py-1 dark:border-gray-800 dark:bg-gray-900">
-              <button
-                type="button"
-                onClick={() => setShowQuickOpen(true)}
-                className="block max-w-full truncate text-left text-xs text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
-                title={activeFilePath || activeFileName || undefined}
-              >
-                {activeFilePath || activeFileName}
-              </button>
+              {fileNavigation}
             </div>
           )}
           <MainViewer
+            fileNavigation={fileNavigation}
             fileId={activeFileId}
             fileName={activeFileName}
             fileMimeType={activeFileMimeType}
@@ -1413,7 +1420,6 @@ function IDEContent({
         onPull={pull}
         onShowConflicts={() => setShowConflictDialog(true)}
         onSelectFile={isMobile ? handleSelectFileMobile : handleSelectFile}
-        onQuickOpen={() => setShowQuickOpen(true)}
         pluginSidebarViews={sidebarViews}
         pluginMainViews={mainViews}
         isMobile={isMobile}

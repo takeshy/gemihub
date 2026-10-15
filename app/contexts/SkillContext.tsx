@@ -20,7 +20,6 @@ interface SkillContextValue {
   activeSkillIds: string[];
   toggleSkill: (skillId: string) => void;
   activateSkill: (skillId: string) => void;
-  activateExclusiveSkill: (skillId: string, exclusiveSkillIds: string[]) => void;
   loading: boolean;
   refreshSkills: () => void;
   getActiveSkillsSystemPrompt: (extraSkillIds?: string[], hubworkAccounts?: Record<string, unknown>) => Promise<string>;
@@ -42,7 +41,6 @@ const SkillContext = createContext<SkillContextValue>({
   activeSkillIds: [],
   toggleSkill: () => {},
   activateSkill: () => {},
-  activateExclusiveSkill: () => {},
   loading: false,
   refreshSkills: () => {},
   getActiveSkillsSystemPrompt: async () => "",
@@ -139,14 +137,6 @@ export function SkillProvider({
     );
   }, []);
 
-  const activateExclusiveSkill = useCallback((skillId: string, exclusiveSkillIds: string[]) => {
-    const exclusive = new Set(exclusiveSkillIds);
-    setActiveSkillIds((prev) => {
-      const next = prev.filter((id) => !exclusive.has(id) || id === skillId);
-      return next.includes(skillId) ? next : [...next, skillId];
-    });
-  }, []);
-
   const mergeSkillIds = useCallback((extraSkillIds?: string[]) => {
     return extraSkillIds
       ? [...new Set([...activeSkillIds, ...extraSkillIds])]
@@ -204,7 +194,6 @@ export function SkillProvider({
         activeSkillIds,
         toggleSkill,
         activateSkill,
-        activateExclusiveSkill,
         loading,
         refreshSkills: discover,
         getActiveSkillsSystemPrompt,

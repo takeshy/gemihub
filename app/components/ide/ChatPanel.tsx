@@ -63,7 +63,22 @@ export interface ChatOverrides {
 
 const WEBPAGE_REVIEW_MAX_ITERATIONS = 1;
 const WEBPAGE_BUILDER_SKILL_ID = "webpage-builder";
-const FILE_CONTEXT_SKILL_IDS = ["markdown", "base", "dashboard"];
+
+/** Built-in skill (by id) suggested for a file type open in the editor. */
+type FileSkillKind = "markdown" | "canvas" | "base" | "dashboard";
+const FILE_SKILL_BY_EXTENSION: Record<string, FileSkillKind> = {
+  md: "markdown",
+  markdown: "markdown",
+  canvas: "canvas",
+  base: "base",
+  dashboard: "dashboard",
+};
+
+function fileSkillKindFor(fileName: string | null | undefined): FileSkillKind | null {
+  const dot = fileName?.lastIndexOf(".") ?? -1;
+  if (!fileName || dot < 0) return null;
+  return FILE_SKILL_BY_EXTENSION[fileName.slice(dot + 1).toLowerCase()] ?? null;
+}
 const MCP_SELECTION_STORAGE_KEY = "gemihub:enabledMcpServers";
 const MCP_PLUGIN_DEFAULTS_STORAGE_KEY = "gemihub:mcpPluginDefaults";
 const MCP_PLUGIN_DEFAULTS_VERSION = "1";
@@ -268,7 +283,6 @@ export function ChatPanel({
     activeSkillIds,
     toggleSkill,
     activateSkill,
-    activateExclusiveSkill,
     getActiveSkillsSystemPrompt,
     getActiveSkillWorkflows,
   } = useSkills();
@@ -342,22 +356,23 @@ export function ChatPanel({
   // counter, and reuse the description the reviewer saw).
   const pendingAutoReviewRef = useRef<{ originalDescription: string } | null>(null);
 
-  useEffect(() => {
-    const fileName = editorCtx.activeFileName?.toLowerCase();
-    const targetSkillId = fileName?.endsWith(".md") || fileName?.endsWith(".markdown")
-      ? "markdown"
-      : fileName?.endsWith(".base")
-      ? "base"
-      : fileName?.endsWith(".dashboard")
-        ? "dashboard"
-        : null;
-    if (!targetSkillId) return;
-
-    const skill = skills.find((s) =>
-      s.id === targetSkillId || s.name.toLowerCase() === targetSkillId
-    );
-    if (skill) activateExclusiveSkill(skill.id, FILE_CONTEXT_SKILL_IDS);
-  }, [activateExclusiveSkill, editorCtx.activeFileName, skills]);
+  // The skill that fits the file open in the editor. It is only offered on the
+  // empty chat; opening a file never switches a skill on, so the selection the
+  // user last made (even an empty one) carries over.
+  const fileSkillSuggestion = useMemo(() => {
+    const fileName = editorCtx.activeFileName;
+    const kind = fileSkillKindFor(fileName);
+    if (!fileName || !kind) return null;
+    const skill = skills.find((s) => s.id === kind);
+    if (!skill) return null;
+    return {
+      fileName: fileName.split("/").pop() || fileName,
+      kind,
+      skillName: skill.name,
+      enabled: activeSkillIds.includes(skill.id),
+      onEnable: () => activateSkill(skill.id),
+    };
+  }, [editorCtx.activeFileName, skills, activeSkillIds, activateSkill]);
   // Latest handleSend, so the deferred auto-fix reads the re-rendered closure
   // (which sees the appended review message).
   const handleSendRef = useRef<
@@ -1760,6 +1775,7 @@ export function ChatPanel({
             // whole card in MessageList.
             {})}
         onAskAboutGemihub={handleAskAboutGemihub}
+        fileSkill={fileSkillSuggestion}
       />
 
       {/* Input */}

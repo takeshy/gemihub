@@ -6,7 +6,6 @@ import {
   Settings,
   LogOut,
   Puzzle,
-  Search,
   WifiOff,
   HelpCircle,
   House,
@@ -40,7 +39,6 @@ interface HeaderProps {
   onPull: (ignoredIds?: Set<string>) => void;
   onShowConflicts: () => void;
   onSelectFile?: (fileId: string, fileName: string, mimeType: string) => void;
-  onQuickOpen?: () => void;
   pluginSidebarViews?: PluginView[];
   pluginMainViews?: PluginView[];
   isMobile?: boolean;
@@ -70,7 +68,6 @@ export function Header({
   onPull,
   onShowConflicts,
   onSelectFile,
-  onQuickOpen,
   pluginSidebarViews = [],
   pluginMainViews = [],
   isMobile = false,
@@ -161,15 +158,7 @@ export function Header({
             pullDialogTrigger={pullDialogTrigger}
           />
         )}
-        {onQuickOpen && (
-          <button
-            onClick={onQuickOpen}
-            className="flex items-center gap-1 rounded px-1 py-0.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 min-w-0"
-            title={t("quickOpen.selectFile")}
-          >
-            <Search size={ICON.MD} className="shrink-0" />
-          </button>
-        )}
+
       </div>
 
       <div className="flex items-center gap-1 shrink-0">

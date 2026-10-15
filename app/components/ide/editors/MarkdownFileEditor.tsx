@@ -99,6 +99,7 @@ function WysiwygSelectionTracker({
 export type MdEditMode = "preview" | "wysiwyg" | "raw";
 
 export function MarkdownFileEditor({
+  fileNavigation,
   fileId,
   fileName,
   initialContent,
@@ -115,6 +116,7 @@ export function MarkdownFileEditor({
   initialMode = "wysiwyg",
   onModeChange,
 }: {
+  fileNavigation?: React.ReactNode;
   fileId: string;
   fileName: string;
   initialContent: string;
@@ -572,12 +574,13 @@ export function MarkdownFileEditor({
       {!hideHeader && (
         <div
           ref={headerRef}
-          className={`flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${compactHeader ? "flex-wrap" : ""}`}
+          className={`flex items-center justify-between gap-2 px-3 py-1 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${compactHeader || fileNavigation ? "flex-wrap" : ""}`}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
+            {fileNavigation && <div className="min-w-0 flex-1">{fileNavigation}</div>}
             {headerLeft && <div className="min-w-0 flex-1">{headerLeft}</div>}
             {/* Mode selector */}
-            {!compactHeader && <div className="flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden shrink-0">
+            {!compactHeader && !fileNavigation && <div className="flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden shrink-0">
               {modes.map((m) => (
                 <button
                   key={m.key}
@@ -594,7 +597,7 @@ export function MarkdownFileEditor({
                 </button>
               ))}
             </div>}
-            {!compactHeader && <CopyMarkdownButton key={fileId} content={content} compact={false} />}
+            {!compactHeader && !fileNavigation && <CopyMarkdownButton key={fileId} content={content} compact={false} />}
             {!compactHeader && mode === "raw" && (
               <button
                 type="button"
@@ -652,7 +655,7 @@ export function MarkdownFileEditor({
               )}
             </div>
           )}
-          {compactHeader && (
+          {(compactHeader || fileNavigation) && (
             <div className="order-last flex w-full items-center gap-2">
               <div className="flex min-w-0 flex-1 items-center overflow-hidden rounded-md border border-gray-300 dark:border-gray-600">
                 {modes.map((item) => (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import type { UserSettings } from "~/types/settings";
 import { WorkflowEditor } from "./WorkflowEditor";
@@ -28,6 +28,7 @@ import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
  * and internal resets alike) so memo anchoring knows when the preview exists.
  */
 function MemoMarkdownEditor({
+  fileNavigation,
   fileId,
   name,
   drivePath,
@@ -38,6 +39,7 @@ function MemoMarkdownEditor({
   onDiffClick,
   onHistoryClick,
 }: {
+  fileNavigation?: ReactNode;
   fileId: string;
   name: string;
   drivePath: string;
@@ -54,6 +56,7 @@ function MemoMarkdownEditor({
     <IdeDocumentMemo drivePath={drivePath} kind="markdown" markdownMode={mode} refreshSignals={[content]}>
       {({ memoToggle }) => (
         <MarkdownFileEditor
+          fileNavigation={fileNavigation}
           fileId={fileId}
           fileName={name}
           initialContent={content}
@@ -72,6 +75,7 @@ function MemoMarkdownEditor({
 }
 
 export function TextBasedViewer({
+  fileNavigation,
   fileId,
   fileName,
   fileMimeType,
@@ -81,6 +85,7 @@ export function TextBasedViewer({
   onImageChange,
   binaryFallback = false,
 }: {
+  fileNavigation?: ReactNode;
   fileId: string;
   fileName: string | null;
   fileMimeType?: string | null;
@@ -258,6 +263,7 @@ export function TextBasedViewer({
   } else if (lower.endsWith(".md")) {
     editor = (
       <MemoMarkdownEditor
+        fileNavigation={fileNavigation}
         fileId={fileId}
         name={name}
         drivePath={memoDrivePath}

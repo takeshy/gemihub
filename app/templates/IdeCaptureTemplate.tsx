@@ -26,7 +26,6 @@ export function IdeCaptureTemplate({ children, mode, language: _language, leftPa
         onPush={() => undefined}
         onPull={() => undefined}
         onShowConflicts={() => undefined}
-        onQuickOpen={() => undefined}
         onLogoClick={() => undefined}
         onOpenLauncher={() => undefined}
         onOpenTimelineComposer={() => undefined}

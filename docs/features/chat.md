@@ -22,7 +22,7 @@ AI chat with Gemini streaming, function calling, RAG, image generation, and MCP 
 - **Slash Commands**: `/command` with template variables and per-command overrides
 - **File References**: `@filename` to reference Drive files in messages
 - **Attachments**: Image, PDF, and text file attachments via drag-and-drop or file picker
-- **Empty State**: Before the first message, the chat panel (`MessageList.tsx`) shows an "Ask about GemiHub" section (enables the installed GemiHub OKF help bundle, if any, and drafts a starter question into the composer via `ChatInput`'s `setDraft` handle without sending it) and a "Dashboards" section ("Open Dashboard" navigates to the home dashboard; "New Dashboard" prompts for a name, creates it, and opens it via `requestOpenDashboard`) — shown on both the free-plan hint screen and the paid-plan "Build a Web App" screen
+- **Empty State**: Before the first message, the chat panel (`MessageList.tsx`) shows an "Ask about GemiHub" section (enables the installed GemiHub OKF help bundle, if any, and drafts a starter question into the composer via `ChatInput`'s `setDraft` handle without sending it) and a "Dashboards" section ("Open Dashboard" navigates to the home dashboard; "New Dashboard" prompts for a name, creates it, and opens it via `requestOpenDashboard`) — shown on both the free-plan hint screen and the paid-plan "Build a Web App" screen. When a Markdown (`.md`), Canvas (`.canvas`), Base (`.base`), or Dashboard (`.dashboard`, while dashboards are enabled) file is open in the editor, it also offers the matching built-in skill ("Editing {file}" card with a "Use the {skill} skill" button; it shows "is on" when already active)
 
 ---
 

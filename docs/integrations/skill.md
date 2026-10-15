@@ -48,6 +48,13 @@ they never appear in the file tree, never sync, and need no provisioning.
 - `builtin-skills.ts` uses Vite `?raw` imports, so it is imported lazily from
   `skill-loader.ts`; a static import would break plain-node consumers (tests).
 
+Opening a file never switches a skill on. The active skill selection is kept
+in localStorage (`gemihub:activeSkills`) and restored as the user last left it —
+an empty selection stays empty. Instead, the empty chat suggests the built-in
+skill that fits the file open in the editor (`.md` → `markdown`, `.canvas` →
+`canvas`, `.base` → `base`, `.dashboard` → `dashboard`), and the user turns it
+on with one click.
+
 Agent-plugin skills and the Hubwork `webpage-builder` skill are unaffected —
 they still live on Drive.
 

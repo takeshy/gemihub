@@ -1,5 +1,8 @@
 # Update Log
 
+## 2026-10-15
+* **Update**: Opening a Markdown / Base / Dashboard file no longer switches the matching built-in skill on (and others off). The skill selection is restored exactly as last left, including an empty one. The empty chat instead offers the skill that fits the open file — Markdown, Canvas, Base, or Dashboard — with a one-click button (`features/chat.md`, `integrations/skill.md`).
+
 ## 2026-10-13
 * **New**: Timeline `@ai` replies. A post that mentions `@ai` is answered by the AI as a reply in its thread, using the whole thread as context; saving an edited `@ai` post asks again. The settings button in the Timeline composer opens a panel for the model, read-only Drive tools, Web Search / RAG, MCP servers, and skills (kept per browser). Answers run on the same provider path as chat (`features/dashboard.md` — "Timeline widget").
 * **Removed**: Timeline **Edit with AI** (the rewrite dialog and `/api/timeline/ai-rewrite`, including its Vertex handler). Ask with `@ai` in a post instead.

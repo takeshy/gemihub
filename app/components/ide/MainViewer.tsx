@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { CloudDownload, CloudUpload, FileText, FolderOpen, History, Lightbulb, ListChecks, Loader2, MessageSquare, PenLine, Rocket, Settings } from "lucide-react";
 import { Link } from "react-router";
 import type { UserSettings } from "~/types/settings";
@@ -14,6 +15,7 @@ import DashboardHost from "~/dashboard/DashboardHost";
 import { useI18n } from "~/i18n/context";
 
 interface MainViewerProps {
+  fileNavigation?: ReactNode;
   fileId: string | null;
   fileName: string | null;
   fileMimeType: string | null;
@@ -24,6 +26,7 @@ interface MainViewerProps {
 }
 
 export function MainViewer({
+  fileNavigation,
   fileId,
   fileName,
   fileMimeType,
@@ -113,6 +116,7 @@ export function MainViewer({
   ) {
     return (
       <TextBasedViewer
+        fileNavigation={fileNavigation}
         fileId={fileId}
         fileName={fileName}
         settings={settings}
@@ -126,6 +130,7 @@ export function MainViewer({
   if (fileName?.toLowerCase().endsWith(".encrypted")) {
     return (
       <TextBasedViewer
+        fileNavigation={fileNavigation}
         fileId={fileId}
         fileName={fileName}
         settings={settings}
@@ -152,6 +157,7 @@ export function MainViewer({
   if (settings.encryption.enabled && (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName))) {
     return (
       <TextBasedViewer
+        fileNavigation={fileNavigation}
         fileId={fileId}
         fileName={fileName}
         fileMimeType={fileMimeType}
@@ -172,6 +178,7 @@ export function MainViewer({
 
   return (
     <TextBasedViewer
+        fileNavigation={fileNavigation}
       fileId={fileId}
       fileName={fileName}
       settings={settings}
