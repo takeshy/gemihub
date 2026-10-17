@@ -9,6 +9,7 @@ import {
   gcsListForSync,
   gcsRead,
   gcsReadMetadata,
+  gcsReadStream,
   gcsRename,
   gcsWrite,
 } from "./gcs-provider.server";
@@ -18,6 +19,7 @@ import {
   driveListForSync,
   driveRead,
   driveReadMetadata,
+  driveReadStream,
   driveRename,
   driveWrite,
 } from "./drive-provider.server";
@@ -40,6 +42,16 @@ export async function readObject(
 ): Promise<{ meta: ObjectMeta; bytes: Uint8Array }> {
   if (ctx.kind === "gcs-project" && ctx.gcs) return gcsRead(ctx.gcs, relativePath);
   if (ctx.kind === "drive" && ctx.drive) return driveRead(ctx.drive, relativePath);
+  unsupported(ctx);
+}
+
+/** Streaming read for raw downloads — bytes never buffer on the server. */
+export async function readObjectStream(
+  ctx: MountContext,
+  relativePath: string,
+): Promise<{ meta: ObjectMeta; body: ReadableStream<Uint8Array> }> {
+  if (ctx.kind === "gcs-project" && ctx.gcs) return gcsReadStream(ctx.gcs, relativePath);
+  if (ctx.kind === "drive" && ctx.drive) return driveReadStream(ctx.drive, relativePath);
   unsupported(ctx);
 }
 

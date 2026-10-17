@@ -20,6 +20,7 @@ import {
   listObjectsForSync,
   readObject,
   readObjectMetadata,
+  readObjectStream,
   renameObject,
   writeObject,
 } from "./provider.server";
@@ -195,7 +196,9 @@ export async function handleProjectFilesLoader(
       }
       case "raw": {
         if (!fileId) return Response.json({ error: "Missing fileId" }, { status: 400 });
-        const { meta, bytes } = await readObject(ctx, fileId);
+        // Stream: buffering large files (e.g. a 350MB zip) exhausts memory
+        // and exceeds Cloud Run's buffered-response limit (502).
+        const { meta, body } = await readObjectStream(ctx, fileId);
         const fileName = meta.relativePath.split("/").pop() || meta.relativePath;
         // Same stored-XSS posture as api.storage.read: never render
         // user-supplied HTML/SVG inline on the app origin.
@@ -208,9 +211,10 @@ export async function handleProjectFilesLoader(
         const inlineAllowed = contentType !== "application/octet-stream";
         const disposition =
           url.searchParams.get("download") === "1" || !inlineAllowed ? "attachment" : "inline";
-        return new Response(bytes as BlobPart, {
+        return new Response(body, {
           headers: {
             "Content-Type": contentType,
+            ...(meta.size > 0 ? { "Content-Length": String(meta.size) } : {}),
             "Content-Disposition": `${disposition}; filename="${encodeURIComponent(fileName)}"`,
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "sandbox; default-src 'none'",

@@ -12,6 +12,7 @@ import {
   type GetFilesOptions,
   type SaveOptions,
 } from "@google-cloud/storage";
+import { Readable } from "node:stream";
 import type { ProjectAccessContext, TenantInfo } from "~/types/enterprise";
 import {
   objectPathOf,
@@ -122,6 +123,32 @@ export async function readObject(
     if (isNotFound(err)) throw new GcsObjectNotFoundError(objectPathOf(ctx, relativePath));
     throw err;
   }
+}
+
+/**
+ * Streaming read for downloads: metadata first (so a missing object is a
+ * clean 404), then the body as a web stream so large files never sit in
+ * server memory or exceed Cloud Run's buffered-response limit.
+ */
+export async function readObjectStream(
+  ctx: ProjectAccessContext,
+  relativePath: string,
+): Promise<{ object: StoredObject; body: ReadableStream<Uint8Array> }> {
+  const storage = await getStorageForTenant(ctx.tenant);
+  const file = fileFor(storage, ctx, relativePath);
+  let meta: RawGcsMetadata;
+  try {
+    const [raw] = await file.getMetadata();
+    meta = raw as RawGcsMetadata;
+  } catch (err) {
+    if (isNotFound(err)) throw new GcsObjectNotFoundError(objectPathOf(ctx, relativePath));
+    throw err;
+  }
+  const stream = file.createReadStream();
+  return {
+    object: toStoredObject(meta, ctx.gcsPrefix),
+    body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+  };
 }
 
 export async function readObjectMetadata(

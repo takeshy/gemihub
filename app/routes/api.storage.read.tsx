@@ -10,7 +10,7 @@
  */
 
 import type { Route } from "./+types/api.storage.read";
-import { readObject, readObjectMetadata } from "~/services/storage/provider.server";
+import { readObject, readObjectMetadata, readObjectStream } from "~/services/storage/provider.server";
 import { resolveMount } from "~/services/storage/resolve-mount.server";
 import {
   badRequestResponse,
@@ -46,9 +46,10 @@ export async function loader({ request }: Route.LoaderArgs) {
       return Response.json({ object });
     }
 
-    const { meta: object, bytes } = await readObject(ctx, path);
-
     if (format === "raw") {
+      // Stream so large files neither buffer in memory nor hit Cloud Run's
+      // buffered-response size limit.
+      const { meta: object, body } = await readObjectStream(ctx, path);
       const fileName = object.relativePath.split("/").pop() || object.relativePath || "download";
       // Stored-XSS guard: these bytes are user-uploaded and this route serves
       // them on the app origin (session cookies in scope). Only render inline
@@ -64,16 +65,17 @@ export async function loader({ request }: Route.LoaderArgs) {
       const inlineAllowed = contentType !== "application/octet-stream";
       const disposition =
         url.searchParams.get("download") === "1" || !inlineAllowed ? "attachment" : "inline";
-      return new Response(bytes as BlobPart, {
+      return new Response(body, {
         headers: {
           "Content-Type": contentType,
-          "Content-Length": String(object.size),
+          ...(object.size > 0 ? { "Content-Length": String(object.size) } : {}),
           "Content-Disposition": `${disposition}; filename="${encodeURIComponent(fileName)}"`,
           "X-Content-Type-Options": "nosniff",
           "Content-Security-Policy": "sandbox; default-src 'none'",
         },
       });
     }
+    const { meta: object, bytes } = await readObject(ctx, path);
     const binary = shouldTreatAsBinaryFile(object.relativePath, object.contentType);
     return Response.json({
       object,

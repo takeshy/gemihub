@@ -13,6 +13,7 @@ import {
   listObjectsForSync,
   readObject,
   readObjectMetadata,
+  readObjectStream,
   renameObject,
   writeObject,
 } from "../gcs-storage.server";
@@ -58,6 +59,18 @@ export async function gcsRead(
   try {
     const { object, bytes } = await readObject(ctx, relativePath);
     return { meta: gcsObjectToMeta(object), bytes };
+  } catch (err) {
+    normalizeError(err, relativePath);
+  }
+}
+
+export async function gcsReadStream(
+  ctx: ProjectAccessContext,
+  relativePath: string,
+): Promise<{ meta: ObjectMeta; body: ReadableStream<Uint8Array> }> {
+  try {
+    const { object, body } = await readObjectStream(ctx, relativePath);
+    return { meta: gcsObjectToMeta(object), body };
   } catch (err) {
     normalizeError(err, relativePath);
   }

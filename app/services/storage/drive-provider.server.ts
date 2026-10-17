@@ -19,6 +19,7 @@ import {
   deleteFile,
   getFileMetadata,
   readFileBytes,
+  readFileRaw,
   renameFile,
   updateFileBinary,
   type DriveFile,
@@ -73,6 +74,17 @@ export async function driveRead(
   if (!entry) throw new StorageNotFoundError(relativePath);
   const bytes = await readFileBytes(ctx.accessToken, entry.id);
   return { meta: driveFileToMeta(entry), bytes };
+}
+
+export async function driveReadStream(
+  ctx: DriveMount,
+  relativePath: string,
+): Promise<{ meta: ObjectMeta; body: ReadableStream<Uint8Array> }> {
+  const entry = await findByPath(ctx, relativePath);
+  if (!entry) throw new StorageNotFoundError(relativePath);
+  const res = await readFileRaw(ctx.accessToken, entry.id);
+  if (!res.body) throw new Error(`Drive returned no body for ${relativePath}`);
+  return { meta: driveFileToMeta(entry), body: res.body };
 }
 
 export async function driveReadMetadata(
