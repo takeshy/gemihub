@@ -2,7 +2,7 @@ import { BlueskyDialog } from "~/components/bluesky/BlueskyDialog";
 import { BlueskyIcon } from "~/components/bluesky/BlueskyIcon";
 import { useBlueskyConnection, webBluesky } from "~/services/bluesky-client";
 import type { BlueskyEntry } from "~/services/bluesky";
-import { lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Bot, ChevronDown, ChevronUp, Code, Image, Loader2, MessageSquare, PenLine, Pencil, Pin, Plus, RefreshCw, Search, Send, Settings2, Trash2, X } from "lucide-react";
 import GfmMarkdownPreview from "~/components/ide/GfmMarkdownPreview";
 import { QuickOpenDialog } from "~/components/ide/QuickOpenDialog";
@@ -381,7 +381,8 @@ export default function TimelineWidget({
   const imagesRef = useRef<PendingImage[]>([]);
   const editImagesRef = useRef<PendingImage[]>([]);
   const wikiLinkStartRef = useRef(0);
-  const preserveScrollOnNextPostsChangeRef = useRef(false);
+  const shouldScrollToLatestRef = useRef(false);
+  const pendingScrollRestoreRef = useRef<{ prevHeight: number; prevScrollTop: number } | null>(null);
 
   const scrollToLatest = useCallback(() => {
     const el = listRef.current;
@@ -396,19 +397,21 @@ export default function TimelineWidget({
     return Array.from(byPath.values());
   }, [editorCtx.fileList, resolvedFiles]);
 
-  const refresh = useCallback(async (count: number) => {
+  const refresh = useCallback(async (count: number, options?: { scrollToLatest?: boolean; silent?: boolean }) => {
     if (!name) return;
-    setLoading(true);
+    const scroll = options?.scrollToLatest ?? true;
+    if (!options?.silent) setLoading(true);
     setError(null);
     try {
       const loaded = await loadTimelineFiles(name, count, 0, filters);
+      if (scroll) shouldScrollToLatestRef.current = true;
       setPosts(loaded.posts);
       setResolvedFiles(loaded.fileList);
       setHasOlderPosts(loaded.hasMore);
     } catch {
       setError(t("dashboard.fileNotFound"));
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [name, filters, t]);
 
@@ -430,23 +433,23 @@ export default function TimelineWidget({
   const loadOlder = useCallback(async () => {
     if (!name || loadingOlder) return;
     const el = listRef.current;
-    const prevHeight = el?.scrollHeight ?? 0;
-    const prevScrollTop = el?.scrollTop ?? 0;
+    const initialHeight = el?.scrollHeight ?? 0;
+    const initialScrollTop = el?.scrollTop ?? 0;
     setLoadingOlder(true);
     setError(null);
     try {
       const nextCount = loadedCount + latestCount;
       const loaded = await loadTimelineFiles(name, nextCount, 0, filters);
-      preserveScrollOnNextPostsChangeRef.current = true;
+      const currentEl = listRef.current;
+      pendingScrollRestoreRef.current = {
+        prevHeight: currentEl?.scrollHeight ?? initialHeight,
+        prevScrollTop: currentEl?.scrollTop ?? initialScrollTop,
+      };
+      shouldScrollToLatestRef.current = false;
       setLoadedCount(nextCount);
       setPosts(loaded.posts);
       setResolvedFiles(loaded.fileList);
       setHasOlderPosts(loaded.hasMore);
-      requestAnimationFrame(() => {
-        const nextEl = listRef.current;
-        if (nextEl) nextEl.scrollTop = prevScrollTop + nextEl.scrollHeight - prevHeight;
-        preserveScrollOnNextPostsChangeRef.current = false;
-      });
     } catch {
       setError(t("dashboard.fileNotFound"));
     } finally {
@@ -483,13 +486,27 @@ export default function TimelineWidget({
     };
   }, []);
 
+  useLayoutEffect(() => {
+    const restore = pendingScrollRestoreRef.current;
+    if (!restore) return;
+    pendingScrollRestoreRef.current = null;
+    const el = listRef.current;
+    if (el) {
+      el.scrollTop = restore.prevScrollTop + (el.scrollHeight - restore.prevHeight);
+    }
+  }, [posts]);
+
   useEffect(() => {
-    if (editingPostId) return;
-    if (preserveScrollOnNextPostsChangeRef.current) return;
-    requestAnimationFrame(scrollToLatest);
+    if (loading || editingPostId) return;
+    if (!shouldScrollToLatestRef.current) return;
+    shouldScrollToLatestRef.current = false;
+    const raf = requestAnimationFrame(scrollToLatest);
     const timers = [80, 240, 600].map((delay) => window.setTimeout(scrollToLatest, delay));
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [name, posts.length, loading, editingPostId, scrollToLatest]);
+    return () => {
+      cancelAnimationFrame(raf);
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [name, posts, loading, editingPostId, scrollToLatest]);
 
   const createAndOpenMissingNote = useCallback(async (target: string) => {
     const path = wikiTargetPath(target);
@@ -649,7 +666,7 @@ export default function TimelineWidget({
         (current) => replacePostContent(current, post.sourcePath, post.id, nextBody),
       );
       cancelEditing();
-      await refresh(loadedCount);
+      await refresh(loadedCount, { scrollToLatest: false, silent: true });
     } catch {
       setError(t("dashboard.writeFailed"));
       return;
@@ -670,7 +687,7 @@ export default function TimelineWidget({
         post.sourcePath,
         (current) => deletePostContent(current, post.sourcePath, post.id),
       );
-      await refresh(loadedCount);
+      await refresh(loadedCount, { scrollToLatest: false, silent: true });
     } catch {
       setError(t("dashboard.writeFailed"));
     } finally {
@@ -735,7 +752,7 @@ export default function TimelineWidget({
         post.sourcePath,
         (current) => setPostPinnedContent(current, post.sourcePath, post.id, !post.pinned),
       );
-      await refresh(loadedCount);
+      await refresh(loadedCount, { scrollToLatest: false, silent: true });
     } catch {
       setError(t("dashboard.writeFailed"));
     } finally {
