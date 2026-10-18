@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useIsDark } from "~/hooks/useIsDark";
-import { enqueueMermaidRender } from "~/utils/mermaid-render";
+import { renderMermaid } from "~/utils/mermaid-render";
 
 export function MermaidCodeBlock({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -11,9 +11,12 @@ export function MermaidCodeBlock({ code }: { code: string }) {
     let cancelled = false;
 
     (async () => {
-      if (!containerRef.current || !code) return;
+      if (!containerRef.current) return;
+      containerRef.current.innerHTML = "";
+      setError(null);
+      if (!code) return;
       try {
-        const result = await enqueueMermaidRender(
+        const result = await renderMermaid(
           { chart: code, isDark, useMaxWidth: true },
           () => cancelled,
         );
@@ -33,18 +36,18 @@ export function MermaidCodeBlock({ code }: { code: string }) {
     };
   }, [code, isDark]);
 
-  if (error) {
-    return (
-      <pre className="rounded bg-gray-100 p-4 text-sm text-red-600 dark:bg-gray-800 dark:text-red-400">
-        <code>{code}</code>
-      </pre>
-    );
-  }
-
   return (
-    <div
-      ref={containerRef}
-      className="flex items-center justify-center overflow-auto rounded bg-white p-4 dark:bg-gray-900 [&>svg]:max-w-full"
-    />
+    <>
+      {error && (
+        <pre className="rounded bg-gray-100 p-4 text-sm text-red-600 dark:bg-gray-800 dark:text-red-400">
+          <code>{code}</code>
+        </pre>
+      )}
+      <div
+        ref={containerRef}
+        style={{ display: error ? "none" : undefined }}
+        className="flex items-center justify-center overflow-auto rounded bg-white p-4 dark:bg-gray-900 [&>svg]:max-w-full"
+      />
+    </>
   );
 }

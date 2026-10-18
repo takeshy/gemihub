@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useIsDark } from "~/hooks/useIsDark";
-import { enqueueMermaidRender } from "~/utils/mermaid-render";
+import { renderMermaid } from "~/utils/mermaid-render";
 
 interface MermaidPreviewProps {
   chart: string;
@@ -15,10 +15,13 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
     let cancelled = false;
 
     (async () => {
-      if (!containerRef.current || !chart) return;
+      if (!containerRef.current) return;
+      containerRef.current.innerHTML = "";
+      setError(null);
+      if (!chart) return;
       try {
-        const result = await enqueueMermaidRender(
-          { chart, isDark },
+        const result = await renderMermaid(
+          { chart, isDark, useMaxWidth: false },
           () => cancelled,
         );
         if (result && !cancelled && containerRef.current) {
@@ -37,18 +40,18 @@ export function MermaidPreview({ chart }: MermaidPreviewProps) {
     };
   }, [chart, isDark]);
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center p-8 text-sm text-red-500">
-        {error}
-      </div>
-    );
-  }
-
   return (
-    <div
-      ref={containerRef}
-      className="overflow-auto rounded bg-white p-4 dark:bg-gray-900"
-    />
+    <>
+      {error && (
+        <div className="flex items-center justify-center p-8 text-sm text-red-500">
+          {error}
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        style={{ display: error ? "none" : undefined }}
+        className="overflow-auto rounded bg-white p-4 dark:bg-gray-900"
+      />
+    </>
   );
 }

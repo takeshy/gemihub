@@ -1,0 +1,24 @@
+/* Shared by Markdown, workflow, and WYSIWYG diagrams. */
+.pele {
+  --pele-bg: #ffffff;
+  --pele-fg: #1f2937;
+  --pele-muted: #6b7280;
+  --pele-line: #374151;
+  --pele-surface: #f3f4f6;
+  --pele-surface-alt: #e5e7eb;
+  --pele-border: #9ca3af;
+  --pele-accent: #2563eb;
+}
+
+.pele[data-pele-theme="dark"],
+.dark .pele[data-pele-theme="auto"],
+[data-theme="dark"] .pele[data-pele-theme="auto"] {
+  --pele-bg: #111827;
+  --pele-fg: #f3f4f6;
+  --pele-muted: #9ca3af;
+  --pele-line: #d1d5db;
+  --pele-surface: #1f2937;
+  --pele-surface-alt: #374151;
+  --pele-border: #6b7280;
+  --pele-accent: #60a5fa;
+}
