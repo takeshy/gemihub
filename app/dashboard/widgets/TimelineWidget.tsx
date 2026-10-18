@@ -23,6 +23,7 @@ import { FilePreviewModal } from "./FilePreviewModal";
 import { TimelineAiPanel } from "./TimelineAiPanel";
 import { useTimelineAi } from "./useTimelineAi";
 import { hasAiMention, isTimelineAiLookupActive } from "~/services/timeline-ai";
+import { subscribeLocalFileChanges } from "~/services/local-file-events";
 
 const MarkdownEditor = lazy(() => import("~/components/editor/MarkdownEditor").then((mod) => ({ default: mod.MarkdownEditor })));
 
@@ -383,6 +384,7 @@ export default function TimelineWidget({
   const wikiLinkStartRef = useRef(0);
   const shouldScrollToLatestRef = useRef(false);
   const pendingScrollRestoreRef = useRef<{ prevHeight: number; prevScrollTop: number } | null>(null);
+  const refreshId = useRef(0);
 
   const scrollToLatest = useCallback(() => {
     const el = listRef.current;
@@ -399,19 +401,21 @@ export default function TimelineWidget({
 
   const refresh = useCallback(async (count: number, options?: { scrollToLatest?: boolean; silent?: boolean }) => {
     if (!name) return;
+    const id = ++refreshId.current;
     const scroll = options?.scrollToLatest ?? true;
     if (!options?.silent) setLoading(true);
     setError(null);
     try {
       const loaded = await loadTimelineFiles(name, count, 0, filters);
+      if (id !== refreshId.current) return;
       if (scroll) shouldScrollToLatestRef.current = true;
       setPosts(loaded.posts);
       setResolvedFiles(loaded.fileList);
       setHasOlderPosts(loaded.hasMore);
     } catch {
-      setError(t("dashboard.fileNotFound"));
+      if (id === refreshId.current) setError(t("dashboard.fileNotFound"));
     } finally {
-      if (!options?.silent) setLoading(false);
+      if (id === refreshId.current) setLoading(false);
     }
   }, [name, filters, t]);
 
@@ -426,9 +430,15 @@ export default function TimelineWidget({
   }, [wordInput]);
 
   useEffect(() => {
+    const requestState = refreshId;
     setLoadedCount(latestCount);
     void refresh(latestCount);
+    return () => { requestState.current++; };
   }, [latestCount, refresh]);
+
+  useEffect(() => subscribeLocalFileChanges(window, () => {
+    void refresh(loadedCount, { scrollToLatest: false, silent: true });
+  }), [loadedCount, refresh]);
 
   const loadOlder = useCallback(async () => {
     if (!name || loadingOlder) return;

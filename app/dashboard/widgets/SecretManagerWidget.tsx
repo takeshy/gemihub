@@ -32,6 +32,7 @@ import {
   isEncryptedFile,
 } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
+import { subscribeLocalFileChanges } from "~/services/local-file-events";
 import type { SecretManagerConfig, SecretTreeDir, SecretTreeNode } from "../secret-manager";
 import {
   buildSecretTree,
@@ -107,8 +108,10 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [moveError, setMoveError] = useState("");
+  const refreshId = useRef(0);
 
   const refresh = useCallback(async () => {
+    const id = ++refreshId.current;
     if (!folder) {
       setEntries([]);
       return;
@@ -132,27 +135,16 @@ export default function SecretManagerWidget({ config, encryptionSettings: encryp
         return { ...file, description: "", publicMetadata: {} };
       }
     }, 5);
-    setEntries(next);
+    if (id === refreshId.current) setEntries(next);
   }, [folder]);
 
   useEffect(() => {
+    const requestState = refreshId;
+    const unsubscribe = subscribeLocalFileChanges(window, () => void refresh());
     void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    let timer = 0;
-    const schedule = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => void refresh(), 250);
-    };
-    window.addEventListener("file-modified", schedule);
-    window.addEventListener("files-pulled", schedule);
-    window.addEventListener("tree-meta-updated", schedule);
     return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener("file-modified", schedule);
-      window.removeEventListener("files-pulled", schedule);
-      window.removeEventListener("tree-meta-updated", schedule);
+      unsubscribe();
+      requestState.current++;
     };
   }, [refresh]);
 
