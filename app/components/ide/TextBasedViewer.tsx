@@ -19,7 +19,7 @@ import { CanvasFileEditor } from "./editors/CanvasFileEditor";
 import { BaseFileEditor } from "./editors/BaseFileEditor";
 import { KanbanFileEditor } from "./editors/KanbanFileEditor";
 import { DashboardFileEditor } from "./editors/DashboardFileEditor";
-import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
+import { shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
 import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
 
 /**
@@ -163,7 +163,7 @@ export function TextBasedViewer({
   const fileEntry = editorCtx.fileList.find((f) => f.id === fileId);
   const memoDrivePath = fileEntry ? fileEntry.path || fileEntry.name : name;
 
-  if (!encryptedCandidate && binaryFallback && (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName))) {
+  if (!encryptedCandidate && binaryFallback && shouldTreatAsBinaryFile(fileName, fileMimeType)) {
     return <BinaryFileInfoViewer fileId={fileId} fileName={fileName} fileMimeType={fileMimeType ?? null} />;
   }
 

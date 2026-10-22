@@ -52,7 +52,7 @@ import {
 } from "~/services/indexeddb-cache";
 import { isEncryptedFile } from "~/services/crypto-core";
 import { cryptoCache } from "~/services/crypto-cache";
-import { isBinaryMimeType } from "~/services/sync-client-utils";
+import { canDownloadCachedFile } from "~/services/file-download-cache";
 import { downloadDriveFileDirect } from "~/services/drive-download";
 import { collectPushCandidates } from "~/hooks/sync-utils";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -740,7 +740,7 @@ export function DriveFileTree({
           onClick: async () => {
             const fileName = item.name.split("/").pop() || item.name;
             const cached = await getCachedFile(item.id);
-            if (cached) {
+            if (cached && canDownloadCachedFile(cached, item.name, item.mimeType)) {
               if (cached.rawContentBase64) {
                 const blob = new Blob([base64ToArrayBuffer(cached.rawContentBase64)], { type: item.mimeType || "application/octet-stream" });
                 const url = URL.createObjectURL(blob);
@@ -766,18 +766,16 @@ export function DriveFileTree({
                 URL.revokeObjectURL(url);
                 return;
               }
-              if (!isBinaryMimeType(item.mimeType)) {
-                const blob = new Blob([cached.content], { type: item.mimeType || "text/plain" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                return;
-              }
+              const blob = new Blob([cached.content], { type: item.mimeType || "text/plain" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              return;
             }
             // Cache miss: fetch Drive bytes directly in the browser.
             if (isNewFile) return; // new: files have no server-side data
@@ -889,12 +887,12 @@ export function DriveFileTree({
               for (let i = 0; i < files.length; i += CONCURRENCY) {
                 const batch = files.slice(i, i + CONCURRENCY);
                 await Promise.all(
-                  batch.map(async ({ id, fullPath }) => {
+                  batch.map(async ({ id, fullPath, mimeType }) => {
                     const relativePath = fullPath.startsWith(folderName + "/")
                       ? fullPath.slice(folderName.length + 1)
                       : fullPath;
                     const cached = await getCachedFile(id);
-                    if (cached) {
+                    if (cached && canDownloadCachedFile(cached, fullPath, mimeType)) {
                       if (cached.rawContentBase64) {
                         zip.file(relativePath, cached.rawContentBase64, { base64: true });
                       } else if (cached.encoding === "base64") {

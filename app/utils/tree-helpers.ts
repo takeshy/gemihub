@@ -29,10 +29,10 @@ export function findFullFileName(
 export function collectFilesWithPaths(
   node: CachedTreeNode,
   parentPath: string,
-): { id: string; fullPath: string }[] {
+): { id: string; fullPath: string; mimeType?: string }[] {
   const fullPath = parentPath ? `${parentPath}/${node.name}` : node.name;
-  if (!node.isFolder) return [{ id: node.id, fullPath }];
-  const files: { id: string; fullPath: string }[] = [];
+  if (!node.isFolder) return [{ id: node.id, fullPath, mimeType: node.mimeType }];
+  const files: { id: string; fullPath: string; mimeType?: string }[] = [];
   for (const child of node.children ?? []) {
     files.push(...collectFilesWithPaths(child, fullPath));
   }

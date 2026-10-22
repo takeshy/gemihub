@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import type { UserSettings } from "~/types/settings";
 import { usePlugins } from "~/contexts/plugin-context";
 import { PanelErrorBoundary } from "~/components/shared/PanelErrorBoundary";
-import { isBinaryFileName, isBinaryMimeType } from "~/services/sync-client-utils";
+import { shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
 import { getMediaType } from "~/utils/media-utils";
 import { BinaryFileInfoViewer } from "./BinaryFileInfoViewer";
 import { MediaViewer } from "./editors/MediaViewer";
@@ -154,7 +154,7 @@ export function MainViewer({
     );
   }
 
-  if (settings.encryption.enabled && (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName))) {
+  if (settings.encryption.enabled && shouldTreatAsBinaryFile(fileName, fileMimeType)) {
     return (
       <TextBasedViewer
         fileNavigation={fileNavigation}
@@ -170,7 +170,7 @@ export function MainViewer({
     );
   }
 
-  if (isBinaryMimeType(fileMimeType) || isBinaryFileName(fileName)) {
+  if (shouldTreatAsBinaryFile(fileName, fileMimeType)) {
     return (
       <BinaryFileInfoViewer fileId={fileId} fileName={fileName} fileMimeType={fileMimeType} />
     );
