@@ -702,6 +702,16 @@ export interface TranslationStrings {
 
   // Context menu
   "contextMenu.rename": string;
+  "contextMenu.moveTo": string;
+  "fileTree.moveTitle": string;
+  "fileTree.moveDestination": string;
+  "fileTree.moveHere": string;
+  "fileTree.moveHint": string;
+  "fileTree.parentFolder": string;
+  "fileTree.openFolder": string;
+  "fileTree.moveSameFolder": string;
+  "fileTree.moveDescendant": string;
+  "fileTree.moveNameConflict": string;
   "contextMenu.download": string;
   "contextMenu.tempDownload": string;
   "contextMenu.tempDownloadConfirm": string;
@@ -2202,6 +2212,16 @@ const en: TranslationStrings = {
 
   // Context menu
   "contextMenu.rename": "Rename",
+  "contextMenu.moveTo": "Move to…",
+  "fileTree.moveTitle": "Move \"{name}\"",
+  "fileTree.moveDestination": "Destination",
+  "fileTree.moveHere": "Move here",
+  "fileTree.moveHint": "Select a destination folder. Double-click a folder or use its arrow to open it.",
+  "fileTree.parentFolder": "Up one folder",
+  "fileTree.openFolder": "Open {name}",
+  "fileTree.moveSameFolder": "Choose a different folder from the current location.",
+  "fileTree.moveDescendant": "A folder cannot be moved into itself or its subfolders.",
+  "fileTree.moveNameConflict": "An item with the same name already exists in this folder.",
   "contextMenu.download": "Download",
   "contextMenu.tempDownload": "Temp DL",
   "contextMenu.tempDownloadConfirm": "Overwrite local file with temp file content?",
@@ -3702,6 +3722,16 @@ const ja: TranslationStrings = {
 
   // Context menu
   "contextMenu.rename": "名前を変更",
+  "contextMenu.moveTo": "移動…",
+  "fileTree.moveTitle": "「{name}」を移動",
+  "fileTree.moveDestination": "移動先",
+  "fileTree.moveHere": "ここに移動",
+  "fileTree.moveHint": "移動先を選択してください。ダブルクリックまたは右の矢印でフォルダを開けます。",
+  "fileTree.parentFolder": "上のフォルダへ",
+  "fileTree.openFolder": "{name}を開く",
+  "fileTree.moveSameFolder": "現在の場所とは別のフォルダを選択してください。",
+  "fileTree.moveDescendant": "フォルダ自身や、その配下には移動できません。",
+  "fileTree.moveNameConflict": "移動先に同じ名前の項目があります。",
   "contextMenu.download": "ダウンロード",
   "contextMenu.tempDownload": "一時DL",
   "contextMenu.tempDownloadConfirm": "一時ファイルの内容でローカルを上書きしますか？",

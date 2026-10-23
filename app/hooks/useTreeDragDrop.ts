@@ -19,6 +19,8 @@ import {
   findNodeById,
   collectFilesWithPaths,
   getFolderPath,
+  getMoveTargetIssue,
+  moveNodeInTree,
 } from "~/utils/tree-helpers";
 import type { TranslationStrings } from "~/i18n/translations";
 import type { UploadFile, UploadReturn } from "~/hooks/useFileUpload";
@@ -39,6 +41,14 @@ interface UseTreeDragDropParams {
   setExpandedFolders: Dispatch<SetStateAction<Set<string>>>;
   t: (key: keyof TranslationStrings) => string;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+}
+
+function remapEmptyFolders(nodes: CachedTreeNode[], oldPath: string, newPath: string): CachedTreeNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    id: `vfolder:${newPath}${getFolderPath(node.id).slice(oldPath.length)}`,
+    children: remapEmptyFolders(node.children ?? [], oldPath, newPath),
+  }));
 }
 
 /**
@@ -99,9 +109,12 @@ export function useTreeDragDrop({
   const folderDragCounterRef = useRef<Map<string, number>>(new Map());
 
   const handleMoveItem = useCallback(
-    async (itemId: string, _oldParentId: string, newParentId: string) => {
-      // Don't drop on self
-      if (itemId === newParentId) return;
+    async (itemId: string, newParentId: string) => {
+      const issue = getMoveTargetIssue(treeItems, itemId, newParentId, rootFolderId);
+      if (issue) {
+        if (issue === "nameConflict") alert(t("fileTree.moveNameConflict"));
+        return;
+      }
 
       // Folder move: rename all files under the folder
       if (itemId.startsWith("vfolder:")) {
@@ -120,7 +133,15 @@ export function useTreeDragDrop({
         // Collect from children so fullPath is relative to (not including) the folder itself
         const files = (folderNode.children ?? []).flatMap((child) => collectFilesWithPaths(child, ""));
 
-        if (files.length === 0) return;
+        if (files.length === 0) {
+          setTreeItems((prev) => moveNodeInTree(prev, itemId, newParentId, rootFolderId, {
+            ...folderNode,
+            id: `vfolder:${newFolderPath}`,
+            children: remapEmptyFolders(folderNode.children ?? [], oldFolderPath, newFolderPath),
+          }));
+          if (newParentId !== rootFolderId) setExpandedFolders((prev) => new Set(prev).add(newParentId));
+          return;
+        }
 
         // Classify files before confirm so we know the count
         const remoteFiles: Array<{ fileId: string; name: string; relativePath: string }> = [];
@@ -228,16 +249,11 @@ export function useTreeDragDrop({
           if (activeFileId === itemId) {
             onSelectFile(newTempId, baseName, node?.mimeType || "text/plain");
           }
-          // Update tree in-place (no server fetch needed for local-only files)
-          setTreeItems((prev) => {
-            const replace = (nodes: CachedTreeNode[]): CachedTreeNode[] =>
-              nodes.map((n) => {
-                if (n.id === itemId) return { ...n, id: newTempId, name: baseName };
-                if (n.children) return { ...n, children: replace(n.children) };
-                return n;
-              });
-            return replace(prev);
-          });
+          if (node) {
+            setTreeItems((prev) => moveNodeInTree(prev, itemId, newParentId, rootFolderId, {
+              ...node, id: newTempId, name: baseName,
+            }));
+          }
         } else {
           const res = await fetch("/api/drive/files", {
             method: "POST",
@@ -404,8 +420,7 @@ export function useTreeDragDrop({
 
       const nodeId = e.dataTransfer.getData("application/x-tree-node-id");
       if (nodeId) {
-        const nodeParent = e.dataTransfer.getData("application/x-tree-node-parent");
-        await handleMoveItem(nodeId, nodeParent, folderId);
+        await handleMoveItem(nodeId, folderId);
         return;
       }
 
@@ -662,6 +677,7 @@ export function useTreeDragDrop({
     dragOverFolderId,
     draggingItem,
     setDraggingItem,
+    handleMoveItem,
     handleDrop,
     handleTreeDragOver,
     handleTreeDragEnter,

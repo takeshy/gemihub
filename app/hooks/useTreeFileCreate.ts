@@ -621,7 +621,6 @@ export function useTreeFileCreate({
   const handleCreateFileSubmit = useCallback(async () => {
     const defaultName = buildDefaultName();
     const enteredName = createFileDialog.name.trim();
-    const usesDefaultDailyPath = enteredName === "";
     const name = enteredName || defaultName;
     const ext = createFileDialog.ext === "custom"
       ? (createFileDialog.customExt.startsWith(".") ? createFileDialog.customExt : "." + createFileDialog.customExt)
@@ -656,12 +655,8 @@ export function useTreeFileCreate({
       ? `---\n${frontmatterLines.join("\n")}\n---\n\n`
       : "";
 
-    // The generated daily/YYYY/... name is already a full path from the root.
-    // Do not nest it under whichever folder happened to be selected; explicitly
-    // named files keep being created inside the selected folder.
-    const folderPath = !usesDefaultDailyPath && selectedFolderId?.startsWith("vfolder:")
-      ? selectedFolderId.slice("vfolder:".length)
-      : "";
+    // Resolve both entered names and generated daily paths from the selected folder.
+    const folderPath = folderPathFromId(selectedFolderId);
     const fullName = folderPath ? `${folderPath}/${fileName}` : fileName;
     const projectMount = activeProjectMountParam();
 

@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   XCircle,
   FolderPlus,
+  FolderInput,
   FilePlus,
   History,
   Eraser,
@@ -72,6 +73,7 @@ import {
 import { findFullFileName, collectFileIds, collectFilesWithPaths } from "~/utils/tree-helpers";
 import { useTreeFileOperations } from "~/hooks/useTreeFileOperations";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { MoveToFolderDialog } from "./MoveToFolderDialog";
 import { useTreeDragDrop } from "~/hooks/useTreeDragDrop";
 import { useTreeFileCreate } from "~/hooks/useTreeFileCreate";
 import { useEnterpriseSelection } from "~/contexts/EnterpriseContext";
@@ -159,6 +161,7 @@ export function DriveFileTree({
   } | null>(null);
   const [editHistoryFile, setEditHistoryFile] = useState<{ fileId: string; filePath: string; fullPath: string } | null>(null);
   const [renameDialog, setRenameDialog] = useState<{ item: CachedTreeNode; name: string } | null>(null);
+  const [moveItem, setMoveItem] = useState<CachedTreeNode | null>(null);
   const [decryptDialog, setDecryptDialog] = useState<{ step: "confirm" | "password"; item: CachedTreeNode; password: string } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -650,6 +653,7 @@ export function DriveFileTree({
     dragOverFolderId,
     draggingItem,
     setDraggingItem,
+    handleMoveItem,
     handleDrop,
     handleTreeDragOver,
     handleTreeDragEnter,
@@ -955,6 +959,12 @@ export function DriveFileTree({
       }
 
       items.push({
+        label: t("contextMenu.moveTo"),
+        icon: <FolderInput size={ICON.MD} />,
+        onClick: () => setMoveItem(item),
+      });
+
+      items.push({
         label: t("contextMenu.rename"),
         icon: <Pencil size={ICON.MD} />,
         onClick: () => setRenameDialog({ item, name: item.name }),
@@ -1163,6 +1173,14 @@ export function DriveFileTree({
   const toolbarIconSize = isMobile ? ICON.XL : ICON.MD;
   const toolbarButtonPadding = isMobile ? "px-2 py-1" : "p-0.5";
   const toolbarButtonClass = `${toolbarButtonPadding} rounded text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300`;
+  const deleteTargetIds = selectedIds.size > 0
+    ? [...selectedIds]
+    : !selectedFolderId && activeFileId && visibleFileIds.includes(activeFileId)
+      ? [activeFileId]
+      : [];
+  const deleteDisabled = deleteTargetIds.length === 0
+    || deleteConfirmRequest !== null
+    || deleteTargetIds.some((id) => busyFileIds.has(id));
 
   return (
     <div
@@ -1200,15 +1218,15 @@ export function DriveFileTree({
             : "Files"}
         </span>
         <div className="flex items-center gap-0.5">
-          {selectedIds.size > 0 && (
-            <button
-              onClick={async () => { if (await handleDeleteMultiple([...selectedIds])) setSelectedIds(new Set()); }}
-              className={`${toolbarButtonPadding} rounded text-red-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400`}
-              title={t("trash.tabTrash")}
-            >
-              <Trash2 size={toolbarIconSize} />
-            </button>
-          )}
+          <button
+            onClick={async () => { if (await handleDeleteMultiple(deleteTargetIds)) setSelectedIds(new Set()); }}
+            disabled={deleteDisabled}
+            className={`${toolbarButtonPadding} rounded text-red-400 enabled:hover:bg-red-100 enabled:hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:enabled:hover:bg-red-900/30 dark:enabled:hover:text-red-400`}
+            title={t("trash.tabTrash")}
+            aria-label={t("trash.tabTrash")}
+          >
+            <Trash2 size={toolbarIconSize} />
+          </button>
           {onSearchOpen && (
             <button
               onClick={onSearchOpen}
@@ -1542,6 +1560,17 @@ export function DriveFileTree({
           </div>
         </div>,
         document.body
+      )}
+
+      {moveItem && (
+        <MoveToFolderDialog
+          key={`${activeMount}:${moveItem.id}`}
+          item={moveItem}
+          treeItems={filteredTreeItems}
+          rootFolderId={rootFolderId}
+          onMove={(folderId) => handleMoveItem(moveItem.id, folderId)}
+          onClose={() => setMoveItem(null)}
+        />
       )}
 
       {createFileDialog.open && createPortal(

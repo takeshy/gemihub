@@ -454,6 +454,8 @@ export function useTreeFileOperations({
         if (failCount > 0) alert(t("trash.deleteFailed"));
         if (lastMeta) {
           await updateTreeFromMeta(lastMeta);
+        } else if (failCount === 0) {
+          setTreeItems((prev) => targetIds.reduce((nodes, id) => removeNodeFromTree(nodes, id), prev));
         } else {
           await fetchAndCacheTree();
         }
@@ -470,7 +472,7 @@ export function useTreeFileOperations({
         clearBusy(targetIds);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, askDeleteConfirm]
+    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, askDeleteConfirm, setTreeItems]
   );
 
   const handleEncrypt = useCallback(

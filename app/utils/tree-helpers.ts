@@ -63,3 +63,46 @@ export function collectFileIds(node: CachedTreeNode): string[] {
   }
   return ids;
 }
+
+/** Validate a destination before moving a file or an entire virtual folder. */
+export function getMoveTargetIssue(
+  nodes: CachedTreeNode[],
+  itemId: string,
+  targetId: string,
+  rootFolderId: string,
+): "sameFolder" | "descendant" | "nameConflict" | "missing" | null {
+  const item = findNodeById(itemId, nodes);
+  const sourcePath = findFullFileName(itemId, nodes, "");
+  const target = targetId === rootFolderId ? null : findNodeById(targetId, nodes);
+  if (!item || !sourcePath || (targetId !== rootFolderId && !target?.isFolder)) return "missing";
+  const targetPath = targetId === rootFolderId ? "" : findFullFileName(targetId, nodes, "")!;
+  if (item.isFolder && (targetPath === sourcePath || targetPath.startsWith(`${sourcePath}/`))) return "descendant";
+  const parentPath = sourcePath.includes("/") ? sourcePath.slice(0, sourcePath.lastIndexOf("/")) : "";
+  if (targetPath === parentPath) return "sameFolder";
+  const siblings = targetId === rootFolderId ? nodes : target?.children ?? [];
+  if (siblings.some((node) => node.name === item.name)) return "nameConflict";
+  return null;
+}
+
+/** Reparent a local node without rebuilding the tree and losing empty folders. */
+export function moveNodeInTree(
+  nodes: CachedTreeNode[],
+  itemId: string,
+  targetId: string,
+  rootFolderId: string,
+  movedNode: CachedTreeNode,
+): CachedTreeNode[] {
+  if (getMoveTargetIssue(nodes, itemId, targetId, rootFolderId)) return nodes;
+  const sort = (items: CachedTreeNode[]) => items.sort((a, b) =>
+    a.isFolder !== b.isFolder ? (a.isFolder ? -1 : 1) : a.name.localeCompare(b.name));
+  const remove = (items: CachedTreeNode[]): CachedTreeNode[] => items
+    .filter((node) => node.id !== itemId)
+    .map((node) => node.children ? { ...node, children: remove(node.children) } : node);
+  const remaining = remove(nodes);
+  if (targetId === rootFolderId) return sort([...remaining, movedNode]);
+  const insert = (items: CachedTreeNode[]): CachedTreeNode[] => items.map((node) => {
+    if (node.id === targetId) return { ...node, children: sort([...(node.children ?? []), movedNode]) };
+    return node.children ? { ...node, children: insert(node.children) } : node;
+  });
+  return insert(remaining);
+}
