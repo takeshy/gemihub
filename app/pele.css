@@ -1,5 +1,5 @@
 /* Shared by Markdown, workflow, and WYSIWYG diagrams. */
-.pele {
+.pele[data-pele-theme] {
   --pele-bg: #ffffff;
   --pele-fg: #1f2937;
   --pele-muted: #6b7280;

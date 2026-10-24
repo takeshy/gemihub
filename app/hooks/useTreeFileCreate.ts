@@ -15,6 +15,7 @@ import {
 import { saveLocalEdit } from "~/services/edit-history-local";
 import { shouldTreatAsBinaryFile } from "~/services/sync-client-utils";
 import { findFileByPath } from "~/utils/file-tree-operations";
+import { findFullFileName, getCreateFileDirectory } from "~/utils/tree-helpers";
 import type { TranslationStrings } from "~/i18n/translations";
 import type { UploadFile, UploadReturn } from "~/hooks/useFileUpload";
 import { getUploadFileName } from "~/hooks/useFileUpload";
@@ -141,8 +142,8 @@ export function useTreeFileCreate({
   t,
 }: UseTreeFileCreateParams) {
   const [createFileDialog, setCreateFileDialog] = useState<{
-    open: boolean; name: string; ext: string; customExt: string; addDateTime: boolean; addLocation: boolean;
-  }>({ open: false, name: "", ext: ".md", customExt: "", addDateTime: false, addLocation: false });
+    open: boolean; directory: string; name: string; ext: string; customExt: string; addDateTime: boolean; addLocation: boolean;
+  }>({ open: false, directory: "", name: "", ext: ".md", customExt: "", addDateTime: false, addLocation: false });
 
   const [folderDialog, setFolderDialog] = useState<{ open: boolean; name: string; targetFolderId: string | null }>({ open: false, name: "", targetFolderId: null });
 
@@ -210,11 +211,15 @@ export function useTreeFileCreate({
     setSelectedFolderId(folderId);
   }, [folderDialog, setTreeItems, setExpandedFolders, setSelectedFolderId]);
 
-  const handleCreateFile = useCallback(() => {
+  const handleCreateFile = useCallback(async () => {
     const saved = localStorage.getItem("createFileOptions");
     const opts = saved ? JSON.parse(saved) : {};
-    setCreateFileDialog({ open: true, name: "", ext: ".md", customExt: "", addDateTime: !!opts.addDateTime, addLocation: !!opts.addLocation });
-  }, []);
+    const cachedActiveFile = activeFileId && !findFullFileName(activeFileId, treeItems, "")
+      ? await getCachedFile(activeFileId)
+      : undefined;
+    const directory = getCreateFileDirectory(treeItems, selectedFolderId, activeFileId, cachedActiveFile?.fileName);
+    setCreateFileDialog({ open: true, directory, name: "", ext: ".md", customExt: "", addDateTime: !!opts.addDateTime, addLocation: !!opts.addLocation });
+  }, [treeItems, selectedFolderId, activeFileId]);
 
   const expandZipFiles = useCallback(async (files: File[]): Promise<File[]> => {
     const imported: File[] = [];
@@ -655,8 +660,8 @@ export function useTreeFileCreate({
       ? `---\n${frontmatterLines.join("\n")}\n---\n\n`
       : "";
 
-    // Resolve both entered names and generated daily paths from the selected folder.
-    const folderPath = folderPathFromId(selectedFolderId);
+    // Use the directory shown in the dialog, captured when it was opened.
+    const folderPath = createFileDialog.directory.trim().replace(/^\/+|\/+$/g, "");
     const fullName = folderPath ? `${folderPath}/${fileName}` : fileName;
     const projectMount = activeProjectMountParam();
 
@@ -915,7 +920,7 @@ export function useTreeFileCreate({
         new CustomEvent("file-modified", { detail: { fileId: file.id } })
       );
     }).catch(() => {});
-  }, [createFileDialog, selectedFolderId, onSelectFile, treeItems, t, buildDefaultName, setTreeItems, setExpandedFolders]);
+  }, [createFileDialog, onSelectFile, treeItems, t, buildDefaultName, setTreeItems, setExpandedFolders]);
 
   return {
     createFileDialog,

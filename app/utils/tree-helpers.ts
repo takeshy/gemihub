@@ -54,6 +54,23 @@ export function findNodeById(
   return null;
 }
 
+/** Prefer the selected directory, then the parent of the active file. */
+export function getCreateFileDirectory(
+  nodes: CachedTreeNode[],
+  selectedFolderId: string | null,
+  activeFileId: string | null,
+  cachedActiveFileName?: string,
+): string {
+  if (selectedFolderId && findNodeById(selectedFolderId, nodes)?.isFolder) {
+    return findFullFileName(selectedFolderId, nodes, "") ?? "";
+  }
+  const activePath = activeFileId
+    ? findFullFileName(activeFileId, nodes, "") ?? cachedActiveFileName ?? ""
+    : "";
+  const separator = activePath.lastIndexOf("/");
+  return separator >= 0 ? activePath.slice(0, separator) : "";
+}
+
 /** Collect all real file IDs under a tree node */
 export function collectFileIds(node: CachedTreeNode): string[] {
   if (!node.isFolder) return [node.id];

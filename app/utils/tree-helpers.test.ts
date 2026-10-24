@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { CachedTreeNode } from "~/services/indexeddb-cache";
-import { findNodeById, getMoveTargetIssue, moveNodeInTree } from "./tree-helpers";
+import { findNodeById, getCreateFileDirectory, getMoveTargetIssue, moveNodeInTree } from "./tree-helpers";
 
 const file = (id: string, name: string): CachedTreeNode => ({ id, name, mimeType: "text/plain", isFolder: false });
 const folder = (path: string, children?: CachedTreeNode[]): CachedTreeNode => ({
@@ -14,6 +14,31 @@ const tree = [
   folder("docs-other", []),
   file("new:note.md", "note.md"),
 ];
+
+test("new files prefer the selected directory over the active file's directory", () => {
+  assert.equal(getCreateFileDirectory(tree, "vfolder:empty", "draft"), "empty");
+  assert.equal(getCreateFileDirectory(tree, "vfolder:docs/nested", "other-draft"), "docs/nested");
+});
+
+test("new files use the active file's parent when no directory is selected", () => {
+  assert.equal(getCreateFileDirectory(tree, null, "draft"), "docs");
+  assert.equal(getCreateFileDirectory(tree, null, "other-draft"), "archive");
+  assert.equal(getCreateFileDirectory(tree, null, "new:note.md"), "");
+  assert.equal(getCreateFileDirectory(tree, "vfolder:deleted", "draft"), "docs");
+});
+
+test("new files can use cached paths before the active file appears in the tree", () => {
+  assert.equal(getCreateFileDirectory([], null, "drive-id", "notes/nested/guide.md"), "notes/nested");
+  assert.equal(getCreateFileDirectory([], null, "new:docs/new.md", "docs/new.md"), "docs");
+  assert.equal(getCreateFileDirectory([], null, "project/notes.md", "project/notes.md"), "project");
+  assert.equal(getCreateFileDirectory(tree, "vfolder:empty", "drive-id", "notes/guide.md"), "empty");
+});
+
+test("new files fall back to root when there is no file or directory context", () => {
+  assert.equal(getCreateFileDirectory(tree, null, null), "");
+  assert.equal(getCreateFileDirectory(tree, null, "missing"), "");
+  assert.equal(getCreateFileDirectory([], null, "root-id", "root.md"), "");
+});
 
 test("move targets reject the current parent, self, and descendants, but allow root and similarly named siblings", () => {
   assert.equal(getMoveTargetIssue(tree, "draft", "vfolder:docs", "root"), "sameFolder");

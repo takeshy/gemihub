@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderMermaid } from "./mermaid-render.ts";
-import editorMermaid from "./mermaid-compat.ts";
 import { parseWorkflowYaml } from "../engine/parser.ts";
 import { workflowToMermaid } from "./workflow-to-mermaid.ts";
 
@@ -22,16 +21,12 @@ test("renders multiple diagram types concurrently with independent SVG identifie
   assert.ok(results[0]!.svg.includes("開始"));
 });
 
-test("supports explicit dark themes, automatic editor themes, and fixed-size workflow previews", async () => {
+test("supports explicit dark themes, automatic themes, and fixed-size workflow previews", async () => {
   const dark = await renderMermaid({ chart: flowchart, isDark: true });
   assert.ok(dark?.svg.includes('data-pele-theme="dark"'));
   const fixed = await renderMermaid({ chart: flowchart, useMaxWidth: false });
   assert.ok(fixed?.svg.includes('data-pele-theme="auto"'));
   assert.equal(fixed.svg.includes("max-width:100%"), false);
-  editorMermaid.initialize({ theme: "default" });
-  const editor = await editorMermaid.render("editor-1", flowchart);
-  assert.ok(editor.svg.includes('data-pele-theme="auto"'));
-  assert.ok(editor.svg.includes("pele-flowchart"));
 });
 
 test("empty or cancelled renders produce no output", async () => {

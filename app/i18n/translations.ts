@@ -941,6 +941,7 @@ export interface TranslationStrings {
   "fileTree.fileName": string;
   "fileTree.fileNamePlaceholder": string;
   "fileTree.fileNameDefault": string;
+  "fileTree.directory": string;
   "fileTree.extension": string;
   "fileTree.customExt": string;
   "fileTree.create": string;
@@ -2451,6 +2452,7 @@ const en: TranslationStrings = {
   "fileTree.fileName": "File name",
   "fileTree.fileNamePlaceholder": "",
   "fileTree.fileNameDefault": "Default: {name}",
+  "fileTree.directory": "Directory",
   "fileTree.extension": "Extension",
   "fileTree.customExt": "Custom",
   "fileTree.create": "Create",
@@ -3961,6 +3963,7 @@ const ja: TranslationStrings = {
   "fileTree.fileName": "ファイル名",
   "fileTree.fileNamePlaceholder": "",
   "fileTree.fileNameDefault": "デフォルト: {name}",
+  "fileTree.directory": "ディレクトリ",
   "fileTree.extension": "拡張子",
   "fileTree.customExt": "カスタム",
   "fileTree.create": "作成",

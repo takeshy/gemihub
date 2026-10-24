@@ -132,15 +132,7 @@ const customLogger: Logger = {
 
 export default defineConfig({
   customLogger,
-  resolve: {
-    // Include diagrams inside wysimark-lite in the renderer migration.
-    alias: { mermaid: path.resolve("app/utils/mermaid-compat.ts") },
-  },
   plugins: [pdfjsAssets(), hubworkRootPage(), serveWasmAssets(), tailwindcss(), reactRouter(), tsconfigPaths()],
-  ssr: {
-    // Apply the Mermaid adapter to the editor in the server bundle as well.
-    noExternal: ["wysimark-lite"],
-  },
   build: {
     chunkSizeWarningLimit: 2000,
     rollupOptions: {

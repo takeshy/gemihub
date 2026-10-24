@@ -572,7 +572,7 @@ export function DriveFileTree({
   }, [cacheRootFolderId, fetchAndCacheTree]);
 
   const toggleFolder = useCallback((folderId: string) => {
-    setSelectedFolderId((prev) => (prev === folderId ? null : folderId));
+    setSelectedFolderId(folderId);
     setExpandedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(folderId)) {
@@ -1579,6 +1579,20 @@ export function DriveFileTree({
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
               {t("fileTree.newFile")}
             </h3>
+            <label className="mb-4 block text-xs text-gray-500 dark:text-gray-400">
+              {t("fileTree.directory")}
+              <input
+                type="text"
+                value={createFileDialog.directory}
+                onChange={(e) => setCreateFileDialog((prev) => ({ ...prev, directory: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateFileSubmit();
+                  if (e.key === "Escape") setCreateFileDialog((prev) => ({ ...prev, open: false }));
+                }}
+                placeholder="/"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              />
+            </label>
             <div className="flex gap-2 mb-4">
               <div className="flex-1">
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t("fileTree.fileName")}</label>
@@ -1595,7 +1609,7 @@ export function DriveFileTree({
                 />
                 {!createFileDialog.name.trim() && (
                   <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                    {t("fileTree.fileNameDefault").replace("{name}", buildDefaultName())}
+                    {t("fileTree.fileNameDefault").replace("{name}", [createFileDialog.directory.trim().replace(/^\/+|\/+$/g, ""), buildDefaultName()].filter(Boolean).join("/"))}
                   </p>
                 )}
               </div>
