@@ -164,6 +164,9 @@ export function useTreeFileOperations({
   setTempDiffData,
   onPush,
 }: UseTreeFileOperationsParams) {
+  // Deletion can finish after the user has opened a different file.
+  const activeFileIdRef = useRef(activeFileId);
+  activeFileIdRef.current = activeFileId;
   const [deleteConfirmRequest, setDeleteConfirmRequest] = useState<DeleteConfirmRequest | null>(null);
   const pendingResolveRef = useRef<((result: { confirmed: boolean; permanent: boolean }) => void) | null>(null);
 
@@ -370,7 +373,7 @@ export function useTreeFileOperations({
         }
         setTreeItems((prev) => removeNodeFromTree(prev, item.id));
         window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
-        if (item.id === activeFileId) {
+        if (item.id === activeFileIdRef.current) {
           window.history.pushState({}, "", "/");
           window.dispatchEvent(new PopStateEvent("popstate"));
         }
@@ -397,7 +400,7 @@ export function useTreeFileOperations({
             await fetchAndCacheTree();
           }
           window.dispatchEvent(new CustomEvent("file-modified", { detail: {} }));
-          if (activeFileId && fileIds.includes(activeFileId)) {
+          if (activeFileIdRef.current && fileIds.includes(activeFileIdRef.current)) {
             window.history.pushState({}, "", "/");
             window.dispatchEvent(new PopStateEvent("popstate"));
           }
@@ -425,7 +428,7 @@ export function useTreeFileOperations({
               setTreeItems(updated);
             }
             window.dispatchEvent(new CustomEvent("file-modified", { detail: { fileId: item.id } }));
-            if (item.id === activeFileId || (activeFileId && childIds.includes(activeFileId))) {
+            if (activeFileIdRef.current && fileIds.includes(activeFileIdRef.current)) {
               window.history.pushState({}, "", "/");
               window.dispatchEvent(new PopStateEvent("popstate"));
             }
@@ -437,7 +440,7 @@ export function useTreeFileOperations({
         }
       }
     },
-    [treeItems, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, setTreeItems, askDeleteConfirm]
+    [treeItems, fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, setTreeItems, askDeleteConfirm]
   );
 
   const handleDeleteMultiple = useCallback(
@@ -460,7 +463,7 @@ export function useTreeFileOperations({
           await fetchAndCacheTree();
         }
         window.dispatchEvent(new CustomEvent("file-modified", { detail: {} }));
-        if (activeFileId && targetIds.includes(activeFileId)) {
+        if (activeFileIdRef.current && targetIds.includes(activeFileIdRef.current)) {
           window.history.pushState({}, "", "/");
           window.dispatchEvent(new PopStateEvent("popstate"));
         }
@@ -472,7 +475,7 @@ export function useTreeFileOperations({
         clearBusy(targetIds);
       }
     },
-    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, activeFileId, askDeleteConfirm, setTreeItems]
+    [fetchAndCacheTree, updateTreeFromMeta, t, setBusy, clearBusy, askDeleteConfirm, setTreeItems]
   );
 
   const handleEncrypt = useCallback(
