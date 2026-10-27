@@ -1,0 +1,10 @@
+node_modules/
+tmp/
+dist/
+.data/
+.env
+*.log
+storybook-static/
+
+# Local requirements supplied by the shop owner
+bin/

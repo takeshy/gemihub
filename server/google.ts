@@ -1,0 +1,469 @@
+import { google } from "googleapis";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "node:crypto";
+import { Readable } from "node:stream";
+import { readFile } from "node:fs/promises";
+import { artifacts } from "./artifacts.ts";
+google.options({ timeout: 15000 });
+import {
+  documents,
+  shopSchema,
+  type ShopConfig,
+  type Booking,
+} from "./domain.ts";
+import type { Shop } from "./store.ts";
+export function oauth() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    `${process.env.APP_ORIGIN || "http://localhost:3000"}/auth/google/callback`,
+  );
+}
+const key = () =>
+  createHash("sha256")
+    .update(process.env.SESSION_SECRET || "development-only")
+    .digest();
+export function encrypt(value: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key(), iv);
+  const data = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), data]).toString("base64url");
+}
+export function decrypt(value: string) {
+  const b = Buffer.from(value, "base64url");
+  const cipher = createDecipheriv("aes-256-gcm", key(), b.subarray(0, 12));
+  cipher.setAuthTag(b.subarray(12, 28));
+  return Buffer.concat([
+    cipher.update(b.subarray(28)),
+    cipher.final(),
+  ]).toString("utf8");
+}
+export function clients(refreshToken: string) {
+  const auth = oauth();
+  auth.setCredentials({ refresh_token: decrypt(refreshToken) });
+  return {
+    auth,
+    drive: google.drive({ version: "v3", auth }),
+    sheets: google.sheets({ version: "v4", auth }),
+    gmail: google.gmail({ version: "v1", auth }),
+  };
+}
+const tabs = [
+  "menus",
+  "staff",
+  "settings",
+  "reservations",
+  "inquiries",
+  "members",
+  "posts",
+];
+const headers = [
+  ["id", "name", "duration", "price", "active"],
+  ["id", "name", "menuIds", "weekdays", "start", "end"],
+  ["key", "value"],
+];
+export async function provision(shop: Shop, config: ShopConfig, token: string) {
+  const { drive, sheets } = clients(token);
+  if (shop.google) return shop.google;
+  const folder = await drive.files.create({
+    requestBody: {
+      name: `${config.name} — omaiweb`,
+      mimeType: "application/vnd.google-apps.folder",
+    },
+    fields: "id",
+  });
+  const file = await drive.files.create({
+    requestBody: {
+      name: `${config.name} 予約台帳`,
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      parents: [folder.data.id!],
+    },
+    fields: "id",
+  });
+  const sheetId = file.data.id!;
+  const existing = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: sheetId,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: {
+              sheetId: existing.data.sheets![0].properties!.sheetId,
+              title: "menus",
+            },
+            fields: "title",
+          },
+        },
+        ...tabs
+          .slice(1)
+          .map((title) => ({ addSheet: { properties: { title } } })),
+      ],
+    },
+  });
+  const make = async (name: string) =>
+    (
+      await drive.files.create({
+        requestBody: { name, parents: [folder.data.id!] },
+        media: { mimeType: "text/markdown", body: Readable.from([""]) },
+        fields: "id",
+      })
+    ).data.id!;
+  return {
+    sheetId,
+    folderId: folder.data.id!,
+    specId: await make("spec.md"),
+    historyId: await make("history.md"),
+  };
+}
+export async function syncConfig(
+  shop: Shop,
+  config: ShopConfig,
+  token: string,
+  onProgress: () => void | Promise<void> = () => {},
+) {
+  if (!shop.google) throw new Error("Google の保存先が未作成です");
+  const { sheets, drive } = clients(token);
+  const doc = documents(config, shop.history);
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: shop.google.sheetId,
+    requestBody: {
+      valueInputOption: "RAW",
+      data: [
+        {
+          range: "menus!A1:E1000",
+          values: [
+            ["id", "name", "duration", "price", "active"],
+            ...config.menus.map((m) => [
+              m.id,
+              m.name,
+              m.duration,
+              m.price,
+              m.active,
+            ]),
+          ],
+        },
+        {
+          range: "staff!A1:F1000",
+          values: [
+            ["id", "name", "menuIds", "weekdays", "start", "end"],
+            ...config.staff.map((p) => [
+              p.id,
+              p.name,
+              JSON.stringify(p.menuIds),
+              JSON.stringify(p.weekdays),
+              p.start,
+              p.end,
+            ]),
+          ],
+        },
+        {
+          range: "settings!A1:B100",
+          values: [
+            ["key", "value"],
+            ...Object.entries(config)
+              .filter(([k]) => !["menus", "staff"].includes(k))
+              .map(([k, v]) => [k, JSON.stringify(v)]),
+          ],
+        },
+      ],
+    },
+  });
+  // Clear trailing rows when a menu or staff member has been removed.
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: shop.google.sheetId,
+    requestBody: {
+      ranges: [
+        `menus!A${config.menus.length + 2}:E1000`,
+        `staff!A${config.staff.length + 2}:F1000`,
+      ],
+    },
+  });
+  await Promise.all([
+    drive.files.update({
+      fileId: shop.google.specId,
+      media: { mimeType: "text/markdown", body: Readable.from([doc.spec]) },
+    }),
+    drive.files.update({
+      fileId: shop.google.historyId,
+      media: { mimeType: "text/markdown", body: Readable.from([doc.history]) },
+    }),
+  ]);
+  const generated = artifacts(
+    config,
+    await readFile("dist/index.html", "utf8"),
+  );
+  shop.google.artifactIds ||= {};
+  shop.google.artifactFolders ||= {};
+  for (const folder of ["web", "admin"]) {
+    if (!shop.google.artifactFolders[folder])
+      shop.google.artifactFolders[folder] = (
+        await drive.files.create({
+          requestBody: {
+            name: folder,
+            mimeType: "application/vnd.google-apps.folder",
+            parents: [shop.google.folderId],
+          },
+          fields: "id",
+        })
+      ).data.id!;
+    await onProgress();
+  }
+  for (const [path, content] of Object.entries(generated)) {
+    const id = shop.google.artifactIds[path];
+    const mimeType = path.endsWith(".html")
+      ? "text/html"
+      : path.endsWith(".svg")
+        ? "image/svg+xml"
+        : path.endsWith(".json")
+          ? "application/json"
+          : "text/markdown";
+    if (id)
+      await drive.files.update({
+        fileId: id,
+        media: { mimeType, body: Readable.from([content]) },
+      });
+    else
+      shop.google.artifactIds[path] = (
+        await drive.files.create({
+          requestBody: {
+            name: path.split("/").at(-1)!,
+            parents: [
+              path.includes("/")
+                ? shop.google.artifactFolders[path.split("/")[0]]
+                : shop.google.folderId,
+            ],
+          },
+          media: { mimeType, body: Readable.from([content]) },
+          fields: "id",
+        })
+      ).data.id!;
+    await onProgress();
+  }
+}
+export async function readConfig(
+  shop: Shop,
+  token: string,
+): Promise<ShopConfig> {
+  const { sheets } = clients(token);
+  const res = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: shop.google!.sheetId,
+    ranges: ["menus!A:E", "staff!A:F", "settings!A:B"],
+  });
+  for (let i = 0; i < headers.length; i++)
+    if (
+      JSON.stringify(res.data.valueRanges?.[i]?.values?.[0]) !==
+      JSON.stringify(headers[i])
+    )
+      throw Object.assign(
+        new Error(
+          "スプレッドシートの列構造が変更されています。schema.md の列順に戻してください。",
+        ),
+        { status: 409 },
+      );
+  const [menus, staff, settings] = res.data.valueRanges!.map((r) =>
+    (r.values || []).slice(1).filter((r) => r[0]),
+  );
+  const config = {
+    ...Object.fromEntries(
+      settings.map((r) => [r[0], JSON.parse(String(r[1]))]),
+    ),
+    menus: menus.map((r) => ({
+      id: String(r[0]),
+      name: String(r[1]),
+      duration: Number(r[2]),
+      price: Number(r[3]),
+      active: String(r[4]).toLowerCase() === "true",
+    })),
+    staff: staff.map((r) => ({
+      id: String(r[0]),
+      name: String(r[1]),
+      menuIds: JSON.parse(String(r[2])),
+      weekdays: JSON.parse(String(r[3])),
+      start: String(r[4]),
+      end: String(r[5]),
+    })),
+  };
+  return shopSchema.parse(config);
+}
+export async function sendMail(
+  token: string,
+  to: string,
+  subject: string,
+  body: string,
+) {
+  if (!/^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/.test(to))
+    throw new Error("メール宛先が不正です");
+  const { gmail } = clients(token);
+  const raw = Buffer.from(
+    `To: ${to}\r\nSubject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString("base64")}`,
+  ).toString("base64url");
+  await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+}
+
+export async function readDriveNote(token: string, link: string) {
+  let id = "";
+  try {
+    const url = new URL(link);
+    if (!["drive.google.com", "docs.google.com"].includes(url.hostname))
+      throw new Error();
+    id =
+      url.pathname.match(/\/d\/([A-Za-z0-9_-]+)/)?.[1] ||
+      url.searchParams.get("id") ||
+      "";
+  } catch {
+    throw Object.assign(
+      new Error(
+        "Google ドライブまたは Google ドキュメントのメモのリンクを入力してください",
+      ),
+      { status: 400 },
+    );
+  }
+  if (!/^[A-Za-z0-9_-]{10,200}$/.test(id))
+    throw Object.assign(new Error("メモのリンクを確認してください"), {
+      status: 400,
+    });
+  const { drive } = clients(token);
+  try {
+    const meta = await drive.files.get({
+      fileId: id,
+      fields: "name,mimeType,size,trashed",
+    });
+    if (meta.data.trashed || Number(meta.data.size || 0) > 100000)
+      throw Object.assign(new Error("読み込めるメモは10万バイト以内です"), {
+        status: 400,
+      });
+    const doc = meta.data.mimeType === "application/vnd.google-apps.document";
+    if (!doc && !/\.(md|markdown|txt)$/i.test(meta.data.name || ""))
+      throw Object.assign(
+        new Error(
+          "テキスト・Markdown、または Google ドキュメントを選んでください",
+        ),
+        { status: 400 },
+      );
+    const result = doc
+      ? await drive.files.export(
+          { fileId: id, mimeType: "text/plain" },
+          { responseType: "text", maxContentLength: 100000 },
+        )
+      : await drive.files.get(
+          { fileId: id, alt: "media" },
+          { responseType: "text", maxContentLength: 100000 },
+        );
+    const text = String(result.data);
+    if (text.length > 20000)
+      throw Object.assign(new Error("メモを2万文字以内にしてください"), {
+        status: 400,
+      });
+    return { name: meta.data.name || "メモ", text };
+  } catch (error) {
+    if ((error as { status?: number }).status === 400) throw error;
+    throw Object.assign(
+      new Error(
+        "このメモを読み込めませんでした。このアプリでアクセスできるファイルか確認するか、本文を貼り付けてください。",
+      ),
+      { status: 403 },
+    );
+  }
+}
+
+export async function syncPostFiles(
+  shop: Shop,
+  posts: import("./post-domain.ts").Post[],
+  token: string,
+  onProgress: () => void | Promise<void>,
+) {
+  if (!shop.google || !shop.published) return;
+  const { postArtifacts } = await import("./post-renderer.tsx");
+  const { drive } = clients(token);
+  const config = await readConfig(shop, token);
+  const files = postArtifacts(
+    config,
+    posts,
+    await readFile("dist/index.html", "utf8"),
+  );
+  const connection = shop.google;
+  connection.artifactFolders ||= {};
+  connection.artifactIds ||= {};
+  async function folder(path: string): Promise<string> {
+    if (connection.artifactFolders![path])
+      return connection.artifactFolders![path];
+    const parts = path.split("/");
+    const name = parts.pop()!;
+    const parent = parts.length
+      ? await folder(parts.join("/"))
+      : connection.folderId;
+    const result = await drive.files.create({
+      requestBody: {
+        name,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [parent],
+      },
+      fields: "id",
+    });
+    const id = result.data.id!;
+    connection.artifactFolders![path] = id;
+    await onProgress();
+    return id;
+  }
+  async function move(fileId: string, parent: string) {
+    const current =
+      (await drive.files.get({ fileId, fields: "parents" })).data.parents || [];
+    if (current.length !== 1 || current[0] !== parent)
+      await drive.files.update({
+        fileId,
+        addParents: parent,
+        removeParents:
+          current.filter((p) => p !== parent).join(",") || undefined,
+      });
+  }
+  for (const [path, content] of Object.entries(files)) {
+    const parts = path.split("/");
+    const name = parts.pop()!;
+    const parent = await folder(parts.join("/"));
+    const mimeType = path.endsWith(".html")
+      ? "text/html"
+      : path.endsWith(".md")
+        ? "text/markdown"
+        : "application/json";
+    const fileId = connection.artifactIds[path];
+    if (fileId) {
+      await move(fileId, parent);
+      await drive.files.update({
+        fileId,
+        media: { mimeType, body: Readable.from([content]) },
+      });
+    } else {
+      connection.artifactIds[path] = (
+        await drive.files.create({
+          requestBody: { name, parents: [parent] },
+          media: { mimeType, body: Readable.from([content]) },
+          fields: "id",
+        })
+      ).data.id!;
+      await onProgress();
+    }
+  }
+  for (const [path, fileId] of Object.entries(connection.artifactIds))
+    if (
+      /^web\/(blogs|announcements)\/\d{4}-\d{2}-\d{2}-.+\.html$/.test(path) &&
+      !(path in files)
+    )
+      await move(fileId, await folder("admin/posts/unpublished"));
+  const doc = documents(config, shop.history);
+  await Promise.all([
+    drive.files.update({
+      fileId: connection.specId,
+      media: { mimeType: "text/markdown", body: Readable.from([doc.spec]) },
+    }),
+    drive.files.update({
+      fileId: connection.historyId,
+      media: { mimeType: "text/markdown", body: Readable.from([doc.history]) },
+    }),
+  ]);
+  await onProgress();
+}

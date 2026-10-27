@@ -1,0 +1,43 @@
+{
+  "name": "omaiweb",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --import tsx --watch server/index.ts",
+    "dev:web": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "start": "node --env-file-if-exists=.env --import tsx server/index.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "check": "tsc --noEmit",
+    "storybook": "storybook dev -p 6005 --host 0.0.0.0 --no-open --disable-telemetry",
+    "build-storybook": "storybook build --disable-telemetry",
+    "capture:manual": "node scripts/capture-manual.mjs",
+    "check:multimodal": "node scripts/check-multimodal.mjs"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.6",
+    "@google/genai": "2.13.0",
+    "googleapis": "171.3.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "^10.6.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.2",
+    "playwright": "^1.63.0",
+    "storybook": "^10.6.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  }
+}
