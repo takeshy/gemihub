@@ -1,3 +1,4 @@
+import { SHOW_ADVANCED_PLANS, SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import { useEffect } from "react";
 import { useLocation, useParams, Navigate } from "react-router";
 import type { Language } from "~/types/settings";
@@ -34,7 +35,7 @@ interface ChapterDef extends ChapterInfo {
   component: React.ComponentType<{ lang: Language }>;
 }
 
-const CHAPTERS: ChapterDef[] = [
+const ALL_CHAPTERS: ChapterDef[] = [
   { slug: "intro", num: 1, titleEn: "What is GemiHub?", titleJa: "GemiHubとは", descEn: "Overview, key features, and how GemiHub works.", descJa: "概要、主な機能、GemiHubの仕組み。", component: IntroChapter },
   { slug: "layout", num: 2, titleEn: "Screen Layout", titleJa: "画面構成", descEn: "Understanding the IDE layout: sidebar, editor, and panels.", descJa: "IDE画面の構成：サイドバー、エディタ、パネル。", component: LayoutChapter },
   { slug: "setup", num: 3, titleEn: "Initial Setup", titleJa: "初期セットアップ", descEn: "Sign in, API key configuration, optional features, and first sync.", descJa: "サインイン、APIキー、任意の上級機能、初回同期の設定。", component: SetupChapter },
@@ -51,11 +52,16 @@ const CHAPTERS: ChapterDef[] = [
   { slug: "shortcuts", num: 14, titleEn: "Keyboard Shortcuts", titleJa: "キーボードショートカット", descEn: "Built-in shortcuts and custom workflow shortcuts.", descJa: "組み込みショートカットとカスタムワークフローショートカット。", component: ShortcutsChapter },
   { slug: "encryption", num: 15, titleEn: "Encryption", titleJa: "暗号化", descEn: "Hybrid RSA+AES encryption for files, chat, and workflow history.", descJa: "ファイル、チャット、ワークフロー履歴のハイブリッドRSA+AES暗号化。", component: EncryptionChapter },
   { slug: "plugins", num: 16, titleEn: "Plugins", titleJa: "プラグイン", descEn: "Install, manage, and develop plugins from GitHub.", descJa: "GitHubからのプラグインのインストール、管理、開発。", component: PluginsChapter },
-  { slug: "premium", num: 17, titleEn: "Premium Plan", titleJa: "プレミアムプラン", descEn: "Lite, Pro, and Business plans: Interactions API, Gmail, PDF, scheduling, hosting, Sheets, and more.", descJa: "Lite・Pro・Businessプラン：Interactions API、Gmail、PDF、スケジュール実行、ホスティング、Sheetsなど。", component: PremiumChapter },
+  { slug: "premium", num: 17, titleEn: "Premium Plan", titleJa: "プレミアムプラン", descEn: "Premium features: Interactions API, Gmail, PDF, and more.", descJa: "プレミアム機能：Interactions API、Gmail、PDFなど。", component: PremiumChapter },
   { slug: "organization", num: 18, titleEn: "Organizations & Shared Projects", titleJa: "組織と共有プロジェクト", descEn: "Business teams: shared projects, roles, Vertex AI budgets, storage, and advanced project management.", descJa: "Businessのチーム機能：共有プロジェクト、権限、Vertex AI予算、ストレージ、詳細なプロジェクト管理。", component: OrganizationChapter },
   { slug: "webpage-builder", num: 19, titleEn: "AI Web Builder", titleJa: "AI Webビルダー", descEn: "Optional Business feature: build Hubwork sites end-to-end through chat.", descJa: "Business向け任意機能：チャットでHubworkサイトを丸ごと構築。", component: WebpageBuilderChapter },
   { slug: "faq", num: 20, titleEn: "FAQ", titleJa: "FAQ", descEn: "Frequently asked questions and troubleshooting.", descJa: "よくある質問とトラブルシューティング。", component: FaqChapter },
 ];
+
+const CHAPTERS = ALL_CHAPTERS.filter((chapter) =>
+  (SHOW_ADVANCED_PLANS || chapter.slug !== "organization") &&
+  (SHOW_WEBPAGE_BUILDER || chapter.slug !== "webpage-builder")
+).map((chapter, index) => ({ ...chapter, num: index + 1 }));
 
 const CHAPTER_MAP = new Map(CHAPTERS.map((ch) => [ch.slug, ch]));
 

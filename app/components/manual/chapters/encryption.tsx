@@ -1,3 +1,4 @@
+import { SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import type { Language } from "~/types/settings";
 import { prose } from "../prose";
 
@@ -19,9 +20,9 @@ function EncryptionEn() {
         </p>
 
         <h2>Setting Up Encryption</h2>
-        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+        {SHOW_WEBPAGE_BUILDER && (<figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
           <img src="/images/setting_general_en.png" alt="General settings with encryption" className="w-full" loading="lazy" />
-        </figure>
+        </figure>)}
         <ol>
           <li>Go to <strong>Settings &gt; General</strong>.</li>
           <li>In the <strong>API Key &amp; Password</strong> section, set a password (minimum 8 characters).</li>
@@ -90,9 +91,9 @@ function EncryptionJa() {
         </p>
 
         <h2>暗号化のセットアップ</h2>
-        <figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+        {SHOW_WEBPAGE_BUILDER && (<figure className="my-4 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
           <img src="/images/setting_general.png" alt="一般設定（暗号化）" className="w-full" loading="lazy" />
-        </figure>
+        </figure>)}
         <ol>
           <li><strong>設定 &gt; 一般</strong>に移動。</li>
           <li><strong>APIキー &amp; パスワード</strong>セクションでパスワードを設定（8文字以上）。</li>

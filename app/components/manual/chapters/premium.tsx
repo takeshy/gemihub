@@ -1,3 +1,4 @@
+import { SHOW_ADVANCED_PLANS, SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import type { Language } from "~/types/settings";
 import { prose } from "../prose";
 
@@ -12,7 +13,7 @@ function PremiumEn() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Premium Plan</h1>
       <div className={prose}>
         <p>
-          GemiHub&apos;s Premium plans add server-side capability on top of the free Drive experience. <strong>Lite</strong> unlocks the paid workflow nodes and the Interactions API chat. <strong>Pro</strong> adds scheduled workflows and static page hosting served straight from your own Drive — no organization required. <strong>Business</strong> turns GemiHub into a full web app builder — Google Sheets/Gmail integration, CDN-hosted pages, custom domains — and provisions an organization with a shared project for your team, billed per organization rather than per seat. See the <strong>Organizations &amp; Shared Projects</strong> chapter for the team side.
+          GemiHub&apos;s Premium plan adds server-side capability on top of the free Drive experience, including paid workflow nodes and Interactions API chat.
         </p>
 
         <h2>Plans</h2>
@@ -23,29 +24,31 @@ function PremiumEn() {
                 <th className="py-2 text-left">Feature</th>
                 <th className="py-2 text-center">Free</th>
                 <th className="py-2 text-center">Lite (¥300/mo)</th>
-                <th className="py-2 text-center">Pro (¥3,000/mo)</th>
-                <th className="py-2 text-center">Business (¥7,500/mo)</th>
+                {SHOW_ADVANCED_PLANS && (<th className="py-2 text-center">Pro (¥3,000/mo)</th>)}
+                {SHOW_ADVANCED_PLANS && (<th className="py-2 text-center">Business (¥7,500/mo)</th>)}
               </tr>
             </thead>
             <tbody>
-              <tr><td>Max File Size</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
-              <tr><td>Interactions API Chat</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Gmail Send</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Google Calendar Nodes</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>PDF Generation</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Obsidian Sync Token</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Temp Upload URL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>Max File Size</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">5 GB</td><td className="text-center">5 GB</td></>}</tr>
+              <tr><td>Interactions API Chat</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>Gmail Send</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>Google Calendar Nodes</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>PDF Generation</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>Obsidian Sync Token</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>Temp Upload URL</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              {SHOW_ADVANCED_PLANS && <>
               <tr><td>Scheduled Workflows</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>Static Page Hosting</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓ (Drive)</td><td className="text-center">✓ (CDN)</td></tr>
               <tr><td>AI Billing for Scheduled Runs</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">Own key or Vertex balance</td><td className="text-center">+ org Vertex budget</td></tr>
               <tr><td>Google Sheets CRUD</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>Custom Domains (auto SSL)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>Server-Side Execution</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
-              <tr><td>AI Web Builder</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
+              {SHOW_WEBPAGE_BUILDER && (<tr><td>AI Web Builder</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>)}
               <tr><td>Organization &amp; Shared Projects</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>Vertex AI (no API key)</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>Included Vertex AI Budget</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30 / period</td></tr>
               <tr><td>Shared Project Storage</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB (+500 GB)</td></tr>
+              </>}
             </tbody>
           </table>
         </div>
@@ -92,6 +95,7 @@ function PremiumEn() {
           Generate temporary URLs for file uploads. External tools can read and write files via these time-limited URLs without authentication.
         </p>
 
+        {SHOW_ADVANCED_PLANS && <>
         <h2>Pro Plan Features</h2>
         <p>All Lite features are included in the Pro plan (¥3,000 / $20 per month), plus scheduled workflows and static page hosting — both served directly from your own Drive, with no organization or GCS project required. AI calls made during a scheduled run use your own Gemini API key if you&apos;ve saved one (<strong>Settings &gt; Premium Plan</strong>); otherwise, if you&apos;ve opted into a personal Vertex AI balance (<strong>Settings &gt; General</strong>), the run bills against that prepaid balance instead. Business includes everything in Pro, plus CDN caching, custom domains, and the org&apos;s Vertex AI budget as an additional billing option — see below.</p>
 
@@ -177,10 +181,13 @@ function PremiumEn() {
           The <code>script</code> workflow node can execute JavaScript server-side using an isolated V8 sandbox. Each execution runs in a fresh isolate with a 128 MB memory limit and no network/filesystem access.
         </p>
 
+        {SHOW_WEBPAGE_BUILDER && <>
         <h3>AI Web Builder</h3>
         <p>
           A built-in Agent Skill that builds entire websites — pages, workflow APIs, schemas, mocks, even admin screens — from a chat conversation. See the <strong>AI Web Builder</strong> chapter for activation, the Plan → Approval flow, and the conventions the AI enforces.
         </p>
+        </>}
+        </>}
       </div>
     </>
   );
@@ -192,7 +199,7 @@ function PremiumJa() {
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">プレミアムプラン</h1>
       <div className={prose}>
         <p>
-          GemiHubのプレミアムプランは、無料のDrive環境にサーバーサイドの機能を追加します。<strong>Lite</strong>では有料のワークフローノードとInteractions APIチャットが利用可能に。<strong>Pro</strong>ではスケジュール実行と、自分のDriveから直接配信する静的ページ公開が使えます（組織は不要）。<strong>Business</strong>ではGoogle Sheets/Gmail連携、CDN配信、カスタムドメインによりフルのWebアプリビルダーとして使えるうえ、チーム用の組織と共有プロジェクトが作成されます（課金はメンバー単位ではなく組織単位）。チーム機能の詳細は<strong>組織と共有プロジェクト</strong>の章を参照してください。
+          GemiHubのプレミアムプランは、無料のDrive環境にサーバーサイドの機能を追加します。有料のワークフローノードとInteractions APIチャットが利用できます。
         </p>
 
         <h2>プラン一覧</h2>
@@ -203,18 +210,19 @@ function PremiumJa() {
                 <th className="py-2 text-left">機能</th>
                 <th className="py-2 text-center">Free</th>
                 <th className="py-2 text-center">Lite（¥300/月）</th>
-                <th className="py-2 text-center">Pro（¥3,000/月）</th>
-                <th className="py-2 text-center">Business（¥7,500/月）</th>
+                {SHOW_ADVANCED_PLANS && (<th className="py-2 text-center">Pro（¥3,000/月）</th>)}
+                {SHOW_ADVANCED_PLANS && (<th className="py-2 text-center">Business（¥7,500/月）</th>)}
               </tr>
             </thead>
             <tbody>
-              <tr><td>1ファイル最大サイズ</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td><td className="text-center">5 GB</td></tr>
-              <tr><td>Interactions API チャット</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Gmail 送信</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Google カレンダー ノード</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>PDF 生成</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>Obsidian 同期トークン</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
-              <tr><td>一時アップロードURL</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
+              <tr><td>1ファイル最大サイズ</td><td className="text-center">20 MB</td><td className="text-center">5 GB</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">5 GB</td><td className="text-center">5 GB</td></>}</tr>
+              <tr><td>Interactions API チャット</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>Gmail 送信</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>Google カレンダー ノード</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>PDF 生成</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>Obsidian 同期トークン</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              <tr><td>一時アップロードURL</td><td className="text-center">—</td><td className="text-center">✓</td>{SHOW_ADVANCED_PLANS && <><td className="text-center">✓</td><td className="text-center">✓</td></>}</tr>
+              {SHOW_ADVANCED_PLANS && <>
               <tr><td>スケジュール実行</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td><td className="text-center">✓</td></tr>
               <tr><td>静的ページホスティング</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓（Drive）</td><td className="text-center">✓（CDN）</td></tr>
               <tr><td>スケジュール実行のAI課金</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">自分の鍵 or Vertex残高</td><td className="text-center">+組織Vertex予算</td></tr>
@@ -226,6 +234,7 @@ function PremiumJa() {
               <tr><td>Vertex AI（APIキー不要）</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">✓</td></tr>
               <tr><td>Vertex AI 月間利用枠</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">$30/期間</td></tr>
               <tr><td>共有プロジェクトのストレージ</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">100 GB（+500 GB）</td></tr>
+              </>}
             </tbody>
           </table>
         </div>
@@ -272,6 +281,7 @@ function PremiumJa() {
           ファイルアップロード用の一時URLを生成します。外部ツールから認証なしで時間制限付きのファイル読み書きが可能です。
         </p>
 
+        {SHOW_ADVANCED_PLANS && <>
         <h2>Proプランの機能</h2>
         <p>Liteプランの全機能がProプラン（月額 ¥3,000 / $20）に含まれ、さらにスケジュール実行と静的ページ公開が使えます。どちらも組織やGCSプロジェクトを作らず、自分のDriveから直接提供されます。スケジュール実行中のAI呼び出しは、保存済みのGemini APIキー（<strong>設定 &gt; プレミアムプラン</strong>）があればそれを使用し、無ければ個人のVertex AI残高（<strong>設定 &gt; 一般</strong>で購入）に課金されます。BusinessはProの全機能に加え、CDN配信・カスタムドメイン・組織のVertex AI利用枠を追加で提供します（詳細は下記）。</p>
 
@@ -357,10 +367,13 @@ function PremiumJa() {
           ワークフローの<code>script</code>ノードをサーバーサイドのV8サンドボックスで実行可能。各実行は新しいアイソレートで行われ、128MBのメモリ制限、ネットワーク/ファイルシステムアクセスなしの環境です。
         </p>
 
+        {SHOW_WEBPAGE_BUILDER && <>
         <h3>AI Webビルダー</h3>
         <p>
           チャットだけでウェブサイト一式 — ページ、ワークフロー API、スキーマ、モック、管理画面まで — を生成する組み込み Agent Skill。有効化方法、Plan → Approval フロー、AI が守る規約の詳細は <strong>AI Webビルダー</strong>章を参照してください。
         </p>
+        </>}
+        </>}
       </div>
     </>
   );

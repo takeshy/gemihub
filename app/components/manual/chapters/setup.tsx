@@ -1,3 +1,4 @@
+import { SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import type { Language } from "~/types/settings";
 import { prose } from "../prose";
 
@@ -10,9 +11,9 @@ function SetupEn() {
   return (
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">Initial Setup</h1>
-      <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+      {SHOW_WEBPAGE_BUILDER && (<figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
         <img src="/images/setting_general_en.png" alt="Settings - General tab" className="w-full" loading="lazy" />
-      </figure>
+      </figure>)}
       <div className={prose}>
         <h2>1. Sign In</h2>
         <p>
@@ -45,7 +46,7 @@ function SetupEn() {
 
         <h2>5. Enable Optional Advanced Features</h2>
         <p>
-          Dashboard, Workflow, RAG, and the Web App Builder are off by default to keep the workspace simple. Open <strong>Settings &gt; General &gt; Optional advanced features</strong> and enable only what you need. Do this before following the Dashboard, Workflow, or RAG chapters; their navigation and settings tabs stay hidden while disabled.
+          Dashboard, Workflow, and RAG are off by default to keep the workspace simple. Open <strong>Settings &gt; General &gt; Optional advanced features</strong> and enable only what you need. Do this before following the Dashboard, Workflow, or RAG chapters; their navigation and settings tabs stay hidden while disabled.
         </p>
 
         <h2>6. First Sync</h2>
@@ -66,9 +67,9 @@ function SetupJa() {
   return (
     <>
       <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-50">初期セットアップ</h1>
-      <figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
+      {SHOW_WEBPAGE_BUILDER && (<figure className="mb-8 overflow-hidden rounded-xl border border-gray-200 shadow dark:border-gray-800">
         <img src="/images/setting_general.png" alt="設定 - 一般タブ" className="w-full" loading="lazy" />
-      </figure>
+      </figure>)}
       <div className={prose}>
         <h2>1. サインイン</h2>
         <p>
@@ -101,7 +102,7 @@ function SetupJa() {
 
         <h2>5. 任意の上級機能を有効にする</h2>
         <p>
-          初期画面をシンプルに保つため、ダッシュボード、ワークフロー、RAG、Webアプリビルダーは初期状態で無効です。<strong>設定 &gt; 一般 &gt; 任意の上級機能</strong>で、利用する機能だけを有効にしてください。ダッシュボード、ワークフロー、RAGの章へ進む前に有効化が必要です。無効な間は関連するナビゲーションや設定タブも表示されません。
+          初期画面をシンプルに保つため、ダッシュボード、ワークフロー、RAGは初期状態で無効です。<strong>設定 &gt; 一般 &gt; 任意の上級機能</strong>で、利用する機能だけを有効にしてください。ダッシュボード、ワークフロー、RAGの章へ進む前に有効化が必要です。無効な間は関連するナビゲーションや設定タブも表示されません。
         </p>
 
         <h2>6. 初回同期</h2>

@@ -1,3 +1,4 @@
+import { SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Plus, Trash2, ChevronDown, HardDrive, Loader2, Check } from "lucide-react";
 import { ICON } from "~/utils/icon-sizes";
@@ -1760,7 +1761,7 @@ export function ChatPanel({
         streamingWebSearchUsed={streamingWebSearchUsed}
         isStreaming={isStreaming}
         isPro={settings.hubwork?.plan === "business" || settings.hubwork?.plan === "granted"}
-        {...((settings.webpageBuilderEnabled ?? false)
+        {...((SHOW_WEBPAGE_BUILDER && (settings.webpageBuilderEnabled ?? false))
           ? { onBuildWebApp: () => handleSend("", undefined, { skillId: "webpage-builder" }) }
           : // Opt-in advanced feature (Settings > General). The Business plan
             // check in MessageList still applies on top of it.

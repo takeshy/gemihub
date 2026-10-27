@@ -1,3 +1,4 @@
+import { SHOW_ADVANCED_PLANS, SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import { LogIn, MessageSquare, MessagesSquare, Search, Puzzle, GitBranch, Shield, User, HardDrive, Lock, ServerCog, Github, Globe, Zap, BookOpen, RefreshCw, CreditCard, Mail, FileSpreadsheet, Calendar, Server, Upload, FileText, PenTool, Check, X, Calculator, Music, LayoutDashboard, GitCompare, Highlighter, KeyRound, Building2, UserCog, Sparkles, Database, Copy, Clock } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect } from "react";
@@ -128,7 +129,7 @@ const en: LpStrings = {
     { icon: GitBranch, title: "Workflows", description: "Just describe what you want and AI builds an automation workflow. Works with Drive, the web, and external services." },
     { icon: GitCompare, title: "Obsidian-Friendly", description: "Use Obsidian-compatible Canvas files and sync notes with the GemiHub Drive Sync plugin through the same Drive metadata." },
     { icon: Puzzle, title: "Plugins", description: "Add new features from GitHub. Plugins can use AI and Drive, so you can build custom tools and advanced automation." },
-    { icon: Globe, title: "One-Click Publishing", description: "Turn Drive files into public pages, or use Business features for CDN-hosted HTML pages, custom domains, and AI-assisted web building." },
+    { icon: Globe, title: "One-Click Publishing", description: "Turn Drive files into public pages and share them by URL." },
     { icon: Zap, title: "Works Offline", description: "All files cached in your browser for instant access — even without internet. Edit offline, then push changes to Drive with one click. Conflicts are detected automatically." },
     { icon: KeyRound, title: "Encrypted Secrets", description: "Store API tokens, passwords, and other secrets as RSA + AES encrypted files in your Drive, organized into folders and searchable by name or description — without ever exposing the value." },
     { icon: Shield, title: "Your Data, Your Control", description: "No external database. Everything stored in your Google Drive. Supports encryption and self-hosting." },
@@ -202,7 +203,7 @@ const en: LpStrings = {
   footerManual: "Manual",
   footerContact: "Contact",
   premiumTitle: "Premium Plans",
-  premiumIntro: "GemiHub is useful on the free plan by default. Paid plans are for features that need heavier server-side processing, such as streaming files over 20 MB, Gmail integration, or temporary upload/edit URLs. Choose Pro for scheduled workflows and web page hosting on your own Drive, no organization needed. Choose Business to work as a team — it provisions an organization with a shared project, Vertex AI with a monthly budget included, and shared storage — plus AI-assisted web service publishing with natural-language build and edit flows, custom domains, and login support. Business is billed per organization, not per seat.",
+  premiumIntro: "GemiHub is useful on the free plan by default. Premium adds features that need heavier server-side processing, such as streaming files over 20 MB, Gmail integration, or temporary upload/edit URLs.",
   premiumFree: "Free",
   premiumLite: "Lite",
   premiumPro: "Pro",
@@ -275,7 +276,7 @@ const ja: LpStrings = {
     { icon: GitBranch, title: "ワークフロー", description: "やりたいことを言葉で伝えるだけでAIが自動化ワークフローを作成。Drive や Web、外部サービスとも連携。" },
     { icon: GitCompare, title: "Obsidianと相性抜群", description: "Obsidian互換Canvasを扱え、GemiHub Drive Syncプラグインとは同じDriveメタデータで双方向同期できます。" },
     { icon: Puzzle, title: "プラグイン", description: "GitHubから機能を追加。AI や Drive と連携できるので、自分だけのツールや高度な自動化も構築できます。" },
-    { icon: Globe, title: "ワンクリック公開", description: "Driveファイルを公開ページに。BusinessならCDN配信、独自ドメイン、AIによるWeb構築にも対応します。" },
+    { icon: Globe, title: "ワンクリック公開", description: "Driveファイルを公開ページにして、URLで共有できます。" },
     { icon: Zap, title: "オフラインでも快適", description: "すべてのファイルがブラウザにキャッシュされ、ネットがなくても即座にアクセス。オフラインで編集して、ワンクリックでDriveに同期。コンフリクトも自動検出。" },
     { icon: KeyRound, title: "暗号化シークレット", description: "APIトークンやパスワードなどをRSA + AESで暗号化してDriveに保存。フォルダで整理でき、名前や説明で検索可能。値そのものが公開されることはありません。" },
     { icon: Shield, title: "データは自分の手に", description: "外部データベースなし。すべてあなたのGoogle Driveに保存。暗号化やセルフホストにも対応。" },
@@ -349,7 +350,7 @@ const ja: LpStrings = {
   footerManual: "マニュアル",
   footerContact: "お問い合わせ",
   premiumTitle: "有料プラン",
-  premiumIntro: "GemiHub は基本的に無料プランで便利に使えます。有料プランは、1ファイルが20MBを超えてストリーミングが必要な場合、Gmail 連携、一時アップロード URL など、サーバー側の処理負担がかかる機能を使うためのものです。Pro プランなら、組織不要で自分のDriveのままスケジュール実行とWebページ公開が使えます。Business プランは、組織と共有プロジェクトを作成してチームで使うためのプラン。Vertex AI の利用枠と共有ストレージが含まれ、AI を活用して自然文で構築・修正できる自社 Web サービス提供機能、独自ドメイン、ログイン機能にも対応します。料金は組織単位で、メンバーごとの追加課金はありません。",
+  premiumIntro: "GemiHub は基本的に無料プランで便利に使えます。プレミアムプランでは、1ファイルが20MBを超えるストリーミング、Gmail 連携、一時アップロード URL など、サーバー側の処理負担がかかる機能を利用できます。",
   premiumFree: "Free",
   premiumLite: "Lite",
   premiumPro: "Pro",
@@ -427,6 +428,8 @@ export default function LandingPage() {
       root.style.colorScheme = previousColorScheme;
     };
   }, []);
+
+  const screenshots = s.screenshots.filter(({ src }) => SHOW_ADVANCED_PLANS || !src.includes("/organization_"));
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -507,23 +510,23 @@ export default function LandingPage() {
           {s.screenshotsTitle}
         </h2>
         {/* Hero screenshot */}
-        {s.screenshots.length > 0 && (
+        {screenshots.length > 0 && (
           <figure className="mb-6 overflow-hidden rounded-2xl border border-gray-200 shadow-xl dark:border-gray-800">
             <img
-              src={s.screenshots[0].src}
-              alt={s.screenshots[0].alt}
+              src={screenshots[0].src}
+              alt={screenshots[0].alt}
               className="w-full"
               loading="lazy"
             />
             <figcaption className="bg-gray-50 px-5 py-4 dark:bg-gray-900">
-              <p className="text-center text-sm font-semibold text-gray-900 dark:text-gray-100">{s.screenshots[0].alt}</p>
-              <p className="mt-1 text-center text-sm leading-relaxed text-gray-600 dark:text-gray-400">{s.screenshots[0].description}</p>
+              <p className="text-center text-sm font-semibold text-gray-900 dark:text-gray-100">{screenshots[0].alt}</p>
+              <p className="mt-1 text-center text-sm leading-relaxed text-gray-600 dark:text-gray-400">{screenshots[0].description}</p>
             </figcaption>
           </figure>
         )}
         {/* Rest in grid */}
         <div className="grid gap-6 sm:grid-cols-2">
-          {s.screenshots.slice(1).map(({ src, alt, description }) => (
+          {screenshots.slice(1).map(({ src, alt, description }) => (
             <figure key={src} className="overflow-hidden rounded-2xl border border-gray-200 shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl dark:border-gray-800">
               <img
                 src={src}
@@ -552,7 +555,7 @@ export default function LandingPage() {
           </p>
 
           {/* Plan headers */}
-          <div className="mb-6 grid grid-cols-5 gap-3 text-center">
+          <div className={`mb-6 grid ${SHOW_ADVANCED_PLANS ? "grid-cols-5" : "grid-cols-3"} gap-3 text-center`}>
             <div />
             <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{s.premiumFree}</h3>
@@ -562,6 +565,7 @@ export default function LandingPage() {
               <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{s.premiumLite}</h3>
               <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{s.premiumLitePrice}</p>
             </div>
+            {SHOW_ADVANCED_PLANS && <>
             <div className="rounded-xl border border-sky-300 bg-sky-50 p-4 dark:border-sky-700 dark:bg-sky-950/40">
               <h3 className="text-lg font-bold text-sky-700 dark:text-sky-300">{s.premiumPro}</h3>
               <p className="mt-1 text-xl font-bold text-sky-600 dark:text-sky-400">{s.premiumProPrice}</p>
@@ -570,6 +574,7 @@ export default function LandingPage() {
               <h3 className="text-lg font-bold text-purple-700 dark:text-purple-300">{s.premiumBusiness}</h3>
               <p className="mt-1 text-xl font-bold text-purple-600 dark:text-purple-400">{s.premiumBusinessPrice}</p>
             </div>
+            </>}
           </div>
 
           {/* Feature comparison */}
@@ -601,13 +606,15 @@ export default function LandingPage() {
             };
             return (
               <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-                {features.map(({ label, free, lite, pro, business }, i) => (
-                  <div key={label} className={`grid grid-cols-5 gap-3 px-4 py-3 ${i % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-900/60"}`}>
+                {features.filter(({ lite }) => SHOW_ADVANCED_PLANS || lite !== false).filter(({ label }) => SHOW_WEBPAGE_BUILDER || label !== s.premiumFeatureWebBuilder).map(({ label, free, lite, pro, business }, i) => (
+                  <div key={label} className={`grid ${SHOW_ADVANCED_PLANS ? "grid-cols-5" : "grid-cols-3"} gap-3 px-4 py-3 ${i % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-900/60"}`}>
                     <div className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</div>
                     <div className="text-center">{renderCell(free)}</div>
                     <div className="text-center">{renderCell(lite)}</div>
+                    {SHOW_ADVANCED_PLANS && <>
                     <div className="text-center">{renderCell(pro)}</div>
                     <div className="text-center">{renderCell(business)}</div>
+                    </>}
                   </div>
                 ))}
               </div>
@@ -637,6 +644,7 @@ export default function LandingPage() {
             ))}
           </div>
 
+          {SHOW_ADVANCED_PLANS && <>
           {/* Pro feature highlights */}
           <h3 className="mb-6 mt-12 text-center text-xl font-bold text-gray-900 dark:text-gray-100">
             Pro
@@ -667,7 +675,7 @@ export default function LandingPage() {
               { icon: Lock, title: s.premiumFeatureDomain, desc: s.premiumFeatureDomainDesc },
               { icon: Server, title: s.premiumFeatureServerExec, desc: s.premiumFeatureServerExecDesc },
               { icon: PenTool, title: s.premiumFeatureWebBuilder, desc: s.premiumFeatureWebBuilderDesc },
-            ].map(({ icon: Icon, title, desc }) => (
+            ].filter(({ title }) => SHOW_WEBPAGE_BUILDER || title !== s.premiumFeatureWebBuilder).map(({ icon: Icon, title, desc }) => (
               <div key={title} className="rounded-xl border border-gray-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-gray-800 dark:bg-gray-900">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
                   <Icon size={22} className="text-emerald-600 dark:text-emerald-400" />
@@ -677,9 +685,11 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+          </>}
         </div>
       </section>
 
+      {SHOW_ADVANCED_PLANS && <>
       {/* Teams / Organizations */}
       <section className="px-4 py-20">
         <div className="mx-auto max-w-5xl">
@@ -708,6 +718,8 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      </>}
 
       {/* Plugin Showcase */}
       <section className="bg-gray-50/30 px-4 py-20 dark:bg-gray-900/20">
@@ -784,9 +796,9 @@ export default function LandingPage() {
             </div>
           ))}
         </div>
-        <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+        {SHOW_ADVANCED_PLANS && <p className="mx-auto mt-6 max-w-3xl text-center text-xs leading-relaxed text-gray-500 dark:text-gray-400">
           {s.dataUsageOrgNote}
-        </p>
+        </p>}
         <p className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
           {s.dataUsageLearnMore}{" "}
           <a href={`/policy${jaPrefix}`} className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400">

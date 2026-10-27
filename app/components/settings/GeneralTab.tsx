@@ -1,3 +1,4 @@
+import { SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import { useState, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { KeyRound, Lock, Check, Zap } from "lucide-react";
@@ -783,6 +784,7 @@ export function GeneralTab({
                 </p>
               </div>
             </div>
+            {SHOW_WEBPAGE_BUILDER ? (
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -799,6 +801,9 @@ export function GeneralTab({
                 </p>
               </div>
             </div>
+            ) : (
+              <input type="hidden" name="webpageBuilderEnabled" value={webpageBuilderEnabled ? "on" : ""} />
+            )}
           </div>
         </div>
 

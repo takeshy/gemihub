@@ -1,3 +1,4 @@
+import { SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import { KakerattaConnection } from "~/components/KakerattaConnection";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { data, redirect, useLoaderData } from "react-router";
@@ -656,7 +657,7 @@ function IDEContent({
   useEffect(() => {
     // Web app builder is opt-in (Settings > General): with it off, do not nag
     // about skill updates for a feature the user is not using.
-    if (!(settings.webpageBuilderEnabled ?? false)) return;
+    if (!SHOW_WEBPAGE_BUILDER || !(settings.webpageBuilderEnabled ?? false)) return;
     const installedSkillVersion = settings.hubwork?.skillVersion;
     if (!installedSkillVersion) return;
     if (compareSkillVersions(installedSkillVersion, WEBPAGE_BUILDER_SKILL_VERSION) >= 0) return;

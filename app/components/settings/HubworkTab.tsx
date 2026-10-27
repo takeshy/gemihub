@@ -1,3 +1,4 @@
+import { SHOW_ADVANCED_PLANS, SHOW_WEBPAGE_BUILDER } from "~/config/feature-visibility";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { Globe, Clock, Plus, Trash2, Loader2, CheckCircle, AlertCircle, CreditCard, RefreshCw, Upload, Sparkles, X, XCircle } from "lucide-react";
@@ -245,7 +246,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           </stripeFetcher.Form>
         )}
 
-        {isBusiness && (
+        {SHOW_ADVANCED_PLANS && isBusiness && (
           <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
             <div className="font-medium text-gray-900 dark:text-gray-100">{t("settings.hubwork.additionalBusinessTitle")}</div>
             <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-400">{t("settings.hubwork.additionalBusinessDescription")}</p>
@@ -269,7 +270,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           </div>
         )}
 
-        {plan === "lite" && (
+        {SHOW_ADVANCED_PLANS && plan === "lite" && (
           <div className="mt-4 space-y-4">
             {([
               { target: "pro" as const, features: proPlanFeatures, title: t("settings.hubwork.upgradeToProPlan") },
@@ -343,7 +344,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
         {!plan && (
           <div className="space-y-4">
             {/* Plan cards */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3">
               {([
                 {
                   plan: "lite" as const,
@@ -360,7 +361,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
                   features: businessPlanFeatures,
                   slugRequired: true,
                 },
-              ]).map(({ plan: p, features, slugRequired }) => (
+              ]).filter(({ plan }) => SHOW_ADVANCED_PLANS || plan === "lite").map(({ plan: p, features, slugRequired }) => (
                 <div key={p} className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
                   <div className="font-medium text-gray-900 dark:text-gray-100">{planDisplayName(p)}</div>
                   <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{priceFor(p, newSubscriptionCurrency)}<span className="text-xs font-normal text-gray-500">{t("settings.hubwork.priceMonthSuffix")}</span></div>
@@ -701,7 +702,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
           )}
 
           {/* Business orgs only: Web Builder skill provisioning/update */}
-          {organizationSelected && isBusiness && (
+          {SHOW_WEBPAGE_BUILDER && organizationSelected && isBusiness && (
             <>
               {/* Skill Update */}
               <SectionCard>
@@ -852,7 +853,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
       )}
 
       {/* Provisioning loading overlay */}
-      {provisioning && (
+      {SHOW_WEBPAGE_BUILDER && provisioning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="mx-4 w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800 flex items-center gap-3">
             <Loader2 size={20} className="animate-spin text-purple-600 dark:text-purple-400" />
@@ -862,7 +863,7 @@ export function HubworkTab({ settings, hasHubworkScopes, rootFolderId: _rootFold
       )}
 
       {/* Welcome dialog after first provision */}
-      {showWelcomeDialog && (
+      {SHOW_WEBPAGE_BUILDER && showWelcomeDialog && (
         <div className="fixed inset-0 z-50 flex items-start pt-4 md:items-center md:pt-0 justify-center bg-black/50">
           <div className="mx-4 w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-800">
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4">
