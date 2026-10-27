@@ -10,6 +10,7 @@ import { useTempEditConfirm } from "~/hooks/useTempEditConfirm";
 import { TempEditUrlDialog } from "~/components/shared/TempEditUrlDialog";
 import { TempDiffModal } from "../TempDiffModal";
 import { useIsMobile } from "~/hooks/useIsMobile";
+import { watchPreviewDependencies } from "./html-preview-events";
 import {
   buildHtmlPreviewSrcDoc,
   buildMockGemihubScript,
@@ -189,6 +190,16 @@ export function HtmlFileEditor({
   const [mockScript, setMockScript] = useState("");
   const [siblings, setSiblings] = useState<SiblingAssetMap>({});
   const [unresolvedRefs, setUnresolvedRefs] = useState<string[]>([]);
+  const previewDependencyIds = useRef(new Set<string>());
+  const [previewCacheVersion, setPreviewCacheVersion] = useState(0);
+  useEffect(() => {
+    if ((!needsMock || isAdmin) && collectRelativeRefs(content).length === 0) return;
+    return watchPreviewDependencies(
+      window,
+      () => previewDependencyIds.current,
+      () => setPreviewCacheVersion((version) => version + 1),
+    );
+  }, [content, needsMock, isAdmin]);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   // `null` = not yet fetched; `"missing"` = fetched and no session (401 or null email).
   // Admin preview is gated on a confirmed-non-empty email to avoid serving a
@@ -240,6 +251,7 @@ export function HtmlFileEditor({
     const relRefs = collectRelativeRefs(content);
     const needsSiblings = relRefs.length > 0;
     if (!needsMock && !needsSiblings) {
+      previewDependencyIds.current = new Set();
       setMockScript("");
       setSiblings({});
       setUnresolvedRefs([]);
@@ -253,6 +265,15 @@ export function HtmlFileEditor({
         const { getCachedRemoteMeta, getCachedFile } = await import("~/services/indexeddb-cache");
         const meta = await getCachedRemoteMeta();
         if (cancelled) return;
+        const dependencies = new Set<string>();
+        if (needsMock && !isAdmin) {
+          for (const [id, entry] of Object.entries(meta?.files ?? {})) {
+            if (entry.name?.startsWith("web/__gemihub/") && entry.name.endsWith(".json")) {
+              dependencies.add(id);
+            }
+          }
+        }
+        previewDependencyIds.current = dependencies;
 
         let newMockScript = "";
         if (needsMock) {
@@ -292,6 +313,7 @@ export function HtmlFileEditor({
             if (!resolved) { unresolved.push(ref); continue; }
             const fid = idByPath[resolved];
             if (!fid) { unresolved.push(ref); continue; }
+            dependencies.add(fid);
             const cached = await getCachedFile(fid);
             if (cancelled) return;
             if (!cached?.content) { unresolved.push(ref); continue; }
@@ -327,7 +349,7 @@ export function HtmlFileEditor({
       }
     })();
     return () => { cancelled = true; };
-  }, [content, fileId, needsMock, isAdmin, sessionEmail, adminAuthState]);
+  }, [content, fileId, needsMock, isAdmin, sessionEmail, adminAuthState, previewCacheVersion]);
 
   const srcDocWithScripts = useMemo(() => {
     return buildHtmlPreviewSrcDoc(content, mockScript, siblings);
