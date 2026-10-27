@@ -102,6 +102,26 @@ export function buildAdminGemihubScript(sessionEmail: string): string {
   ].join("");
 }
 
+/** Load available fixtures without letting an unrelated missing file block preview. */
+export async function loadPreviewMockData(
+  files: Record<string, { name: string }>,
+  readFile: (fileId: string) => Promise<string>,
+  isCancelled: () => boolean,
+): Promise<Record<string, string>> {
+  const mockData: Record<string, string> = {};
+  for (const [fileId, { name }] of Object.entries(files)) {
+    if (!name?.startsWith("web/__gemihub/") || !name.endsWith(".json")) continue;
+    if (isCancelled()) break;
+    try {
+      const content = await readFile(fileId);
+      if (content) mockData[name] = content;
+    } catch {
+      // Stale metadata or a failed download must not discard other fixtures.
+    }
+  }
+  return mockData;
+}
+
 /** Build an inline <script> that provides window.gemihub with mock data from IndexedDB cache. */
 export function buildMockGemihubScript(
   mockData: Record<string, string>,

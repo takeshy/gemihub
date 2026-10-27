@@ -14,6 +14,7 @@ import {
   buildHtmlPreviewSrcDoc,
   buildMockGemihubScript,
   buildAdminGemihubScript,
+  loadPreviewMockData,
   collectRelativeRefs,
   isAdminPreviewFile,
   resolveNavTarget,
@@ -184,6 +185,7 @@ export function HtmlFileEditor({
   const isAdmin = isAdminPreviewFile(fileName);
   const needsMock = content.includes("/__gemihub/api.js");
   const [previewReady, setPreviewReady] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [mockScript, setMockScript] = useState("");
   const [siblings, setSiblings] = useState<SiblingAssetMap>({});
   const [unresolvedRefs, setUnresolvedRefs] = useState<string[]>([]);
@@ -234,6 +236,7 @@ export function HtmlFileEditor({
   }, [isAdmin]);
 
   useEffect(() => {
+    setPreviewError(null);
     const relRefs = collectRelativeRefs(content);
     const needsSiblings = relRefs.length > 0;
     if (!needsMock && !needsSiblings) {
@@ -264,15 +267,11 @@ export function HtmlFileEditor({
               newMockScript = "";
             }
           } else {
-            const mockData: Record<string, string> = {};
-            for (const [fid, fmeta] of Object.entries(meta?.files ?? {})) {
-              if (fmeta.name?.startsWith("web/__gemihub/") && fmeta.name.endsWith(".json")) {
-                const cached = await getCachedFile(fid);
-                if (cached?.content) {
-                  mockData[fmeta.name] = cached.content;
-                }
-              }
-            }
+            const { readFileLocal } = await import("~/services/drive-local");
+            // Cache-first; download available fixtures before the iframe runs.
+            const mockData = await loadPreviewMockData(
+              meta?.files ?? {}, readFileLocal, () => cancelled,
+            );
             newMockScript = buildMockGemihubScript(mockData, content);
           }
         }
@@ -318,8 +317,9 @@ export function HtmlFileEditor({
         setSiblings(newSiblings);
         setUnresolvedRefs(unresolved);
         setPreviewReady(true);
-      } catch {
+      } catch (err) {
         if (cancelled) return;
+        setPreviewError(err instanceof Error ? err.message : String(err));
         setMockScript("");
         setSiblings({});
         setUnresolvedRefs([]);
@@ -537,7 +537,12 @@ export function HtmlFileEditor({
       {mode === "preview" && isAdmin && adminAuthState === "loading" && (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Loading...</div>
       )}
-      {mode === "preview" && previewReady && (!isAdmin || adminAuthState === "ready") && (
+      {mode === "preview" && previewError && (!isAdmin || adminAuthState === "ready") && (
+        <div role="alert" className="p-4 text-sm text-red-600 dark:text-red-400">
+          {t("mainViewer.loadError")}: {previewError}
+        </div>
+      )}
+      {mode === "preview" && previewReady && !previewError && (!isAdmin || adminAuthState === "ready") && (
         <div className="relative flex-1 overflow-hidden">
           {unresolvedRefs.length > 0 && (
             <div className="absolute inset-x-0 top-0 z-10 bg-amber-100 text-amber-900 text-xs px-3 py-1.5 border-b border-amber-300 dark:bg-amber-900/40 dark:text-amber-100 dark:border-amber-700">
