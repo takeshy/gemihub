@@ -38,12 +38,17 @@ export type Scenario =
   | "bookings"
   | "inquiries"
   | "team"
+  | "calendar-disconnected"
+  | "calendar-connected"
+  | "calendar-member"
+  | "calendar-missing-staff"
   | "data"
   | "settings"
   | "sync-error"
   | "publication-error"
   | "reservation"
   | "any-reservation"
+  | "customer-choice"
   | "mypage"
   | "contact"
   | "preview"
@@ -55,6 +60,7 @@ const publicScenarios = new Set<Scenario>([
   "empty-blog",
   "reservation",
   "any-reservation",
+  "customer-choice",
   "mypage",
   "contact",
   "preview",
@@ -86,6 +92,10 @@ export function scenarioProps(scenario: Scenario) {
           bookings: "bookings",
           inquiries: "inquiries",
           team: "team",
+          "calendar-disconnected": "team",
+          "calendar-connected": "team",
+          "calendar-member": "team",
+          "calendar-missing-staff": "team",
           data: "data",
           settings: "settings",
           "sync-error": "bookings",
@@ -104,7 +114,6 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const config = structuredClone(sample);
   config.hours.closedWeekdays = [];
   config.notificationEmail = "owner@example.com";
-  if (scenario === "any-reservation") config.rules.mode = "any";
   const tomorrow = dateJST(new Date(Date.now() + 86400000));
   const bookings: Booking[] = [
     {
@@ -213,6 +222,16 @@ export function createMockClient(scenario: Scenario): ApiClient {
           shopId: shop.id,
         },
   };
+  if (scenario === "calendar-member") {
+    shop.isOwner = false;
+    session.user = { email: "haru@example.com", name: "はる", role: "customer", shopId: shop.id };
+  }
+  const calendarConnection = {
+    connected: ["calendar-connected", "calendar-member", "calendar-missing-staff"].includes(scenario),
+    email: session.user?.email || shop.owner,
+    staffId: scenario === "calendar-missing-staff" ? "removed-staff" : scenario === "calendar-member" ? "haru" : "aoi",
+    configured: scenario.startsWith("calendar-"),
+  };
   const interview={fields:{} as Record<string,string>,version:0};
   const client: ApiClient = async <T>(
     path: string,
@@ -286,7 +305,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action === `/api/shops/${shop.id}/system`) {
       result = {diagram: shopSystem(shop.published || config), svg: systemSvg(shop.published || config), overview: systemSvg(shop.published || config, false), revision: shop.revision};
     } else if (action === `/api/shops/${shop.id}/system/question`) {
-      result = {answer: "このお店は指名型です。指定したスタッフの勤務時間と既存の予約を確認して空き枠を表示します。変更する場合は、差分プランを確認・承認して公開してください。", changeRequest: true};
+      result = {answer: "お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。変更する場合は、差分プランを確認・承認して公開してください。", changeRequest: true};
     } else if (action === `/api/shops/${shop.id}/visual/identify`) {
       result = {id: "story-visual", explanation: "Storybook のサンプルでは、店名か紹介文を候補として表示します。", candidates: [{id: "name", label: `店名：${config.name}`}, {id: "description", label: `紹介文：${config.description}`}]};
     } else if (action === `/api/shops/${shop.id}/plan`) {
@@ -338,6 +357,17 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/documents`)
       result = documents(shop.published || config, shop.history);
+    else if (action === `/api/shops/${shop.id}/calendar`) {
+      result = calendarConnection;
+    }
+    else if (action === `/api/shops/${shop.id}/calendar/disconnect`) {
+      calendarConnection.connected = false;
+      calendarConnection.staffId = "";
+      result = { ok: true };
+    }
+    else if (action === `/api/shops/${shop.id}/calendar/connect`) {
+      throw new Error("Storybook のサンプルです。実際の Google 認証は行いません。連携後の画面は「Calendar 連携中」で確認できます。");
+    }
     else if (action === `/api/shops/${shop.id}/invite`) {
       shop.members.push({ email: String(input.email), accepted: false });
       result = { ok: true };
@@ -407,7 +437,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           preview ? [] : shop.bookings,
           date,
           String(input.menuId),
-          String(input.staffId),
+          input.staffId ? String(input.staffId) : undefined,
         ).find((s) => s.start === start);
         if (!slot)
           throw new Error("この枠は予約できません。別の時間を選んでください。");

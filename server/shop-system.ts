@@ -14,11 +14,11 @@ export function shopSystem(input: ShopConfig) {
         `お客様のキャンセル：開始${c.rules.cancelHours}時間前まで。自分の予約だけ確認・取消できます。`,
       ] },
       { title: "② 空きを判断する仕組み", lines: [
-        c.rules.mode === "designated" ? "指名型：選んだスタッフが空いている場合に予約できます。" : "OR 型・指名なし：対応するスタッフのうち1人でも空いていれば予約できます。空いている1人に割り当てます。",
+        "お客様が指名・指名なしを選べます。指名時は選んだスタッフのみ、指名なしは対応するスタッフのうち空いている1人に割り当てます。",
         `営業時間 ${c.hours.start}〜${c.hours.end}／${c.rules.interval}分刻み（日本時間）`,
         `定休日：${c.hours.closedWeekdays.map(d => days[d] + "曜").join("・") || "なし"}。臨時休業：${c.hours.holidays.join("・") || "なし"}。`,
         ...c.staff.map(p => `${p.name}：${p.weekdays.map(d => days[d]).join("・")} ${p.start}〜${p.end}／${p.menuIds.map(id => c.menus.find(m => m.id === id)!.name).join("・")}`),
-        "メニューの所要時間全体について、勤務・営業時間と既存の有効な予約を照合。重複する予約を防ぎます。",
+        "メニューの所要時間全体について、勤務・営業時間と既存の有効な予約、連携済み Calendar の予定あり時間を照合。重複する予約を防ぎます。",
       ] },
       { title: "③ データの行き先", lines: [
         "予約・問い合わせ → アプリに保存 → 店主の Google スプレッドシートへ同期（失敗時は再送）",
@@ -34,7 +34,6 @@ export function shopSystem(input: ShopConfig) {
 const escape = (s: string) => s.replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"})[c]!);
 export function systemSvg(config: ShopConfig, detailed = true) {
   const model = shopSystem(config);
-  const any = config.rules.mode === "any";
   const node = (x: number, y: number, width: number, label: string, sub: string, fill = "#eef3ee") => `<rect x="${x}" y="${y}" width="${width}" height="76" rx="14" fill="${fill}" stroke="#cbd8ce"/><text x="${x + width / 2}" y="${y + 30}" text-anchor="middle" font-size="18" font-weight="bold">${escape(label)}</text><text x="${x + width / 2}" y="${y + 56}" text-anchor="middle" font-size="14">${escape(sub)}</text>`;
   const arrow = (path: string) => `<path d="${path}" fill="none" stroke="#648575" stroke-width="2.5" marker-end="url(#arrow)"/>`;
   const overview = `
@@ -44,11 +43,11 @@ export function systemSvg(config: ShopConfig, detailed = true) {
     ${node(472, 120, 175, "空きを確認", "勤務と既存予約を照合")}
     ${node(692, 120, 175, "予約確定", "重複を防いで保存")}
     ${arrow("M207 158 H246")}${arrow("M427 158 H466")}${arrow("M647 158 H686")}
-    <text x="32" y="246" font-size="20" font-weight="bold">② ${any ? "OR 型：対応する誰か1人が空いていれば受付" : "指名型：選んだスタッフの空きを確認"}</text>
-    ${node(32, 306, 200, any ? "対応スタッフの空き" : "指名したスタッフ", `スタッフ ${config.staff.length}人・勤務を照合`)}
-    ${node(310, 270, 260, any ? "1人以上が空いている" : "指名スタッフが空いている", "施術時間全体が空いている")}
-    ${node(310, 376, 260, any ? "全員が埋まっている" : "指名スタッフが埋まっている", "勤務外・休業・期限外も不可", "#f6efeb")}
-    ${node(648, 270, 220, "○ 予約できる", any ? "空いている1人に割り当て" : "指名したスタッフに予約")}
+    <text x="32" y="246" font-size="20" font-weight="bold">② お客様が指名・指名なしを選択</text>
+    ${node(32, 306, 200, "指名先／対応スタッフ", `スタッフ ${config.staff.length}人・勤務を照合`)}
+    ${node(310, 270, 260, "選択した条件で空きあり", "施術時間全体が空いている")}
+    ${node(310, 376, 260, "選択した条件で空きなし", "勤務外・休業・期限外も不可", "#f6efeb")}
+    ${node(648, 270, 220, "○ 予約できる", "指名先／空いている1人")}
     ${node(648, 376, 220, "× 予約できない", "別の日時を選ぶ", "#f6efeb")}
     ${arrow("M232 344 H265 V308 H304")}${arrow("M265 344 V414 H304")}
     ${arrow("M570 308 H642")}${arrow("M570 414 H642")}

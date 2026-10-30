@@ -28,7 +28,6 @@ test("lead time, same-day policy, future limits, and invalid calendar dates", ()
 });
 test("OR availability assigns an actually free eligible staff member and soft deletions free slots", () => {
   const c = make();
-  c.rules.mode = "any";
   const b: Booking = {
     id: "1",
     shopId: "shop",
@@ -55,8 +54,7 @@ test("OR availability assigns an actually free eligible staff member and soft de
     slots(c, both, "2030-01-07", "simple", undefined, now)[0].staffId,
     "aoi",
   );
-  c.rules.mode = "designated";
-  assert.equal(slots(c, [], "2030-01-07", "simple", undefined, now).length, 0);
+  assert.ok(slots(c, [], "2030-01-07", "simple", undefined, now).length > 0);
 });
 test("schema rejects duplicate IDs, nonexistent references and impossible hours", () => {
   const c = make();
@@ -68,4 +66,17 @@ test("schema rejects duplicate IDs, nonexistent references and impossible hours"
   const c2 = make();
   c2.hours.end = "09:00";
   assert.equal(shopSchema.safeParse(c2).success, false);
+});
+
+test("customer choice honors a named staff and allocates any available staff only when unspecified", () => {
+  const c = make();
+  const first = slots(c, [], "2030-01-07", "simple", undefined, now)[0];
+  const b: Booking = { ...first, id: "busy", shopId: "shop", customer: "", name: "", menuId: "simple", status: "active", createdAt: now.toISOString() };
+  assert.equal(slots(c, [b], "2030-01-07", "simple", undefined, now)[0].staffId, "haru");
+  assert.equal(slots(c, [b], "2030-01-07", "simple", "", now)[0].staffId, "haru");
+  assert.equal(slots(c, [b], "2030-01-07", "simple", "haru", now)[0].start, first.start);
+  assert.ok(!slots(c, [b], "2030-01-07", "simple", "aoi", now).some(s => s.start === first.start));
+  assert.deepEqual(slots(c, [], "2030-01-07", "simple", "missing", now), []);
+  c.staff[1].menuIds = ["design"];
+  assert.deepEqual(slots(c, [], "2030-01-07", "simple", "haru", now), []);
 });

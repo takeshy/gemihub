@@ -13,15 +13,14 @@ import { validateVisualChange, type VisualRequest } from "../server/visual.ts";
 import type { AddressInfo } from "node:net";
 process.env.DEMO_MODE = "true";
 process.env.APP_ORIGIN = "http://127.0.0.1";
-test("diagram uses validated published settings, OR/designated rules, escaping and all data destinations", () => {
+test("diagram uses validated published settings, customer staff selection, escaping and all data destinations", () => {
   const c = structuredClone(sample);
   c.name = '<script>"店"</script>';
-  c.rules.mode = "any";
   c.hours.holidays = ["2026-11-01"];
   c.rules.sameDay = false;
   const svg = systemSvg(c);
   assert.equal(svg, systemSvg(structuredClone(c)));
-  assert.match(svg, /OR 型/);
+  assert.match(svg, /お客様が指名・指名なしを選択/);
   assert.match(svg, /2026-11-01/);
   assert.match(svg, /当日予約不可/);
   assert.doesNotMatch(svg, /<script>/);
@@ -33,9 +32,8 @@ test("diagram uses validated published settings, OR/designated rules, escaping a
     /Google ドライブ/,
   );
   assert.match(svg, /スプレッドシート/);
-  assert.match(documents(c, []).spec, /"mode": "any"/);
-  c.rules.mode = "designated";
-  assert.match(systemSvg(c), /指名型/);
+  assert.match(documents(c, []).spec, /"sameDay": false/);
+  assert.match(systemSvg(c), /指名先／対応スタッフ/);
   assert.throws(() => shopSystem({ ...c, staff: [] }));
   assert.throws(() =>
     shopSchema.parse({
@@ -52,7 +50,7 @@ test("pen changes are limited to the selected text or safe appearance", () => {
     "新しい名前",
   );
   assert.throws(() => validateVisualChange(sample, next, "name"));
-  next.rules.mode = "any";
+  next.rules.interval = 60;
   assert.throws(() => validateVisualChange(sample, next, "menu:simple"));
   const appearance = {
     ...sample,
@@ -101,7 +99,7 @@ test("removed uploads, image identification, ambiguous target selection, explana
     async propose(text: string, current: typeof sample | null) {
       const config = structuredClone(current || sample);
       config.name = "新しい店名";
-      if (illegal) config.rules.mode = "any";
+      if (illegal) config.rules.interval = 60;
       return { config, summary: planSummary(current, config) };
     },
     async proposeArticle() {
@@ -200,8 +198,8 @@ test("removed uploads, image identification, ambiguous target selection, explana
   assert.equal(explanation.body.changeRequest, true);
   assert.equal(questionCalls, 1);
   assert.equal(
-    (await store.shop(shop.id))!.published!.rules.mode,
-    "designated",
+    (await store.shop(shop.id))!.published!.rules.interval,
+    sample.rules.interval,
   );
   assert.deepEqual((await store.shop(shop.id))!.history, history);
   assert.equal(

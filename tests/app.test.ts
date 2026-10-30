@@ -39,7 +39,6 @@ test("approval, isolated preview, publication, customer authorization, conflict 
   const work = await request("/api/workspace", undefined, owner);
   const shop: Shop = work.body.shops[0];
   const c = structuredClone(sample);
-  c.rules.mode = "any";
   c.rules.cancelHours = 0;
   c.hours.closedWeekdays = [];
   const generated = await request(

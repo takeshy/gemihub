@@ -69,7 +69,7 @@ export type AppProps = {
 export function App({
   path = location.pathname,
   search = location.search,
-  initialTab = "build",
+  initialTab = new URLSearchParams(location.search).get("calendar") === "connected" ? "team" : "build",
   initialPane = "reserve",
   navigate = (href) => location.assign(href),
 }: AppProps = {}) {
@@ -769,7 +769,7 @@ function ConfigSummary({ config: c }: { config: ShopConfig }) {
         <div>
           <span>予約の受け方</span>
           <b>
-            {c.rules.mode === "any" ? "空いているスタッフで" : "スタッフを指名"}
+            お客様が指名・指名なしを選ぶ
           </b>
         </div>
         <div>
@@ -1113,20 +1113,7 @@ function ConfigEditor({
         />
       </Field>
       <h3>予約のルール</h3>
-      <Field label="空き枠の受け方">
-        <select
-          value={c.rules.mode}
-          onChange={(e) =>
-            put("rules", {
-              ...c.rules,
-              mode: e.target.value as "any" | "designated",
-            })
-          }
-        >
-          <option value="designated">スタッフを指名する</option>
-          <option value="any">どちらか空いていれば受ける（指名なし）</option>
-        </select>
-      </Field>
+      <p className="muted">お客様が予約時に、指名なしまたは希望するスタッフを選べます。</p>
       <div className="form-grid">
         {(
           [
@@ -1317,6 +1304,40 @@ function InquiryCard({ q, send }: { q: Inquiry; send: (s: string) => void }) {
     </div>
   );
 }
+function CalendarPanel({ shop, run }: { shop: Workspace; run: Run }) {
+  const api = useApi();
+  const [connection, setConnection] = useState<{ connected: boolean; staffId?: string; email: string; configured: boolean }>();
+  const [staffId, setStaffId] = useState("");
+  const reload = async () => {
+    const value = await api<NonNullable<typeof connection>>(`/api/shops/${shop.id}/calendar`);
+    setConnection(value);
+    setStaffId(value.staffId || "");
+  };
+  useEffect(() => { setConnection(undefined); run(reload); }, [shop.id]);
+  const config = shop.published;
+  return <section>
+    <h3>自分の Google Calendar と連携</h3>
+    <p className="muted">各メンバーが自分のアカウントで接続してください。メインカレンダーで「予定あり」の時間を、選んだ担当者の予約枠から除外します。終日の予定にも対応します。予定の件名・本文は取得しません。</p>
+    <p className="small muted">追加カレンダーは対象外です。予約の書き込みは行いません。連携先を確認できないときは、その担当者を含む予約受付を一時停止します。</p>
+    {connection && <>
+      <p>{connection.email} · {connection.connected ? `連携中（${config?.staff.find(s => s.id === connection.staffId)?.name || "担当者が削除されています"}）` : "未連携"}</p>
+      {!connection.configured && <p className="notice">利用にはサーバーの Google OAuth 設定が必要です。</p>}
+      {!config ? <p>お店を公開すると連携できます。</p> : <>
+        <Field label="自分に対応する予約の担当者">
+          <select value={staffId} onChange={e => setStaffId(e.target.value)}>
+            <option value="">担当者を選択</option>
+            {config.staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </Field>
+        <button disabled={!staffId || !connection.configured} onClick={() => run(async () => {
+          const result = await api<{ authUrl: string }>(`/api/shops/${shop.id}/calendar/connect`, { staffId });
+          location.assign(result.authUrl);
+        })}>{connection.connected ? "再接続・担当者を変更" : "Google Calendar を接続"}</button>
+      </>}
+      {connection.connected && <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/calendar/disconnect`, {}); await reload(); })}>カレンダー連携を解除</button>}
+    </>}
+  </section>;
+}
 function Team({
   shop,
   run,
@@ -1331,6 +1352,7 @@ function Team({
   return (
     <div className="panel">
       <h2>家族・スタッフの招待</h2>
+      <CalendarPanel shop={shop} run={run} />
       <p className="muted">
         同じお店の予約とお問い合わせを、一緒に管理できます。保存先は店主の
         Google ドライブのままです。
@@ -1577,17 +1599,18 @@ function PublicShop({
       }>(base + suffix);
       setData(d);
       setMenu(d.config.menus.find((m) => m.active)?.id || "");
-      setStaff(d.config.staff[0]?.id || "");
+      setStaff("");
     });
   }, [base]);
   useEffect(() => {
     if (!data) return;
     if (
+      staff &&
       !data.config.staff.some((p) => p.id === staff && p.menuIds.includes(menu))
-    )
-      setStaff(
-        data.config.staff.find((p) => p.menuIds.includes(menu))?.id || "",
-      );
+    ) {
+      setStaff("");
+      return;
+    }
     setSelected("");
     setComplete(false);
     setRequestId(createRequestId());
@@ -1741,26 +1764,21 @@ function PublicShop({
                     ))}
                 </div>
                 <h3>02 スタッフと日時</h3>
-                {c.rules.mode === "designated" ? (
-                  <Field label="スタッフ">
-                    <select
-                      value={staff}
-                      onChange={(e) => setStaff(e.target.value)}
-                    >
-                      {c.staff
-                        .filter((p) => p.menuIds.includes(menu))
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                    </select>
-                  </Field>
-                ) : (
-                  <p className="notice">
-                    指名なし · 空いているスタッフが担当します。
-                  </p>
-                )}
+                <Field label="スタッフ">
+                  <select
+                    value={staff}
+                    onChange={(e) => setStaff(e.target.value)}
+                  >
+                    <option value="">指名なし（空いているスタッフ）</option>
+                    {c.staff
+                      .filter((p) => p.menuIds.includes(menu))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
                 <Field label="ご希望の日付（日本時間）">
                   <input
                     type="date"
@@ -1851,7 +1869,7 @@ function PublicShop({
                 <hr />
                 <p>{selected ? when(selected) : "日時をお選びください"}</p>
                 <p className="small muted">
-                  {c.rules.mode === "any"
+                  {!staff
                     ? "スタッフの指名なし"
                     : c.staff.find((p) => p.id === staff)?.name}
                 </p>

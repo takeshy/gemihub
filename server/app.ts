@@ -76,6 +76,7 @@ import {
   renderArchive,
   renderHomeWithPosts,
 } from "./post-renderer.tsx";
+import { calendarGateway, calendarScope, connections, availableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
 function fail(status: number, message: string): never {
   throw Object.assign(new Error(message), { status });
 }
@@ -147,6 +148,7 @@ export function createApp(
     normalizeTurn?: typeof normalizeTurn;
   } = { propose, proposeArticle, identifyVisual, explainSystem, normalizeTurn },
   liveConnector?: LiveConnector,
+  calendar: CalendarGateway = calendarGateway,
 ) {
   const ownerToken = async (shop: Shop) =>
     (await store.get<User>("user", shop.owner))?.refreshToken;
@@ -381,9 +383,26 @@ export function createApp(
           shopId?: string;
           returnHost: string;
           expires: number;
+          calendarShopId?: string;
+          email?: string;
+          staffId?: string;
         }>("oauth", key);
         if (!pending || pending.expires < Date.now())
           fail(400, "ログインの有効期限が切れました");
+        if (pending.calendarShopId) {
+          if (!user || user.email !== pending.email) fail(403, "連携を開始したアカウントでログインしてください");
+          return await store.locked(pending.calendarShopId, async () => {
+            const shop = await store.shop(pending.calendarShopId!) || fail(404, "お店がありません");
+            await assertOperator(user, shop);
+            const config = await effective(shop);
+            if (!config?.staff.some(s => s.id === pending.staffId)) fail(400, "担当者を選び直してください");
+            const identity = await calendar.exchange(url.searchParams.get("code") || "", pending.verifier);
+            if (identity.email !== pending.email) fail(403, "ログイン中と同じ Google アカウントを選択してください");
+            if ((await connections(store, shop)).some(c => c.staffId === pending.staffId && c.email !== user.email)) fail(409, "この担当者は別のメンバーが連携済みです");
+            await store.put("calendar", `${shop.id}:${user.email}`, { shopId: shop.id, email: user.email, staffId: pending.staffId, refreshToken: identity.refreshToken });
+            return redirect(res, "/?calendar=connected");
+          });
+        }
         const auth = oauth();
         const { tokens } = await auth.getToken({
           code: url.searchParams.get("code") || "",
@@ -552,6 +571,26 @@ export function createApp(
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
+          if (action === "calendar" && method === "GET") {
+            const connection = await store.get<CalendarConnection>("calendar", `${fresh.id}:${user!.email}`);
+            return json(res, { connected: !!connection, staffId: connection?.staffId, email: user!.email, configured: !!process.env.GOOGLE_CLIENT_ID });
+          }
+          if (action === "calendar/disconnect" && method === "POST") {
+            await store.delete("calendar", `${fresh.id}:${user!.email}`);
+            return json(res, { ok: true });
+          }
+          if (action === "calendar/connect" && method === "POST") {
+            if (!process.env.GOOGLE_CLIENT_ID) fail(503, "Google ログインをサーバーで設定してください");
+            const { staffId } = z.object({ staffId: z.string().min(1) }).parse(await body(req));
+            const config = await effective(fresh);
+            if (!config?.staff.some(s => s.id === staffId)) fail(400, "予約の担当者を選択してください");
+            if ((await connections(store, fresh)).some(c => c.staffId === staffId && c.email !== user!.email)) fail(409, "この担当者は別のメンバーが連携済みです");
+            const state = randomBytes(32).toString("base64url");
+            const verifier = randomBytes(48).toString("base64url");
+            await store.put("oauth", digest(state), { verifier, calendarShopId: fresh.id, email: user!.email, staffId, expires: Date.now() + 600000 });
+            res.setHeader("Set-Cookie", `omai_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
+            return json(res, { authUrl: oauth().generateAuthUrl({ access_type: "offline", prompt: "consent", login_hint: user!.email, scope: ["openid", "email", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }) });
+          }
           if (action === "interview" && method === "GET") {
             assertOwner(user, fresh);
             return json(res, await interview(store, fresh));
@@ -1054,6 +1093,7 @@ export function createApp(
               status: "revoked",
               revokedAt: new Date().toISOString(),
             });
+            await store.delete("calendar", `${fresh.id}:${email}`);
             return json(res, { ok: true });
           }
           if (action === "domain" && method === "POST") {
@@ -1234,13 +1274,10 @@ export function createApp(
           if (action === "slots" && method === "GET")
             return json(
               res,
-              slots(
-                config,
-                await store.bookings(shop.id),
+              await availableSlots(store, shop, config,
                 url.searchParams.get("date") || "",
                 url.searchParams.get("menu") || "",
-                url.searchParams.get("staff") || undefined,
-              ),
+                url.searchParams.get("staff") || undefined, calendar),
             );
           if (action === "bookings" && method === "GET") {
             const u = customer();
@@ -1274,13 +1311,7 @@ export function createApp(
             const date = new Date(Date.parse(input.start) + 9 * 3600000)
               .toISOString()
               .slice(0, 10);
-            const slot = slots(
-              config,
-              await store.bookings(shop.id),
-              date,
-              input.menuId,
-              input.staffId,
-            ).find((s) => s.start === input.start);
+            const slot = (await availableSlots(store, shop, config, date, input.menuId, input.staffId, calendar)).find((s) => s.start === input.start);
             if (!slot)
               fail(409, "この時間は予約できません。空き状況を更新してください");
             const b: Booking = {

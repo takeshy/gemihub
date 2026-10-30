@@ -44,7 +44,6 @@ export const shopSchema = z
       holidays: z.array(z.iso.date()),
     }),
     rules: z.object({
-      mode: z.enum(["designated", "any"]),
       interval: z.number().int().min(5).max(120),
       advanceDays: z.number().int().min(1).max(365),
       leadMinutes: z.number().int().min(0).max(43200),
@@ -128,7 +127,6 @@ export const sample: ShopConfig = {
   ],
   hours: { start: "10:00", end: "18:00", closedWeekdays: [2], holidays: [] },
   rules: {
-    mode: "designated",
     interval: 30,
     advanceDays: 30,
     leadMinutes: 60,
@@ -165,7 +163,6 @@ export function slots(
     config.hours.holidays.includes(date)
   )
     return [];
-  if (config.rules.mode === "designated" && !requestedStaff) return [];
   const result: { start: string; end: string; staffId: string }[] = [];
   for (
     let t = minutes(config.hours.start);
@@ -179,7 +176,7 @@ export function slots(
       continue;
     const staff = config.staff.find(
       (p) =>
-        (config.rules.mode === "any" || p.id === requestedStaff) &&
+        (!requestedStaff || p.id === requestedStaff) &&
         p.menuIds.includes(menuId) &&
         p.weekdays.includes(weekday) &&
         minutes(p.start) <= t &&
