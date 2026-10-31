@@ -45,11 +45,11 @@ test("sync status distinguishes unfetched, remote, local and edit/delete conflic
   assert.equal(await syncStatus(draft, editorIndex(remote, 4), headerScope), "conflict");
 });
 
-test("per-page Drive sync only writes selected HTML/JSON and shared indexes, never other pages or menus", async t => {
+test("per-page Drive sync writes selected HTML/JSON and shared snapshots, never other pages or menus", async t => {
   t.after(() => { mock.restoreAll(); syncBuiltinESMExports(); });
   mock.method(fs, "readFile", async () => '<title></title><div id="root"></div>');
   syncBuiltinESMExports();
-  const writes: { fileId: string; requestBody?: { trashed?: boolean } }[] = [];
+  const writes: { fileId: string; requestBody?: { trashed?: boolean }; media?: { mimeType: string } }[] = [];
   const ranges: string[] = [];
   mock.method(google as unknown as { sheets: () => unknown }, "sheets", (() => ({ spreadsheets: { values: {
     get: async ({ range }: { range: string }) => ({ data: { values: range === "pages!A:B" ? [["id", "record"], ["faq", JSON.stringify(page("faq"))], ["access", JSON.stringify(page("access"))]] : [["key"], ["name"], ["pages"]] } }),
@@ -63,14 +63,17 @@ test("per-page Drive sync only writes selected HTML/JSON and shared indexes, nev
   const before = { ...structuredClone(sample), pages: [page("faq"), page("access")] };
   const config = structuredClone(before); config.pages[0].body = "変更本文";
   const shop: Shop = { id: "shop", owner: "owner@example.com", slug: "shop", revision: 1, history: [], draft: null, published: before, google: { sheetId: "sheet", folderId: "root", specId: "spec", historyId: "history", artifactFolders: { web: "web", admin: "admin", "web/pages": "pages" }, artifactIds: { "web/pages/faq.html": "faq-html", "web/pages/faq.json": "faq-json", "web/pages/access.html": "access-html", "web/pages/access.json": "access-json", "web/pages/index.json": "pages-index" } } };
+  for (const [path, id] of Object.entries({ "web/index.html": "shop-html", "web/data.js": "shop-data", "web/shop.json": "shop-config", "web/mock.json": "shop-mock" })) shop.google!.artifactIds![path] = id;
+  const snapshotIds = ["shop-html", "shop-data", "shop-config", "shop-mock"];
   await syncConfig(shop, config, encrypt("token"), () => {}, { kind: "page", pageId: "faq" });
   assert.deepEqual(ranges, ["pages!A2:B2", "settings!A3:B3"]);
-  assert.deepEqual(writes.map(w => w.fileId).sort(), ["faq-html", "faq-json", "history", "pages-index", "spec"].sort());
+  assert.deepEqual(writes.map(w => w.fileId).sort(), [...snapshotIds, "faq-html", "faq-json", "history", "pages-index", "spec"].sort());
+  assert.equal(writes.find(w => w.fileId === "shop-data")?.media?.mimeType, "text/javascript");
   writes.length = 0;
   await syncConfig(shop, { ...config, pages: [page("access")] }, encrypt("token"), () => {}, { kind: "page", pageId: "faq" });
   assert.deepEqual(writes.filter(w => w.requestBody?.trashed).map(w => w.fileId).sort(), ["faq-html", "faq-json"]);
   assert.ok(!writes.some(w => w.fileId.startsWith("access")));
-  // A part release updates only its settings row and files, including no page cleanup.
+  // Part releases also refresh the shared snapshot without changing other page/part files.
   shop.google!.artifactFolders!["web/parts"] = "parts";
   shop.google!.artifactIds!["web/parts/header.html"] = "header-html";
   shop.google!.artifactIds!["web/parts/header.json"] = "header-json";
@@ -78,7 +81,7 @@ test("per-page Drive sync only writes selected HTML/JSON and shared indexes, nev
   writes.length = 0; ranges.length = 0;
   await syncConfig(shop, { ...config, header: { ...config.header, title: "ヘッダーだけ更新" } }, encrypt("token"), () => {}, { kind: "part", part: "header" });
   assert.deepEqual(ranges, ["settings!A4:B4"]);
-  assert.deepEqual(writes.map(w => w.fileId).sort(), ["header-html", "header-json", "history", "spec"].sort());
+  assert.deepEqual(writes.map(w => w.fileId).sort(), [...snapshotIds, "header-html", "header-json", "history", "spec"].sort());
 });
 
 test("page AI and merge only propose, enforce owner and reject a changed remote", async t => {

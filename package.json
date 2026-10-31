@@ -16,7 +16,8 @@
     "storybook": "storybook dev -p 6005 --host 0.0.0.0 --no-open --disable-telemetry",
     "build-storybook": "storybook build --disable-telemetry",
     "capture:manual": "node scripts/capture-manual.mjs",
-    "check:multimodal": "node scripts/check-multimodal.mjs"
+    "check:multimodal": "node scripts/check-multimodal.mjs",
+    "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",

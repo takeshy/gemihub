@@ -133,6 +133,8 @@ export async function syncConfig(
   if (!shop.google) throw new Error("Google の保存先が未作成です");
   const { sheets, drive } = clients(token);
   const doc = documents(config, shop.history);
+  // Prepare the runnable export before writing any remote data.
+  const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"));
   const pageIndex = config.pages.map(({ id, slug, title, navigationLabel }) => ({ id, slug, title, navigationLabel }));
   if (scope?.kind === "part") {
     const settings = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "settings!A:A" });
@@ -223,12 +225,13 @@ export async function syncConfig(
       media: { mimeType: "text/markdown", body: Readable.from([doc.history]) },
     }),
   ]);
-  const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"));
   const selectedPage = scope?.kind === "page" ? config.pages.find(p => p.id === scope.pageId) : undefined;
   const previousPage = scope?.kind === "page" ? shop.published?.pages.find(p => p.id === scope.pageId) : undefined;
+  // These are one published snapshot, including after a page/part-only release.
+  const snapshotPaths = ["web/index.html", "web/data.js", "web/shop.json", "web/mock.json"];
   const generated = scope?.kind === "part"
-    ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => [`web/parts/${scope.part}.html`, `web/parts/${scope.part}.json`].includes(path)))
-    : scope?.kind === "page" ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => path === "web/pages/index.json" || selectedPage && [ `web/pages/${selectedPage.slug}.html`, `web/pages/${selectedPage.slug}.json` ].includes(path))) : allGenerated;
+    ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || [`web/parts/${scope.part}.html`, `web/parts/${scope.part}.json`].includes(path)))
+    : scope?.kind === "page" ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || path === "web/pages/index.json" || selectedPage && [ `web/pages/${selectedPage.slug}.html`, `web/pages/${selectedPage.slug}.json` ].includes(path))) : allGenerated;
   shop.google.artifactIds ||= {};
   shop.google.artifactFolders ||= {};
   for (const folder of (scope?.kind === "part" ? ["web", "web/parts"] : scope?.kind === "page" ? ["web", "web/pages"] : ["web", "admin", "web/pages", "web/parts"])) {
@@ -253,6 +256,8 @@ export async function syncConfig(
         ? "image/svg+xml"
         : path.endsWith(".json")
           ? "application/json"
+          : path.endsWith(".js")
+            ? "text/javascript"
           : "text/markdown";
     if (id)
       await drive.files.update({
@@ -469,6 +474,8 @@ export async function syncPostFiles(
       ? "text/html"
       : path.endsWith(".md")
         ? "text/markdown"
+        : path.endsWith(".js")
+          ? "text/javascript"
         : "application/json";
     const fileId = connection.artifactIds[path];
     if (fileId) {

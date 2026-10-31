@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PostContent } from "../src/PostContent.tsx";
-import { escapeHtml, renderShop } from "./artifacts.ts";
+import { escapeHtml, renderShop, driveSnapshot } from "./artifacts.ts";
 import {
   postLabel,
   postPath,
@@ -64,11 +64,7 @@ export function postArtifacts(
 ) {
   const live = publicPosts(posts);
   const files: Record<string, string> = {
-    "web/index.html": renderHomeWithPosts(
-      config,
-      shell,
-      live.map(summarizePost),
-    ),
+    ...driveSnapshot(config, shell),
     "web/recent-articles.json": JSON.stringify(
       live.slice(0, 5).map(summarizePost),
       null,
