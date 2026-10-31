@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
 import {useApi} from "./api";
 import {VoiceInput} from "./VoiceInput";
@@ -11,6 +12,18 @@ export async function capturePage(root: HTMLElement) {
   const clone = root.cloneNode(true) as HTMLElement;
   const copies = [clone, ...clone.querySelectorAll<HTMLElement>("*")];
   for (let i = 0; i < original.length; i++) {
+    if (original[i] instanceof HTMLInputElement && copies[i] instanceof HTMLInputElement) {
+      const input = original[i] as HTMLInputElement;
+      copies[i].setAttribute("value", input.value);
+      if (input.checked) copies[i].setAttribute("checked", ""); else copies[i].removeAttribute("checked");
+    }
+    if (original[i] instanceof HTMLTextAreaElement) copies[i].textContent = (original[i] as HTMLTextAreaElement).value;
+    if (original[i] instanceof HTMLSelectElement) {
+      const selected = (original[i] as HTMLSelectElement).selectedIndex;
+      copies[i].querySelectorAll("option").forEach((option, index) => {
+        if (index === selected) option.setAttribute("selected", ""); else option.removeAttribute("selected");
+      });
+    }
     const style = getComputedStyle(original[i]);
     for (const key of Array.from(style)) copies[i].style.setProperty(key, style.getPropertyValue(key));
     if (copies[i] instanceof HTMLImageElement) {
@@ -30,7 +43,7 @@ export async function capturePage(root: HTMLElement) {
   clone.querySelectorAll("script, iframe, [data-capture-ignore]").forEach(e => e.remove());
   clone.style.margin = "0";
   const width = Math.ceil(root.getBoundingClientRect().width);
-  const height = Math.min(root.scrollHeight, 2600);
+  const height = root.scrollHeight;
   if (!width || !height) throw new Error("画面を表示してからお試しください");
   clone.style.width = `${width}px`;
   clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
@@ -38,14 +51,20 @@ export async function capturePage(root: HTMLElement) {
   const image = new Image();
   await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("画面の取り込みに失敗しました。ページを再読み込みしてください。")); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`; });
   const canvas = document.createElement("canvas");
-  const scale = Math.min(1, 1100 / width);
+  const scale = Math.min(1, 1100 / width, 6000 / height);
   canvas.width = Math.ceil(width * scale); canvas.height = Math.ceil(height * scale);
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#fffdf8"; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/png");
 }
-export function VisualRequest({shopId, config, planId, root}: {shopId: string; config: ShopConfig; planId?: string; root: React.RefObject<HTMLDivElement | null>}) {
+export function VisualRequest({shopId, config, planId, root, local, onLocalChange, onBusyChange, triggerHost}: {
+  shopId: string; config: ShopConfig; planId?: string; root: React.RefObject<HTMLDivElement | null>;
+  local?: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer" };
+  onLocalChange?: (config: ShopConfig) => void;
+  onBusyChange?: (busy: boolean) => void;
+  triggerHost?: HTMLElement | null;
+}) {
   const api = useApi();
   const [image, setImage] = useState("");
   const [instruction, setInstruction] = useState("");
@@ -65,12 +84,15 @@ export function VisualRequest({shopId, config, planId, root}: {shopId: string; c
     setMarked(false); setResult(undefined); setTarget(""); setPlan(undefined);
   }
   useEffect(() => { if (image) void reset(); }, [image]);
-  async function run(fn: () => Promise<void>) {setBusy(true); setError(""); try {await fn();} catch(e) {setError(e instanceof Error ? e.message : String(e));} finally {setBusy(false);}}
-  return <div className="visual-request panel" data-capture-ignore>
-    <button disabled={busy} onClick={() => run(async () => { if (root.current) setImage(await capturePage(root.current)); })}>✎ この画面にペンで変更を依頼</button>
+  async function run(fn: () => Promise<void>) {setBusy(true); onBusyChange?.(true); setError(""); try {await fn();} catch(e) {setError(e instanceof Error ? e.message : String(e));} finally {setBusy(false); onBusyChange?.(false);}}
+  const trigger = <button className={triggerHost ? "editor-pen-button" : undefined} title="この画面にペンで変更を依頼" disabled={busy} onClick={() => run(async () => { if (root.current) setImage(await capturePage(root.current)); })}>{triggerHost ? "✎ ペンで依頼" : "✎ この画面にペンで変更を依頼"}</button>;
+  return <>
+    {triggerHost && createPortal(trigger, triggerHost)}
+    {(!triggerHost || image || error) && <div className="visual-request panel" data-capture-ignore>
+    {!triggerHost && trigger}
     {error && <p className="alert" role="alert">{error}</p>}
     {image && <>
-      <p>変更したい文言や画像、配置を赤いペンで囲んで、希望を教えてください。外部画像は枠で表示される場合があります。予約ルール・料金の変更は運営画面で言葉で依頼してください。</p>
+      <p>変更したい文言や画像、配置を赤いペンで囲んで、希望を教えてください。外部画像は枠で表示される場合があります。ペンでは店名・紹介文・アクセス・ページ本文・画像・配置を変更できます。料金・スタッフ・営業時間・予約ルールはそれぞれの管理メニューで保存してください。</p>
       <canvas ref={canvas} aria-label="変更したい箇所を囲む画面" className="annotation-canvas"
         onPointerDown={e => {
           if (busy) return;
@@ -92,12 +114,16 @@ export function VisualRequest({shopId, config, planId, root}: {shopId: string; c
       <button disabled={busy || !marked || !instruction.trim()} onClick={() => run(async () => {
         const media = {mimeType: "image/png", data: canvas.current!.toDataURL("image/png").split(",")[1]};
         setResult(undefined); setTarget(""); setPlan(undefined);
-        const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, planId, displayed: config});
+        const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, planId, displayed: config, local});
         setResult(r); if (r.candidates.length === 1) setTarget(r.candidates[0].id);
       })}>{busy ? "確認しています…" : "Gemini に印の対象を確認してもらう"}</button>
-      {result && <div className="notice"><p>{result.explanation}</p><label>変更する対象を確認<select value={target} onChange={e => {setTarget(e.target.value); setPlan(undefined);}}><option value="">対象を選んでください</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {setPlan(await api(`/api/shops/${shopId}/plan`, {text: instruction, visual: {id: result.id, target}}));})}>この対象の差分プランを作る</button></div>}
+      {result && <div className="notice"><p>{result.explanation}</p><label>変更する対象を確認<select value={target} onChange={e => {setTarget(e.target.value); setPlan(undefined);}}><option value="">対象を選んでください</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {if (local && onLocalChange) {
+          const proposed = await api<{config: ShopConfig}>(`/api/shops/${shopId}/visual/propose`, {id: result.id, target, instruction});
+          onLocalChange(proposed.config);
+        } else setPlan(await api(`/api/shops/${shopId}/plan`, {text: instruction, visual: {id: result.id, target}}));})}>{local ? "この対象をローカルに変更" : "この対象の差分プランを作る"}</button></div>}
       {plan && <div className="notice"><h3>差分プランを作成しました</h3><ul>{plan.summary.map(s => <li key={s}>{s}</li>)}</ul><p>まだ公開内容は変更されていません。</p><a className="button primary" href={`/?shop=${encodeURIComponent(shopId)}&plan=${encodeURIComponent(plan.id)}`}>運営画面でプランを確認・承認する →</a></div>}
       <button disabled={busy} onClick={() => {setImage(""); setResult(undefined); setPlan(undefined);}}>ペン入力を閉じる</button>
     </>}
-  </div>;
+  </div>}
+  </>;
 }

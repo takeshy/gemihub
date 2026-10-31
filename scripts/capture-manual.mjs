@@ -145,7 +145,7 @@ try {
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
   await capture("16-blog-edit.jpg", ".post-editor");
   await page
-    .getByRole("button", { name: "公開前のプレビュー", exact: true })
+    .getByRole("button", { name: "プレビュー", exact: true })
     .click();
   await page.locator(".post-preview").waitFor();
   await capture("17-blog-preview.jpg", ".post-preview");
@@ -159,10 +159,10 @@ try {
   await page
     .getByLabel("タイトル", { exact: true })
     .fill("秋色ネイルで、季節を指先に。（お手入れのご案内を追加）");
-  await page.getByRole("button", { name: "下書きを保存", exact: true }).click();
+  await page.getByRole("button", { name: "保存", exact: true }).click();
   await page
     .getByRole("status")
-    .filter({ hasText: "下書きを保存しました" })
+    .filter({ hasText: "保存して本番に反映しました" })
     .waitFor();
   await capture("20-blog-update.jpg", ".post-editor");
   assert.deepEqual(errors, []);

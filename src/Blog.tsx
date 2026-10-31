@@ -96,7 +96,7 @@ export function BlogEditor({
             ＋ 新しい記事
           </button>
         </div>
-        <p className="small muted">下書きは、お客様には見えません。</p>
+        <p className="small muted">保存前の編集は、お客様には反映されません。</p>
         <button
           className="text-button"
           onClick={() =>
@@ -303,7 +303,7 @@ export function BlogEditor({
                     setContent((c) => ({ ...c, ...proposed }));
                     setReview(undefined);
                     notify(
-                      "下書きの案ができました。内容を確認し、下書きを保存してください。",
+                      "記事の案ができました。プレビューで確認し、保存すると本番に反映されます。",
                     );
                   })
                 }
@@ -319,35 +319,36 @@ export function BlogEditor({
             </details>
             <div className="actions">
               <button
+                disabled={!shop.published || busy || !shop.isOwner}
                 onClick={() =>
                   run(async () => {
                     const parsed = postContentSchema.parse(content);
                     const saved = await api<Post>(
                       current ? `${base}/${current.id}/save` : base,
                       current
-                        ? { version: current.version, content: parsed }
-                        : { content: parsed },
+                        ? { version: current.version, content: parsed, publish: true }
+                        : { content: parsed, publish: true },
                     );
                     await accept(saved);
                     notify(
-                      "下書きを保存しました。公開前のプレビューでご確認ください。",
+                      "保存して本番に反映しました。",
                     );
                   })
                 }
               >
-                下書きを保存
+                保存
               </button>
               <button
-                disabled={!clean}
-                onClick={() => setReview(current!.version)}
+                disabled={!content.title.trim() || !content.body.trim()}
+                onClick={() => setReview(current?.version || 0)}
               >
-                公開前のプレビュー
+                プレビュー
               </button>
             </div>
           </fieldset>
           {!clean && current && (
             <p className="small muted">
-              未保存の変更があります。先に下書きを保存してください。
+              未保存の変更があります。保存すると本番に反映されます。
             </p>
           )}
           {current?.published && (
@@ -381,34 +382,16 @@ export function BlogEditor({
             </div>
           )}
         </div>
-        {current && clean && review === current.version && (
+        {review !== undefined && (
           <div ref={previewRef} className="panel post-preview">
             <div className="preview-banner">
-              公開前のプレビュー · お客様にはまだ反映されていません。
+              記事のプレビュー · 編集中の内容を確認できます。
             </div>
             <PostContent post={content} />
             <p className="small muted">
-              この内容を確認して公開します。日付は記事の表示日で、予約投稿ではありません。
+              確認して保存すると本番に反映されます。日付は記事の表示日で、予約投稿ではありません。
             </p>
-            <button
-              className="primary wide"
-              disabled={busy || !shop.isOwner || !shop.published}
-              onClick={() =>
-                run(async () => {
-                  await accept(
-                    await api<Post>(`${base}/${current.id}/publish`, {
-                      version: current.version,
-                      approved: true,
-                    }),
-                  );
-                  notify(
-                    "記事を公開しました。一覧とトップの新着にも反映しました。",
-                  );
-                })
-              }
-            >
-              内容を承認して記事を公開 →
-            </button>
+            <button onClick={() => setReview(undefined)}>プレビューを閉じる</button>
             {!shop.published && (
               <p className="small muted">
                 先にお店の予約ページを公開してください。

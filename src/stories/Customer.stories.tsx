@@ -45,3 +45,8 @@ export const Anonymous: Story = {
   name: "顧客・ログイン前",
   args: { scenario: "anonymous" },
 };
+
+export const CustomPage: Story = {
+  name: "追加ページ・よくある質問",
+  args: { scenario: "custom-page" },
+};

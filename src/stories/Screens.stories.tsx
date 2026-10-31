@@ -45,3 +45,10 @@ export const PublicationError: Story = {
   name: "公開の再試行",
   args: { scenario: "publication-error" },
 };
+
+export const Menus: Story = { name: "メニュー・料金の保存", args: { scenario: "manage-menus" } };
+export const Staff: Story = { name: "スタッフ・勤務の保存", args: { scenario: "manage-staff" } };
+export const Hours: Story = { name: "営業時間・休業日の保存", args: { scenario: "manage-hours" } };
+export const Rules: Story = { name: "予約ルールの保存", args: { scenario: "manage-rules" } };
+
+export const Basic: Story = { name: "お店の基本情報の保存", args: { scenario: "manage-basic" } };

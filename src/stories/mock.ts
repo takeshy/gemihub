@@ -1,3 +1,6 @@
+import { updateLiveValue, type LiveSection } from "../../server/live-settings";
+import { fingerprint } from "../editor-sync";
+import { scopedSource, scopedConfig, type ReleaseScope } from "../../server/pages";
 import { shopSystem, systemSvg } from "../../server/shop-system";
 import { storyPosts } from "./posts";
 import {
@@ -21,6 +24,19 @@ import {
   type Booking,
 } from "../../server/domain";
 export type Scenario =
+  | "editor-unfetched"
+  | "editor-remote"
+  | "editor-conflict"
+  | "page-builder"
+  | "local-editor-pages"
+  | "custom-page"
+  | "manage-basic"
+  | "manage-menus"
+  | "manage-staff"
+  | "manage-hours"
+  | "manage-rules"
+  | "local-editor"
+  | "local-editor-new"
   | "system"
   | "visual-preview"
   | "visual-live"
@@ -54,6 +70,7 @@ export type Scenario =
   | "preview"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
+  "custom-page",
   "blog-archive",
   "blog-article",
   "announcement-archive",
@@ -71,7 +88,7 @@ const publicScenarios = new Set<Scenario>([
 export function scenarioProps(scenario: Scenario) {
   return {
     path:
-      scenario === "blog-archive" || scenario === "empty-blog"
+      scenario === "custom-page" ? "/s/salon-nagi/pages/faq" : scenario === "blog-archive" || scenario === "empty-blog"
         ? "/s/salon-nagi/blogs"
         : scenario === "announcement-archive"
           ? "/s/salon-nagi/announcements"
@@ -83,11 +100,16 @@ export function scenarioProps(scenario: Scenario) {
                 ? "/s/salon-nagi"
                 : "/",
     search: (scenario === "preview" || scenario === "visual-preview") ? "?plan=story-plan" : "",
-    initialTab:
+    initialTab: scenario === "editor-unfetched" ? undefined :
       (
         {
           manual: "manual",
           system: "system",
+          "local-editor": "try",
+          "local-editor-pages": "try",
+          "editor-unfetched": "try", "editor-remote": "try", "editor-conflict": "try", "page-builder": "create-page",
+          "manage-basic": "basic", "manage-menus": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
+          "local-editor-new": "try",
           "blog-editor": "blog",
           bookings: "bookings",
           inquiries: "inquiries",
@@ -114,6 +136,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const config = structuredClone(sample);
   config.hours.closedWeekdays = [];
   config.notificationEmail = "owner@example.com";
+  if (["local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-conflict"].includes(scenario)) config.pages = [
+    { id: "faq", slug: "faq", title: "よくある質問", navigationLabel: "よくある質問", body: "## 初めてでも予約できますか？\n\n初めてのお客様も歓迎しています。\n\n## 当日の持ち物は？\n\n特にありません。お気軽にお越しください。", layout: "standard", imageUrl: "" },
+    { id: "about-us", slug: "about-us", title: "私たちのお店", navigationLabel: "店舗紹介", body: "## 大切にしていること\n\n一人ひとりに合った時間をご用意します。", layout: "compact", imageUrl: "" },
+  ];
+  if (["editor-remote", "editor-conflict"].includes(scenario)) config.pages[0].body = "## リモートの変更\n\nリモートで追加された案内です。";
   const tomorrow = dateJST(new Date(Date.now() + 86400000));
   const bookings: Booking[] = [
     {
@@ -148,11 +175,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
     base: 0,
     approved: ["approved", "preview", "visual-preview", "publication-error"].includes(scenario),
   };
-  const unpublished = ["onboarding", "plan", "approved", "preview", "visual-preview"].includes(
+  const unpublished = ["local-editor-new", "onboarding", "plan", "approved", "preview", "visual-preview"].includes(
     scenario,
   );
   const shop: Workspace = {
-    id: "story-shop",
+    id: scenario === "local-editor-new" ? "story-new-shop" : "story-shop",
     owner: "owner@example.com",
     slug: "salon-nagi",
     published: unpublished ? null : config,
@@ -232,6 +259,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     staffId: scenario === "calendar-missing-staff" ? "removed-staff" : scenario === "calendar-member" ? "haru" : "aoi",
     configured: scenario.startsWith("calendar-"),
   };
+  let visualConfig = structuredClone(config);
   const interview={fields:{} as Record<string,string>,version:0};
   const client: ApiClient = async <T>(
     path: string,
@@ -244,6 +272,44 @@ export function createMockClient(scenario: Scenario): ApiClient {
     if (action === "/api/session") result = session;
     else if (action === "/api/workspace") result = { shops: [shop] };
     else if (action === "/api/invitations") result = [];
+    else if (action.startsWith(`/api/shops/${shop.id}/live-settings/`)) {
+      const section = action.split("/").at(-1) as LiveSection;
+      if (data === undefined) result = { config: shop.published || config };
+      else { shop.published = updateLiveValue(shop.published || config, section, input.value); shop.revision++; result = { ok: true }; }
+    }
+    else if (action === `/api/shops/${shop.id}/pages/create-with-ai`) {
+      const messages = input.messages as { role: string; text: string }[];
+      const ready = input.mode === "write" || messages.filter(m => m.role === "user").length >= 2;
+      result = { reply: ready ? "FAQ のページ案ができました。内容を確認してツリーに追加してください。" : "どんな質問や案内を載せたいですか？", page: ready ? { slug: "new-faq", title: "新しいFAQ", navigationLabel: "よくある質問", body: "## 初めてのお客様へ\n\nご予約方法をご案内します。", layout: "standard", imageUrl: "" } : null };
+    }
+    else if (action === `/api/shops/${shop.id}/local-editor/index`) result = {
+      base: shop.revision, published: !!shop.published, lastPublishedPlanId: shop.lastPublishedPlanId,
+      sharedHash: await fingerprint(scopedSource(shop.published, { kind: "shared" })),
+      parts: { header: await fingerprint(shop.published?.header || null), footer: await fingerprint(shop.published?.footer || null) },
+      pages: await Promise.all((shop.published?.pages || []).map(async p => ({ id: p.id, title: p.title, slug: p.slug, hash: await fingerprint(p) }))),
+    };
+    else if (action === `/api/shops/${shop.id}/local-editor/shared`) result = { base: shop.revision, source: shop.published ? { ...shop.published, pages: [] } : null, config: { ...(shop.published || config), pages: [] }, lastPublishedPlanId: shop.lastPublishedPlanId };
+    else if (action.startsWith(`/api/shops/${shop.id}/local-editor/pages/`)) result = { base: shop.revision, page: shop.published?.pages.find(p => p.id === action.split("/").at(-1)) || null };
+    else if (action === `/api/shops/${shop.id}/local-editor/merge`) {
+      const scope = input.scope as ReleaseScope;
+      const remote = input.expectedRemote as Record<string, unknown> | null;
+      const local = input.localValue as Record<string, unknown> | null;
+      result = { value: scope.kind === "page" ? { ...(remote || local), body: `## AIの結合案\n\n${String(local?.body || "")}\n\n${String(remote?.body || "")}` } : { ...remote, ...local }, explanation: "ローカルとリモートの案内を両方残した結合案です。" };
+    }
+    else if (action === `/api/shops/${shop.id}/local-editor`) result = { base: shop.revision, source: shop.published, config: shop.published || config, lastPublishedPlanId: shop.lastPublishedPlanId };
+    else if (action === `/api/shops/${shop.id}/visual/propose`) {
+      const next = structuredClone(visualConfig) as typeof config;
+      if (String(input.target).startsWith("page:")) {
+        const [, id, field] = String(input.target).split(":");
+        const page = next.pages.find(p => p.id === id)!;
+        if (field === "body") page.body = "## ペンで変更した内容\n\nローカルのページ本文を更新しました。";
+        else page.title = "ペンで変更したページ";
+      } else if (input.target === "part:header") next.header.title = "季節を楽しむアトリエ";
+      else if (input.target === "part:footer") next.footer.text = "お会いできる日を楽しみにしています。";
+      else if (input.target === "name") next.name = "季節のアトリエ";
+      else next.description = "季節を楽しむ、小さなネイルサロン。";
+      result = { config: next, summary: ["選んだ対象をローカルで変更"] };
+    }
     else if (action === `/api/shops/${shop.id}/posts/propose`)
       result = {
         title: String(input.title || "お店からのお便り"),
@@ -271,6 +337,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           updatedBy: "owner@example.com",
         };
         validatePostAddress(post, content, posts);
+        if (input.publish) { post.published = structuredClone(content); post.publishedAt = at; post.address = postAddress(content); }
         posts.unshift(post);
         result = post;
       }
@@ -283,6 +350,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         const content = postContentSchema.parse(input.content);
         validatePostAddress(post, content, posts);
         post.draft = content;
+        if (input.publish) { post.published = structuredClone(content); post.publishedAt = new Date().toISOString(); post.address = postAddress(content); }
       } else if (action.endsWith("/publish")) {
         if (input.approved !== true) throw new Error("内容を承認してください");
         post.published = structuredClone(post.draft);
@@ -307,11 +375,20 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action === `/api/shops/${shop.id}/system/question`) {
       result = {answer: "お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。変更する場合は、差分プランを確認・承認して公開してください。", changeRequest: true};
     } else if (action === `/api/shops/${shop.id}/visual/identify`) {
-      result = {id: "story-visual", explanation: "Storybook のサンプルでは、店名か紹介文を候補として表示します。", candidates: [{id: "name", label: `店名：${config.name}`}, {id: "description", label: `紹介文：${config.description}`}]};
+      visualConfig = structuredClone((input.displayed || config) as typeof config);
+      const part = (input.local as { part?: "header" | "footer" } | undefined)?.part;
+      if (part) result = { id: "story-visual", explanation: "共通パーツの変更対象を確認してください。", candidates: [{ id: `part:${part}`, label: part === "header" ? "共通ヘッダー" : "共通フッター" }] };
+      else if (visualConfig.pages.length && String(input.instruction).includes("ページ")) {
+        const pageId = (input.local as { pageId?: string } | undefined)?.pageId;
+        const page = visualConfig.pages.find(p => p.id === pageId) || visualConfig.pages.at(-1)!;
+        result = { id: "story-visual", explanation: "ページの変更対象を確認してください。", candidates: [{ id: `page:${page.id}:title`, label: `ページ見出し：${page.title}` }, { id: `page:${page.id}:body`, label: `ページ本文：${page.title}` }] };
+      } else result = {id: "story-visual", explanation: "Storybook のサンプルでは、店名か紹介文を候補として表示します。", candidates: [{id: "name", label: `店名：${config.name}`}, {id: "description", label: `紹介文：${config.description}`}]};
     } else if (action === `/api/shops/${shop.id}/plan`) {
-      const next = input.config
+      let next = input.config
         ? structuredClone(input.config as typeof config)
         : structuredClone(config);
+      const local = input.local as { scope?: ReleaseScope } | undefined;
+      if (local?.scope) next = scopedConfig(shop.published, next, local.scope);
       if (input.visual) {
         const target = (input.visual as {target: string}).target;
         if (target === "name") next.name = "季節のアトリエ";
@@ -352,6 +429,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           summary: current.summary.join("、"),
         });
         shop.revision++;
+        shop.lastPublishedPlanId = current.id;
         delete shop.publishingPlanId;
       } else throw new Error("未対応のモック操作");
       result = { ok: true };

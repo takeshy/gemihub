@@ -76,6 +76,12 @@ import {
   renderArchive,
   renderHomeWithPosts,
 } from "./post-renderer.tsx";
+import { liveValue, updateLiveValue, type LiveSection } from "./live-settings.ts";
+import { editorIndex } from "./editor-sync.ts";
+import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from "./page-ai.ts";
+import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
+import { renderCustomPage } from "./page-renderer.tsx";
+import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
 import { calendarGateway, calendarScope, connections, availableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
 function fail(status: number, message: string): never {
   throw Object.assign(new Error(message), { status });
@@ -88,6 +94,8 @@ type Plan = {
   config: ShopConfig;
   summary: string[];
   approved: boolean;
+  local?: boolean;
+  scope?: ReleaseScope;
   createdAt: number;
   checklist: string[];
   source?: ShopConfig | null;
@@ -146,6 +154,8 @@ export function createApp(
     identifyVisual: typeof identifyVisual;
     explainSystem: typeof explainSystem;
     normalizeTurn?: typeof normalizeTurn;
+    createPage?: typeof createPageWithAI;
+    mergePage?: typeof mergePageWithAI;
   } = { propose, proposeArticle, identifyVisual, explainSystem, normalizeTurn },
   liveConnector?: LiveConnector,
   calendar: CalendarGateway = calendarGateway,
@@ -228,6 +238,68 @@ export function createApp(
   ) {
     for (const address of new Set([to, config.notificationEmail]))
       await enqueue(shop, "mail", { to: address, subject, body: text });
+  }
+  async function publishConfiguration(fresh: Shop, plan: Plan) {
+    if (plan.local && fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
+    if (plan.base !== fresh.revision) fail(409, "本番の内容が変わりました。最新の内容を読み直してください");
+    if (!plan.approved) fail(409, "先にプランを承認してください");
+    if (
+      fresh.google &&
+      !fresh.publishingPlanId &&
+      JSON.stringify(plan.source) !==
+        JSON.stringify(await effective(fresh))
+    )
+      fail(
+        409,
+        "スプレッドシートの設定が更新されています。最新の内容でプランを作り直してください",
+      );
+    if (fresh.publishingPlanId && fresh.publishingPlanId !== plan.id)
+      fail(409, "公開中のプランを先に完了してください");
+    const history = [
+      ...fresh.history,
+      {
+        at: new Date().toISOString(),
+        summary: plan.summary.join("、"),
+      },
+    ];
+    if (!demoEnabled() || (await ownerToken(fresh))) {
+      const token =
+        (await ownerToken(fresh)) ||
+        fail(503, "店主の Google 再接続が必要です");
+      fresh.publishingPlanId = plan.id;
+      await store.saveShop(fresh);
+      try {
+        fresh.google = await provision(fresh, plan.config, token);
+        await store.saveShop(fresh);
+        await syncConfig(
+          { ...fresh, history },
+          plan.config,
+          token,
+          async () => await store.saveShop(fresh),
+          plan.scope,
+        );
+      } catch (error) {
+        fresh.publishingError =
+          error instanceof Error ? error.message : "Google 連携エラー";
+        await store.saveShop(fresh);
+        console.error(error);
+        fail(
+          503,
+          "保存・反映を完了できませんでした。同じ画面から再試行してください。処理中は予約受付を停止しています。",
+        );
+      }
+      delete fresh.publishingPlanId;
+      delete fresh.publishingError;
+    }
+    fresh.published = plan.config;
+    fresh.draft = null;
+    fresh.history = history;
+    fresh.revision++;
+    fresh.lastPublishedPlanId = plan.id;
+    await store.saveShop(fresh);
+    if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
+    await flush(fresh);
+    return { ok: true, url: `/s/${fresh.slug}` };
   }
   const rate = new Map<
     string,
@@ -571,6 +643,80 @@ export function createApp(
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
+          const liveSettings = action.match(/^live-settings\/(basic|menus|staff|hours|rules)$/);
+          if (liveSettings && (method === "GET" || method === "POST")) {
+            assertOwner(user, fresh);
+            const section = liveSettings[1] as LiveSection;
+            if (method === "GET") {
+              if (!fresh.published) fail(409, "先にお店の共通設定を反映してください");
+              return json(res, { config: await effective(fresh) });
+            }
+            const input = z.object({ value: z.unknown(), previous: z.unknown(), requestId: z.uuid() }).parse(await body(req));
+            const id = digest(`${fresh.id}:${user!.email}:settings:${section}:${input.requestId}`);
+            let plan = await store.get<Plan>("plan", id);
+            if (plan) {
+              if (!same(liveValue(plan.config, section), input.value)) fail(409, "保存する内容を確認し直してください");
+            } else {
+              if (!fresh.published) fail(409, "先にお店の共通設定を反映してください");
+              const current = await effective(fresh);
+              if (!same(liveValue(current, section), input.previous)) fail(409, "別の操作で更新されました。最新の内容を読み直してください。編集内容はこの画面に残っています");
+              const config = updateLiveValue(current, section, input.value);
+              plan = { id, shopId: fresh.id, base: fresh.revision, config, source: current, summary: planSummary(current, config), approved: true, local: true, createdAt: Date.now(), checklist };
+              if (!plan.summary.length) return json(res, { ok: true });
+              await store.put("plan", id, plan);
+            }
+            return json(res, await publishConfiguration(fresh, plan));
+          }
+          if (action === "pages/create-with-ai" && method === "POST") {
+            assertOwner(user, fresh);
+            const input = z.object({ messages: z.array(messageSchema).min(1).max(40), mode: z.enum(["chat", "write"]) }).parse(await body(req, 500000));
+            const config = fresh.published ? await effective(fresh) : fresh.draft || sample;
+            const { name, industry, description, address } = config;
+            const result = await (intelligence.createPage || createPageWithAI)(input.messages, { name, industry, description, address }, input.mode);
+            return json(res, z.object({ reply: z.string().min(1).max(4000), page: pageSchema.omit({ id: true }).nullable() }).parse(result));
+          }
+          if (action.startsWith("local-editor/") && method === "GET") {
+            assertOwner(user, fresh);
+            const current = fresh.published ? await effective(fresh) : null;
+            if (action === "local-editor/index") return json(res, editorIndex(current, fresh.revision, fresh.lastPublishedPlanId));
+            if (action === "local-editor/shared") {
+              const config = { ...(current || fresh.draft || { ...structuredClone(sample), notificationEmail: user!.email }), pages: [] };
+              return json(res, { base: fresh.revision, source: current ? { ...current, pages: [] } : null, config, lastPublishedPlanId: fresh.lastPublishedPlanId });
+            }
+            const page = action.match(/^local-editor\/pages\/([a-z0-9_-]+)$/);
+            if (page) return json(res, { base: fresh.revision, page: current?.pages.find(p => p.id === page[1]) || null });
+          }
+          if (action === "local-editor/merge" && method === "POST") {
+            assertOwner(user, fresh);
+            const input = z.object({ scope: releaseScopeSchema, baseline: z.unknown(), localValue: z.unknown(), expectedRemote: z.unknown() }).parse(await body(req, 1500000));
+            const outputSchema = input.scope.kind === "page" ? pageSchema.nullable() : input.scope.kind === "part" ? (input.scope.part === "header" ? headerSchema : footerSchema) : profileSchema;
+            const valueSchema = outputSchema.nullable();
+            const baseline = valueSchema.parse(input.baseline), localValue = valueSchema.parse(input.localValue), expectedRemote = valueSchema.parse(input.expectedRemote);
+            const current = fresh.published ? await effective(fresh) : null;
+            if (!same(expectedRemote, scopedSource(current, input.scope))) fail(409, "リモートが再更新されました。比較を開き直してください");
+            const proposal = await (intelligence.mergePage || mergePageWithAI)({ baseline, local: localValue, remote: expectedRemote, kind: input.scope.kind === "part" ? input.scope.part : input.scope.kind });
+            const value = outputSchema.parse(proposal.value);
+            if (input.scope.kind === "page" && value && "id" in value && value.id !== input.scope.pageId) fail(400, "AI が対象外のページを変更しました");
+            const latest = fresh.published ? await effective(fresh) : null;
+            if (!same(expectedRemote, scopedSource(latest, input.scope))) fail(409, "リモートが再更新されました。比較を開き直してください");
+            return json(res, { value, explanation: z.string().min(1).max(4000).parse(proposal.explanation) });
+          }
+          if (action === "local-editor" && method === "GET") {
+            assertOwner(user, fresh);
+            const source = fresh.published ? await effective(fresh) : null;
+            return json(res, { base: fresh.revision, source, lastPublishedPlanId: fresh.lastPublishedPlanId, config: source || fresh.draft || { ...structuredClone(sample), notificationEmail: user!.email } });
+          }
+          if (action === "visual/propose" && method === "POST") {
+            assertOwner(user, fresh);
+            const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000) }).parse(await body(req));
+            const visual = await store.get<VisualRequest>("visual", input.id);
+            const source = fresh.published ? await effective(fresh) : null;
+            if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
+              fail(409, "本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください");
+            const proposed = await intelligence.propose(`ペンで選んだ対象 ${input.target} のみ変更する。他の箇所は変更しない。依頼：${input.instruction}`, visual.config, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT);
+            const config = validateVisualChange(visual.config, proposed.config, input.target);
+            return json(res, { config, summary: planSummary(visual.config, config) });
+          }
           if (action === "calendar" && method === "GET") {
             const connection = await store.get<CalendarConnection>("calendar", `${fresh.id}:${user!.email}`);
             return json(res, { connected: !!connection, staffId: connection?.staffId, email: user!.email, configured: !!process.env.GOOGLE_CLIENT_ID });
@@ -675,6 +821,7 @@ export function createApp(
                 instruction: z.string().trim().min(1).max(4000),
                 planId: z.string().optional(),
                 displayed: shopSchema,
+                local: z.object({ base: z.number().int(), source: shopSchema.nullable(), pageId: z.string().optional(), part: z.enum(["header", "footer"]).optional() }).optional(),
               })
               .parse(await body(req, 12000000));
             if (
@@ -684,6 +831,12 @@ export function createApp(
               fail(400, "4MB以下の PNG を指定してください");
             const source = fresh.published ? await effective(fresh) : null;
             let config = source;
+            if (input.local) {
+              const scope = input.local.part ? { kind: "part" as const, part: input.local.part } : input.local.pageId ? { kind: "page" as const, pageId: input.local.pageId } : { kind: "shared" as const };
+              if (input.planId || !same(scopedSource(input.local.source, scope), scopedSource(source, scope)))
+                fail(409, "本番の内容が変わりました。最新の内容を取り込んでください");
+              config = input.displayed;
+            }
             if (input.planId) {
               const plan = await store.get<Plan>("plan", input.planId);
               if (
@@ -704,7 +857,10 @@ export function createApp(
                 409,
                 "画面の設定が古くなっています。開き直して印をつけてください",
               );
-            const targets = visualTargets(config);
+            if (input.local?.pageId && !config.pages.some(p => p.id === input.local!.pageId)) fail(400, "対象ページがありません");
+            const targets = visualTargets(config).filter(t => !input.local || (input.local.part ? t.id === `part:${input.local.part}` : input.local.pageId
+              ? t.id.startsWith(`page:${input.local.pageId}:`)
+              : !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:")));
             const result = await intelligence.identifyVisual(
               input.media,
               targets,
@@ -773,9 +929,10 @@ export function createApp(
           }
           if (action === "posts" && method === "POST") {
             assertOwner(user, fresh);
-            const { content } = z
-              .object({ content: postContentSchema })
+            const { content, publish } = z
+              .object({ content: postContentSchema, publish: z.boolean().optional() })
               .parse(await body(req));
+            if (publish && (!fresh.published || fresh.publishingPlanId)) fail(409, "先にお店の反映処理を完了してください");
             const at = new Date().toISOString();
             const post: Post = {
               id: randomUUID(),
@@ -788,8 +945,13 @@ export function createApp(
               updatedBy: user!.email,
             };
             validatePostAddress(post, content, await postsFor(fresh));
+            if (publish) {
+              post.published = structuredClone(content); post.publishedAt = at; post.address = postAddress(content);
+              fresh.history.push({ at, summary: `${postLabel(content.category)}を保存・公開：${content.title}` });
+            }
             await store.transaction(async () => {
               await store.put("post", post.id, post);
+              if (publish) await store.saveShop(fresh);
               await enqueue(fresh, "posts");
             });
             await flush(fresh);
@@ -816,11 +978,16 @@ export function createApp(
               );
             const at = new Date().toISOString();
             if (postAction[2] === "save") {
-              const { content } = z
-                .object({ content: postContentSchema })
+              const { content, publish } = z
+                .object({ content: postContentSchema, publish: z.boolean().optional() })
                 .parse(raw);
+              if (publish && (!fresh.published || fresh.publishingPlanId)) fail(409, "先にお店の反映処理を完了してください");
               validatePostAddress(post, content, await postsFor(fresh));
               post.draft = content;
+              if (publish) {
+                post.published = structuredClone(content); post.publishedAt = at; post.address = postAddress(content);
+                fresh.history.push({ at, summary: `${postLabel(content.category)}を保存・公開：${content.title}` });
+              }
             } else if (postAction[2] === "publish") {
               z.object({ approved: z.literal(true) }).parse(raw);
               if (!fresh.published)
@@ -865,12 +1032,28 @@ export function createApp(
               .object({
                 text: z.string().min(1).max(10000),
                 config: shopSchema.optional(),
+                local: z.object({ base: z.number().int(), source: shopSchema.nullable(), requestId: z.uuid(), scope: releaseScopeSchema.optional() }).optional(),
                 visual: z
                   .object({ id: z.string(), target: z.string() })
                   .optional(),
               })
-              .parse(await body(req));
+              .parse(await body(req, 1500000));
             const current = fresh.published ? await effective(fresh) : null;
+            let releaseConfig = input.config;
+            if (input.local?.scope && input.config) releaseConfig = shopSchema.parse(scopedConfig(current, input.config, input.local.scope));
+            const localPlanId = input.local ? digest(`${fresh.id}:${user!.email}:${input.local.requestId}`) : undefined;
+            if (input.local) {
+              if (!input.config || input.visual) fail(400, "反映するローカル設定を指定してください");
+              const previous = await store.get<Plan>("plan", localPlanId!);
+              if (previous) {
+                if (previous.shopId !== fresh.id || JSON.stringify(previous.config) !== JSON.stringify(releaseConfig)) fail(409, "反映する内容を確認し直してください");
+                return json(res, previous);
+              }
+              if (input.local.scope
+                ? !same(scopedSource(input.local.source, input.local.scope), scopedSource(current, input.local.scope))
+                : input.local.base !== fresh.revision || !same(input.local.source, current))
+                fail(409, "本番の内容が変わりました。ローカル編集は保持しています。最新の内容を取り込んで変更を確認してください");
+            }
             let visual: VisualRequest | undefined;
             if (input.visual) {
               if (input.config)
@@ -892,8 +1075,8 @@ export function createApp(
             }
             const proposed = input.config
               ? {
-                  config: input.config,
-                  summary: planSummary(current, input.config),
+                  config: releaseConfig!,
+                  summary: planSummary(current, releaseConfig!),
                 }
               : await intelligence.propose(
                   visual
@@ -912,7 +1095,9 @@ export function createApp(
               proposed.summary = planSummary(current, proposed.config);
             }
             const plan: Plan = {
-              id: randomUUID(),
+              id: localPlanId || randomUUID(),
+              local: !!input.local,
+              scope: input.local?.scope,
               shopId: fresh.id,
               base: fresh.revision,
               ...proposed,
@@ -932,6 +1117,8 @@ export function createApp(
             const plan = await store.get<Plan>("plan", p[1]);
             if (!plan || plan.shopId !== fresh.id)
               fail(404, "プランがありません");
+            if (plan.local && fresh.lastPublishedPlanId === plan.id)
+              return json(res, { ok: true, url: `/s/${fresh.slug}` });
             if (plan.base !== fresh.revision)
               fail(409, "公開内容が変わりました。プランを作り直してください");
             if (p[2] === "approve") {
@@ -941,62 +1128,7 @@ export function createApp(
               await store.saveShop(fresh);
               return json(res, { ok: true });
             }
-            if (!plan.approved) fail(409, "先にプランを承認してください");
-            if (
-              fresh.google &&
-              !fresh.publishingPlanId &&
-              JSON.stringify(plan.source) !==
-                JSON.stringify(await effective(fresh))
-            )
-              fail(
-                409,
-                "スプレッドシートの設定が更新されています。最新の内容でプランを作り直してください",
-              );
-            if (fresh.publishingPlanId && fresh.publishingPlanId !== plan.id)
-              fail(409, "公開中のプランを先に完了してください");
-            const history = [
-              ...fresh.history,
-              {
-                at: new Date().toISOString(),
-                summary: plan.summary.join("、"),
-              },
-            ];
-            if (!demoEnabled() || (await ownerToken(fresh))) {
-              const token =
-                (await ownerToken(fresh)) ||
-                fail(503, "店主の Google 再接続が必要です");
-              fresh.publishingPlanId = plan.id;
-              await store.saveShop(fresh);
-              try {
-                fresh.google = await provision(fresh, plan.config, token);
-                await store.saveShop(fresh);
-                await syncConfig(
-                  { ...fresh, history },
-                  plan.config,
-                  token,
-                  async () => await store.saveShop(fresh),
-                );
-              } catch (error) {
-                fresh.publishingError =
-                  error instanceof Error ? error.message : "Google 連携エラー";
-                await store.saveShop(fresh);
-                console.error(error);
-                fail(
-                  503,
-                  "Google への公開を完了できませんでした。承認済みプランの「公開」を再試行してください。更新中は予約受付を停止しています。",
-                );
-              }
-              delete fresh.publishingPlanId;
-              delete fresh.publishingError;
-            }
-            fresh.published = plan.config;
-            fresh.draft = null;
-            fresh.history = history;
-            fresh.revision++;
-            await store.saveShop(fresh);
-            await enqueue(fresh, "posts");
-            await flush(fresh);
-            return json(res, { ok: true, url: `/s/${fresh.slug}` });
+            return json(res, await publishConfiguration(fresh, plan));
           }
           if (action === "operations" && method === "GET") {
             return json(res, {
@@ -1429,9 +1561,9 @@ export function createApp(
         !asset &&
         path !== "/" &&
         (publicHost
-          ? !/^\/(blogs|announcements)(?:\/[a-z0-9-]+)?$/.test(path)
+          ? !/^\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?$/.test(path)
           : path !== "/manual" &&
-            !/^\/(s|preview)\/[^/]+(?:\/(blogs|announcements)(?:\/[a-z0-9-]+)?)?$/.test(
+            !/^\/(s|preview)\/[^/]+(?:\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?)?$/.test(
               path,
             ))
       )
@@ -1444,10 +1576,10 @@ export function createApp(
       }
       if (!asset) {
         const local = path.match(
-          /^\/s\/([^/]+)(?:\/(blogs|announcements)(?:\/([a-z0-9-]+))?)?$/,
+          /^\/s\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
         );
         const custom = publicHost
-          ? path.match(/^\/(blogs|announcements)(?:\/([a-z0-9-]+))?$/)
+          ? path.match(/^\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?$/)
           : null;
         const shop =
           hosted || allShops.find((s) => s.slug === local?.[1] && s.published);
@@ -1457,7 +1589,11 @@ export function createApp(
           const posts = publicPosts(await postsFor(shop));
           const base = publicHost ? "" : `/s/${shop.slug}`;
           const shell = data.toString("utf8");
-          if (category) {
+          if (category === "pages") {
+            const config = await effective(shop);
+            const page = config.pages.find(p => p.slug === key) || fail(404, "ページがありません");
+            data = Buffer.from(renderCustomPage(page, shell, base));
+          } else if (category) {
             const parsed = postCategorySchema.parse(category);
             if (key && key !== "index") {
               const post =

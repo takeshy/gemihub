@@ -19,6 +19,7 @@ export type Shop = {
     artifactIds?: Record<string, string>;
     artifactFolders?: Record<string, string>;
   };
+  lastPublishedPlanId?: string;
   publishingPlanId?: string;
   publishingError?: string;
   domain?: string;

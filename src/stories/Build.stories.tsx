@@ -41,3 +41,34 @@ export const ShopSystem: Story = { name: "お店の仕組み図と質問", args:
 export const PenPreview: Story = { name: "プレビューへのペン入力", args: {scenario: "visual-preview"} };
 
 export const PenLive: Story = { name: "公開ページへのペン入力", args: {scenario: "visual-live"} };
+
+export const LocalEditor: Story = {
+  name: "画面を試す・ローカル編集と反映",
+  args: { scenario: "local-editor" },
+};
+export const LocalEditorNew: Story = {
+  name: "公開前のお店をローカルで試す",
+  args: { scenario: "local-editor-new" },
+};
+
+export const CustomPagesEditor: Story = {
+  name: "追加ページ・画面ツリーと個別反映",
+  args: { scenario: "local-editor-pages" },
+};
+
+export const UnfetchedPages: Story = {
+  name: "初期サイドツリー・開くと自動取得",
+  args: { scenario: "editor-unfetched" },
+  loaders: [async () => { const { seedEditor } = await import("./sync-fixtures"); seedEditor("unfetched"); return {}; }],
+};
+export const RemoteUpdates: Story = {
+  name: "リモート更新・変更あり",
+  args: { scenario: "editor-remote" },
+  loaders: [async () => { const { seedEditor } = await import("./sync-fixtures"); seedEditor("remote"); return {}; }],
+};
+export const PageConflict: Story = {
+  name: "競合・プレビュー比較とAI結合",
+  args: { scenario: "editor-conflict" },
+  loaders: [async () => { const { seedEditor } = await import("./sync-fixtures"); seedEditor("conflict"); return {}; }],
+};
+export const AIPageBuilder: Story = { name: "別メニューでAIとページをつくる", args: { scenario: "page-builder" } };

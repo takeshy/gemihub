@@ -3,6 +3,11 @@ import type { PostCategory, PostSummary } from "../server/post-domain";
 import { VoiceInput } from "./VoiceInput";
 import { SystemDiagram } from "./SystemDiagram";
 import { VisualRequest } from "./VisualRequest";
+import { SiteHeader, SiteFooter } from "./SiteChrome";
+import { CustomPage } from "./CustomPage";
+import { LiveSettings } from "./LiveSettings";
+import { PageBuilder } from "./PageBuilder";
+import { LocalPreview, type LocalEditorHandle } from "./LocalPreview";
 import { Manual } from "./Manual";
 import { createRequestId } from "./request-id";
 import React, { useEffect, useState, useRef } from "react";
@@ -69,7 +74,7 @@ export type AppProps = {
 export function App({
   path = location.pathname,
   search = location.search,
-  initialTab = new URLSearchParams(location.search).get("calendar") === "connected" ? "team" : "build",
+  initialTab = new URLSearchParams(location.search).get("calendar") === "connected" ? "team" : "try",
   initialPane = "reserve",
   navigate = (href) => location.assign(href),
 }: AppProps = {}) {
@@ -102,15 +107,15 @@ export function App({
   if (!session)
     return <div className="loading">{error || "お店の準備をしています…"}</div>;
   const match = path.match(
-    /^\/(s|preview)\/([^/]+)(?:\/(blogs|announcements)(?:\/([a-z0-9-]+))?)?$/,
+    /^\/(s|preview)\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
   );
   const hostedPost = session.hosted
-    ? path.match(/^\/(blogs|announcements)(?:\/([a-z0-9-]+))?$/)
+    ? path.match(/^\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?$/)
     : null;
   const isPublic = !!match || !!session.hosted;
   return (
     <>
-      <header>
+      {!isPublic && <header>
         <Brand />
         <div className="header-right">
           <span className="small muted">
@@ -127,7 +132,7 @@ export function App({
             </button>
           )}
         </div>
-      </header>
+      </header>}
       <main>
         {session.demo && (
           <div className="demo-banner">
@@ -160,8 +165,9 @@ export function App({
                 ? new URLSearchParams(search).get("pane")
                 : initialPane)!
             }
+            pageSlug={(match?.[3] || hostedPost?.[1]) === "pages" ? match?.[4] || hostedPost?.[2] : undefined}
             category={
-              (match?.[3] || hostedPost?.[1]) as PostCategory | undefined
+              ((match?.[3] || hostedPost?.[1]) === "pages" ? undefined : match?.[3] || hostedPost?.[1]) as PostCategory | undefined
             }
             articleKey={match?.[4] || hostedPost?.[2]}
             navigate={navigate}
@@ -183,10 +189,10 @@ export function App({
           <Landing demo={session.demo} run={run} />
         )}
       </main>
-      <footer>
+      {!isPublic && <footer>
         <span>omaiweb — Oh my web.</span>
         <span>データも、仕様も、あなたの手の中に。</span>
-      </footer>
+      </footer>}
       {busy && (
         <div className="busy" role="status">
           処理しています…
@@ -266,7 +272,7 @@ function Landing({ demo, run }: { demo: boolean; run: Run }) {
   );
 }
 function Dashboard({
-  initialTab = "build",
+  initialTab = "try",
   session,
   run,
   busy,
@@ -282,6 +288,8 @@ function Dashboard({
   const [shops, setShops] = useState<Workspace[]>([]);
   const [chosen, setChosen] = useState(() => new URLSearchParams(location.search).get("shop") || "");
   const [tab, setTab] = useState(initialTab);
+  const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
+  const editorRef = useRef<LocalEditorHandle>(null);
   const [text, setText] = useState("");
   const [plan, setPlan] = useState<Plan>();
   const [edit, setEdit] = useState<ShopConfig>();
@@ -303,6 +311,7 @@ function Dashboard({
     });
   }, []);
   const shop = shops.find((s) => s.id === chosen) || shops[0];
+  useEffect(() => { if (shop && !shop.isOwner && ["try", "create-page"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
   const activePlan =
     plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
       ? plan
@@ -347,7 +356,9 @@ function Dashboard({
         <nav>
           {[
             ["build", "✧", "お店をつくる・直す"],
+            ...(shop?.isOwner ? [["try", "▣", "画面を試す・編集"], ["create-page", "＋", "ページをつくる"]] : []),
             ["bookings", "▦", "予約を管理"],
+            ...(shop?.isOwner ? [["basic", "⌂", "お店の基本情報"], ["menus", "≡", "メニュー・料金"], ["staff", "♧", "スタッフ・勤務"], ["hours", "◷", "営業時間・休業日"], ["rules", "⚙", "予約ルール"]] : []),
             ["inquiries", "✉", "お問い合わせ"],
             ["blog", "✎", "ブログ・お知らせ"],
             ["team", "♧", "家族・スタッフ"],
@@ -356,14 +367,13 @@ function Dashboard({
             ["settings", "⚙", "公開の設定"],
             ["manual", "?", "使い方"],
           ].map(([id, icon, label]) => (
-            <button
-              key={id}
+            <React.Fragment key={id}><button
               className={tab === id ? "active" : ""}
               onClick={() => setTab(id)}
             >
               <span>{icon}</span>
               {label}
-            </button>
+            </button>{id === "try" && <div className="sidebar-editor-tree" ref={setTreeHost} />}</React.Fragment>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -404,7 +414,7 @@ function Dashboard({
               <Manual />
             ) : (
               <>
-                <div className="page-title">
+                {tab !== "try" && <div className="page-title">
                   <div>
                     <div className="eyebrow">YOUR SHOP, YOUR WORDS</div>
                     <h1>
@@ -414,6 +424,9 @@ function Dashboard({
                           : "まずは、お店のお話から。"
                         : (
                             {
+                              try: "試して、直して、反映する。",
+                              "create-page": "AIと、新しいページを。",
+                              basic: "お店の基本情報を管理", menus: "メニュー・料金を管理", staff: "スタッフ・勤務を管理", hours: "営業時間・休業日を管理", rules: "予約ルールを管理",
                               bookings: "今日も、お客様を迎える準備を。",
                               inquiries: "お客様からのお便り。",
                               blog: "お店の想いを、お客様へ。",
@@ -430,21 +443,10 @@ function Dashboard({
                         : "専門知識は必要ありません。いつもの言葉で教えてください。"}
                     </p>
                   </div>
-                  {shop.published && (
-                    <a
-                      href={shop.publicUrl}
-                      className="button"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      予約ページを見る ↗
-                    </a>
-                  )}
-                </div>
-                {shop.isOwner && shop.published && <p><a className="button" href={`/s/${shop.slug}`}>公開ページを開いてペンで変更を依頼 ✎</a></p>}
+                </div>}
                 {shop.publishingPlanId && (
                   <div className="alert">
-                    公開が未完了です。予約受付を一時停止しています。承認済みプランの「お店のページを公開」を再試行してください。
+                    保存・反映が未完了です。予約受付を一時停止しています。操作した管理画面から再試行してください。
                   </div>
                 )}
                 {shop.jobs.length > 0 && (
@@ -699,6 +701,8 @@ function Dashboard({
                     </div>
                   </>
                 )}
+                {["basic", "menus", "staff", "hours", "rules"].includes(tab) && shop.isOwner && <LiveSettings key={`${shop.id}-${tab}`} shop={shop} section={tab as "basic" | "menus" | "staff" | "hours" | "rules"} reload={load} />}
+                {tab === "create-page" && shop.isOwner && <PageBuilder key={shop.id} shopId={shop.id} email={session.user!.email} onAdd={page => { if (!editorRef.current) throw new Error("画面の読み込みが完了するまでお待ちください"); editorRef.current.addPage(page); setTab("try"); }} />}
                 {tab === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
@@ -743,6 +747,7 @@ function Dashboard({
             )}
           </>
         )}
+        {shop?.isOwner && <div hidden={tab !== "try"}><LocalPreview key={shop.id} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} activate={() => setTab("try")} actionsRef={editorRef} /></div>}
       </section>
     </div>
   );
@@ -804,17 +809,20 @@ function Field({
     </label>
   );
 }
-function ConfigEditor({
+export function ConfigEditor({
   config: c,
   onChange: set,
+  section,
 }: {
   config: ShopConfig;
+  section?: "basic" | "profile" | "menus" | "staff" | "hours" | "rules";
   onChange: (c: ShopConfig) => void;
 }) {
   const put = <K extends keyof ShopConfig>(k: K, v: ShopConfig[K]) =>
     set({ ...c, [k]: v });
   return (
     <div className="editor">
+      {(!section || section === "profile" || section === "basic") && <>
       <div className="form-grid">
         <Field label="店名">
           <input value={c.name} onChange={(e) => put("name", e.target.value)} />
@@ -851,6 +859,8 @@ function ConfigEditor({
           onChange={(e) => put("notificationEmail", e.target.value)}
         />
       </Field>
+      </>}
+      {(!section || section === "menus") && <>
       <h3>メニュー</h3>
       {c.menus.map((m, i) => (
         <div className="edit-row" key={m.id}>
@@ -922,19 +932,23 @@ function ConfigEditor({
               name: "新しいコース",
               duration: 60,
               price: 5000,
-              active: true,
+              active: section === "menus" ? false : true,
             },
           ])
         }
       >
         ＋ メニューを追加
       </button>
+      </>}
+      {(!section || section === "profile") && <>
       <h3>ページの見た目</h3>
       <div className="form-grid">
         <Field label="色"><select value={c.appearance?.accent || "sage"} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), accent: e.target.value as "sage" | "rose" | "navy"})}><option value="sage">グリーン</option><option value="rose">ローズ</option><option value="navy">ネイビー</option></select></Field>
         <Field label="配置"><select value={c.appearance?.layout || "standard"} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), layout: e.target.value as "standard" | "compact"})}><option value="standard">ゆったり</option><option value="compact">コンパクト</option></select></Field>
         <Field label="紹介画像の URL（HTTPS）"><input type="url" value={c.appearance?.imageUrl || ""} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), imageUrl: e.target.value})}/></Field>
       </div>
+      </>}
+      {(!section || section === "staff") && <>
       <h3>スタッフと勤務</h3>
       {c.staff.map((p, i) => (
         <div className="staff-editor" key={p.id}>
@@ -1065,6 +1079,8 @@ function ConfigEditor({
       >
         ＋ スタッフを追加
       </button>
+      </>}
+      {(!section || section === "hours") && <>
       <h3>営業時間とお休み</h3>
       <div className="form-grid">
         {(["start", "end"] as const).map((k) => (
@@ -1112,6 +1128,8 @@ function ConfigEditor({
           }
         />
       </Field>
+      </>}
+      {(!section || section === "rules") && <>
       <h3>予約のルール</h3>
       <p className="muted">お客様が予約時に、指名なしまたは希望するスタッフを選べます。</p>
       <div className="form-grid">
@@ -1146,8 +1164,9 @@ function ConfigEditor({
         当日の予約を受け付ける
       </label>
       <p className="small muted">
-        設定はプラン確認・承認・公開のあとに反映されます。
+        {section ? "この項目は保存すると反映されます。" : "設定はプラン確認・承認・公開のあとに反映されます。"}
       </p>
+      </>}
     </div>
   );
 }
@@ -1476,9 +1495,13 @@ function Settings({
     <div className="panel">
       <h2>予約ページのアドレス</h2>
       {shop.published ? (
-        <a href={shop.publicUrl} target="_blank" rel="noreferrer">
-          {shop.publicUrl} ↗
-        </a>
+        <>
+          <p className="muted">お客様に公開している本番のお店を別タブで開きます。</p>
+          <a className="button" href={shop.publicUrl} target="_blank" rel="noreferrer">
+            公開中のお店を開く ↗
+          </a>
+          <p className="small muted">{shop.publicUrl}</p>
+        </>
       ) : (
         <p>お店のページを公開すると、アドレスができあがります。</p>
       )}
@@ -1534,12 +1557,16 @@ function Settings({
     </div>
   );
 }
-function PublicShop({
+export function PublicShop({
+  hideHeader = false,
+  hideFooter = false,
+  pageSlug,
   category,
   articleKey,
   navigate,
   search = location.search,
   initialPane = "reserve",
+  onPaneChange,
   session,
   slug,
   preview,
@@ -1547,11 +1574,15 @@ function PublicShop({
   busy,
   notify,
 }: {
+  hideHeader?: boolean;
+  hideFooter?: boolean;
+  pageSlug?: string;
   category?: PostCategory;
   articleKey?: string;
   navigate: Navigate;
   search?: string;
   initialPane?: string;
+  onPaneChange?: (pane: string) => void;
   session: Session;
   slug: string;
   preview: boolean;
@@ -1647,22 +1678,7 @@ function PublicShop({
           ✧ プレビュー · 練習用の予約画面です。実際の予約は作成されません。
         </div>
       )}
-      <section className="salon-hero">
-        <span className="eyebrow">A LITTLE MOMENT, JUST FOR YOU.</span>
-        <h1>{c.name}</h1>
-        <p>{c.description}</p>
-        <div className="salon-details">
-          <span>
-            ◷ {c.hours.start} – {c.hours.end}
-          </span>
-          <span>
-            定休日：
-            {c.hours.closedWeekdays.map((d) => `${weekdays[d]}曜`).join("・") ||
-              "なし"}
-          </span>
-        </div>
-        {c.appearance?.imageUrl ? <img className="salon-image" src={c.appearance.imageUrl} alt="お店の紹介画像" /> : <span className="hero-flower">✳</span>}
-      </section>
+      {!hideHeader && <SiteHeader config={c}>
       <nav className="public-nav">
         {[
           ["reserve", "ご予約"],
@@ -1671,9 +1687,9 @@ function PublicShop({
           ["contact", "お問い合わせ"],
         ].map(([id, label]) => (
           <button
-            className={!category && pane === id ? "active" : ""}
+            className={!category && !pageSlug && pane === id ? "active" : ""}
             onClick={() =>
-              category ? navigate(`${basePath || "/"}?pane=${id}`) : setPane(id)
+              (category || pageSlug) ? navigate(`${basePath || "/"}?pane=${id}`) : onPaneChange ? onPaneChange(id) : setPane(id)
             }
             key={id}
           >
@@ -1690,8 +1706,12 @@ function PublicShop({
               {cat === "blogs" ? "ブログ" : "お知らせ"}
             </button>
           ))}
+        {c.pages.map(page => <button key={page.id} className={pageSlug === page.slug ? "active" : ""} onClick={() => navigate(`${basePath}/pages/${page.slug}`)}>{page.navigationLabel}</button>)}
       </nav>
-      {category ? (
+      </SiteHeader>}
+      {pageSlug ? (
+        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} /> : <p className="alert">ページがありません。</p>
+      ) : category ? (
         <PublicBlog
           baseApi={base}
           basePath={basePath}
@@ -1992,6 +2012,7 @@ function PublicShop({
           )}
         </>
       )}
+      {!hideFooter && <SiteFooter config={c} />}
     </div>
   );
 }

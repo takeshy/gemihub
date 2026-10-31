@@ -1,4 +1,6 @@
 import { shopSchema, type ShopConfig } from "./domain.ts";
+import { renderCustomPage } from "./page-renderer.tsx";
+import { renderChrome } from "./chrome-renderer.tsx";
 import { systemSvg } from "./shop-system.ts";
 export function escapeHtml(value: string) {
   return value.replace(
@@ -32,9 +34,12 @@ export function renderShop(config: ShopConfig, shell: string) {
           )}</ul><p>予約には JavaScript を有効にしてください。</p></noscript>`,
     );
 }
-export function artifacts(config: ShopConfig, shell: string) {
+export function artifacts(config: ShopConfig, shell: string): Record<string, string> {
   const c = shopSchema.parse(config);
   return {
+    ...Object.fromEntries((["header", "footer"] as const).flatMap(part => [[`web/parts/${part}.html`, renderChrome(c, part)], [`web/parts/${part}.json`, JSON.stringify(c[part], null, 2)]])),
+    ...Object.fromEntries(c.pages.flatMap(page => [[`web/pages/${page.slug}.html`, renderCustomPage(page, shell)], [`web/pages/${page.slug}.json`, JSON.stringify(page, null, 2)]])),
+    "web/pages/index.json": JSON.stringify(c.pages.map(({ id, slug, title, navigationLabel }) => ({ id, slug, title, navigationLabel })), null, 2),
     "admin/system.svg": systemSvg(c),
     "web/index.html": renderShop(c, shell),
     "web/shop.json": JSON.stringify(c, null, 2),
@@ -52,7 +57,7 @@ export function artifacts(config: ShopConfig, shell: string) {
     ),
     "admin/index.html": shell,
     "schema.md":
-      "# データ構造 v1\n\n## menus\nid, name, duration (分), price (円), active (true/false)\n\n## staff\nid, name, menuIds (JSON配列), weekdays (JSON配列・日曜0), start (HH:mm), end (HH:mm)\n\n## settings\nkey, value (JSON)\n\n## reservations\nid, customer, name, menuId, staffId, start (ISO UTC), end (ISO UTC), status (active/cancelled/no_show), createdAt, updatedBy, updatedAt, requestKey\n\n## inquiries\nid, email, name, message, reply, status, at\n\n## members\nemail, accepted (true/false), status (invited/accepted/revoked), invitedAt, acceptedAt, revokedAt\n\n## posts\nid, record (JSON)\n\nマスター・予約・問い合わせ・メンバー・記事は店主のシートから読み込みます。列名・列順は変更しないでください。キャンセルや参加解除は行を消さず状態変更で履歴を保持します。\n",
+      "# データ構造 v1\n\n## menus\nid, name, duration (分), price (円), active (true/false)\n\n## staff\nid, name, menuIds (JSON配列), weekdays (JSON配列・日曜0), start (HH:mm), end (HH:mm)\n\n## settings\nkey, value (JSON)\n\n## reservations\nid, customer, name, menuId, staffId, start (ISO UTC), end (ISO UTC), status (active/cancelled/no_show), createdAt, updatedBy, updatedAt, requestKey\n\n## inquiries\nid, email, name, message, reply, status, at\n\n## members\nemail, accepted (true/false), status (invited/accepted/revoked), invitedAt, acceptedAt, revokedAt\n\n## posts\nid, record (JSON)\n\n## pages\nid, record (JSON) — ページごとに1行。settings.pages は見出しとアドレスの索引。\n\nマスター・予約・問い合わせ・メンバー・記事は店主のシートから読み込みます。列名・列順は変更しないでください。キャンセルや参加解除は行を消さず状態変更で履歴を保持します。\n",
   };
 }
 export const checklist = [

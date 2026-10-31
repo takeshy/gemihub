@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } from "./pages.ts";
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const shopSchema = z
   .object({
@@ -12,6 +13,9 @@ export const shopSchema = z
       imageUrl: z.union([z.literal(""), z.url({protocol: /^https$/}).max(2048)]),
     }).optional(),
     notificationEmail: z.email(),
+    header: headerSchema.default(() => ({ ...defaultHeader })),
+    footer: footerSchema.default(() => ({ ...defaultFooter })),
+    pages: z.array(pageSchema).max(30).default([]),
     menus: z
       .array(
         z.object({
@@ -60,6 +64,7 @@ export const shopSchema = z
       new Set(s.staff.map((m) => m.id)).size !== s.staff.length
     )
       fail("メニュー・スタッフの ID が重複しています");
+    if (new Set(s.pages.map(p => p.id)).size !== s.pages.length || new Set(s.pages.map(p => p.slug)).size !== s.pages.length) fail("ページの ID・アドレスが重複しています");
     for (const p of s.staff) {
       if (p.start >= p.end) fail("勤務終了は開始より後にしてください");
       if (p.menuIds.some((id) => !s.menus.some((m) => m.id === id)))
@@ -91,6 +96,9 @@ export const sample: ShopConfig = {
   description: "日常に、少しのときめきを。小さなプライベートネイルサロンです。",
   address: "東京都世田谷区（詳しいアクセスは予約後にご案内）",
   notificationEmail: "owner@example.com",
+  pages: [],
+  header: { ...defaultHeader },
+  footer: { ...defaultFooter },
   menus: [
     {
       id: "simple",
@@ -203,7 +211,7 @@ export function documents(
   history: { at: string; summary: string }[],
 ) {
   return {
-    spec: `# ${config.name}\n\n${config.description}\n\n## お店の情報・予約ルール\n\n\`\`\`json\n${JSON.stringify(config, null, 2)}\n\`\`\`\n\n## 権限\nお客様は自分の予約のみ閲覧・キャンセルできます。運営は店主と招待されたメンバーのみです。\nキャンセル・無断キャンセルは状態変更で記録します。時刻は日本時間です。\n\n## ブログ・お知らせ\n店主が記事の下書きを作成し、プレビューで確認・承認して公開します。下書きは非公開で、公開中の本文は次の承認まで維持します。ブログとお知らせの一覧・個別記事・新着5件を提供し、公開・非公開の変更は履歴に残します。原稿と生成ファイルも店主の Drive に保存します。\n`,
+    spec: `# ${config.name}\n\n${config.description}\n\n## お店の情報・予約ルール\n\n\`\`\`json\n${JSON.stringify(config, null, 2)}\n\`\`\`\n\n## 権限\nお客様は自分の予約のみ閲覧・キャンセルできます。運営は店主と招待されたメンバーのみです。\nキャンセル・無断キャンセルは状態変更で記録します。時刻は日本時間です。\n\n## ブログ・お知らせ\n店主が管理メニューで記事を編集し、必要に応じてプレビューを見て、保存すると本番へ反映します。保存前の編集は公開内容に反映しません。ブログとお知らせの一覧・個別記事・新着5件を提供し、公開・非公開の変更は履歴に残します。原稿と生成ファイルも店主の Drive に保存します。\n\n## 追加ページと本番データ\n追加ページはローカルで作成・編集し、ページ単位で差分を確認して反映します。メニュー・料金、スタッフ・勤務、営業時間・予約ルールは専用管理メニューの保存で本番へ反映します。\n`,
     history: `# 変更履歴\n\n${history.map((h) => `- ${h.at} ${h.summary}`).join("\n")}\n`,
   };
 }
@@ -220,6 +228,6 @@ export function planSummary(before: ShopConfig | null, next: ShopConfig) {
     .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(next[k]))
     .map(
       (k) =>
-        `${{ name: "店名", industry: "業種", description: "お店の紹介", address: "アクセス", appearance: "ページの色・画像・配置", notificationEmail: "通知先", menus: "メニュー", staff: "スタッフ・勤務", hours: "営業時間・休業日", rules: "予約ルール" }[k]}を更新`,
+        `${{ name: "店名", industry: "業種", description: "お店の紹介", address: "アクセス", appearance: "ページの色・画像・配置", notificationEmail: "通知先", pages: "追加ページ", header: "共通ヘッダー", footer: "共通フッター", menus: "メニュー", staff: "スタッフ・勤務", hours: "営業時間・休業日", rules: "予約ルール" }[k]}を更新`,
     );
 }

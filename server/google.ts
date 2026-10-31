@@ -15,6 +15,7 @@ import {
   type ShopConfig,
   type Booking,
 } from "./domain.ts";
+import type { ReleaseScope } from "./pages.ts";
 import type { Shop } from "./store.ts";
 export function oauth() {
   return new google.auth.OAuth2(
@@ -60,11 +61,13 @@ const tabs = [
   "inquiries",
   "members",
   "posts",
+  "pages",
 ];
 const headers = [
   ["id", "name", "duration", "price", "active"],
   ["id", "name", "menuIds", "weekdays", "start", "end"],
   ["key", "value"],
+  ["id", "record"],
 ];
 export async function provision(shop: Shop, config: ShopConfig, token: string) {
   const { drive, sheets } = clients(token);
@@ -125,64 +128,91 @@ export async function syncConfig(
   config: ShopConfig,
   token: string,
   onProgress: () => void | Promise<void> = () => {},
+  scope?: ReleaseScope,
 ) {
   if (!shop.google) throw new Error("Google の保存先が未作成です");
   const { sheets, drive } = clients(token);
   const doc = documents(config, shop.history);
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId: shop.google.sheetId,
-    requestBody: {
-      valueInputOption: "RAW",
-      data: [
-        {
-          range: "menus!A1:E1000",
-          values: [
-            ["id", "name", "duration", "price", "active"],
-            ...config.menus.map((m) => [
-              m.id,
-              m.name,
-              m.duration,
-              m.price,
-              m.active,
-            ]),
-          ],
-        },
-        {
-          range: "staff!A1:F1000",
-          values: [
-            ["id", "name", "menuIds", "weekdays", "start", "end"],
-            ...config.staff.map((p) => [
-              p.id,
-              p.name,
-              JSON.stringify(p.menuIds),
-              JSON.stringify(p.weekdays),
-              p.start,
-              p.end,
-            ]),
-          ],
-        },
-        {
-          range: "settings!A1:B100",
-          values: [
-            ["key", "value"],
-            ...Object.entries(config)
-              .filter(([k]) => !["menus", "staff"].includes(k))
-              .map(([k, v]) => [k, JSON.stringify(v)]),
-          ],
-        },
-      ],
-    },
-  });
-  // Clear trailing rows when a menu or staff member has been removed.
-  await sheets.spreadsheets.values.batchClear({
-    spreadsheetId: shop.google.sheetId,
-    requestBody: {
-      ranges: [
-        `menus!A${config.menus.length + 2}:E1000`,
-        `staff!A${config.staff.length + 2}:F1000`,
-      ],
-    },
-  });
+  const pageIndex = config.pages.map(({ id, slug, title, navigationLabel }) => ({ id, slug, title, navigationLabel }));
+  if (scope?.kind === "part") {
+    const settings = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "settings!A:A" });
+    const rows = settings.data.values || [];
+    const found = rows.findIndex(row => row[0] === scope.part);
+    const row = found >= 0 ? found + 1 : Math.max(2, rows.length + 1);
+    await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: shop.google.sheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `settings!A${row}:B${row}`, values: [[scope.part, JSON.stringify(config[scope.part])]] }] } });
+  } else if (scope?.kind === "page") {
+    const pageRows = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "pages!A:B" });
+    const rows = pageRows.data.values || [];
+    const existing = rows.findIndex(row => row[0] === scope.pageId);
+    const selected = config.pages.find(p => p.id === scope.pageId);
+    if (selected || existing >= 0) {
+      const vacant = rows.findIndex((row, index) => index > 0 && !row[0]);
+      const row = existing >= 0 ? existing + 1 : vacant >= 0 ? vacant + 1 : Math.max(2, rows.length + 1);
+      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: shop.google.sheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `pages!A${row}:B${row}`, values: [selected ? [selected.id, JSON.stringify(selected)] : ["", ""]] }] } });
+    }
+    const settings = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "settings!A:A" });
+    const settingsRows = settings.data.values || [];
+    const found = settingsRows.findIndex(row => row[0] === "pages");
+    const row = found >= 0 ? found + 1 : settingsRows.length + 1;
+    await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: shop.google.sheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `settings!A${row}:B${row}`, values: [["pages", JSON.stringify(pageIndex)]] }] } });
+  } else {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: shop.google.sheetId,
+      requestBody: {
+        valueInputOption: "RAW",
+        data: [
+          {
+            range: "menus!A1:E1000",
+            values: [
+              ["id", "name", "duration", "price", "active"],
+              ...config.menus.map((m) => [
+                m.id,
+                m.name,
+                m.duration,
+                m.price,
+                m.active,
+              ]),
+            ],
+          },
+          {
+            range: "staff!A1:F1000",
+            values: [
+              ["id", "name", "menuIds", "weekdays", "start", "end"],
+              ...config.staff.map((p) => [
+                p.id,
+                p.name,
+                JSON.stringify(p.menuIds),
+                JSON.stringify(p.weekdays),
+                p.start,
+                p.end,
+              ]),
+            ],
+          },
+          { range: "pages!A1:B100", values: [["id", "record"], ...config.pages.map(p => [p.id, JSON.stringify(p)])] },
+          {
+            range: "settings!A1:B100",
+            values: [
+              ["key", "value"],
+              ...Object.entries(config)
+                .filter(([k]) => !["menus", "staff"].includes(k))
+                .map(([k, v]) => [k, JSON.stringify(k === "pages" ? pageIndex : v)]),
+            ],
+          },
+        ],
+      },
+    });
+    // Clear trailing rows when a menu or staff member has been removed.
+    await sheets.spreadsheets.values.batchClear({
+      spreadsheetId: shop.google.sheetId,
+      requestBody: {
+        ranges: [
+          `menus!A${config.menus.length + 2}:E1000`,
+          `staff!A${config.staff.length + 2}:F1000`,
+          `pages!A${config.pages.length + 2}:B100`,
+        ],
+      },
+    });
+  }
   await Promise.all([
     drive.files.update({
       fileId: shop.google.specId,
@@ -193,20 +223,22 @@ export async function syncConfig(
       media: { mimeType: "text/markdown", body: Readable.from([doc.history]) },
     }),
   ]);
-  const generated = artifacts(
-    config,
-    await readFile("dist/index.html", "utf8"),
-  );
+  const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"));
+  const selectedPage = scope?.kind === "page" ? config.pages.find(p => p.id === scope.pageId) : undefined;
+  const previousPage = scope?.kind === "page" ? shop.published?.pages.find(p => p.id === scope.pageId) : undefined;
+  const generated = scope?.kind === "part"
+    ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => [`web/parts/${scope.part}.html`, `web/parts/${scope.part}.json`].includes(path)))
+    : scope?.kind === "page" ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => path === "web/pages/index.json" || selectedPage && [ `web/pages/${selectedPage.slug}.html`, `web/pages/${selectedPage.slug}.json` ].includes(path))) : allGenerated;
   shop.google.artifactIds ||= {};
   shop.google.artifactFolders ||= {};
-  for (const folder of ["web", "admin"]) {
+  for (const folder of (scope?.kind === "part" ? ["web", "web/parts"] : scope?.kind === "page" ? ["web", "web/pages"] : ["web", "admin", "web/pages", "web/parts"])) {
     if (!shop.google.artifactFolders[folder])
       shop.google.artifactFolders[folder] = (
         await drive.files.create({
           requestBody: {
             name: folder,
             mimeType: "application/vnd.google-apps.folder",
-            parents: [shop.google.folderId],
+            parents: [folder.includes("/") ? shop.google.artifactFolders[folder.slice(0, folder.lastIndexOf("/"))] : shop.google.folderId],
           },
           fields: "id",
         })
@@ -234,7 +266,7 @@ export async function syncConfig(
             name: path.split("/").at(-1)!,
             parents: [
               path.includes("/")
-                ? shop.google.artifactFolders[path.split("/")[0]]
+                ? shop.google.artifactFolders[path.slice(0, path.lastIndexOf("/"))]
                 : shop.google.folderId,
             ],
           },
@@ -244,6 +276,13 @@ export async function syncConfig(
       ).data.id!;
     await onProgress();
   }
+  for (const [path, id] of Object.entries(shop.google.artifactIds)) {
+    if (scope?.kind !== "part" && path.startsWith("web/pages/") && !(path in allGenerated) && (scope?.kind !== "page" || previousPage && [ `web/pages/${previousPage.slug}.html`, `web/pages/${previousPage.slug}.json` ].includes(path))) {
+      await drive.files.update({ fileId: id, requestBody: { trashed: true } });
+      delete shop.google.artifactIds[path];
+      await onProgress();
+    }
+  }
 }
 export async function readConfig(
   shop: Shop,
@@ -252,7 +291,7 @@ export async function readConfig(
   const { sheets } = clients(token);
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: shop.google!.sheetId,
-    ranges: ["menus!A:E", "staff!A:F", "settings!A:B"],
+    ranges: ["menus!A:E", "staff!A:F", "settings!A:B", "pages!A:B"],
   });
   for (let i = 0; i < headers.length; i++)
     if (
@@ -265,13 +304,14 @@ export async function readConfig(
         ),
         { status: 409 },
       );
-  const [menus, staff, settings] = res.data.valueRanges!.map((r) =>
+  const [menus, staff, settings, pages] = res.data.valueRanges!.map((r) =>
     (r.values || []).slice(1).filter((r) => r[0]),
   );
   const config = {
     ...Object.fromEntries(
       settings.map((r) => [r[0], JSON.parse(String(r[1]))]),
     ),
+    pages: pages.map(r => { const page = JSON.parse(String(r[1])); if (page.id !== String(r[0])) throw new Error("ページのIDと行が一致しません"); return page; }),
     menus: menus.map((r) => ({
       id: String(r[0]),
       name: String(r[1]),
