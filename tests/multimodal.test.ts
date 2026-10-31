@@ -9,6 +9,7 @@ import {
   shopSchema,
 } from "../server/domain.ts";
 import { shopSystem, systemSvg } from "../server/shop-system.ts";
+import type { ConsultationContext } from "../server/ai.ts";
 import { validateVisualChange, type VisualRequest } from "../server/visual.ts";
 import type { AddressInfo } from "node:net";
 process.env.DEMO_MODE = "true";
@@ -88,9 +89,11 @@ test("removed uploads, image identification, ambiguous target selection, explana
         explanation: "店名か紹介文を囲んでいます。対象を選んでください。",
       };
     },
-    async explainSystem(question: string, config: typeof sample) {
+    async explainSystem(question: string, config: typeof sample, _demo?: boolean, context?: ConsultationContext) {
       questionCalls++;
       assert.equal(config.name, sample.name);
+      assert.ok(context?.history.some(h => h.summary));
+      assert.equal(context?.messages[0]?.text, "指名なしではどうなる？");
       return {
         answer: "変更するにはプランの承認が必要です。",
         changeRequest: true,
@@ -189,10 +192,16 @@ test("removed uploads, image identification, ambiguous target selection, explana
   const diagram = await request(base + "/system", undefined, owner);
   assert.equal(diagram.status, 200);
   const revision = diagram.body.revision;
+  const context = await request(base + "/build-context", undefined, owner);
+  assert.equal(context.status, 200);
+  assert.deepEqual(context.body.config, sample);
+  assert.match(context.body.hash, /^[a-f0-9]{64}$/);
+  assert.equal((await request(base + "/system/question", { question: "どう動く？", revision, hash: "stale" }, owner)).status, 409);
+  assert.equal((await request(base + "/plan", { text: "古い画面からの変更", context: { revision, hash: "stale" } }, owner)).status, 409);
   const history = structuredClone((await store.shop(shop.id))!.history);
   const explanation = await request(
     base + "/system/question",
-    { question: "指名なしに変更して", revision },
+    { question: "指名なしに変更して", revision, hash: context.body.hash, messages: [{ role: "user", text: "指名なしではどうなる？" }] },
     owner,
   );
   assert.equal(explanation.body.changeRequest, true);
@@ -244,6 +253,7 @@ test("removed uploads, image identification, ambiguous target selection, explana
       email: "guest@example.com",
     })
   ).cookie;
+  assert.equal((await request(base + "/build-context", undefined, customer)).status, 403);
   assert.equal(
     (await request(base + "/system", undefined, customer)).status,
     403,
@@ -270,6 +280,7 @@ test("removed uploads, image identification, ambiguous target selection, explana
   );
   await request(base + "/invite", { email: "guest@example.com" }, owner);
   await request(`/api/invitations/${shop.id}/accept`, {}, customer);
+  assert.equal((await request(base + "/build-context", undefined, customer)).status, 200);
   assert.equal(
     (await request(base + "/system", undefined, customer)).status,
     200,

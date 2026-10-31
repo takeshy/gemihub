@@ -1701,12 +1701,6 @@ pre {
 
 .voice-input { margin: 14px 0; }
 .voice-input input[type=file] { display: block; max-width: 230px; font-size: 12px; margin-top: 6px; }
-.system-flow { margin: 24px 0; }
-.system-card { border: 1px solid var(--line); background: var(--cream); border-radius: 18px; padding: 20px 24px; }
-.system-card li { margin: 10px 0; line-height: 1.8; overflow-wrap: anywhere; }
-.system-arrow { text-align: center; font-size: 28px; color: var(--green); }
-.system-arrow:last-child { display: none; }
-.system-panel form { margin-top: 24px; }
 .annotation-canvas { display: block; width: 100%; height: auto; touch-action: none; border: 2px solid #e32236; margin: 16px 0; cursor: crosshair; }
 .visual-request { margin-bottom: 20px; }
 .visual-request textarea { margin: 12px 0; }
@@ -1717,8 +1711,6 @@ pre {
 .public-shop.layout-compact .salon-hero { padding: 24px; }
 .public-shop.layout-compact .reservation-layout { gap: 16px; }
 .salon-image { display: block; max-width: 100%; width: 480px; max-height: 300px; object-fit: cover; border-radius: 18px; margin: 20px auto 0; }
-.system-overview { display: block; width: 100%; height: auto; margin: 18px 0; }
-.system-details { margin: 20px 0; }
 
 .local-preview details { margin: 18px 0; }
 .local-preview summary { cursor: pointer; font-weight: 600; }
@@ -1793,3 +1785,66 @@ pre {
   .editor-toolbar { gap: 8px; }
   .editor-toolbar > .actions { width: 100%; }
 }
+
+.shop-build-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 22px; align-items: start; }
+.shop-spec-column, .shop-consultation { min-width: 0; }
+.shop-spec { padding: 26px; }
+.shop-spec h2, .shop-consultation h2, .shop-history h2 { margin: 5px 0; font-size: 20px; }
+.shop-spec .section-top { justify-content: space-between; }
+.shop-spec-intro { margin: 24px 0; }
+.shop-spec-intro h3 { font-size: 25px; margin-bottom: 10px; }
+.shop-spec-intro p { font-size: 12px; line-height: 1.8; }
+.spec-stats { display: grid; grid-template-columns: repeat(3, 1fr); padding: 16px 0; background: #eff3e8; border-radius: 14px; text-align: center; gap: 8px; }
+.spec-stats > div { display: grid; gap: 3px; border-right: 1px solid #d6dfcd; }
+.spec-stats > div:last-child { border: 0; }
+.spec-stats strong { font-size: 27px; font-weight: 500; }
+.spec-stats span { font-size: 10px; color: #6f7e65; }
+.spec-booking-flow { display: grid; grid-template-columns: repeat(4, 1fr); padding: 0; list-style: none; margin: 24px 0; gap: 12px; }
+.spec-booking-flow li { position: relative; display: grid; gap: 7px; font-size: 10px; text-align: center; }
+.spec-booking-flow li + li::before { content: '→'; position: absolute; left: -12px; top: 10px; color: #9aab87; }
+.spec-booking-flow b { display: grid; place-items: center; width: 33px; height: 33px; border-radius: 50%; margin: auto; background: #edf2ea; color: var(--green); font-size: 12px; }
+.spec-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.spec-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fffdf8; overflow-wrap: anywhere; }
+.spec-card h3 { font-size: 13px; margin: 0 0 15px; }
+.spec-card h3 > span { color: #8b9c77; }
+.spec-card p { font-size: 11px; line-height: 1.9; margin: 6px 0; }
+.spec-card .spec-highlight { font-size: 21px; color: var(--green); }
+.spec-wide { grid-column: 1 / -1; }
+.spec-menu { display: flex; justify-content: space-between; gap: 12px; margin: 12px 0; font-size: 11px; }
+.spec-menu b { white-space: nowrap; text-align: right; font-weight: 500; }
+.spec-menu small { display: block; font-size: 10px; font-weight: 400; color: #7c8871; }
+.spec-staff-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 15px 0; }
+.spec-staff-list > div { border-left: 2px solid #b9c5aa; padding-left: 12px; font-size: 12px; }
+.spec-note { color: #79866e; }
+.spec-page-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.spec-page-tags span { padding: 4px 8px; border-radius: 6px; background: #edf1e8; font-size: 10px; }
+.shop-consultation { position: sticky; top: 20px; padding: 24px; }
+.shop-consultation .section-top { gap: 12px; }
+.shop-consultation > p { font-size: 12px; line-height: 1.9; }
+.shop-consultation .actions input { width: 100%; min-width: 0; flex: 1 1 160px; }
+.shop-consultation .actions { flex-wrap: wrap; }
+.shop-history { margin-top: 20px; }
+.shop-history ol { list-style: none; max-height: 380px; overflow: auto; padding: 0 0 0 10px; }
+.shop-history li { position: relative; border-left: 1px solid #d5dfcc; padding: 0 0 18px 20px; }
+.shop-history li::before { content: ''; position: absolute; left: -4px; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: #9eaf88; }
+.shop-history time { font-size: 10px; color: #7c8871; }
+.shop-history p { font-size: 12px; margin: 5px 0 0; line-height: 1.8; overflow-wrap: anywhere; }
+.build-plan-area { margin-top: 22px; }
+@media (max-width: 1100px) { .shop-build-layout { grid-template-columns: minmax(0, 1fr); } .shop-consultation { position: static; } }
+@media (max-width: 760px) { .shop-spec, .shop-consultation { padding: 18px; } .spec-card-grid { grid-template-columns: 1fr; } .spec-wide { grid-column: auto; } .spec-booking-flow { gap: 8px; } .spec-booking-flow li { font-size: 9px; } }
+
+.request-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 20px 0; }
+.request-methods button { display: grid; justify-items: start; text-align: left; gap: 6px; padding: 18px 14px; background: white; }
+.request-methods button.selected { border-color: var(--green); background: #eef3e8; box-shadow: inset 0 0 0 1px var(--green); }
+.request-methods button > span { color: #8b9e79; font-size: 22px; }
+.request-methods b { font-size: 13px; font-weight: 600; }
+.request-methods small { color: #7b8770; font-size: 10px; }
+.shop-request form label { display: block; font-size: 12px; }
+.shop-request textarea { display: block; margin: 10px 0 14px; }
+.request-review { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 20px; font-size: 12px; }
+.request-review h3 { font-size: 18px; margin-top: 14px; }
+.request-review > p { line-height: 1.9; }
+.request-review .config-summary { margin: 15px 0; font-size: 11px; padding: 14px; }
+.request-review .config-summary p, .request-review .config-summary li { font-size: 11px; }
+.request-review .actions { margin-top: 20px; }
+.request-review pre { max-height: 250px; overflow: auto; }

@@ -1,0 +1,52 @@
+import React, { useEffect, useState } from "react";
+import type { ShopConfig } from "../server/domain";
+import { useApi } from "./api";
+import { ShopRequest } from "./ShopRequest";
+import type { Plan } from "./App";
+export type BuildContext = { config: ShopConfig | null; published: boolean; revision: number; hash: string; history: { at: string; summary: string }[] };
+const days = ["日", "月", "火", "水", "木", "金", "土"];
+const money = (price: number) => `¥${price.toLocaleString("ja-JP")}`;
+export function ShopOverview({ shopId, isOwner, onPlan, onEdit, onAccept, plan }: { shopId: string; isOwner: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan; onEdit: (config: ShopConfig) => void }) {
+  const api = useApi();
+  const [data, setData] = useState<BuildContext>();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const [generation, setGeneration] = useState(0);
+  async function refresh() {
+    setLoading(true); setError("");
+    try { setData(await api<BuildContext>(`/api/shops/${shopId}/build-context`)); setGeneration(v => v + 1); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void refresh(); }, [shopId]);
+  const config = data?.config;
+  return <div className="shop-build-layout">
+    <div className="shop-spec-column">
+      <section className="panel shop-spec" aria-label="現在のお店の仕様">
+        <div className="section-top"><div><span className="eyebrow">YOUR SHOP TODAY</span><h2>現在の仕様</h2></div><button disabled={loading || planning} onClick={() => void refresh()}>最新に更新</button></div>
+        {error && <p className="alert" role="alert">{error}</p>}
+        {!data && <p>{loading ? "現在の仕様を読み込んでいます…" : "仕様を読み込めませんでした。最新に更新してください。"}</p>}
+        {config && <>
+          <div className="shop-spec-intro"><h3>{config.name}</h3><p>{config.description}</p><span className="pill">{data.published ? "現在の設定" : "公開前の設定"}</span></div>
+          <div className="spec-stats"><div><strong>{config.menus.filter(m => m.active).length}</strong><span>メニュー</span></div><div><strong>{config.staff.length}</strong><span>スタッフ</span></div><div><strong>{8 + config.pages.length}</strong><span>お客様向け画面</span></div></div>
+          <ol className="spec-booking-flow" aria-label="予約の流れ">{["Googleでログイン", "メニュー・指名・日時", "空き時間を確認", "予約・メール通知"].map((label, i) => <li key={label}><b>{String(i + 1).padStart(2, "0")}</b><span>{label}</span></li>)}</ol>
+          <div className="spec-card-grid">
+            <section className="spec-card"><h3><span aria-hidden="true">◷</span> 営業時間と受付</h3><p className="spec-highlight">{config.hours.start} – {config.hours.end}</p><p>定休日：{config.hours.closedWeekdays.map(d => `${days[d]}曜`).join("・") || "なし"}</p><p>臨時休業：{config.hours.holidays.join("・") || "なし"}</p><p>{config.rules.advanceDays}日前から・開始{config.rules.leadMinutes}分前まで受付</p><p>当日予約{config.rules.sameDay ? "可" : "不可"}／{config.rules.interval}分刻み</p><p>キャンセルは開始{config.rules.cancelHours}時間前まで</p></section>
+            <section className="spec-card"><h3><span aria-hidden="true">◇</span> メニューと料金</h3>{config.menus.map(menu => <div className="spec-menu" key={menu.id}><span>{menu.name}{!menu.active && <small>（受付停止）</small>}</span><b>{money(menu.price)}<small>{menu.duration}分</small></b></div>)}</section>
+            <section className="spec-card spec-wide"><h3><span aria-hidden="true">♧</span> スタッフと予約の割り当て</h3><p>お客様が指名・指名なしを選択。指名なしは、対応するスタッフのうち空いている1人に割り当てます。</p><div className="spec-staff-list">{config.staff.map(staff => <div key={staff.id}><b>{staff.name}</b><p>{staff.weekdays.map(d => days[d]).join("・")} {staff.start} – {staff.end}</p><p>{staff.menuIds.map(id => config.menus.find(m => m.id === id)?.name).join("・")}</p></div>)}</div><p className="spec-note">営業時間・勤務・施術時間・予約済みの時間・連携済みのGoogle Calendarを確認して、予約可能な時間を表示します。</p></section>
+            <section className="spec-card spec-wide"><h3><span aria-hidden="true">▣</span> お店のページ</h3><div className="spec-page-tags">{["予約", "お店のこと", "マイページ", "お問い合わせ", "ブログ一覧・記事", "お知らせ一覧・記事", ...config.pages.map(p => p.title)].map((title, i) => <span key={i}>{title}</span>)}</div><p className="spec-note">ヘッダー・フッターは共通パーツとして個別に編集できます。</p><p>アクセス：{config.address}</p><p>お店への通知：{config.notificationEmail}</p></section>
+          </div>
+        </>}
+      </section>
+      <section className="panel shop-history" aria-label="お店の変更履歴"><div className="section-top"><h2>変更履歴</h2><span className="small muted">{data?.history.length || 0}件</span></div>{data && !data.history.length && <p className="muted">まだ変更履歴はありません。</p>}<ol>{[...(data?.history || [])].reverse().map((entry, i) => <li key={`${entry.at}-${i}`}><time dateTime={entry.at}>{new Date(entry.at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</time><p>{entry.summary}</p></li>)}</ol></section>
+    </div>
+    <section className="panel shop-consultation" aria-label="AIへの相談">
+      <div className="section-top"><span className="ai-mark">✳</span><div><h2>AIとお店をつくる</h2><p className="small muted">質問も、変更の相談も、ここから。</p></div></div>
+      <p className="muted">現在の仕様と変更履歴を見ながら、音声や文字でやりとりできます。</p>
+      {data && config && <ShopRequest key={`${data.hash}-${generation}`} shopId={shopId} published={data.published} isOwner={isOwner} context={{ revision: data.revision, hash: data.hash }} plan={plan} onAccept={onAccept} onPlan={async text => { setPlanning(true); try { return await onPlan(text, { revision: data.revision, hash: data.hash }); } finally { setPlanning(false); } }} />}
+      {planning && <p role="status">変更プランを作成しています…</p>}
+      {isOwner && config && <button disabled={loading || planning} onClick={() => onEdit(structuredClone(config))}>項目ごとに入力・修正</button>}
+    </section>
+  </div>;
+}

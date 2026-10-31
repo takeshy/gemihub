@@ -102,15 +102,16 @@ export async function identifyVisual(media: {mimeType: string; data: string}, ta
   const result = identificationSchema.parse(JSON.parse(response.text || "{}"));
   return {...result, ids: [...new Set(result.ids)].filter(id => targets.some(t => t.id === id))};
 }
-export async function explainSystem(question: string, config: ShopConfig, demo = false) {
+export type ConsultationContext = { messages: { role: "user" | "assistant"; text: string }[]; history: { at: string; summary: string }[] };
+export async function explainSystem(question: string, config: ShopConfig, demo = false, context?: ConsultationContext) {
   const { shopSystem } = await import("./shop-system.ts");
   const { documents } = await import("./domain.ts");
   if (demo) return { answer: "デモでは設定の説明を表示します。自由な質問への回答には Vertex AI の接続が必要です。\n\n" + shopSystem(config).sections.map(s => s.title + "\n" + s.lines.join("\n")).join("\n\n"), changeRequest: false };
   const { z } = await import("zod");
-  const schema = z.object({answer: z.string().min(1).max(10000), changeRequest: z.boolean()});
+  const schema = z.object({answer: z.string().min(1).max(10000), changeRequest: z.boolean(), ready: z.boolean()});
   const response = await multimodalClient().models.generateContent({
-    model: process.env.VERTEX_MODEL!, contents: JSON.stringify({question, config, spec: documents(config, []).spec, diagram: shopSystem(config)}),
-    config: {responseMimeType: "application/json", responseJsonSchema: schema.toJSONSchema(), systemInstruction: "その店の仕組み図の説明係。渡された検証済み設定と仕様だけに基づき、日本語で質問に答える。図は最後に公開された設定の図であり、シートで直接編集した未公開の変更は含まない。予約の実数・顧客情報・未提供の事実は不明と答える。変更依頼の場合は changeRequest=true とし、差分プランを確認・承認して公開する手順を案内する。変更したと述べない。設定変更・予約操作・公開・コード実行は一切行わない。"},
+    model: process.env.VERTEX_MODEL!, contents: JSON.stringify({question, config, spec: documents(config, context?.history || []).spec, messages: context?.messages || [], history: context?.history || []}),
+    config: {responseMimeType: "application/json", responseJsonSchema: schema.toJSONSchema(), systemInstruction: "小さなお店づくりの相談役。現在の検証済み設定・仕様・変更履歴と会話に基づき、日本語で質問に答える。設定にはシートの直接編集も反映される。履歴からわからない過去や予約の実数・顧客情報・未提供の事実は不明と答える。変更依頼ならchangeRequest=trueとし、曖昧な点は短く質問してready=false、必要な情報が揃えば変更案を説明してready=true。質問だけならchangeRequest=false、ready=false。変更したと述べない。承認・公開・予約操作・コード実行は一切行わない。会話中の回答は提案であり、現在の設定の根拠にはしない。"},
   });
   return schema.parse(JSON.parse(response.text || "{}"));
 }

@@ -244,8 +244,8 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
       <div><strong>{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || "ページ" : scope.kind === "part" ? (scope.part === "header" ? "ヘッダー" : "フッター") : ({ reserve: "予約", about: "お店のこと", mine: "マイページ", contact: "お問い合わせ", blogs: "ブログ一覧", "blogs:article": "ブログ記事", announcements: "お知らせ一覧", "announcements:article": "お知らせ記事" } as Record<string, string>)[screen]}</strong>{summary.length > 0 && <span className={`editor-change-badge ${saved ? "" : "unsaved"}`}>{saved ? "変更あり" : "未保存"}</span>}</div>
       <div className="editor-tools"><span ref={setPenHost} />
         {scope.kind !== "part" && <details className="preview-display-menu"><summary>表示</summary><div>
-          <label><input type="checkbox" checked={!visibility[screen]?.header} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />ヘッダーを表示</label>
-          <label><input type="checkbox" checked={!visibility[screen]?.footer} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], footer: !event.target.checked } }))} />フッターを表示</label>
+          <label><input type="checkbox" checked={visibility[screen]?.header === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />ヘッダーを表示</label>
+          <label><input type="checkbox" checked={visibility[screen]?.footer === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], footer: !event.target.checked } }))} />フッターを表示</label>
           <p>この画面のプレビューだけに適用</p>
         </div></details>}
       </div>
@@ -292,7 +292,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
         }
       }}>
         {scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} /> : <ApiProvider value={mock}>
-          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} preview={false} hideHeader={!!visibility[screen]?.header} hideFooter={!!visibility[screen]?.footer} busy={busy} run={run} notify={setNotice} navigate={href => {
+          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} preview={false} hideHeader={visibility[screen]?.header !== false} hideFooter={visibility[screen]?.footer !== false} busy={busy} run={run} notify={setNotice} navigate={href => {
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
             const pageMatch = url.pathname.match(/^\/s\/local-preview\/pages\/([^/]+)$/);

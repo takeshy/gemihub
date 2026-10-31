@@ -60,8 +60,9 @@ try {
   await open("landing", /お店のことを話す/);
   await capture("01-start.jpg");
   await open("onboarding", "まずは、お店のお話から。");
+  await page.getByRole("button", {name:/文章で依頼/}).click();
   await page
-    .getByRole("textbox", { name: "お店のことや変更したいこと" })
+    .getByRole("textbox", { name: "質問・変更したいこと" })
     .fill(
       "夫婦で営むネイルサロン「凪」です。\nシンプルネイルは60分5,500円、季節のデザインは90分7,800円です。\nスタッフはあおい・はるの二人。営業時間は10〜18時、火曜定休。\n予約は30日前から、開始1時間前まで受け付けたいです。",
     );
@@ -74,8 +75,8 @@ try {
     .waitFor();
   await capture("03-edit.jpg", ".panel:has(.editor)");
   await capture("03-rules.jpg", ".editor h3:last-of-type");
-  await open("plan-review", "こんな予約システムをつくります。");
-  await capture("04-plan.jpg", ".panel.plan");
+  await open("plan-review", "依頼の結果を確認");
+  await capture("04-plan.jpg", ".request-review");
   await open("preview", "自分のための、ひとときを。");
   await capture("05-preview.jpg");
   const previewDate = new Date(Date.now() + 2 * 86400000)
@@ -123,16 +124,17 @@ try {
     .fill("new-staff@example.com");
   await capture("11-team.jpg");
   await open("changes", "お店の「こうしたい」を、かたちに。");
+  await page.getByRole("button", {name:/文章で依頼/}).click();
   await page
-    .getByRole("textbox", { name: "お店のことや変更したいこと" })
+    .getByRole("textbox", { name: "質問・変更したいこと" })
     .fill(
       "水曜日も定休日にして、90分8,500円の「ご褒美ケアコース」を追加してください。",
     );
-  await page.getByRole("button", { name: "プランを見直す →" }).click();
+  await page.getByRole("button", { name: "依頼して結果を確認", exact: true }).click();
   await page
-    .getByRole("heading", { name: "こんな予約システムをつくります。" })
+    .getByRole("heading", { name: "依頼の結果を確認" })
     .waitFor();
-  await capture("12-changes.jpg", ".panel.plan");
+  await capture("12-changes.jpg", ".request-review");
   await open("data", "お店の中身は、いつでも手元に。");
   await page.locator(".document").first().waitFor();
   await capture("13-data.jpg");

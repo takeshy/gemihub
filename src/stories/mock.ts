@@ -104,7 +104,7 @@ export function scenarioProps(scenario: Scenario) {
       (
         {
           manual: "manual",
-          system: "system",
+          system: "build",
           "local-editor": "try",
           "local-editor-pages": "try",
           "editor-unfetched": "try", "editor-remote": "try", "editor-conflict": "try", "page-builder": "create-page",
@@ -370,10 +370,13 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action === `/api/shops/${shop.id}/interview/turn`) {
       interview.fields.changes=String(input.text);interview.version++;
       result={state:interview,question:"（Storybook のサンプル）内容を確認しました。他に変えたいところはありますか？"};
+    } else if (action === `/api/shops/${shop.id}/build-context`) {
+      result = { config: shop.published || shop.draft, published: !!shop.published, history: shop.history, revision: shop.revision, hash: await fingerprint(shop.published || shop.draft) };
     } else if (action === `/api/shops/${shop.id}/system`) {
       result = {diagram: shopSystem(shop.published || config), svg: systemSvg(shop.published || config), overview: systemSvg(shop.published || config, false), revision: shop.revision};
     } else if (action === `/api/shops/${shop.id}/system/question`) {
-      result = {answer: "お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。変更する場合は、差分プランを確認・承認して公開してください。", changeRequest: true};
+      const changeRequest = /変更|したい|変え|追加/.test(String(input.question));
+      result = {answer: changeRequest ? "水曜日も定休日にする変更ですね。変更プランを作り、内容を確認してから承認・公開してください。" : String(input.question).includes("履歴") ? "変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。" : "お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。", changeRequest};
     } else if (action === `/api/shops/${shop.id}/visual/identify`) {
       visualConfig = structuredClone((input.displayed || config) as typeof config);
       const part = (input.local as { part?: "header" | "footer" } | undefined)?.part;

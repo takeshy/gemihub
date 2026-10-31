@@ -1,7 +1,7 @@
 import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
-import { VoiceInput } from "./VoiceInput";
-import { SystemDiagram } from "./SystemDiagram";
+import { ShopOverview } from "./ShopOverview";
+import { ShopRequest } from "./ShopRequest";
 import { VisualRequest } from "./VisualRequest";
 import { SiteHeader, SiteFooter } from "./SiteChrome";
 import { CustomPage } from "./CustomPage";
@@ -290,7 +290,7 @@ function Dashboard({
   const [tab, setTab] = useState(initialTab);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
   const editorRef = useRef<LocalEditorHandle>(null);
-  const [text, setText] = useState("");
+  const buildReview = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<Plan>();
   const [edit, setEdit] = useState<ShopConfig>();
   const [invites, setInvites] = useState<{ shopId: string; name: string }[]>(
@@ -321,7 +321,7 @@ function Dashboard({
   const generate = () =>
     run(async () => {
       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, {
-        text: text || "入力したお店の情報で作成",
+        text: "入力したお店の情報で作成",
         ...(edit ? { config: edit } : {}),
       });
       setPlan(p);
@@ -362,8 +362,7 @@ function Dashboard({
             ["inquiries", "✉", "お問い合わせ"],
             ["blog", "✎", "ブログ・お知らせ"],
             ["team", "♧", "家族・スタッフ"],
-            ["system", "◎", "お店の仕組み図"],
-            ["data", "▤", "データと履歴"],
+            ["data", "▤", "データとファイル"],
             ["settings", "⚙", "公開の設定"],
             ["manual", "?", "使い方"],
           ].map(([id, icon, label]) => (
@@ -431,7 +430,6 @@ function Dashboard({
                               inquiries: "お客様からのお便り。",
                               blog: "お店の想いを、お客様へ。",
                               team: "お店を、一緒に。",
-                              system: "お店の仕組みを、ひと目で。",
                               data: "お店の中身は、いつでも手元に。",
                               settings: "お店の入り口を整える。",
                             } as Record<string, string>
@@ -472,7 +470,11 @@ function Dashboard({
                 )}
                 {tab === "build" && (
                   <>
-                    <div className="steps">
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} isOwner={shop.isOwner} plan={activePlan} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onEdit={config => { setEdit(config); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onPlan={async (text, context) => {
+                      const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context });
+                      setPlan(p); setEdit(undefined); await load(); return p;
+                    }} />}
+                    {!shop.published && <div className="steps">
                       {["お店の情報", "プランを確認", "プレビュー", "公開"].map(
                         (s, i) => (
                           <div
@@ -491,87 +493,10 @@ function Dashboard({
                           </div>
                         ),
                       )}
-                    </div>
-                    <div className="build-grid">
+                    </div>}
+                    <div ref={buildReview} className={shop.published ? "build-plan-area" : "build-grid"}>
                       <div>
-                        <div className="panel interview">
-                          <div className="section-top">
-                            <span className="ai-mark">✳</span>
-                            <div>
-                              <b>
-                                {shop.published
-                                  ? "どんなふうに変えましょうか？"
-                                  : "どんなお店ですか？"}
-                              </b>
-                              <p className="small muted">
-                                omaiweb がお店づくりをお手伝いします
-                              </p>
-                            </div>
-                          </div>
-                          <p className="muted">
-                            {shop.published
-                              ? "追加したいメニューやお休みの変更など、希望を教えてください。"
-                              : "メニュー・所要時間・料金、スタッフ、営業時間、お休みを教えてください。未定の項目は、プランを見ながら一緒に決められます。"}
-                          </p>
-                          <VoiceInput key={`${shop.id}-${shop.revision}`} shopId={shop.id} published={!!shop.published} onPlan={async text => {const p=await api<Plan>(`/api/shops/${shop.id}/plan`,{text});setPlan(p);setEdit(undefined);await load();}} disabled={busy || !shop.isOwner || !!edit} onText={t => setText(v => v ? `${v}\n${t}` : t)} />
-                          <textarea
-                            aria-label="お店のことや変更したいこと"
-                            rows={7}
-                            value={text}
-                            onChange={(e) => setText(e.target.value)}
-                            placeholder={
-                              "例：夫婦で営むネイルサロン「凪」です。\nシンプルネイルは60分5,500円。\n営業時間は10〜18時、火曜日はお休みです。\n指名なしでも予約できるようにしたいです。"
-                            }
-                            disabled={!shop.isOwner}
-                          />
-
-                          {edit && <p className="small muted">項目入力の内容でプランを作成します。音声・文章で依頼する場合は <button onClick={() => setEdit(undefined)}>項目入力を閉じる</button></p>}
-                          <div className="suggestions">
-                            {[
-                              shop.published
-                                ? "来月から水曜日も定休日にしたい"
-                                : "ネイルサロン",
-                              shop.published
-                                ? "新しいコースを追加したい"
-                                : "美容室・ヘアサロン",
-                            ].map((t) => (
-                              <button
-                                key={t}
-                                onClick={() =>
-                                  setText((v) => (v ? `${v}\n${t}` : t))
-                                }
-                              >
-                                {t} ＋
-                              </button>
-                            ))}
-                          </div>
-                          <div className="actions">
-                            <button
-                              onClick={() =>
-                                setEdit(
-                                  structuredClone(shop.published || sample),
-                                )
-                              }
-                              disabled={!shop.isOwner}
-                            >
-                              項目ごとに入力・修正
-                            </button>
-                            <button
-                              className="primary"
-                              onClick={generate}
-                              disabled={
-                                busy || !shop.isOwner || (!text && !edit)
-                              }
-                            >
-                              プランを{shop.published ? "見直す" : "つくる"} →
-                            </button>
-                          </div>
-                          {session.demo && (
-                            <p className="small muted">
-                              未接続のデモでは初回にサロンのサンプルを提案します。変更は項目入力で確認できます。
-                            </p>
-                          )}
-                        </div>
+                        {!shop.published && <div className="panel interview"><h2>どんなお店をつくりますか？</h2><ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} plan={activePlan} onPlan={async text => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text }); setPlan(p); await load(); return p; }} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); }} /><button disabled={!shop.isOwner} onClick={() => setEdit(structuredClone(sample))}>項目ごとに入力・修正</button></div>}
                         {edit && (
                           <div className="panel">
                             <h2>お店の情報</h2>
@@ -585,7 +510,7 @@ function Dashboard({
                             </button>
                           </div>
                         )}
-                        {activePlan && (
+                        {activePlan?.approved && (
                           <div className="panel plan">
                             <span className="pill">
                               {activePlan.approved ? "承認済み" : "ご提案"}
@@ -670,7 +595,7 @@ function Dashboard({
                           </div>
                         )}
                       </div>
-                      <div className="right-column">
+                      {!shop.published && <div className="right-column">
                         <div className="panel guide">
                           <div className="line-flower">✳</div>
                           <h2>
@@ -697,7 +622,7 @@ function Dashboard({
                           <br />
                           実際の予約には影響しません。
                         </div>
-                      </div>
+                      </div>}
                     </div>
                   </>
                 )}
@@ -738,7 +663,6 @@ function Dashboard({
                   </div>
                 )}
                 {tab === "team" && <Team shop={shop} run={run} reload={load} />}
-                {tab === "system" && <SystemDiagram key={`${shop.id}-${shop.revision}`} shopId={shop.id} published={!!shop.published} isOwner={shop.isOwner} onChange={t => {setText(t); setEdit(undefined); setTab("build");}} />}
                 {tab === "data" && <DataPanel shop={shop} run={run} />}
                 {tab === "settings" && (
                   <Settings shop={shop} run={run} reload={load} />
@@ -752,7 +676,7 @@ function Dashboard({
     </div>
   );
 }
-function ConfigSummary({ config: c }: { config: ShopConfig }) {
+export function ConfigSummary({ config: c }: { config: ShopConfig }) {
   return (
     <div className="config-summary">
       <h3>{c.name}</h3>
@@ -1432,7 +1356,8 @@ function DataPanel({ shop, run }: { shop: Workspace; run: Run }) {
   };
   return (
     <div className="panel">
-      <h2>データも、仕様も、履歴も。</h2>
+      <h2>データとファイル</h2>
+      <p>現在の仕様と変更履歴は「お店をつくる・直す」で確認できます。</p>
       <p className="muted">
         Google 接続で公開すると、あなたのドライブにファイルが保存されます。
       </p>

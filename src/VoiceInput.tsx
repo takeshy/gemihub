@@ -12,44 +12,30 @@ const labels: Record<string, string> = {
   changes: "変更したいこと",
 };
 type Interview = { fields: Record<string, string>; version: number };
-type Recognition = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult:
-    | ((event: {
-        results: {
-          length: number;
-          [i: number]: {
-            isFinal: boolean;
-            [i: number]: { transcript: string };
-          };
-        };
-        resultIndex: number;
-      }) => void)
-    | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-};
 export function VoiceInput({
   shopId,
   onText,
   onPlan,
   disabled,
   published = false,
+  consultation,
+  voiceOnly = false,
+  onAnswer,
+  messages = [],
 }: {
   shopId: string;
   onText: (text: string) => void;
   onPlan?: (text: string) => Promise<void>;
   disabled?: boolean;
   published?: boolean;
+  consultation?: { revision: number; hash: string; allowChanges: boolean };
+  voiceOnly?: boolean;
+  messages?: { role: "user" | "assistant"; text: string }[];
+  onAnswer?: (response: { text: string; answer: string }) => void;
 }) {
   const api = useApi();
   const [state, setState] = useState<Interview>({ fields: {}, version: 0 });
-  const [mode, setMode] = useState<"live" | "speech" | null>(null);
+  const [mode, setMode] = useState<"live" | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [question, setQuestion] = useState("");
@@ -60,6 +46,7 @@ export function VoiceInput({
   const connectionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  const replyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ws = useRef<WebSocket | undefined>(undefined);
   const stream = useRef<MediaStream | undefined>(undefined);
   const inputAudio = useRef<AudioContext | undefined>(undefined);
@@ -67,11 +54,10 @@ export function VoiceInput({
   const playback = useRef<AudioContext | undefined>(undefined);
   const playAt = useRef(0);
   const sources = useRef(new Set<AudioBufferSourceNode>());
-  const recognition = useRef<Recognition | undefined>(undefined);
   const queue = useRef(Promise.resolve());
   const saving = useRef<Promise<Interview> | undefined>(undefined);
-  const callbacks = useRef({ onText, onPlan });
-  callbacks.current = { onText, onPlan };
+  const callbacks = useRef({ onText, onPlan, onAnswer });
+  callbacks.current = { onText, onPlan, onAnswer };
   const prefix = `/api/shops/${shopId}`;
   function silence() {
     for (const source of sources.current) source.stop();
@@ -81,16 +67,9 @@ export function VoiceInput({
   function stop() {
     generation.current++;
     clearTimeout(connectionTimer.current);
+    clearTimeout(replyTimer.current);
     ws.current?.close();
     ws.current = undefined;
-    const rec = recognition.current;
-    recognition.current = undefined;
-    if (rec) {
-      rec.onresult = null;
-      rec.onerror = null;
-      rec.onend = null;
-      rec.abort();
-    }
     processor.current?.disconnect();
     processor.current = undefined;
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -108,7 +87,7 @@ export function VoiceInput({
   }
   useEffect(() => {
     alive.current = true;
-    void api<Interview>(prefix + "/interview")
+    if (!consultation) void api<Interview>(prefix + "/interview")
       .then((s) => {
         if (alive.current) setState(s);
       })
@@ -174,7 +153,7 @@ export function VoiceInput({
         return;
       }
       const socket = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${prefix}/live`,
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${prefix}/live${consultation ? `?hash=${encodeURIComponent(consultation.hash)}` : ""}`,
       );
       ws.current = socket;
       const node = new AudioWorkletNode(context, "microphone");
@@ -206,10 +185,11 @@ export function VoiceInput({
           const event = JSON.parse(e.data);
           if (event.type === "ready") {
             clearTimeout(connectionTimer.current);
+            if (messages.length) socket.send(JSON.stringify({ type: "context", messages: messages.slice(-6).map(message => ({ ...message, text: message.text.slice(-2000) })) }));
             ready = true;
             setMode("live");
             setPending(false);
-            setQuestion("お店のことをお話しください。");
+            setQuestion(consultation ? "質問や変更したいことをお話しください。" : "お店のことをお話しください。");
           }
           if (event.type === "reconnecting") {
             ready = false;
@@ -222,6 +202,15 @@ export function VoiceInput({
             setQuestion((v) => (v + event.text).slice(-4000));
           if (event.type === "error") setError(event.message);
           if (event.type === "plan") acceptPlan(event.text);
+          if (event.type === "answer" && callbacks.current.onAnswer) {
+            // End microphone capture now, then let the queued spoken reply finish.
+            processor.current?.disconnect();
+            stream.current?.getTracks().forEach(track => track.stop());
+            const wait = playback.current ? Math.max(0, playAt.current - playback.current.currentTime) * 1000 : 0;
+            replyTimer.current = setTimeout(() => {
+              if (alive.current && attempt === generation.current) { stop(); callbacks.current.onAnswer?.({ text: event.text, answer: event.answer }); }
+            }, wait);
+          }
           if (event.type === "interrupted") silence();
           if (event.type === "audio" && playback.current) {
             const context = playback.current;
@@ -252,17 +241,17 @@ export function VoiceInput({
           stop();
           showError(
             new Error(
-              "音声会話に接続できません。リアルタイム書き起こしか文字入力をご利用ください。",
+              "音声会話に接続できません。文字入力をご利用ください。",
             ),
           );
         }
       };
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         if (attempt === generation.current) {
           stop();
           showError(
             new Error(
-              "音声会話を終了しました。確定済みの項目から再開できます。",
+              event.reason || "音声会話を終了しました。確定済みの項目から再開できます。",
             ),
           );
         }
@@ -275,20 +264,16 @@ export function VoiceInput({
     }
   }
   function turn(text: string) {
+    setError("");
     callbacks.current.onText(text);
     const attempt = generation.current;
     queue.current = queue.current.then(async () => {
       if (!alive.current || attempt !== generation.current) return;
       setPending(true);
       try {
-        const result = await api<{
-          state: Interview;
-          question: string;
-          text?: string;
-        }>(prefix + "/interview/turn", { text });
+        const result = await api<{ state: Interview; question: string; text?: string }>(prefix + "/interview/turn", { text });
         if (!alive.current || attempt !== generation.current) return;
-        setState(result.state);
-        setQuestion(result.question);
+        setState(result.state); setQuestion(result.question);
         if (result.text) acceptPlan(result.text);
       } catch (e) {
         showError(e);
@@ -296,61 +281,6 @@ export function VoiceInput({
         if (alive.current && attempt === generation.current) setPending(false);
       }
     });
-  }
-  function speech() {
-    stop();
-    setError("");
-    const Constructor =
-      (
-        window as unknown as {
-          SpeechRecognition?: new () => Recognition;
-          webkitSpeechRecognition?: new () => Recognition;
-        }
-      ).SpeechRecognition ||
-      (window as unknown as { webkitSpeechRecognition?: new () => Recognition })
-        .webkitSpeechRecognition;
-    if (!Constructor) {
-      setError(
-        "このブラウザはリアルタイム書き起こしに対応していません。文字で入力してください。",
-      );
-      return;
-    }
-    const rec = new Constructor();
-    recognition.current = rec;
-    rec.lang = "ja-JP";
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (event) => {
-      let text = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) turn(result[0].transcript);
-        else text += result[0].transcript;
-      }
-      setInterim(text);
-    };
-    rec.onerror = (e) => {
-      stop();
-      setError(
-        e.error === "not-allowed"
-          ? "マイクの使用を許可するか、文字で入力してください。"
-          : "音声を聞き取れませんでした。再開するか文字で入力してください。",
-      );
-    };
-    rec.onend = () => {
-      if (recognition.current === rec) {
-        recognition.current = undefined;
-        setMode(null);
-        setInterim("");
-      }
-    };
-    try {
-      rec.start();
-      setMode("speech");
-    } catch (e) {
-      stop();
-      showError(e);
-    }
   }
   async function edit(field: string, value: string) {
     try {
@@ -390,7 +320,7 @@ export function VoiceInput({
   return (
     <div className="voice-input">
       <div className="actions">
-        <button
+        {(!consultation || consultation.allowChanges) && <button
           type="button"
           disabled={disabled}
           onClick={mode || pending ? stop : live}
@@ -400,32 +330,28 @@ export function VoiceInput({
             : pending
               ? "処理を中止する"
               : "🎙 AI と音声で話す"}
-        </button>
-        <button
-          type="button"
-          disabled={disabled || pending || !!mode}
-          onClick={speech}
-        >
-          リアルタイム書き起こし
-        </button>
+        </button>}
+
       </div>
       <p className="small muted">
-        話した内容は順に下へ反映します。いつでも文字で直せます。プランの承認と公開は画面で行います。
+        {consultation ? "回答は相談用です。変更プランを確認・承認・公開するまで、お店の設定は変わりません。" : "話した内容は順に下へ反映します。いつでも文字で直せます。プランの承認と公開は画面で行います。"}
       </p>
-      {question && <p role="status">{question}</p>}
+
+      {question && <p className="pre-wrap" role="status">{question}</p>}
       {interim && (
         <p className="small" aria-live="polite">
           {interim}
         </p>
       )}
-      <div className="actions">
+      {!voiceOnly && <div className="actions">
         <input
-          aria-label="会話への返答"
+          aria-label={consultation ? "AIへの質問・変更依頼" : "会話への返答"}
+          maxLength={consultation ? 4000 : 12000}
           value={typed}
           disabled={disabled || !!mode}
           onChange={(e) => setTyped(e.target.value)}
           placeholder={
-            published ? "変更したいことを入力" : "質問への返答を入力"
+            consultation ? "質問や変更したいことを入力" : published ? "変更したいことを入力" : "質問への返答を入力"
           }
         />
         <button
@@ -436,10 +362,10 @@ export function VoiceInput({
             setTyped("");
           }}
         >
-          会話に送る
+          {consultation ? "相談する" : "会話に送る"}
         </button>
-      </div>
-      <details open={Object.keys(state.fields).length > 0}>
+      </div>}
+      {!voiceOnly && !consultation && <details open={Object.keys(state.fields).length > 0}>
         <summary>聞き取ったお店の情報（修正できます）</summary>
         {Object.entries(labels)
           .filter(([key]) =>
@@ -465,8 +391,8 @@ export function VoiceInput({
               />
             </label>
           ))}
-      </details>
-      {Object.keys(state.fields).length > 0 && (
+      </details>}
+      {!voiceOnly && !consultation && Object.keys(state.fields).length > 0 && (
         <button
           type="button"
           disabled={disabled || pending}

@@ -27,10 +27,11 @@ test("interview survives interruption, validates fields and versions, and never 
   const store = new Store(":memory:");
   let connection: LiveConnectParameters | undefined;
   const toolResponses: unknown[] = [];
+  const contexts: unknown[] = [];
   const connector = async (parameters: LiveConnectParameters) => {
     connection = parameters;
     return {
-      sendClientContent() {},
+      sendClientContent(value: unknown) { contexts.push(value); },
       sendRealtimeInput() {},
       sendToolResponse(value: unknown) {
         toolResponses.push(value);
@@ -129,6 +130,11 @@ test("interview survives interruption, validates fields and versions, and never 
     connection!.callbacks.onmessage(message);
     await new Promise((r) => setTimeout(r, 20));
   };
+  ws.send(JSON.stringify({ type: "context", messages: [{ role: "user", text: "営業時間を確認したい" }] }));
+  await until(() => contexts.some(value => JSON.stringify(value).includes("営業時間を確認したい")));
+  await emit({ serverContent: { inputTranscription: { text: "何時まで？" }, outputTranscription: { text: "18時までです。" }, turnComplete: true } } as LiveServerMessage);
+  await until(() => messages.some(message => message.type === "answer" && message.text === "何時まで？" && message.answer === "18時までです。"));
+  assert.equal((await store.list("plan")).length, 0);
   await emit({
     sessionResumptionUpdate: { resumable: true, newHandle: "resume-handle" },
   } as unknown as LiveServerMessage);

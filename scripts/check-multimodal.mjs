@@ -29,55 +29,80 @@ try {
     await page.screenshot({path: resolve(output, name), type: "jpeg", quality: 86, animations: "disabled"});
   }
   let audioFrames = 0;
-  await page.context().routeWebSocket(/\/api\/shops\/[^/]+\/live$/, socket => {
-    socket.send(JSON.stringify({type: "state", state: {fields: {changes: "（Live サンプル）店名を季節のアトリエに変更"}, version: 1}}));
+  let voiceResult = null;
+  await page.context().routeWebSocket(/\/api\/shops\/[^/]+\/live(?:\?.*)?$/, socket => {
+    let replied = false;
+    socket.send(JSON.stringify({type: "state", state: {fields: {}, version: 1}}));
     socket.send(JSON.stringify({type: "ready"}));
-    socket.onMessage(raw => {const input = JSON.parse(String(raw)); assert.equal(input.type, "audio"); assert.ok(input.data); audioFrames++;});
+    socket.onMessage(raw => {
+      const input = JSON.parse(String(raw));
+      if (input.type === "context") return;
+      assert.equal(input.type, "audio"); assert.ok(input.data); audioFrames++;
+      if (!replied && voiceResult) { replied = true; socket.send(JSON.stringify(voiceResult)); }
+    });
   });
-  await open("shop-system", "お店の仕組み図");
-  await page.locator(".system-overview").waitFor();
-  await capture("21-system.jpg", ".system-overview");
-  await page.getByLabel("仕組み図について質問").fill("指名なしのとき、どうやって空きを判断する？");
-  await page.getByRole("button", {name: "このお店の仕組みを聞く", exact: true}).click();
-  await page.getByText("このお店は指名型です。", {exact: false}).waitFor();
-  await page.getByRole("button", {name: "この内容から変更プランを相談する →"}).click();
-  assert.equal(await page.getByLabel("お店のことや変更したいこと").inputValue(), "指名なしのとき、どうやって空きを判断する？");
-  // Streaming microphone transport and incremental fields use an explicit Live fixture.
-  await page.getByLabel("お店のことや変更したいこと").fill("最初のメモ");
-  await page.getByRole("button", {name: "🎙 AI と音声で話す", exact: true}).click();
-  await page.getByRole("button", {name: "会話を止める", exact: true}).waitFor({timeout:10000}).catch(async e=>{console.error(await page.locator(".voice-input").innerText());throw e;});
-  await page.getByLabel("確認：変更したいこと").filter({visible: true}).waitFor();
-  await page.waitForTimeout(350);
+  await open("shop-specification", "現在の仕様");
+  await page.getByRole("region", {name: "お店の変更履歴"}).waitFor();
+  assert.equal(await page.locator("aside").getByRole("button", {name: /お店の仕組み図/}).count(), 0);
+  assert.equal(await page.getByRole("button", {name: "リアルタイム書き起こし", exact: true}).count(), 0);
+  assert.equal(await page.getByLabel("質問・変更したいこと", {exact:true}).count(), 0);
+  await capture("21-system.jpg", ".shop-build-layout");
+  await page.getByRole("button", {name: /文章で依頼/}).click();
+  await page.getByLabel("質問・変更したいこと", {exact:true}).fill("指名なしのとき、どうやって空きを判断する？");
+  await page.getByRole("button", {name: "依頼して結果を確認", exact:true}).click();
+  const review = page.getByRole("region", {name: "依頼の結果を確認"});
+  await review.waitFor();
+  await review.getByText("お客様が指名・指名なしを選べます。", {exact:false}).waitFor();
+  assert.equal(await page.getByRole("link", {name:"プレビュー ↗",exact:true}).count(), 0);
+  await review.getByRole("button", {name:"さらに依頼する",exact:true}).click();
+  assert.equal(await page.getByLabel("質問・変更したいこと",{exact:true}).count(), 0);
+  await page.getByRole("button", {name:/音声で依頼/}).click();
+  await page.getByRole("button", {name:"🎙 AI と音声で話す",exact:true}).click();
+  await page.getByRole("button", {name:"会話を止める",exact:true}).waitFor();
+  await page.waitForFunction(() => window.__voiceTracks?.some(track => track.readyState === "live"));
+  await page.waitForTimeout(200);
   assert.ok(audioFrames > 0, "microphone streams PCM chunks");
-  await page.getByRole("button", {name: "会話を止める", exact: true}).click();
-  assert.ok(await page.evaluate(() => window.__voiceTracks.every(track => track.readyState === "ended")), "stopping releases microphone");
-  assert.equal(await page.getByLabel("お店のことや変更したいこと").inputValue(), "最初のメモ");
-  assert.equal(await page.locator('input[type=file][accept*=audio]').count(), 0);
-  await page.getByLabel("会話への返答").fill("サンプル：店名を季節のアトリエに変更");
-  await page.getByRole("button", {name: "会話に送る", exact: true}).click();
-  await page.getByText("（Storybook のサンプル）内容を確認しました。", {exact:false}).waitFor();
-  assert.ok((await page.getByLabel("お店のことや変更したいこと").inputValue()).startsWith("最初のメモ\n"));
-  await capture("24-voice.jpg", ".voice-input");
-  await page.evaluate(()=>{
-    window.SpeechRecognition=class {
-      start(){window.__recognition=this;setTimeout(()=>this.onresult?.({resultIndex:0,results:[{isFinal:true,0:{transcript:"サンプルの書き起こし"}}]}),0);}
-      abort(){window.__recognitionAborted=true;}
-      stop(){this.abort();}
-    };
-  });
-  await page.getByRole("button", {name:"リアルタイム書き起こし",exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('textarea[aria-label="お店のことや変更したいこと"]').value.includes("サンプルの書き起こし"));
   await page.getByRole("button", {name:"会話を止める",exact:true}).click();
-  assert.ok(await page.evaluate(()=>window.__recognitionAborted),"stopping releases recognition");
-  await page.getByLabel("確認：変更したいこと").fill("画面で確認・修正した変更内容");
-  await page.getByRole("button",{name:"この内容でプランを確認 →",exact:true}).click();
-  await page.getByRole("button",{name:"このプランでつくる →",exact:true}).waitFor();
+  assert.ok(await page.evaluate(() => window.__voiceTracks.every(track => track.readyState === "ended")), "stopping releases microphone");
+  voiceResult = {type:"answer",text:"これまでの履歴は？",answer:"予約ページを公開した履歴があります。"};
+  await page.getByRole("button", {name:"🎙 AI と音声で話す",exact:true}).click();
+  await review.getByText("予約ページを公開した履歴があります。",{exact:true}).waitFor();
+  assert.ok(await page.evaluate(() => window.__voiceTracks.every(track => track.readyState === "ended")), "result confirmation releases microphone");
+  await review.getByRole("button", {name:"これでOK",exact:true}).click();
+  await page.getByText("回答を確認しました。",{exact:true}).waitFor();
+  await page.getByRole("button", {name:"新しい依頼をする",exact:true}).click();
+  await page.getByRole("button", {name:/文章で依頼/}).click();
+  await page.getByLabel("質問・変更したいこと",{exact:true}).fill("水曜日もお休みに変更したい");
+  await page.getByRole("button", {name:"依頼して結果を確認",exact:true}).click();
+  await review.getByText("営業時間・休業日を更新",{exact:false}).waitFor();
+  await capture("24-voice.jpg", ".request-review");
+  await capture("12-changes.jpg", ".request-review");
+  await review.getByRole("button", {name:"さらに依頼する",exact:true}).click();
+  await page.getByRole("button", {name:/音声で依頼/}).click();
+  voiceResult = {type:"plan",text:"水曜日も定休日に変更し、新しいコースを追加したい"};
+  await page.getByRole("button", {name:"🎙 AI と音声で話す",exact:true}).click();
+  await review.getByRole("button", {name:"これでOK",exact:true}).waitFor();
+  assert.equal(await page.getByRole("link", {name:"プレビュー ↗",exact:true}).count(), 0);
+  await review.getByRole("button", {name:"これでOK",exact:true}).click();
+  await page.getByRole("link", {name:"プレビュー ↗",exact:true}).waitFor();
+  await page.getByRole("button", {name:"お店のページを公開 →",exact:true}).click();
+  await page.getByRole("region", {name:"お店の変更履歴"}).getByText("営業時間・休業日を更新",{exact:false}).waitFor();
 
-  await page.getByRole("button", {name: "🎙 AI と音声で話す", exact: true}).click();
-  await page.getByRole("button", {name: "会話を止める", exact: true}).waitFor();
-  await page.getByRole("button", {name: "◎ お店の仕組み図", exact: false}).click();
-  await page.getByRole("heading", {name: "お店の仕組み図", exact: true}).waitFor();
-  assert.ok(await page.evaluate(() => window.__voiceTracks.every(track => track.readyState === "ended")), "leaving input releases microphone");
+  await open("onboarding", "どんなお店をつくりますか？");
+  assert.equal(await page.getByLabel("質問・変更したいこと", {exact:true}).count(), 0);
+  await page.getByRole("button", {name:/文章で依頼/}).click();
+  await page.getByLabel("質問・変更したいこと", {exact:true}).fill("夫婦で営むネイルサロンを作りたい。メニューと営業時間を設定して。");
+  await capture("02-interview.jpg", ".panel.interview");
+  await page.getByRole("button", {name:"依頼して結果を確認",exact:true}).click();
+  await review.waitFor();
+  await capture("04-plan.jpg", ".request-review");
+  await review.getByRole("button", {name:"さらに依頼する",exact:true}).click();
+  assert.equal(await page.getByLabel("質問・変更したいこと", {exact:true}).count(), 0);
+  await page.getByRole("button", {name:/文章で依頼/}).click();
+  await page.getByLabel("質問・変更したいこと", {exact:true}).fill("営業時間は10時から18時にして");
+  await page.getByRole("button", {name:"依頼して結果を確認",exact:true}).click();
+  await review.getByRole("button", {name:"これでOK",exact:true}).click();
+  await page.getByRole("link", {name:"プレビュー ↗",exact:true}).waitFor();
   // Capture real rendered pixels, draw a circle, resolve ambiguity and create an unapproved plan.
   for (const story of ["pen-preview", "pen-live"]) {
     await open(story, "自分のための、ひとときを。");
@@ -109,11 +134,10 @@ try {
     await capture("23-pen-plan.jpg", ".visual-request .notice:last-of-type");
   }
   await page.setViewportSize({width: 390, height: 844});
-  await open("shop-system", "お店の仕組み図");
-  await page.locator(".system-overview").waitFor();
-  await page.getByText("設定と保存先の詳しい説明", {exact: true}).click();
-  await page.getByRole("heading", {name: "③ データの行き先"}).waitFor();
+  await open("shop-specification", "現在の仕様");
+  await page.getByRole("region", {name:"お店の変更履歴"}).waitFor();
+  await page.screenshot({path:resolve("tmp/spec-mobile.png"),fullPage:true});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "mobile layout should not overflow");
   assert.deepEqual(errors, []);
-  console.log("Verified diagram Q&A, voice/text composition, screenshot capture, pen strokes, ambiguous targets, draft plans and mobile layout (Storybook fixtures).");
+  console.log("Verified current specification/history, text and voice choices, result confirmation/revision/approval, publication, microphone cleanup, pen editing and mobile layout (Storybook fixtures).");
 } finally {await browser.close();}

@@ -77,7 +77,7 @@ import {
   renderHomeWithPosts,
 } from "./post-renderer.tsx";
 import { liveValue, updateLiveValue, type LiveSection } from "./live-settings.ts";
-import { editorIndex } from "./editor-sync.ts";
+import { editorIndex, contentHash } from "./editor-sync.ts";
 import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from "./page-ai.ts";
 import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
 import { renderCustomPage } from "./page-renderer.tsx";
@@ -792,23 +792,29 @@ export function createApp(
               revision: fresh.revision,
             });
           }
+          if (action === "build-context" && method === "GET") {
+            const config = fresh.published ? await effective(fresh) : fresh.draft;
+            return json(res, { config, revision: fresh.revision, hash: contentHash(config), history: fresh.history, published: !!fresh.published });
+          }
           if (action === "system/question" && method === "POST") {
             if (!fresh.published) fail(409, "公開後に質問できます");
             const input = z
               .object({
                 question: z.string().trim().min(1).max(4000),
                 revision: z.number().int(),
+                hash: z.string().optional(),
+                messages: z.array(messageSchema).max(30).default([]),
               })
-              .parse(await body(req));
+              .parse(await body(req, 1500000));
             if (input.revision !== fresh.revision)
-              fail(409, "公開内容が変わりました。仕組み図を更新してください");
+              fail(409, "お店の仕様が変わりました。現在の仕様を更新してください");
+            const config = await effective(fresh);
+            if (input.hash && input.hash !== contentHash(config)) fail(409, "お店の仕様が変わりました。現在の仕様を更新してください");
+            const response = await intelligence.explainSystem(input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: input.messages, history: fresh.history });
+            if (!same(config, await effective(fresh))) fail(409, "回答中にお店の仕様が変わりました。現在の仕様を更新して質問し直してください");
             return json(
               res,
-              await intelligence.explainSystem(
-                input.question,
-                fresh.published,
-                demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT,
-              ),
+              response,
             );
           }
           if (action === "visual/identify" && method === "POST") {
@@ -1032,6 +1038,7 @@ export function createApp(
               .object({
                 text: z.string().min(1).max(10000),
                 config: shopSchema.optional(),
+                context: z.object({ revision: z.number().int(), hash: z.string() }).optional(),
                 local: z.object({ base: z.number().int(), source: shopSchema.nullable(), requestId: z.uuid(), scope: releaseScopeSchema.optional() }).optional(),
                 visual: z
                   .object({ id: z.string(), target: z.string() })
@@ -1039,6 +1046,7 @@ export function createApp(
               })
               .parse(await body(req, 1500000));
             const current = fresh.published ? await effective(fresh) : null;
+            if (input.context && (input.context.revision !== fresh.revision || input.context.hash !== contentHash(current))) fail(409, "お店の仕様が変わりました。現在の仕様を更新して変更を相談し直してください");
             let releaseConfig = input.config;
             if (input.local?.scope && input.config) releaseConfig = shopSchema.parse(scopedConfig(current, input.config, input.local.scope));
             const localPlanId = input.local ? digest(`${fresh.id}:${user!.email}:${input.local.requestId}`) : undefined;

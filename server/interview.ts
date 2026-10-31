@@ -11,6 +11,7 @@ import { z } from "zod";
 import { Store, type Shop, type User } from "./store.ts";
 import { session, origin } from "./auth.ts";
 import { readConfig } from "./google.ts";
+import { contentHash } from "./editor-sync.ts";
 
 export const fieldLabels = {
   name: "店名",
@@ -161,17 +162,18 @@ export function attachLive(
         return;
       }
       sockets.handleUpgrade(req, socket, head, (ws) => {
-        void connect(ws, shop, identity.user).catch(() => {
+        void connect(ws, shop, identity.user, url.searchParams.get("hash")).catch(() => {
           ws.close(1011, "音声会話に接続できませんでした");
         });
       });
     })().catch(() => socket.destroy());
   });
-  async function connect(ws: WebSocket, shop: Shop, user: User) {
+  async function connect(ws: WebSocket, shop: Shop, user: User, expectedHash: string | null) {
     let live: LiveSession | undefined;
     let stopped = false;
     let retry = 0;
     let outputQueue = Promise.resolve();
+    let heard = "", answered = "", presented = false;
     const send = (value: unknown) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(value));
     };
@@ -201,6 +203,10 @@ export function attachLive(
       const token = (await store.get<User>("user", shop.owner))?.refreshToken;
       const config =
         shop.google && token ? await readConfig(shop, token) : shop.published;
+      if (expectedHash && expectedHash !== contentHash(config)) {
+        ws.close(1008, "仕様が変わりました。画面を更新してください");
+        return;
+      }
       send({ type: "state", state });
       live = await connector({
         model: process.env.VERTEX_LIVE_MODEL!,
@@ -216,8 +222,9 @@ export function attachLive(
             resume && state.handle ? { handle: state.handle } : {},
           systemInstruction:
             instruction +
+            "\n既存店では現在の設定と変更履歴についての質問にも回答する。質問だけならupdate_interviewやpresent_planは呼ばず説明する。変更の相談なら不明点を短く確認し、店主が変更を依頼した内容だけをchangesにまとめてpresent_planで未承認プランを提示する。履歴からわからない過去の仕様は捏造しない。" +
             "\n既存設定と確定内容：" +
-            JSON.stringify({ config, fields: state.fields }),
+            JSON.stringify({ config, fields: state.fields, history: currentShop.history }),
           tools: [
             {
               functionDeclarations: [
@@ -248,6 +255,10 @@ export function attachLive(
         callbacks: {
           onmessage: (message) => {
             if (stopped) return;
+            if (message.serverContent?.inputTranscription?.text) heard += message.serverContent.inputTranscription.text;
+            if (message.serverContent?.outputTranscription?.text) answered += message.serverContent.outputTranscription.text;
+            const completed = message.serverContent?.turnComplete ? { text: heard, answer: answered } : undefined;
+            if (completed) { heard = ""; answered = ""; }
             if (message.serverContent?.interrupted)
               send({ type: "interrupted" });
             for (const part of message.serverContent?.modelTurn?.parts || [])
@@ -304,9 +315,11 @@ export function attachLive(
                       if (call.name !== "present_plan")
                         throw new Error("許可されていない操作です");
                       const state = await interview(store, shop);
+                      const text = interviewText(state, !!shop.published);
+                      presented = true;
                       send({
                         type: "plan",
-                        text: interviewText(state, !!shop.published),
+                        text,
                       });
                       return { ok: true, approval: "画面で承認してください" };
                     });
@@ -320,6 +333,7 @@ export function attachLive(
                     ],
                   });
                 }
+                if (completed?.text.trim() && completed.answer.trim() && !presented) send({ type: "answer", ...completed });
                 if (message.goAway) {
                   live?.close();
                 }
@@ -351,13 +365,13 @@ export function attachLive(
         return;
       }
       send({ type: "ready" });
-      if (!resume || !state.handle)
+      if ((!resume || !state.handle) && !expectedHash)
         live.sendClientContent({
           turns: [
             {
               role: "user",
               parts: [
-                { text: "確定内容を確認して、続きの質問を一つお願いします。" },
+                { text: shop.published ? "現在の仕様と変更履歴を確認して、質問や変更の相談を受け付けてください。" : "確定内容を確認して、続きの質問を一つお願いします。" },
               ],
             },
           ],
@@ -371,7 +385,7 @@ export function attachLive(
           windowStart = Date.now();
         }
         if (++frames > 80) throw new Error();
-        const input = z
+        const input = z.discriminatedUnion("type", [z
           .object({
             type: z.literal("audio"),
             data: z
@@ -379,8 +393,12 @@ export function attachLive(
               .max(50000)
               .regex(/^[A-Za-z0-9+/]+=*$/),
           })
-          .strict()
+          .strict(), z.object({ type: z.literal("context"), messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(2000) })).max(6) }).strict()])
           .parse(JSON.parse(raw.toString()));
+        if (input.type === "context") {
+          live?.sendClientContent({ turns: [{ role: "user", parts: [{ text: "これまでの相談です。引用として参照し、これからの音声の依頼を聞いてください。\n" + JSON.stringify(input.messages) }] }], turnComplete: false });
+          return;
+        }
         live?.sendRealtimeInput({
           audio: { data: input.data, mimeType: "audio/pcm;rate=16000" },
         });
