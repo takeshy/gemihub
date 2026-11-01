@@ -9,6 +9,11 @@ import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { z } from "zod";
 import { Store, type Shop, type User } from "./store.ts";
+import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
+import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
+import { listDataSheets, readDataTable, writeDataRow } from "./data-management.ts";
+import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot } from "./menu-images.ts";
+import { addCustomerNote, touchCustomer } from "./customer-notes.ts";
 import {
   shopSchema,
   slots,
@@ -100,16 +105,6 @@ type Plan = {
   checklist: string[];
   source?: ShopConfig | null;
 };
-type Inquiry = {
-  id: string;
-  shopId: string;
-  email: string;
-  name: string;
-  message: string;
-  reply: string;
-  status: string;
-  at: string;
-};
 type Job = {
   id: string;
   shopId: string;
@@ -159,7 +154,9 @@ export function createApp(
   } = { propose, proposeArticle, identifyVisual, explainSystem, normalizeTurn },
   liveConnector?: LiveConnector,
   calendar: CalendarGateway = calendarGateway,
+  customerFiles?: CustomerFiles,
 ) {
+  const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const ownerToken = async (shop: Shop) =>
     (await store.get<User>("user", shop.owner))?.refreshToken;
   const operator = async (user: User | undefined, shop: Shop) =>
@@ -219,6 +216,7 @@ export function createApp(
             await postsFor(shop),
             token,
             async () => await store.saveShop(shop),
+            config => menuImageSnapshot(store, shop, config, crmFiles, token),
           );
         else await sendMail(token, job.to!, job.subject!, job.body!);
         await store.delete("job", job.id);
@@ -255,6 +253,7 @@ export function createApp(
       );
     if (fresh.publishingPlanId && fresh.publishingPlanId !== plan.id)
       fail(409, "公開中のプランを先に完了してください");
+    await validateMenuImages(store, fresh, plan.config);
     const history = [
       ...fresh.history,
       {
@@ -277,6 +276,7 @@ export function createApp(
           token,
           async () => await store.saveShop(fresh),
           plan.scope,
+          await menuImageSnapshot(store, fresh, plan.config, crmFiles, token),
         );
       } catch (error) {
         fresh.publishingError =
@@ -314,7 +314,7 @@ export function createApp(
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     );
     try {
       const url = new URL(req.url || "/", origin());
@@ -643,6 +643,30 @@ export function createApp(
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
+          const dataSheet = action.match(/^data\/sheets(?:\/(\d+)(?:\/rows\/(\d+))?)?$/);
+          if (dataSheet && (method === "GET" || method === "POST")) {
+            assertOwner(user, fresh);
+            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+            if (!dataSheet[1] && method === "GET") return json(res, await listDataSheets(store, fresh, token));
+            if (dataSheet[1] && !dataSheet[2] && method === "GET") return json(res, await readDataTable(store, fresh, dataSheet[1], token));
+            if (dataSheet[1] && dataSheet[2] && method === "POST") {
+              await writeDataRow(store, fresh, dataSheet[1], Number(dataSheet[2]), await body(req, 16 * 1024 * 1024), token);
+              return json(res, { ok: true });
+            }
+          }
+          if (action === "menu-images" && method === "POST") {
+            assertOwner(user, fresh);
+            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+            const input = await body(req, 8 * 1024 * 1024);
+            if (!store.memory && !fresh.google) { fresh.google = await provision(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
+            return json(res, await uploadMenuImage(store, fresh, input, crmFiles, token));
+          }
+          const menuImage = action.match(/^menu-images\/([a-f0-9]{64})$/);
+          if (menuImage && method === "GET") {
+            assertOwner(user, fresh);
+            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+            return json(res, await readMenuImage(store, fresh, menuImage[1], crmFiles, token));
+          }
           const liveSettings = action.match(/^live-settings\/(basic|menus|staff|hours|rules)$/);
           if (liveSettings && (method === "GET" || method === "POST")) {
             assertOwner(user, fresh);
@@ -785,10 +809,11 @@ export function createApp(
           }
           if (action === "system" && method === "GET") {
             if (!fresh.published) fail(409, "公開後に仕組み図を表示します");
+            const config = await effective(fresh);
             return json(res, {
-              diagram: shopSystem(fresh.published),
-              svg: systemSvg(fresh.published),
-              overview: systemSvg(fresh.published, false),
+              diagram: shopSystem(config),
+              svg: systemSvg(config),
+              overview: systemSvg(config, false),
               revision: fresh.revision,
             });
           }
@@ -1144,6 +1169,61 @@ export function createApp(
               inquiries: await inquiries(fresh),
             });
           }
+          const customerRoute = action.match(/^customers(?:\/([^/]+)(?:\/(.*))?)?$/);
+          if (customerRoute && (method === "GET" || method === "POST")) {
+            const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
+            const now = new Date();
+            const loadCustomers = async () => aggregateCustomers(await store.bookings(fresh.id), await inquiries(fresh), await store.records<CustomerNote>("customerNote", fresh), now, customerSince(filter, now));
+            const customers = await loadCustomers();
+            if (!customerRoute[1] && method === "GET") return json(res, customerSummaries(customers));
+            const email = normalizeEmail(decodeURIComponent(customerRoute[1] || ""));
+            const customer = customers.find(customer => customer.email === email) || fail(404, "お客様が見つかりません");
+            const tail = customerRoute[2] || "";
+            if (!tail && method === "GET") return json(res, customer);
+            if (tail === "images" && method === "GET") return json(res, {
+              name: customer.name,
+              images: customerImages((await store.records<CustomerNote>("customerNote", fresh)).filter(note => normalizeEmail(note.email) === email)),
+            });
+            if (tail === "notes" && method === "POST") {
+              const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+              await addCustomerNote(store, fresh, email, user!.email, await body(req, 15 * 1024 * 1024), crmFiles, token);
+              return json(res, (await loadCustomers()).find(customer => customer.email === email));
+            }
+            const noteRoute = tail.match(/^notes\/([^/]+)(?:\/(delete|files)(?:\/([^/]+))?)?$/);
+            if (noteRoute) {
+              const note = (await store.records<CustomerNote>("customerNote", fresh)).find(note => note.id === noteRoute[1] && normalizeEmail(note.email) === email && note.status === "active") || fail(404, "メモがありません");
+              if (noteRoute[2] === "files" && noteRoute[3] && method === "GET") {
+                const attachment = note.attachments.find(file => file.id === noteRoute[3]) || fail(404, "添付ファイルがありません");
+                const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+                const data = await crmFiles.read(fresh, token, attachment.id);
+                if (data.length !== attachment.size) fail(409, "添付ファイルが変更されています");
+                return json(res, { data: data.toString("base64") });
+              }
+              if (method === "POST" && (!noteRoute[2] || noteRoute[2] === "delete")) {
+                const input = z.object({ text: z.string().max(10000).optional(), attachmentNames: z.array(customerAttachmentSchema.pick({ id: true, name: true })).max(5).optional(), previousUpdatedAt: z.string() }).parse(await body(req));
+                if (input.previousUpdatedAt !== note.updatedAt) fail(409, "メモが更新されています。詳細を開き直して確認してください。入力内容は画面に残っています");
+                if (!noteRoute[2]) {
+                  if (input.text === undefined && !input.attachmentNames?.length) fail(400, "変更内容を指定してください");
+                  if (input.text !== undefined && !input.text.trim() && !note.attachments.length) fail(400, "メモを入力してください");
+                  const names = input.attachmentNames || [];
+                  if (new Set(names.map(file => file.id)).size !== names.length || names.some(file => !note.attachments.some(attachment => attachment.id === file.id))) fail(400, "添付ファイルを確認してください");
+                  for (const file of names) {
+                    const attachment = note.attachments.find(attachment => attachment.id === file.id)!;
+                    if (attachment.name === file.name) continue;
+                    const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+                    await crmFiles.rename(fresh, token, file.id, file.name);
+                    attachment.name = file.name;
+                  }
+                  if (input.text !== undefined) note.text = input.text;
+                } else note.status = "deleted";
+                note.updatedAt = new Date(Math.max(Date.now(), Date.parse(note.updatedAt) + 1)).toISOString();
+                note.updatedBy = user!.email;
+                await store.put("customerNote", note.id, note);
+                await touchCustomer(store, fresh, email, note);
+                return json(res, (await loadCustomers()).find(customer => customer.email === email));
+              }
+            }
+          }
           const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
           if (cancellation && method === "POST") {
             const input = z
@@ -1284,7 +1364,7 @@ export function createApp(
             return json(
               res,
               documents(
-                fresh.published || fresh.draft || sample,
+                fresh.published ? await effective(fresh) : fresh.draft || sample,
                 fresh.history,
               ),
             );
@@ -1302,6 +1382,11 @@ export function createApp(
         );
         if (!plan || plan.shopId !== shop.id || !plan.approved)
           fail(404, "承認済みのプランがありません");
+        const previewImage = preview[2]?.match(/^menu-images\/([a-f0-9]{64})$/);
+        if (previewImage && method === "GET") {
+          if (!plan.config.menus.some(menu => menu.active && menu.imageId === previewImage[1])) fail(404, "メニュー画像がありません");
+          return json(res, await readMenuImage(store, shop, previewImage[1], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
+        }
         if (method === "GET" && (!preview[2] || preview[2] === "slots")) {
           if (preview[2] === "slots")
             return json(
@@ -1325,6 +1410,7 @@ export function createApp(
           const b = z
             .object({
               name: z.string().min(1).max(100),
+              message: z.string().max(2000).default(""),
               menuId: z.string(),
               staffId: z.string().optional(),
               start: z.iso.datetime(),
@@ -1394,6 +1480,11 @@ export function createApp(
             return json(res, post);
           }
           const config = await effective(shop);
+          const menuImage = action.match(/^menu-images\/([a-f0-9]{64})$/);
+          if (menuImage && method === "GET") {
+            if (!config.menus.some(menu => menu.active && menu.imageId === menuImage[1])) fail(404, "メニュー画像がありません");
+            return json(res, await readMenuImage(store, shop, menuImage[1], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
+          }
           const customer = () => {
             if (!user || user.role !== "customer" || user.shopId !== shop.id)
               fail(401, "このお店のお客様としてログインしてください");
@@ -1433,6 +1524,7 @@ export function createApp(
             const input = z
               .object({
                 name: z.string().min(1).max(100),
+                message: z.string().max(2000).default(""),
                 menuId: z.string(),
                 staffId: z.string().optional(),
                 start: z.iso.datetime(),
@@ -1460,7 +1552,9 @@ export function createApp(
               shopId: shop.id,
               customer: u.email,
               name: input.name,
+              message: input.message,
               menuId: input.menuId,
+              price: config.menus.find(menu => menu.id === input.menuId)!.price,
               ...slot,
               status: "active",
               createdAt: new Date().toISOString(),
@@ -1477,7 +1571,7 @@ export function createApp(
                 config,
                 u.email,
                 `${config.name} ご予約を承りました`,
-                `${b.name} 様\n${config.menus.find((m) => m.id === b.menuId)!.name}\n${new Date(b.start).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}\n予約番号: ${b.id}`,
+                `${b.name} 様\n${config.menus.find((m) => m.id === b.menuId)!.name}\n${new Date(b.start).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}\n予約番号: ${b.id}${b.message ? `\nメッセージ: ${b.message}` : ""}`,
               );
             });
             await flush(shop);

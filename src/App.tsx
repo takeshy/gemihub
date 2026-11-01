@@ -1,5 +1,7 @@
 import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
+import { DataManagement } from "./DataManagement";
+import { DataOverview } from "./DataOverview";
 import { ShopOverview } from "./ShopOverview";
 import { ShopRequest } from "./ShopRequest";
 import { VisualRequest } from "./VisualRequest";
@@ -9,6 +11,8 @@ import { LiveSettings } from "./LiveSettings";
 import { PageBuilder } from "./PageBuilder";
 import { LocalPreview, type LocalEditorHandle } from "./LocalPreview";
 import { Manual } from "./Manual";
+import { MenuImage, MenuImageEditor } from "./MenuImage";
+import { Customers } from "./Customers";
 import { createRequestId } from "./request-id";
 import React, { useEffect, useState, useRef } from "react";
 import { useApi } from "./api";
@@ -30,6 +34,7 @@ export type Inquiry = {
   message: string;
   reply: string;
   status: string;
+  at?: string;
 };
 export type Workspace = Shop & {
   isOwner: boolean;
@@ -74,8 +79,8 @@ export type AppProps = {
 export function App({
   path = location.pathname,
   search = location.search,
-  initialTab = new URLSearchParams(location.search).get("calendar") === "connected" ? "team" : "try",
-  initialPane = "reserve",
+  initialTab = new URLSearchParams(search).has("customer") ? "customers" : new URLSearchParams(search).get("calendar") === "connected" ? "team" : "try",
+  initialPane = "mine",
   navigate = (href) => location.assign(href),
 }: AppProps = {}) {
   const api = useApi();
@@ -163,7 +168,7 @@ export function App({
                 new URLSearchParams(search).get("pane") || "",
               )
                 ? new URLSearchParams(search).get("pane")
-                : initialPane)!
+                : match?.[1] === "preview" ? "reserve" : initialPane)!
             }
             pageSlug={(match?.[3] || hostedPost?.[1]) === "pages" ? match?.[4] || hostedPost?.[2] : undefined}
             category={
@@ -180,6 +185,8 @@ export function App({
         ) : session.user ? (
           <Dashboard
             initialTab={initialTab}
+            initialCustomer={new URLSearchParams(search).get("customer") || ""}
+            initialCustomerImages={new URLSearchParams(search).get("customerView") === "images"}
             session={session}
             run={run}
             busy={busy}
@@ -273,12 +280,16 @@ function Landing({ demo, run }: { demo: boolean; run: Run }) {
 }
 function Dashboard({
   initialTab = "try",
+  initialCustomer = "",
+  initialCustomerImages = false,
   session,
   run,
   busy,
   notify,
 }: {
   initialTab?: string;
+  initialCustomer?: string;
+  initialCustomerImages?: boolean;
   session: Session;
   run: Run;
   busy: boolean;
@@ -311,7 +322,7 @@ function Dashboard({
     });
   }, []);
   const shop = shops.find((s) => s.id === chosen) || shops[0];
-  useEffect(() => { if (shop && !shop.isOwner && ["try", "create-page"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
+  useEffect(() => { if (shop && !shop.isOwner && ["try", "create-page", "data"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
   const activePlan =
     plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
       ? plan
@@ -358,11 +369,12 @@ function Dashboard({
             ["build", "✧", "お店をつくる・直す"],
             ...(shop?.isOwner ? [["try", "▣", "画面を試す・編集"], ["create-page", "＋", "ページをつくる"]] : []),
             ["bookings", "▦", "予約を管理"],
+            ...(shop ? [["customers", "♧", "お客様"]] : []),
             ...(shop?.isOwner ? [["basic", "⌂", "お店の基本情報"], ["menus", "≡", "メニュー・料金"], ["staff", "♧", "スタッフ・勤務"], ["hours", "◷", "営業時間・休業日"], ["rules", "⚙", "予約ルール"]] : []),
             ["inquiries", "✉", "お問い合わせ"],
             ["blog", "✎", "ブログ・お知らせ"],
             ["team", "♧", "家族・スタッフ"],
-            ["data", "▤", "データとファイル"],
+            ...(shop?.isOwner ? [["data", "▤", "データ管理"]] : []),
             ["settings", "⚙", "公開の設定"],
             ["manual", "?", "使い方"],
           ].map(([id, icon, label]) => (
@@ -413,35 +425,6 @@ function Dashboard({
               <Manual />
             ) : (
               <>
-                {tab !== "try" && <div className="page-title">
-                  <div>
-                    <div className="eyebrow">YOUR SHOP, YOUR WORDS</div>
-                    <h1>
-                      {tab === "build"
-                        ? shop.published
-                          ? "お店の「こうしたい」を、かたちに。"
-                          : "まずは、お店のお話から。"
-                        : (
-                            {
-                              try: "試して、直して、反映する。",
-                              "create-page": "AIと、新しいページを。",
-                              basic: "お店の基本情報を管理", menus: "メニュー・料金を管理", staff: "スタッフ・勤務を管理", hours: "営業時間・休業日を管理", rules: "予約ルールを管理",
-                              bookings: "今日も、お客様を迎える準備を。",
-                              inquiries: "お客様からのお便り。",
-                              blog: "お店の想いを、お客様へ。",
-                              team: "お店を、一緒に。",
-                              data: "お店の中身は、いつでも手元に。",
-                              settings: "お店の入り口を整える。",
-                            } as Record<string, string>
-                          )[tab]}
-                    </h1>
-                    <p className="muted">
-                      {shop.published
-                        ? `${shop.published.name} のお店づくり`
-                        : "専門知識は必要ありません。いつもの言葉で教えてください。"}
-                    </p>
-                  </div>
-                </div>}
                 {shop.publishingPlanId && (
                   <div className="alert">
                     保存・反映が未完了です。予約受付を一時停止しています。操作した管理画面から再試行してください。
@@ -470,7 +453,7 @@ function Dashboard({
                 )}
                 {tab === "build" && (
                   <>
-                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} isOwner={shop.isOwner} plan={activePlan} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onEdit={config => { setEdit(config); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onPlan={async (text, context) => {
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} google={shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onPlan={async (text, context) => {
                       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context });
                       setPlan(p); setEdit(undefined); await load(); return p;
                     }} />}
@@ -500,7 +483,7 @@ function Dashboard({
                         {edit && (
                           <div className="panel">
                             <h2>お店の情報</h2>
-                            <ConfigEditor config={edit} onChange={setEdit} />
+                            <ConfigEditor config={edit} onChange={setEdit} shopId={shop.id} />
                             <button
                               className="primary"
                               onClick={generate}
@@ -624,6 +607,7 @@ function Dashboard({
                         </div>
                       </div>}
                     </div>
+                    {!shop.published && <DataOverview isOwner={shop.isOwner} google={shop.google} open={setTab} />}
                   </>
                 )}
                 {["basic", "menus", "staff", "hours", "rules"].includes(tab) && shop.isOwner && <LiveSettings key={`${shop.id}-${tab}`} shop={shop} section={tab as "basic" | "menus" | "staff" | "hours" | "rules"} reload={load} />}
@@ -631,6 +615,7 @@ function Dashboard({
                 {tab === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
+                {tab === "customers" && <Customers key={shop.id} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} />}
                 {tab === "blog" && (
                   <BlogEditor
                     shop={shop}
@@ -663,7 +648,7 @@ function Dashboard({
                   </div>
                 )}
                 {tab === "team" && <Team shop={shop} run={run} reload={load} />}
-                {tab === "data" && <DataPanel shop={shop} run={run} />}
+                {tab === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} />}
                 {tab === "settings" && (
                   <Settings shop={shop} run={run} reload={load} />
                 )}
@@ -737,8 +722,12 @@ export function ConfigEditor({
   config: c,
   onChange: set,
   section,
+  shopId,
+  onImageUploading,
 }: {
   config: ShopConfig;
+  shopId?: string;
+  onImageUploading?: (busy: boolean) => void;
   section?: "basic" | "profile" | "menus" | "staff" | "hours" | "rules";
   onChange: (c: ShopConfig) => void;
 }) {
@@ -787,7 +776,7 @@ export function ConfigEditor({
       {(!section || section === "menus") && <>
       <h3>メニュー</h3>
       {c.menus.map((m, i) => (
-        <div className="edit-row" key={m.id}>
+        <div className="menu-edit-block" key={m.id}><div className="edit-row">
           <input
             aria-label="メニュー名"
             value={m.name}
@@ -845,7 +834,7 @@ export function ConfigEditor({
             />
             有効
           </label>
-        </div>
+        </div>{shopId && <MenuImageEditor shopId={shopId} imageId={m.imageId} name={m.name} uploading={onImageUploading} change={imageId => put("menus", c.menus.map((menu, index) => index === i ? { ...menu, imageId } : menu))} />}</div>
       ))}
       <button
         onClick={() =>
@@ -1194,6 +1183,7 @@ function Reservations({
                     ?.name || b.staffId}
                 </p>
                 <span className="small muted">{b.customer}</span>
+                {b.message && <p className="pre-wrap"><b>予約時のメッセージ</b><br />{b.message}</p>}
               </div>
               {b.status === "active" && (
                 <div className="actions">
@@ -1336,75 +1326,6 @@ function Team({
     </div>
   );
 }
-function DataPanel({ shop, run }: { shop: Workspace; run: Run }) {
-  const api = useApi();
-  const [docs, setDocs] = useState<{ spec: string; history: string }>();
-  useEffect(() => {
-    run(async () => {
-      setDocs(await api(`/api/shops/${shop.id}/documents`));
-    });
-  }, [shop.id]);
-  const download = (name: string, text: string) => {
-    const url = URL.createObjectURL(
-      new Blob([text], { type: "text/markdown" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-  return (
-    <div className="panel">
-      <h2>データとファイル</h2>
-      <p>現在の仕様と変更履歴は「お店をつくる・直す」で確認できます。</p>
-      <p className="muted">
-        Google 接続で公開すると、あなたのドライブにファイルが保存されます。
-      </p>
-      {shop.google ? (
-        <div className="actions">
-          <a
-            className="button primary"
-            href={`https://docs.google.com/spreadsheets/d/${shop.google.sheetId}/edit`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            予約のスプレッドシート ↗
-          </a>
-          <a
-            className="button"
-            href={`https://drive.google.com/drive/folders/${shop.google.folderId}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            お店のファイル ↗
-          </a>
-        </div>
-      ) : (
-        <p className="notice">
-          デモのデータは、このサーバー内に保存されています。
-        </p>
-      )}
-      {docs && (
-        <>
-          {(["spec", "history"] as const).map((k) => (
-            <div key={k}>
-              <div className="section-top">
-                <h3>
-                  {k === "spec" ? "お店の仕様" : "変更履歴"} · {k}.md
-                </h3>
-                <button onClick={() => download(`${k}.md`, docs[k])}>
-                  ダウンロード ↓
-                </button>
-              </div>
-              <pre className="document">{docs[k]}</pre>
-            </div>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
 function Settings({
   shop,
   run,
@@ -1490,7 +1411,7 @@ export function PublicShop({
   articleKey,
   navigate,
   search = location.search,
-  initialPane = "reserve",
+  initialPane = "mine",
   onPaneChange,
   session,
   slug,
@@ -1538,6 +1459,7 @@ export function PublicShop({
   const [name, setName] = useState(session.user?.name || "");
   const [mine, setMine] = useState<Booking[]>([]);
   const [message, setMessage] = useState("");
+  const [bookingMessage, setBookingMessage] = useState("");
   const [pane, setPane] = useState(initialPane);
   const [complete, setComplete] = useState(false);
   const [requestId, setRequestId] = useState(() => createRequestId());
@@ -1606,9 +1528,9 @@ export function PublicShop({
       {!hideHeader && <SiteHeader config={c}>
       <nav className="public-nav">
         {[
+          ["mine", "マイページ"],
           ["reserve", "ご予約"],
           ["about", "お店のこと"],
-          ["mine", "マイページ"],
           ["contact", "お問い合わせ"],
         ].map(([id, label]) => (
           <button
@@ -1646,7 +1568,7 @@ export function PublicShop({
         />
       ) : (
         <>
-          {!preview && pane === "reserve" && (
+          {!preview && pane === "mine" && (
             <RecentPosts
               posts={data.recentPosts || []}
               basePath={basePath}
@@ -1697,6 +1619,7 @@ export function PublicShop({
                         }}
                         key={m.id}
                       >
+                        <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} suffix={suffix} name={m.name} />
                         <span>
                           <b>{m.name}</b>
                           <small>{m.duration}分</small>
@@ -1764,6 +1687,9 @@ export function PublicShop({
                     placeholder="お名前"
                   />
                 </Field>
+                <Field label="お店へのメッセージ（任意）">
+                  <textarea maxLength={2000} rows={3} value={bookingMessage} onChange={event => { setBookingMessage(event.target.value); setRequestId(createRequestId()); }} placeholder="ご希望や事前に伝えたいことがあればご記入ください" />
+                </Field>
                 <p className="small muted">
                   キャンセルは開始 {c.rules.cancelHours}{" "}
                   時間前までマイページで承ります。それ以降はお問い合わせください。
@@ -1781,6 +1707,7 @@ export function PublicShop({
                     run(async () => {
                       await api(`${base}/bookings${suffix}`, {
                         name,
+                        message: bookingMessage,
                         menuId: menu,
                         staffId: staff,
                         start: selected,
@@ -1831,6 +1758,7 @@ export function PublicShop({
                 .filter((m) => m.active)
                 .map((m) => (
                   <div className="menu-row" key={m.id}>
+                    <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} suffix={suffix} name={m.name} />
                     {m.name} · {m.duration}分 <b>{yen(m.price)}</b>
                   </div>
                 ))}
@@ -1871,6 +1799,7 @@ export function PublicShop({
                         {c.menus.find((m) => m.id === b.menuId)?.name ||
                           b.menuId}
                       </p>
+                      {b.message && <p className="pre-wrap"><b>予約時のメッセージ</b><br />{b.message}</p>}
                       <p className="small muted">予約番号：{b.id}</p>
                     </div>
                     {b.status === "active" && (

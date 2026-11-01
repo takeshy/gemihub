@@ -13,6 +13,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
   const [source, setSource] = useState<ShopConfig>();
   const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const key = `omaiweb:live-save:${shop.owner}:${shop.id}:${section}`;
@@ -37,16 +38,16 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
     {error && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {!config && <p>お店の共通設定を反映すると管理できます。</p>}
-    {config && <fieldset disabled={busy || !!pending}><ConfigEditor section={section} config={config} onChange={value => { setConfig(value); setNotice(""); }} /></fieldset>}
+    {config && <fieldset disabled={busy || imageUploading || !!pending}><ConfigEditor shopId={shop.id} onImageUploading={setImageUploading} section={section} config={config} onChange={value => { setConfig(value); setNotice(""); }} /></fieldset>}
     <div className="actions">
-      <button disabled={busy} onClick={async () => {
+      <button disabled={busy || imageUploading} onClick={async () => {
         if ((pending || config && JSON.stringify(config) !== JSON.stringify(source)) && !window.confirm("編集を破棄して最新の本番データを読み直しますか？")) return;
         setBusy(true); setError("");
         try { await load(); localStorage.removeItem(key); setPending(undefined); setNotice(""); }
         catch (e) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
       }}>最新の内容を読み直す</button>
-      <button className="primary" disabled={busy || (!pending && (!config || !source || JSON.stringify(liveValue(config, section)) === JSON.stringify(liveValue(source, section))))} onClick={async () => {
+      <button className="primary" disabled={busy || imageUploading || (!pending && (!config || !source || JSON.stringify(liveValue(config, section)) === JSON.stringify(liveValue(source, section))))} onClick={async () => {
         if (!pending && (!config || !source)) return;
         setBusy(true); setError(""); setNotice("");
         try {

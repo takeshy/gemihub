@@ -46,8 +46,8 @@ export function readDraft(storage: Pick<Storage, "getItem">, key: string) {
 export function writeDraft(storage: Pick<Storage, "setItem">, key: string, draft: z.input<typeof localDraftSchema>) {
   storage.setItem(key, JSON.stringify(localDraftSchema.parse(draft)));
 }
-export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string): ApiClient {
-  const bookings = fixtures.bookings.map(b => ({ ...b, shopId, customer: "sample@example.com", createdAt: new Date().toISOString() }));
+export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string) => Promise<import("../server/menu-image-domain").MenuImageData>): ApiClient {
+  const bookings = fixtures.bookings.map(b => ({ ...b, shopId, price: config.menus.find(menu => menu.id === b.menuId)?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }));
   const posts: PublicPost[] = fixtures.posts.map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
   return async <T>(path: string, data?: unknown): Promise<T> => {
@@ -55,13 +55,18 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     const action = url.pathname;
     const input = (data || {}) as Record<string, string>;
     let result: unknown;
-    if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5) };
+    const image = action.match(/^\/api\/public\/local-preview\/menu-images\/([a-f0-9]{64})$/);
+    if (image) {
+      if (!config.menus.some(menu => menu.active && menu.imageId === image[1]) || !readImage) throw new Error("メニュー画像がありません");
+      result = await readImage(image[1]);
+    }
+    else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5) };
     else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined);
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {
       const slot = slots(config, bookings, dateJST(new Date(input.start)), input.menuId, input.staffId || undefined).find(s => s.start === input.start);
       if (!slot) throw new Error("この時間は予約できません。空き枠を選び直してください。");
-      bookings.push({ ...slot, id: `practice-${bookings.length}`, name: input.name, menuId: input.menuId, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() });
+      bookings.push({ ...slot, id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: config.menus.find(menu => menu.id === input.menuId)!.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() });
       result = { ok: true };
     } else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/cancel")) {
       const b = bookings.find(b => b.id === action.split("/").at(-2));

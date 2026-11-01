@@ -56,6 +56,9 @@ try {
   page.on('request', request => { if (/^https?:/.test(request.url())) remoteRequests.push(request.url()); });
   await page.goto(pathToFileURL(file).href);
   await page.getByRole('heading', { name: config.name, exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'あなたのご予約', exact: true }).waitFor();
+  assert.equal(await page.locator('.public-nav button').first().textContent(), 'マイページ');
+  await page.getByRole('button', { name: 'ご予約', exact: true }).click();
   await page.getByRole('heading', { name: '自分のための、ひとときを。', exact: true }).waitFor();
   assert.ok(await page.getByRole('button', { name: new RegExp(config.menus[0].name) }).count());
   assert.deepEqual(await page.locator('script[src]').evaluateAll(elements => elements.map(e => e.getAttribute('src'))), ['./data.js']);

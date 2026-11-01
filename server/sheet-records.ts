@@ -1,3 +1,4 @@
+import { customerNoteSchema } from "./customers.ts";
 import { clients } from "./google.ts";
 import type { Shop } from "./store.ts";
 const layouts: Record<string, { tab: string; columns: string[] }> = {
@@ -16,6 +17,8 @@ const layouts: Record<string, { tab: string; columns: string[] }> = {
       "updatedBy",
       "updatedAt",
       "requestKey",
+      "price",
+      "message",
     ],
   },
   inquiry: {
@@ -34,6 +37,8 @@ const layouts: Record<string, { tab: string; columns: string[] }> = {
     ],
   },
   post: { tab: "posts", columns: ["id", "record"] },
+  customer: { tab: "customers", columns: ["email", "updatedBy", "updatedAt"] },
+  customerNote: { tab: "customer_notes", columns: ["id", "email", "text", "attachments", "createdAt", "createdBy", "status", "updatedAt", "updatedBy"] },
 };
 async function table(shop: Shop, kind: string, token: string) {
   const layout = layouts[kind];
@@ -71,9 +76,7 @@ async function table(shop: Shop, kind: string, token: string) {
   const header = rows[0] || [];
   if (
     header.some((v, i) => v !== layout.columns[i]) ||
-    (header.length &&
-      header.length !== layout.columns.length &&
-      !(kind === "booking" && header.length === 11))
+    (header.length && header.length !== layout.columns.length)
   )
     throw Object.assign(new Error(`${layout.tab} の列構造を確認してください`), {
       status: 409,
@@ -111,11 +114,26 @@ export async function readRecords(
         layout.columns.map((k, i) => [k, row[i] ?? ""]),
       );
       value.shopId = shop.id;
-      if (kind === "member") {
+      if (kind === "customerNote") {
         value.email = String(value.email).trim().toLowerCase();
+        try {
+          value.attachments = JSON.parse(String(value.attachments || "[]"));
+          return customerNoteSchema.parse(value);
+        } catch { throw Object.assign(new Error("お客様メモの記録を確認してください"), { status: 409 }); }
+      }
+      if (kind === "member" || kind === "customer") {
+        value.email = String(value.email).trim().toLowerCase();
+      }
+      if (kind === "member") {
         value.accepted =
           String(value.accepted).toLowerCase() === "true" &&
           value.status !== "revoked";
+      }
+      if (kind === "booking") {
+        const price = Number(value.price);
+        if (String(value.price).trim() === "" || !Number.isSafeInteger(price) || price < 0)
+          throw Object.assign(new Error("予約台帳の料金を確認してください"), { status: 409 });
+        value.price = price;
       }
       if (
         kind === "booking" &&
@@ -142,14 +160,14 @@ export async function writeRecord(
     kind,
     token,
   );
-  const key = kind === "member" ? value.email : id;
+  const key = kind === "member" || kind === "customer" ? value.email : id;
   const index = rows.findIndex(
     (r) => String(r[0]).trim().toLowerCase() === String(key).toLowerCase(),
   );
   const row =
     kind === "post"
       ? [id, JSON.stringify(value)]
-      : layout.columns.map((k) => value[k] ?? "");
+      : layout.columns.map((k) => kind === "customerNote" && k === "attachments" ? JSON.stringify(value[k] || []) : value[k] ?? "");
   // A retry reads by identity before choosing its fixed row; it never appends blindly.
   const number = index < 0 ? rows.length + 2 : index + 2;
   await sheets.spreadsheets.values.update({

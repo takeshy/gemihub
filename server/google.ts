@@ -62,9 +62,11 @@ const tabs = [
   "members",
   "posts",
   "pages",
+  "customers",
+  "customer_notes",
 ];
 const headers = [
-  ["id", "name", "duration", "price", "active"],
+  ["id", "name", "duration", "price", "active", "imageId"],
   ["id", "name", "menuIds", "weekdays", "start", "end"],
   ["key", "value"],
   ["id", "record"],
@@ -129,12 +131,13 @@ export async function syncConfig(
   token: string,
   onProgress: () => void | Promise<void> = () => {},
   scope?: ReleaseScope,
+  menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>,
 ) {
   if (!shop.google) throw new Error("Google の保存先が未作成です");
   const { sheets, drive } = clients(token);
   const doc = documents(config, shop.history);
   // Prepare the runnable export before writing any remote data.
-  const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"));
+  const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"), undefined, menuImages);
   const pageIndex = config.pages.map(({ id, slug, title, navigationLabel }) => ({ id, slug, title, navigationLabel }));
   if (scope?.kind === "part") {
     const settings = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "settings!A:A" });
@@ -164,15 +167,16 @@ export async function syncConfig(
         valueInputOption: "RAW",
         data: [
           {
-            range: "menus!A1:E1000",
+            range: "menus!A1:F1000",
             values: [
-              ["id", "name", "duration", "price", "active"],
+              ["id", "name", "duration", "price", "active", "imageId"],
               ...config.menus.map((m) => [
                 m.id,
                 m.name,
                 m.duration,
                 m.price,
                 m.active,
+                m.imageId || "",
               ]),
             ],
           },
@@ -208,7 +212,7 @@ export async function syncConfig(
       spreadsheetId: shop.google.sheetId,
       requestBody: {
         ranges: [
-          `menus!A${config.menus.length + 2}:E1000`,
+          `menus!A${config.menus.length + 2}:F1000`,
           `staff!A${config.staff.length + 2}:F1000`,
           `pages!A${config.pages.length + 2}:B100`,
         ],
@@ -296,7 +300,7 @@ export async function readConfig(
   const { sheets } = clients(token);
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: shop.google!.sheetId,
-    ranges: ["menus!A:E", "staff!A:F", "settings!A:B", "pages!A:B"],
+    ranges: ["menus!A:F", "staff!A:F", "settings!A:B", "pages!A:B"],
   });
   for (let i = 0; i < headers.length; i++)
     if (
@@ -323,6 +327,7 @@ export async function readConfig(
       duration: Number(r[2]),
       price: Number(r[3]),
       active: String(r[4]).toLowerCase() === "true",
+      ...(r[5] ? { imageId: String(r[5]) } : {}),
     })),
     staff: staff.map((r) => ({
       id: String(r[0]),
@@ -421,6 +426,7 @@ export async function syncPostFiles(
   posts: import("./post-domain.ts").Post[],
   token: string,
   onProgress: () => void | Promise<void>,
+  readMenuImages?: (config: ShopConfig) => Promise<Record<string, import("./menu-image-domain.ts").MenuImageData>>,
 ) {
   if (!shop.google || !shop.published) return;
   const { postArtifacts } = await import("./post-renderer.tsx");
@@ -430,6 +436,7 @@ export async function syncPostFiles(
     config,
     posts,
     await readFile("dist/index.html", "utf8"),
+    readMenuImages ? await readMenuImages(config) : undefined,
   );
   const connection = shop.google;
   connection.artifactFolders ||= {};

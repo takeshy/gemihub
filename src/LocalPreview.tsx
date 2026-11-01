@@ -79,7 +79,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     if (!draft || !index) return;
     let active = true;
     const ids = [...new Set([...draft.config.pages, ...draft.source?.pages || [], ...index.pages].map(p => p.id))];
-    void Promise.all([syncStatus(draft, index, { kind: "shared" }).then(status => ["shared", status] as const), ...["header", "footer"].map(part => syncStatus(draft, index, { kind: "part", part: part as "header" | "footer" }).then(status => [`part:${part}`, status] as const)), ...ids.map(id => syncStatus(draft, index, { kind: "page", pageId: id }).then(status => [id, status] as const))]).then(entries => { if (active) setStatuses(Object.fromEntries(entries)); }).catch(() => setError("状態の比較に失敗しました。HTTPS または localhost で開いてください。"));
+    void Promise.all([syncStatus(draft, index, { kind: "shared" }).then(status => ["shared", status] as const), ...["header", "footer"].map(part => syncStatus(draft, index, { kind: "part", part: part as "header" | "footer" }).then(status => [`part:${part}`, status] as const)), ...ids.map(id => syncStatus(draft, index, { kind: "page", pageId: id }).then(status => [id, status] as const))]).then(entries => { if (active) setStatuses(Object.fromEntries(entries)); }).catch(() => { if (active) setError("状態の比較に失敗しました。ページを再読み込みしてください。"); });
     return () => { active = false; };
   }, [draft, index]);
   useEffect(() => {
@@ -93,7 +93,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     window.addEventListener("focus", check);
     return () => { active = false; clearInterval(timer); window.removeEventListener("focus", check); };
   }, [draft, busy, conflict, key]);
-  const mock = useMemo(() => draft ? createPreviewClient(draft.config, draft.fixtures, shop.id) : undefined, [draft?.config, draft?.fixtures, shop.id]);
+  const mock = useMemo(() => draft ? createPreviewClient(draft.config, draft.fixtures, shop.id, imageId => api(`/api/shops/${shop.id}/menu-images/${imageId}`)) : undefined, [draft?.config, draft?.fixtures, shop.id]);
   const session: Session = { demo: false, user: { name: draft?.fixtures.customerName || "サンプルのお客様", email: "sample@example.com", role: "customer", shopId: shop.id } };
   const scope: ReleaseScope = draft?.pending?.scope || (screen.startsWith("page:") ? { kind: "page", pageId: screen.slice(5) } : screen.startsWith("part:") ? { kind: "part", part: screen === "part:footer" ? "footer" : "header" } : { kind: "shared" });
   let releaseConfig = draft?.config;

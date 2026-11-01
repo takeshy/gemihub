@@ -34,7 +34,7 @@ export type User = {
   refreshToken?: string;
 };
 
-const businessKinds = new Set(["booking", "inquiry", "member", "post"]);
+const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote"]);
 type Entry = { kind: string; id: string; value: unknown };
 export class Store {
   readonly memory: boolean;
@@ -71,7 +71,7 @@ export class Store {
   }
   async get<T>(kind: string, id: string): Promise<T | undefined> {
     if (!this.memory && businessKinds.has(kind)) {
-      if (kind === "member") {
+      if (kind === "member" || kind === "customer") {
         const shop = await this.shop(id.split(":")[0]);
         return shop
           ? (await this.records<T & { email: string }>(kind, shop)).find(

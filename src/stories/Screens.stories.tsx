@@ -27,7 +27,7 @@ export const Team: Story = {
 };
 
 export const Data: Story = {
-  name: "データ・仕様・変更履歴",
+  name: "データ管理・追加データの編集",
   args: { scenario: "data" },
 };
 
@@ -52,3 +52,5 @@ export const Hours: Story = { name: "営業時間・休業日の保存", args: {
 export const Rules: Story = { name: "予約ルールの保存", args: { scenario: "manage-rules" } };
 
 export const Basic: Story = { name: "お店の基本情報の保存", args: { scenario: "manage-basic" } };
+
+export const NoExtraData: Story = { name: "データ管理・追加データなし", args: { scenario: "data-empty" } };

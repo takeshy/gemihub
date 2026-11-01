@@ -87,7 +87,7 @@ export async function availableSlots(
       for (const b of result.busy)
         bookings.push({
           ...b, id: "calendar", shopId: shop.id, staffId: result.staffId,
-          customer: "", name: "", menuId: "", createdAt: "", status: "active",
+          customer: "", name: "", menuId: "", price: 0, message: "", createdAt: "", status: "active",
         });
   } catch {
     throw Object.assign(

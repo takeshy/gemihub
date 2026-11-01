@@ -28,6 +28,7 @@ export function Screen({ scenario }: { scenario: Scenario }) {
           navigate(link.getAttribute("href")!);
           return;
         }
+        if (link?.hasAttribute("data-customer-images-link")) return;
         if (link && !link.getAttribute("href")?.startsWith("#")) {
           event.preventDefault();
           setNotice(

@@ -5,7 +5,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { google } from "googleapis";
 import { sample, type ShopConfig } from "../server/domain.ts";
 import { syncConfig, encrypt } from "../server/google.ts";
-import { editorIndex } from "../server/editor-sync.ts";
+import { contentHash, editorIndex } from "../server/editor-sync.ts";
 import { fingerprint, syncStatus, replaceScope } from "../src/editor-sync.ts";
 import { sampleFixtures, type LocalDraft } from "../src/local-preview.ts";
 import { pageValue, type ShopPage } from "../server/pages.ts";
@@ -16,6 +16,25 @@ import { randomUUID } from "node:crypto";
 import { digest } from "../server/auth.ts";
 import type { AddressInfo } from "node:net";
 const page = (id: string): ShopPage => ({ id, slug: id, title: id, navigationLabel: id, body: "もとの本文", layout: "standard", imageUrl: "" });
+
+test("editor fingerprints match server SHA-256 and sync still detects conflicts without Web Crypto", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis.crypto, "subtle");
+  Object.defineProperty(globalThis.crypto, "subtle", { configurable: true, value: undefined });
+  try {
+    for (const value of [null, "", "お客様の髪型 ✂️", { text: "あ".repeat(2000), enabled: true, list: [0, false, null] }, sample])
+      assert.equal(await fingerprint(value), contentHash(value));
+    const config = structuredClone(sample);
+    const draft: LocalDraft = { config, source: structuredClone(config), base: 0, fixtures: sampleFixtures(config) };
+    assert.equal(await syncStatus(draft, editorIndex(config, 0), { kind: "shared" }), "synced");
+    config.description = "ローカルの編集";
+    assert.equal(await syncStatus(draft, editorIndex(draft.source, 0), { kind: "shared" }), "local");
+    const remote = { ...draft.source!, description: "リモートの編集" };
+    assert.equal(await syncStatus(draft, editorIndex(remote, 1), { kind: "shared" }), "conflict");
+  } finally {
+    if (previous) Object.defineProperty(globalThis.crypto, "subtle", previous);
+    else Reflect.deleteProperty(globalThis.crypto, "subtle");
+  }
+});
 
 test("sync status distinguishes unfetched, remote, local and edit/delete conflicts", async () => {
   const remote = { ...structuredClone(sample), pages: [page("faq"), page("access")] };

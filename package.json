@@ -17,11 +17,13 @@
     "build-storybook": "storybook build --disable-telemetry",
     "capture:manual": "node scripts/capture-manual.mjs",
     "check:multimodal": "node scripts/check-multimodal.mjs",
+    "check:storybook": "node scripts/check-storybook.mjs",
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",
     "@google/genai": "2.13.0",
+    "@noble/hashes": "^2.4.0",
     "googleapis": "171.3.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",

@@ -5,6 +5,7 @@ import { google } from "googleapis";
 import { Store, type Shop } from "../server/store.ts";
 import { encrypt } from "../server/google.ts";
 import { sample, type Booking } from "../server/domain.ts";
+import type { CustomerNote, CustomerRecord } from "../server/customers.ts";
 
 test("Firestore shares operational state and locks; owner Sheets hold business records, survive restart, and reflect revocation", async (t) => {
   const previous = {
@@ -147,6 +148,7 @@ test("Firestore shares operational state and locks; owner Sheets hold business r
     status: "active",
     createdAt: new Date().toISOString(),
     requestKey: "stable-request",
+    price: 5500, message: "相談したいです。",
   };
   let active = 0,
     max = 0;
@@ -173,6 +175,30 @@ test("Firestore shares operational state and locks; owner Sheets hold business r
   await restarted.saveBooking({ ...booking, status: "cancelled" });
   assert.equal((await first.bookings(shop.id))[0].status, "cancelled");
   assert.equal(sheets.get("reservations")?.length, 2);
+  assert.equal((await restarted.bookings(shop.id))[0].price, 5500);
+  const reservations = sheets.get("reservations")!;
+  // Missing or malformed fees must never silently reduce CRM totals.
+  for (const invalid of ["", " ", -1, "not-a-price", 1.5]) {
+    reservations[1][12] = invalid;
+    await assert.rejects(() => restarted.bookings(shop.id), /料金/);
+  }
+  reservations[1][12] = 0;
+  assert.equal((await restarted.bookings(shop.id))[0].price, 0);
+  reservations[1][12] = booking.price;
+  await first.put("customer", `${shop.id}:customer@example.com`, {
+    shopId: shop.id, email: "customer@example.com", updatedBy: shop.owner, updatedAt: "2026-11-01T00:00:00Z",
+  });
+  assert.deepEqual(sheets.get("customers")![0], ["email", "updatedBy", "updatedAt"]);
+  assert.equal((await restarted.get<CustomerRecord>("customer", `${shop.id}:customer@example.com`))?.email, "customer@example.com");
+  const note: CustomerNote = { id: "n1", shopId: shop.id, email: "customer@example.com", text: "=private note", attachments: [{id: "private-file", name: "写真.png", mimeType: "image/png", size: 3}], createdBy: shop.owner, createdAt: "2026-11-01T00:00:00Z", updatedBy: shop.owner, updatedAt: "2026-11-01T00:00:00Z", status: "active" };
+  await first.put("customerNote", note.id, note);
+  assert.deepEqual((await restarted.records<CustomerNote>("customerNote", shop))[0], note);
+  await second.put("customerNote", note.id, { ...note, status: "deleted" });
+  assert.equal((await first.records<CustomerNote>("customerNote", shop))[0].status, "deleted");
+  assert.equal(sheets.get("customer_notes")!.length, 2);
+  await assert.rejects(() => first.delete("customerNote", note.id), /状態変更/);
+  await assert.rejects(() => first.delete("customer", `${shop.id}:customer@example.com`), /状態変更/);
+  assert.equal((await restarted.bookings(shop.id))[0].message, "相談したいです。");
   await first.put("member", `${shop.id}:guest@example.com`, {
     shopId: shop.id,
     email: "guest@example.com",
@@ -214,7 +240,7 @@ test("Firestore shares operational state and locks; owner Sheets hold business r
   );
   assert.ok(
     [...cloud.values()].every(
-      (v) => !["booking", "member", "inquiry", "post"].includes(String(v.kind)),
+      (v) => !["booking", "member", "inquiry", "post", "customer", "customerNote"].includes(String(v.kind)),
     ),
   );
   const headers = sheets.get("reservations")![0];

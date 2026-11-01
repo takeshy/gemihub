@@ -59,7 +59,7 @@ try {
   }
   await open("landing", /お店のことを話す/);
   await capture("01-start.jpg");
-  await open("onboarding", "まずは、お店のお話から。");
+  await open("onboarding", "どんなお店をつくりますか？");
   await page.getByRole("button", {name:/文章で依頼/}).click();
   await page
     .getByRole("textbox", { name: "質問・変更したいこと" })
@@ -108,22 +108,22 @@ try {
   await open("my-page", "あなたのご予約");
   await page.getByText("予約確定", { exact: true }).waitFor();
   await capture("08-mypage.jpg");
-  await open("reservations", "今日も、お客様を迎える準備を。");
+  await open("reservations", /予約一覧/);
   await page.getByRole("heading", { name: /山田 花子 様/ }).waitFor();
   await capture("09-bookings.jpg");
-  await open("inquiries", "お客様からのお便り。");
+  await open("inquiries", "お問い合わせ");
   await page
     .getByRole("textbox", { name: "返信内容" })
     .fill(
       "もちろんです。当日、お好みやお仕事に合わせて一緒にお色を選びましょう。ご来店をお待ちしております。",
     );
   await capture("10-inquiries.jpg");
-  await open("team", "お店を、一緒に。");
+  await open("team", "家族・スタッフの招待");
   await page
     .getByLabel("招待する Google アカウントのメールアドレス")
     .fill("new-staff@example.com");
   await capture("11-team.jpg");
-  await open("changes", "お店の「こうしたい」を、かたちに。");
+  await open("changes", "現在の仕様");
   await page.getByRole("button", {name:/文章で依頼/}).click();
   await page
     .getByRole("textbox", { name: "質問・変更したいこと" })
@@ -135,15 +135,15 @@ try {
     .getByRole("heading", { name: "依頼の結果を確認" })
     .waitFor();
   await capture("12-changes.jpg", ".request-review");
-  await open("data", "お店の中身は、いつでも手元に。");
-  await page.locator(".document").first().waitFor();
-  await capture("13-data.jpg");
-  await open("settings", "お店の入り口を整える。");
+  await open("shop-specification", "現在の仕様");
+  await page.getByRole("heading", { name: "変更履歴", exact: true }).waitFor();
+  await capture("13-data.jpg", ".shop-history");
+  await open("settings", "予約ページのアドレス");
   await capture("14-domain.jpg");
-  await open("sync-error", "今日も、お客様を迎える準備を。");
+  await open("sync-error", /予約一覧/);
   await page.getByRole("button", { name: "再送する", exact: true }).waitFor();
   await capture("15-retry.jpg");
-  await open("blog-editor", "お店の想いを、お客様へ。");
+  await open("blog-editor", "お店のお便り");
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
   await capture("16-blog-edit.jpg", ".post-editor");
   await page
@@ -156,7 +156,7 @@ try {
   await capture("18-blog-archive.jpg", ".post-archive");
   await open("blog-article", "秋色ネイルで、季節を指先に。");
   await capture("19-blog-article.jpg", ".article-page");
-  await open("blog-editor", "お店の想いを、お客様へ。");
+  await open("blog-editor", "お店のお便り");
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
   await page
     .getByLabel("タイトル", { exact: true })

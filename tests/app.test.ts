@@ -111,8 +111,9 @@ test("approval, isolated preview, publication, customer authorization, conflict 
   );
   const bookingPath = `/api/public/${shop.slug}/bookings`;
   assert.equal((await request(bookingPath)).status, 401);
-  const booking = { name: "Alice", menuId: "simple", start: slot.start };
+  const booking = { name: "Alice", message: "静かに過ごしたいです。", menuId: "simple", start: slot.start };
   assert.equal((await request(bookingPath, booking)).status, 401);
+  assert.equal((await request(bookingPath, { ...booking, message: "x".repeat(2001) }, alice)).status, 400);
   const attempts = await Promise.all([
     request(bookingPath, booking, alice),
     request(bookingPath, booking, alice),
@@ -125,6 +126,11 @@ test("approval, isolated preview, publication, customer authorization, conflict 
     2,
   );
   const b: Booking = attempts.find((a) => a.status === 200)!.body.booking;
+  assert.equal(b.message, booking.message);
+  assert.equal((await store.bookings(shop.id)).find(value => value.id === b.id)!.message, booking.message);
+  assert.equal((await request(bookingPath, undefined, alice)).body[0].message, booking.message);
+  assert.equal((await request(`/api/shops/${shop.id}/operations`, undefined, owner)).body.bookings[0].message, booking.message);
+  assert.equal(b.price, c.menus.find(menu => menu.id === b.menuId)!.price);
   assert.equal((await request(bookingPath, undefined, bob)).body.length, 0);
   assert.equal(
     (await request(`${bookingPath}/${b.id}/cancel`, {}, bob)).status,

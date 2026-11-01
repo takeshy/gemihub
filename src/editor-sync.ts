@@ -1,10 +1,12 @@
 import { pageValue, scopedSource, type ReleaseScope } from "../server/pages";
+import { sha256 } from "@noble/hashes/sha2.js";
 import type { EditorIndex } from "../server/editor-index-schema";
 import type { LocalDraft } from "./local-preview";
 export type SyncStatus = "unfetched" | "synced" | "local" | "remote" | "conflict";
 export async function fingerprint(value: unknown) {
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(value)));
-  return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, "0")).join("");
+  // Match the server's SHA-256 without requiring a secure browser context.
+  const bytes = sha256(new TextEncoder().encode(JSON.stringify(value)));
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 }
 export async function syncStatus(draft: LocalDraft, index: EditorIndex, scope: ReleaseScope): Promise<SyncStatus> {
   const id = scope.kind === "page" ? scope.pageId : scope.kind === "part" ? `part:${scope.part}` : "shared";

@@ -8,8 +8,8 @@ import type { PostCategory } from "../server/post-domain";
 export function DrivePreview({ mock }: { mock: DriveMock }) {
   useEffect(() => { document.title = `${mock.shop.name} — ご予約`; }, [mock.shop.name]);
   const shopId = "drive-preview";
-  const client = useMemo(() => createPreviewClient(mock.shop, { customerName: mock.auth.name, bookings: [], posts: [] }, shopId), [mock]);
-  const [route, setRoute] = useState<{ pane: string; category?: PostCategory; articleKey?: string; pageSlug?: string }>({ pane: "reserve" });
+  const client = useMemo(() => createPreviewClient(mock.shop, { customerName: mock.auth.name, bookings: [], posts: [] }, shopId, async imageId => { const image = mock.menuImages?.[imageId]; if (!image) throw new Error("メニュー画像がありません"); return image; }), [mock]);
+  const [route, setRoute] = useState<{ pane: string; category?: PostCategory; articleKey?: string; pageSlug?: string }>({ pane: "mine" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -28,7 +28,7 @@ export function DrivePreview({ mock }: { mock: DriveMock }) {
       const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements|pages)(?:\/([^/]+))?$/);
       if (match?.[1] === "pages") setRoute({ pane: "reserve", pageSlug: match[2] });
       else if (match) setRoute({ pane: "reserve", category: match[1] as PostCategory, articleKey: match[2] });
-      else setRoute({ pane: url.searchParams.get("pane") || "reserve" });
+      else setRoute({ pane: url.searchParams.get("pane") || "mine" });
     }} />
   </ApiProvider>;
 }

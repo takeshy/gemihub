@@ -36,7 +36,7 @@ export const Changes: Story = {
   args: { scenario: "changes" },
 };
 
-export const ShopSpecification: Story = { name: "現在の仕様・履歴とAI相談", args: {scenario: "system"} };
+export const ShopSpecification: Story = { name: "トップの変更履歴・現在の仕様とAI相談", args: {scenario: "system"} };
 
 export const PenPreview: Story = { name: "プレビューへのペン入力", args: {scenario: "visual-preview"} };
 

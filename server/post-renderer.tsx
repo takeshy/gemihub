@@ -61,10 +61,11 @@ export function postArtifacts(
   config: ShopConfig,
   posts: Post[],
   shell: string,
+  menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>,
 ) {
   const live = publicPosts(posts);
   const files: Record<string, string> = {
-    ...driveSnapshot(config, shell),
+    ...driveSnapshot(config, shell, undefined, menuImages),
     "web/recent-articles.json": JSON.stringify(
       live.slice(0, 5).map(summarizePost),
       null,
