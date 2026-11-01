@@ -2,6 +2,7 @@ import { tr } from "../shared/i18n.ts";
 import { Firestore } from "@google-cloud/firestore";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID, createHash } from "node:crypto";
+import type { Checkout } from "./payments.ts";
 import type { ShopConfig, Booking } from "./domain.ts";
 import { readRecords, writeRecord } from "./sheet-records.ts";
 export type Shop = {
@@ -245,7 +246,14 @@ export class Store {
   }
   async bookings(shop: string): Promise<Booking[]> {
     const s = await this.shop(shop);
-    return s ? this.records<Booking>("booking", s) : [];
+    if (!s) return [];
+    const bookings = await this.records<Booking>("booking", s);
+    // A sheet edit cannot rewrite the captured amount, consent or cancellation intent.
+    for (const c of (await this.list<Checkout>("checkout")).filter(c => c.shopId === shop && c.phase === "confirmed")) {
+      const index = bookings.findIndex(b => b.id === c.booking.id);
+      if (index < 0) bookings.push(c.booking); else bookings[index] = c.booking;
+    }
+    return bookings;
   }
   async saveBooking(b: Booking) {
     await this.put("booking", b.id, b);

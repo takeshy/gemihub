@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n.ts";
+import { bookingPaymentSchema } from "./payment-domain.ts";
 import { customerNoteSchema } from "./customers.ts";
 import { clients } from "./google.ts";
 import type { Shop } from "./store.ts";
@@ -20,6 +21,7 @@ const layouts: Record<string, { tab: string; columns: string[] }> = {
       "requestKey",
       "price",
       "message",
+      "payment",
     ],
   },
   inquiry: {
@@ -78,7 +80,8 @@ async function table(shop: Shop, kind: string, token: string) {
   const rows = response.data.values || [];
   const header = rows[0] || [];
   const legacyCustomerHeader = kind === "customer" && header.length === 3 && header.every((value, index) => value === layout.columns[index]);
-  if (!legacyCustomerHeader && (
+  const legacyBookingHeader = kind === "booking" && header.length === 14 && header.every((value, index) => value === layout.columns[index]);
+  if (!legacyCustomerHeader && !legacyBookingHeader && (
     header.some((v, i) => v !== layout.columns[i]) ||
     (header.length && header.length !== layout.columns.length)
   ))
@@ -139,6 +142,10 @@ export async function readRecords(
         if (String(value.price).trim() === "" || !Number.isSafeInteger(price) || price < 0)
           throw Object.assign(new Error(tr("予約台帳の料金を確認してください")), { status: 409 });
         value.price = price;
+        if (value.payment) {
+          try { value.payment = bookingPaymentSchema.parse(JSON.parse(String(value.payment))); }
+          catch { throw Object.assign(new Error(tr("予約台帳の支払いの記録を確認してください")), { status: 409 }); }
+        } else delete value.payment;
       }
       if (
         kind === "booking" &&
@@ -172,7 +179,7 @@ export async function writeRecord(
   const row =
     kind === "post"
       ? [id, JSON.stringify(value)]
-      : layout.columns.map((k) => kind === "customerNote" && k === "attachments" ? JSON.stringify(value[k] || []) : kind === "shopChatMessage" && k === "detail" ? JSON.stringify(value[k] || {}) : value[k] ?? "");
+      : layout.columns.map((k) => kind === "booking" && k === "payment" ? (value.payment ? JSON.stringify(value.payment) : "") : kind === "customerNote" && k === "attachments" ? JSON.stringify(value[k] || []) : kind === "shopChatMessage" && k === "detail" ? JSON.stringify(value[k] || {}) : value[k] ?? "");
   // A retry reads by identity before choosing its fixed row; it never appends blindly.
   const number = index < 0 ? rows.length + 2 : index + 2;
   await sheets.spreadsheets.values.update({

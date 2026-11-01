@@ -1,6 +1,9 @@
 import { localizeShell } from "../shared/html.ts";
 import { tr, intlLocale, getLocale } from "../shared/i18n.ts";
 import { localeForRequest, requestLocale } from "./i18n.ts";
+import { paypalGateway, type PaymentGateway } from "./paypal.ts";
+import { paymentService, checkoutView, type Checkout } from "./payments.ts";
+import { refundTiersSchema, policyText, refundQuote } from "./payment-domain.ts";
 import { articleFiles, articleToolContext } from "./article-files.ts";
 import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts";
 import { articleInputSchema, articleMetadataSchema, generateArticleMetadata } from "./post-metadata.ts";
@@ -175,6 +178,7 @@ export function createApp(
   } = { propose, proposeArticle, identifyVisual, explainSystem },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
+  paymentGateway: PaymentGateway = paypalGateway(),
 ) {
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const ownerToken = async (shop: Shop) =>
@@ -254,6 +258,20 @@ export function createApp(
     for (const address of new Set([to, config.notificationEmail]))
       await enqueue(shop, "mail", { to: address, subject, body: text });
   }
+  const payments = paymentService(store, paymentGateway, async (booking, event) => {
+    const key = `${booking.id}:${event}`;
+    if (await store.get("paymentNotice", key)) return;
+    const shop = await store.shop(booking.shopId);
+    if (!shop?.published) return;
+    const config = await effective(shop);
+    const refund = booking.payment?.cancellation;
+    const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
+    await store.transaction(async () => {
+      await notify(shop, config, booking.customer, `${config.name} ${refund ? tr("予約キャンセル・返金") : booking.status === "no_show" ? tr("予約の状態が変更されました") : tr("ご予約を承りました")}`,
+        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}円\n{6}{7}", booking.name, booking.id, booking.start, config.menus.find(menu => menu.id === booking.menuId)?.name || booking.menuId, booking.message ? tr("\nメッセージ: {0}", booking.message) : "", booking.payment!.amount, status, refund ? tr("\n返金額: {0}円", refund.amount) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))));
+      await store.put("paymentNotice", key, { at: new Date().toISOString() });
+    });
+  });
   async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional")) {
     if (fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
     if (plan.base !== fresh.revision) fail(409, tr("本番の内容が変わりました。最新の内容を読み直してください"));
@@ -634,6 +652,7 @@ export function createApp(
               ...shop,
               isOwner: user.email === shop.owner,
               bookings: await store.bookings(shop.id),
+              paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
               inquiries: await inquiries(shop),
               plans: (await store.list<Plan>("plan"))
                 .filter((p) => p.shopId === shop.id)
@@ -1415,6 +1434,7 @@ export function createApp(
           if (action === "operations" && method === "GET") {
             return json(res, {
               bookings: await store.bookings(fresh.id),
+              paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === fresh.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
               inquiries: await inquiries(fresh),
             });
           }
@@ -1482,6 +1502,19 @@ export function createApp(
               (await store.bookings(fresh.id)).find(
                 (b) => b.id === cancellation[1],
               ) || fail(404, tr("予約がありません"));
+            const paid = await store.get<Checkout>("checkout", b.id);
+            if (paid?.shopId === fresh.id && paid.phase === "confirmed") {
+              if (input.status === "cancelled") {
+                const booking = await payments.cancel(paid, user!.email, "shop");
+                await flush(fresh);
+                return json(res, { ok: true, booking });
+              }
+              if (paid.booking.status !== "active") fail(409, tr("この予約は処理済みです"));
+              paid.booking.status = "no_show"; paid.booking.updatedBy = user!.email; paid.booking.updatedAt = new Date().toISOString();
+              await store.put("checkout", paid.id, paid); await payments.sync(paid); await flush(fresh);
+              return json(res, { ok: true, booking: paid.booking });
+            }
+            if (b.payment) fail(409, tr("支払いの記録を確認してください"));
             if (b.status !== "active") fail(409, tr("この予約は処理済みです"));
             const config = await effective(fresh);
             b.status = input.status;
@@ -1610,6 +1643,7 @@ export function createApp(
             return json(res, { ok: true });
           }
           if (action === "retry" && method === "POST") {
+            await payments.reconcile(fresh.id);
             await flush(fresh);
             return json(res, { ok: true });
           }
@@ -1634,6 +1668,35 @@ export function createApp(
         return await store.locked(shopRef.id, async () => {
           const shop = (await store.shop(shopRef.id))!;
           assertStorefrontAccess(shop);
+          const customer = () => {
+            if (!user || user.role !== "customer" || user.shopId !== shop.id)
+              fail(401, tr("このお店のお客様としてログインしてください"));
+            return user!;
+          };
+          const paidCancellation = action.match(/^bookings\/([^/]+)\/(cancel|cancel-quote)$/);
+          if (paidCancellation && ((method === "POST" && paidCancellation[2] === "cancel") || (method === "GET" && paidCancellation[2] === "cancel-quote"))) {
+            const u = customer();
+            const paid = await store.get<Checkout>("checkout", paidCancellation[1]);
+            if (paid) {
+              if (paid.shopId !== shop.id || paid.customer !== u.email) fail(404, tr("予約がありません"));
+              if (paid.phase !== "confirmed" || !paid.booking.payment) fail(409, tr("支払いを確認中です。確定後にキャンセルしてください。"));
+              if (paidCancellation[2] === "cancel-quote") {
+                const p = paid.booking.payment;
+                return json(res, p.cancellation || refundQuote(p.amount, paid.booking.start, new Date().toISOString(), p.policy, "customer"));
+              }
+              const input = z.object({ expectedRefund: z.number().int().min(0).optional() }).parse(await body(req));
+              const at = new Date().toISOString();
+              if (!paid.booking.payment!.cancellation) {
+                const p = paid.booking.payment!;
+                const quote = refundQuote(p.amount, paid.booking.start, at, p.policy, "customer");
+                if (input.expectedRefund !== quote.amount) fail(409, tr("返金額を再確認してからキャンセルしてください。時間の経過で返金額が変わる場合があります。"));
+              }
+              const booking = await payments.cancel(paid, u.email, "customer", at);
+              await flush(shop);
+              return json(res, { ok: true, booking });
+            }
+            if (paidCancellation[2] === "cancel-quote") fail(404, tr("支払い済みの予約がありません"));
+          }
           const livePosts = publicPosts(await postsFor(shop));
           if (action === "posts" && method === "GET") {
             const category = postCategorySchema
@@ -1676,11 +1739,6 @@ export function createApp(
             if (!ids.includes(menuImage[2])) fail(404, tr("画像がありません"));
             return json(res, await readMenuImage(store, shop, menuImage[2], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です"))));
           }
-          const customer = () => {
-            if (!user || user.role !== "customer" || user.shopId !== shop.id)
-              fail(401, tr("このお店のお客様としてログインしてください"));
-            return user!;
-          };
           const ownProfile = async () => memberProfile(await store.get("customer", `${shop.id}:${customer().email}`));
           if (action === "profile" && method === "GET") {
             const u = customer();
@@ -1720,6 +1778,26 @@ export function createApp(
                 url.searchParams.get("menu") || "",
                 url.searchParams.get("staff") || undefined, calendar),
             );
+          if (action === "checkouts" && method === "GET") {
+            const u = customer();
+            return json(res, (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && c.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(checkoutView));
+          }
+          const checkoutAction = action.match(/^checkouts\/([a-f0-9]{64})\/(capture|abandon|resume)$/);
+          if (checkoutAction && method === "POST") {
+            const u = customer();
+            const c = await store.get<Checkout>("checkout", checkoutAction[1]);
+            if (!c || c.shopId !== shop.id || c.customer !== u.email) fail(404, tr("お支払いの記録がありません"));
+            if (checkoutAction[2] === "abandon") {
+              if (["creating", "awaiting_approval"].includes(c.phase)) { c.phase = "expired"; await store.put("checkout", c.id, c); }
+            } else if (checkoutAction[2] === "resume") await payments.create(c);
+            else await payments.capture(c, async () => {
+              const b = c.booking;
+              const date = new Date(Date.parse(b.start) + 9 * 3600000).toISOString().slice(0, 10);
+              return (await availableSlots(store, shop, config, date, b.menuId, b.staffId, calendar, c.id)).some(slot => slot.start === b.start && slot.end === b.end && slot.staffId === b.staffId);
+            });
+            await flush(shop);
+            return json(res, { ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? c.booking : undefined, checkout: checkoutView(c) });
+          }
           if (action === "bookings" && method === "GET") {
             const u = customer();
             return json(
@@ -1740,6 +1818,7 @@ export function createApp(
                 staffId: z.string().optional(),
                 start: z.iso.datetime(),
                 requestId: z.uuid().optional(),
+                paymentConsent: z.object({ amount: z.number().int().min(0), policy: refundTiersSchema }).optional(),
               })
               .parse(await body(req));
             const requestKey = input.requestId
@@ -1750,7 +1829,15 @@ export function createApp(
                   (b) => b.requestKey === requestKey,
                 )
               : undefined;
+            const pending = requestKey ? await store.get<Checkout>("checkout", digest(requestKey)) : undefined;
+            if (pending) {
+              if (pending.customer !== u.email || pending.shopId !== shop.id || pending.booking.name !== input.name || pending.booking.message !== input.message || pending.booking.start !== input.start || pending.booking.menuId !== input.menuId || (input.staffId && pending.booking.staffId !== input.staffId)) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
+              await payments.create(pending);
+              return json(res, { ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? pending.booking : undefined, checkout: checkoutView(pending) });
+            }
             if (previous) return json(res, { ok: true, booking: previous });
+            const menuPrice = config.menus.find(menu => menu.id === input.menuId && menu.active)?.price;
+            if (config.rules.payment?.enabled && menuPrice && (!input.requestId || !input.paymentConsent || input.paymentConsent.amount !== menuPrice || JSON.stringify(input.paymentConsent.policy) !== JSON.stringify(config.rules.payment.refundTiers))) fail(409, tr("料金と返金条件を読み直し、同意してからPayPalへ進んでください。"));
             const date = new Date(Date.parse(input.start) + 9 * 3600000)
               .toISOString()
               .slice(0, 10);
@@ -1770,6 +1857,17 @@ export function createApp(
               status: "active",
               createdAt: new Date().toISOString(),
             };
+            if (config.rules.payment?.enabled && b.price > 0) {
+              // Return only to this storefront's verified host or the configured app origin.
+              const storefront = hosted ? `https://${host}/` : `${origin()}/s/${shop.slug}`;
+              const back = new URL(storefront);
+              back.searchParams.set("pane", "mine"); back.searchParams.set("checkout", b.id);
+              back.searchParams.set("paypal", "return");
+              const returnUrl = back.href;
+              back.searchParams.set("paypal", "cancel");
+              const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href);
+              return json(res, { ok: false, checkout: checkoutView(checkout) });
+            }
             await store.transaction(async () => {
               await store.saveBooking(b);
               if (requestKey)
@@ -1795,6 +1893,7 @@ export function createApp(
               (await store.bookings(shop.id)).find(
                 (b) => b.id === cancel[1] && b.customer === u.email,
               ) || fail(404, tr("予約がありません"));
+            if (b.payment) fail(409, tr("支払いの記録を確認してください"));
             if (b.status !== "active") fail(409, tr("この予約は処理済みです"));
             if (
               Date.parse(b.start) - Date.now() <
@@ -2000,12 +2099,12 @@ export function createApp(
     void (async () => {
       await store.cleanup();
       for (const shop of (await store.list<Shop>("shop")).filter(
-        (s) => s.google && s.published,
+        (s) => s.published,
       ))
         void store
           .locked(shop.id, async () => {
             const fresh = await store.shop(shop.id);
-            if (fresh) await flush(fresh);
+            if (fresh) { await payments.reconcile(fresh.id); await flush(fresh); }
           })
           .catch(console.error);
     })().catch(console.error);

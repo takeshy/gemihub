@@ -113,3 +113,24 @@ variable "oauth_secret_version" {
   type    = string
   default = "1"
 }
+
+variable "paypal_client_id" {
+  description = "Optional PayPal client ID for the server's receiving account. Empty disables credential provisioning."
+  type        = string
+  default     = ""
+}
+
+variable "paypal_environment" {
+  type    = string
+  default = "sandbox"
+  validation {
+    condition     = contains(["sandbox", "live"], var.paypal_environment)
+    error_message = "Use sandbox or live."
+  }
+}
+
+variable "paypal_secret_version" {
+  description = "Pinned version of omaiweb-paypal-client-secret; the payload is managed outside Terraform."
+  type        = string
+  default     = "1"
+}

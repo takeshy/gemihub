@@ -1,5 +1,6 @@
 import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
+import { paymentRulesSchema, type BookingPayment } from "./payment-domain.ts";
 import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } from "./pages.ts";
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const shopSchema = z
@@ -56,6 +57,7 @@ export const shopSchema = z
       leadMinutes: z.number().int().min(0).max(43200),
       sameDay: z.boolean(),
       cancelHours: z.number().int().min(0).max(720),
+      payment: paymentRulesSchema.optional(),
     }),
   })
   .superRefine((s, ctx) => {
@@ -92,6 +94,7 @@ export type Booking = {
   end: string;
   status: "active" | "cancelled" | "no_show";
   createdAt: string;
+  payment?: BookingPayment;
   updatedBy?: string;
   updatedAt?: string;
 };
@@ -216,7 +219,7 @@ export function documents(
   history: { at: string; summary: string }[],
 ) {
   return {
-    spec: tr("# {0}\n\n{1}\n\n## お店の情報・予約ルール\n\n```json\n{2}\n```\n\n## 権限\nお客様は自分の予約のみ閲覧・キャンセルできます。運営は店主とGoogleログインを完了した登録済みスタッフのみです。\nキャンセル・無断キャンセルは状態変更で記録します。時刻は日本時間です。\n\n## ブログ・お知らせ\n店主が管理メニューで記事を編集し、必要に応じてプレビューを見て、保存すると本番へ反映します。保存前の編集は公開内容に反映しません。ブログとお知らせの一覧・個別記事・新着5件を提供し、公開・非公開の変更は履歴に残します。原稿と生成ファイルも店主の Drive に保存します。\n\n## データとファイル\n予約・問い合わせ・お客様・メニュー等の正本は店主のスプレッドシート、画像・添付は店主の Drive に保存します。仕様・履歴・保存先は「お店をつくる・直す」にまとめて表示します。標準シートは各専用管理メニューで扱い、専用画面のない追加シートは店主専用の「データ管理」で一覧・検索・行追加・編集できます。列名・列順と既存の計算式を維持し、行全体の削除はしません。\n\n## 追加ページと本番データ\n追加ページは「AIとお店をつくる」の新ページ作成で内容と公開メニュー名を確認して追加します。追加後は画面単位で編集・反映します。メニュー・料金、スタッフ・勤務、営業時間・予約ルールは専用管理メニューの保存で本番へ反映します。\n", config.name, config.description, JSON.stringify(config, null, 2)),
+    spec: tr("# {0}\n\n{1}\n\n## お店の情報・予約ルール\n\n```json\n{2}\n```\n\n## 権限\nお客様は自分の予約のみ閲覧・キャンセルできます。運営は店主とGoogleログインを完了した登録済みスタッフのみです。\nキャンセル・無断キャンセルは状態変更で記録します。時刻は日本時間です。\n\n## 予約時の決済と返金\nPayPal決済を有効にした店舗では予約時に全額を支払い、キャンセル時に予約時点の金額・条件で自動返金します。店都合は全額返金。返金額は開始までの残り時間で計算し、円未満を切り捨てます。キャンセルの記録と返金状態は保持します。プレビューでは実際の支払い・返金はしません。\n\n## ブログ・お知らせ\n店主が管理メニューで記事を編集し、必要に応じてプレビューを見て、保存すると本番へ反映します。保存前の編集は公開内容に反映しません。ブログとお知らせの一覧・個別記事・新着5件を提供し、公開・非公開の変更は履歴に残します。原稿と生成ファイルも店主の Drive に保存します。\n\n## データとファイル\n予約・問い合わせ・お客様・メニュー等の正本は店主のスプレッドシート、画像・添付は店主の Drive に保存します。仕様・履歴・保存先は「お店をつくる・直す」にまとめて表示します。標準シートは各専用管理メニューで扱い、専用画面のない追加シートは店主専用の「データ管理」で一覧・検索・行追加・編集できます。列名・列順と既存の計算式を維持し、行全体の削除はしません。\n\n## 追加ページと本番データ\n追加ページは「AIとお店をつくる」の新ページ作成で内容と公開メニュー名を確認して追加します。追加後は画面単位で編集・反映します。メニュー・料金、スタッフ・勤務、営業時間・予約ルールは専用管理メニューの保存で本番へ反映します。\n", config.name, config.description, JSON.stringify(config, null, 2)),
     history: tr("# 変更履歴\n\n{0}\n", history.map((h) => `- ${h.at} ${h.summary}`).join("\n")),
   };
 }

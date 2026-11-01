@@ -123,3 +123,14 @@ terraform -chdir=infra test
 ```
 
 Terraform tests use mock providers and do not apply cloud changes. Run shared-VM Python tests and GemiHub host-rule tests in their own repositories too. Initial Docker builds, real GCP plan/apply, and production OAuth/DB/AI connectivity still need verification after actual domains and credentials are configured.
+
+
+### PayPal Sandboxの追加設定
+
+`paypal_client_id`を設定した場合だけ`omaiweb-paypal-client-secret`を作成し、実行アカウントへの参照権限と、VM登録用の`PAYPAL_CLIENT_SECRET`参照を出力します。`paypal_environment`の初期値は`sandbox`です。既存環境は未設定のまま維持できます。
+
+```bash
+gcloud secrets versions add omaiweb-paypal-client-secret --project=geminihub-486523 --data-file=/secure/path/paypal.secret
+```
+
+Secretの値をtfvarsや登録JSONに書かず、`paypal_secret_version`でバージョンを固定します。公開した店舗で事前決済を有効にする前に、購入者用Sandboxアカウントで支払い・キャンセル・返金を確認してください。デプロイしたコードと認証済みの決済確認は別の検証です。1つの受取アカウントを使用する実装で、店舗ごとの加盟店接続・分配は含みません。実行中の取引がある間は環境やアカウントを変更しないでください。共有VMの常駐プロセスが毎分の決済・返金復旧処理を実行します。

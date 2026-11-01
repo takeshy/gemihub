@@ -1,4 +1,6 @@
 import { tr } from "../../shared/i18n";
+import { simulatePayment, simulateCancellation } from "../payment-mock";
+import { defaultRefundTiers, refundQuote } from "../../server/payment-domain";
 import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../server/post-images";
 import { inquiryStatus } from "../../server/inquiries";
 import { answeredFinalDetails, initialSetupDemoReply, openingQuestions } from "../../server/request-intent";
@@ -35,6 +37,17 @@ import {
   type Booking,
 } from "../../server/domain";
 export type Scenario =
+  | "payment-reservation"
+  | "paid-mypage"
+  | "partial-refund"
+  | "zero-refund"
+  | "full-refund"
+  | "pending-refund"
+  | "failed-refund"
+  | "owner-paid"
+  | "manage-payment"
+  | "insufficient-refund"
+
   | "registration"
   | "image-library"
   | "image-library-empty"
@@ -95,6 +108,14 @@ export type Scenario =
   | "contact"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
+  "payment-reservation",
+  "paid-mypage",
+  "partial-refund",
+  "zero-refund",
+  "full-refund",
+  "pending-refund",
+  "failed-refund",
+
   "registration",
   "provisional-page",
   "image-page",
@@ -136,7 +157,7 @@ export function scenarioProps(scenario: Scenario) {
           "manage-basic": "basic", "manage-menus": "menus", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
           "local-editor-new": "try",
           "blog-editor": "blog",
-          bookings: "bookings",
+          bookings: "bookings", "owner-paid": "bookings", "manage-payment": "rules", "insufficient-refund": "bookings",
           "crm-list": "customers", "crm-detail": "customers", "crm-inquiry": "customers", "crm-empty": "customers", "crm-images": "customers", "crm-images-empty": "customers",
           inquiries: "inquiries",
           "staff-login": "staff",
@@ -150,7 +171,7 @@ export function scenarioProps(scenario: Scenario) {
         } as Partial<Record<Scenario, string>>
       )[scenario] || "build",
     initialPane:
-      scenario === "mypage" || scenario === "anonymous"
+      ["paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund"].includes(scenario) ? "mine" : scenario === "mypage" || scenario === "anonymous"
         ? undefined
         : scenario === "contact"
           ? "contact"
@@ -162,6 +183,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const posts = scenario === "empty-blog" ? [] : storyPosts();
   const config = structuredClone(sample);
   config.hours.closedWeekdays = [];
+  if (["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
   if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-conflict", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
     { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("## 初めてでも予約できますか？\n\n初めてのお客様も歓迎しています。\n\n## 当日の持ち物は？\n\n特にありません。お気軽にお越しください。"), layout: "standard", imageUrl: "" },
@@ -217,6 +239,19 @@ export function createMockClient(scenario: Scenario): ApiClient {
       createdAt: new Date().toISOString(),
     },
   ];
+  if (config.rules.payment?.enabled) {
+    bookings.forEach(booking => { simulatePayment(booking, config); if (booking.status === "cancelled") simulateCancellation(booking, "customer"); });
+    if (["partial-refund", "pending-refund", "failed-refund"].includes(scenario)) {
+      bookings[0].start = new Date(Date.now() + 48 * 3600000).toISOString();
+      bookings[0].end = new Date(Date.now() + 49 * 3600000).toISOString();
+      simulateCancellation(bookings[0], "customer", scenario === "pending-refund" ? "pending" : scenario === "failed-refund" ? "manual_review" : "completed");
+    } else if (scenario === "insufficient-refund") {
+      simulateCancellation(bookings[0], "shop"); bookings[0].payment!.cancellation!.status = "awaiting_funds";
+    } else if (scenario === "zero-refund") {
+      bookings[0].start = new Date(Date.now() + 2 * 3600000).toISOString();
+      simulateCancellation(bookings[0], "customer");
+    } else if (scenario === "full-refund") simulateCancellation(bookings[0], "shop");
+  }
   const plan: Plan = {
     id: "story-plan",
     config: structuredClone(config),
@@ -726,9 +761,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action.endsWith("/status")) {
       const b = shop.bookings.find((b) => b.id === action.split("/").at(-2));
       if (!b) throw new Error(tr("予約がありません"));
-      b.status = input.status as Booking["status"];
+      if (input.status === "cancelled") simulateCancellation(b, "shop");
+      else b.status = input.status as Booking["status"];
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/retry`) {
+      for (const booking of shop.bookings) if (booking.payment?.cancellation?.status === "awaiting_funds") booking.payment.cancellation.status = "completed";
       shop.jobs = [];
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/domain`) {
@@ -770,6 +807,12 @@ export function createMockClient(scenario: Scenario): ApiClient {
           url.searchParams.get("menu") || "",
           url.searchParams.get("staff") || undefined,
         );
+      else if (action.endsWith("/checkouts")) result = [];
+      else if (action.endsWith("/cancel-quote")) {
+        const b = shop.bookings.find(b => b.id === action.split("/").at(-2));
+        if (!b?.payment) throw new Error(tr("支払い済みの予約がありません"));
+        result = refundQuote(b.payment.amount, b.start, new Date().toISOString(), b.payment.policy, "customer");
+      }
       else if (action.endsWith("/bookings") && data === undefined)
         result = preview
           ? []
@@ -787,7 +830,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         if (!slot)
           throw new Error(tr("この枠は予約できません。別の時間を選んでください。"));
         if (!preview)
-          shop.bookings.push({
+          shop.bookings.push(simulatePayment({
             id: createRequestId(),
             shopId: shop.id,
             customer: "guest@example.com",
@@ -798,7 +841,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
             ...slot,
             status: "active",
             createdAt: new Date().toISOString(),
-          });
+          }, current));
         result = { ok: true };
       } else if (action.endsWith("/cancel")) {
         const b = shop.bookings.find(
@@ -807,7 +850,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
             b.customer === "guest@example.com",
         );
         if (!b) throw new Error(tr("予約がありません"));
-        b.status = "cancelled";
+        simulateCancellation(b, "customer");
         result = { ok: true };
       } else if (action.endsWith("/profile")) {
         if (input && data !== undefined) customerProfile = customerProfileSchema.parse(input);
@@ -816,6 +859,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       else
         result = {
           config: current,
+          paymentSimulation: true,
           shopId: shop.id,
           customerProfile: session.user?.role === "customer" ? customerProfile : undefined,
           registrationRequired: session.user?.role === "customer" && !customerProfile,

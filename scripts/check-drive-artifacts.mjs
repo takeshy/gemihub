@@ -6,12 +6,14 @@ import { pathToFileURL } from 'node:url';
 import { createServer } from 'node:http';
 import { chromium } from 'playwright';
 import { artifacts } from '../server/artifacts.ts';
+import { defaultRefundTiers } from '../server/payment-domain.ts';
 import { sample, dateJST, slots } from '../server/domain.ts';
 import { renderMockScript } from '../server/drive-mock.ts';
 
 const shell = await readFile('dist/index.html', 'utf8');
 assert.ok(!shell.includes('./data.js'), 'served build must not reference Drive data');
 const config = structuredClone(sample);
+if (process.env.PAYMENT_PREVIEW === 'true') config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
 const imageId = 'c'.repeat(64);
 const image = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' };
 config.header.imageId = imageId;
@@ -38,7 +40,7 @@ const server = createServer(async (req, res) => {
     if (path === '/api/session') res.end(JSON.stringify({ demo: false, hosted: 'hosted', user: { ...source.auth, role: 'customer', shopId: 'hosted-id' } }));
     else if (path === '/api/public/hosted') res.end(JSON.stringify({ config: serverConfig, shopId: 'hosted-id', recentPosts: [] }));
     else if (path === `/api/public/hosted/images/${imageId}`) res.end(JSON.stringify(image));
-    else if (path === '/api/public/hosted/bookings' || path === '/api/public/hosted/slots') res.end('[]');
+    else if (path === '/api/public/hosted/bookings' || path === '/api/public/hosted/slots' || path === '/api/public/hosted/checkouts') res.end('[]');
     else { res.writeHead(404); res.end('{"error":"unexpected request"}'); }
     return;
   }
@@ -81,10 +83,20 @@ try {
   const time = new Date(slot.start).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
   await page.getByRole('button', { name: time, exact: true }).click();
   await page.getByLabel('お名前', { exact: true }).fill('保存しない予約');
-  await page.getByRole('button', { name: 'この内容で予約する →', exact: true }).click();
+  if (config.rules.payment?.enabled) {
+    await page.getByText('プレビューの練習です。実際の支払い・返金は行いません。', { exact: true }).waitFor();
+    await page.getByLabel('支払額と返金条件を確認しました').check();
+    await page.getByRole('button', { name: '支払い・予約を練習する →', exact: true }).click();
+  } else await page.getByRole('button', { name: 'この内容で予約する →', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'ご予約を承りました' }).waitFor();
   await page.getByRole('button', { name: 'マイページ', exact: true }).click();
   await page.getByText('予約確定', { exact: true }).waitFor();
+  if (config.rules.payment?.enabled) {
+    await page.getByText('PayPal 支払済み：5,500円', { exact: false }).waitFor();
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'キャンセルする', exact: true }).click();
+    await page.getByText('キャンセル済み', { exact: true }).waitFor();
+  }
   assert.deepEqual(await page.evaluate(() => window.__OMAIWEB_MOCK__), source);
   assert.equal(await readFile(dataFile, 'utf8'), originalData);
   await page.reload();
@@ -130,8 +142,9 @@ try {
   assert.deepEqual(errors, []);
   // Save the same runnable set in the workspace for easy manual inspection.
   await writeFile(dataFile, originalData);
-  await mkdir('tmp/drive-artifacts', { recursive: true });
-  await cp(join(directory, 'web'), 'tmp/drive-artifacts/web', { recursive: true });
+  const destination = config.rules.payment?.enabled ? 'tmp/drive-payment-artifacts' : 'tmp/drive-artifacts';
+  await mkdir(destination, { recursive: true });
+  await cp(join(directory, 'web'), join(destination, 'web'), { recursive: true });
   console.log('PASS: file:// store/menu/booking, discarded writes and reload, data.js edits, missing-data static fallback, HTTP double guard, unchanged served shell.');
   console.log(`Generated artifacts: ${directory}`);
 } finally {

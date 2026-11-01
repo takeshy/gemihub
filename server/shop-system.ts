@@ -1,4 +1,5 @@
 import { tr, intlLocale } from "../shared/i18n.ts";
+import { policyText } from "./payment-domain.ts";
 import { shopSchema, type ShopConfig } from "./domain.ts";
 
 // Both the operating screen and the exported SVG use this validated, deterministic model.
@@ -12,7 +13,7 @@ export function shopSystem(input: ShopConfig) {
         tr("Google ログイン → メニュー・日時を選択 → 空きを確認 → 予約確定"),
         ...c.menus.filter(m => m.active).map(m => tr("{0}：{1}分・{2}円", m.name, m.duration, m.price.toLocaleString(intlLocale()))),
         tr("受付：{0}日前から、開始{1}分前まで。当日予約{2}。", c.rules.advanceDays, c.rules.leadMinutes, c.rules.sameDay ? tr("可") : tr("不可")),
-        tr("お客様のキャンセル：開始{0}時間前まで。自分の予約だけ確認・取消できます。", c.rules.cancelHours),
+        c.rules.payment?.enabled ? tr("予約時にPayPalで全額決済。キャンセル時は予約時の条件で自動返金。{0}。店都合は全額返金。", policyText(c.rules.payment.refundTiers)) : tr("お客様のキャンセル：開始{0}時間前まで。自分の予約だけ確認・取消できます。", c.rules.cancelHours),
       ] },
       { title: tr("② 空きを判断する仕組み"), lines: [
         tr("お客様が指名・指名なしを選べます。指名時は選んだスタッフのみ、指名なしは対応するスタッフのうち空いている1人に割り当てます。"),

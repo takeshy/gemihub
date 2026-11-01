@@ -25,11 +25,15 @@ output "shared_vm_registration" {
           GEMINI_IMAGE_MODEL    = var.image_model
           VERTEX_IMAGE_LOCATION = var.image_location
           GOOGLE_CLIENT_ID      = var.google_client_id
+          PAYPAL_CLIENT_ID      = var.paypal_client_id
+          PAYPAL_ENVIRONMENT    = var.paypal_environment
         }
-        secrets = {
+        secrets = merge({
           SESSION_SECRET       = { project = var.project_id, name = google_secret_manager_secret.app["omaiweb-session-secret"].secret_id, version = var.session_secret_version }
           GOOGLE_CLIENT_SECRET = { project = var.project_id, name = google_secret_manager_secret.app["omaiweb-google-client-secret"].secret_id, version = var.oauth_secret_version }
-        }
+          }, var.paypal_client_id != "" ? {
+          PAYPAL_CLIENT_SECRET = { project = var.project_id, name = google_secret_manager_secret.app["omaiweb-paypal-client-secret"].secret_id, version = var.paypal_secret_version }
+        } : {})
       }
     }
   }

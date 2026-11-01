@@ -59,7 +59,7 @@ resource "google_project_iam_member" "vertex" {
 }
 
 resource "google_secret_manager_secret" "app" {
-  for_each  = toset(["omaiweb-session-secret", "omaiweb-google-client-secret"])
+  for_each  = toset(concat(["omaiweb-session-secret", "omaiweb-google-client-secret"], var.paypal_client_id != "" ? ["omaiweb-paypal-client-secret"] : []))
   project   = var.project_id
   secret_id = each.value
   replication {

@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n.ts";
+import { paymentHolds } from "./payments.ts";
 import { google } from "googleapis";
 import { z } from "zod";
 import { oauth, encrypt, decrypt } from "./google.ts";
@@ -69,9 +70,9 @@ export async function connections(store: Store, shop: Shop) {
 }
 export async function availableSlots(
   store: Store, shop: Shop, config: ShopConfig, date: string, menu: string,
-  staff: string | undefined, gateway: CalendarGateway,
+  staff: string | undefined, gateway: CalendarGateway, excludeCheckout?: string,
 ) {
-  const bookings = await store.bookings(shop.id);
+  const bookings = [...await store.bookings(shop.id), ...await paymentHolds(store, shop.id, excludeCheckout)];
   // Allocate after adding all busy intervals, so unspecified staff can be assigned.
   if (!z.iso.date().safeParse(date).success) return [];
   const start = new Date(`${date}T00:00:00+09:00`);

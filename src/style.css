@@ -2254,3 +2254,7 @@ pre {
 .article-composer-actions label { min-width: 0; max-width: 100%; }
 .article-composer-actions select { min-width: 0; width: 100%; }
 @media(max-width:1150px) { .blog-editor-layout { grid-template-columns: minmax(0,1fr); } }
+
+.payment-policy, .payment-details { padding: 1rem; border: 1px solid var(--line, #d8e1d9); border-radius: 12px; margin: .75rem 0; background: #f6f8f4; }
+.payment-policy label { display: flex; gap: .5rem; align-items: baseline; }
+.payment-details p { margin: .35rem 0; }

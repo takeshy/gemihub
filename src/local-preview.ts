@@ -1,4 +1,7 @@
 import { tr } from "../shared/i18n";
+import { simulatePayment, simulateCancellation } from "./payment-mock";
+import { refundQuote } from "../server/payment-domain";
+import type { Booking } from "../server/domain";
 import {postImageIds} from "../server/post-images";
 import { customerProfileSchema, type MemberProfile } from "../server/customer-profile";
 import { z } from "zod";
@@ -51,7 +54,7 @@ export function writeDraft(storage: Pick<Storage, "setItem">, key: string, draft
   storage.setItem(key, JSON.stringify(localDraftSchema.parse(draft)));
 }
 export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string) => Promise<import("../server/menu-image-domain").MenuImageData>): ApiClient {
-  const bookings = fixtures.bookings.map(b => ({ ...b, shopId, price: config.menus.find(menu => menu.id === b.menuId)?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }));
+  const bookings: Booking[] = fixtures.bookings.map(b => simulatePayment({ ...b, shopId, price: config.menus.find(menu => menu.id === b.menuId)?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }, config));
   const posts: PublicPost[] = fixtures.posts.map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
   let profile: MemberProfile = { name: fixtures.customerName, birthDate: "1990-01-01", gender: "not_specified" };
@@ -66,18 +69,23 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
       if (!ids.includes(image[2]) || !readImage) throw new Error(tr("画像がありません"));
       result = await readImage(image[2]);
     }
-    else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5), customerProfile: profile, registrationRequired: false };
+    else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5), paymentSimulation: true, customerProfile: profile, registrationRequired: false };
     else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined);
+    else if (action === `${base}/checkouts`) result = [];
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {
       const slot = slots(config, bookings, dateJST(new Date(input.start)), input.menuId, input.staffId || undefined).find(s => s.start === input.start);
       if (!slot) throw new Error(tr("この時間は予約できません。空き枠を選び直してください。"));
-      bookings.push({ ...slot, id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: config.menus.find(menu => menu.id === input.menuId)!.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() });
+      bookings.push(simulatePayment({ ...slot, id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: config.menus.find(menu => menu.id === input.menuId)!.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() }, config));
       result = { ok: true };
+    } else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/cancel-quote")) {
+      const b = bookings.find(b => b.id === action.split("/").at(-2));
+      if (!b?.payment) throw new Error(tr("支払い済みのサンプル予約がありません"));
+      result = refundQuote(b.payment.amount, b.start, new Date().toISOString(), b.payment.policy, "customer");
     } else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/cancel")) {
       const b = bookings.find(b => b.id === action.split("/").at(-2));
       if (!b) throw new Error(tr("サンプル予約がありません"));
-      b.status = "cancelled";
+      simulateCancellation(b, "customer");
       result = { ok: true };
     } else if (action === `${base}/profile`) { if (data !== undefined) profile = customerProfileSchema.parse(data); result = {profile};
     } else if (action === `${base}/inquiries`) result = { ok: true };

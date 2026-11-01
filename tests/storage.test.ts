@@ -1,3 +1,4 @@
+import { defaultRefundTiers } from "../server/payment-domain.ts";
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { Firestore } from "@google-cloud/firestore";
@@ -189,6 +190,15 @@ test("Firestore shares operational state and locks; owner Sheets hold business r
   reservations[1][12] = 0;
   assert.equal((await restarted.bookings(shop.id))[0].price, 0);
   reservations[1][12] = booking.price;
+  reservations[0] = reservations[0].slice(0, 14);
+  assert.equal((await restarted.bookings(shop.id))[0].payment, undefined);
+  assert.equal(sheets.get("reservations")![0][14], "payment", "legacy booking headers are extended without moving columns");
+  const payment = { provider: "paypal" as const, environment: "sandbox" as const, orderId: "order-fixture", captureId: "capture-fixture", amount: booking.price, currency: "JPY" as const, policy: defaultRefundTiers };
+  await restarted.saveBooking({ ...booking, payment });
+  assert.deepEqual((await first.bookings(shop.id))[0].payment, payment);
+  sheets.get("reservations")![1][14] = "malformed";
+  await assert.rejects(() => first.bookings(shop.id), /支払いの記録/);
+  sheets.get("reservations")![1][14] = JSON.stringify(payment);
   sheets.set("customers", [["email", "updatedBy", "updatedAt"], ["legacy@example.com", shop.owner, "2026-10-01T00:00:00Z"]]);
   await first.put("customer", `${shop.id}:customer@example.com`, {
     shopId: shop.id, email: "customer@example.com", updatedBy: shop.owner, updatedAt: "2026-11-01T00:00:00Z", name: "登録した名前", birthDate: "1990-01-02", gender: "not_specified",

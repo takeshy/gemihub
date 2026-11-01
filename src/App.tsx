@@ -1,5 +1,7 @@
 import { tr, intlLocale } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { PaymentDetails } from "./PaymentDetails";
+import { defaultRefundTiers, policyText } from "../server/payment-domain";
 import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
 import { Inquiries } from "./Inquiries";
 import type { RequestIntent } from "../server/request-intent";
@@ -49,6 +51,7 @@ export type Workspace = Shop & {
   isOwner: boolean;
   plans: Plan[];
   bookings: Booking[];
+  paymentCheckouts?: { id: string; start: string; amount: number; phase: string; review: boolean; customer: string; name: string }[];
   inquiries: Inquiry[];
   members: { email: string; accepted: boolean; status?: string }[];
   jobs: { type: string; error?: string }[];
@@ -542,7 +545,7 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
           <li>{tr("予約できるのは")}{c.rules.advanceDays}{tr("日先まで、開始の")}{c.rules.leadMinutes}{tr("分前までです。")}</li>
           <li>{tr("当日の予約は")}{c.rules.sameDay ? tr("受け付けます") : tr("受け付けません")}。</li>
           <li>{tr("予約の時刻は")}{c.rules.interval}{tr("分ごとに選べます。")}</li>
-          <li>{tr("キャンセルは開始の")}{c.rules.cancelHours}{tr("時間前までです。")}</li>
+          <li>{c.rules.payment?.enabled ? tr("予約時にPayPalでお支払い。{0}", policyText(c.rules.payment.refundTiers)) : tr("キャンセルは開始の{0}時間前までです。", c.rules.cancelHours)}</li>
           <li>{tr("臨時のお休み：")}{c.hours.holidays.join("、") || tr("なし")}</li>
         </ul>
       </details>
@@ -893,7 +896,7 @@ export function ConfigEditor({
             ["interval", tr("予約枠の間隔（分）")],
             ["advanceDays", tr("何日先まで予約できるか")],
             ["leadMinutes", tr("開始何分前まで予約できるか")],
-            ["cancelHours", tr("開始何時間前までキャンセルできるか")],
+            ...(!c.rules.payment?.enabled ? [["cancelHours", tr("開始何時間前までキャンセルできるか")] as const] : []),
           ] as const
         ).map(([k, label]) => (
           <Field key={k} label={label}>
@@ -917,6 +920,18 @@ export function ConfigEditor({
           }
         />{" "}
         {tr("当日の予約を受け付ける")}</label>
+      <h3>{tr("予約時のお支払い・キャンセル時の返金")}</h3>
+      <label><input type="checkbox" checked={!!c.rules.payment?.enabled} onChange={event => put("rules", { ...c.rules, payment: { enabled: event.target.checked, refundTiers: c.rules.payment?.refundTiers || structuredClone(defaultRefundTiers) } })} /> {tr("予約時にPayPalで全額お支払いいただく")}</label>
+      {c.rules.payment?.enabled && <>
+        <p className="small">{tr("開始までの残り時間で返金率を決めます。店都合は常に全額返金です。予約時の金額・条件を保存するため、変更はこれからの予約に適用されます。")}</p>
+        {c.rules.payment.refundTiers.map((tier, i) => <div className="form-grid" key={i}>
+          <Field label={tr("返金条件{0}・開始の何時間前まで", i + 1)}><input type="number" min="0" max="8760" value={tier.hoursBefore} onChange={e => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.map((value, index) => index === i ? { ...value, hoursBefore: Number(e.target.value) } : value) } })} /></Field>
+          <Field label={tr("返金条件{0}・返金率（%）", i + 1)}><input type="number" min="0" max="100" value={tier.percent} onChange={e => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.map((value, index) => index === i ? { ...value, percent: Number(e.target.value) } : value) } })} /></Field>
+          {i < c.rules.payment!.refundTiers.length - 1 && <button onClick={() => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.filter((_, index) => index !== i) } })}>{tr("返金条件{0}を削除", i + 1)}</button>}
+        </div>)}
+        {c.rules.payment.refundTiers.length < 10 && <button onClick={() => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: [{ hoursBefore: c.rules.payment!.refundTiers[0].hoursBefore + 24, percent: 100 }, ...c.rules.payment!.refundTiers] } })}>{tr("返金条件を追加")}</button>}
+        <p className="small">{tr("時間の大きい順に設定し、最後は0時間（それ以降の返金率）にします。1円未満は切り捨てます。自然な言葉での変更は「AIとお店をつくる」から依頼し、変更案を確認して反映できます。")}</p>
+      </>}
       <p className="small muted">
         {section ? tr("この項目は保存すると反映されます。") : tr("設定はプラン確認・承認・公開のあとに反映されます。")}
       </p>
@@ -986,7 +1001,11 @@ function Reservations({
         >
           {tr("絞り込みを解除")}</button>
       </div>
-      {!shop.bookings.length && (
+      {shop.paymentCheckouts?.map(checkout => <div className="booking-card" key={checkout.id}>
+        <div><h3>{tr("{0} 様・{1}", checkout.name, when(checkout.start))}</h3><p>{checkout.customer} ／ {yen(checkout.amount)}</p><p>{checkout.review ? tr("PayPalの決済結果を照合してください。予約枠を確保したまま、自動の課金再送は停止しています。") : tr("お支払い手続き中・予約未確定")}</p></div>
+        <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/retry`, {}); await reload(); })}>{tr("決済状況を再確認")}</button>
+      </div>)}
+      {!shop.bookings.length && !shop.paymentCheckouts?.length && (
         <Empty text={tr("最初の予約を、楽しみに待ちましょう。")} />
       )}
       <div className="booking-list">
@@ -1020,6 +1039,7 @@ function Reservations({
                     ?.name || b.staffId}
                 </p>
                 <span className="small muted">{b.customer}</span>
+                <PaymentDetails booking={b} operator />
                 {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
               </div>
               {b.status === "active" && (
@@ -1029,6 +1049,7 @@ function Reservations({
                       key={status}
                       onClick={() =>
                         run(async () => {
+                          if (status === "cancelled" && !window.confirm(b.payment ? tr("店都合でキャンセルし、{0}を全額返金しますか？", yen(b.payment.amount)) : tr("この予約をキャンセルしますか？"))) return;
                           await api(
                             `/api/shops/${shop.id}/bookings/${b.id}/status`,
                             { status },
@@ -1038,12 +1059,13 @@ function Reservations({
                       }
                     >
                       {status === "cancelled"
-                        ? tr("予約をキャンセル")
+                        ? b.payment ? tr("店都合でキャンセル・全額返金") : tr("予約をキャンセル")
                         : tr("無断キャンセルを記録")}
                     </button>
                   ))}
                 </div>
               )}
+              {b.payment?.cancellation && ["pending", "retrying", "awaiting_funds"].includes(b.payment.cancellation.status) && <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/retry`, {}); await reload(); })}>{tr("返金状況を再確認")}</button>}
             </div>
           ))}
       </div>
@@ -1163,6 +1185,7 @@ export function PublicShop({
     recentPosts?: PostSummary[];
     customerProfile?: MemberProfile | null;
     registrationRequired?: boolean;
+    paymentSimulation?: boolean;
   }>();
   const [menu, setMenu] = useState("");
   const [staff, setStaff] = useState("");
@@ -1174,6 +1197,12 @@ export function PublicShop({
   const [name, setName] = useState(session.user?.name || "");
   useEffect(() => { setName(session.user?.name || ""); }, [session.user?.email, session.user?.name]);
   const [mine, setMine] = useState<Booking[]>([]);
+  type PendingCheckout = { id: string; phase: string; expires: number; approvalUrl?: string; review?: boolean; start: string; amount: number };
+  const [checkouts, setCheckouts] = useState<PendingCheckout[]>([]);
+  const [paymentConsent, setPaymentConsent] = useState(false);
+  const processedReturn = useRef("");
+  useEffect(() => { setPaymentConsent(false); }, [menu, data?.config.rules.payment, selected]);
+
   const [message, setMessage] = useState("");
   const [bookingMessage, setBookingMessage] = useState("");
   const [pane, setPane] = useState(initialPane || (session.user ? "mine" : "about"));
@@ -1182,8 +1211,26 @@ export function PublicShop({
   const isCustomer =
     session.user?.role === "customer" && session.user.shopId === data?.shopId;
   const loadMine = async () => {
-    if (isCustomer) setMine(await api(`${base}/bookings`));
+    if (isCustomer) {
+      const [bookings, pending] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`)]);
+      setMine(bookings); setCheckouts(pending);
+    }
   };
+  const confirmCheckout = async (id: string, abandon = false) => {
+    const result = await api<{ ok: boolean; checkout: PendingCheckout }>(`${base}/checkouts/${id}/${abandon ? "abandon" : "capture"}`, {});
+    notify(result.ok ? tr("お支払いが完了し、予約が確定しました。") : result.checkout.phase === "expired" ? tr("お支払い手続きは終了しました。空き枠から選び直してください。") : result.checkout.phase === "failed" ? tr("お支払いが完了しませんでした。空き枠から選び直してください。") : tr("支払いを確認中です。マイページで状況を再確認できます。"));
+    await loadMine();
+  };
+  useEffect(() => {
+    if (!isCustomer || !data) return;
+    const params = new URLSearchParams(search || "");
+    const id = params.get("checkout");
+    const action = params.get("paypal");
+    if (!id || !["return", "cancel"].includes(action || "") || processedReturn.current === `${id}:${action}`) return;
+    processedReturn.current = `${id}:${action}`;
+    setPane("mine");
+    run(async () => { await confirmCheckout(id, action === "cancel"); });
+  }, [isCustomer, data?.shopId, search]);
   useEffect(() => {
     run(async () => {
       const d = await api<{
@@ -1379,9 +1426,14 @@ export function PublicShop({
                 <Field label={tr("お店へのメッセージ（任意）")}>
                   <textarea maxLength={2000} rows={3} value={bookingMessage} onChange={event => { setBookingMessage(event.target.value); setRequestId(createRequestId()); }} placeholder={tr("ご希望や事前に伝えたいことがあればご記入ください")} />
                 </Field>
-                <p className="small muted">
-                  {tr("キャンセルは開始 ")}{c.rules.cancelHours}{" "}
-                  {tr("時間前までマイページで承ります。それ以降はお問い合わせください。")}</p>
+                {c.rules.payment?.enabled && (c.menus.find(m => m.id === menu)?.price || 0) > 0 ? <div className="payment-policy">
+                  <h4>{tr("予約時のお支払いと返金条件")}</h4>
+                  <p>{tr("PayPalで{0}をお支払い後、予約が確定します。決済中の枠は10分間確保します。", yen(c.menus.find(m => m.id === menu)!.price))}</p>
+                  <p>{policyText(c.rules.payment.refundTiers)}</p>
+                  <p className="small">{tr("返金額はキャンセル時点の残り時間で計算し、1円未満を切り捨てます。店都合は全額返金。予約後に条件が変更されても、この予約の条件は変わりません。")}</p>
+                  {data.paymentSimulation && <p className="notice">{tr("プレビューの練習です。実際の支払い・返金は行いません。")}</p>}
+                  <label><input type="checkbox" checked={paymentConsent} onChange={e => setPaymentConsent(e.target.checked)} /> {tr("支払額と返金条件を確認しました")}</label>
+                </div> : <p className="small muted">{tr("キャンセルは開始 ")}{c.rules.cancelHours} {tr("時間前までマイページで承ります。それ以降はお問い合わせください。")}</p>}
                 <button
                   className="primary wide"
                   disabled={
@@ -1389,18 +1441,24 @@ export function PublicShop({
                     !selected ||
                     !name.trim() ||
                     (!isCustomer) ||
-                    complete
+                    complete ||
+                    (!!c.rules.payment?.enabled && (c.menus.find(m => m.id === menu)?.price || 0) > 0 && !paymentConsent)
                   }
                   onClick={() =>
                     run(async () => {
-                      await api(`${base}/bookings`, {
+                      const result = await api<{ ok: boolean; checkout?: PendingCheckout }>(`${base}/bookings`, {
                         name,
                         message: bookingMessage,
                         menuId: menu,
                         staffId: staff,
                         start: selected,
                         requestId,
+                        paymentConsent: paymentConsent && c.rules.payment ? { amount: c.menus.find(m => m.id === menu)!.price, policy: c.rules.payment.refundTiers } : undefined,
                       });
+                      if (result.checkout) {
+                        if (result.checkout.phase === "awaiting_approval" && result.checkout.approvalUrl) { window.location.assign(result.checkout.approvalUrl); return; }
+                        setPane("mine"); await loadMine(); notify(tr("マイページでお支払いの状況を確認してください。")); return;
+                      }
                       setComplete(true);
                       notify(
                         tr("ご予約を承りました。マイページからご確認いただけます。"),
@@ -1411,7 +1469,7 @@ export function PublicShop({
                 >
                   {complete
                     ? tr("✓ 予約を受け付けました")
-                    : tr("この内容で予約する")}{" "}
+                    : c.rules.payment?.enabled && (c.menus.find(m => m.id === menu)?.price || 0) > 0 ? data.paymentSimulation ? tr("支払い・予約を練習する") : tr("PayPalで支払いへ進む") : tr("この内容で予約する")}{" "}
                   →
                 </button>
               </div>
@@ -1462,6 +1520,15 @@ export function PublicShop({
           {pane === "mine" && (
             <div className="panel">
               <h2>{tr("あなたのご予約")}</h2>
+              {checkouts.map(checkout => <div className="booking-card" key={checkout.id}>
+                <div><h3>{when(checkout.start)}</h3><p>{yen(checkout.amount)}・{checkout.review ? tr("お店での支払い確認が必要です。お問い合わせください。") : tr("支払い手続き中・予約はまだ確定していません")}</p></div>
+                <div className="actions">
+                  {checkout.phase === "awaiting_approval" && checkout.approvalUrl && checkout.expires > Date.now() && <button disabled={busy} onClick={() => window.location.assign(checkout.approvalUrl!)}>{tr("PayPalで支払いを続ける")}</button>}
+                  {checkout.phase === "creating" && <button disabled={busy} onClick={() => run(async () => { await api(`${base}/checkouts/${checkout.id}/resume`, {}); await loadMine(); })}>{tr("支払い手続きを再開")}</button>}
+                  {checkout.phase !== "creating" && <button disabled={busy} onClick={() => run(async () => confirmCheckout(checkout.id))}>{tr("支払い状況を確認・予約を確定")}</button>}
+                  {["creating", "awaiting_approval"].includes(checkout.phase) && <button disabled={busy} onClick={() => run(async () => confirmCheckout(checkout.id, true))}>{tr("支払いを中止")}</button>}
+                </div>
+              </div>)}
               {!mine.length ? (
                 <Empty text={tr("ご予約はまだありません。")} />
               ) : (
@@ -1481,19 +1548,27 @@ export function PublicShop({
                           b.menuId}
                       </p>
                       {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
+                      <PaymentDetails booking={b} />
                       <p className="small muted">{tr("予約番号：")}{b.id}</p>
                     </div>
-                    {b.status === "active" && (
-                      <button
+                    {(b.status === "active" || b.payment?.cancellation && ["retrying", "pending", "awaiting_funds"].includes(b.payment.cancellation.status)) && (
+                      <button disabled={busy}
                         onClick={() =>
                           run(async () => {
-                            await api(`${base}/bookings/${b.id}/cancel`, {});
+                            let expectedRefund: number | undefined;
+                            if (b.payment && !b.payment.cancellation) {
+                              const quote = await api<{ amount: number; percent: number }>(`${base}/bookings/${b.id}/cancel-quote`);
+                              if (!window.confirm(tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", yen(quote.amount), quote.percent))) return;
+                              expectedRefund = quote.amount;
+                            }
+                            await api(`${base}/bookings/${b.id}/cancel`, { expectedRefund });
                             await loadMine();
                             notify(tr("予約をキャンセルしました。"));
                           })
                         }
                       >
-                        {tr("キャンセルする")}</button>
+                        {b.payment?.cancellation ? tr("返金状況を再確認") : tr("キャンセルする")}
+                      </button>
                     )}
                   </div>
                 ))
