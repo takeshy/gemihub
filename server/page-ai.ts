@@ -2,17 +2,18 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { pageSchema, headerSchema, footerSchema, type ShopPage } from "./pages.ts";
 import { shopSchema, type ShopConfig } from "./domain.ts";
+import { requestImageParts, requestImageInstruction, type RequestImage } from "./request-images.ts";
 export const profileSchema = z.object({ name: shopSchema.shape.name, industry: shopSchema.shape.industry, description: shopSchema.shape.description, address: shopSchema.shape.address, appearance: shopSchema.shape.appearance, notificationEmail: shopSchema.shape.notificationEmail });
 export const messageSchema = z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(12000) });
-async function generate<T extends z.ZodType>(schema: T, input: unknown, instruction: string) {
+async function generate<T extends z.ZodType>(schema: T, input: unknown, instruction: string, images: RequestImage[] = []) {
   if (!process.env.GOOGLE_CLOUD_PROJECT || !process.env.VERTEX_MODEL) throw Object.assign(new Error("AI の接続がまだ設定されていません"), { status: 503 });
   const ai = new GoogleGenAI({ vertexai: true, project: process.env.GOOGLE_CLOUD_PROJECT, location: process.env.GOOGLE_CLOUD_LOCATION || "global" });
-  const response = await ai.models.generateContent({ model: process.env.VERTEX_MODEL, contents: JSON.stringify(input), config: { responseMimeType: "application/json", responseJsonSchema: z.toJSONSchema(schema), systemInstruction: instruction } });
+  const response = await ai.models.generateContent({ model: process.env.VERTEX_MODEL, contents: [{ role: "user", parts: requestImageParts(input, images) }], config: { responseMimeType: "application/json", responseJsonSchema: z.toJSONSchema(schema), systemInstruction: instruction } });
   return schema.parse(JSON.parse(response.text || "{}"));
 }
-export async function createPageWithAI(messages: z.infer<typeof messageSchema>[], context: Pick<ShopConfig, "name" | "industry" | "description" | "address">, mode: "chat" | "write") {
+export async function createPageWithAI(messages: z.infer<typeof messageSchema>[], context: Pick<ShopConfig, "name" | "industry" | "description" | "address">, mode: "chat" | "write", images: RequestImage[] = []) {
   const schema = z.object({ reply: z.string().min(1).max(4000), page: pageSchema.omit({ id: true }).nullable() });
-  return generate(schema, { messages, context, mode }, "小さなお店のページ作成を日本語で手伝う。chatでは必要な情報が足りなければ短い質問を一つ返しpageはnull。writeでは要望からページ案を作る。情報が揃えばページ案と説明を返す。未確認の料金・住所・サービスを捏造しない。本文は安全なMarkdown。画像URLは提供されたHTTPS URLのみ、未提供なら空文字。HTMLやスクリプトや予約処理は生成しない。slugは半角英小文字・数字・ハイフン。提案のみで公開しない。");
+  return generate(schema, { messages, context, mode }, "小さなお店のページ作成を日本語で手伝う。chatでは必要な情報が足りなければ短い質問を一つ返しpageはnull。writeでは要望からページ案を作る。情報が揃えばページ案と説明を返す。未確認の料金・住所・サービスを捏造しない。本文は安全なMarkdown。画像URLは提供されたHTTPS URLのみ、未提供なら空文字。HTMLやスクリプトや予約処理は生成しない。slugは半角英小文字・数字・ハイフン。提案のみで公開しない。" + requestImageInstruction.replace("header.imageId・pages[].imageId・menus[].imageId", "page.imageId"), images);
 }
 export async function mergePageWithAI(input: { baseline: unknown; local: unknown; remote: unknown; kind: "page" | "shared" | "header" | "footer" }) {
   const valueSchema = input.kind === "page" ? pageSchema.nullable() : input.kind === "header" ? headerSchema : input.kind === "footer" ? footerSchema : profileSchema;

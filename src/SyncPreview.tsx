@@ -16,6 +16,6 @@ export function SyncPreview({ config, value, scope, fixtures, shopId }: { config
   const mock = useMemo(() => createPreviewClient(previewConfig, fixtures, shopId, imageId => api(`/api/shops/${shopId}/menu-images/${imageId}`)), [previewConfig, fixtures, shopId, api]);
   const session: Session = { demo: false, user: { email: "sample@example.com", name: fixtures.customerName, role: "customer", shopId } };
   if (value === null) return <p className="notice">この側では{scope.kind === "page" ? "ページが削除されています（または未作成）" : "お店が未公開です"}。</p>;
-  if (scope.kind === "part") return <div inert className="comparison-preview"><ChromePreview config={previewConfig} part={scope.part} /></div>;
+  if (scope.kind === "part") return <div inert className="comparison-preview"><ChromePreview config={previewConfig} part={scope.part} imageBase={`/api/shops/${shopId}/images`} /></div>;
   return <div inert className="comparison-preview"><ApiProvider value={mock}><PublicShop key={JSON.stringify(value)} session={session} slug="local-preview" search="" initialPane="reserve" pageSlug={scope.kind === "page" ? (value as ShopPage).slug : undefined} preview={false} busy={false} run={async fn => { try { await fn(); } catch { /* Read-only comparison. */ } }} notify={() => {}} navigate={() => {}} /></ApiProvider></div>;
 }

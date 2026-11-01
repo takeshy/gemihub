@@ -3,8 +3,9 @@ import type { Store, Shop } from "./store.ts";
 import type { ShopConfig } from "./domain.ts";
 import type { CustomerFiles } from "./customer-files.ts";
 import { menuImageInputSchema, menuImageLimit, type MenuImageData } from "./menu-image-domain.ts";
+import { managedImageIds } from "./image-references.ts";
 
-type Upload = { shopId: string; fileId: string; hash: string; mimeType: MenuImageData["mimeType"]; size: number; complete: boolean };
+export type ImageUpload = { shopId: string; fileId: string; hash: string; mimeType: MenuImageData["mimeType"]; size: number; complete: boolean; name?: string; createdAt?: string; source?: "upload" | "ai"; prompt?: string; model?: string; archived?: boolean };
 const fail = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
 export async function uploadMenuImage(store: Store, shop: Shop, raw: unknown, files: CustomerFiles, token: string) {
   const input = menuImageInputSchema.parse(raw);
@@ -16,12 +17,12 @@ export async function uploadMenuImage(store: Store, shop: Shop, raw: unknown, fi
   if (!valid || bytes.length > menuImageLimit || bytes.toString("base64") !== input.data) fail(400, "5MB以内のPNG・JPEG・GIF・WebP画像を選択してください");
   const imageId = createHash("sha256").update(`${shop.id}:menu-image:${input.requestId}`).digest("hex");
   const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
-  let upload = await store.get<Upload>("menuImageUpload", imageId);
+  let upload = await store.get<ImageUpload>("menuImageUpload", imageId);
   if (upload && upload.hash !== hash) fail(409, "画像が変更されています。選び直してください");
   if (!upload) {
     const [fileId] = await files.reserve(1, token);
     if (!fileId) throw new Error("画像の保存先を作成できませんでした");
-    upload = { shopId: shop.id, fileId, hash, mimeType: input.mimeType, size: bytes.length, complete: false };
+    upload = { shopId: shop.id, fileId, hash, mimeType: input.mimeType, size: bytes.length, complete: false, name: input.name, createdAt: new Date().toISOString(), source: "upload" };
     await store.put("menuImageUpload", imageId, upload);
   }
   if (!upload.complete) {
@@ -32,11 +33,12 @@ export async function uploadMenuImage(store: Store, shop: Shop, raw: unknown, fi
   return { imageId };
 }
 async function receipt(store: Store, shop: Shop, imageId: string) {
-  const upload = await store.get<Upload>("menuImageUpload", imageId);
-  return upload?.complete && upload.shopId === shop.id ? upload : fail(404, "メニュー画像がありません");
+  const upload = await store.get<ImageUpload>("menuImageUpload", imageId);
+  return upload?.complete && !upload.archived && upload.shopId === shop.id ? upload : fail(404, "画像がありません");
 }
 export async function validateMenuImages(store: Store, shop: Shop, config: ShopConfig) {
   for (const menu of config.menus) if (menu.imageId) await receipt(store, shop, menu.imageId);
+  for (const id of managedImageIds(config)) await receipt(store, shop, id);
 }
 export async function readMenuImage(store: Store, shop: Shop, imageId: string, files: CustomerFiles, token: string): Promise<MenuImageData> {
   const upload = await receipt(store, shop, imageId);
@@ -46,6 +48,6 @@ export async function readMenuImage(store: Store, shop: Shop, imageId: string, f
 }
 export async function menuImageSnapshot(store: Store, shop: Shop, config: ShopConfig, files: CustomerFiles, token: string) {
   const images: Record<string, MenuImageData> = {};
-  for (const menu of config.menus) if (menu.active && menu.imageId && !images[menu.imageId]) images[menu.imageId] = await readMenuImage(store, shop, menu.imageId, files, token);
+  for (const id of managedImageIds(config)) images[id] = await readMenuImage(store, shop, id, files, token);
   return images;
 }

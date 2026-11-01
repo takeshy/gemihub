@@ -60,6 +60,7 @@ function Thumbnail({ item, open }: { item: ImageItem; open: () => void }) {
     {error && <div role="alert">{error}<button type="button" onClick={retry}>再読み込み</button></div>}
   </>;
 }
+export { Thumbnail as CustomerImageThumbnail };
 
 export function CustomerImageGallery({ base, rangeQuery, back, saved }: { base: string; rangeQuery: string; back: () => void; saved: (customer: CustomerDetail) => void }) {
   const api = useApi();

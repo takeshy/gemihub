@@ -22,8 +22,10 @@ export function VoiceInput({
   voiceOnly = false,
   onAnswer,
   messages = [],
+  imageIds = [],
 }: {
   shopId: string;
+  imageIds?: string[];
   onText: (text: string) => void;
   onPlan?: (text: string) => Promise<void>;
   disabled?: boolean;
@@ -85,6 +87,7 @@ export function VoiceInput({
       setInterim("");
     }
   }
+  useEffect(() => { stop(); }, [imageIds.join(",")]);
   useEffect(() => {
     alive.current = true;
     if (!consultation) void api<Interview>(prefix + "/interview")
@@ -153,7 +156,7 @@ export function VoiceInput({
         return;
       }
       const socket = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${prefix}/live${consultation ? `?hash=${encodeURIComponent(consultation.hash)}` : ""}`,
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${prefix}/live?${new URLSearchParams({ ...(consultation ? { hash: consultation.hash } : {}), ...(imageIds.length ? { images: imageIds.join(",") } : {}) })}`,
       );
       ws.current = socket;
       const node = new AudioWorkletNode(context, "microphone");

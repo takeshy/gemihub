@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
 import {useApi} from "./api";
 import {VoiceInput} from "./VoiceInput";
+import { RequestImagePicker } from "./RequestImagePicker";
 import type {ShopConfig} from "../server/domain";
 
 // Capture the rendered page with its computed styles, without granting screen sharing.
@@ -58,22 +59,22 @@ export async function capturePage(root: HTMLElement) {
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/png");
 }
-export function VisualRequest({shopId, config, planId, root, local, onLocalChange, onBusyChange, triggerHost}: {
-  shopId: string; config: ShopConfig; planId?: string; root: React.RefObject<HTMLDivElement | null>;
-  local?: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer" };
-  onLocalChange?: (config: ShopConfig) => void;
+export function VisualRequest({shopId, config, root, local, onLocalChange, onBusyChange, triggerHost}: {
+  shopId: string; config: ShopConfig; root: React.RefObject<HTMLDivElement | null>;
+  local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer" };
+  onLocalChange: (config: ShopConfig) => void;
   onBusyChange?: (busy: boolean) => void;
   triggerHost?: HTMLElement | null;
 }) {
   const api = useApi();
   const [image, setImage] = useState("");
+  const [imageIds, setImageIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [marked, setMarked] = useState(false);
   const [result, setResult] = useState<{id: string; explanation: string; candidates: {id: string; label: string}[]}>();
   const [target, setTarget] = useState("");
-  const [plan, setPlan] = useState<{id: string; summary: string[]; config: ShopConfig}>();
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   async function reset(source = image) {
@@ -81,11 +82,11 @@ export function VisualRequest({shopId, config, planId, root, local, onLocalChang
     if (!canvas.current) return;
     canvas.current.width = img.width; canvas.current.height = img.height;
     canvas.current.getContext("2d")!.drawImage(img, 0, 0);
-    setMarked(false); setResult(undefined); setTarget(""); setPlan(undefined);
+    setMarked(false); setResult(undefined); setTarget("");
   }
   useEffect(() => { if (image) void reset(); }, [image]);
   async function run(fn: () => Promise<void>) {setBusy(true); onBusyChange?.(true); setError(""); try {await fn();} catch(e) {setError(e instanceof Error ? e.message : String(e));} finally {setBusy(false); onBusyChange?.(false);}}
-  const trigger = <button className={triggerHost ? "editor-pen-button" : undefined} title="この画面にペンで変更を依頼" disabled={busy} onClick={() => run(async () => { if (root.current) setImage(await capturePage(root.current)); })}>{triggerHost ? "✎ ペンで依頼" : "✎ この画面にペンで変更を依頼"}</button>;
+  const trigger = <button className={triggerHost ? "editor-pen-button" : undefined} title="この画面を修正する" disabled={busy} onClick={() => run(async () => { if (root.current) setImage(await capturePage(root.current)); })}>修正する</button>;
   return <>
     {triggerHost && createPortal(trigger, triggerHost)}
     {(!triggerHost || image || error) && <div className="visual-request panel" data-capture-ignore>
@@ -100,7 +101,7 @@ export function VisualRequest({shopId, config, planId, root, local, onLocalChang
           const rect = e.currentTarget.getBoundingClientRect();
           const ctx = e.currentTarget.getContext("2d")!; ctx.beginPath(); ctx.strokeStyle = "#e32236"; ctx.lineWidth = 5; ctx.lineCap = "round";
           ctx.moveTo((e.clientX - rect.left) * e.currentTarget.width / rect.width, (e.clientY - rect.top) * e.currentTarget.height / rect.height);
-          setMarked(true); setResult(undefined); setPlan(undefined);
+          setMarked(true); setResult(undefined);
         }}
         onPointerMove={e => {
           if (!drawing.current) return;
@@ -109,20 +110,20 @@ export function VisualRequest({shopId, config, planId, root, local, onLocalChang
         }} onPointerUp={() => {drawing.current = false;}} onPointerCancel={() => {drawing.current = false;}}
       />
       <button disabled={busy} onClick={() => reset()}>印を消して描き直す</button>
-      <label>ここをどう変えたいですか<textarea maxLength={4000} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined); setPlan(undefined);}} placeholder="ここを『季節を楽しむネイル』に変えて"/></label>
-      <VoiceInput shopId={shopId} onText={t => {setInstruction(v => v ? `${v}\n${t}` : t); setResult(undefined); setPlan(undefined);}} disabled={busy}/>
+      <label>ここをどう変えたいですか<textarea maxLength={4000} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined);}} placeholder="ここを『季節を楽しむネイル』に変えて"/></label>
+      <RequestImagePicker shopId={shopId} value={imageIds} disabled={busy} onChange={ids => { setImageIds(ids); setResult(undefined); }} />
+      <VoiceInput shopId={shopId} imageIds={imageIds} onText={t => {setInstruction(v => v ? `${v}\n${t}` : t); setResult(undefined);}} disabled={busy}/>
       <button disabled={busy || !marked || !instruction.trim()} onClick={() => run(async () => {
         const media = {mimeType: "image/png", data: canvas.current!.toDataURL("image/png").split(",")[1]};
-        setResult(undefined); setTarget(""); setPlan(undefined);
-        const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, planId, displayed: config, local});
+        setResult(undefined); setTarget("");
+        const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, displayed: config, local});
         setResult(r); if (r.candidates.length === 1) setTarget(r.candidates[0].id);
       })}>{busy ? "確認しています…" : "Gemini に印の対象を確認してもらう"}</button>
-      {result && <div className="notice"><p>{result.explanation}</p><label>変更する対象を確認<select value={target} onChange={e => {setTarget(e.target.value); setPlan(undefined);}}><option value="">対象を選んでください</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {if (local && onLocalChange) {
-          const proposed = await api<{config: ShopConfig}>(`/api/shops/${shopId}/visual/propose`, {id: result.id, target, instruction});
+      {result && <div className="notice"><p>{result.explanation}</p><label>変更する対象を確認<select value={target} onChange={e => setTarget(e.target.value)}><option value="">対象を選んでください</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {
+          const proposed = await api<{config: ShopConfig}>(`/api/shops/${shopId}/visual/propose`, {id: result.id, target, instruction, imageIds});
           onLocalChange(proposed.config);
-        } else setPlan(await api(`/api/shops/${shopId}/plan`, {text: instruction, visual: {id: result.id, target}}));})}>{local ? "この対象をローカルに変更" : "この対象の差分プランを作る"}</button></div>}
-      {plan && <div className="notice"><h3>差分プランを作成しました</h3><ul>{plan.summary.map(s => <li key={s}>{s}</li>)}</ul><p>まだ公開内容は変更されていません。</p><a className="button primary" href={`/?shop=${encodeURIComponent(shopId)}&plan=${encodeURIComponent(plan.id)}`}>運営画面でプランを確認・承認する →</a></div>}
-      <button disabled={busy} onClick={() => {setImage(""); setResult(undefined); setPlan(undefined);}}>ペン入力を閉じる</button>
+        })}>この対象をローカルに変更</button></div>}
+      <button disabled={busy} onClick={() => {setImage(""); setResult(undefined);}}>ペン入力を閉じる</button>
     </>}
   </div>}
   </>;

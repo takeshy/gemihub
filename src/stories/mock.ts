@@ -1,5 +1,7 @@
 import { updateLiveValue, type LiveSection } from "../../server/live-settings";
 import { fingerprint } from "../editor-sync";
+import { imageUses } from "../../server/image-references";
+import type { LibraryImage } from "../../server/image-library-domain";
 import { scopedSource, scopedConfig, type ReleaseScope } from "../../server/pages";
 import { shopSystem, systemSvg } from "../../server/shop-system";
 import { storyPosts } from "./posts";
@@ -25,6 +27,10 @@ import {
   type Booking,
 } from "../../server/domain";
 export type Scenario =
+  | "image-library"
+  | "image-library-empty"
+  | "image-library-generation"
+  | "image-page"
   | "crm-list"
   | "crm-detail"
   | "crm-images"
@@ -46,8 +52,6 @@ export type Scenario =
   | "local-editor"
   | "local-editor-new"
   | "system"
-  | "visual-preview"
-  | "visual-live"
   | "blog-editor"
   | "blog-archive"
   | "blog-article"
@@ -79,6 +83,7 @@ export type Scenario =
   | "preview"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
+  "image-page",
   "menu-images-public",
   "custom-page",
   "blog-archive",
@@ -91,28 +96,27 @@ const publicScenarios = new Set<Scenario>([
   "mypage",
   "contact",
   "preview",
-  "visual-preview",
-  "visual-live",
   "anonymous",
 ]);
 export function scenarioProps(scenario: Scenario) {
   return {
     path:
-      scenario === "custom-page" ? "/s/salon-nagi/pages/faq" : scenario === "blog-archive" || scenario === "empty-blog"
+      scenario === "custom-page" || scenario === "image-page" ? "/s/salon-nagi/pages/faq" : scenario === "blog-archive" || scenario === "empty-blog"
         ? "/s/salon-nagi/blogs"
         : scenario === "announcement-archive"
           ? "/s/salon-nagi/announcements"
           : scenario === "blog-article"
             ? `/s/salon-nagi/blogs/${dateJST()}-autumn-design`
-            : (scenario === "preview" || scenario === "visual-preview")
+            : scenario === "preview"
               ? "/preview/story-shop"
               : publicScenarios.has(scenario)
                 ? "/s/salon-nagi"
                 : "/",
-    search: scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-detail" ? "?customer=guest%40example.com" : (scenario === "preview" || scenario === "visual-preview") ? "?plan=story-plan" : "",
+    search: scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-detail" ? "?customer=guest%40example.com" : scenario === "preview" ? "?plan=story-plan" : "",
     initialTab: scenario === "editor-unfetched" ? undefined :
       (
         {
+          "image-library": "images", "image-library-empty": "images", "image-library-generation": "images",
           manual: "manual",
           system: "build",
           "local-editor": "try",
@@ -147,18 +151,27 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const config = structuredClone(sample);
   config.hours.closedWeekdays = [];
   config.notificationEmail = "owner@example.com";
-  if (["local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-conflict"].includes(scenario)) config.pages = [
+  if (["local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-conflict", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
     { id: "faq", slug: "faq", title: "よくある質問", navigationLabel: "よくある質問", body: "## 初めてでも予約できますか？\n\n初めてのお客様も歓迎しています。\n\n## 当日の持ち物は？\n\n特にありません。お気軽にお越しください。", layout: "standard", imageUrl: "" },
     { id: "about-us", slug: "about-us", title: "私たちのお店", navigationLabel: "店舗紹介", body: "## 大切にしていること\n\n一人ひとりに合った時間をご用意します。", layout: "compact", imageUrl: "" },
   ];
   if (["editor-remote", "editor-conflict"].includes(scenario)) config.pages[0].body = "## リモートの変更\n\nリモートで追加された案内です。";
   const menuImages = new Map<string, { mimeType: string; data: string }>();
-  if (["menu-images", "menu-images-public"].includes(scenario)) {
+  const imageMetadata = new Map<string, LibraryImage>();
+  const generatedImages = new Map<string, string>();
+  if (["menu-images", "menu-images-public", "image-library", "image-library-generation", "image-page"].includes(scenario)) {
     const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
     const context = canvas.getContext("2d")!; context.fillStyle = "#d0ded3"; context.fillRect(0, 0, 640, 480);
     context.fillStyle = "#465b50"; context.font = "32px sans-serif"; context.textAlign = "center"; context.fillText("Menu image sample", 320, 240);
     const imageId = "a".repeat(64); config.menus[0].imageId = imageId;
     menuImages.set(imageId, { mimeType: "image/png", data: canvas.toDataURL("image/png").split(",")[1] });
+    imageMetadata.set(imageId, { id: imageId, name: "お店の紹介.png", mimeType: "image/png", size: 12000, source: "upload", createdAt: new Date().toISOString(), usedBy: [] });
+    if (scenario.startsWith("image-") && scenario !== "image-library-empty") {
+      const secondId = "b".repeat(64);
+      menuImages.set(secondId, menuImages.get(imageId)!);
+      imageMetadata.set(secondId, { id: secondId, name: "AIで生成した季節のイメージ.png", mimeType: "image/png", size: 12000, source: "ai", model: "gemini-nano-banana-2.1", prompt: "明るい窓辺に季節の花を飾った、お店の紹介ページ向けの画像", createdAt: new Date().toISOString(), usedBy: [] });
+      if (scenario === "image-page") { config.header.imageId = imageId; config.pages[0].imageId = secondId; }
+    }
   }
   const tomorrow = dateJST(new Date(Date.now() + 86400000));
   const bookings: Booking[] = [
@@ -196,9 +209,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
     config: structuredClone(config),
     summary: planSummary(null, config),
     base: 0,
-    approved: ["approved", "preview", "visual-preview", "publication-error"].includes(scenario),
+    approved: ["approved", "preview", "publication-error"].includes(scenario),
   };
-  const unpublished = ["local-editor-new", "onboarding", "plan", "approved", "preview", "visual-preview"].includes(
+  const unpublished = ["local-editor-new", "onboarding", "plan", "approved", "preview"].includes(
     scenario,
   );
   const shop: Workspace = {
@@ -212,12 +225,12 @@ export function createMockClient(scenario: Scenario): ApiClient {
       ? []
       : [{ at: new Date().toISOString(), summary: "お店の予約ページを公開" }],
     isOwner: true,
-    plans: ["plan", "approved", "preview", "visual-preview", "publication-error"].includes(
+    plans: ["plan", "approved", "preview", "publication-error"].includes(
       scenario,
     )
       ? [plan]
       : [],
-    bookings: ["onboarding", "plan", "approved", "preview", "visual-preview"].includes(scenario)
+    bookings: ["onboarding", "plan", "approved", "preview"].includes(scenario)
       ? []
       : bookings,
     inquiries: [
@@ -268,7 +281,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       customerNotes.push({ id: "story-note", shopId: shop.id, email: "guest@example.com", text: "落ち着いたピンクがお好み。次回は短めに整える。", attachments: [], createdBy: shop.owner, createdAt: new Date(Date.now() - 86400000).toISOString(), updatedBy: shop.owner, updatedAt: new Date(Date.now() - 86400000).toISOString(), status: "active" });
     }
   }
-  if (scenario === "crm-images") {
+  if (scenario === "crm-images" || scenario.startsWith("image-library")) {
     // Generated placeholders keep Storybook independent of real customer photos.
     for (let index = 0; index < 3; index++) {
       const canvas = document.createElement("canvas");
@@ -285,7 +298,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     }
   }
   if (scenario === "publication-error") shop.publishingPlanId = plan.id;
-  const customer = publicScenarios.has(scenario) && !["preview", "visual-preview", "visual-live"].includes(scenario);
+  const customer = publicScenarios.has(scenario) && !["preview"].includes(scenario);
   const session: Session = {
     demo: false,
     user: [
@@ -339,11 +352,35 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (current) current.values = [...values]; else { extraData.rows.push({ row, values: [...values] }); extraData.nextRow++; }
       result = { ok: true };
     }
-    else if (action === `/api/shops/${shop.id}/menu-images` && data !== undefined) {
+    else if (action === `/api/shops/${shop.id}/images/customer-memos`) {
+      result = customerNotes.flatMap(note => customerImages([note]).map(item => ({ ...item, noteId: note.id, email: note.email, customerName: "山田 花子", createdAt: item.createdAt })));
+    }
+    else if (action === `/api/shops/${shop.id}/images` && data === undefined) {
+      result = [...imageMetadata.values()].map(image => ({ ...image, usedBy: imageUses(shop.published, image.id) }));
+    }
+    else if (action === `/api/shops/${shop.id}/images/generate` && data !== undefined) {
+      let imageId = generatedImages.get(String(input.requestId));
+      if (!imageId) {
+        imageId = String(menuImages.size + 1).padStart(64, "0"); generatedImages.set(String(input.requestId), imageId);
+        const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
+        const context = canvas.getContext("2d")!; context.fillStyle = "#dfcbd0"; context.fillRect(0, 0, 640, 480); context.fillStyle = "#73555d"; context.font = "32px sans-serif"; context.textAlign = "center"; context.fillText("AI image sample", 320, 240);
+        menuImages.set(imageId, { mimeType: "image/png", data: canvas.toDataURL("image/png").split(",")[1] });
+        imageMetadata.set(imageId, { id: imageId, name: String(input.name), mimeType: "image/png", size: 12000, source: "ai", model: "gemini-nano-banana-2.1", prompt: String(input.prompt), createdAt: new Date().toISOString(), usedBy: [] });
+      }
+      result = { imageId };
+    }
+    else if (/\/images\/[a-f0-9]{64}\/(rename|archive)$/.test(action) && data !== undefined) {
+      const parts = action.split("/"); const id = parts.at(-2)!; const image = imageMetadata.get(id); if (!image) throw new Error("画像がありません");
+      if (parts.at(-1) === "rename") image.name = String(input.name);
+      else { if (imageUses(shop.published, id).length) throw new Error("使用中の画像は削除できません。"); imageMetadata.delete(id); menuImages.delete(id); }
+      result = { ok: true };
+    }
+    else if ([`/api/shops/${shop.id}/menu-images`, `/api/shops/${shop.id}/images`].includes(action) && data !== undefined) {
       const imageId = String(menuImages.size + 1).padStart(64, "0");
       menuImages.set(imageId, { mimeType: String(input.mimeType), data: String(input.data) }); result = { imageId };
+      imageMetadata.set(imageId, { id: imageId, name: String(input.name), mimeType: String(input.mimeType), size: atob(String(input.data)).length, source: "upload", createdAt: new Date().toISOString(), usedBy: [] });
     }
-    else if (/\/menu-images\/[a-f0-9]{64}$/.test(action)) {
+    else if (/\/(menu-images|images)\/[a-f0-9]{64}$/.test(action)) {
       const image = menuImages.get(action.split("/").at(-1)!); if (!image) throw new Error("メニュー画像がありません"); result = image;
     }
     else if (action.startsWith(`/api/shops/${shop.id}/customers`)) {
@@ -396,7 +433,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/pages/create-with-ai`) {
       const messages = input.messages as { role: string; text: string }[];
       const ready = input.mode === "write" || messages.filter(m => m.role === "user").length >= 2;
-      result = { reply: ready ? "FAQ のページ案ができました。内容を確認してツリーに追加してください。" : "どんな質問や案内を載せたいですか？", page: ready ? { slug: "new-faq", title: "新しいFAQ", navigationLabel: "よくある質問", body: "## 初めてのお客様へ\n\nご予約方法をご案内します。", layout: "standard", imageUrl: "" } : null };
+      result = { reply: ready ? "FAQ のページ案ができました。内容を確認してツリーに追加してください。" : "どんな質問や案内を載せたいですか？", page: ready ? { slug: "new-faq", title: "新しいFAQ", navigationLabel: "よくある質問", body: "## 初めてのお客様へ\n\nご予約方法をご案内します。", layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] } : null };
     }
     else if (action === `/api/shops/${shop.id}/local-editor/index`) result = {
       base: shop.revision, published: !!shop.published, lastPublishedPlanId: shop.lastPublishedPlanId,
@@ -491,8 +528,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action === `/api/shops/${shop.id}/system`) {
       result = {diagram: shopSystem(shop.published || config), svg: systemSvg(shop.published || config), overview: systemSvg(shop.published || config, false), revision: shop.revision};
     } else if (action === `/api/shops/${shop.id}/system/question`) {
-      const changeRequest = /変更|したい|変え|追加/.test(String(input.question));
-      result = {answer: changeRequest ? "水曜日も定休日にする変更ですね。変更プランを作り、内容を確認してから承認・公開してください。" : String(input.question).includes("履歴") ? "変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。" : "お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。", changeRequest};
+      const hasImages = !!(input.imageIds as string[] | undefined)?.length;
+      const changeRequest = /変更|したい|変え|追加|使って/.test(String(input.question));
+      result = {answer: hasImages && changeRequest ? "選んだ画像を使う変更ですね。変更案を確認してから承認・公開してください。" : changeRequest ? "水曜日も定休日にする変更ですね。変更プランを作り、内容を確認してから承認・公開してください。" : String(input.question).includes("履歴") ? "変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。" : "お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。", changeRequest};
     } else if (action === `/api/shops/${shop.id}/visual/identify`) {
       visualConfig = structuredClone((input.displayed || config) as typeof config);
       const part = (input.local as { part?: "header" | "footer" } | undefined)?.part;
@@ -512,6 +550,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
         const target = (input.visual as {target: string}).target;
         if (target === "name") next.name = "季節のアトリエ";
         else next.description = "季節を楽しむ、小さなネイルサロン。";
+      } else if (!input.config && (input.imageIds as string[] | undefined)?.length) {
+        const imageId = (input.imageIds as string[])[0];
+        if (/FAQ|よくある質問/.test(String(input.text)) && next.pages.length) { next.pages[0].imageId = imageId; next.pages[0].imageUrl = ""; }
+        else { next.header.imageId = imageId; next.header.imageUrl = ""; }
       } else if (!input.config && shop.published) {
         next.hours.closedWeekdays = [3];
         next.menus.push({
@@ -666,7 +708,6 @@ export function createMockClient(scenario: Scenario): ApiClient {
         result = {
           config: current,
           shopId: shop.id,
-          canEdit: ["visual-preview", "visual-live"].includes(scenario),
           preview,
           authUrl: "/auth/google",
           recentPosts: preview

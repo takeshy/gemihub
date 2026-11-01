@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { shopSchema, type ShopConfig } from "./domain.ts";
 import { menuImageDataSchema, type MenuImageData } from "./menu-image-domain.ts";
+import { managedImageIds } from "./image-references.ts";
 
 export const driveMockSchema = z.object({
   shop: shopSchema,
@@ -17,7 +18,7 @@ export function driveMock(config: ShopConfig, menuImages?: Record<string, MenuIm
     shop: config,
     auth: { email: "preview@example.com", name: "プレビューのお客様" },
     bookings: [], inquiries: [], mode: "mock", writes: "discarded",
-    ...(menuImages ? { menuImages: Object.fromEntries(Object.entries(menuImages).filter(([id]) => config.menus.some(menu => menu.active && menu.imageId === id))) } : {}),
+    ...(menuImages ? { menuImages: Object.fromEntries(Object.entries(menuImages).filter(([id]) => managedImageIds(config).includes(id))) } : {}),
   });
 }
 

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { shopSchema, slots, dateJST, type ShopConfig } from "../server/domain";
 import { editorIndexSchema } from "../server/editor-index-schema";
 import { releaseScopeSchema } from "../server/pages";
+import { managedImageIds } from "../server/image-references";
 import { postContentSchema, postKey, type PublicPost } from "../server/post-domain";
 import type { ApiClient } from "./api";
 
@@ -55,10 +56,11 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     const action = url.pathname;
     const input = (data || {}) as Record<string, string>;
     let result: unknown;
-    const image = action.match(/^\/api\/public\/local-preview\/menu-images\/([a-f0-9]{64})$/);
+    const image = action.match(/^\/api\/public\/local-preview\/(menu-images|images)\/([a-f0-9]{64})$/);
     if (image) {
-      if (!config.menus.some(menu => menu.active && menu.imageId === image[1]) || !readImage) throw new Error("メニュー画像がありません");
-      result = await readImage(image[1]);
+      const ids = image[1] === "images" ? managedImageIds(config) : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
+      if (!ids.includes(image[2]) || !readImage) throw new Error("画像がありません");
+      result = await readImage(image[2]);
     }
     else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5) };
     else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined);

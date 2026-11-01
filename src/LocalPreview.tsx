@@ -22,6 +22,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
   const api = useApi();
   const key = draftKey(email, shop.id);
   const [draft, setDraft] = useState<LocalDraft>();
+  const latestDraft = useRef<LocalDraft | undefined>(undefined);
   const [fixtureEditing, setFixtureEditing] = useState<Fixtures>();
   const [screen, setScreen] = useState("reserve");
   const [penHost, setPenHost] = useState<HTMLSpanElement | null>(null);
@@ -46,6 +47,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     finally { setBusy(false); }
   }
   function save(value: LocalDraft) {
+    latestDraft.current = value;
     setDraft(value); setReview(false); setSaved(false);
     try { writeDraft(localStorage, key, value); setSaved(true); }
     catch { setError("このブラウザに保存できませんでした。空き容量やサイトデータの保存設定を確認してください。編集内容はこの画面に残っています。"); }
@@ -86,7 +88,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     if (!draft || draft.pending || busy || conflict) return;
     let active = true;
     const check = async () => {
-      try { const remote = await api<EditorIndex>(`/api/shops/${shop.id}/local-editor/index`); if (active) { setIndex(remote); writeDraft(localStorage, key, { ...draft, index: remote }); } }
+      try { const remote = await api<EditorIndex>(`/api/shops/${shop.id}/local-editor/index`); if (active) { setIndex(remote); writeDraft(localStorage, key, { ...(latestDraft.current || draft), index: remote }); } }
       catch { if (active) setError("最新のリモート状態を確認できません。ローカル編集は保持しています。"); }
     };
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void check(); }, 30000);
@@ -155,11 +157,14 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
   async function adopt(target: ReleaseScope, remote: unknown, chosen: unknown, backup = false) {
     if (!draft) return;
     const remoteIndex = await refreshIndex();
-    const source = target.kind === "shared" && remote === null ? null : replaceScope(draft.source || { ...draft.config, pages: [] }, target, remote);
-    const config = replaceScope(draft.config, target, chosen);
-    const downloaded = target.kind === "page" ? [...new Set([...(draft.downloaded || []), target.pageId])] : draft.downloaded;
-    const backups = backup ? [...(draft.backups || []), { at: new Date().toISOString(), scope: target, baseline: scopedSource(draft.source, target), localValue: scopedSource(draft.config, target), remoteValue: remote }].slice(-20) : draft.backups;
-    const next = { ...draft, source, config, base: remoteIndex.base, downloaded, backups, index: remoteIndex };
+    const current = latestDraft.current || draft;
+    // A second fetch may finish after the user has chosen an image or edited this scope.
+    if (!same(scopedSource(current.config, target), scopedSource(draft.config, target))) return;
+    const source = target.kind === "shared" && remote === null ? null : replaceScope(current.source || { ...current.config, pages: [] }, target, remote);
+    const config = replaceScope(current.config, target, chosen);
+    const downloaded = target.kind === "page" ? [...new Set([...(current.downloaded || []), target.pageId])] : current.downloaded;
+    const backups = backup ? [...(current.backups || []), { at: new Date().toISOString(), scope: target, baseline: scopedSource(current.source, target), localValue: scopedSource(current.config, target), remoteValue: remote }].slice(-20) : current.backups;
+    const next = { ...current, source, config, base: remoteIndex.base, downloaded, backups, index: remoteIndex };
     writeDraft(localStorage, key, next); restore(next); setConflict(undefined);
     if (target.kind === "page") {
       setPageEditing(config.pages.find(p => p.id === target.pageId));
@@ -291,7 +296,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
           setNotice("リンク先は試す画面では開きません。サイドバーの画面ツリーから選択してください。");
         }
       }}>
-        {scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} /> : <ApiProvider value={mock}>
+        {scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
           <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} preview={false} hideHeader={visibility[screen]?.header !== false} hideFooter={visibility[screen]?.footer !== false} busy={busy} run={run} notify={setNotice} navigate={href => {
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
@@ -303,11 +308,11 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
         </ApiProvider>}
       </div>}
     </>}    {draft && !conflict && <div className="panel editor-secondary">
-      {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? "ヘッダー" : "フッター"}の内容を編集</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} onChange={changeConfig} /></fieldset></details>}
+      {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? "ヘッダー" : "フッター"}の内容を編集</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
       {scope.kind === "page" && <details key={`page:${scope.pageId}`}><summary>このページの内容を編集</summary>
         {scope.kind === "page" && <>
           {!draft.source && <p className="notice">追加ページを公開する前に、予約画面などを選んでお店の共通設定を反映してください。</p>}
-          {status === "unfetched" ? <p className="notice">ページを自動で読み込んでいます。</p> : selectedPage ? <fieldset disabled={busy || !!draft.pending || !!conflict}><PageEditor key={selectedPage.id} page={pageEditing?.id === selectedPage.id ? pageEditing : selectedPage} onChange={editPage} onDelete={() => {
+          {status === "unfetched" ? <p className="notice">ページを自動で読み込んでいます。</p> : selectedPage ? <fieldset disabled={busy || !!draft.pending || !!conflict}><PageEditor key={selectedPage.id} page={pageEditing?.id === selectedPage.id ? pageEditing : selectedPage} shopId={shop.id} onChange={editPage} onDelete={() => {
             if (!window.confirm("このページをローカルで削除しますか？本番からの削除は反映時に行います。")) return;
             save({ ...draft, config: { ...draft.config, pages: draft.config.pages.filter(p => p.id !== selectedPage.id) } }); setPageEditing(undefined); setInvalid("");
             if (!draft.source?.pages.some(p => p.id === selectedPage.id)) { setScreen("reserve"); setRoute({ pane: "reserve" }); }

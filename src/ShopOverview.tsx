@@ -7,7 +7,7 @@ import type { Plan, Workspace } from "./App";
 export type BuildContext = { config: ShopConfig | null; published: boolean; revision: number; hash: string; history: { at: string; summary: string }[] };
 const days = ["日", "月", "火", "水", "木", "金", "土"];
 const money = (price: number) => `¥${price.toLocaleString("ja-JP")}`;
-export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, open }: { google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
+export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, open }: { google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[]) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
   const api = useApi();
   const [data, setData] = useState<BuildContext>();
   const [error, setError] = useState("");
@@ -62,7 +62,7 @@ export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, 
     <section className="panel shop-consultation" aria-label="AIへの相談">
       <div className="section-top"><span className="ai-mark">✳</span><div><h2>AIとお店をつくる</h2><p className="small muted">質問も、変更の相談も、ここから。</p></div></div>
       <p className="muted">現在の仕様と変更履歴を見ながら、音声や文字でやりとりできます。</p>
-      {data && config && <ShopRequest key={`${data.hash}-${generation}`} shopId={shopId} published={data.published} isOwner={isOwner} context={{ revision: data.revision, hash: data.hash }} plan={plan} onAccept={onAccept} onPlan={async text => { setPlanning(true); try { return await onPlan(text, { revision: data.revision, hash: data.hash }); } finally { setPlanning(false); } }} />}
+      {data && config && <ShopRequest key={`${data.hash}-${generation}`} shopId={shopId} published={data.published} isOwner={isOwner} context={{ revision: data.revision, hash: data.hash }} plan={plan} onAccept={onAccept} onPlan={async (text, imageIds) => { setPlanning(true); try { return await onPlan(text, { revision: data.revision, hash: data.hash }, imageIds); } finally { setPlanning(false); } }} />}
       {planning && <p role="status">変更プランを作成しています…</p>}
     </section>
   </div>;

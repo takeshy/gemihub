@@ -13,6 +13,11 @@ import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSi
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
 import { listDataSheets, readDataTable, writeDataRow } from "./data-management.ts";
 import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot } from "./menu-images.ts";
+import { listImages, listCustomerMemoImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
+import { generateImage } from "./image-generation.ts";
+import { managedImageIds } from "./image-references.ts";
+import { generateImageSchema, requestImageIdsSchema } from "./image-library-domain.ts";
+import { readRequestImages, validateProposedImages, validatePageImage } from "./request-images.ts";
 import { addCustomerNote, touchCustomer } from "./customer-notes.ts";
 import {
   shopSchema,
@@ -151,6 +156,7 @@ export function createApp(
     normalizeTurn?: typeof normalizeTurn;
     createPage?: typeof createPageWithAI;
     mergePage?: typeof mergePageWithAI;
+    generateImage?: typeof generateImage;
   } = { propose, proposeArticle, identifyVisual, explainSystem, normalizeTurn },
   liveConnector?: LiveConnector,
   calendar: CalendarGateway = calendarGateway,
@@ -640,9 +646,44 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, "お店がありません");
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        if (action === "images/generate" && method === "POST") {
+          assertOwner(user, shop);
+          const input = generateImageSchema.parse(await body(req, 20000));
+          // Image generation can take minutes; do not hold the booking/configuration lock.
+          return await store.locked(`image-generation:${shop.id}:${input.requestId}`, async () => {
+            const fresh = await store.locked(shop.id, async () => {
+              const current = (await store.shop(shop.id))!; assertOwner(user, current);
+              if (!store.memory && !current.google) { const token = await ownerToken(current) || fail(503, "店主の Google 再接続が必要です"); current.google = await provision(current, current.draft || sample, token); await store.saveShop(current); }
+              return current;
+            });
+            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+            return json(res, await generateLibraryImage(store, fresh, input, crmFiles, token, intelligence.generateImage || generateImage));
+          });
+        }
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
+          if (action === "images/customer-memos" && method === "GET") {
+            assertOwner(user, fresh);
+            return json(res, await listCustomerMemoImages(store, fresh));
+          }
+          const libraryRoute = action.match(/^images(?:\/([a-f0-9]{64})(?:\/(rename|archive))?)?$/);
+          if (libraryRoute && (method === "GET" || method === "POST")) {
+            assertOwner(user, fresh);
+            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+            if (action === "images" && method === "GET") return json(res, await listImages(store, fresh, fresh.published ? await effective(fresh) : fresh.draft));
+            if (method === "POST" && action === "images") {
+              const input = await body(req, 8 * 1024 * 1024);
+              if (!store.memory && !fresh.google) { fresh.google = await provision(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
+              return json(res, await uploadMenuImage(store, fresh, input, crmFiles, token));
+            }
+            if (libraryRoute[1] && method === "GET" && !libraryRoute[2]) return json(res, await readMenuImage(store, fresh, libraryRoute[1], crmFiles, token));
+            if (libraryRoute[1] && method === "POST" && libraryRoute[2]) {
+              if (libraryRoute[2] === "rename") await updateImage(store, fresh, libraryRoute[1], await body(req, 2000), crmFiles, token);
+              else await archiveImage(store, fresh, libraryRoute[1], fresh.published ? await effective(fresh) : fresh.draft);
+              return json(res, { ok: true });
+            }
+          }
           const dataSheet = action.match(/^data\/sheets(?:\/(\d+)(?:\/rows\/(\d+))?)?$/);
           if (dataSheet && (method === "GET" || method === "POST")) {
             assertOwner(user, fresh);
@@ -693,10 +734,12 @@ export function createApp(
           }
           if (action === "pages/create-with-ai" && method === "POST") {
             assertOwner(user, fresh);
-            const input = z.object({ messages: z.array(messageSchema).min(1).max(40), mode: z.enum(["chat", "write"]) }).parse(await body(req, 500000));
+            const input = z.object({ messages: z.array(messageSchema).min(1).max(40), mode: z.enum(["chat", "write"]), imageIds: requestImageIdsSchema.default([]) }).parse(await body(req, 500000));
             const config = fresh.published ? await effective(fresh) : fresh.draft || sample;
             const { name, industry, description, address } = config;
-            const result = await (intelligence.createPage || createPageWithAI)(input.messages, { name, industry, description, address }, input.mode);
+            const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です"));
+            const result = await (intelligence.createPage || createPageWithAI)(input.messages, { name, industry, description, address }, input.mode, images);
+            validatePageImage(result.page, images);
             return json(res, z.object({ reply: z.string().min(1).max(4000), page: pageSchema.omit({ id: true }).nullable() }).parse(result));
           }
           if (action.startsWith("local-editor/") && method === "GET") {
@@ -732,12 +775,14 @@ export function createApp(
           }
           if (action === "visual/propose" && method === "POST") {
             assertOwner(user, fresh);
-            const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000) }).parse(await body(req));
+            const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000), imageIds: requestImageIdsSchema.default([]) }).parse(await body(req));
             const visual = await store.get<VisualRequest>("visual", input.id);
             const source = fresh.published ? await effective(fresh) : null;
             if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
               fail(409, "本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください");
-            const proposed = await intelligence.propose(`ペンで選んだ対象 ${input.target} のみ変更する。他の箇所は変更しない。依頼：${input.instruction}`, visual.config, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT);
+            const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です"));
+            const proposed = await intelligence.propose(`ペンで選んだ対象 ${input.target} のみ変更する。他の箇所は変更しない。依頼：${input.instruction}`, visual.config, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images);
+            validateProposedImages(proposed.config, visual.config, images);
             const config = validateVisualChange(visual.config, proposed.config, input.target);
             return json(res, { config, summary: planSummary(visual.config, config) });
           }
@@ -829,13 +874,16 @@ export function createApp(
                 revision: z.number().int(),
                 hash: z.string().optional(),
                 messages: z.array(messageSchema).max(30).default([]),
+                imageIds: requestImageIdsSchema.default([]),
               })
               .parse(await body(req, 1500000));
             if (input.revision !== fresh.revision)
               fail(409, "お店の仕様が変わりました。現在の仕様を更新してください");
             const config = await effective(fresh);
             if (input.hash && input.hash !== contentHash(config)) fail(409, "お店の仕様が変わりました。現在の仕様を更新してください");
-            const response = await intelligence.explainSystem(input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: input.messages, history: fresh.history });
+            if (input.imageIds.length) assertOwner(user, fresh);
+            const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です"));
+            const response = await intelligence.explainSystem(input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: input.messages, history: fresh.history, ...(images.length ? { images } : {}) });
             if (!same(config, await effective(fresh))) fail(409, "回答中にお店の仕様が変わりました。現在の仕様を更新して質問し直してください");
             return json(
               res,
@@ -1062,6 +1110,7 @@ export function createApp(
             const input = z
               .object({
                 text: z.string().min(1).max(10000),
+                imageIds: requestImageIdsSchema.default([]),
                 config: shopSchema.optional(),
                 context: z.object({ revision: z.number().int(), hash: z.string() }).optional(),
                 local: z.object({ base: z.number().int(), source: shopSchema.nullable(), requestId: z.uuid(), scope: releaseScopeSchema.optional() }).optional(),
@@ -1106,6 +1155,7 @@ export function createApp(
               if (JSON.stringify(current) !== JSON.stringify(visual.source))
                 fail(409, "設定が変わりました。画面を開き直してください");
             }
+            const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です"));
             const proposed = input.config
               ? {
                   config: releaseConfig!,
@@ -1118,7 +1168,9 @@ export function createApp(
                   visual?.config || current,
                   user!.email,
                   demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT,
+                  images,
                 );
+            if (!input.config) validateProposedImages(proposed.config, visual?.config || current, images);
             if (visual) {
               proposed.config = validateVisualChange(
                 visual.config,
@@ -1382,10 +1434,11 @@ export function createApp(
         );
         if (!plan || plan.shopId !== shop.id || !plan.approved)
           fail(404, "承認済みのプランがありません");
-        const previewImage = preview[2]?.match(/^menu-images\/([a-f0-9]{64})$/);
+        const previewImage = preview[2]?.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
         if (previewImage && method === "GET") {
-          if (!plan.config.menus.some(menu => menu.active && menu.imageId === previewImage[1])) fail(404, "メニュー画像がありません");
-          return json(res, await readMenuImage(store, shop, previewImage[1], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
+          const ids = previewImage[1] === "images" ? managedImageIds(plan.config) : plan.config.menus.filter(menu => menu.active).map(menu => menu.imageId);
+          if (!ids.includes(previewImage[2])) fail(404, "画像がありません");
+          return json(res, await readMenuImage(store, shop, previewImage[2], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
         }
         if (method === "GET" && (!preview[2] || preview[2] === "slots")) {
           if (preview[2] === "slots")
@@ -1480,10 +1533,11 @@ export function createApp(
             return json(res, post);
           }
           const config = await effective(shop);
-          const menuImage = action.match(/^menu-images\/([a-f0-9]{64})$/);
+          const menuImage = action.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
           if (menuImage && method === "GET") {
-            if (!config.menus.some(menu => menu.active && menu.imageId === menuImage[1])) fail(404, "メニュー画像がありません");
-            return json(res, await readMenuImage(store, shop, menuImage[1], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
+            const ids = menuImage[1] === "images" ? managedImageIds(config) : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
+            if (!ids.includes(menuImage[2])) fail(404, "画像がありません");
+            return json(res, await readMenuImage(store, shop, menuImage[2], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
           }
           const customer = () => {
             if (!user || user.role !== "customer" || user.shopId !== shop.id)
@@ -1780,6 +1834,6 @@ export function createApp(
   }, 60000);
   timer.unref();
   server.on("close", () => clearInterval(timer));
-  attachLive(server, store, liveConnector);
+  attachLive(server, store, liveConnector, crmFiles);
   return server;
 }

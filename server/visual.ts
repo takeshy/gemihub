@@ -38,7 +38,7 @@ export function validateVisualChange(before: ShopConfig, input: ShopConfig, targ
     if (!page || !updated) throw new Error("対象のページがありません");
     if (field === "title") page.title = updated.title;
     else if (field === "body") page.body = updated.body;
-    else if (field === "design") { page.layout = updated.layout; page.imageUrl = updated.imageUrl; }
+    else if (field === "design") { page.layout = updated.layout; page.imageUrl = updated.imageUrl; page.imageId = updated.imageId; }
     else throw new Error("ページの変更対象を選び直してください");
   }
   else if (target.startsWith("menu:")) {

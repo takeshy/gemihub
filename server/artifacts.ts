@@ -4,6 +4,7 @@ import { renderChrome } from "./chrome-renderer.tsx";
 import { systemSvg } from "./shop-system.ts";
 import { driveMock, renderMockScript } from "./drive-mock.ts";
 import { inlineDriveShell, type ReadBuildAsset } from "./drive-shell.ts";
+import { withInlineImages } from "./image-references.ts";
 export function escapeHtml(value: string) {
   return value.replace(
     /[&<>"']/g,
@@ -55,10 +56,11 @@ export function driveSnapshot(config: ShopConfig, shell: string, readAsset?: Rea
 }
 export function artifacts(config: ShopConfig, shell: string, readAsset?: ReadBuildAsset, menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>): Record<string, string> {
   const c = shopSchema.parse(config);
+  const inline = withInlineImages(c, menuImages);
   return {
     ...driveSnapshot(c, shell, readAsset, menuImages),
-    ...Object.fromEntries((["header", "footer"] as const).flatMap(part => [[`web/parts/${part}.html`, renderChrome(c, part)], [`web/parts/${part}.json`, JSON.stringify(c[part], null, 2)]])),
-    ...Object.fromEntries(c.pages.flatMap(page => [[`web/pages/${page.slug}.html`, renderCustomPage(page, shell)], [`web/pages/${page.slug}.json`, JSON.stringify(page, null, 2)]])),
+    ...Object.fromEntries((["header", "footer"] as const).flatMap(part => [[`web/parts/${part}.html`, renderChrome(inline, part)], [`web/parts/${part}.json`, JSON.stringify(c[part], null, 2)]])),
+    ...Object.fromEntries(c.pages.flatMap(page => [[`web/pages/${page.slug}.html`, renderCustomPage(inline.pages.find(item => item.id === page.id)!, shell)], [`web/pages/${page.slug}.json`, JSON.stringify(page, null, 2)]])),
     "web/pages/index.json": JSON.stringify(c.pages.map(({ id, slug, title, navigationLabel }) => ({ id, slug, title, navigationLabel })), null, 2),
     "admin/system.svg": systemSvg(c),
     "admin/index.html": shell,

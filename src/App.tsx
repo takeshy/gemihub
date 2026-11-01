@@ -3,8 +3,8 @@ import type { PostCategory, PostSummary } from "../server/post-domain";
 import { DataManagement } from "./DataManagement";
 import { DataOverview } from "./DataOverview";
 import { ShopOverview } from "./ShopOverview";
+import { ImageLibrary } from "./ImageLibrary";
 import { ShopRequest } from "./ShopRequest";
-import { VisualRequest } from "./VisualRequest";
 import { SiteHeader, SiteFooter } from "./SiteChrome";
 import { CustomPage } from "./CustomPage";
 import { LiveSettings } from "./LiveSettings";
@@ -367,7 +367,7 @@ function Dashboard({
         <nav>
           {[
             ["build", "✧", "お店をつくる・直す"],
-            ...(shop?.isOwner ? [["try", "▣", "画面を試す・編集"], ["create-page", "＋", "ページをつくる"]] : []),
+            ...(shop?.isOwner ? [["try", "▣", "画面を試す・編集"], ["create-page", "＋", "ページをつくる"], ["images", "▧", "画像管理"]] : []),
             ["bookings", "▦", "予約を管理"],
             ...(shop ? [["customers", "♧", "お客様"]] : []),
             ...(shop?.isOwner ? [["basic", "⌂", "お店の基本情報"], ["menus", "≡", "メニュー・料金"], ["staff", "♧", "スタッフ・勤務"], ["hours", "◷", "営業時間・休業日"], ["rules", "⚙", "予約ルール"]] : []),
@@ -453,8 +453,8 @@ function Dashboard({
                 )}
                 {tab === "build" && (
                   <>
-                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} google={shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onPlan={async (text, context) => {
-                      const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context });
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} google={shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onPlan={async (text, context, imageIds) => {
+                      const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds });
                       setPlan(p); setEdit(undefined); await load(); return p;
                     }} />}
                     {!shop.published && <div className="steps">
@@ -479,7 +479,7 @@ function Dashboard({
                     </div>}
                     <div ref={buildReview} className={shop.published ? "build-plan-area" : "build-grid"}>
                       <div>
-                        {!shop.published && <div className="panel interview"><h2>どんなお店をつくりますか？</h2><ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} plan={activePlan} onPlan={async text => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text }); setPlan(p); await load(); return p; }} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); }} /><button disabled={!shop.isOwner} onClick={() => setEdit(structuredClone(sample))}>項目ごとに入力・修正</button></div>}
+                        {!shop.published && <div className="panel interview"><h2>どんなお店をつくりますか？</h2><ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} plan={activePlan} onPlan={async (text, imageIds) => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, imageIds }); setPlan(p); await load(); return p; }} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); }} /><button disabled={!shop.isOwner} onClick={() => setEdit(structuredClone(sample))}>項目ごとに入力・修正</button></div>}
                         {edit && (
                           <div className="panel">
                             <h2>お店の情報</h2>
@@ -612,6 +612,7 @@ function Dashboard({
                 )}
                 {["basic", "menus", "staff", "hours", "rules"].includes(tab) && shop.isOwner && <LiveSettings key={`${shop.id}-${tab}`} shop={shop} section={tab as "basic" | "menus" | "staff" | "hours" | "rules"} reload={load} />}
                 {tab === "create-page" && shop.isOwner && <PageBuilder key={shop.id} shopId={shop.id} email={session.user!.email} onAdd={page => { if (!editorRef.current) throw new Error("画面の読み込みが完了するまでお待ちください"); editorRef.current.addPage(page); setTab("try"); }} />}
+                {tab === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {tab === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
@@ -1437,7 +1438,6 @@ export function PublicShop({
   notify: (s: string) => void;
 }) {
   const api = useApi();
-  const pageRoot = useRef<HTMLDivElement>(null);
   const plan = new URLSearchParams(search).get("plan");
   const basePath = session.hosted ? "" : `/s/${slug}`;
   const base = preview ? `/api/preview/${slug}` : `/api/public/${slug}`;
@@ -1445,7 +1445,6 @@ export function PublicShop({
   const [data, setData] = useState<{
     config: ShopConfig;
     shopId: string;
-    canEdit?: boolean;
     authUrl?: string;
     recentPosts?: PostSummary[];
   }>();
@@ -1518,14 +1517,13 @@ export function PublicShop({
     return <div className="loading">お店のページを準備しています…</div>;
   const c = data.config;
   return (
-    <div ref={pageRoot} className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}`}>
-      {data.canEdit && !session.hosted && <VisualRequest key={`${data.shopId}-${plan || "live"}`} shopId={data.shopId} config={c} planId={preview ? plan || undefined : undefined} root={pageRoot} /> }
+    <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}`}>
       {preview && (
         <div className="preview-banner">
           ✧ プレビュー · 練習用の予約画面です。実際の予約は作成されません。
         </div>
       )}
-      {!hideHeader && <SiteHeader config={c}>
+      {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`} imageSuffix={suffix}>
       <nav className="public-nav">
         {[
           ["mine", "マイページ"],
@@ -1557,7 +1555,7 @@ export function PublicShop({
       </nav>
       </SiteHeader>}
       {pageSlug ? (
-        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} /> : <p className="alert">ページがありません。</p>
+        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} imageSuffix={suffix} /> : <p className="alert">ページがありません。</p>
       ) : category ? (
         <PublicBlog
           baseApi={base}

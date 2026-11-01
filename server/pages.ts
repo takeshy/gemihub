@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ShopConfig } from "./domain.ts";
 export const defaultHeader = { title: "", subtitle: "", imageUrl: "", showDetails: true, showNavigation: true };
 export const defaultFooter = { text: "", alignment: "center" as const };
-export const headerSchema = z.object({ title: z.string().max(100), subtitle: z.string().max(1500), imageUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ }).max(2048)]), showDetails: z.boolean(), showNavigation: z.boolean() });
+export const headerSchema = z.object({ title: z.string().max(100), subtitle: z.string().max(1500), imageUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ }).max(2048)]), imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(), showDetails: z.boolean(), showNavigation: z.boolean() });
 export const footerSchema = z.object({ text: z.string().max(4000), alignment: z.enum(["left", "center"]) });
 export const pageSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]+$/).max(80),
@@ -12,6 +12,7 @@ export const pageSchema = z.object({
   body: z.string().max(20000),
   layout: z.enum(["standard", "compact"]),
   imageUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ }).max(2048)]),
+  imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 export type ShopPage = z.infer<typeof pageSchema>;
 export const releaseScopeSchema = z.discriminatedUnion("kind", [

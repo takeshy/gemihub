@@ -38,10 +38,6 @@ export const Changes: Story = {
 
 export const ShopSpecification: Story = { name: "トップの変更履歴・現在の仕様とAI相談", args: {scenario: "system"} };
 
-export const PenPreview: Story = { name: "プレビューへのペン入力", args: {scenario: "visual-preview"} };
-
-export const PenLive: Story = { name: "公開ページへのペン入力", args: {scenario: "visual-live"} };
-
 export const LocalEditor: Story = {
   name: "画面を試す・ローカル編集と反映",
   args: { scenario: "local-editor" },

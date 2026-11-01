@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
 
@@ -45,6 +45,7 @@ try {
     await page.getByRole("heading", { name: ready, exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
   }
+  const screenshotBytes = [];
   async function capture(name, focus) {
     if (focus)
       await page
@@ -56,12 +57,11 @@ try {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       await Promise.all([...document.images].filter(img => img.getBoundingClientRect().top < innerHeight && img.getBoundingClientRect().bottom > 0).map(img => img.decode().catch(() => {})));
     });
-    await page.screenshot({
-      path: resolve(output, name),
+    screenshotBytes.push({ name, bytes: await page.screenshot({
       type: "jpeg",
       quality: 86,
       animations: "disabled",
-    });
+    }) });
     captures.push(name);
   }
   // The sample shop is closed on Tuesdays; keep captures rerunnable on any day.
@@ -236,7 +236,43 @@ try {
   await capture("29-data-edit.jpg", ".data-management");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await page.getByRole("status").filter({ hasText: "データを保存しました" }).waitFor();
+  await open("library", "画像管理", "運営/画像管理");
+  await page.locator(".image-library-grid figure").nth(1).waitFor();
+  await page.locator(".image-library-grid img").first().waitFor();
+  await capture("30-image-library.jpg", ".image-library");
+  await page.getByRole("button", { name: "AIで生成", exact: true }).click();
+  const generationMethods = page.getByRole("group", { name: "画像生成の依頼方法" });
+  await generationMethods.getByRole("button", { name: /音声で依頼/ }).click();
+  await capture("34-image-generation-voice.jpg", ".image-generation");
+  await generationMethods.getByRole("button", { name: /文章で依頼/ }).click();
+  await page.getByLabel("画像の名前", { exact: true }).fill("季節の花の紹介画像.png");
+  await page.getByLabel("生成したい画像", { exact: true }).fill("明るい窓辺に季節の花を飾った、お店の紹介ページ向けの写真。やわらかな自然光で落ち着いた雰囲気にしてください。");
+  await page.getByRole("button", { name: "参考画像を選ぶ", exact: true }).click();
+  await page.getByRole("dialog", { name: "依頼の画像を選ぶ", exact: true }).getByRole("button", { name: "お店の紹介.pngを選択", exact: true }).click();
+  await page.getByRole("button", { name: "選択した画像を使う", exact: true }).click();
+  await page.getByLabel("画像の比率").selectOption("16:9");
+  await capture("31-image-generation.jpg", ".image-generation");
+  await page.getByRole("button", { name: "生成して結果を確認", exact: true }).click();
+  await page.getByRole("status").filter({ hasText: "AIで生成した画像を画像管理に保存しました" }).waitFor();
+  await page.locator(".image-generation-result .library-image").scrollIntoViewIfNeeded();
+  await page.locator(".image-generation-result img").waitFor();
+  await capture("35-image-generation-result.jpg", ".image-generation-result");
+  await page.getByRole("region", { name: "生成した画像を確認", exact: true }).getByRole("button", { name: "これでOK", exact: true }).click();
+  await page.getByRole("tab", { name: "お客様メモの画像", exact: true }).click();
+  await page.locator(".customer-memo-images figure").first().scrollIntoViewIfNeeded();
+  await page.locator(".customer-memo-images img").first().waitFor();
+  await capture("33-customer-memo-images.jpg", ".customer-memo-images");
+  await page.locator("aside nav").getByRole("button", { name: /お店をつくる・直す$/ }).click();
+  await page.getByRole("button", { name: /文章で依頼/ }).click();
+  await page.getByLabel("質問・変更したいこと").fill("選んだ画像をよくある質問のページに使ってください。");
+  await page.getByRole("button", { name: "依頼に使う画像を選ぶ", exact: true }).click();
+  const requestPicker = page.getByRole("dialog", { name: "依頼の画像を選ぶ", exact: true });
+  await requestPicker.getByRole("button", { name: "季節の花の紹介画像.pngを選択", exact: true }).click();
+  await requestPicker.locator("img").first().waitFor();
+  await capture("32-page-image.jpg");
   assert.deepEqual(errors, []);
+  // Save after all interactions; writing public assets triggers a Vite reload.
+  for (const capture of screenshotBytes) await writeFile(resolve(output, capture.name), capture.bytes);
   console.log(
     JSON.stringify(
       { screenshots: captures.length, output, files: captures },

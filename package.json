@@ -18,6 +18,7 @@
     "capture:manual": "node scripts/capture-manual.mjs",
     "check:multimodal": "node scripts/check-multimodal.mjs",
     "check:storybook": "node scripts/check-storybook.mjs",
+    "check:images": "node scripts/check-image-library.mjs",
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs"
   },
   "dependencies": {

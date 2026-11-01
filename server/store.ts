@@ -169,6 +169,12 @@ export class Store {
       });
     return (await readRecords(shop, kind, token)) as T[];
   }
+  async entries<T>(kind: string): Promise<{ id: string; value: T }[]> {
+    if (businessKinds.has(kind)) throw new Error("業務記録には専用の読み取りを使ってください");
+    if (this.memory) return [...this.values.values()].filter(entry => entry.kind === kind).map(entry => ({ id: entry.id, value: structuredClone(entry.value) as T }));
+    const result = await this.firestore!.collection("omaiweb_state").where("kind", "==", kind).get();
+    return result.docs.map(doc => ({ id: doc.get("id") as string, value: JSON.parse(doc.get("json")) as T }));
+  }
   async list<T>(kind: string): Promise<T[]> {
     if (!this.memory && businessKinds.has(kind))
       return (
@@ -197,7 +203,7 @@ export class Store {
     });
   }
   async cleanup() {
-    for (const kind of ["session", "oauth", "ticket", "visual"]) {
+    for (const kind of ["session", "oauth", "ticket", "visual", "imageGenerationData"]) {
       const entries = this.memory
         ? [...this.values.values()].filter((e) => e.kind === kind)
         : (

@@ -12,7 +12,11 @@ import { renderMockScript } from '../server/drive-mock.ts';
 const shell = await readFile('dist/index.html', 'utf8');
 assert.ok(!shell.includes('./data.js'), 'served build must not reference Drive data');
 const config = structuredClone(sample);
-const output = artifacts(config, shell);
+const imageId = 'c'.repeat(64);
+const image = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' };
+config.header.imageId = imageId;
+config.pages = [{ id: 'gallery', slug: 'gallery', title: '画像を使ったページ', navigationLabel: '画像のページ', body: '## お店のご案内', layout: 'standard', imageUrl: '', imageId }];
+const output = artifacts(config, shell, undefined, { [imageId]: image });
 const directory = await mkdtemp(join(tmpdir(), 'omaiweb-drive-'));
 for (const [path, content] of Object.entries(output)) {
   const target = join(directory, path);
@@ -33,6 +37,7 @@ const server = createServer(async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     if (path === '/api/session') res.end(JSON.stringify({ demo: false, hosted: 'hosted', user: { ...source.auth, role: 'customer', shopId: 'hosted-id' } }));
     else if (path === '/api/public/hosted') res.end(JSON.stringify({ config: serverConfig, shopId: 'hosted-id', recentPosts: [] }));
+    else if (path === `/api/public/hosted/images/${imageId}`) res.end(JSON.stringify(image));
     else if (path === '/api/public/hosted/bookings' || path === '/api/public/hosted/slots') res.end('[]');
     else { res.writeHead(404); res.end('{"error":"unexpected request"}'); }
     return;
@@ -57,6 +62,8 @@ try {
   await page.goto(pathToFileURL(file).href);
   await page.getByRole('heading', { name: config.name, exact: true }).waitFor();
   await page.getByRole('heading', { name: 'あなたのご予約', exact: true }).waitFor();
+  await page.locator('.site-header .managed-hero-image img').waitFor();
+  assert.ok(await page.locator('.site-header .managed-hero-image img').evaluate(img => img.complete && img.naturalWidth > 0));
   assert.equal(await page.locator('.public-nav button').first().textContent(), 'マイページ');
   await page.getByRole('button', { name: 'ご予約', exact: true }).click();
   await page.getByRole('heading', { name: '自分のための、ひとときを。', exact: true }).waitFor();
@@ -88,6 +95,11 @@ try {
   await page.getByRole('button', { name: 'お問い合わせを送る →', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'お問い合わせを受け付けました' }).waitFor();
   assert.deepEqual(await page.evaluate(() => window.__OMAIWEB_MOCK__.inquiries), []);
+  await page.getByRole('button', { name: '画像のページ', exact: true }).click();
+  await page.getByRole('heading', { name: '画像を使ったページ', exact: true }).waitFor();
+  await page.locator('.custom-page .managed-hero-image').scrollIntoViewIfNeeded();
+  await page.locator('.custom-page .managed-hero-image img').waitFor();
+  assert.ok(await page.locator('.custom-page .managed-hero-image img').evaluate(img => img.complete && img.naturalWidth > 0));
   assert.deepEqual(remoteRequests, [], 'file preview must not call a server');
   const changed = { ...source, shop: { ...source.shop, name: '分離データで変更したお店' } };
   await writeFile(dataFile, renderMockScript(changed));

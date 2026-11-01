@@ -11,6 +11,9 @@ import { z } from "zod";
 import { Store, type Shop, type User } from "./store.ts";
 import { session, origin } from "./auth.ts";
 import { readConfig } from "./google.ts";
+import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
+import { requestImageIdsSchema } from "./image-library-domain.ts";
+import { readRequestImages, requestImageParts, requestImageInstruction } from "./request-images.ts";
 import { contentHash } from "./editor-sync.ts";
 
 export const fieldLabels = {
@@ -142,16 +145,18 @@ export function attachLive(
   store: Store,
   connector: LiveConnector = (parameters) =>
     client(true).live.connect(parameters),
+  files: CustomerFiles = store.memory ? memoryCustomerFiles(store) : googleCustomerFiles,
 ) {
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 65536 });
   server.on("upgrade", (req, socket, head) => {
     void (async () => {
       const url = new URL(req.url || "/", origin());
       const match = url.pathname.match(/^\/api\/shops\/([^/]+)\/live$/);
+      const selected = requestImageIdsSchema.safeParse(url.searchParams.get("images")?.split(",") || []);
       const identity = await session(store, req);
       const shop = match ? await store.shop(match[1]) : undefined;
       if (
-        req.headers.origin !== origin() ||
+        !selected.success || req.headers.origin !== origin() ||
         req.headers.host !== new URL(origin()).host ||
         !shop ||
         identity?.user.email !== shop.owner ||
@@ -162,13 +167,13 @@ export function attachLive(
         return;
       }
       sockets.handleUpgrade(req, socket, head, (ws) => {
-        void connect(ws, shop, identity.user, url.searchParams.get("hash")).catch(() => {
+        void connect(ws, shop, identity.user, url.searchParams.get("hash"), selected.data!).catch(() => {
           ws.close(1011, "音声会話に接続できませんでした");
         });
       });
     })().catch(() => socket.destroy());
   });
-  async function connect(ws: WebSocket, shop: Shop, user: User, expectedHash: string | null) {
+  async function connect(ws: WebSocket, shop: Shop, user: User, expectedHash: string | null, imageIds: string[]) {
     let live: LiveSession | undefined;
     let stopped = false;
     let retry = 0;
@@ -207,6 +212,7 @@ export function attachLive(
         ws.close(1008, "仕様が変わりました。画面を更新してください");
         return;
       }
+      const images = await readRequestImages(store, shop, imageIds, files, store.memory || !imageIds.length ? "" : token || "");
       send({ type: "state", state });
       live = await connector({
         model: process.env.VERTEX_LIVE_MODEL!,
@@ -219,12 +225,12 @@ export function attachLive(
             slidingWindow: { targetTokens: "12000" },
           },
           sessionResumption:
-            resume && state.handle ? { handle: state.handle } : {},
+            !imageIds.length && resume && state.handle ? { handle: state.handle } : {},
           systemInstruction:
-            instruction +
+            instruction + "\n" + requestImageInstruction +
             "\n既存店では現在の設定と変更履歴についての質問にも回答する。質問だけならupdate_interviewやpresent_planは呼ばず説明する。変更の相談なら不明点を短く確認し、店主が変更を依頼した内容だけをchangesにまとめてpresent_planで未承認プランを提示する。履歴からわからない過去の仕様は捏造しない。" +
             "\n既存設定と確定内容：" +
-            JSON.stringify({ config, fields: state.fields, history: currentShop.history }),
+            JSON.stringify({ config, fields: state.fields, history: currentShop.history, selectedImages: images.map(({id, name}) => ({id, name})) }),
           tools: [
             {
               functionDeclarations: [
@@ -277,7 +283,7 @@ export function attachLive(
             outputQueue = outputQueue
               .then(async () => {
                 if (
-                  message.sessionResumptionUpdate?.resumable &&
+                  !imageIds.length && message.sessionResumptionUpdate?.resumable &&
                   message.sessionResumptionUpdate.newHandle
                 )
                   await store.locked(shop.id, async () => {
@@ -364,8 +370,9 @@ export function attachLive(
         live.close();
         return;
       }
+      if (images.length) live.sendClientContent({ turns: [{ role: "user", parts: requestImageParts({ instruction: "以下は依頼で選んだ画像です。これからの音声の依頼に使ってください。" }, images) }], turnComplete: false });
       send({ type: "ready" });
-      if ((!resume || !state.handle) && !expectedHash)
+      if ((images.length || !resume || !state.handle) && !expectedHash)
         live.sendClientContent({
           turns: [
             {
