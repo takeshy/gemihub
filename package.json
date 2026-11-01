@@ -1,5 +1,5 @@
 {
-  "name": "omaiweb",
+  "name": "gemihub",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -32,7 +32,9 @@
     "check:drive-payments": "PAYMENT_PREVIEW=true node --import tsx scripts/check-drive-artifacts.mjs",
     "check:paypal:sandbox": "node --env-file-if-exists=.env --import tsx scripts/check-paypal-sandbox.mjs",
     "check:paypal:e2e": "node --env-file-if-exists=.env --import tsx scripts/check-paypal-e2e.mjs",
-    "check:paypal:recovery": "node --env-file-if-exists=.env --import tsx scripts/check-paypal-refund-recovery.mjs"
+    "check:paypal:recovery": "node --env-file-if-exists=.env --import tsx scripts/check-paypal-refund-recovery.mjs",
+    "start:production": "node --env-file=.env.production --import tsx server/index.ts",
+    "check:lp": "node --import tsx scripts/check-landing.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",

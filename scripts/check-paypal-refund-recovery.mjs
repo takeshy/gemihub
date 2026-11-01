@@ -39,7 +39,7 @@ const server = createApp(store, undefined, undefined, undefined, gateway);
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`; process.env.APP_ORIGIN = origin;
 try {
-  const res = await fetch(`${origin}/api/shops/${journal.shop.id}/retry`, { method: "POST", headers: { Origin: origin, Cookie: "omai_session=recovery-owner", "Content-Type": "application/json" }, body: "{}" });
+  const res = await fetch(`${origin}/api/shops/${journal.shop.id}/retry`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=recovery-owner", "Content-Type": "application/json" }, body: "{}" });
   assert.equal(res.status, 200);
   const recovered = (await store.get("checkout", checkout.id)).booking.payment.cancellation;
   assert.equal(refundPosts, 1);

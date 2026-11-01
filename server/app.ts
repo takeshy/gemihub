@@ -1,3 +1,5 @@
+import { googleCallbackPath } from "../shared/brand.ts";
+import { renderLanding } from "./landing.ts";
 import { localizeShell } from "../shared/html.ts";
 import { tr, intlLocale, getLocale } from "../shared/i18n.ts";
 import { localeForRequest, requestLocale } from "./i18n.ts";
@@ -346,7 +348,7 @@ export function createApp(
   >();
   const server = createServer((req, res) => requestLocale.run(localeForRequest(req), async () => {
     res.setHeader("Content-Language", getLocale());
-    res.setHeader("Vary", "Cookie, X-Omaiweb-Language");
+    res.setHeader("Vary", "Cookie, X-Gemihub-Language");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
     res.setHeader("X-Frame-Options", "DENY");
@@ -360,6 +362,15 @@ export function createApp(
       const method = req.method || "GET";
       const host = (req.headers.host || "").split(":")[0].toLowerCase();
       const appHost = new URL(origin()).hostname;
+      if (path === "/lp" && host === appHost && (method === "GET" || method === "HEAD")) {
+        let shell: string;
+        try { shell = await readFile(resolve("dist/index.html"), "utf8"); }
+        catch { fail(404, tr("画面を表示するには npm run build を実行してください")); }
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(method === "HEAD" ? undefined : renderLanding(shell!));
+        return;
+      }
       const allShops = await store.list<Shop>("shop");
       const hosted =
         host !== appHost
@@ -379,7 +390,7 @@ export function createApp(
         if (shop.publication === "provisional" && user?.email !== shop.owner)
           fail(user ? 403 : 401, tr("仮公開中のため、このページを用意したユーザーのログインが必要です"));
         if (shop.publication === "provisional") {
-          res.setHeader("Vary", "Cookie, X-Omaiweb-Language");
+          res.setHeader("Vary", "Cookie, X-Gemihub-Language");
           res.setHeader("X-Robots-Tag", "noindex, nofollow");
         }
       };
@@ -411,11 +422,11 @@ export function createApp(
           hosted: hosted?.slug,
         });
       if (path === "/api/logout" && method === "POST") {
-        const id = cookie(req, "omai_session");
+        const id = cookie(req, "gemihub_session");
         if (id) await store.delete("session", digest(id));
         res.setHeader(
           "Set-Cookie",
-          "omai_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+          "gemihub_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
         );
         return json(res, { ok: true });
       }
@@ -449,7 +460,7 @@ export function createApp(
           const state = randomBytes(32).toString("base64url");
           const verifier = randomBytes(48).toString("base64url");
           await store.put("oauth", digest(state), { verifier, locale:getLocale(), staffShopId: shop.id, expires: Date.now() + 600000 });
-          res.setHeader("Set-Cookie", `omai_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
+          res.setHeader("Set-Cookie", `gemihub_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
           return redirect(res, oauth().generateAuthUrl({ access_type: "offline", prompt: "consent select_account", scope: ["openid", "email", "profile", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }));
         }
         const slug = url.searchParams.get("shop");
@@ -482,7 +493,7 @@ export function createApp(
         });
         res.setHeader(
           "Set-Cookie",
-          `omai_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`,
+          `gemihub_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`,
         );
         return redirect(
           res,
@@ -506,9 +517,9 @@ export function createApp(
           }),
         );
       }
-      if (path === "/auth/google/callback" && method === "GET" && !publicHost) {
+      if (path === googleCallbackPath && method === "GET" && !publicHost) {
         const state = url.searchParams.get("state") || "";
-        if (!state || !equal(state, cookie(req, "omai_oauth") || ""))
+        if (!state || !equal(state, cookie(req, "gemihub_oauth") || ""))
           fail(400, tr("ログインを最初からやり直してください"));
         const key = digest(state);
         const pending = await store.take<{
@@ -1015,7 +1026,7 @@ export function createApp(
             const state = randomBytes(32).toString("base64url");
             const verifier = randomBytes(48).toString("base64url");
             await store.put("oauth", digest(state), { verifier, locale:getLocale(), calendarShopId: fresh.id, email: user!.email, staffId, expires: Date.now() + 600000 });
-            res.setHeader("Set-Cookie", `omai_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
+            res.setHeader("Set-Cookie", `gemihub_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
             return json(res, { authUrl: oauth().generateAuthUrl({ access_type: "offline", prompt: "consent", login_hint: user!.email, scope: ["openid", "email", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }) });
           }
           if (action === "system" && method === "GET") {
@@ -1633,9 +1644,7 @@ export function createApp(
             assertOwner(user, fresh);
             if (!fresh.domain || !fresh.domainToken)
               fail(400, tr("先にドメインを設定してください"));
-            const records = await resolveTxt(`_omaiweb.${fresh.domain}`).catch(
-              () => [],
-            );
+            const records = await resolveTxt(`_gemihub.${fresh.domain}`).catch(() => []);
             if (!records.some((r) => r.join("") === fresh.domainToken))
               fail(400, tr("確認用 TXT レコードが見つかりません"));
             fresh.domainVerified = true;
@@ -1967,7 +1976,7 @@ export function createApp(
         const shop = await store.shop(publicationPreviewPage[1]) || fail(404, tr("お店がありません"));
         assertOwner(user, shop);
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
-        res.setHeader("Vary", "Cookie, X-Omaiweb-Language");
+        res.setHeader("Vary", "Cookie, X-Gemihub-Language");
       }
       const root = resolve("dist");
       const file = resolve(root, `.${path}`);
@@ -2012,7 +2021,7 @@ export function createApp(
           if (!shop?.published) fail(404, tr("公開されたお店がありません"));
           if (shop.publication === "provisional" && !user) {
             res.setHeader("Cache-Control", "no-store");
-            res.setHeader("Vary", "Cookie, X-Omaiweb-Language");
+            res.setHeader("Vary", "Cookie, X-Gemihub-Language");
             res.setHeader("X-Robots-Tag", "noindex, nofollow");
             return redirect(res, `${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${publicHost ? `&host=${encodeURIComponent(host)}` : ""}`);
           }

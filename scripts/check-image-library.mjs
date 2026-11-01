@@ -22,7 +22,7 @@ try {
     await context.addInitScript(() => {
       window.__imageWrites = [];
       const save = Storage.prototype.setItem;
-      Storage.prototype.setItem = function(key, value) { if (key.startsWith("omaiweb:local-preview:")) { const draft = JSON.parse(value); window.__imageWrites.push({ pages: draft.config.pages.map(page => ({ id: page.id, imageId: page.imageId })), header: draft.config.header.imageId }); } return save.call(this, key, value); };
+      Storage.prototype.setItem = function(key, value) { if (key.startsWith("gemihub:local-preview:")) { const draft = JSON.parse(value); window.__imageWrites.push({ pages: draft.config.pages.map(page => ({ id: page.id, imageId: page.imageId })), header: draft.config.header.imageId }); } return save.call(this, key, value); };
       // Deterministic speech recognition: no microphone or cloud speech service is used.
       window.SpeechRecognition = class {
         start() { setTimeout(() => { this.onresult?.({ resultIndex: 0, results: { length: 1, 0: { isFinal: true, 0: { transcript: "やわらかな光が差し込む春の花の写真" } } } }); this.onend?.(); }, 0); }

@@ -16,7 +16,7 @@ locals {
 resource "google_certificate_manager_dns_authorization" "app" {
   for_each = local.certificate_domains
   provider = google.shared
-  name     = "omaiweb-${each.value == var.app_domain ? "app" : "shops"}"
+  name     = "gemihub-web-${each.value == var.app_domain ? "app" : "shops"}"
   domain   = each.value
   type     = "PER_PROJECT_RECORD"
 }
@@ -33,7 +33,7 @@ resource "google_dns_record_set" "validation" {
 
 resource "google_certificate_manager_certificate" "app" {
   provider = google.shared
-  name     = "omaiweb"
+  name     = "gemihub-web"
   managed {
     domains            = distinct([var.app_domain, var.site_domain, "*.${var.site_domain}"])
     dns_authorizations = [for auth in google_certificate_manager_dns_authorization.app : auth.id]
@@ -44,7 +44,7 @@ resource "google_certificate_manager_certificate" "app" {
 resource "google_certificate_manager_certificate_map_entry" "app" {
   for_each     = toset(local.hosts)
   provider     = google.shared
-  name         = "omaiweb-${each.value == var.app_domain ? "app" : "shops"}"
+  name         = "gemihub-web-${each.value == var.app_domain ? "app" : "shops"}"
   map          = var.certificate_map
   hostname     = each.value
   certificates = [google_certificate_manager_certificate.app.id]

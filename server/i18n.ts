@@ -6,7 +6,7 @@ setLocaleResolver(() => requestLocale.getStore() || "ja");
 export function localeForRequest(req: IncomingMessage): Locale {
   let query: Locale | undefined;
   try { query = parseLocale(new URL(req.url || "/", "http://localhost").searchParams.get("lang")); } catch { /* The request handler reports malformed URLs. */ }
-  const header = parseLocale(req.headers["x-omaiweb-language"]);
-  const cookie = parseLocale(req.headers.cookie?.match(/(?:^|;\s*)omaiweb_locale=([^;]*)/)?.[1]);
+  const header = parseLocale(req.headers["x-gemihub-language"]);
+  const cookie = parseLocale(req.headers.cookie?.match(/(?:^|;\s*)gemihub_locale=([^;]*)/)?.[1]);
   return query || header || cookie || "ja";
 }

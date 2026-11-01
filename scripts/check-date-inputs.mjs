@@ -79,11 +79,11 @@ try {
     assert.equal(await page.locator(".login-strip").count(),0);
     assert.equal(await page.getByRole("region",{name:"会員登録・ログイン",exact:true}).count(),1);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
-    await page.screenshot({path:`/tmp/omaiweb-auth-entry-${locale}-390.png`,fullPage:true});
+    await page.screenshot({path:`/tmp/gemihub-auth-entry-${locale}-390.png`,fullPage:true});
     await page.setViewportSize({width:1280,height:900});
     assert.ok(await page.evaluate(()=>document.querySelector('.site-header').getBoundingClientRect().bottom<=document.querySelector('.public-auth').getBoundingClientRect().top));
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-    await page.screenshot({path:`/tmp/omaiweb-auth-entry-${locale}-1280.png`,fullPage:true});
+    await page.screenshot({path:`/tmp/gemihub-auth-entry-${locale}-1280.png`,fullPage:true});
     await context.close();
     console.log(`${locale}: slash date entry, calendar selection, invalid date validation, ISO filter values and sample times passed.`);
   }

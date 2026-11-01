@@ -93,7 +93,7 @@ test("per-page release never includes other drafts or live data; direct saves me
   t.after(() => { server.close(); void store.close(); });
   for (const [id, email] of [["owner", shop.owner], ["outsider", "other@example.com"]]) await store.put("session", digest(id), { user: { email, name: id, role: "owner" }, expires: Date.now() + 600000 });
   async function request(action: string, data?: unknown, user = "owner") {
-    const res = await fetch(`${origin}/api/shops/${shop.id}/${action}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const res = await fetch(`${origin}/api/shops/${shop.id}/${action}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: res.status, body: await res.json() };
   }
   const original = structuredClone(shop.published);

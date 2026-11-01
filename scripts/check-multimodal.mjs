@@ -118,7 +118,7 @@ try {
   for (const story of ["local-editor", "local-editor-new"]) {
     // Each story has a fresh remote shop; discard drafts from earlier fixtures.
     await page.evaluate(() => {
-      for (const key of Object.keys(localStorage)) if (key.startsWith("omaiweb:local-preview:")) localStorage.removeItem(key);
+      for (const key of Object.keys(localStorage)) if (key.startsWith("gemihub:local-preview:")) localStorage.removeItem(key);
     });
     await open(story, "自分のための、ひとときを。");
     await page.locator(".editor-toolbar summary").click();

@@ -8,7 +8,7 @@ async function api<T = Record<string, unknown>>(
 ): Promise<T> {
   const r = await fetch(path, {
     method: data === undefined ? "GET" : "POST",
-    headers: { "X-Omaiweb-Language": getLocale(), ...(data === undefined ? {} : { "Content-Type": "application/json" }) },
+    headers: { "X-Gemihub-Language": getLocale(), ...(data === undefined ? {} : { "Content-Type": "application/json" }) },
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   const v = await r.json();

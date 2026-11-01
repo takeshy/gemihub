@@ -26,5 +26,5 @@ export function driveMock(config: ShopConfig, menuImages?: Record<string, MenuIm
 // Keep user strings as JavaScript data, including HTML delimiters and line separators.
 export function renderMockScript(mock: DriveMock) {
   const json = JSON.stringify(mock, null, 2).replace(/[<>&\u2028\u2029]/g, character => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
-  return `window.__OMAIWEB_MOCK__ = ${json};\n`;
+  return `window.__GEMIHUB_MOCK__ = ${json};\n`;
 }

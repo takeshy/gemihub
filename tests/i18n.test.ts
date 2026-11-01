@@ -35,7 +35,7 @@ test("English demo onboarding waits for the final answer and accepts English fea
 
 test("English exports translate interface copy while preserving owner content and offline boundaries", () => requestLocale.run("en", () => {
   const config=structuredClone(sample); config.name="店名 <script>alert(1)</script>"; config.description="お店が入力した本文";
-  const shell='<html lang="ja"><head><title>omaiweb</title></head><body><div id="root"></div></body></html>';
+  const shell='<html lang="ja"><head><title>gemihub</title></head><body><div id="root"></div></body></html>';
   const output=artifacts(config,shell);
   assert.match(output["web/index.html"],/lang="en"/);
   assert.match(output["web/index.html"],/Book a visit/);
@@ -46,7 +46,7 @@ test("English exports translate interface copy while preserving owner content an
   assert.match(output["admin/system.svg"],/Shop system diagram/);
   assert.ok(!output["admin/index.html"].includes('./data.js'));
   assert.equal(JSON.parse(output["web/shop.json"]).name,config.name);
-  assert.equal(localizeShell(localizeShell(shell)).match(/omaiweb-language/g)?.length,1);
+  assert.equal(localizeShell(localizeShell(shell)).match(/gemihub-language/g)?.length,1);
 }));
 
 test("API language precedence is request-local and language does not weaken authorization", async t => {
@@ -55,7 +55,7 @@ test("API language precedence is request-local and language does not weaken auth
   await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
   const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN=origin;
   t.after(async()=>{await new Promise<void>(resolve=>server.close(()=>resolve())); await store.close();});
-  const requests: {headers:Record<string,string>;expected:string;lang:string;query?:string}[]=[{headers:{"X-Omaiweb-Language":"en"},expected:"Log in with a Google account",lang:"en"},{headers:{Cookie:"omaiweb_locale=en"},expected:"Log in with a Google account",lang:"en"},{headers:{Cookie:"omaiweb_locale=en","X-Omaiweb-Language":"ja"},expected:"Google アカウントでログインしてください",lang:"ja"},{headers:{"X-Omaiweb-Language":"en"},query:"?lang=ja",expected:"Google アカウントでログインしてください",lang:"ja"},{headers:{"X-Omaiweb-Language":"invalid"},expected:"Google アカウントでログインしてください",lang:"ja"}];
+  const requests: {headers:Record<string,string>;expected:string;lang:string;query?:string}[]=[{headers:{"X-Gemihub-Language":"en"},expected:"Log in with a Google account",lang:"en"},{headers:{Cookie:"gemihub_locale=en"},expected:"Log in with a Google account",lang:"en"},{headers:{Cookie:"gemihub_locale=en","X-Gemihub-Language":"ja"},expected:"Google アカウントでログインしてください",lang:"ja"},{headers:{"X-Gemihub-Language":"en"},query:"?lang=ja",expected:"Google アカウントでログインしてください",lang:"ja"},{headers:{"X-Gemihub-Language":"invalid"},expected:"Google アカウントでログインしてください",lang:"ja"}];
   await Promise.all(requests.map(async({headers,expected,lang,query=""})=>{
     const response=await fetch(`${origin}/api/workspace${query}`,{headers});
     assert.equal(response.status,401); assert.equal(response.headers.get("Content-Language"),lang);
@@ -109,7 +109,7 @@ test("queued replies retain the initiating language when delivery is deferred", 
   const server=createApp(store); await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
   const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN=origin;
   t.after(async()=>{await new Promise<void>(resolve=>server.close(()=>resolve()));await store.close();});
-  const response=await fetch(`${origin}/api/shops/${shop.id}/inquiries/question/reply`,{method:"POST",headers:{Origin:origin,Cookie:"omai_session=owner","Content-Type":"application/json","X-Omaiweb-Language":"en"},body:JSON.stringify({text:"Thank you for your message",requestId:randomUUID(),previousReply:""})});
+  const response=await fetch(`${origin}/api/shops/${shop.id}/inquiries/question/reply`,{method:"POST",headers:{Origin:origin,Cookie:"gemihub_session=owner","Content-Type":"application/json","X-Gemihub-Language":"en"},body:JSON.stringify({text:"Thank you for your message",requestId:randomUUID(),previousReply:""})});
   assert.equal(response.status,200);
   const jobs=await store.list<{locale:string;subject:string}>("job");
   assert.equal(jobs.length,1);assert.equal(jobs[0].locale,"en");assert.match(jobs[0].subject,/Reply from/);

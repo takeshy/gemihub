@@ -2,7 +2,7 @@
 
 ## Wysimark / wysimark-lite
 
-Omaiweb uses [takeshy/wysimark-lite](https://github.com/takeshy/wysimark-lite), a lightweight fork of [portive/wysimark](https://github.com/portive/wysimark), for WYSIWYG Markdown editing. The `wysimark-lite` package declares the MIT License; the following notice is retained from the upstream Wysimark project.
+gemihub uses [takeshy/wysimark-lite](https://github.com/takeshy/wysimark-lite), a lightweight fork of [portive/wysimark](https://github.com/portive/wysimark), for WYSIWYG Markdown editing. The `wysimark-lite` package declares the MIT License; the following notice is retained from the upstream Wysimark project.
 
 Wysimark is licensed under:
 

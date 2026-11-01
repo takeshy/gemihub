@@ -162,7 +162,7 @@ test("HTTP flow enforces consent, ownership, charge-before-booking, idempotence 
     if (id !== "owner") await store.put("customer", `${shop.id}:${email}`, { shopId: shop.id, email, name: id, birthDate: "1990-01-01", gender: "not_specified" });
   }
   async function request(path: string, id = "alice", data?: unknown) {
-    const res = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const res = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: res.status, body: await res.json() };
   }
   const base = `/api/public/${shop.slug}`;

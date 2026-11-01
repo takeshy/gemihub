@@ -508,7 +508,7 @@ export function Manual() {
   return (
     <div className="manual">
       <section className="manual-intro">
-        <span className="eyebrow">OMAIWEB GUIDE</span>
+        <span className="eyebrow">GEMIHUB GUIDE</span>
         <h1>{tr("お店の「できた」を、ひとつずつ。")}</h1>
         <p>
           {tr("はじめてのページづくりから、毎日の予約管理まで。")}<br />

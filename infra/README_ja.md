@@ -1,20 +1,23 @@
-# GemiHub 共有 VM への追加
+# kiokuflow 共有 VM への追加
+
+
+公開名は **gemihub**、管理ドメインは **gemihub.net**、店舗suffixは **shops.gemihub.net**、Google OAuthコールバックは **https://gemihub.net/auth/google/callback** です。旧gemihubは **kiokuflow** になりましたが、VM内部ID `gemihub` を維持しています。この予約サービスはVM ID `gemihub-web`、専用DB `gemihub`、クラウドリソースのプレフィックス `gemihub-web` を使います。配置は `--app gemihub-web` です。[名前の使い分け](../docs/branding.md)を参照してください。
 
 [English](README.md) · [日本語](README_ja.md)
 
-既存の `shared-apps` VM（`geminihub-486523` / `asia-northeast1-b`）に omaiweb を追加します。VM と HTTPS ロードバランサーを共有し、omaiweb のランタイム ID・Docker ネットワーク・Firestore DB・秘密情報・イメージは分けます。新しい VM や Cloud Run は作成しません。
+既存の `shared-apps` VM（`geminihub-486523` / `asia-northeast1-b`）に gemihub.net の予約サービスを追加します。VM と HTTPS ロードバランサーを共有し、gemihub-web のランタイム ID・Docker ネットワーク・Firestore DB・秘密情報・イメージは分けます。新しい VM や Cloud Run は作成しません。
 
 この構成は設定と手順の実装です。ドメイン、OAuth クライアント、利用可能なモデルを入力して plan を確認するまで、本番への適用・公開は完了していません。
 
 | 管理対象 | Terraform の管理元 |
 | --- | --- |
-| omaiweb 用 API / SA / Firestore / Secret Manager / Artifact Registry / DNS / 証明書 / ビルド | このリポジトリの `infra/` |
+| gemihub-web 用 API / SA / Firestore / Secret Manager / Artifact Registry / DNS / 証明書 / ビルド | このリポジトリの `infra/` |
 | 共有 VM / 追加ランタイムの代理認証権限 / IAP / backend / 設定バンドル | Kakeratta の `infra/shared-vm/` |
-| 既存の URL map / HTTPS フロントエンド | GemiHub の `terraform/environments/prod/` |
+| 既存の URL map / HTTPS フロントエンド | kiokuflow の `terraform/environments/prod/` |
 
-同じ VM や URL map を別の Terraform state に取り込まないでください。既存の Kakeratta / GemiHub の tfvars と state を使用し、追加アプリの出力だけをマージします。
+同じ VM や URL map を別の Terraform state に取り込まないでください。既存の Kakeratta / kiokuflow の tfvars と state を使用し、追加アプリの出力だけをマージします。
 
-以下の手順は、`omaiweb`・`kakeratta`・`gemihub` のチェックアウトが同じ親ディレクトリにある構成を想定します。各リポジトリで対応する変更を取り込んでから進めてください。
+以下の手順は、`omaiweb`・`kakeratta`・`gemihub`（kiokuflow） のチェックアウトが同じ親ディレクトリにある構成を想定します。各リポジトリで対応する変更を取り込んでから進めてください。
 
 ## 1. アプリ用リソース
 
@@ -28,11 +31,11 @@ cp infra/backend.hcl.example infra/backend.hcl
 cp infra/terraform.tfvars.example infra/terraform.tfvars
 # 実際のドメイン、既存 DNS zone、OAuth client ID、利用可能なモデルを入力する
 terraform -chdir=infra init -backend-config=backend.hcl
-terraform -chdir=infra plan -out=omaiweb.tfplan
-terraform -chdir=infra apply omaiweb.tfplan
+terraform -chdir=infra plan -out=gemihub-web.tfplan
+terraform -chdir=infra apply gemihub-web.tfplan
 ```
 
-既定の GCP プロジェクトは `geminihub-486523`、DB は専用の `omaiweb` です。既存 DB を変更せず、ランタイムの Firestore 権限にも DB 条件を付けます。管理ホストと店舗ホストの suffix は指定した1つの既存 Cloud DNS zone 内に用意してください。証明書と A レコードは既存の LB に接続します。DNS authorization と [名前付き Firestore DB の IAM 条件](https://cloud.google.com/firestore/native/docs/security/iam)を使います。
+既定の GCP プロジェクトは `geminihub-486523`、DB は専用の `gemihub` です。既存 DB を変更せず、ランタイムの Firestore 権限にも DB 条件を付けます。管理ホストと店舗ホストの suffix は指定した1つの既存 Cloud DNS zone 内に用意してください。証明書と A レコードは既存の LB に接続します。DNS authorization と [名前付き Firestore DB の IAM 条件](https://cloud.google.com/firestore/native/docs/security/iam)を使います。
 
 最初は `repository` を空にして自動デプロイを無効にしてください。GitHub と Cloud Build v2 の接続は、Google 側の OAuth 同意を別途完了してから resource name を設定します。
 
@@ -41,9 +44,9 @@ terraform -chdir=infra apply omaiweb.tfplan
 Terraform は秘密値の入れ物とアクセス権だけを作り、値を生成・取得・state に保存しません。
 
 ```sh
-openssl rand -hex 32 | gcloud secrets versions add omaiweb-session-secret \
+openssl rand -hex 32 | gcloud secrets versions add gemihub-web-session-secret \
   --project=geminihub-486523 --data-file=-
-gcloud secrets versions add omaiweb-google-client-secret \
+gcloud secrets versions add gemihub-web-google-client-secret \
   --project=geminihub-486523 --data-file=/secure/path/google-client-secret.txt
 ```
 
@@ -69,18 +72,18 @@ gcloud builds submit . --project=geminihub-486523 --region=asia-northeast1 \
 
 ```sh
 terraform -chdir=infra output -json shared_vm_registration \
-  > /tmp/omaiweb-registration.json
+  > /tmp/gemihub-web-registration.json
 cd ../kakeratta
 python3 infra/terraform.py shared-vm fetch-vars
-OMAIWEB_EXTENSION_OBJECT=$(python3 infra/shared-vm/prepare-bundle.py \
-  --registration /tmp/omaiweb-registration.json \
-  --output /tmp/omaiweb-extension.tar.gz \
+GEMIHUB_EXTENSION_OBJECT=$(python3 infra/shared-vm/prepare-bundle.py \
+  --registration /tmp/gemihub-web-registration.json \
+  --output /tmp/gemihub-web-extension.tar.gz \
   --tfvars infra/shared-vm/terraform.tfvars)
-gcloud storage cp /tmp/omaiweb-extension.tar.gz \
-  "gs://geminihub-486523-shared-apps/$OMAIWEB_EXTENSION_OBJECT"
+gcloud storage cp /tmp/gemihub-web-extension.tar.gz \
+  "gs://geminihub-486523-shared-apps/$GEMIHUB_EXTENSION_OBJECT"
 ```
 
-`prepare-bundle.py` は既存の private `terraform.tfvars` を維持し、登録設定と `additional_bundle_object` を管理ブロックに追加します。既存の `bundle_object` は変えません。追加する backend は `shared-apps-omaiweb`、ポートは `8105`、ネットワークは `172.28.4.0/24` です。VM のサイズは自動では変えません。コンテナ上限の既定値は `768m` なので、適用前に実際の空きメモリを確認してください。
+`prepare-bundle.py` は既存の private `terraform.tfvars` を維持し、登録設定と `additional_bundle_object` を管理ブロックに追加します。既存の `bundle_object` は変えません。追加する backend は `shared-apps-gemihub-web`、ポートは `8105`、ネットワークは `172.28.4.0/24` です。VM のサイズは自動では変えません。コンテナ上限の既定値は `768m` なので、適用前に実際の空きメモリを確認してください。
 
 ```sh
 python3 infra/terraform.py shared-vm init
@@ -88,11 +91,11 @@ python3 infra/terraform.py shared-vm plan \
   -var-file="$PWD/infra/shared-vm/terraform.tfvars" -out=/tmp/additional.tfplan
 python3 infra/terraform.py shared-vm apply /tmp/additional.tfplan
 python3 infra/terraform.py shared-vm upload-vars
-gcloud compute scp /tmp/omaiweb-extension.tar.gz shared-apps:/tmp/omaiweb-extension.tar.gz \
+gcloud compute scp /tmp/gemihub-web-extension.tar.gz shared-apps:/tmp/gemihub-web-extension.tar.gz \
   --project=geminihub-486523 --zone=asia-northeast1-b --tunnel-through-iap
 gcloud compute ssh shared-apps --project=geminihub-486523 \
   --zone=asia-northeast1-b --tunnel-through-iap \
-  --command='sudo tar --no-same-owner -xzf /tmp/omaiweb-extension.tar.gz -C /opt/shared-apps && sudo bash /opt/shared-apps/install-additional.sh'
+  --command='sudo tar --no-same-owner -xzf /tmp/gemihub-web-extension.tar.gz -C /opt/shared-apps && sudo bash /opt/shared-apps/install-additional.sh'
 ```
 
 plan は編集済みのローカル tfvars を明示し、適用後に wrapper の `upload-vars` で private GCS に保存します。後日の plan でも登録を保持でき、ローカルの tar ファイルは不要になります。既に他の追加アプリを登録している場合は、それらの登録も JSON に含めてください。既存の管理外 `additional_*` 変数がある場合、ツールは自動で上書きせず、先に設定の統合を求めます。
@@ -105,16 +108,16 @@ plan は編集済みのローカル tfvars を明示し、適用後に wrapper �
 
 ```sh
 terraform -chdir=../omaiweb/infra output -json shared_lb_registration \
-  > /tmp/omaiweb-lb-registration.json
+  > /tmp/gemihub-web-lb-registration.json
 ```
 
-GemiHub の既存 private 設定に、出力の `shared_vm_backends.omaiweb` と `shared_vm_hosts.omaiweb` を**マージ**します。既存の GemiHub / Kakeratta / Geo の backend 指定は残してください。`terraform/environments/prod` で plan を確認して apply します。追加設定がない状態の既存ホスト規則は変わりません。独自ドメインを店舗へ追加する場合は、そのドメインの証明書・DNS・`shared_vm_hosts.omaiweb`・登録の `hosts` も別途追加します。店主画面の TXT 確認だけでは LB の設定は増えません。
+kiokuflow の既存 private 設定に、出力の `shared_vm_backends.gemihub-web` と `shared_vm_hosts.gemihub-web` を**マージ**します。既存の kiokuflow / Kakeratta / Geo の backend 指定は残してください。`terraform/environments/prod` で plan を確認して apply します。追加設定がない状態の既存ホスト規則は変わりません。独自ドメインを店舗へ追加する場合は、そのドメインの証明書・DNS・`shared_vm_hosts.gemihub-web`・登録の `hosts` も別途追加します。店主画面の TXT 確認だけでは LB の設定は増えません。
 
-証明書が `ACTIVE`、`shared-apps-omaiweb` が healthy になったことを確認し、管理画面・店舗サブドメイン・Google ログイン・再ログイン後の永続化・実際のモデル呼出を確認します。共有 health check は TCP 到達性の確認であり、OAuth / Firestore / Vertex AI の疎通確認ではありません。
+証明書が `ACTIVE`、`shared-apps-gemihub-web` が healthy になったことを確認し、管理画面・店舗サブドメイン・Google ログイン・再ログイン後の永続化・実際のモデル呼出を確認します。共有 health check は TCP 到達性の確認であり、OAuth / Firestore / Vertex AI の疎通確認ではありません。
 
 ## 継続デプロイと検証
 
-初回の検証後に `repository` を設定して plan / apply すると、指定ブランチの push から Cloud Build が実行されます。`cloudbuild.yaml` はイメージを作成して IAP 経由で `deploy.py --app omaiweb` を実行し、manifest を Secret Manager に保存します。アプリ内ポートは既存の共有デプロイヤーに合わせて `8080` です。
+初回の検証後に `repository` を設定して plan / apply すると、指定ブランチの push から Cloud Build が実行されます。`cloudbuild.yaml` はイメージを作成して IAP 経由で `deploy.py --app gemihub-web` を実行し、manifest を Secret Manager に保存します。アプリ内ポートは既存の共有デプロイヤーに合わせて `8080` です。
 
 ```sh
 cd /path/to/omaiweb
@@ -126,4 +129,6 @@ terraform -chdir=infra validate
 terraform -chdir=infra test
 ```
 
-Terraform のテストはモックプロバイダーを使い、クラウドへ適用しません。共有 VM の Python テストと GemiHub のホスト規則テストも各リポジトリで実行します。実際の初回 Docker build、GCP plan / apply、OAuth / DB / AI の本番接続は、ドメイン等の設定後に別途確認が必要です。
+Terraform のテストはモックプロバイダーを使い、クラウドへ適用しません。共有 VM の Python テストと kiokuflow のホスト規則テストも各リポジトリで実行します。実際の初回 Docker build、GCP plan / apply、OAuth / DB / AI の本番接続は、ドメイン等の設定後に別途確認が必要です。
+
+Google OAuthは `projects/495062043717/secrets/google-client-id/versions/1` と `projects/495062043717/secrets/google-client-secret/versions/1` を参照します。有効バージョン番号のみ確認済みで、秘密値は取得・コピーしません。Terraformはこの2つの既存シークレットに実行アカウントの参照権限を設定し、共有デプロイヤーへバージョン固定の参照を出力します。従来の認証情報を使う場合は両方の `*_secret_ref` をnullにして、既存Client IDと従来のsecretバージョンを指定できます。

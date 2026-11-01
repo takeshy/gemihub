@@ -45,7 +45,7 @@ export const localDraftSchema = z.object({
 });
 export type LocalDraft = z.infer<typeof localDraftSchema>;
 // Separate by signed-in account and shop. No tokens or real customer records.
-export const draftKey = (email: string, shopId: string) => `omaiweb:local-preview:${email}:${shopId}`;
+export const draftKey = (email: string, shopId: string) => `gemihub:local-preview:${email}:${shopId}`;
 export function readDraft(storage: Pick<Storage, "getItem">, key: string) {
   const raw = storage.getItem(key);
   return raw ? localDraftSchema.parse(JSON.parse(raw)) : undefined;

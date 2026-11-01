@@ -20,9 +20,9 @@ test("generated pages escape owner text; public artifacts do not contain operati
   assert.deepEqual(mock.bookings, []);
   assert.deepEqual(mock.inquiries, []);
   assert.equal(mock.writes, "discarded");
-  const context = { window: {} as { __OMAIWEB_MOCK__?: unknown } };
+  const context = { window: {} as { __GEMIHUB_MOCK__?: unknown } };
   runInNewContext(output["web/data.js"], context);
-  assert.deepEqual(JSON.parse(JSON.stringify(context.window.__OMAIWEB_MOCK__)), mock);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.window.__GEMIHUB_MOCK__)), mock);
   assert.deepEqual(JSON.parse(output["web/shop.json"]), mock.shop);
   assert.doesNotMatch(output["web/data.js"], /[<>&\u2028\u2029]/);
   assert.ok("admin/index.html" in output);
@@ -43,7 +43,7 @@ test("Drive exports inline built code and CSS, keep data separate, and leave ser
   assert.match(html, /<style>body \{ color: green \}<\/style>/);
   assert.doesNotMatch(html, /<link\b|\bsrc="\/assets\//);
   assert.deepEqual([...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match => match[1]), ["./data.js"]);
-  assert.doesNotMatch(html, /window\.__OMAIWEB_MOCK__\s*=/);
+  assert.doesNotMatch(html, /window\.__GEMIHUB_MOCK__\s*=/);
   assert.match(html, /<div id="root"><div class="public-shop"><h1>/);
   assert.doesNotMatch(html, /<noscript>/);
   assert.equal(output["admin/index.html"], shell);
@@ -55,10 +55,10 @@ test("Drive exports inline built code and CSS, keep data separate, and leave ser
 test("Drive mock startup requires file protocol and valid data, including safely escaped strings", () => {
   const config = structuredClone(sample); config.description = '</script><>&"\u2028\u2029';
   const output = artifacts(config, '<title></title><div id="root"></div>');
-  const context = { window: {} as { __OMAIWEB_MOCK__?: unknown } };
+  const context = { window: {} as { __GEMIHUB_MOCK__?: unknown } };
   runInNewContext(output["web/data.js"], context);
-  assert.deepEqual(drivePreviewData("file:", context.window.__OMAIWEB_MOCK__), driveMock(config));
-  for (const protocol of ["http:", "https:"]) assert.equal(drivePreviewData(protocol, context.window.__OMAIWEB_MOCK__), undefined);
+  assert.deepEqual(drivePreviewData("file:", context.window.__GEMIHUB_MOCK__), driveMock(config));
+  for (const protocol of ["http:", "https:"]) assert.equal(drivePreviewData(protocol, context.window.__GEMIHUB_MOCK__), undefined);
   for (const value of [undefined, null, {}, { ...driveMock(sample), mode: "live" }]) assert.equal(drivePreviewData("file:", value), undefined);
 });
 test("operational batch rollback discards outbox writes; refresh tokens reject tampering", async () => {

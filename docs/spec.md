@@ -1,4 +1,4 @@
-# omaiweb 仕様書
+# gemihub 仕様書
 
 [English](spec.en.md) · [日本語](spec.md)
 
@@ -103,9 +103,9 @@ Storybook の画面は「はじめる」「お店づくり」「運営」「お�
 - 予約が入ると、店主のスプレッドシート（予約台帳）に1件として記録される
 - メニューやスタッフなどのお店の情報もスプレッドシートにあり、店主がシートを直接開いて直したら、その内容がページや予約に反映される
 - お店の仕様書（spec.md）と履歴（history.md）も店主のドライブに置かれ、開いて読める
-- Drive の公開成果物はフォルダーごとダウンロードし、web/index.html をダブルクリックするだけで店舗・メニュー・予約画面を表示できる。ビルド済みJavaScript/CSSはこのHTMLにインライン化し、モックの店舗設定・プレビュー用お客様・空の予約と問い合わせ・mode=mock・writes=discarded は別ファイル web/data.js の window.__OMAIWEB_MOCK__ で公開する。HTMLは ./data.js を相対参照し、描画データはそれを正とする
+- Drive の公開成果物はフォルダーごとダウンロードし、web/index.html をダブルクリックするだけで店舗・メニュー・予約画面を表示できる。ビルド済みJavaScript/CSSはこのHTMLにインライン化し、モックの店舗設定・プレビュー用お客様・空の予約と問い合わせ・mode=mock・writes=discarded は別ファイル web/data.js の window.__GEMIHUB_MOCK__ で公開する。HTMLは ./data.js を相対参照し、描画データはそれを正とする
 - web/shop.json と web/mock.json は閲覧・外部ツール用に同じ生成元から残す。ユーザーの文字列は安全にエスケープする。予約・問い合わせはブラウザ内の練習だけで、ファイル・サーバーには書き込まない。data.jsを編集すればHTMLを書き換えず表示を変更できる
-- 起動は file:// かつ有効な window.__OMAIWEB_MOCK__ が存在するときだけモックAPIを使用する。data.jsがなければエラーで落とさず既存の静的フォールバックを残す。HTTP/HTTPSではグローバルの有無にかかわらずサーバーAPIを使う。配信用distのシェルにはdata.js参照を加えず、admin/index.htmlは対象外とする
+- 起動は file:// かつ有効な window.__GEMIHUB_MOCK__ が存在するときだけモックAPIを使用する。data.jsがなければエラーで落とさず既存の静的フォールバックを残す。HTTP/HTTPSではグローバルの有無にかかわらずサーバーAPIを使う。配信用distのシェルにはdata.js参照を加えず、admin/index.htmlは対象外とする
 - 終了条件：店主がスプレッドシートを開いて予約とお店の情報を確認でき、シートで直した内容が画面に反映される。成果物を実際にfile://で開き、予約操作の破棄・data.js編集での表示変更・data.jsなしの静的表示・HTTP時の二重ガードを確認する
 
 ### Stage 6：スタッフのGoogleログイン
@@ -245,7 +245,7 @@ Storybook の画面は「はじめる」「お店づくり」「運営」「お�
 ### 記事の作成方法・参照ファイル・画像
 
 - 旧「メモから下書きを作る」を廃止し、記事作成の最初に「AIに依頼する／自分で作成する」を選ぶ。AIの案は繰り返し修正依頼でき、自分での編集にも切り替えられる。
-- 自分で作成する場合はGemiHubと同じwysimark-liteを使い、見出し・箇条書き・写真を編集できる。本文のMarkdownを保存し、編集欄の下に常時プレビューを表示する。プレビューボタンでの操作は不要。
+- 自分で作成する場合はkiokuflowと同じwysimark-liteを使い、見出し・箇条書き・写真を編集できる。本文のMarkdownを保存し、編集欄の下に常時プレビューを表示する。プレビューボタンでの操作は不要。
 - AIの入力欄には画像添付ボタンと参照資料の選択を置く。画像は「アップロード／既存画像のpicker」の2択とし、AIには[[パス]]を入力する。選択された参照をAIがread_shop_fileで確認してから記事を生成する。資料を読まずに完了した場合は再度読み取りを促し、確認できないまま記事を返さない。
 - 参照のパスは店舗限定の仮想ファイル一覧から解決する。spec.md・history.md・shop.json・pages/slug.md・articles/category/date-slug.md・images/id/nameが対象。任意のOSパス、外部URL、他店舗やCRMファイルの参照は拒否する。
 - AIのツール取得は読み取りだけ。最大30呼び出し・画像15枚で制限し、取得画像は送信用に軽量化する。モデルのfunction-call IDと署名を維持して結果を戻し、最終の記事は別の構造化出力で検証する。記事の依頼・応答は本人の非公開チャットに残し、同じ操作の再試行で完成済みの案を再利用する。
@@ -257,9 +257,9 @@ Storybook の画面は「はじめる」「お店づくり」「運営」「お�
 - サーバーはリクエスト単位で言語を保持し、同時利用で混在しない。日本円・日本時間・YYYY/MM/DDの日付入力、列名・列順・識別子と認可は維持する。音声はja-JP/en-US、終了キーワードは「以上」/「send」を既定値とし、言語ごとに保存する。
 - READMEの英語・日本語版、英語仕様書、英語画面キャプチャを含むマニュアルを用意する。Storybookの言語選択を提供し、全画面の両言語表示と英語の操作・実際のfile://出力を検証する。実サービス接続とモックの検証は区別する。
 
-## GemiHub 共有 VM での運用構成
+## kiokuflow 共有 VM での運用構成
 
-`infra/` は既存の共有 VM に本アプリを追加する Terraform 設定を持つ。アプリ用サービスアカウント、名前付き Firestore DB、Secret Manager の参照、Artifact Registry、Cloud Build、DNS・証明書を定義する。共有 VM 本体と追加 backend は Kakeratta、HTTPS URL map は GemiHub の既存 state が管理し、同じリソースを二重に管理しない。管理ドメイン・店舗サブドメインの suffix・OAuth client ID・利用可能なモデルは明示的に指定する。
+`infra/` は既存の共有 VM に本アプリを追加する Terraform 設定を持つ。アプリ用サービスアカウント、名前付き Firestore DB、Secret Manager の参照、Artifact Registry、Cloud Build、DNS・証明書を定義する。共有 VM 本体と追加 backend は Kakeratta、HTTPS URL map は kiokuflow の既存 state が管理し、同じリソースを二重に管理しない。管理ドメイン・店舗サブドメインの suffix・OAuth client ID・利用可能なモデルは明示的に指定する。
 
 秘密値は Terraform で生成・取得せず、Secret Manager の version 参照で渡す。ランタイムは専用 Docker ネットワークを使い、共有 broker から専用サービスアカウントの短期認証を取得する。コンテナ内はポート8080、ホスト側は8105を使う。起動・再デプロイ・復旧手順と本番未検証の範囲は `infra/README.md` に記載する。
 
@@ -280,3 +280,13 @@ Storybook の画面は「はじめる」「お店づくり」「運営」「お�
 - サーバーのPayPalアカウントを利用する構成で、Sandboxが初期値。店舗ごとの加盟店アカウント接続・分配は対象外。本番で複数店舗の売上を分ける場合は別途加盟店接続が必要。既存の共有VMでは常駐プロセスの毎分復旧処理を使う。リクエスト時のみCPUが動く環境では別の定期実行が必要。
 
 - PayPalの返金用残高不足はawaiting_fundsとして保持する。運営には残高補充後の再確認を案内し、お客様にはお店で確認中と表示する。返金額・処理ID・初回送信時刻を変えず、5時間以内は毎分または画面の再確認で再試行する。他の確定エラーは自動再送しない。
+
+## サービス名・公開ドメイン
+
+- 管理ドメインの `/lp` はログイン不要のサービス紹介ページ。予約・お客様メモ・ブログ、お店づくりの3段階、PayPalの事前決済と時間に応じた返金、Google Sheets/Driveの保存先、FAQを日英で説明する。料金や利用者実績の未確定な数値は載せない。
+- 本文・title・description・OG情報・言語別canonical/alternateをサーバーで描画する。LPのHTML生成はセッションやDBに依存させず、店舗の独自ドメインからは配信しない。主要リンクは選択言語を保持して既存の開始画面・使い方へ進む。PC・スマートフォン・キーボード操作・機能切り替え・FAQ・Storybookを検証する。
+
+- 公開名はgemihub。管理画面・Google OAuthの生成元はhttps://gemihub.net、コールバックはhttps://gemihub.net/auth/google/callbackとする。店主・お客様・スタッフ・Calendar連携の全てで同じURIを使う。
+- 店舗サブドメインの既定はshops.gemihub.net。DNS/TLSと管理ドメインへの配信はインフラで設定する。OAuth登録のみで配信完了とはしない。
+- 隣の旧gemihubはkiokuflowとなった。このサービスはFirestore DB名gemihub、gemihub_state/gemihub_locks、gemihub_session/gemihub_oauth、gemihub:保存キー、X-Gemihub-Language、window.__GEMIHUB_MOCK__、TXT _gemihubを使う。未リリースの旧名に対する移行・互換処理は設けない。kiokuflowの内部VM ID gemihubとの衝突を避け、VM登録IDとクラウドリソースのプレフィックスはgemihub-webとする。
+- ローカルデモと本番設定を分け、.env.production.exampleにAPP_ORIGIN=https://gemihub.netとデモ無効化を明示する。GoogleのClient IDとSecretは実行環境で設定し、公開ファイルに含めない。

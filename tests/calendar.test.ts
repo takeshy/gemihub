@@ -46,7 +46,7 @@ test("Calendar OAuth is bound to member, shop, staff and account; busy slots are
   process.env.APP_ORIGIN = origin;
   t.after(() => { server.close(); void store.close(); });
   async function request(path: string, id = "family", data?: unknown, extra = "") {
-    const res = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", redirect: "manual", headers: { Origin: origin, Cookie: `omai_session=${id}${extra}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const res = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", redirect: "manual", headers: { Origin: origin, Cookie: `gemihub_session=${id}${extra}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     const raw = await res.text();
     return { status: res.status, body: raw ? JSON.parse(raw) : null, cookie: res.headers.get("set-cookie")?.split(";")[0], location: res.headers.get("location") };
   }

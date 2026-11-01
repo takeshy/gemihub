@@ -313,7 +313,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     domain: scenario === "settings" ? "reserve.example.com" : undefined,
     domainToken:
       scenario === "settings"
-        ? "omaiweb-storybook-verification-token"
+        ? "gemihub-storybook-verification-token"
         : undefined,
   };
   if (scenario === "inquiries") {
@@ -390,7 +390,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   let visualConfig = structuredClone(config);
   const extraData = { id: "100", title: tr("店販の記録"), headers: [tr("商品"), tr("個数"), tr("金額"), tr("確認済み")], rows: [{ row: 2, values: [tr("ヘアオイル"), 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };
   let chats: ShopChat[] = [];
-  const chatCache = `omaiweb:storybook-chats:${scenario}:${session.user?.email || "anonymous"}`;
+  const chatCache = `gemihub:storybook-chats:${scenario}:${session.user?.email || "anonymous"}`;
   try {
     const saved = JSON.parse(localStorage.getItem(chatCache) || "null");
     if(saved){ chats=saved.chats || []; if(saved.plans&&scenario!=="onboarding")shop.plans=saved.plans; if(saved.published&&scenario!=="onboarding"){shop.published=saved.published;shop.revision=saved.revision;shop.history=saved.history;} }
@@ -770,7 +770,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/domain`) {
       shop.domain = String(input.domain);
-      shop.domainToken = "omaiweb-storybook-verification-token";
+      shop.domainToken = "gemihub-storybook-verification-token";
       shop.domainVerified = false;
       result = { ok: true };
     } else if (action.endsWith("/domain/verify")) {

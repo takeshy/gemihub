@@ -279,5 +279,5 @@ test("Firestore shares operational state and locks; owner Sheets hold business r
   const headers = sheets.get("reservations")![0];
   headers[0] = "broken";
   await assert.rejects(() => first.bookings(shop.id), /列構造/);
-  assert.ok([...cloud.keys()].every((k) => !k.startsWith("omaiweb_locks/")));
+  assert.ok([...cloud.keys()].every((k) => !k.startsWith("gemihub_locks/")));
 });

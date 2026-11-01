@@ -60,6 +60,9 @@ function visit(node){
 visit(source);
 for(const [start,end,replacement] of edits.reverse())text=text.slice(0,start)+replacement+text.slice(end);
 text=text.replace('await page.getByRole("heading", { name: ready, exact: true }).waitFor();','await page.getByRole("heading", { name: ready, exact: true }).first().waitFor();');
+// Storybook's index keeps Japanese titles even when the rendered story is English.
+text='import { readFileSync as readManualCatalog } from "node:fs";\nconst manualCatalog = JSON.parse(readManualCatalog("shared/en.json", "utf8"));\n'+text;
+text=text.replace('entry.title === title', '(entry.title === title || manualCatalog[entry.title] === title)');
 text=text.replace('locale: "ja-JP"','locale: "en-US"').replace('"public/manual"','"public/manual/en"').replace('&viewMode=story`','&viewMode=story&globals=locale:en`');
 text=text.replace('  await capture("13-storage.jpg", ".data-overview");','  await capture("13-storage.jpg", ".data-overview");\n  await capture("21-system.jpg", ".shop-build-layout");');
 text=text.replace('  assert.deepEqual(errors, []);', `

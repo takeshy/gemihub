@@ -2,7 +2,7 @@ import { tr } from "../shared/i18n.ts";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Store, User } from "./store.ts";
-export const origin = () => process.env.APP_ORIGIN || "http://localhost:3000";
+export const origin = () => new URL(process.env.APP_ORIGIN || "http://localhost:3000").origin;
 export const demoEnabled = () =>
   process.env.DEMO_MODE === "true" && process.env.NODE_ENV !== "production";
 export type Session = {
@@ -19,7 +19,7 @@ export function cookie(req: IncomingMessage, name: string) {
 export const digest = (s: string) =>
   createHash("sha256").update(s).digest("hex");
 export async function session(store: Store, req: IncomingMessage) {
-  const id = cookie(req, "omai_session");
+  const id = cookie(req, "gemihub_session");
   if (!id) return;
   const s = await store.get<Session>("session", digest(id));
   if (!s || s.expires < Date.now()) return;
@@ -33,7 +33,7 @@ export async function login(store: Store, res: ServerResponse, user: User) {
   });
   res.setHeader(
     "Set-Cookie",
-    `omai_session=${id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800${origin().startsWith("https:") ? "; Secure" : ""}`,
+    `gemihub_session=${id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800${origin().startsWith("https:") ? "; Secure" : ""}`,
   );
 }
 export function equal(a: string, b: string) {

@@ -61,7 +61,7 @@ export class Store {
         throw new Error("GOOGLE_CLOUD_PROJECT is required for Firestore");
       this.firestore = new Firestore({
         projectId: process.env.GOOGLE_CLOUD_PROJECT,
-        databaseId: process.env.FIRESTORE_DATABASE_ID || "(default)",
+        databaseId: process.env.FIRESTORE_DATABASE_ID || "gemihub",
       });
     }
   }
@@ -71,7 +71,7 @@ export class Store {
       .digest("hex");
   }
   private ref(kind: string, id: string) {
-    return this.firestore!.collection("omaiweb_state").doc(this.key(kind, id));
+    return this.firestore!.collection("gemihub_state").doc(this.key(kind, id));
   }
   async get<T>(kind: string, id: string): Promise<T | undefined> {
     if (!this.memory && businessKinds.has(kind)) {
@@ -164,7 +164,7 @@ export class Store {
       return (await this.list<T & { shopId: string }>(kind)).filter(
         (v) => v.shopId === shop.id,
       );
-    const staged = chatKinds.has(kind) ? (await this.firestore!.collection("omaiweb_state").where("kind", "==", kind).get()).docs.map(doc => ({id:doc.get("id") as string,value:JSON.parse(doc.get("json")) as {shopId:string;updatedAt:string}})).filter(entry => entry.value.shopId === shop.id) : [];
+    const staged = chatKinds.has(kind) ? (await this.firestore!.collection("gemihub_state").where("kind", "==", kind).get()).docs.map(doc => ({id:doc.get("id") as string,value:JSON.parse(doc.get("json")) as {shopId:string;updatedAt:string}})).filter(entry => entry.value.shopId === shop.id) : [];
     if (!shop.google) return staged.map(entry => entry.value as T);
     const token = (await this.get<User>("user", shop.owner))?.refreshToken;
     if (!token)
@@ -185,7 +185,7 @@ export class Store {
   async entries<T>(kind: string): Promise<{ id: string; value: T }[]> {
     if (businessKinds.has(kind)) throw new Error(tr("業務記録には専用の読み取りを使ってください"));
     if (this.memory) return [...this.values.values()].filter(entry => entry.kind === kind).map(entry => ({ id: entry.id, value: structuredClone(entry.value) as T }));
-    const result = await this.firestore!.collection("omaiweb_state").where("kind", "==", kind).get();
+    const result = await this.firestore!.collection("gemihub_state").where("kind", "==", kind).get();
     return result.docs.map(doc => ({ id: doc.get("id") as string, value: JSON.parse(doc.get("json")) as T }));
   }
   async list<T>(kind: string): Promise<T[]> {
@@ -199,7 +199,7 @@ export class Store {
       return [...this.values.values()]
         .filter((e) => e.kind === kind)
         .map((e) => structuredClone(e.value) as T);
-    const result = await this.firestore!.collection("omaiweb_state")
+    const result = await this.firestore!.collection("gemihub_state")
       .where("kind", "==", kind)
       .get();
     return result.docs.map((d) => JSON.parse(d.get("json")));
@@ -220,7 +220,7 @@ export class Store {
       const entries = this.memory
         ? [...this.values.values()].filter((e) => e.kind === kind)
         : (
-            await this.firestore!.collection("omaiweb_state")
+            await this.firestore!.collection("gemihub_state")
               .where("kind", "==", kind)
               .get()
           ).docs.map((d) => ({
@@ -284,7 +284,7 @@ export class Store {
       .catch(() => {})
       .then(async () => {
         if (this.memory) return fn();
-        const ref = this.firestore!.collection("omaiweb_locks").doc(
+        const ref = this.firestore!.collection("gemihub_locks").doc(
           this.key("lock", id),
         );
         let acquired = false;

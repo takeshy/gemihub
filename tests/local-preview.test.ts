@@ -60,7 +60,7 @@ test("local pen changes stay drafts; stale releases fail and retries publish onc
   for (const [id, email] of [["owner", shop.owner], ["customer", "guest@example.com"]])
     await store.put("session", digest(id), { user: { email, name: id, role: id, shopId: shop.id }, expires: Date.now() + 600000 });
   async function request(action: string, data?: unknown, user = "owner") {
-    const res = await fetch(`${origin}/api/shops/${shop.id}/${action}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const res = await fetch(`${origin}/api/shops/${shop.id}/${action}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: res.status, body: await res.json() };
   }
   assert.equal((await request("local-editor", undefined, "customer")).status, 403);

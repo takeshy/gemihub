@@ -45,7 +45,7 @@ test("Private memo images stay on customer pages and out of managed inputs; sele
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
   t.after(() => { server.close(); void store.close(); });
   const base = `/api/shops/${shop.id}/`;
-  async function api(path: string, data?: unknown, user = "owner") { const response = await fetch(origin + base + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) }); return { status: response.status, body: await response.json() }; }
+  async function api(path: string, data?: unknown, user = "owner") { const response = await fetch(origin + base + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) }); return { status: response.status, body: await response.json() }; }
   assert.equal((await api("images/customer-memos")).status,404);
   const customerImages=await api("customers/guest%40example.com/images");assert.equal(customerImages.status,200);assert.deepEqual(customerImages.body.images.map((item:{id:string})=>item.id),[privateId]);
   assert.deepEqual((await api("images")).body.map((item: LibraryImage) => item.id), [uploaded.imageId]);
@@ -84,7 +84,7 @@ test("Image library is owner-only; header/page images are public only when refer
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
   t.after(() => { server.close(); void store.close(); });
   async function api(path: string, data?: unknown, user = "owner") {
-    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: response.status, body: await response.json() };
   }
   const base = `/api/shops/${shop.id}/images`;
@@ -143,7 +143,7 @@ test("AI generation uses separate locks, persists one image per request and lets
   const server = createApp(store, { propose, proposeArticle, identifyVisual, explainSystem, generateImage: async () => { calls++; started(); await wait; return { ...image, model: "test-gemini-image" }; } });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve)); const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
   t.after(() => { release(); server.close(); void store.close(); });
-  async function api(path: string, data?: unknown) { const response = await fetch(origin + `/api/shops/${shop.id}/` + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: "omai_session=owner", "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) }); return { status: response.status, body: await response.json() }; }
+  async function api(path: string, data?: unknown) { const response = await fetch(origin + `/api/shops/${shop.id}/` + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: "gemihub_session=owner", "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) }); return { status: response.status, body: await response.json() }; }
   const input = { requestId: randomUUID(), name: "花.png", prompt: "季節の花を飾った明るい窓辺", aspectRatio: "16:9" };
   const first = api("images/generate", input); await generating;
   let timer: ReturnType<typeof setTimeout> | undefined;

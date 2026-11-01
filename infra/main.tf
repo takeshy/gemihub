@@ -6,7 +6,7 @@ locals {
     "iamcredentials.googleapis.com", "drive.googleapis.com",
     "sheets.googleapis.com", "gmail.googleapis.com", "calendar-json.googleapis.com",
   ])
-  image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}/omaiweb:bootstrap"
+  image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}/gemihub-web:bootstrap"
   hosts = distinct([var.app_domain, "*.${var.site_domain}"])
 }
 
@@ -18,14 +18,14 @@ resource "google_project_service" "app" {
 }
 
 resource "google_service_account" "runtime" {
-  account_id   = "omaiweb-run"
-  display_name = "omaiweb shared VM runtime"
+  account_id   = "gemihub-web-run"
+  display_name = "gemihub.net booking service runtime"
   depends_on   = [google_project_service.app]
 }
 
 resource "google_service_account" "build" {
-  account_id   = "omaiweb-build"
-  display_name = "omaiweb build and IAP deployment"
+  account_id   = "gemihub-web-build"
+  display_name = "gemihub.net booking service build and deployment"
   depends_on   = [google_project_service.app]
 }
 
@@ -46,8 +46,8 @@ resource "google_project_iam_member" "database" {
   role    = "roles/datastore.user"
   member  = "serviceAccount:${google_service_account.runtime.email}"
   condition {
-    title       = "omaiweb_database_only"
-    description = "Only omaiweb's named Firestore database."
+    title       = "gemihub-web_database_only"
+    description = "Only gemihub-web's named Firestore database."
     expression  = "resource.name == 'projects/${var.project_id}/databases/${var.database_id}'"
   }
 }
@@ -59,7 +59,7 @@ resource "google_project_iam_member" "vertex" {
 }
 
 resource "google_secret_manager_secret" "app" {
-  for_each  = toset(concat(["omaiweb-session-secret", "omaiweb-google-client-secret"], var.paypal_client_id != "" ? ["omaiweb-paypal-client-secret"] : []))
+  for_each  = toset(concat(["gemihub-web-session-secret", "gemihub-web-google-client-secret"], var.paypal_client_id != "" ? ["gemihub-web-paypal-client-secret"] : []))
   project   = var.project_id
   secret_id = each.value
   replication {
@@ -77,10 +77,22 @@ resource "google_secret_manager_secret_iam_member" "runtime" {
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+# Reference the configured OAuth secrets without copying payloads.
+resource "google_secret_manager_secret_iam_member" "google_oauth" {
+  for_each = { for key, ref in {
+    client_id     = var.google_client_id_secret_ref
+    client_secret = var.google_client_secret_ref
+  } : key => ref if ref != null }
+  project   = each.value.project
+  secret_id = each.value.name
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
+}
+
 resource "google_artifact_registry_repository" "app" {
   project       = var.project_id
   location      = var.region
-  repository_id = "omaiweb"
+  repository_id = "gemihub-web"
   format        = "DOCKER"
   depends_on    = [google_project_service.app]
 }
@@ -101,7 +113,7 @@ resource "google_project_iam_member" "build_logs" {
 
 resource "google_storage_bucket" "build_source" {
   project                     = var.project_id
-  name                        = "${var.project_id}-omaiweb-build-source"
+  name                        = "${var.project_id}-gemihub-web-build-source"
   location                    = upper(var.region)
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
@@ -123,7 +135,7 @@ resource "google_cloudbuild_trigger" "deploy" {
   count           = var.repository == "" ? 0 : 1
   project         = var.project_id
   location        = var.region
-  name            = "omaiweb-main-deploy"
+  name            = "gemihub-web-main-deploy"
   service_account = google_service_account.build.id
   filename        = "cloudbuild.yaml"
   repository_event_config {
@@ -131,7 +143,7 @@ resource "google_cloudbuild_trigger" "deploy" {
     push { branch = var.deploy_branch }
   }
   substitutions = {
-    _IMAGE          = "${var.region}-docker.pkg.dev/${var.project_id}/omaiweb/omaiweb:$${COMMIT_SHA}"
+    _IMAGE          = "${var.region}-docker.pkg.dev/${var.project_id}/gemihub-web/gemihub-web:$${COMMIT_SHA}"
     _SHARED_PROJECT = var.shared_project_id
   }
   depends_on = [google_artifact_registry_repository_iam_member.build, google_project_iam_member.build_logs]

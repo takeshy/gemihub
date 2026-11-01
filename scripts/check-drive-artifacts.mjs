@@ -19,7 +19,7 @@ const image = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCA
 config.header.imageId = imageId;
 config.pages = [{ id: 'gallery', slug: 'gallery', title: '画像を使ったページ', navigationLabel: '画像のページ', body: '## お店のご案内', layout: 'standard', imageUrl: '', imageId }];
 const output = artifacts(config, shell, undefined, { [imageId]: image });
-const directory = await mkdtemp(join(tmpdir(), 'omaiweb-drive-'));
+const directory = await mkdtemp(join(tmpdir(), 'gemihub-drive-'));
 for (const [path, content] of Object.entries(output)) {
   const target = join(directory, path);
   await mkdir(dirname(target), { recursive: true });
@@ -97,7 +97,7 @@ try {
     await page.getByRole('button', { name: 'キャンセルする', exact: true }).click();
     await page.getByText('キャンセル済み', { exact: true }).waitFor();
   }
-  assert.deepEqual(await page.evaluate(() => window.__OMAIWEB_MOCK__), source);
+  assert.deepEqual(await page.evaluate(() => window.__GEMIHUB_MOCK__), source);
   assert.equal(await readFile(dataFile, 'utf8'), originalData);
   await page.reload();
   await page.getByRole('button', { name: 'マイページ', exact: true }).click();
@@ -106,7 +106,7 @@ try {
   await page.getByLabel('ご相談内容', { exact: true }).fill('保存しない問い合わせ');
   await page.getByRole('button', { name: 'お問い合わせを送る →', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'お問い合わせを受け付けました' }).waitFor();
-  assert.deepEqual(await page.evaluate(() => window.__OMAIWEB_MOCK__.inquiries), []);
+  assert.deepEqual(await page.evaluate(() => window.__GEMIHUB_MOCK__.inquiries), []);
   await page.getByRole('button', { name: '画像のページ', exact: true }).click();
   await page.getByRole('heading', { name: '画像を使ったページ', exact: true }).waitFor();
   await page.locator('.custom-page .managed-hero-image').scrollIntoViewIfNeeded();
@@ -133,7 +133,7 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`;
   await page.goto(origin + '/export/web/index.html');
   await page.getByRole('heading', { name: serverConfig.name, exact: true }).waitFor();
-  assert.equal(await page.evaluate(() => window.__OMAIWEB_MOCK__.shop.name), changed.shop.name);
+  assert.equal(await page.evaluate(() => window.__GEMIHUB_MOCK__.shop.name), changed.shop.name);
   assert.ok(apiCalls.includes('/api/session'));
   assert.ok(apiCalls.includes('/api/public/hosted'));
   await page.goto(origin + '/');

@@ -2,7 +2,7 @@ import { tr } from "../shared/i18n";
 // Adapted from kakeratta's browser_speech.js: preserve edits, consume cumulative
 // results once, and send only on a final trailing command.
 export const defaultEndKeyword = "以上";
-export const endKeywordStorageKey = "omaiweb:dictation:end-keyword";
+export const endKeywordStorageKey = "gemihub:dictation:end-keyword";
 export type SpeechResult = { isFinal:boolean; [index:number]:{transcript:string} };
 export type SpeechResults = {length:number;[index:number]:SpeechResult};
 export type Recognition = {

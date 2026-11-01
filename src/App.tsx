@@ -1,3 +1,5 @@
+import { serviceName } from "../shared/brand";
+import { Brand } from "./Brand";
 import { tr, intlLocale } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { PaymentDetails } from "./PaymentDetails";
@@ -71,16 +73,6 @@ const when = (s: string) =>
 const localDate = () =>
   new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 const weekdays = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
-function Brand() {
-  return (
-    <a href="/" className="brand">
-      <span className="brand-icon">
-        o<span>✳</span>
-      </span>
-      omaiweb<span className="brand-dot">.</span>
-    </a>
-  );
-}
 export type AppProps = {
   path?: string;
   search?: string;
@@ -139,6 +131,7 @@ export function App({
           <span className="small muted">
             {session.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
+          {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
           {!isPublic && (
             <a className="text-button" href="/manual">
               {tr("使い方")}</a>
@@ -217,7 +210,7 @@ export function App({
         )}
       </main>
       {!isPublic && <footer>
-        <span>omaiweb — Oh my web.</span>
+        <span>{serviceName} — {tr("お店のシステムを、言葉で。")}</span>
         <span>{tr("データも、仕様も、あなたの手の中に。")}</span>
       </footer>}
       {busy && (
@@ -1121,7 +1114,7 @@ function Settings({
       {shop.domainToken && (
         <div className="config-summary">
           <p>{tr("DNS 管理画面で次のレコードを追加してください。")}</p>
-          <code>TXT _omaiweb.{shop.domain}</code>
+          <code>TXT _gemihub.{shop.domain}</code>
           <pre>{shop.domainToken}</pre>
           <p className="small">
             {tr("加えて、このサービスの公開先への DNS 接続と HTTPS 証明書をサーバーの運用担当者に設定してもらってください。")}</p>

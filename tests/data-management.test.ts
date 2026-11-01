@@ -24,7 +24,7 @@ test("Data management lists only extra sheets, enforces ownership, preserves cel
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
   t.after(() => { server.close(); void store.close(); });
   async function request(path: string, data?: unknown, id = "owner") {
-    const response = await fetch(`${origin}/api/shops/${shop.id}/data/sheets${path}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const response = await fetch(`${origin}/api/shops/${shop.id}/data/sheets${path}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: response.status, body: await response.json() };
   }
   const input = { headers: sheet.headers, previous: sheet.values[0], values: ["ヘアオイル", 3, true, "=B2*2"] };

@@ -36,7 +36,7 @@ test("consultation never creates changes; new pages and navigation are reviewed 
   t.after(() => {server.close(); void store.close();});
   const base = `/api/shops/${shop.id}`;
   async function request(action:string,data?:unknown) {
-    const response = await fetch(origin+base+action,{method:data===undefined?"GET":"POST",headers:{Origin:origin,Cookie:"omai_session=owner","Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});
+    const response = await fetch(origin+base+action,{method:data===undefined?"GET":"POST",headers:{Origin:origin,Cookie:"gemihub_session=owner","Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});
     return {status:response.status,body:await response.json()};
   }
   const context = (await request("/build-context")).body;

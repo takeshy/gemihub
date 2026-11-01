@@ -28,7 +28,7 @@ try{
   await page.getByRole('heading',{name:/Tell us about your shop/}).waitFor();
   await page.goto(origin+'/');
   await page.getByRole('heading',{name:/Tell us about your shop/}).waitFor();
-  assert.ok((await context.cookies()).some(cookie=>cookie.name==='omaiweb_locale'&&cookie.value==='en'));
+  assert.ok((await context.cookies()).some(cookie=>cookie.name==='gemihub_locale'&&cookie.value==='en'));
   await page.getByRole('button',{name:'Try the salon demo →',exact:true}).click();
   await page.locator('aside nav').getByRole('button',{name:/Build your shop with AI$/}).click();
   await page.getByRole('button',{name:'Get started',exact:true}).click();
@@ -48,7 +48,7 @@ try{
   await page.getByRole('heading',{name:'Review screens and publish',exact:true}).waitFor();
   await page.getByRole('button',{name:'Publish publicly',exact:true}).click();
   await page.getByText('Published publicly. People can now view the page without logging in.',{exact:true}).waitFor();
-  let response=await context.request.get(origin+'/api/workspace',{headers:{'X-Omaiweb-Language':'en'}});
+  let response=await context.request.get(origin+'/api/workspace',{headers:{'X-Gemihub-Language':'en'}});
   const shop=(await response.json()).shops[0];
   await page.goto(origin+'/s/'+shop.slug+'?pane=reserve');
   await page.getByRole('button',{name:'Log in as a demo customer',exact:true}).click();
@@ -89,7 +89,7 @@ try{
 
   const shell=await readFile('dist/index.html','utf8');
   const output=requestLocale.run('en',()=>artifacts(structuredClone(sample),shell));
-  const directory=await mkdtemp(join(tmpdir(),'omaiweb-en-'));
+  const directory=await mkdtemp(join(tmpdir(),'gemihub-en-'));
   for(const [name,contents]of Object.entries(output)){const file=join(directory,name);await mkdir(dirname(file),{recursive:true});await writeFile(file,contents);}
   const offline=await browser.newContext();const filePage=await offline.newPage();const external=[];
   filePage.on('pageerror',error=>errors.push(error.message));filePage.on('request',request=>{if(/^https?:/.test(request.url()))external.push(request.url());});

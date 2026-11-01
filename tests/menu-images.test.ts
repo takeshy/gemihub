@@ -30,7 +30,7 @@ test("Menu images are owner managed, stay private until saved, and never expose 
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
   t.after(() => { server.close(); void store.close(); });
   async function request(path: string, data?: unknown, user = "owner") {
-    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: response.status, body: await response.json() };
   }
   const base = `/api/shops/${shop.id}`;

@@ -1,3 +1,5 @@
+import { serviceName, googleCallbackPath } from "../shared/brand.ts";
+import { origin } from "./auth.ts";
 import { tr } from "../shared/i18n.ts";
 import { google } from "googleapis";
 import {
@@ -22,7 +24,7 @@ export function oauth() {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    `${process.env.APP_ORIGIN || "http://localhost:3000"}/auth/google/callback`,
+    new URL(googleCallbackPath, origin()).href,
   );
 }
 const key = () =>
@@ -79,7 +81,7 @@ export async function provision(shop: Shop, config: ShopConfig, token: string) {
   if (shop.google) return shop.google;
   const folder = await drive.files.create({
     requestBody: {
-      name: `${config.name} — omaiweb`,
+      name: `${config.name} — ${serviceName}`,
       mimeType: "application/vnd.google-apps.folder",
     },
     fields: "id",

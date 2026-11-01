@@ -141,7 +141,7 @@ test("inquiry responses and status are independent, scoped to operators, durable
       method: "POST",
       headers: {
         Origin: origin,
-        Cookie: `omai_session=${user}`,
+        Cookie: `gemihub_session=${user}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(data),
@@ -275,7 +275,7 @@ test("inquiry responses and status are independent, scoped to operators, durable
   );
   const profile = await fetch(
     `${origin}/api/shops/${shop.id}/customers/${question.email}?period=all`,
-    { headers: { Cookie: "omai_session=owner" } },
+    { headers: { Cookie: "gemihub_session=owner" } },
   );
   assert.equal(profile.status, 200);
   const customer = await profile.json();
@@ -331,7 +331,7 @@ test("an accepted inquiry reply sends its queued email before removing the mail 
       method: "POST",
       headers: {
         Origin: origin,
-        Cookie: "omai_session=owner",
+        Cookie: "gemihub_session=owner",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

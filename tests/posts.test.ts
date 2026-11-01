@@ -371,7 +371,7 @@ test("safe Markdown exports keep draft bodies out of public files and all publis
   assert.doesNotMatch(files["web/index.html"], /PRIVATE/);
   // The post-sync queue must not overwrite the runnable Drive home with a server shell.
   assert.match(files["web/index.html"], /<script src="\.\/data\.js"><\/script>/);
-  assert.match(files["web/data.js"], /window\.__OMAIWEB_MOCK__ = /);
+  assert.match(files["web/data.js"], /window\.__GEMIHUB_MOCK__ = /);
   assert.deepEqual(JSON.parse(files["web/mock.json"]).shop, JSON.parse(files["web/shop.json"]));
   assert.match(files["admin/posts/posts.json"], /PRIVATE-DRAFT/);
   assert.equal(JSON.parse(files["web/recent-articles.json"]).length, 5);

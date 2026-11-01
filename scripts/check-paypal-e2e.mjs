@@ -63,7 +63,7 @@ await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`; process.env.APP_ORIGIN = origin;
 const base = `/api/public/${shop.slug}`;
 async function api(path, body, user = "alice") {
-  const res = await fetch(origin + path, { method: body === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${user}`, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await fetch(origin + path, { method: body === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${user}`, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const result = await res.json(); assert.equal(res.status, 200, JSON.stringify(result)); return result;
 }
 async function approve(c) {

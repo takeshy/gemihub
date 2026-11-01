@@ -69,7 +69,7 @@ test("article metadata is generated at save, cached, private, collision-safe and
       method: data === undefined ? "GET" : "POST",
       headers: {
         Origin: origin,
-        Cookie: `omai_session=${user}`,
+        Cookie: `gemihub_session=${user}`,
         "Content-Type": "application/json",
       },
       body: data === undefined ? undefined : JSON.stringify(data),

@@ -17,7 +17,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
   const [imageUploading, setImageUploading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const key = `omaiweb:live-save:${shop.owner}:${shop.id}:${section}`;
+  const key = `gemihub:live-save:${shop.owner}:${shop.id}:${section}`;
   async function load() {
     const data = await api<{ config: ShopConfig }>(`/api/shops/${shop.id}/live-settings/${section}`);
     setConfig(data.config); setSource(data.config);

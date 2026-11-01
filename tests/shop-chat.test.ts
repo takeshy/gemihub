@@ -21,7 +21,7 @@ test("begin asks the first question and supports initial shop creation without r
   await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
   const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN=origin;t.after(()=>{server.close();void store.close();});
   const prefix=`${origin}/api/shops/${shop.id}`;
-  async function api(path:string,body:unknown){const response=await fetch(prefix+path,{method:"POST",headers:{Origin:origin,Cookie:"omai_session=owner","Content-Type":"application/json"},body:JSON.stringify(body)});return{status:response.status,body:await response.json()};}
+  async function api(path:string,body:unknown){const response=await fetch(prefix+path,{method:"POST",headers:{Origin:origin,Cookie:"gemihub_session=owner","Content-Type":"application/json"},body:JSON.stringify(body)});return{status:response.status,body:await response.json()};}
   const start={intent:"create-shop",requestId:randomUUID(),begin:true};
   const opened=(await api("/conversations",start)).body;
   assert.equal(opened.messages.length,1);assert.equal(opened.messages[0].role,"assistant");assert.equal(opened.messages[0].text,"どういう業種のお店ですか？");assert.equal(called,0);
@@ -64,7 +64,7 @@ test("saved chats are private, resumable, deduplicate retries and supply server-
   t.after(()=>{server.close();void store.close();});
   const base=`/api/shops/${shop.id}`;
   async function api(path:string,data?:unknown,actor="owner"){
-    const response=await fetch(origin+base+path,{method:data===undefined?"GET":"POST",headers:{Origin:origin,Cookie:`omai_session=${actor}`,"Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});
+    const response=await fetch(origin+base+path,{method:data===undefined?"GET":"POST",headers:{Origin:origin,Cookie:`gemihub_session=${actor}`,"Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});
     return{status:response.status,body:await response.json()};
   }
   const creation=randomUUID();

@@ -1,10 +1,10 @@
-# omaiweb
+# gemihub
 
 [English](README.md) · [日本語](README_ja.md)
 
-Terraform deployment on the shared GemiHub VM: [infra/README.md](infra/README.md).
+Terraform deployment on the shared kiokuflow VM: [infra/README.md](infra/README.md).
 
-**“Oh my web” — build your shop's booking system in your own words.**
+**Build your shop's booking system in your own words.**
 
 A booking system for small independent businesses. Sign in with Google, describe your shop, review a proposal, publish a private preview, and then open it to customers. Generative AI uses **Gemini on Vertex AI**, authenticated by the server.
 
@@ -31,15 +31,33 @@ The demo runs real approval, authorization, publication, and availability logic 
 
 For development, run `npm run dev` for the watched server and `npm run dev:web` in another terminal for Vite at http://localhost:5173. Set `APP_ORIGIN` and the Google OAuth redirect URI to that origin when using Vite.
 
+## gemihub.net and Google OAuth
+
+The public service name is **gemihub**. The management origin is `https://gemihub.net`; register **`https://gemihub.net/auth/google/callback`** as the Google OAuth web client's authorized redirect URI. Set the authorized JavaScript origin to `https://gemihub.net` when configuring the client. The same callback serves owners, customers, staff, and Calendar connections.
+
+For a domain-hosted server, copy `.env.production.example` to `.env.production`, configure the server's Google Client ID/Secret, persistent session key, Firestore and Vertex settings, then run `npm run build` and `npm run start:production`. The server derives the callback from `APP_ORIGIN`. Local development retains `http://localhost:3000` in `.env.example`; add its callback separately if using Google login locally.
+
+Terraform defaults now use `gemihub.net` and `shops.gemihub.net`. The latter is the storefront suffix and requires wildcard DNS/TLS; shop-path URLs remain available on the management origin. Supply the actual DNS project and managed-zone name before applying. Setting the OAuth callback in Google does not create DNS records, install TLS, or deploy the server.
+
+The separate application in `../gemihub` is now **kiokuflow**. This service uses `gemihub` for its database, browser storage, cookies, language header, export data and domain-verification prefix. Shared-VM registration and new cloud resources use `gemihub-web`, because kiokuflow still retains the legacy runtime ID `gemihub`. The checkout directory remains `omaiweb`. See [the naming notes](docs/branding.md).
+
 ## Languages
 
 The landing page, management screens, customer pages, manual, validation and API messages, generated documents, and AI instructions support Japanese and English. The language switcher is available before login, on public shop pages, and in offline Drive previews. The selection is stored in this browser and a same-site cookie; explicit `lang` links also work when storage is unavailable.
 
-- Requests carry `X-Omaiweb-Language`. Server language state is isolated per request, so concurrent English and Japanese users do not affect each other.
+- Requests carry `X-Gemihub-Language`. Server language state is isolated per request, so concurrent English and Japanese users do not affect each other.
 - AI-generated explanations and new content follow the selected language. Existing shop text, articles, customer names, notes, and other saved content remain as entered; changing the interface does not translate or rewrite them.
 - Prices remain **Japanese yen** and booking times remain **Asia/Tokyo** in both languages. Date inputs stay `YYYY/MM/DD`, or `YYYY/MM/DD HH:mm`, while readable dates and weekdays use the selected language. ISO API values and ledger columns are unchanged.
 - Voice recognition uses `ja-JP` or `en-US`. The default end phrase is **以上** in Japanese and **send** in English. Each language has its own saved end-phrase preference.
 - Translation keys use the Japanese source text in `tr(...)`; English translations are in [shared/en.json](shared/en.json). See [docs/i18n.md](docs/i18n.md) for maintenance and verification.
+
+## Service overview
+
+`/lp` introduces gemihub: bookings, customer notes, news, the publication workflow, PayPal prepayment/refunds, and owner-controlled data storage. Use `/lp?lang=en` for English. The start buttons open the existing onboarding entry page in the selected language.
+
+The server renders the content and search/sharing metadata without login or database access. Feature selectors and FAQs work in the browser. A Service overview story is also available under Operations → Get started in Storybook.
+
+After `npm run build`, run `npm run check:lp` to check both languages, desktop/mobile layouts, keyboard interaction and JavaScript-disabled rendering. Screenshots are saved in `tmp/lp/`. Set `CHROMIUM` to a browser executable if needed.
 
 ## Storybook
 
@@ -175,7 +193,7 @@ Business records live in the owner's spreadsheet; images and files live in the o
 | Booking ledger | `menus`, `staff`, `settings`, `reservations`, `inquiries`, `members`, `posts`, `pages`, `customers`, `customer_notes` |
 | `spec.md`, `history.md` | Published settings/permissions and dated changes |
 | `web/index.html` | Shop preview with built JS/CSS inlined; opens by double-click |
-| `web/data.js` | Separately editable preview config/data in `window.__OMAIWEB_MOCK__` |
+| `web/data.js` | Separately editable preview config/data in `window.__GEMIHUB_MOCK__` |
 | `web/shop.json`, `web/mock.json` | Matching machine-readable export data |
 | `web/parts/`, `web/pages/` | Component/page HTML, JSON, and page index |
 | `admin/system.svg` | Deterministically generated shop diagram |
@@ -193,15 +211,15 @@ Additional sheets use owner-only Data management: up to 100 unique columns and 1
 
 ## Deployment and operations
 
-Production operational state uses Firestore Native mode in `GOOGLE_CLOUD_PROJECT`; optionally set `FIRESTORE_DATABASE_ID`. Give ADC access to Firestore. `FIRESTORE_EMULATOR_HOST` supports local integration testing. `omaiweb_state` holds encrypted tokens, sessions, domains/publication, plans, conversation staging, and queues, not the primary business rows. Published configuration is a serving snapshot.
+Production operational state uses Firestore Native mode in `GOOGLE_CLOUD_PROJECT`; optionally set `FIRESTORE_DATABASE_ID`. Give ADC access to Firestore. `FIRESTORE_EMULATOR_HOST` supports local integration testing. `gemihub_state` holds encrypted tokens, sessions, domains/publication, plans, conversation staging, and queues, not the primary business rows. Published configuration is a serving snapshot.
 
-`omaiweb_locks` serializes availability checks and ledger writes per shop across processes. Locks are not stolen after a timeout. After a crash, an administrator must confirm the old process has stopped and inspect ledger writes before removing a lock. Direct Sheets edits do not participate in these locks; avoid adding reservations there while app bookings are running.
+`gemihub_locks` serializes availability checks and ledger writes per shop across processes. Locks are not stolen after a timeout. After a crash, an administrator must confirm the old process has stopped and inspect ledger writes before removing a lock. Direct Sheets edits do not participate in these locks; avoid adding reservations there while app bookings are running.
 
-Persistent disk is unnecessary. There is no automatic migration from old SQLite data. Keep `SESSION_SECRET` stable. Production requires `NODE_ENV=production`, HTTPS `APP_ORIGIN`, a secret of at least 32 characters, and disabled demo mode.
+Persistent disk is unnecessary. Keep `SESSION_SECRET` stable. Production requires `NODE_ENV=production`, HTTPS `APP_ORIGIN`, a secret of at least 32 characters, and disabled demo mode.
 
 Set `SITE_DOMAIN=shops.example.com` and configure wildcard DNS/TLS at the reverse proxy to serve `shop-xxxxxxxx.shops.example.com`; otherwise use `/s/shop-xxxxxxxx`. Public hosts cannot access management pages/APIs; those are served only on `APP_ORIGIN`. Preserve the original Host and Origin; forwarded headers are not trusted unconditionally.
 
-For custom domains, register the domain in Publication settings, add the displayed `_omaiweb.<domain>` TXT record, and verify ownership. Administrators must separately configure DNS routing and TLS termination. Certificate issuance/load-balancer changes are not automated. Public-host customer authentication uses management-side Google login and a short-lived, one-time, host-bound handoff ticket.
+For custom domains, register the domain in Publication settings, add the displayed `_gemihub.<domain>` TXT record, and verify ownership. Administrators must separately configure DNS routing and TLS termination. Certificate issuance/load-balancer changes are not automated. Public-host customer authentication uses management-side Google login and a short-lived, one-time, host-bound handoff ticket.
 
 Interrupted publication records its plan and pauses bookings. Retry the approved plan to resume. Gmail delivery is at least once: losing the response after Google accepts a message may cause a duplicate email. Booking request IDs prevent duplicate bookings.
 
@@ -262,3 +280,5 @@ API仕様：[PayPal Orders v2](https://developer.paypal.com/api/orders/v2/)、[�
 PayPalが`REFUND_FAILED_INSUFFICIENT_FUNDS`を返した場合は、運営画面に返金用残高の不足を表示します。金額と処理IDを変えずに毎分再確認し、残高補充後は「返金状況を再確認」からも再試行できます。最初の送信から5時間を超えた未完了処理は、従来どおり確認が必要な状態で停止します。
 
 `npm run check:paypal:recovery`は、完了済みのSandbox全額返金について応答消失を再現し、アプリの再確認APIから同じ処理ID・金額で同じ返金IDを取得できるか検証します。追加の課金はせず、最初の返金送信から5時間以内だけ実行できます。
+
+Google OAuth for gemihub.net reuses `projects/495062043717/secrets/google-client-id/versions/1` and `projects/495062043717/secrets/google-client-secret/versions/1`. Both enabled version numbers were checked without reading payloads. Terraform grants the service runtime access to these two secrets and exports versioned references for the shared deployer; credentials are not copied into this repository. To supply the client ID directly, set both `google_client_id_secret_ref` and `google_client_secret_ref` to null and configure the client ID and managed secret version.

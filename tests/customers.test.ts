@@ -151,7 +151,7 @@ test("CRM API is scoped to operators and shop; notes persist, reject stale edits
   process.env.APP_ORIGIN = origin;
   t.after(() => { server.close(); void store.close(); });
   async function request(path: string, id = "owner", data?: unknown) {
-    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: response.status, body: await response.json() };
   }
   const base = `/api/shops/${shop.id}/customers`;

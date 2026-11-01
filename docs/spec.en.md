@@ -1,4 +1,4 @@
-# omaiweb specification
+# gemihub specification
 
 [Japanese source](spec.md) · [English README](../README.md)
 
@@ -104,7 +104,7 @@ Text change requests propose additions such as closure days or services, require
 
 Read master settings, services, staff, and business records from the owner's spreadsheet, reflecting direct edits. Preserve column names/order, JSON cell formats, references, and soft-delete behavior. Store specs/history and generated pages in the owner's Drive. Keep public/customer artifacts separate from operational documents and APIs.
 
-Downloaded `web/index.html` must open by double-click with built JS/CSS inlined. Keep rendering input in separate relative `web/data.js` defining `window.__OMAIWEB_MOCK__`, with shop config, preview customer, empty bookings/inquiries, mode=mock, and writes=discarded. Generate shop.json/mock.json from the same source. Escape embedded user strings safely. Practice actions mutate only browser memory and reset on reload; editing data.js changes the display without editing HTML.
+Downloaded `web/index.html` must open by double-click with built JS/CSS inlined. Keep rendering input in separate relative `web/data.js` defining `window.__GEMIHUB_MOCK__`, with shop config, preview customer, empty bookings/inquiries, mode=mock, and writes=discarded. Generate shop.json/mock.json from the same source. Escape embedded user strings safely. Practice actions mutate only browser memory and reset on reload; editing data.js changes the display without editing HTML.
 
 Use the mock only for file:// plus valid data. Missing/invalid data leaves static shop/service content. HTTP/HTTPS always uses the server API regardless of a mock global. Do not add the offline data reference to the served dist/admin shell. Verify actual file:// actions, discarded writes, edited data, missing-data fallback, and HTTP guards.
 
@@ -152,8 +152,16 @@ Support Japanese and English across the landing page, management, customer scree
 
 Maintain English/Japanese README files and this English specification. Capture English manual screens, expose both languages through the Storybook toolbar, validate every story in both languages and secure/insecure browser contexts, and exercise English booking/inquiry/publication/editor and actual offline output. Record automated evidence separately from untested live Google, model, microphone, and delivery behavior.
 
-## Shared GemiHub VM deployment
+## Shared kiokuflow VM deployment
 
-The new infra configuration adds this app to the existing shared VM. This repository owns app service accounts, a named Firestore database, Secret Manager references, registry, Cloud Build, DNS, and certificates. Kakeratta's existing state owns the shared VM/additional backend; GemiHub's state owns the HTTPS URL map. Do not duplicate resource ownership. Explicitly configure management/storefront domains, OAuth client ID, and available models.
+The new infra configuration adds this app to the existing shared VM. This repository owns app service accounts, a named Firestore database, Secret Manager references, registry, Cloud Build, DNS, and certificates. Kakeratta's existing state owns the shared VM/additional backend; kiokuflow's state owns the HTTPS URL map. Do not duplicate resource ownership. Explicitly configure management/storefront domains, OAuth client ID, and available models.
 
 Terraform does not generate or read secret values; pass version references. Runtime uses its own Docker network and gets short-lived credentials for its dedicated account through the shared broker. Container port is 8080, host port is 8105. See [infra/README.md](../infra/README.md) for bootstrap, deployment, recovery, and live-verification boundaries.
+
+## Service name and public domain
+
+The management host serves a public `/lp` service overview in Japanese and English. Explain bookings, customer notes, news, the three-step setup/publication flow, PayPal prepayment and timed refunds, owner Google Sheets/Drive storage, and FAQs. Do not invent pricing or customer metrics. Server-render content, title, description, Open Graph metadata and language-specific canonical/alternate links without session/database reads. Do not serve the LP on custom storefront hosts. Preserve the selected language when linking to onboarding and the manual. Verify desktop/mobile layouts, keyboard access, feature switching, FAQs and the Storybook state.
+
+The public brand is gemihub. The management origin is https://gemihub.net and all Google OAuth flows use https://gemihub.net/auth/google/callback. Storefront subdomains default to shops.gemihub.net and need separate DNS/TLS setup. Production settings are provided in .env.production.example; local demo settings remain separate. Configure Google client credentials on the server only.
+
+The separate former gemihub service is now kiokuflow. This service uses the named database gemihub, collections gemihub_state/gemihub_locks, gemihub_session/gemihub_oauth cookies, gemihub: browser keys, X-Gemihub-Language, window.__GEMIHUB_MOCK__, and TXT _gemihub. The former name was never released, so no migration or compatibility aliases are provided. Use gemihub-web for shared-VM registration and cloud-resource prefixes because kiokuflow retains the legacy runtime ID gemihub.

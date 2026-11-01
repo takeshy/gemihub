@@ -21,7 +21,7 @@ test("verified customers register their own profile before booking; profiles sta
   for (const id of ["alice", "bob", "owner", "other-shop"]) await store.put("session", digest(id), { user: {email: `${id}@example.com`, name: `Google ${id}`, role: id === "owner" ? "owner" : "customer", shopId: id === "other-shop" ? "other" : shop.id}, expires: Date.now() + 600000 });
   const base = `/api/public/${shop.slug}`;
   async function api(path: string, data?: unknown, user = "alice") {
-    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: user ? `omai_session=${user}` : "", "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: user ? `gemihub_session=${user}` : "", "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return {status: response.status, body: await response.json()};
   }
   assert.equal((await api(`${base}/profile`, undefined, "")).status, 401);

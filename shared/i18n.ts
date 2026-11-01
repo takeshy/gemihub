@@ -13,9 +13,9 @@ export function getLocale(): Locale {
   if (typeof window === "undefined") return "ja";
   const query = parseLocale(new URLSearchParams(window.location.search).get("lang"));
   if (query) return query;
-  try { const saved = parseLocale(window.localStorage.getItem("omaiweb:locale")); if (saved) return saved; } catch { /* Private/offline browsing can deny storage. */ }
-  try { const cookie = parseLocale(document.cookie.match(/(?:^|;\s*)omaiweb_locale=([^;]*)/)?.[1]); if (cookie) return cookie; } catch { /* Cookie access may be denied. */ }
-  return parseLocale(document.querySelector('meta[name="omaiweb-language"]')?.getAttribute("content")) || "ja";
+  try { const saved = parseLocale(window.localStorage.getItem("gemihub:locale")); if (saved) return saved; } catch { /* Private/offline browsing can deny storage. */ }
+  try { const cookie = parseLocale(document.cookie.match(/(?:^|;\s*)gemihub_locale=([^;]*)/)?.[1]); if (cookie) return cookie; } catch { /* Cookie access may be denied. */ }
+  return parseLocale(document.querySelector('meta[name="gemihub-language"]')?.getAttribute("content")) || "ja";
 }
 export const intlLocale = () => getLocale() === "en" ? "en-US" : "ja-JP";
 // Source-language keys preserve Japanese copy and make untranslated additions visible in review.
@@ -26,7 +26,7 @@ export function translate(locale: Locale, source: string, ...values: unknown[]):
 export const tr = (source: string, ...values: unknown[]) => translate(getLocale(), source, ...values);
 
 export function rememberLocale(locale: Locale) {
-  try { localStorage.setItem("omaiweb:locale", locale); } catch { /* URL remains available. */ }
+  try { localStorage.setItem("gemihub:locale", locale); } catch { /* URL remains available. */ }
   if (location.protocol === "file:") return;
-  try { document.cookie = `omaiweb_locale=${locale}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol === "https:" ? "; Secure" : ""}`; } catch { /* Cookie storage may be blocked. */ }
+  try { document.cookie = `gemihub_locale=${locale}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol === "https:" ? "; Secure" : ""}`; } catch { /* Cookie storage may be blocked. */ }
 }

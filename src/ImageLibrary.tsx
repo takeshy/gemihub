@@ -12,7 +12,7 @@ const toData = (file: File) => new Promise<string>((resolve, reject) => { const 
 export function ImageLibrary({ shopId, onSelect, selectedId }: { shopId: string; onSelect?: (id: string) => void; selectedId?: string }) {
   const api = useApi();
   const base = `/api/shops/${shopId}/images`;
-  const pendingKey = `omaiweb:image-generation:${shopId}`;
+  const pendingKey = `gemihub:image-generation:${shopId}`;
   const [images, setImages] = useState<LibraryImage[]>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");

@@ -125,7 +125,7 @@ test("page AI and merge only propose, enforce owner and reject a changed remote"
   t.after(() => { server.close(); void store.close(); });
   for (const email of [shop.owner, "other@example.com"]) await store.put("session", digest(email), { user: { email, name: email, role: "owner" }, expires: Date.now() + 600000 });
   async function request(action: string, data?: unknown, email = shop.owner) {
-    const res = await fetch(`${origin}/api/shops/${shop.id}/${action}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${email}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    const res = await fetch(`${origin}/api/shops/${shop.id}/${action}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${email}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: res.status, body: await res.json() };
   }
   const index = await request("local-editor/index");

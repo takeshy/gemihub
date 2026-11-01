@@ -1,9 +1,13 @@
+locals {
+  oauth_client_secret = var.google_client_secret_ref != null ? var.google_client_secret_ref : { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-google-client-secret"].secret_id, version = var.oauth_secret_version }
+}
+
 output "shared_vm_registration" {
   description = "Pass this JSON to Kakeratta's prepare-bundle.py. Contains settings and secret references only, never secret payloads."
   value = {
     additional_build_accounts = [google_service_account.build.email]
     additional_apps = {
-      omaiweb = {
+      gemihub-web = {
         account       = google_service_account.runtime.email
         project       = var.project_id
         network_index = 4
@@ -11,7 +15,7 @@ output "shared_vm_registration" {
         memory        = var.memory
         image         = local.image
         hosts         = local.hosts
-        env = {
+        env = merge({
           NODE_ENV              = "production"
           DEMO_MODE             = "false"
           PORT                  = "8080"
@@ -24,26 +28,29 @@ output "shared_vm_registration" {
           GEMINI_MODEL          = var.vertex_model
           GEMINI_IMAGE_MODEL    = var.image_model
           VERTEX_IMAGE_LOCATION = var.image_location
-          GOOGLE_CLIENT_ID      = var.google_client_id
           PAYPAL_CLIENT_ID      = var.paypal_client_id
           PAYPAL_ENVIRONMENT    = var.paypal_environment
-        }
+        }, var.google_client_id_secret_ref == null ? { GOOGLE_CLIENT_ID = var.google_client_id } : {})
         secrets = merge({
-          SESSION_SECRET       = { project = var.project_id, name = google_secret_manager_secret.app["omaiweb-session-secret"].secret_id, version = var.session_secret_version }
-          GOOGLE_CLIENT_SECRET = { project = var.project_id, name = google_secret_manager_secret.app["omaiweb-google-client-secret"].secret_id, version = var.oauth_secret_version }
-          }, var.paypal_client_id != "" ? {
-          PAYPAL_CLIENT_SECRET = { project = var.project_id, name = google_secret_manager_secret.app["omaiweb-paypal-client-secret"].secret_id, version = var.paypal_secret_version }
+          SESSION_SECRET                                                  = { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-session-secret"].secret_id, version = var.session_secret_version }
+          GOOGLE_CLIENT_SECRET                                            = local.oauth_client_secret
+          }, var.google_client_id_secret_ref != null ? { GOOGLE_CLIENT_ID = var.google_client_id_secret_ref } : {}, var.paypal_client_id != "" ? {
+          PAYPAL_CLIENT_SECRET                                            = { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-paypal-client-secret"].secret_id, version = var.paypal_secret_version }
         } : {})
       }
     }
   }
+  precondition {
+    condition     = var.google_client_id_secret_ref != null || var.google_client_id != ""
+    error_message = "Configure a Google client ID or an existing Secret Manager reference."
+  }
 }
 
 output "shared_lb_registration" {
-  description = "Merge into GemiHub's existing shared-vm.auto.tfvars; preserve all existing entries."
+  description = "Merge into kiokuflow's existing shared-vm.auto.tfvars; preserve all existing entries."
   value = {
-    shared_vm_backends = { omaiweb = "https://www.googleapis.com/compute/v1/projects/${var.shared_project_id}/global/backendServices/shared-apps-omaiweb" }
-    shared_vm_hosts    = { omaiweb = local.hosts }
+    shared_vm_backends = { gemihub-web = "https://www.googleapis.com/compute/v1/projects/${var.shared_project_id}/global/backendServices/shared-apps-gemihub-web" }
+    shared_vm_hosts    = { gemihub-web = local.hosts }
   }
 }
 

@@ -210,7 +210,7 @@ test("article file tools exclude private CRM and other shops; article images pub
       method: data === undefined ? "GET" : "POST",
       headers: {
         Origin: origin,
-        Cookie: `omai_session=${user}`,
+        Cookie: `gemihub_session=${user}`,
         "Content-Type": "application/json",
       },
       body: data === undefined ? undefined : JSON.stringify(data),

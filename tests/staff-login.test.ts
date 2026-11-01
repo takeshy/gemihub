@@ -70,7 +70,7 @@ test("registered staff log in and grant Calendar together without creating an ow
       redirect: "manual",
       headers: {
         Origin: origin,
-        Cookie: `omai_session=${id}${extra}`,
+        Cookie: `gemihub_session=${id}${extra}`,
         "Content-Type": "application/json",
       },
       body: data === undefined ? undefined : JSON.stringify(data),
@@ -210,7 +210,7 @@ test("registered staff log in and grant Calendar together without creating an ow
     new URL(login.location!, origin).searchParams.get("tab"),
     "bookings",
   );
-  assert.ok(login.cookie.startsWith("omai_session="));
+  assert.ok(login.cookie.startsWith("gemihub_session="));
   assert.equal(
     (await finish(pending)).status,
     400,

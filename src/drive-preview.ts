@@ -1,7 +1,7 @@
 import { driveMockSchema } from "../server/drive-mock";
 
 declare global {
-  interface Window { __OMAIWEB_MOCK__?: unknown }
+  interface Window { __GEMIHUB_MOCK__?: unknown }
 }
 
 export function drivePreviewData(protocol: string, value: unknown) {
