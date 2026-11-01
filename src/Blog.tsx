@@ -1,5 +1,8 @@
+import { createRequestId } from "./request-id";
+import { ArticleImageChooser } from "./ArticleImages";
+import type { ArticleFile } from "../server/article-files";
 import { DateInput } from "./DateInput";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { useApi } from "./api";
 import { PostContent } from "./PostContent";
 import {
@@ -14,6 +17,8 @@ import {
 } from "../server/post-domain";
 import { dateJST } from "../server/domain";
 import type { Workspace } from "./App";
+
+const ArticleEditor = lazy(() => import("./ArticleEditor"));
 export type Navigate = (href: string) => void;
 type Run = (fn: () => Promise<void>) => Promise<void>;
 const freshContent = (): Content => ({
@@ -30,7 +35,6 @@ export function BlogEditor({
   busy,
   notify,
   reload,
-  demo,
 }: {
   shop: Workspace;
   run: Run;
@@ -40,73 +44,96 @@ export function BlogEditor({
   demo: boolean;
 }) {
   const api = useApi();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [current, setCurrent] = useState<Post>();
-  const [content, setContent] = useState<Content>(freshContent);
-  const [review, setReview] = useState<number>();
-  const previewRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (review !== undefined)
-      previewRef.current?.scrollIntoView({
-        block: "start",
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
-      });
-  }, [review]);
-  const [instruction, setInstruction] = useState("");
-  const [source, setSource] = useState("");
+  const [posts, setPosts] = useState<Post[]>([]),
+    [current, setCurrent] = useState<Post>();
+  const [content, setContent] = useState<Content>(freshContent),
+    [method, setMethod] = useState<"ai" | "write">();
+  const [instruction, setInstruction] = useState(""),
+    [conversationId, setConversationId] = useState<string>();
+  const [messages, setMessages] = useState<
+    { role: "user" | "assistant"; text: string }[]
+  >([]);
+  const [saveId, setSaveId] = useState(createRequestId),
+    [turnId, setTurnId] = useState(createRequestId);
+  const [mediaBusy, setMediaBusy] = useState(false),
+    [imageOpen, setImageOpen] = useState(false),
+    [files, setFiles] = useState<ArticleFile[]>([]),
+    [fileError, setFileError] = useState("");
+  const requestInput = useRef<HTMLTextAreaElement>(null);
   const base = `/api/shops/${shop.id}/posts`;
   const clean =
     !!current && JSON.stringify(content) === JSON.stringify(current.draft);
+  const blocked = busy || mediaBusy || !shop.isOwner;
   async function load() {
-    const result = await api<Post[]>(base);
-    setPosts(result);
-    return result;
+    const values = await api<Post[]>(base);
+    setPosts(values);
+    return values;
   }
   useEffect(() => {
-    run(async () => {
+    void run(async () => {
       await load();
     });
   }, [shop.id]);
+  useEffect(() => {
+    if (method !== "ai") return;
+    let active = true;
+    setFileError("");
+    api<ArticleFile[]>(`${base}/files`)
+      .then((result) => {
+        if (active) setFiles(result);
+      })
+      .catch((error) => {
+        if (active) setFileError(error.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [base, method]);
   function choose(post?: Post) {
     setCurrent(post);
     setContent(post ? structuredClone(post.draft) : freshContent());
-    setReview(undefined);
+    setMethod(post ? "write" : undefined);
+    setSaveId(createRequestId());
+    setTurnId(createRequestId());
     setInstruction("");
-    setSource("");
+    setConversationId(undefined);
+    setMessages([]);
   }
   const update = <K extends keyof Content>(key: K, value: Content[K]) => {
-    setContent((c) => ({ ...c, [key]: value }));
-    setReview(undefined);
+    setContent((current) => ({ ...current, [key]: value }));
+    setSaveId(createRequestId());
   };
   async function accept(post: Post) {
     setCurrent(post);
     setContent(structuredClone(post.draft));
-    setReview(undefined);
+    setSaveId(createRequestId());
     await load();
     await reload();
+  }
+  function insertReference(path: string) {
+    const input = requestInput.current;
+    const start = input?.selectionStart ?? instruction.length,
+      end = input?.selectionEnd ?? start;
+    const text = `[[${path}]]`;
+    setInstruction(instruction.slice(0, start) + text + instruction.slice(end));
+    setTurnId(createRequestId());
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + text.length, start + text.length);
+    });
   }
   return (
     <div className="blog-editor-layout">
       <div className="panel post-management-list">
         <div className="section-top">
           <h2>お店のお便り</h2>
-          <button disabled={!shop.isOwner || busy} onClick={() => choose()}>
+          <button disabled={blocked} onClick={() => choose()}>
             ＋ 新しい記事
           </button>
         </div>
-        <p className="small muted">保存前の編集は、お客様には反映されません。</p>
-        <button
-          className="text-button"
-          onClick={() =>
-            run(async () => {
-              await load();
-            })
-          }
-        >
-          一覧を更新
-        </button>
+        <p className="small muted">
+          保存前の編集は、お客様には反映されません。
+        </p>
         {!posts.length && (
           <p className="empty">最初のお便りを書いてみましょう。</p>
         )}
@@ -115,210 +142,297 @@ export function BlogEditor({
             key={post.id}
             className={`post-management-item ${post.id === current?.id ? "selected" : ""}`}
             onClick={() => choose(post)}
+            disabled={blocked}
           >
             <span className="post-meta">
               <span className="pill">{postLabel(post.draft.category)}</span>
               <small>{post.published ? "公開中" : "下書き・非公開"}</small>
             </span>
             <strong>{post.draft.title}</strong>
-            <small>
-              {post.draft.date}
-              {post.published &&
-              JSON.stringify(post.draft) !== JSON.stringify(post.published)
-                ? " · 未公開の変更あり"
-                : ""}
-            </small>
+            <small>{post.draft.date.replaceAll("-", "/")}</small>
           </button>
         ))}
       </div>
       <div>
-        <div className="panel post-editor">
+        <section className="panel post-editor">
           <span className="eyebrow">BLOG & NEWS</span>
           <h2>{current ? "記事を編集する" : "新しいお便りを書く"}</h2>
-          <p className="muted small">
-            本文を直接書くか、メモから下書きを作れます。公開前に内容を確認してください。
-          </p>
           {!shop.isOwner && (
             <p className="notice">記事の作成・変更・公開は店主が行います。</p>
           )}
-          <fieldset disabled={!shop.isOwner || busy}>
-            <div className="form-grid">
-              <label className="field">
-                <span>記事の種類</span>
-                <select
-                  value={content.category}
-                  disabled={!!current?.address}
-                  onChange={(e) =>
-                    update("category", e.target.value as PostCategory)
-                  }
+          <div
+            className="article-methods"
+            role="group"
+            aria-label="記事の作成方法"
+          >
+            <button
+              type="button"
+              disabled={blocked}
+              aria-pressed={method === "ai"}
+              onClick={() => setMethod("ai")}
+            >
+              <b>AIに依頼する</b>
+              <span>書きたい内容や使う画像を伝えます</span>
+            </button>
+            <button
+              type="button"
+              disabled={blocked}
+              aria-pressed={method === "write"}
+              onClick={() => setMethod("write")}
+            >
+              <b>自分で作成する</b>
+              <span>見出しや写真を入れて記事を書きます</span>
+            </button>
+          </div>
+          {method && (
+            <>
+              <fieldset disabled={blocked}>
+                <div className="form-grid">
+                  <label className="field">
+                    <span>記事の種類</span>
+                    <select
+                      value={content.category}
+                      disabled={!!current?.address}
+                      onChange={(event) =>
+                        update("category", event.target.value as PostCategory)
+                      }
+                    >
+                      <option value="blogs">ブログ</option>
+                      <option value="announcements">お知らせ</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>記事の日付（表示用）</span>
+                    <DateInput
+                      aria-label="記事の日付（表示用）"
+                      value={content.date}
+                      disabled={!!current?.address}
+                      onValueChange={(value) => update("date", value)}
+                    />
+                  </label>
+                </div>
+              </fieldset>
+              {method === "ai" ? (
+                <section
+                  className="article-ai-chat"
+                  aria-label="AIと記事を作る"
                 >
-                  <option value="blogs">ブログ</option>
-                  <option value="announcements">お知らせ</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>記事の日付（表示用）</span>
-                <DateInput aria-label="記事の日付（表示用）"
-                  value={content.date}
-                  disabled={!!current?.address}
-                  onValueChange={value => update("date", value)} />
-              </label>
-            </div>
-            <label className="field">
-              <span>タイトル</span>
-              <input
-                value={content.title}
-                maxLength={160}
-                onChange={(e) => update("title", e.target.value)}
-                placeholder="秋の新しいデザインができました"
-              />
-            </label>
-            <label className="field">
-              <span>記事のアドレス（英小文字・数字・ハイフン）</span>
-              <input
-                value={content.slug}
-                maxLength={80}
-                disabled={!!current?.address}
-                onChange={(e) => update("slug", e.target.value)}
-                placeholder="autumn-design"
-              />
-            </label>
-            {current?.address && (
-              <p className="small muted">
-                公開後も同じアドレスで読めるよう、種類・日付・アドレスは固定されます。
-              </p>
-            )}
-            <label className="field">
-              <span>短い紹介（一覧に表示）</span>
-              <textarea
-                rows={2}
-                value={content.excerpt}
-                maxLength={300}
-                onChange={(e) => update("excerpt", e.target.value)}
-              />
-            </label>
-            <label className="field">
-              <span>本文（Markdown）</span>
-              <textarea
-                className="post-body-editor"
-                rows={14}
-                value={content.body}
-                maxLength={20000}
-                onChange={(e) => update("body", e.target.value)}
-                placeholder={
-                  "## 秋の色を、指先に。\n\n新しい季節のデザインをご紹介します。\n\n- くすみカラー\n- さりげないきらめき"
-                }
-              />
-            </label>
-            <p className="small muted">
-              「## 見出し」「- 箇条書き」「**強調**」などが使えます。HTML
-              や画像は使用できません。
-            </p>
-            <details className="post-writing-help">
-              <summary>メモから下書きを作る</summary>
-              <label className="field">
-                <span>お願いしたいこと</span>
-                <textarea
-                  rows={2}
-                  value={instruction}
-                  onChange={(e) => setInstruction(e.target.value)}
-                  placeholder="このメモから、お客様向けにやさしい文章で紹介してください"
-                />
-              </label>
-              <label className="field">
-                <span>元になるメモ</span>
-                <textarea
-                  rows={5}
-                  value={source}
-                  maxLength={20000}
-                  onChange={(e) => setSource(e.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>テキスト・Markdown ファイルを読み込む</span>
-                <input
-                  type="file"
-                  accept=".txt,.md,.markdown,text/plain,text/markdown"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file)
-                      run(async () => {
-                        if (file.size > 100000)
-                          throw new Error(
-                            "ファイルを10万バイト以内にしてください",
-                          );
-                        const text = await file.text();
-                        if (text.length > 20000)
-                          throw new Error("メモを2万文字以内にしてください");
-                        setSource(text);
+                  <div role="log" aria-label="記事の依頼">
+                    {messages.map((message, index) => (
+                      <div
+                        key={index}
+                        className={`article-chat-message ${message.role}`}
+                      >
+                        <b>{message.role === "user" ? "あなた" : "AI"}</b>
+                        <p>{message.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {fileError && (
+                    <p className="alert" role="alert">
+                      {fileError}
+                    </p>
+                  )}
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (!instruction.trim() || blocked) return;
+                      void run(async () => {
+                        const result = await api<{
+                          title: string;
+                          excerpt: string;
+                          body: string;
+                          conversationId?: string;
+                        }>(`${base}/propose`, {
+                          instruction,
+                          source: content.body,
+                          title: content.title,
+                          requestId: turnId,
+                          conversationId,
+                        });
+                        setContent((value) => ({
+                          ...value,
+                          title: result.title,
+                          body: result.body,
+                          excerpt: result.excerpt,
+                        }));
+                        setSaveId(createRequestId());
+                        setConversationId(result.conversationId);
+                        setMessages((value) => [
+                          ...value,
+                          { role: "user", text: instruction },
+                          {
+                            role: "assistant",
+                            text: "記事の案を作成しました。下のプレビューを確認してください。追加の依頼もできます。",
+                          },
+                        ]);
+                        setInstruction("");
+                        setTurnId(createRequestId());
+                        notify(
+                          "記事の案ができました。下のプレビューで確認できます。",
+                        );
                       });
-                  }}
-                />
-              </label>
-
+                    }}
+                  >
+                    <label>
+                      AIに伝える内容
+                      <textarea
+                        ref={requestInput}
+                        aria-label="AIに伝える内容"
+                        rows={4}
+                        maxLength={10000}
+                        value={instruction}
+                        disabled={blocked}
+                        onChange={(event) => {
+                          setInstruction(event.target.value);
+                          setTurnId(createRequestId());
+                        }}
+                        placeholder="例：この写真を使って、秋のおすすめネイルを紹介してください。[[spec.md]]の情報も参考にしてください。"
+                      />
+                    </label>
+                    <div className="article-composer-actions">
+                      <button
+                        type="button"
+                        disabled={blocked}
+                        onClick={() => setImageOpen(true)}
+                      >
+                        📎 画像を添付
+                      </button>
+                      <label>
+                        資料を選ぶ
+                        <select
+                          aria-label="記事の参照ファイル"
+                          value=""
+                          disabled={blocked}
+                          onChange={(event) => {
+                            if (event.target.value)
+                              insertReference(event.target.value);
+                          }}
+                        >
+                          <option value="">お店のファイルから選ぶ</option>
+                          {files.map((file) => (
+                            <option key={file.path} value={file.path}>
+                              {file.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="primary"
+                        disabled={blocked || !instruction.trim()}
+                      >
+                        {busy ? "AIが記事を作成しています…" : "送信する"}
+                      </button>
+                    </div>
+                    <p className="small muted">
+                      [[パス]]でお店のファイルを参照できます。画像を添付すると、参照するパスが入力されます。
+                    </p>
+                  </form>
+                  <ArticleImageChooser
+                    shopId={shop.id}
+                    open={imageOpen}
+                    close={() => setImageOpen(false)}
+                    select={(image) => insertReference(image.path)}
+                    onBusy={setMediaBusy}
+                  />
+                  {content.body && (
+                    <button
+                      type="button"
+                      disabled={blocked}
+                      onClick={() => setMethod("write")}
+                    >
+                      自分で編集する
+                    </button>
+                  )}
+                </section>
+              ) : (
+                <>
+                  <label className="field">
+                    <span>タイトル</span>
+                    <input
+                      maxLength={160}
+                      value={content.title}
+                      disabled={blocked}
+                      onChange={(event) => update("title", event.target.value)}
+                      placeholder="秋の新しいデザインができました"
+                    />
+                  </label>
+                  <Suspense
+                    fallback={
+                      <p role="status">記事の編集画面を読み込んでいます…</p>
+                    }
+                  >
+                    <ArticleEditor
+                      key={current?.id || "new"}
+                      shopId={shop.id}
+                      value={content.body}
+                      onChange={(value) => update("body", value)}
+                      disabled={blocked}
+                      onBusy={setMediaBusy}
+                    />
+                  </Suspense>
+                </>
+              )}
               <p className="small muted">
-                このアプリがアクセスできるメモを読み込めます。読み込めない場合は、本文を貼り付けるかファイルを選んでください。
+                記事の紹介文とアドレスは、保存時にAIが自動で作成します。既存記事のアドレスは維持します。
               </p>
               <button
                 className="primary"
-                disabled={!instruction.trim()}
-                onClick={() =>
-                  run(async () => {
-                    const proposed = await api<{
-                      title: string;
-                      excerpt: string;
-                      body: string;
-                    }>(`${base}/propose`, {
-                      instruction,
-                      source,
-                      title: content.title,
-                    });
-                    setContent((c) => ({ ...c, ...proposed }));
-                    setReview(undefined);
-                    notify(
-                      "記事の案ができました。プレビューで確認し、保存すると本番に反映されます。",
-                    );
-                  })
+                disabled={
+                  blocked ||
+                  !shop.published ||
+                  !content.title.trim() ||
+                  !content.body.trim() ||
+                  !content.date
                 }
-              >
-                メモから下書きを提案
-              </button>
-              {demo && (
-                <p className="small muted">
-                  未接続のデモではメモを本文にコピーします。文章の生成には
-                  Vertex AI の接続が必要です。
-                </p>
-              )}
-            </details>
-            <div className="actions">
-              <button
-                disabled={!shop.published || busy || !shop.isOwner}
                 onClick={() =>
-                  run(async () => {
-                    const parsed = postContentSchema.parse(content);
-                    const saved = await api<Post>(
-                      current ? `${base}/${current.id}/save` : base,
-                      current
-                        ? { version: current.version, content: parsed, publish: true }
-                        : { content: parsed, publish: true },
-                    );
-                    await accept(saved);
-                    notify(
-                      "保存して本番に反映しました。",
-                    );
+                  void run(async () => {
+                    try {
+                      const fields = postContentSchema
+                        .omit({ slug: true, excerpt: true })
+                        .parse(content);
+                      const metadata = await api<{
+                        slug: string;
+                        excerpt: string;
+                      }>(`${base}/metadata`, {
+                        content: fields,
+                        requestId: saveId,
+                        ...(current
+                          ? { postId: current.id, version: current.version }
+                          : {}),
+                      });
+                      const parsed = postContentSchema.parse({
+                        ...fields,
+                        ...metadata,
+                      });
+                      const saved = await api<Post>(
+                        current ? `${base}/${current.id}/save` : base,
+                        current
+                          ? {
+                              version: current.version,
+                              content: parsed,
+                              publish: true,
+                            }
+                          : {
+                              content: parsed,
+                              publish: true,
+                              requestId: saveId,
+                              autoMetadata: true,
+                            },
+                      );
+                      await accept(saved);
+                      notify("保存して本番に反映しました。");
+                    } catch (error) {
+                      await load().catch(() => {});
+                      throw error;
+                    }
                   })
                 }
               >
                 保存
               </button>
-              <button
-                disabled={!content.title.trim() || !content.body.trim()}
-                onClick={() => setReview(current?.version || 0)}
-              >
-                プレビュー
-              </button>
-            </div>
-          </fieldset>
+            </>
+          )}
           {!clean && current && (
             <p className="small muted">
               未保存の変更があります。保存すると本番に反映されます。
@@ -336,9 +450,9 @@ export function BlogEditor({
                 {current.published.title} ↗
               </a>
               <button
-                disabled={!shop.isOwner || busy}
+                disabled={blocked}
                 onClick={() =>
-                  run(async () => {
+                  void run(async () => {
                     await accept(
                       await api<Post>(`${base}/${current.id}/unpublish`, {
                         version: current.version,
@@ -354,28 +468,28 @@ export function BlogEditor({
               </button>
             </div>
           )}
-        </div>
-        {review !== undefined && (
-          <div ref={previewRef} className="panel post-preview">
-            <div className="preview-banner">
-              記事のプレビュー · 編集中の内容を確認できます。
-            </div>
-            <PostContent post={content} />
+        </section>
+        {method && (
+          <section className="panel post-preview" aria-label="記事のプレビュー">
+            <h2>記事のプレビュー</h2>
             <p className="small muted">
-              確認して保存すると本番に反映されます。日付は記事の表示日で、予約投稿ではありません。
+              入力中の記事を確認できます。保存すると本番に反映されます。
             </p>
-            <button onClick={() => setReview(undefined)}>プレビューを閉じる</button>
-            {!shop.published && (
-              <p className="small muted">
-                先にお店の予約ページを公開してください。
-              </p>
+            {content.title || content.body ? (
+              <PostContent
+                post={{ ...content, excerpt: clean ? content.excerpt : "" }}
+                imageBase={`/api/shops/${shop.id}/images`}
+              />
+            ) : (
+              <p className="empty">入力した記事がここに表示されます。</p>
             )}
-          </div>
+          </section>
         )}
       </div>
     </div>
   );
 }
+
 export function RecentPosts({
   posts,
   basePath,
@@ -503,7 +617,7 @@ export function PublicBlog({
         >
           ← {postLabel(category)}の一覧
         </a>
-        <PostContent post={post} />
+        <PostContent post={post} imageBase={`${baseApi}/images`} />
         <div className="actions">
           <a
             className="button primary"

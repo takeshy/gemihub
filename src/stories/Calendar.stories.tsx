@@ -12,7 +12,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const CalendarDisconnected: Story = {
-  name: "Calendar 未連携・担当者選択",
+  name: "Calendar 未連携・ログイン時に許可",
   args: { scenario: "calendar-disconnected" },
 };
 
@@ -22,11 +22,11 @@ export const CalendarConnected: Story = {
 };
 
 export const CalendarMember: Story = {
-  name: "Calendar 家族・スタッフ本人の連携",
+  name: "Calendar スタッフ本人の連携",
   args: { scenario: "calendar-member" },
 };
 
 export const CalendarMissingStaff: Story = {
-  name: "Calendar 担当者削除後の再接続",
+  name: "Calendar 担当スタッフ削除後",
   args: { scenario: "calendar-missing-staff" },
 };

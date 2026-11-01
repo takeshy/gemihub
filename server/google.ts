@@ -69,7 +69,7 @@ const tabs = [
 ];
 const headers = [
   ["id", "name", "duration", "price", "active", "imageId"],
-  ["id", "name", "menuIds", "weekdays", "start", "end"],
+  ["id", "name", "menuIds", "weekdays", "start", "end", "imageId"],
   ["key", "value"],
   ["id", "record"],
 ];
@@ -183,9 +183,9 @@ export async function syncConfig(
             ],
           },
           {
-            range: "staff!A1:F1000",
+            range: "staff!A1:G1000",
             values: [
-              ["id", "name", "menuIds", "weekdays", "start", "end"],
+              ["id", "name", "menuIds", "weekdays", "start", "end", "imageId"],
               ...config.staff.map((p) => [
                 p.id,
                 p.name,
@@ -193,6 +193,7 @@ export async function syncConfig(
                 JSON.stringify(p.weekdays),
                 p.start,
                 p.end,
+                p.imageId || "",
               ]),
             ],
           },
@@ -215,7 +216,7 @@ export async function syncConfig(
       requestBody: {
         ranges: [
           `menus!A${config.menus.length + 2}:F1000`,
-          `staff!A${config.staff.length + 2}:F1000`,
+          `staff!A${config.staff.length + 2}:G1000`,
           `pages!A${config.pages.length + 2}:B100`,
         ],
       },
@@ -302,12 +303,12 @@ export async function readConfig(
   const { sheets } = clients(token);
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: shop.google!.sheetId,
-    ranges: ["menus!A:F", "staff!A:F", "settings!A:B", "pages!A:B"],
+    ranges: ["menus!A:F", "staff!A:G", "settings!A:B", "pages!A:B"],
   });
   for (let i = 0; i < headers.length; i++)
     if (
       JSON.stringify(res.data.valueRanges?.[i]?.values?.[0]) !==
-      JSON.stringify(headers[i])
+      JSON.stringify(headers[i]) && !(i === 1 && JSON.stringify(res.data.valueRanges?.[i]?.values?.[0]) === JSON.stringify(headers[1].slice(0,6)))
     )
       throw Object.assign(
         new Error(
@@ -338,6 +339,7 @@ export async function readConfig(
       weekdays: JSON.parse(String(r[3])),
       start: String(r[4]),
       end: String(r[5]),
+      ...(r[6] ? { imageId: String(r[6]) } : {}),
     })),
   };
   return shopSchema.parse(config);

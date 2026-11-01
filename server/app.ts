@@ -1,3 +1,8 @@
+import { articleFiles, articleToolContext } from "./article-files.ts";
+import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts";
+import { articleInputSchema, articleMetadataSchema, generateArticleMetadata } from "./post-metadata.ts";
+import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } from "./staff-accounts.ts";
+import { inquiryStatus, inquiryStatusSchema } from "./inquiries.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, type ChatReference } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
@@ -15,7 +20,7 @@ import { Store, type Shop, type User } from "./store.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
 import { listDataSheets, readDataTable, writeDataRow } from "./data-management.ts";
-import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot } from "./menu-images.ts";
+import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
 import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
 import { generateImage } from "./image-generation.ts";
 import { managedImageIds } from "./image-references.ts";
@@ -72,6 +77,7 @@ import {
   postAddress,
   postKey,
   validatePostAddress,
+  uniquePostSlug,
   publicPosts,
   summarizePost,
   type Post,
@@ -153,6 +159,7 @@ export function createApp(
     createPage?: typeof createPageWithAI;
     mergePage?: typeof mergePageWithAI;
     generateImage?: typeof generateImage;
+    articleMetadata?: typeof generateArticleMetadata;
   } = { propose, proposeArticle, identifyVisual, explainSystem },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
@@ -160,14 +167,12 @@ export function createApp(
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const ownerToken = async (shop: Shop) =>
     (await store.get<User>("user", shop.owner))?.refreshToken;
-  const operator = async (user: User | undefined, shop: Shop) =>
-    !!user &&
-    (user.email === shop.owner ||
-      (
-        await store.get<{
-          accepted: boolean;
-        }>("member", `${shop.id}:${user.email}`)
-      )?.accepted === true);
+  const operator = async (user: User | undefined, shop: Shop) => {
+    if (!user) return false;
+    if (user.email === shop.owner) return true;
+    const member = await store.get<StaffMember>("member", `${shop.id}:${user.email}`);
+    return member?.accepted === true && member.status !== "revoked";
+  };
   const assertOperator = async (user: User | undefined, shop: Shop) => {
     if (!(await operator(user, shop)))
       fail(403, "運営メンバーのみ利用できます");
@@ -192,9 +197,10 @@ export function createApp(
     shop: Shop,
     type: Job["type"],
     data: Partial<Job> = {},
+    id: string = randomUUID(),
   ) {
     if (!shop.google) return;
-    const id = randomUUID();
+    if(await store.get("job",id))return;
     await store.put("job", id, {
       id,
       shopId: shop.id,
@@ -211,15 +217,10 @@ export function createApp(
       (j) => j.shopId === shop.id,
     )) {
       try {
-        if (job.type === "posts")
-          await syncPostFiles(
-            shop,
-            await postsFor(shop),
-            token,
-            async () => await store.saveShop(shop),
-            config => menuImageSnapshot(store, shop, config, crmFiles, token),
-          );
-        else await sendMail(token, job.to!, job.subject!, job.body!);
+        if (job.type === "posts") {
+          const posts=await postsFor(shop);
+          await syncPostFiles(shop,posts,token,async()=>await store.saveShop(shop),config=>menuImageSnapshot(store,shop,config,crmFiles,token,publishedPostImageIds(posts)));
+        } else await sendMail(token, job.to!, job.subject!, job.body!);
         await store.delete("job", job.id);
       } catch (err) {
         job.error = err instanceof Error ? err.message : "連携エラー";
@@ -396,12 +397,26 @@ export function createApp(
         await login(store, res, ticket.user);
         return redirect(res, publicHost ? "/" : `/s/${ticket.slug}`);
       }
+      const staffLogin = path.match(/^\/api\/staff-login\/([^/]+)$/);
+      if (staffLogin && method === "GET" && !publicHost) {
+        const shop = allShops.find(s => s.id === staffLogin[1] && s.published) || fail(404, "お店がありません");
+        return json(res, { name: shop.published!.name, configured: !!process.env.GOOGLE_CLIENT_ID });
+      }
       if (path === "/auth/google" && method === "GET" && !publicHost) {
         if (!process.env.GOOGLE_CLIENT_ID)
           fail(
             503,
             "Google ログインはサーバーで設定してください。ローカル確認にはデモモードを利用できます。",
           );
+        const staffShopId = url.searchParams.get("staffShop");
+        if (staffShopId) {
+          const shop = allShops.find(s => s.id === staffShopId && s.published) || fail(404, "お店がありません");
+          const state = randomBytes(32).toString("base64url");
+          const verifier = randomBytes(48).toString("base64url");
+          await store.put("oauth", digest(state), { verifier, staffShopId: shop.id, expires: Date.now() + 600000 });
+          res.setHeader("Set-Cookie", `omai_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
+          return redirect(res, oauth().generateAuthUrl({ access_type: "offline", prompt: "consent select_account", scope: ["openid", "email", "profile", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }));
+        }
         const slug = url.searchParams.get("shop");
         const shop = slug
           ? allShops.find((s) => s.slug === slug && s.published)
@@ -465,12 +480,32 @@ export function createApp(
           shopId?: string;
           returnHost: string;
           expires: number;
+          staffShopId?: string;
           calendarShopId?: string;
           email?: string;
           staffId?: string;
         }>("oauth", key);
         if (!pending || pending.expires < Date.now())
           fail(400, "ログインの有効期限が切れました");
+        if (url.searchParams.has("error")) fail(400, "Google ログインとカレンダーの利用許可を完了してください。スタッフ用ログインからやり直せます。");
+        if (pending.staffShopId) {
+          const identity = await calendar.exchange(url.searchParams.get("code") || "", pending.verifier);
+          return await store.locked(pending.staffShopId, async () => {
+            const shop = await store.shop(pending.staffShopId!) || fail(404, "お店がありません");
+            const key = staffAccountKey(shop.id, identity.email);
+            const account = (await staffAccounts(store, shop)).find(account => account.email === identity.email) || fail(403, "このGoogleアカウントはスタッフに登録されていません。店主にメールアドレスの登録を依頼してください。");
+            const config = await effective(shop);
+            if (!config?.staff.some(staff => staff.id === account.staffId)) fail(403, "担当スタッフが削除されています。店主に確認してください。");
+            if ((await connections(store, shop)).some(connection => connection.staffId === account.staffId && connection.email !== identity.email)) fail(409, "この担当スタッフは別のアカウントと連携されています。");
+            await store.put("calendar", key, { shopId: shop.id, email: identity.email, staffId: account.staffId, refreshToken: identity.refreshToken });
+            if (identity.email !== shop.owner) {
+              const member = await store.get<StaffMember>("member", key) || fail(403, "スタッフの登録がありません");
+              await store.put("member", key, { ...member, accepted: true, status: "accepted", acceptedAt: member.acceptedAt || new Date().toISOString() });
+            }
+            await login(store, res, { email: identity.email, name: identity.name || config.staff.find(staff => staff.id === account.staffId)!.name, role: identity.email === shop.owner ? "owner" : "customer", shopId: shop.id });
+            return redirect(res, `/?shop=${encodeURIComponent(shop.id)}&tab=bookings&staffLogin=connected`);
+          });
+        }
         if (pending.calendarShopId) {
           if (!user || user.email !== pending.email) fail(403, "連携を開始したアカウントでログインしてください");
           return await store.locked(pending.calendarShopId, async () => {
@@ -615,7 +650,7 @@ export function createApp(
           }>("member")
         ).filter(
           (m) =>
-            m.email === user.email && !m.accepted && m.status !== "revoked",
+            m.email === user.email && !m.accepted && m.status !== "revoked" && m.status !== "registered",
         );
         return json(
           res,
@@ -638,7 +673,7 @@ export function createApp(
             status?: string;
             acceptedAt?: string;
           }>("member", `${accept[1]}:${user.email}`);
-          if (!m || m.status === "revoked")
+          if (!m || m.status === "revoked" || m.status === "registered")
             fail(403, "このアカウントへの招待はありません");
           m.accepted = true;
           m.status = "accepted";
@@ -665,6 +700,59 @@ export function createApp(
             });
             const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
             return json(res, await generateLibraryImage(store, fresh, input, crmFiles, token, intelligence.generateImage || generateImage));
+          });
+        }
+        if (action === "posts/files" && method === "GET") {
+          assertOwner(user,shop);
+          return json(res,(await articleFiles(store,shop,await effective(shop))).files);
+        }
+        if (action === "posts/propose" && method === "POST") {
+          assertOwner(user,shop);
+          const input=z.object({instruction:z.string().trim().min(1).max(10000),source:z.string().max(20000).default(""),title:z.string().max(160).default(""),requestId:z.uuid().default(()=>randomUUID()),conversationId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).parse(await body(req));
+          const id=digest(`${shop.id}:${user!.email}:article:${input.requestId}`);
+          return await store.locked(`article:${id}`,async()=>{
+            const hash=digest(JSON.stringify(input));
+            const previousRequest=await store.get<{hash:string}>("articleRequest",id);
+            if(previousRequest&&previousRequest.hash!==hash)fail(409,"記事の依頼が変わっています。新しい依頼として送信してください");
+            if(!previousRequest)await store.put("articleRequest",id,{hash});
+            const prepared=await store.locked(shop.id,async()=>{
+              const fresh=(await store.shop(shop.id))!;assertOwner(user,fresh);
+              const config=await effective(fresh);
+              const chat=input.conversationId?await readConversation(store,fresh,user!.email,input.conversationId):await createConversation(store,fresh,user!.email,"consult",input.requestId);
+              await appendChatMessage(store,fresh,chat,{role:"user",text:input.instruction,requestId:input.requestId});
+              const previous=chat.messages.find(message=>message.role==="assistant"&&message.requestId===input.requestId)?.detail.article;
+              return {fresh,config,chat,previous};
+            });
+            if(prepared.previous)return json(res,{...prepared.previous,conversationId:prepared.chat.id});
+            const context=await articleToolContext(store,prepared.fresh,prepared.config,wikiPaths(input.instruction),crmFiles,store.memory?"":await ownerToken(prepared.fresh)||fail(503,"店主のGoogle再接続が必要です"));
+            const result=await intelligence.proposeArticle(input.instruction,input.source,input.title,demoEnabled()&&!process.env.GOOGLE_CLOUD_PROJECT,{...context,messages:conversationContext(prepared.chat)});
+            const parsed=z.object({title:z.string().min(1).max(160),excerpt:z.string().max(300),body:z.string().min(1).max(20000)}).parse(result);
+            for(const imageId of postImageIds(parsed.body))if(!context.files.some(file=>file.imageId===imageId))fail(400,"参照できない画像が記事に含まれています");
+            await store.locked(shop.id,async()=>{
+              const fresh=(await store.shop(shop.id))!;assertOwner(user,fresh);
+              await appendChatMessage(store,fresh,prepared.chat,{role:"assistant",text:`${parsed.title}\n\n${parsed.body}`.slice(0,12000),requestId:input.requestId,detail:{article:parsed}});
+            });
+            return json(res,{...parsed,conversationId:prepared.chat.id});
+          });
+        }
+        if (action === "posts/metadata" && method === "POST") {
+          assertOwner(user,shop);
+          const input = z.object({content:articleInputSchema,requestId:z.uuid(),postId:z.string().optional(),version:z.number().int().positive().optional()}).parse(await body(req));
+          const id=digest(`${shop.id}:${user!.email}:post-metadata:${input.requestId}`);
+          return await store.locked(`post-metadata:${id}`,async()=>{
+            const existing=await store.locked(shop.id,async()=>{
+              const fresh=(await store.shop(shop.id))!;assertOwner(user,fresh);
+              if(!input.postId)return undefined;
+              const post=(await postsFor(fresh)).find(post=>post.id===input.postId)||fail(404,"記事がありません");
+              if(post.version!==input.version)fail(409,"記事が更新されています。一覧から記事を開き直してください");
+              return post;
+            });
+            const hash=digest(JSON.stringify(input));
+            const cached=await store.get<{hash:string;metadata:z.infer<typeof articleMetadataSchema>}>("postMetadata",id);
+            if(cached){if(cached.hash!==hash)fail(409,"記事の内容が変わっています。もう一度保存してください");return json(res,cached.metadata);}
+            const generated=articleMetadataSchema.parse(await (intelligence.articleMetadata||generateArticleMetadata)(input.content,demoEnabled()&&!process.env.GOOGLE_CLOUD_PROJECT));
+            const metadata={...generated,slug:existing?.address?.slug||existing?.draft.slug||generated.slug};
+            await store.put("postMetadata",id,{hash,metadata});return json(res,metadata);
           });
         }
         return await store.locked(shop.id, async () => {
@@ -710,6 +798,43 @@ export function createApp(
             assertOwner(user, fresh);
             const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
             return json(res, await readMenuImage(store, fresh, menuImage[1], crmFiles, token));
+          }
+          const staffPhotoRoute = action.match(/^staff-photo(?:\/images(?:\/([a-f0-9]{64}))?)?$/);
+          if (staffPhotoRoute && (method === "GET" || method === "POST")) {
+            const assigned = (await staffAccounts(store, fresh)).find(account => account.email === user!.email) || fail(403, "担当スタッフの登録がありません");
+            const current = await effective(fresh);
+            const staff = current.staff.find(staff => staff.id === assigned.staffId) || fail(403, "担当スタッフが削除されています");
+            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です");
+            const choices = (await listImages(store, fresh, current)).filter(image => image.id === staff.imageId);
+            for (const image of await store.entries<ImageUpload>("menuImageUpload")) {
+              if (image.value.shopId === fresh.id && image.value.uploadedBy === user!.email && image.value.complete && !image.value.archived && !choices.some(choice => choice.id === image.id)) {
+                choices.push({id:image.id,name:image.value.name || "スタッフ写真",mimeType:image.value.mimeType,size:image.value.size,createdAt:image.value.createdAt || "",source:"upload",usedBy:[]});
+              }
+            }
+            if (action === "staff-photo" && method === "GET") return json(res, { staffId: staff.id, name: staff.name, imageId: staff.imageId });
+            if (action === "staff-photo/images" && method === "GET") return json(res, choices);
+            if (staffPhotoRoute[1] && method === "GET") {
+              if (!choices.some(image => image.id === staffPhotoRoute[1])) fail(404, "画像がありません");
+              return json(res, await readMenuImage(store, fresh, staffPhotoRoute[1], crmFiles, token));
+            }
+            if (action === "staff-photo/images" && method === "POST") return json(res, await uploadMenuImage(store, fresh, await body(req, 8*1024*1024), crmFiles, token, user!.email));
+            if (action === "staff-photo" && method === "POST") {
+              const input = z.object({imageId:z.string().regex(/^[a-f0-9]{64}$/).optional(),previousImageId:z.string().default(""),requestId:z.uuid()}).parse(await body(req));
+              if (input.imageId && !choices.some(image => image.id === input.imageId)) fail(403, "自分の写真を選択してください");
+              const id = digest(`${fresh.id}:${user!.email}:staff-photo:${input.requestId}`);
+              let plan = await store.get<Plan>("plan",id);
+              if (plan) {
+                if (plan.config.staff.find(person=>person.id===staff.id)?.imageId !== input.imageId) fail(409, "保存する写真が変わっています");
+              } else {
+                if ((staff.imageId || "") !== input.previousImageId) fail(409, "写真が更新されています。最新の状態を確認してください");
+                if (staff.imageId === input.imageId) return json(res,{ok:true});
+                const config = shopSchema.parse({...current,staff:current.staff.map(person=>person.id===staff.id?{...person,imageId:input.imageId}:person)});
+                plan = {id,shopId:fresh.id,base:fresh.revision,source:current,config,approved:true,local:true,createdAt:Date.now(),summary:[`${staff.name}のスタッフ写真を更新`],checklist};
+                await store.put("plan",id,plan);
+              }
+              return json(res, await publishConfiguration(fresh,plan));
+            }
+            fail(404, "見つかりません");
           }
           const liveSettings = action.match(/^live-settings\/(basic|menus|staff|hours|rules)$/);
           if (liveSettings && (method === "GET" || method === "POST")) {
@@ -789,9 +914,52 @@ export function createApp(
             const config = validateVisualChange(visual.config, proposed.config, input.target);
             return json(res, { config, summary: planSummary(visual.config, config) });
           }
+          if (action === "staff-accounts" && method === "GET") {
+            assertOwner(user, fresh);
+            const accounts = await staffAccounts(store, fresh);
+            const config = await effective(fresh);
+            const members = await store.records<StaffMember>("member", fresh);
+            const linked = await connections(store, fresh);
+            return json(res, { configured: !!process.env.GOOGLE_CLIENT_ID, loginUrl: `/staff-login/${fresh.id}`, staff: (config?.staff || []).map(staff => {
+              const account = accounts.find(account => account.staffId === staff.id);
+              return { staffId: staff.id, name: staff.name, email: account?.email || "", accepted: account?.email === fresh.owner || members.some(member => member.email === account?.email && member.accepted), connected: linked.some(connection => connection.staffId === staff.id && connection.email === account?.email) };
+            }) });
+          }
+          if (action === "staff-accounts" && method === "POST") {
+            assertOwner(user, fresh);
+            const input = z.object({ staffId: z.string().min(1), email: z.union([z.string().trim().pipe(emailSchema), z.literal("")]), previousEmail: z.string().default("") }).parse(await body(req));
+            const config = await effective(fresh);
+            if (!config?.staff.some(staff => staff.id === input.staffId)) fail(400, "担当スタッフを選択してください");
+            const accounts = await staffAccounts(store, fresh);
+            const previous = accounts.find(account => account.staffId === input.staffId);
+            if ((previous?.email || "") !== input.previousEmail) fail(409, "登録内容が更新されています。最新の内容を確認してください。");
+            if (input.email && accounts.some(account => account.email === input.email && account.staffId !== input.staffId)) fail(409, "このアカウントは別のスタッフに登録されています。");
+            if (input.email && (await connections(store, fresh)).some(connection => (connection.staffId === input.staffId && connection.email !== input.email) || (connection.email === input.email && connection.staffId !== input.staffId))) {
+              if (!previous || previous.email === input.email) fail(409, "別のスタッフとしてカレンダー連携中です。本人が連携を解除してから登録してください。");
+            }
+            if (previous && previous.email !== input.email) {
+              const key = staffAccountKey(fresh.id, previous.email);
+              if (previous.email !== fresh.owner) {
+                const member = await store.get<StaffMember>("member", key);
+                if (member) await store.put("member", key, { ...member, accepted: false, status: "revoked", revokedAt: new Date().toISOString() });
+              }
+              await store.delete("calendar", key);
+              await store.delete("staffAccount", key);
+            }
+            if (input.email) {
+              const key = staffAccountKey(fresh.id, input.email);
+              if (input.email !== fresh.owner) {
+                const member = await store.get<StaffMember>("member", key);
+                await store.put("member", key, { shopId: fresh.id, email: input.email, accepted: member?.status !== "revoked" && member?.accepted === true, status: member?.status !== "revoked" && member?.accepted ? "accepted" : "registered", invitedAt: member?.invitedAt || new Date().toISOString(), acceptedAt: member?.acceptedAt || "", revokedAt: "" });
+              }
+              await store.put("staffAccount", key, { shopId: fresh.id, staffId: input.staffId, email: input.email } satisfies StaffAccount);
+            }
+            return json(res, { ok: true });
+          }
           if (action === "calendar" && method === "GET") {
             const connection = await store.get<CalendarConnection>("calendar", `${fresh.id}:${user!.email}`);
-            return json(res, { connected: !!connection, staffId: connection?.staffId, email: user!.email, configured: !!process.env.GOOGLE_CLIENT_ID });
+            const account = (await staffAccounts(store, fresh)).find(account => account.email === user!.email);
+            return json(res, { connected: !!connection, staffId: connection?.staffId || account?.staffId, email: user!.email, configured: !!process.env.GOOGLE_CLIENT_ID, loginUrl: `/staff-login/${fresh.id}` });
           }
           if (action === "calendar/disconnect" && method === "POST") {
             await store.delete("calendar", `${fresh.id}:${user!.email}`);
@@ -802,6 +970,8 @@ export function createApp(
             const { staffId } = z.object({ staffId: z.string().min(1) }).parse(await body(req));
             const config = await effective(fresh);
             if (!config?.staff.some(s => s.id === staffId)) fail(400, "予約の担当者を選択してください");
+            const assigned = (await staffAccounts(store, fresh)).find(account => account.email === user!.email);
+            if (assigned && assigned.staffId !== staffId) fail(403, "登録されている担当スタッフで接続してください");
             if ((await connections(store, fresh)).some(c => c.staffId === staffId && c.email !== user!.email)) fail(409, "この担当者は別のメンバーが連携済みです");
             const state = randomBytes(32).toString("base64url");
             const verifier = randomBytes(48).toString("base64url");
@@ -953,34 +1123,20 @@ export function createApp(
           }
           if (action === "posts" && method === "GET")
             return json(res, await postsFor(fresh));
-          if (action === "posts/propose" && method === "POST") {
-            assertOwner(user, fresh);
-            const input = z
-              .object({
-                instruction: z.string().min(1).max(10000),
-                source: z.string().max(20000).default(""),
-                title: z.string().max(160).default(""),
-              })
-              .parse(await body(req));
-            return json(
-              res,
-              await intelligence.proposeArticle(
-                input.instruction,
-                input.source,
-                input.title,
-                demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT,
-              ),
-            );
-          }
           if (action === "posts" && method === "POST") {
             assertOwner(user, fresh);
-            const { content, publish } = z
-              .object({ content: postContentSchema, publish: z.boolean().optional() })
+            const { content, publish, requestId, autoMetadata } = z
+              .object({ content: postContentSchema, publish: z.boolean().optional(), requestId:z.uuid().optional(), autoMetadata:z.boolean().optional() })
               .parse(await body(req));
+            const creationId = requestId ? digest(`${fresh.id}:${user!.email}:post:${requestId}`) : randomUUID();
+            const creationHash = digest(JSON.stringify({content,publish}));
+            const receipt = requestId ? await store.get<{hash:string;postId:string}>("postCreation",creationId) : undefined;
+            if(receipt){if(receipt.hash!==creationHash)fail(409,"保存する記事の内容が変わっています");return json(res,(await postsFor(fresh)).find(post=>post.id===receipt.postId)||fail(404,"記事がありません"));}
+            if(autoMetadata)content.slug=uniquePostSlug(content,await postsFor(fresh),creationId);
             if (publish && (!fresh.published || fresh.publishingPlanId)) fail(409, "先にお店の反映処理を完了してください");
             const at = new Date().toISOString();
             const post: Post = {
-              id: randomUUID(),
+              id: creationId,
               shopId: fresh.id,
               draft: content,
               published: null,
@@ -989,6 +1145,7 @@ export function createApp(
               updatedAt: at,
               updatedBy: user!.email,
             };
+            for(const imageId of postImageIds(content.body))await readMenuImage(store,fresh,imageId,crmFiles,store.memory?"":await ownerToken(fresh)||fail(503,"店主のGoogle再接続が必要です"));
             validatePostAddress(post, content, await postsFor(fresh));
             if (publish) {
               post.published = structuredClone(content); post.publishedAt = at; post.address = postAddress(content);
@@ -996,6 +1153,7 @@ export function createApp(
             }
             await store.transaction(async () => {
               await store.put("post", post.id, post);
+              if(requestId)await store.put("postCreation",creationId,{hash:creationHash,postId:post.id});
               if (publish) await store.saveShop(fresh);
               await enqueue(fresh, "posts");
             });
@@ -1019,7 +1177,7 @@ export function createApp(
             if (version !== post.version)
               fail(
                 409,
-                "別の画面で記事が更新されました。一覧を更新してからやり直してください",
+                "別の画面で記事が更新されました。一覧から記事を開き直してください",
               );
             const at = new Date().toISOString();
             if (postAction[2] === "save") {
@@ -1027,7 +1185,8 @@ export function createApp(
                 .object({ content: postContentSchema, publish: z.boolean().optional() })
                 .parse(raw);
               if (publish && (!fresh.published || fresh.publishingPlanId)) fail(409, "先にお店の反映処理を完了してください");
-              validatePostAddress(post, content, await postsFor(fresh));
+              for(const imageId of postImageIds(content.body))await readMenuImage(store,fresh,imageId,crmFiles,store.memory?"":await ownerToken(fresh)||fail(503,"店主のGoogle再接続が必要です"));
+            validatePostAddress(post, content, await postsFor(fresh));
               post.draft = content;
               if (publish) {
                 post.published = structuredClone(content); post.publishedAt = at; post.address = postAddress(content);
@@ -1039,6 +1198,7 @@ export function createApp(
                 fail(409, "先にお店の予約ページを公開してください");
               if (fresh.publishingPlanId)
                 fail(409, "お店の公開処理を完了してから記事を公開してください");
+              for(const imageId of postImageIds(post.draft.body))await readMenuImage(store,fresh,imageId,crmFiles,store.memory?"":await ownerToken(fresh)||fail(503,"店主のGoogle再接続が必要です"));
               validatePostAddress(post, post.draft, await postsFor(fresh));
               post.published = structuredClone(post.draft);
               post.publishedAt = at;
@@ -1318,24 +1478,27 @@ export function createApp(
             await flush(fresh);
             return json(res, { ok: true });
           }
-          const reply = action.match(/^inquiries\/([^/]+)\/reply$/);
-          if (reply && method === "POST") {
-            const { text } = z
-              .object({ text: z.string().min(1).max(5000) })
-              .parse(await body(req));
-            const q = (await inquiries(fresh)).find((q) => q.id === reply[1]);
-            if (!q || q.shopId !== fresh.id)
-              fail(404, "お問い合わせがありません");
-            q.reply = text;
-            q.status = "replied";
-            await store.put("inquiry", q.id, q);
-            await enqueue(fresh, "mail", {
-              to: q.email,
-              subject: `${fresh.published!.name} からの返信`,
-              body: text,
-            });
-            await flush(fresh);
-            return json(res, { ok: true });
+          const inquiryAction=action.match(/^inquiries\/([^/]+)\/(reply|status)$/);
+          if(inquiryAction&&method==="POST"){
+            const q=(await inquiries(fresh)).find(q=>q.id===inquiryAction[1]&&q.shopId===fresh.id)||fail(404,"お問い合わせがありません");
+            if(inquiryAction[2]==="status"){
+              const input=z.object({status:inquiryStatusSchema,previousStatus:inquiryStatusSchema.optional()}).parse(await body(req));
+              const current=inquiryStatus(q);
+              if(input.previousStatus&&input.previousStatus!==current&&input.status!==current)fail(409,"対応状況が更新されています。最新の状態を確認してください");
+              q.status=input.status;await store.put("inquiry",q.id,q);return json(res,{ok:true});
+            }
+            const input=z.object({text:z.string().trim().min(1).max(5000),requestId:z.uuid().optional(),previousReply:z.string().max(5000).optional(),status:inquiryStatusSchema.optional()}).parse(await body(req));
+            const key=digest(`${fresh.id}:${q.id}:${input.requestId||randomUUID()}`);
+            const hash=digest(JSON.stringify({text:input.text,previousReply:input.previousReply??null,status:input.status??null}));
+            const operation=await store.get<{hash:string;done:boolean}>("inquiryReplyRequest",key);
+            if(operation&&operation.hash!==hash)fail(409,"返信内容が変わっています。入力し直してください");
+            if(operation?.done){await flush(fresh);return json(res,{ok:true});}
+            if(input.previousReply!==undefined&&q.reply!==input.previousReply&&!(operation&&q.reply===input.text))fail(409,"他の担当者が返信しています。最新の状態を確認してください");
+            await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:false});
+            q.reply=input.text;q.status=input.status||inquiryStatus(q);await store.put("inquiry",q.id,q);
+            await enqueue(fresh,"mail",{to:q.email,subject:`${fresh.published!.name} からの返信`,body:input.text},digest(`${key}:mail`));
+            await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:true});
+            await flush(fresh);return json(res,{ok:true});
           }
           if (action === "invite" && method === "POST") {
             assertOwner(user, fresh);
@@ -1383,6 +1546,7 @@ export function createApp(
               revokedAt: new Date().toISOString(),
             });
             await store.delete("calendar", `${fresh.id}:${email}`);
+            await store.delete("staffAccount", `${fresh.id}:${email}`);
             return json(res, { ok: true });
           }
           if (action === "domain" && method === "POST") {
@@ -1488,7 +1652,7 @@ export function createApp(
           const config = await effective(shop);
           const menuImage = action.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
           if (menuImage && method === "GET") {
-            const ids = menuImage[1] === "images" ? managedImageIds(config) : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
+            const ids = menuImage[1] === "images" ? [...managedImageIds(config),...publishedPostImageIds(await postsFor(shop))] : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
             if (!ids.includes(menuImage[2])) fail(404, "画像がありません");
             return json(res, await readMenuImage(store, shop, menuImage[2], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
           }
@@ -1651,7 +1815,7 @@ export function createApp(
               email: u.email,
               ...input,
               reply: "",
-              status: "open",
+              status: "in_progress",
               at: new Date().toISOString(),
             };
             await store.put("inquiry", q.id, q);

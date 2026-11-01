@@ -57,9 +57,9 @@ export function ImageLibrary({ shopId, onSelect, selectedId }: { shopId: string;
   const visible = images?.filter(image => (source === "all" || image.source === source) && `${image.name} ${image.prompt || ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   const zoomIndex = visible?.findIndex(image => image.id === zoomId) ?? -1;
   return <section className={onSelect ? "image-library image-picker-library" : "panel image-library"} aria-label={onSelect ? "画像を選ぶ" : "画像管理"}>
-    <div className="section-top">{onSelect ? <h3>画像を選ぶ</h3> : <h2>画像管理</h2>}<button type="button" disabled={busy || listening} onClick={() => setAttempt(v => v + 1)}>一覧を更新</button></div>
+    <div className="section-top">{onSelect ? <h3>画像を選ぶ</h3> : <h2>画像管理</h2>}</div>
     <p>アップロードした画像とAIで生成した画像をまとめて管理します。ページやメニューで使って保存・反映するまで、お客様には公開されません。</p>
-    {error && <p className="alert" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
+    {error && <p className="alert" role="alert">{error}{!images && <button type="button" onClick={() => { setError(""); setAttempt(v => v + 1); }}>再試行</button>}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     <div className="image-library-tools"><label>画像をアップロード<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy || listening} onChange={event => {
       const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
       if (file.size > 5 * 1024 * 1024 || !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) { setError("5MB以内のPNG・JPEG・GIF・WebP画像を選んでください。"); return; }

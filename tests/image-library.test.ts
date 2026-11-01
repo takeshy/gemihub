@@ -9,7 +9,7 @@ import { propose, proposeArticle, identifyVisual, explainSystem } from "../serve
 import { memoryCustomerFiles } from "../server/customer-files.ts";
 import { uploadMenuImage, readMenuImage, menuImageSnapshot, validateMenuImages, type ImageUpload } from "../server/menu-images.ts";
 import { generateLibraryImage, listImages } from "../server/image-library.ts";
-import { generateImageSchema, type LibraryImage } from "../server/image-library-domain.ts";
+import { requestImageIdsSchema, requestImageTotalLimit, generateImageSchema, type LibraryImage } from "../server/image-library-domain.ts";
 import { artifacts } from "../server/artifacts.ts";
 import { driveMock } from "../server/drive-mock.ts";
 import { createPreviewClient } from "../src/local-preview.ts";
@@ -68,7 +68,11 @@ test("Private memo images stay on customer pages and out of managed inputs; sele
   const archived = await uploadMenuImage(store, shop, { ...image, name: "削除.png", requestId: randomUUID() }, files, ""); await api(`images/${archived.imageId}/archive`, {}); assert.equal((await api("plan", { ...request, imageIds: [archived.imageId] })).status, 404);
   const huge = { ...image, data: Buffer.concat([Buffer.from(image.data, "base64"), Buffer.alloc(4 * 1024 * 1024)]).toString("base64") };
   const largeIds = await Promise.all([1, 2, 3].map(async n => (await uploadMenuImage(store, shop, { ...huge, name: `${n}.png`, requestId: randomUUID() }, files, "")).imageId));
-  await assert.rejects(readRequestImages(store, shop, largeIds, files, ""), /合計10MB/);
+  const optimized = await readRequestImages(store, shop, largeIds, files, "");
+  assert.equal(optimized.length, 3);
+  assert.ok(optimized.every(image => image.mimeType === "image/jpeg"));
+  assert.ok(optimized.reduce((sum,image) => sum + Buffer.byteLength(image.data,"base64"),0) < 12 * 1024 * 1024);
+  assert.equal((await readMenuImage(store,shop,largeIds[0],files,"")).data,huge.data,"original in Drive remains intact");
 });
 
 test("Image library is owner-only; header/page images are public only when referenced and cannot expose private attachments or other shops", async t => {
@@ -206,4 +210,25 @@ test("Header and page managed images survive scoped artifacts and offline previe
   const preview = createPreviewClient(config, { customerName: "お客様", bookings: [], posts: [] }, shop.id, async id => assets[id]);
   assert.deepEqual(await preview(`/api/public/local-preview/images/${imageId}`), image);
   await assert.rejects(preview(`/api/public/local-preview/images/${"e".repeat(64)}`));
+});
+
+test("AI requests accept 15 original images totaling 75MB and prepare bounded model inputs", async () => {
+  const ids = Array.from({length:15},(_,index) => String(index+1).padStart(64,"0"));
+  assert.equal(requestImageIdsSchema.safeParse(ids).success,true);
+  assert.equal(requestImageIdsSchema.safeParse([...ids,"f".repeat(64)]).success,false);
+  const store = new Store(":memory:");
+  const shop = await store.createShop("owner@example.com");
+  const bytes = Buffer.alloc(5*1024*1024);
+  Buffer.from(image.data,"base64").copy(bytes);
+  assert.equal(bytes.length*15,requestImageTotalLimit);
+  for(const id of ids) await store.put("menuImageUpload",id,{shopId:shop.id,fileId:id,size:bytes.length,mimeType:"image/png",complete:true,name:`${id}.png`});
+  const files = { ...memoryCustomerFiles(store), async read(){return bytes;} };
+  const prepared = await readRequestImages(store,shop,ids,files,"");
+  assert.equal(prepared.length,15);
+  assert.deepEqual(prepared.map(image=>image.id),ids);
+  assert.ok(Buffer.byteLength(JSON.stringify(requestImageParts({request:"test"},prepared))) < 16*1024*1024);
+  const record = (await store.get<ImageUpload>("menuImageUpload",ids[0]))!;
+  await store.put("menuImageUpload",ids[0],{...record,size:record.size+1});
+  await assert.rejects(readRequestImages(store,shop,ids,files,""),/合計75MB/);
+  await store.close();
 });

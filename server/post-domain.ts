@@ -87,3 +87,12 @@ export function validatePostAddress(
       { status: 409 },
     );
 }
+
+export function uniquePostSlug(content: PostContent, posts: Post[], id: string) {
+  const original=content.slug;
+  let slug=original,index=2;
+  while(posts.some(post=>post.id!==id&&JSON.stringify(post.address||postAddress(post.draft))===JSON.stringify(postAddress({...content,slug})))) {
+    const suffix=`-${index++}`;slug=original.slice(0,80-suffix.length).replace(/-+$/,"")+suffix;
+  }
+  return slug;
+}

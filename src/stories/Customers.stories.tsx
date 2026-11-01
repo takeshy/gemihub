@@ -17,3 +17,5 @@ export const Empty: Story = { name: "お客様ゼロ件", args: { scenario: "crm
 
 export const Images: Story = { name: "画像一覧・ファイル名の編集と拡大", args: { scenario: "crm-images" } };
 export const NoImages: Story = { name: "画像一覧・画像ゼロ件", args: { scenario: "crm-images-empty" } };
+
+export const Inquiry: Story = { name: "お問い合わせの返信・対応状況", args: { scenario: "crm-inquiry" } };

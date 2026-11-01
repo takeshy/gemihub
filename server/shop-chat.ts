@@ -5,7 +5,7 @@ import { chatLabels, openingQuestions, requestIntentSchema, type RequestIntent }
 import { findRelevantHistory } from "./chat-context.ts";
 
 export type ShopConversation = { id: string; shopId: string; email: string; intent: RequestIntent; title: string; createdAt: string; updatedAt: string };
-export type ShopChatMessage = { id: string; shopId: string; conversationId: string; email: string; role: "user" | "assistant"; text: string; requestId: string; sequence: number; createdAt: string; updatedAt: string; detail: { imageIds?: string[]; changeRequest?: boolean; ready?: boolean; planId?: string; partial?: boolean } };
+export type ShopChatMessage = { id: string; shopId: string; conversationId: string; email: string; role: "user" | "assistant"; text: string; requestId: string; sequence: number; createdAt: string; updatedAt: string; detail: { article?:{title:string;excerpt:string;body:string}; imageIds?: string[]; changeRequest?: boolean; ready?: boolean; planId?: string; partial?: boolean } };
 export type ShopChat = ShopConversation & { messages: ShopChatMessage[] };
 export const conversationInputSchema = z.object({ intent: requestIntentSchema, requestId: z.uuid(), begin:z.boolean().optional() });
 export const chatReferenceSchema = z.object({ id: z.string().regex(/^[a-f0-9]{64}$/), requestId: z.uuid() });

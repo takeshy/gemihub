@@ -128,17 +128,24 @@ try {
   await open("contact", "お問い合わせ", "お客様の予約");
   await capture("10-contact-form.jpg", ".contact-form");
   await open("inquiries", "お問い合わせ");
-  await page
+  await capture("10-inquiries.jpg", ".inquiries-list");
+  await page.getByRole("link", { name: "山田 花子のお問い合わせを開く" }).click();
+  await page.locator('[data-inquiry-id="guest-inquiry"]').waitFor();
+  await page.locator('[data-inquiry-id="guest-inquiry"]')
     .getByRole("textbox", { name: "返信内容" })
     .fill(
       "もちろんです。当日、お好みやお仕事に合わせて一緒にお色を選びましょう。ご来店をお待ちしております。",
     );
-  await capture("10-inquiries.jpg");
-  await open("team", "家族・スタッフの招待");
-  await page
-    .getByLabel("招待する Google アカウントのメールアドレス")
-    .fill("new-staff@example.com");
-  await capture("11-team.jpg");
+  await capture("10-inquiry-reply.jpg", '[data-inquiry-id="guest-inquiry"]');
+  await open("staff", "スタッフ・勤務", "運営/スタッフ・勤務");
+  await page.locator('.staff-accounts').waitFor();
+  await capture("11-staff-login.jpg", ".staff-accounts");
+  await page.getByRole("link",{name:"スタッフ用ログイン画面を開く",exact:true}).click();
+  await page.getByRole("heading",{name:"スタッフ用ログイン",exact:true}).waitFor();
+  await capture("11-staff-consent.jpg", ".staff-login");
+  await open("my-photo", "自分のカレンダー", "運営/スタッフ・勤務");
+  await page.locator(".own-staff-photo img").waitFor();
+  await capture("11-staff-photo.jpg", ".own-staff-photo");
   await open("changes", "現在のお店の設定");
   await page.getByRole("button",{name:"修正",exact:true}).click();
   await page.getByRole("button", {name:"はじめる",exact:true}).click();
@@ -183,16 +190,31 @@ try {
   await page.getByRole("button", { name: "再送する", exact: true }).waitFor();
   await capture("15-retry.jpg");
   await open("blog-editor", "お店のお便り");
+  await capture("16-article-methods.jpg", ".article-methods");
+  await page.getByRole("button",{name:/^AIに依頼する/}).click();
+  await page.getByRole("textbox",{name:"AIに伝える内容",exact:true}).fill("[[spec.md]]を参考に、この写真を使って秋のおすすめネイルを紹介してください。");
+  await page.getByRole("button",{name:/画像を添付$/}).click();
+  let articleImages=page.getByRole("dialog",{name:"記事に使う画像",exact:true});
+  await capture("16-blog-image-methods.jpg", ".article-image-dialog");
+  await articleImages.getByRole("button",{name:"既存の画像から選ぶ",exact:true}).click();
+  let articlePicker=page.getByRole("dialog",{name:"画像を選ぶ",exact:true});
+  await articlePicker.getByRole("button",{name:"お店の紹介.pngを選択",exact:true}).click();
+  await articlePicker.getByRole("button",{name:"この画像を使う",exact:true}).click();
+  await articleImages.waitFor({state:"detached"});
+  await capture("16-blog-ai.jpg", ".article-ai-chat");
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
-  await page.locator('.post-writing-help summary').click();
-  assert.equal(await page.getByText("Google ドライブのメモのリンク",{exact:true}).count(),0);
-  await page.getByLabel("元になるメモ",{exact:true}).waitFor();
-  await page.locator('.post-writing-help summary').click();
+  await page.locator('.article-wysimark [contenteditable="true"]').waitFor();
+  assert.equal(await page.getByText("メモから下書きを作る",{exact:true}).count(),0);
+  await page.getByRole("button",{name:"画像を挿入",exact:true}).click();
+  articleImages=page.getByRole("dialog",{name:"記事に使う画像",exact:true});
+  await articleImages.getByRole("button",{name:"既存の画像から選ぶ",exact:true}).click();
+  articlePicker=page.getByRole("dialog",{name:"画像を選ぶ",exact:true});
+  await articlePicker.getByRole("button",{name:"お店の紹介.pngを選択",exact:true}).click();
+  await articlePicker.getByRole("button",{name:"この画像を使う",exact:true}).click();
+  await articleImages.waitFor({state:"detached"});
   await capture("16-blog-edit.jpg", ".post-editor");
-  await page
-    .getByRole("button", { name: "プレビュー", exact: true })
-    .click();
-  await page.locator(".post-preview").waitFor();
+  await page.locator(".post-preview .article-managed-image").scrollIntoViewIfNeeded();
+  await page.locator(".post-preview img").waitFor();
   await capture("17-blog-preview.jpg", ".post-preview");
   await open("blog-archive", "ブログ");
   await page.locator(".post-archive-card").first().waitFor();
@@ -219,6 +241,7 @@ try {
   }), "base64");
   const file = { name: "施術の記録.png", mimeType: "image/png", buffer: sampleImage };
   await open("editor", "メニュー・料金", "運営/メニュー画像");
+  await page.locator(".menu-image-editor").first().getByRole("button",{name:"画像をアップロード",exact:true}).click();
   await page.getByLabel("メニュー画像（任意）").first().setInputFiles(file);
   await page.getByRole("button", { name: "保存", exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector(".menu-image-editor input").disabled);

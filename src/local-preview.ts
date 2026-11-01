@@ -1,3 +1,4 @@
+import {postImageIds} from "../server/post-images";
 import { customerProfileSchema, type MemberProfile } from "../server/customer-profile";
 import { z } from "zod";
 import { shopSchema, slots, dateJST, type ShopConfig } from "../server/domain";
@@ -60,7 +61,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     let result: unknown;
     const image = action.match(/^\/api\/public\/local-preview\/(menu-images|images)\/([a-f0-9]{64})$/);
     if (image) {
-      const ids = image[1] === "images" ? managedImageIds(config) : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
+      const ids = image[1] === "images" ? [...managedImageIds(config),...posts.flatMap(post=>postImageIds(post.body))] : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
       if (!ids.includes(image[2]) || !readImage) throw new Error("画像がありません");
       result = await readImage(image[2]);
     }

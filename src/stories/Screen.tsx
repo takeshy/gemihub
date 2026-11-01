@@ -5,10 +5,10 @@ import { createMockClient, scenarioProps, type Scenario } from "./mock";
 export function Screen({ scenario }: { scenario: Scenario }) {
   const client = useMemo(() => createMockClient(scenario), [scenario]);
   const [notice, setNotice] = useState("");
-  const [route, setRoute] = useState<{ path: string; search: string }>();
+  const [route, setRoute] = useState<{ path: string; search: string; version: number }>();
   const navigate = (href: string) => {
     const url = new URL(href, location.origin);
-    setRoute({ path: url.pathname, search: url.search });
+    setRoute(current => ({ path: url.pathname, search: url.search, version: (current?.version || 0) + 1 }));
     setNotice("");
   };
   return (
@@ -24,7 +24,7 @@ export function Screen({ scenario }: { scenario: Scenario }) {
           navigate(link.getAttribute("href")!);
           return;
         }
-        if (link?.hasAttribute("data-publication-preview-link") || link?.hasAttribute("data-shop-request-link") || link?.hasAttribute("data-article-link")) {
+        if (link?.hasAttribute("data-publication-preview-link") || link?.hasAttribute("data-shop-request-link") || link?.hasAttribute("data-customer-inquiry-link") || link?.hasAttribute("data-staff-login-link") || link?.hasAttribute("data-article-link")) {
           event.preventDefault();
           navigate(link.getAttribute("href")!);
           return;
@@ -45,7 +45,7 @@ export function Screen({ scenario }: { scenario: Scenario }) {
       )}
       <ApiProvider value={client}>
         <App
-          key={`${scenario}-${route?.path || ""}-${route?.search || ""}`}
+          key={`${scenario}-${route?.path || ""}-${route?.search || ""}-${route?.version || 0}`}
           {...scenarioProps(scenario)}
           {...route}
           navigate={navigate}

@@ -19,6 +19,9 @@
     "check:multimodal": "node scripts/check-multimodal.mjs",
     "check:chat": "node scripts/check-chat.mjs",
     "check:storybook": "node scripts/check-storybook.mjs",
+    "check:articles": "node scripts/check-article-authoring.mjs",
+    "check:staff-images": "node scripts/check-staff-images.mjs",
+    "check:inquiries": "node scripts/check-inquiries.mjs",
     "check:images": "node scripts/check-image-library.mjs",
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs",
     "check:publication-routing": "node scripts/check-publication-routing.mjs"
@@ -31,6 +34,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
+    "sharp": "^0.35.5",
+    "wysimark-lite": "^1.0.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {

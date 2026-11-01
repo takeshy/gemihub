@@ -1,3 +1,5 @@
+import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../server/post-images";
+import { inquiryStatus } from "../../server/inquiries";
 import { answeredFinalDetails, initialSetupDemoReply, openingQuestions } from "../../server/request-intent";
 import { findRelevantHistory } from "../../server/chat-context";
 import type { ShopChat, ShopChatMessage } from "../../server/shop-chat";
@@ -15,6 +17,7 @@ import {
   postKey,
   postContentSchema,
   validatePostAddress,
+  uniquePostSlug,
   postAddress,
   type Post,
 } from "../../server/post-domain";
@@ -38,6 +41,7 @@ export type Scenario =
   | "image-page"
   | "crm-list"
   | "crm-detail"
+  | "crm-inquiry"
   | "crm-images"
   | "crm-images-empty"
   | "crm-empty"
@@ -73,7 +77,7 @@ export type Scenario =
   | "changes"
   | "bookings"
   | "inquiries"
-  | "team"
+  | "staff-login"
   | "calendar-disconnected"
   | "calendar-connected"
   | "calendar-member"
@@ -109,7 +113,7 @@ const publicScenarios = new Set<Scenario>([
 export function scenarioProps(scenario: Scenario) {
   return {
     path:
-      scenario === "production-preview" ? "/publication-preview/story-shop" : scenario === "custom-page" || scenario === "image-page" ? "/s/salon-nagi/pages/faq" : scenario === "blog-archive" || scenario === "empty-blog"
+      scenario === "staff-login" ? "/staff-login/story-shop" : scenario === "production-preview" ? "/publication-preview/story-shop" : scenario === "custom-page" || scenario === "image-page" ? "/s/salon-nagi/pages/faq" : scenario === "blog-archive" || scenario === "empty-blog"
         ? "/s/salon-nagi/blogs"
         : scenario === "announcement-archive"
           ? "/s/salon-nagi/announcements"
@@ -118,7 +122,7 @@ export function scenarioProps(scenario: Scenario) {
               : publicScenarios.has(scenario)
                 ? "/s/salon-nagi"
                 : "/",
-    search: scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
+    search: scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
     initialTab: scenario === "editor-unfetched" ? undefined :
       (
         {
@@ -132,13 +136,13 @@ export function scenarioProps(scenario: Scenario) {
           "local-editor-new": "try",
           "blog-editor": "blog",
           bookings: "bookings",
-          "crm-list": "customers", "crm-detail": "customers", "crm-empty": "customers", "crm-images": "customers", "crm-images-empty": "customers",
+          "crm-list": "customers", "crm-detail": "customers", "crm-inquiry": "customers", "crm-empty": "customers", "crm-images": "customers", "crm-images-empty": "customers",
           inquiries: "inquiries",
-          team: "team",
-          "calendar-disconnected": "team",
-          "calendar-connected": "team",
-          "calendar-member": "team",
-          "calendar-missing-staff": "team",
+          "staff-login": "staff",
+          "calendar-disconnected": "staff",
+          "calendar-connected": "staff",
+          "calendar-member": "staff",
+          "calendar-missing-staff": "staff",
           data: "data", "data-empty": "data",
           settings: "settings",
           "sync-error": "bookings",
@@ -166,11 +170,12 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const menuImages = new Map<string, { mimeType: string; data: string }>();
   const imageMetadata = new Map<string, LibraryImage>();
   const generatedImages = new Map<string, string>();
-  if (["menu-images", "menu-images-public", "image-library", "image-library-generation", "image-page"].includes(scenario)) {
+  const ownPhotoImages = new Set<string>();
+  if (["menu-images", "menu-images-public", "blog-editor", "manage-staff", "calendar-member", "calendar-connected", "image-library", "image-library-generation", "image-page"].includes(scenario)) {
     const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
     const context = canvas.getContext("2d")!; context.fillStyle = "#d0ded3"; context.fillRect(0, 0, 640, 480);
     context.fillStyle = "#465b50"; context.font = "32px sans-serif"; context.textAlign = "center"; context.fillText("Menu image sample", 320, 240);
-    const imageId = "a".repeat(64); config.menus[0].imageId = imageId;
+    const imageId = "a".repeat(64); if (["manage-staff","calendar-member","calendar-connected"].includes(scenario)) config.staff[scenario === "calendar-member" ? 1 : 0].imageId = imageId; else config.menus[0].imageId = imageId; if(scenario === "menu-images-public")config.staff[0].imageId=imageId;
     menuImages.set(imageId, { mimeType: "image/png", data: canvas.toDataURL("image/png").split(",")[1] });
     imageMetadata.set(imageId, { id: imageId, name: "お店の紹介.png", mimeType: "image/png", size: 12000, source: "upload", createdAt: new Date().toISOString(), usedBy: [] });
     if (scenario.startsWith("image-") && scenario !== "image-library-empty") {
@@ -275,6 +280,14 @@ export function createMockClient(scenario: Scenario): ApiClient {
         ? "omaiweb-storybook-verification-token"
         : undefined,
   };
+  if (scenario === "inquiries") {
+    shop.inquiries.push(
+      { id: "guest-inquiry", email: "guest@example.com", name: "山田 花子", message: "予約をしました。アートの相談をしたいです。", reply: "ご希望の写真があればお持ちください。", status: "in_progress", at: new Date(Date.now() - 86400000).toISOString() },
+      { id: "completed-inquiry", email: "guest@example.com", name: "山田 花子", message: "駐車場の場所を教えてください。", reply: "お店の裏にございます。", status: "completed", at: new Date(Date.now() - 2 * 86400000).toISOString() },
+      { id: "closed-unreplied", email: "midori@example.com", name: "佐藤 みどり", message: "電話で教えていただいた件です。ありがとうございました。", reply: "", status: "completed", at: new Date(Date.now() - 3 * 86400000).toISOString() },
+    );
+  }
+  const inquiryRequests = new Map<string, { text: string; previousReply: unknown }>();
   const customerNotes: CustomerNote[] = [];
   const customerFileData = new Map<string, string>();
   if (scenario.startsWith("crm-")) {
@@ -317,7 +330,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       "blog-article",
       "announcement-archive",
       "empty-blog",
-    ].includes(scenario)
+    ].includes(scenario) || scenario === "staff-login"
       ? null
       : {
           email: customer ? "guest@example.com" : "owner@example.com",
@@ -334,8 +347,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
     connected: ["calendar-connected", "calendar-member", "calendar-missing-staff"].includes(scenario),
     email: session.user?.email || shop.owner,
     staffId: scenario === "calendar-missing-staff" ? "removed-staff" : scenario === "calendar-member" ? "haru" : "aoi",
-    configured: scenario.startsWith("calendar-"),
+    configured: scenario.startsWith("calendar-") || scenario === "manage-staff",
+    loginUrl: `/staff-login/${shop.id}`,
   };
+  const staffLogins = config.staff.map(staff => ({ staffId: staff.id, name: staff.name, email: staff.id === "aoi" ? shop.owner : "haru@example.com", accepted: staff.id === "aoi", connected: staff.id === "aoi" && calendarConnection.connected }));
   let visualConfig = structuredClone(config);
   const extraData = { id: "100", title: "店販の記録", headers: ["商品", "個数", "金額", "確認済み"], rows: [{ row: 2, values: ["ヘアオイル", 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };
   let chats: ShopChat[] = [];
@@ -387,6 +402,16 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (current) current.values = [...values]; else { extraData.rows.push({ row, values: [...values] }); extraData.nextRow++; }
       result = { ok: true };
     }
+    else if (action.startsWith(`/api/shops/${shop.id}/staff-photo`)) {
+      const staff = shop.published!.staff.find(person => person.id === "haru")!;
+      const current = () => [...imageMetadata.values()].filter(image => image.id === staff.imageId || ownPhotoImages.has(image.id));
+      if (action.endsWith("/images") && data === undefined) result = current();
+      else if (action.endsWith("/images")) {
+        const id = String(menuImages.size+1).padStart(64,"0");menuImages.set(id,{mimeType:String(input.mimeType),data:String(input.data)});ownPhotoImages.add(id);imageMetadata.set(id,{id,name:String(input.name),mimeType:String(input.mimeType),size:atob(String(input.data)).length,source:"upload",usedBy:[],createdAt:new Date().toISOString()});result={imageId:id};
+      } else if (action.includes("/images/")) { const id=action.split("/").at(-1)!; if(!current().some(image=>image.id===id))throw new Error("画像がありません");result=menuImages.get(id); }
+      else if (data === undefined) result={staffId:staff.id,name:staff.name,imageId:staff.imageId};
+      else {if((staff.imageId||"")!==input.previousImageId)throw new Error("写真が更新されています");staff.imageId=input.imageId as string|undefined;shop.revision++;result={ok:true};}
+    }
     else if (action === `/api/shops/${shop.id}/images` && data === undefined) {
       result = [...imageMetadata.values()].map(image => ({ ...image, usedBy: imageUses(shop.published, image.id) }));
     }
@@ -418,7 +443,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action.startsWith(`/api/shops/${shop.id}/customers`)) {
       const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
       const now = new Date();
-      const current = () => aggregateCustomers(shop.bookings, shop.inquiries.map(inquiry => ({ ...inquiry, shopId: shop.id, at: inquiry.at || now.toISOString() })) as Inquiry[], customerNotes, now, customerSince(filter, now));
+      const current = () => aggregateCustomers(shop.bookings, shop.inquiries.map(inquiry => ({ ...inquiry, shopId: shop.id, at: inquiry.at || now.toISOString() })) as Inquiry[], customerNotes, now, customerSince(filter, now), scenario === "crm-empty" ? [] : [{ shopId: shop.id, email: "guest@example.com", name: "山田 花子", birthDate: "1992-06-15", gender: "female", updatedBy: shop.owner, updatedAt: now.toISOString() }]);
       const route = action.match(/\/customers(?:\/([^/]+)(?:\/(.*))?)?$/)!;
       if (!route[1]) result = customerSummaries(current());
       else {
@@ -495,12 +520,17 @@ export function createMockClient(scenario: Scenario): ApiClient {
       else next.description = "季節を楽しむ、小さなネイルサロン。";
       result = { config: next, summary: ["選んだ対象をローカルで変更"] };
     }
-    else if (action === `/api/shops/${shop.id}/posts/propose`)
-      result = {
-        title: String(input.title || "お店からのお便り"),
-        excerpt: "メモから作成した下書きです。",
-        body: String(input.source || input.instruction),
-      };
+    else if (action === `/api/shops/${shop.id}/posts/metadata`) {
+      const article=input.content as {title:string;body:string};
+      const current=posts.find(post=>post.id===input.postId);
+      if(current&&current.version!==input.version)throw new Error("記事が更新されています。一覧から記事を開き直してください");
+      result={slug:current?.address?.slug||current?.draft.slug||`article-${(await fingerprint(article.title)).slice(0,12)}`,excerpt:(articlePlainText(article.body)||article.title).slice(0,140)};
+    }
+    else if (action === `/api/shops/${shop.id}/posts/files`) result=[{path:"spec.md",name:"お店の設定（spec.md）",kind:"text"},{path:"history.md",name:"変更履歴（history.md）",kind:"text"},...[...imageMetadata.values()].map(image=>({path:articleImagePath(image.id,image.name),name:image.name,kind:"image",imageId:image.id}))];
+    else if (action === `/api/shops/${shop.id}/posts/propose`) {
+      const selected=wikiPaths(String(input.instruction)).map(path=>[...imageMetadata.values()].find(image=>articleImagePath(image.id,image.name)===path)).filter(Boolean);
+      result={title:String(input.title||"季節のお店のお便り"),excerpt:"",body:[String(input.source||input.instruction).replace(/\[\[[^\]]+\]\]/g,""),...selected.map(image=>`![${image!.name}](shop-image:${image!.id})`)].join("\n\n"),conversationId:"c".repeat(64)};
+    }
     else if (action === `/api/shops/${shop.id}/posts`) {
       if (data === undefined) result = posts;
       else {
@@ -516,6 +546,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           updatedAt: at,
           updatedBy: "owner@example.com",
         };
+        if(input.autoMetadata)content.slug=uniquePostSlug(content,posts,post.id);
         validatePostAddress(post, content, posts);
         if (input.publish) { post.published = structuredClone(content); post.publishedAt = at; post.address = postAddress(content); }
         posts.unshift(post);
@@ -648,6 +679,15 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/documents`)
       result = documents(shop.published || config, shop.history);
+    else if (action === `/api/staff-login/${shop.id}`) result = { name: config.name, configured: true };
+    else if (action === `/api/shops/${shop.id}/staff-accounts` && data === undefined) result = { staff: staffLogins, configured: true, loginUrl: `/staff-login/${shop.id}` };
+    else if (action === `/api/shops/${shop.id}/staff-accounts`) {
+      const staff = staffLogins.find(staff => staff.staffId === input.staffId);
+      if (!staff) throw new Error("担当スタッフがありません");
+      if (staff.email !== input.previousEmail) throw new Error("登録内容が更新されています");
+      if (input.email && staffLogins.some(other => other !== staff && other.email === input.email)) throw new Error("このアカウントは別のスタッフに登録されています");
+      staff.email = String(input.email); staff.accepted = false; staff.connected = false; result = { ok: true };
+    }
     else if (action === `/api/shops/${shop.id}/calendar`) {
       result = calendarConnection;
     }
@@ -665,8 +705,22 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action.endsWith("/reply")) {
       const q = shop.inquiries.find((q) => q.id === action.split("/").at(-2));
       if (!q) throw new Error("お問い合わせがありません");
-      q.reply = String(input.text);
-      q.status = "replied";
+      const previous = input.requestId ? inquiryRequests.get(String(input.requestId)) : undefined;
+      if (previous && (previous.text !== input.text || previous.previousReply !== input.previousReply)) throw new Error("返信内容が変わっています。入力し直してください");
+      if (!previous) {
+        if (input.previousReply !== undefined && input.previousReply !== q.reply) throw new Error("他の担当者が返信しています。最新の状態を確認してください");
+        if (!String(input.text).trim()) throw new Error("返信内容を入力してください");
+        q.reply = String(input.text).trim();
+        q.status = inquiryStatus(q);
+        if (input.requestId) inquiryRequests.set(String(input.requestId), { text: String(input.text), previousReply: input.previousReply });
+      }
+      result = { ok: true };
+    } else if (action.includes("/inquiries/") && action.endsWith("/status")) {
+      const q = shop.inquiries.find(q => q.id === action.split("/").at(-2));
+      if (!q) throw new Error("お問い合わせがありません");
+      if (!["in_progress", "completed"].includes(String(input.status))) throw new Error("対応状況を選択してください");
+      if (input.previousStatus && input.previousStatus !== inquiryStatus(q) && input.status !== inquiryStatus(q)) throw new Error("対応状況が更新されています。最新の状態を確認してください");
+      q.status = String(input.status);
       result = { ok: true };
     } else if (action.endsWith("/status")) {
       const b = shop.bookings.find((b) => b.id === action.split("/").at(-2));

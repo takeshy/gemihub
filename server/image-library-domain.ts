@@ -1,6 +1,8 @@
 import { z } from "zod";
 export const imageIdSchema = z.string().regex(/^[a-f0-9]{64}$/);
-export const requestImageIdsSchema = z.array(imageIdSchema).max(5).refine(ids => new Set(ids).size === ids.length, "同じ画像を重複して選択できません");
+export const requestImageCountLimit = 15;
+export const requestImageTotalLimit = 75 * 1024 * 1024;
+export const requestImageIdsSchema = z.array(imageIdSchema).max(requestImageCountLimit).refine(ids => new Set(ids).size === ids.length, "同じ画像を重複して選択できません");
 export const imageNameSchema = z.string().trim().min(1).max(255).regex(/^[^\x00-\x1f\x7f]+$/);
 export const generateImageSchema = z.object({
   requestId: z.uuid(), name: imageNameSchema, prompt: z.string().trim().min(1).max(4000),

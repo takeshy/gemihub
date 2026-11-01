@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
 import { menuImageLimit, type MenuImageData } from "../server/menu-image-domain";
-import { ImagePicker } from "./ImageLibrary";
+import { RequestImagePicker } from "./RequestImagePicker";
 
 export function MenuImage({ imageId, imageBase, suffix = "", name, className = "menu-image" }: { imageId?: string; imageBase: string; suffix?: string; name: string; className?: string }) {
   const api = useApi();
@@ -33,8 +33,9 @@ export function MenuImage({ imageId, imageBase, suffix = "", name, className = "
   return <span ref={ref} className={className}>{image?.id === imageId ? <img src={image.url} alt={`${name}の画像`} /> : <span>{error ? "画像を読み込めませんでした" : "画像を読み込み中…"}</span>}</span>;
 }
 
-export function MenuImageEditor({ shopId, imageId, name, change, uploading }: { shopId: string; imageId?: string; name: string; change: (imageId: string | undefined) => void; uploading?: (busy: boolean) => void }) {
+export function MenuImageEditor({ shopId, imageId, name, change, uploading, label = "メニュー画像（任意）", imageBase, pickerBase, uploadPath }: { label?: string; imageBase?: string; pickerBase?: string; uploadPath?: string; shopId: string; imageId?: string; name: string; change: (imageId: string | undefined) => void; uploading?: (busy: boolean) => void }) {
   const api = useApi();
+  const [method, setMethod] = useState<"upload" | undefined>();
   const [pending, setPending] = useState<{ file: File; requestId: string }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -50,21 +51,21 @@ export function MenuImageEditor({ shopId, imageId, name, change, uploading }: { 
         reader.onerror = () => reject(new Error("画像を読み込めませんでした"));
         reader.readAsDataURL(action.file);
       });
-      const result = await api<{ imageId: string }>(`/api/shops/${shopId}/menu-images`, { requestId: action.requestId, name: action.file.name, mimeType: action.file.type, data });
+      const result = await api<{ imageId: string }>(uploadPath || `/api/shops/${shopId}/menu-images`, { requestId: action.requestId, name: action.file.name, mimeType: action.file.type, data });
       currentChange.current(result.imageId); setPending(undefined);
     } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); uploading?.(false); }
   }
   return <div className="menu-image-editor">
-    <MenuImage imageId={imageId} imageBase={`/api/shops/${shopId}/menu-images`} name={name} />
-    <div><label>メニュー画像（任意）<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy} onChange={event => {
+    <MenuImage imageId={imageId} imageBase={imageBase || `/api/shops/${shopId}/menu-images`} name={name} />
+    <div><p>{label}</p><div className="menu-image-methods" role="group" aria-label={`${name}の画像の登録方法`}><button type="button" disabled={busy} aria-pressed={method === "upload"} onClick={() => setMethod("upload")}>画像をアップロード</button><RequestImagePicker shopId={shopId} max={1} selectionOnly preview={false} imageBase={pickerBase} value={imageId ? [imageId] : []} disabled={busy} label="既存の画像から選ぶ" onChange={ids => { change(ids[0]); setPending(undefined); setError(""); setMethod(undefined); }}/></div>
+    {method === "upload" && <label>{label}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy} onChange={event => {
       const file = event.target.files?.[0]; event.target.value = "";
       if (!file) return;
       if (file.size > menuImageLimit || !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) { setPending(undefined); setError("5MB以内のPNG・JPEG・GIF・WebP画像を選択してください"); return; }
       const action = { file, requestId: createRequestId() }; setPending(action); void upload(action);
-    }} /></label>
-    <p className="small muted">1枚・5MBまで。画像を選んだ後、「保存」で予約画面に反映します。</p>
-    <ImagePicker shopId={shopId} value={imageId} change={change} preview={false} />
+    }} /></label>}
+    <p className="small muted">1枚・5MBまで。アップロードした画像も画像管理に保存されます。画像を選んだ後、「保存」でお客様の画面に反映します。</p>
     {busy && <p role="status">画像を保存しています…</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     <div className="actions">{pending && !busy && error && <button type="button" onClick={() => void upload(pending)}>画像の保存を再試行</button>}{imageId && <button type="button" disabled={busy} onClick={() => { change(undefined); setPending(undefined); setError(""); }}>画像を解除</button>}</div>

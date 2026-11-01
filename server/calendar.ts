@@ -19,7 +19,7 @@ export const busySchema = z.array(
 );
 export type Busy = z.infer<typeof busySchema>;
 export const calendarGateway = {
-  async exchange(code: string, verifier: string) {
+  async exchange(code: string, verifier: string): Promise<{ email: string; refreshToken: string; name?: string }> {
     const auth = oauth();
     const { tokens } = await auth.getToken({ code, codeVerifier: verifier });
     const identity = await auth.verifyIdToken({
@@ -37,6 +37,7 @@ export const calendarGateway = {
       );
     return {
       email: profile.email.toLowerCase(),
+      name: profile.name || profile.email,
       refreshToken: encrypt(tokens.refresh_token),
     };
   },

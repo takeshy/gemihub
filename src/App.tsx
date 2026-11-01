@@ -1,3 +1,5 @@
+import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
+import { Inquiries } from "./Inquiries";
 import type { RequestIntent } from "../server/request-intent";
 import type { ChatReference } from "../server/shop-chat";
 import { DateInput } from "./DateInput";
@@ -84,7 +86,7 @@ export type AppProps = {
 export function App({
   path = location.pathname,
   search = location.search,
-  initialTab = new URLSearchParams(search).has("customer") ? "customers" : new URLSearchParams(search).get("calendar") === "connected" ? "team" : "try",
+  initialTab = new URLSearchParams(search).has("customer") ? "customers" : new URLSearchParams(search).get("calendar") === "connected" ? "staff" : "try",
   initialPane,
   navigate = (href) => location.assign(href),
 }: AppProps = {}) {
@@ -186,11 +188,13 @@ export function App({
             busy={busy}
             notify={setNotice}
           />
+        ) : /^\/staff-login\/[^/]+$/.test(path) ? (
+          <StaffLogin shopId={path.split("/")[2]} />
         ) : /^\/publication-preview\/[^/]+$/.test(path) ? (
           <PublicationPreview shopId={path.split("/")[2]} />
         ) : session.user ? (
           <Dashboard
-            initialTab={["build","try","data"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
+            initialTab={new URLSearchParams(search).has("customer")?"customers":["build","try","data","inquiries","customers","bookings","staff"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
             initialScreen={new URLSearchParams(search).get("screen") || undefined}
             initialArticleKey={new URLSearchParams(search).get("article") || undefined}
             requestIntent={new URLSearchParams(search).get("intent") === "modify" ? "modify" : undefined}
@@ -198,6 +202,7 @@ export function App({
             initialShop={new URLSearchParams(search).get("shop") || ""}
             focusRequest={new URLSearchParams(search).get("request") === "1"}
             initialCustomer={new URLSearchParams(search).get("customer") || ""}
+            initialInquiryId={new URLSearchParams(search).get("inquiry") || ""}
             initialCustomerImages={new URLSearchParams(search).get("customerView") === "images"}
             session={session}
             run={run}
@@ -300,6 +305,7 @@ function Dashboard({
   openDataMenu = false,
   initialCustomer = "",
   initialCustomerImages = false,
+  initialInquiryId = "",
   session,
   run,
   busy,
@@ -314,6 +320,7 @@ function Dashboard({
   openDataMenu?: boolean;
   initialCustomer?: string;
   initialCustomerImages?: boolean;
+  initialInquiryId?: string;
   session: Session;
   run: Run;
   busy: boolean;
@@ -322,20 +329,13 @@ function Dashboard({
   const api = useApi();
   const [shops, setShops] = useState<Workspace[]>([]);
   const [chosen, setChosen] = useState(initialShop);
-  const [tab, setTab] = useState(initialTab === "create-page" ? "build" : ["hours","rules"].includes(initialTab)?"basic":initialTab);
+  const [tab, setTab] = useState(initialTab === "team" ? "staff" : initialTab === "create-page" ? "build" : ["hours","rules"].includes(initialTab)?"basic":initialTab);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
   const buildReview = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<Plan>();
-  const [invites, setInvites] = useState<{ shopId: string; name: string }[]>(
-    [],
-  );
   async function load() {
-    const [w, i] = await Promise.all([
-      api<{ shops: Workspace[] }>("/api/workspace"),
-      api<{ shopId: string; name: string }[]>("/api/invitations"),
-    ]);
+    const w = await api<{ shops: Workspace[] }>("/api/workspace");
     setShops(w.shops);
-    setInvites(i);
     return w.shops;
   }
   useEffect(() => {
@@ -391,7 +391,7 @@ function Dashboard({
             ...(shop?.isOwner ? [["basic", "⌂", "お店の基本情報"], ["menus", "≡", "メニュー・料金"], ["staff", "♧", "スタッフ・勤務"]] : []),
             ["inquiries", "✉", "お問い合わせ"],
             ["blog", "✎", "ブログ・お知らせ"],
-            ["team", "♧", "家族・スタッフ"],
+            ...(!shop?.isOwner ? [["staff", "♧", "自分のカレンダー"]] : []),
             ...(shop?.isOwner ? [["data", "▤", "データ管理"]] : []),
             ["settings", "⚙", "公開の設定"],
             ["manual", "?", "使い方"],
@@ -416,26 +416,9 @@ function Dashboard({
         </div>
       </aside>
       <section className="workspace">
-        {invites.map((i) => (
-          <div className="notice" key={i.shopId}>
-            {i.name} の運営に招待されています。
-            <button
-              onClick={() =>
-                run(async () => {
-                  await api(`/api/invitations/${i.shopId}/accept`, {});
-                  setChosen(i.shopId);
-                  await load();
-                })
-              }
-            >
-              招待を承諾
-            </button>
-          </div>
-        ))}
         {!shop ? (
           <p>
-            運営できるお店はありません。招待された Google
-            アカウントでログインしてください。
+            運営できるお店はありません。スタッフの方は、店主から案内されたスタッフ用ログインURLからログインしてください。
           </p>
         ) : (
           <>
@@ -494,12 +477,13 @@ function Dashboard({
                   </>
                 )}
                 {tab === "basic" && shop.isOwner && <section className="basic-settings" aria-label="お店の基本情報と予約の設定">{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
-                {["menus", "staff"].includes(tab) && shop.isOwner && <LiveSettings key={`${shop.id}-${tab}`} shop={shop} section={tab as "menus" | "staff"} reload={load} />}
+                {tab === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
+                {tab === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop}/></>}<StaffCalendar key={shop.id} shop={shop}/>{!shop.isOwner && <StaffPhoto shop={shop} reload={load}/>}</>}
                 {tab === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {tab === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
-                {tab === "customers" && <Customers key={shop.id} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} />}
+                {tab === "customers" && <Customers key={shop.id} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={load} />}
                 {tab === "blog" && (
                   <BlogEditor
                     shop={shop}
@@ -510,28 +494,7 @@ function Dashboard({
                     demo={session.demo}
                   />
                 )}
-                {tab === "inquiries" && (
-                  <div className="panel">
-                    <h2>お問い合わせ</h2>
-                    {!shop.inquiries.length && (
-                      <Empty text="まだお問い合わせはありません。" />
-                    )}
-                    {shop.inquiries.map((q) => (
-                      <InquiryCard
-                        key={q.id}
-                        q={q}
-                        send={(text) =>
-                          run(async () => {
-                            await request(`inquiries/${q.id}/reply`, { text });
-                            await load();
-                            notify("返信を受け付けました。");
-                          })
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-                {tab === "team" && <Team shop={shop} run={run} reload={load} />}
+                <div hidden={tab!=="inquiries"}><Inquiries shopId={shop.id} inquiries={shop.inquiries}/></div>
                 {tab === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} showMenus={openDataMenu} />}
                 {tab === "settings" && (
                   <Settings shop={shop} run={run} reload={load} />
@@ -763,6 +726,7 @@ export function ConfigEditor({
       <h3>スタッフと勤務</h3>
       {c.staff.map((p, i) => (
         <div className="staff-editor" key={p.id}>
+          {shopId && <MenuImageEditor shopId={shopId} imageId={p.imageId} name={p.name} label="スタッフ写真（任意）" uploading={onImageUploading} change={imageId => put("staff", c.staff.map((staff,j) => j===i ? {...staff,imageId} : staff))}/>}
           <Field label="名前">
             <input
               value={p.name}
@@ -1109,119 +1073,6 @@ function Reservations({
     </div>
   );
 }
-function InquiryCard({ q, send }: { q: Inquiry; send: (s: string) => void }) {
-  const [text, setText] = useState(q.reply);
-  return (
-    <div className="inquiry">
-      <b>{q.name} 様</b>
-      <span className="small muted"> {q.email}</span>
-      <p className="pre-wrap">{q.message}</p>
-      {q.reply && <p className="notice pre-wrap">返信：{q.reply}</p>}
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="返信を書いてください"
-        aria-label="返信内容"
-      />
-      <button
-        className="primary"
-        disabled={!text.trim()}
-        onClick={() => send(text)}
-      >
-        メールで返信
-      </button>
-    </div>
-  );
-}
-function CalendarPanel({ shop, run }: { shop: Workspace; run: Run }) {
-  const api = useApi();
-  const [connection, setConnection] = useState<{ connected: boolean; staffId?: string; email: string; configured: boolean }>();
-  const [staffId, setStaffId] = useState("");
-  const reload = async () => {
-    const value = await api<NonNullable<typeof connection>>(`/api/shops/${shop.id}/calendar`);
-    setConnection(value);
-    setStaffId(value.staffId || "");
-  };
-  useEffect(() => { setConnection(undefined); run(reload); }, [shop.id]);
-  const config = shop.published;
-  return <section>
-    <h3>自分の Google Calendar と連携</h3>
-    <p className="muted">各メンバーが自分のアカウントで接続してください。メインカレンダーで「予定あり」の時間を、選んだ担当者の予約枠から除外します。終日の予定にも対応します。予定の件名・本文は取得しません。</p>
-    <p className="small muted">追加カレンダーは対象外です。予約の書き込みは行いません。連携先を確認できないときは、その担当者を含む予約受付を一時停止します。</p>
-    {connection && <>
-      <p>{connection.email} · {connection.connected ? `連携中（${config?.staff.find(s => s.id === connection.staffId)?.name || "担当者が削除されています"}）` : "未連携"}</p>
-      {!connection.configured && <p className="notice">利用にはサーバーの Google OAuth 設定が必要です。</p>}
-      {!config ? <p>お店を公開すると連携できます。</p> : <>
-        <Field label="自分に対応する予約の担当者">
-          <select value={staffId} onChange={e => setStaffId(e.target.value)}>
-            <option value="">担当者を選択</option>
-            {config.staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </Field>
-        <button disabled={!staffId || !connection.configured} onClick={() => run(async () => {
-          const result = await api<{ authUrl: string }>(`/api/shops/${shop.id}/calendar/connect`, { staffId });
-          location.assign(result.authUrl);
-        })}>{connection.connected ? "再接続・担当者を変更" : "Google Calendar を接続"}</button>
-      </>}
-      {connection.connected && <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/calendar/disconnect`, {}); await reload(); })}>カレンダー連携を解除</button>}
-    </>}
-  </section>;
-}
-function Team({
-  shop,
-  run,
-  reload,
-}: {
-  shop: Workspace;
-  run: Run;
-  reload: () => Promise<unknown>;
-}) {
-  const api = useApi();
-  const [email, setEmail] = useState("");
-  return (
-    <div className="panel">
-      <h2>家族・スタッフの招待</h2>
-      <CalendarPanel shop={shop} run={run} />
-      <p className="muted">
-        同じお店の予約とお問い合わせを、一緒に管理できます。保存先は店主の
-        Google ドライブのままです。
-      </p>
-      <div className="member-row">
-        <b>{shop.owner}</b>
-        <span className="pill">店主</span>
-      </div>
-      {shop.members.map((m) => (
-        <div className="member-row" key={m.email}>
-          {m.email}
-          <span className="pill">{m.status === "revoked" ? "解除済み" : m.accepted ? "参加済み" : "招待中"}</span>
-          {shop.isOwner && m.status!=="revoked" && <button onClick={()=>run(async()=>{await api(`/api/shops/${shop.id}/members/revoke`,{email:m.email});await reload();})}>参加を解除</button>}
-        </div>
-      ))}
-      {shop.isOwner && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            run(async () => {
-              await api(`/api/shops/${shop.id}/invite`, { email });
-              setEmail("");
-              await reload();
-            });
-          }}
-        >
-          <Field label="招待する Google アカウントのメールアドレス">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </Field>
-          <button className="primary">招待を送る →</button>
-        </form>
-      )}
-    </div>
-  );
-}
 function Settings({
   shop,
   run,
@@ -1516,6 +1367,7 @@ export function PublicShop({
                       ))}
                   </select>
                 </Field>
+                {staff && <MenuImage imageId={c.staff.find(person=>person.id===staff)?.imageId} imageBase={`${base}/images`} name={c.staff.find(person=>person.id===staff)?.name || "スタッフ"} className="staff-photo"/>}
                 <Field label="ご希望の日付（日本時間）">
                   <DateInput aria-label="ご希望の日付（日本時間）"
                     min={localDate()}
@@ -1626,7 +1478,7 @@ export function PublicShop({
                   </div>
                 ))}
               <h3>スタッフ</h3>
-              <p>{c.staff.map((p) => p.name).join("・")}</p>
+              <div className="public-staff-list">{c.staff.map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>
               <h3>アクセス</h3>
               <p>{c.address}</p>
               <h3>営業時間</h3>

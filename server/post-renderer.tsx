@@ -28,14 +28,14 @@ export function renderHomeWithPosts(
     () => `${recentMarkup(posts.slice(0, 5), base)}</noscript>`,
   );
 }
-export function renderArticle(post: PublicPost, shell: string, base = "") {
+export function renderArticle(post: PublicPost, shell: string, base = "", images?:Record<string,import("./menu-image-domain.ts").MenuImageData>) {
   const body = renderToStaticMarkup(
     <>
       <nav>
         <a href={`${base}/`}>お店に戻る</a> ·{" "}
         <a href={`${base}/${post.category}`}>{postLabel(post.category)}一覧</a>
       </nav>
-      <PostContent post={post} />
+      <PostContent post={post} inlineImages={images} />
     </>,
   );
   return shell
@@ -76,7 +76,7 @@ export function postArtifacts(
     "admin/posts/posts.json": JSON.stringify(posts, null, 2),
   };
   for (const p of live)
-    files[`web/${p.category}/${postKey(p)}.html`] = renderArticle(p, shell);
+    files[`web/${p.category}/${postKey(p)}.html`] = renderArticle(p, shell, "", menuImages);
   for (const p of posts)
     files[`admin/posts/${p.id}.md`] = `# ${p.draft.title}\n\n${p.draft.body}\n`;
   return files;

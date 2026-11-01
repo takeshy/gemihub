@@ -1,3 +1,5 @@
+import { postImageIds } from "./post-images.ts";
+import type { Post } from "./post-domain.ts";
 import { createHash } from "node:crypto";
 import type { Shop, Store } from "./store.ts";
 import type { ShopConfig } from "./domain.ts";
@@ -8,8 +10,9 @@ import { generateImageSchema, imageNameSchema, type LibraryImage } from "./image
 import { generateImage } from "./image-generation.ts";
 import type { MenuImageData } from "./menu-image-domain.ts";
 export async function listImages(store: Store, shop: Shop, config: ShopConfig | null): Promise<LibraryImage[]> {
+  const posts=await store.records<Post>("post",shop);
   return (await store.entries<ImageUpload>("menuImageUpload")).flatMap(({ id, value }) => value.shopId === shop.id && value.complete && !value.archived ? [{
-    id, name: value.name || `メニュー画像-${id.slice(0, 8)}`, mimeType: value.mimeType, size: value.size, createdAt: value.createdAt || "", source: value.source || "upload", prompt: value.prompt, model: value.model, usedBy: imageUses(config, id),
+    id, name: value.name || `メニュー画像-${id.slice(0, 8)}`, mimeType: value.mimeType, size: value.size, createdAt: value.createdAt || "", source: value.source || "upload", prompt: value.prompt, model: value.model, usedBy: [...imageUses(config, id), ...posts.filter(post=>post.published&&postImageIds(post.published.body).includes(id)).map(post=>`記事：${post.published!.title}`)],
   }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
 }
 export async function updateImage(store: Store, shop: Shop, id: string, raw: unknown, files: CustomerFiles, token: string) {
@@ -22,7 +25,8 @@ export async function updateImage(store: Store, shop: Shop, id: string, raw: unk
 export async function archiveImage(store: Store, shop: Shop, id: string, config: ShopConfig | null) {
   const image = await store.get<ImageUpload>("menuImageUpload", id);
   if (!image || image.shopId !== shop.id || !image.complete) throw Object.assign(new Error("画像がありません"), { status: 404 });
-  if (imageUses(config, id).length || config && managedImageIds(config).includes(id)) throw Object.assign(new Error("使用中の画像です。ページやメニューの画像を外して反映してから削除してください。"), { status: 409 });
+  const posts=await store.records<Post>("post",shop);
+  if (posts.some(post=>post.published&&postImageIds(post.published.body).includes(id)) || imageUses(config, id).length || config && managedImageIds(config).includes(id)) throw Object.assign(new Error("使用中の画像です。ページやメニューの画像を外して反映してから削除してください。"), { status: 409 });
   await store.put("menuImageUpload", id, { ...image, archived: true });
 }
 type Generation = { shopId: string; hash: string; state: "started" | "ready" | "done" | "failed"; imageId?: string; mimeType?: MenuImageData["mimeType"]; model?: string; chunks?: number; error?: string };
