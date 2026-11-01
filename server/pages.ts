@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import type { ShopConfig } from "./domain.ts";
 export const defaultHeader = { title: "", subtitle: "", imageUrl: "", showDetails: true, showNavigation: true };
@@ -32,7 +33,7 @@ export function scopedSource(config: ShopConfig | null, scope: ReleaseScope) {
 }
 export function scopedConfig(current: ShopConfig | null, local: ShopConfig, scope: ReleaseScope): ShopConfig {
   if (scope.kind === "shared") return current ? { ...current, ...scopedSource(local, scope) as object, appearance: local.appearance } : { ...local, pages: [], header: { ...defaultHeader }, footer: { ...defaultFooter } };
-  if (!current) throw Object.assign(new Error("先にお店の共通設定を本番に反映してください"), { status: 409 });
+  if (!current) throw Object.assign(new Error(tr("先にお店の共通設定を本番に反映してください")), { status: 409 });
   if (scope.kind === "part") return { ...current, [scope.part]: local[scope.part] };
   const page = pageValue(local, scope.pageId);
   const exists = current.pages.some(p => p.id === scope.pageId);

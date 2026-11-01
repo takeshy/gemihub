@@ -1,7 +1,8 @@
+import { tr } from "../shared/i18n.ts";
 import type { ShopConfig } from "./domain.ts";
 export function imageUses(config: ShopConfig | null, id: string): string[] {
   if (!config) return [];
-  return [config.header.imageId === id ? "ヘッダー" : "", ...config.pages.filter(page => page.imageId === id).map(page => `ページ：${page.title}`), ...config.menus.filter(menu => menu.imageId === id).map(menu => `メニュー：${menu.name}`), ...config.staff.filter(staff => staff.imageId === id).map(staff => `スタッフ：${staff.name}`)].filter(Boolean);
+  return [config.header.imageId === id ? tr("ヘッダー") : "", ...config.pages.filter(page => page.imageId === id).map(page => tr("ページ：{0}", page.title)), ...config.menus.filter(menu => menu.imageId === id).map(menu => tr("メニュー：{0}", menu.name)), ...config.staff.filter(staff => staff.imageId === id).map(staff => tr("スタッフ：{0}", staff.name))].filter(Boolean);
 }
 export const managedImageIds = (config: ShopConfig) => [...new Set([
   config.header.imageId,

@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import React, { useEffect, useState } from "react";
 import { z } from "zod";
 import { ConfigEditor, type Workspace } from "./App";
@@ -26,27 +27,27 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
       const raw = localStorage.getItem(key);
       if (raw) {
         const cached = pendingSchema.parse(JSON.parse(raw));
-        setPending(cached); setConfig(cached.config); setNotice("未完了の保存があります。保存を再試行してください。"); return;
+        setPending(cached); setConfig(cached.config); setNotice(tr("未完了の保存があります。保存を再試行してください。")); return;
       }
       void load().catch(e => setError(e.message));
-    } catch { setError("保存中のデータを読み込めませんでした。最新の内容を読み直してください。"); }
+    } catch { setError(tr("保存中のデータを読み込めませんでした。最新の内容を読み直してください。")); }
   }, [key]);
   return <div className={`panel live-settings live-settings-${section}`}>
-    <h2>{{ basic: "お店の基本情報", menus: "メニュー・料金", staff: "スタッフ・勤務", hours: "営業時間・休業日", rules: "予約ルール" }[section]}</h2>
-    <p>{shop.publication === "provisional" ? "仮公開中のお店の設定です。「保存」で仮公開の内容に反映します。" : "本番のお店のデータです。「保存」で反映します。"}</p>
-    {section === "menus" && <p className="small muted">新しいメニューは無効の状態で追加します。スタッフの対応メニューに追加してから有効にしてください。</p>}
+    <h2>{{ basic: tr("お店の基本情報"), menus: tr("メニュー・料金"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[section]}</h2>
+    <p>{shop.publication === "provisional" ? tr("仮公開中のお店の設定です。「保存」で仮公開の内容に反映します。") : tr("本番のお店のデータです。「保存」で反映します。")}</p>
+    {section === "menus" && <p className="small muted">{tr("新しいメニューは無効の状態で追加します。スタッフの対応メニューに追加してから有効にしてください。")}</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
-    {!config && <p>お店の共通設定を反映すると管理できます。</p>}
+    {!config && <p>{tr("お店の共通設定を反映すると管理できます。")}</p>}
     {config && <fieldset disabled={busy || imageUploading || !!pending}><ConfigEditor shopId={shop.id} onImageUploading={setImageUploading} section={section} config={config} onChange={value => { setConfig(value); setNotice(""); }} /></fieldset>}
     <div className="actions">
       <button disabled={busy || imageUploading} onClick={async () => {
-        if ((pending || config && JSON.stringify(config) !== JSON.stringify(source)) && !window.confirm("編集を破棄して最新の本番データを読み直しますか？")) return;
+        if ((pending || config && JSON.stringify(config) !== JSON.stringify(source)) && !window.confirm(tr("編集を破棄して最新の本番データを読み直しますか？"))) return;
         setBusy(true); setError("");
         try { await load(); localStorage.removeItem(key); setPending(undefined); setNotice(""); }
         catch (e) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
-      }}>最新の内容を読み直す</button>
+      }}>{tr("最新の内容を読み直す")}</button>
       <button className="primary" disabled={busy || imageUploading || (!pending && (!config || !source || JSON.stringify(liveValue(config, section)) === JSON.stringify(liveValue(source, section))))} onClick={async () => {
         if (!pending && (!config || !source)) return;
         setBusy(true); setError(""); setNotice("");
@@ -59,10 +60,10 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
             localStorage.setItem(key, JSON.stringify(action)); setPending(action);
           }
           await api(`/api/shops/${shop.id}/live-settings/${section}`, { value: liveValue(action.config, section), previous: action.previous, requestId: action.requestId });
-          await load(); localStorage.removeItem(key); setPending(undefined); await reload(); setNotice(shop.publication === "provisional" ? "保存して仮公開に反映しました。" : "保存して本番に反映しました。");
+          await load(); localStorage.removeItem(key); setPending(undefined); await reload(); setNotice(shop.publication === "provisional" ? tr("保存して仮公開に反映しました。") : tr("保存して本番に反映しました。"));
         } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
-      }}>{pending ? "保存を再試行" : "保存"}</button>
+      }}>{pending ? tr("保存を再試行") : tr("保存")}</button>
     </div>
   </div>;
 }

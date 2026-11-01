@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import { MenuImageEditor } from "./MenuImage";
 import { createRequestId } from "./request-id";
 import React, { useEffect, useState } from "react";
@@ -25,15 +26,13 @@ export function StaffAccounts({ shop }: { shop: Workspace }) {
   return (
     <section
       className="panel staff-accounts"
-      aria-label="スタッフのGoogleログイン"
+      aria-label={tr("スタッフのGoogleログイン")}
     >
-      <h2>スタッフのGoogleログイン</h2>
+      <h2>{tr("スタッフのGoogleログイン")}</h2>
       <p>
-        スタッフごとにGoogleアカウントのメールアドレスを登録してください。本人が下のURLからログインすると、カレンダーの利用許可も一緒に行えます。
-      </p>
+        {tr("スタッフごとにGoogleアカウントのメールアドレスを登録してください。本人が下のURLからログインすると、カレンダーの利用許可も一緒に行えます。")}</p>
       <p className="small muted">
-        登録したスタッフは予約・お客様・お問い合わせを管理できます。予定の件名や本文は取得せず、カレンダーの「予定あり」の時間を予約枠から除外します。
-      </p>
+        {tr("登録したスタッフは予約・お客様・お問い合わせを管理できます。予定の件名や本文は取得せず、カレンダーの「予定あり」の時間を予約枠から除外します。")}</p>
       {error && (
         <p role="alert" className="alert">
           {error}
@@ -43,27 +42,23 @@ export function StaffAccounts({ shop }: { shop: Workspace }) {
               void load().catch((error) => setError(error.message));
             }}
           >
-            最新の登録を確認
-          </button>
+            {tr("最新の登録を確認")}</button>
         </p>
       )}
       {data && (
         <>
           <label>
-            スタッフ用ログインURL
-            <input
-              aria-label="スタッフ用ログインURL"
+            {tr("スタッフ用ログインURL")}<input
+              aria-label={tr("スタッフ用ログインURL")}
               readOnly
               value={new URL(data.loginUrl, location.origin).href}
             />
           </label>
           <a className="button" data-staff-login-link href={data.loginUrl}>
-            スタッフ用ログイン画面を開く
-          </a>
+            {tr("スタッフ用ログイン画面を開く")}</a>
           {!data.configured && (
             <p className="notice">
-              Googleログインを利用するにはサーバーの設定が必要です。
-            </p>
+              {tr("Googleログインを利用するにはサーバーの設定が必要です。")}</p>
           )}
           <div className="staff-account-rows">
             {data.staff.map((staff) => (
@@ -110,8 +105,8 @@ function StaffAccountRow({
       await saved();
       setNotice(
         value
-          ? "登録しました。本人にスタッフ用ログインURLを伝えてください。"
-          : "登録を解除しました。",
+          ? tr("登録しました。本人にスタッフ用ログインURLを伝えてください。")
+          : tr("登録を解除しました。"),
       );
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -122,17 +117,17 @@ function StaffAccountRow({
   return (
     <article
       className="staff-account-row"
-      aria-label={`${staff.name}のログイン設定`}
+      aria-label={tr("{0}のログイン設定", staff.name)}
     >
       <h3>{staff.name}</h3>
       <p className="small muted">
         {!staff.email
-          ? "未登録"
+          ? tr("未登録")
           : !staff.accepted
-            ? "初回ログイン待ち"
+            ? tr("初回ログイン待ち")
             : staff.connected
-              ? "カレンダー連携中"
-              : "カレンダー未連携"}
+              ? tr("カレンダー連携中")
+              : tr("カレンダー未連携")}
       </p>
       {error && (
         <p className="alert" role="alert">
@@ -151,10 +146,9 @@ function StaffAccountRow({
         }}
       >
         <label>
-          Googleアカウントのメールアドレス
-          <input
+          {tr("Googleアカウントのメールアドレス")}<input
             type="email"
-            aria-label="Googleアカウントのメールアドレス"
+            aria-label={tr("Googleアカウントのメールアドレス")}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             disabled={busy}
@@ -171,8 +165,7 @@ function StaffAccountRow({
               email.trim().toLowerCase() === staff.email
             }
           >
-            登録する
-          </button>
+            {tr("登録する")}</button>
           {staff.email && (
             <button
               type="button"
@@ -180,14 +173,13 @@ function StaffAccountRow({
               onClick={() => {
                 if (
                   window.confirm(
-                    `${staff.name}のログイン登録を解除しますか？運営の権限とカレンダー連携が解除されます。`,
+                    tr("{0}のログイン登録を解除しますか？運営の権限とカレンダー連携が解除されます。", staff.name),
                   )
                 )
                   void save("");
               }}
             >
-              ログイン登録を解除
-            </button>
+              {tr("ログイン登録を解除")}</button>
           )}
         </div>
       </form>
@@ -214,8 +206,8 @@ export function StaffCalendar({ shop }: { shop: Workspace }) {
     (staff) => staff.id === connection?.staffId,
   );
   return (
-    <section className="panel staff-calendar" aria-label="自分のカレンダー">
-      <h2>自分のカレンダー</h2>
+    <section className="panel staff-calendar" aria-label={tr("自分のカレンダー")}>
+      <h2>{tr("自分のカレンダー")}</h2>
       {error && (
         <p className="alert" role="alert">
           {error}
@@ -227,20 +219,18 @@ export function StaffCalendar({ shop }: { shop: Workspace }) {
           <p>
             {connection.connected
               ? staff
-                ? `${staff.name} · カレンダー連携中`
-                : "担当スタッフが削除されています。店主に確認してください。"
-              : "カレンダー未連携"}
+                ? tr("{0} · カレンダー連携中", staff.name)
+                : tr("担当スタッフが削除されています。店主に確認してください。")
+              : tr("カレンダー未連携")}
           </p>
           <p>
-            スタッフ用のGoogleログインで、カレンダーの利用許可も行います。予定の件名・本文は取得しません。
-          </p>
+            {tr("スタッフ用のGoogleログインで、カレンダーの利用許可も行います。予定の件名・本文は取得しません。")}</p>
           <a
             className="button"
             data-staff-login-link
             href={connection.loginUrl}
           >
-            Googleでログインしてカレンダーを許可
-          </a>
+            {tr("Googleでログインしてカレンダーを許可")}</a>
           {connection.connected && (
             <button
               disabled={busy}
@@ -259,8 +249,7 @@ export function StaffCalendar({ shop }: { shop: Workspace }) {
                 }
               }}
             >
-              カレンダー連携を解除
-            </button>
+              {tr("カレンダー連携を解除")}</button>
           )}
         </>
       )}
@@ -278,7 +267,7 @@ export function StaffLogin({ shopId }: { shopId: string }) {
   }, [shopId]);
   return (
     <main className="staff-login panel">
-      <h1>スタッフ用ログイン</h1>
+      <h1>{tr("スタッフ用ログイン")}</h1>
       {error && (
         <p className="alert" role="alert">
           {error}
@@ -288,22 +277,18 @@ export function StaffLogin({ shopId }: { shopId: string }) {
         <>
           <h2>{data.name}</h2>
           <p>
-            店主が登録したGoogleアカウントでログインしてください。ログイン時にGoogleカレンダーの利用許可も行います。
-          </p>
+            {tr("店主が登録したGoogleアカウントでログインしてください。ログイン時にGoogleカレンダーの利用許可も行います。")}</p>
           <p>
-            メインカレンダーの「予定あり」の時間を予約できない時間として扱います。予定の件名・本文は取得しません。
-          </p>
+            {tr("メインカレンダーの「予定あり」の時間を予約できない時間として扱います。予定の件名・本文は取得しません。")}</p>
           {data.configured ? (
             <a
               className="button primary"
               href={`/auth/google?${new URLSearchParams({ staffShop: shopId })}`}
             >
-              Googleでログインしてカレンダーを許可
-            </a>
+              {tr("Googleでログインしてカレンダーを許可")}</a>
           ) : (
             <p className="notice">
-              Googleログインの設定が完了していません。店主に確認してください。
-            </p>
+              {tr("Googleログインの設定が完了していません。店主に確認してください。")}</p>
           )}
         </>
       )}
@@ -341,11 +326,10 @@ export function StaffPhoto({
     void load().catch((error) => setError(error.message));
   }, [base]);
   return (
-    <section className="panel own-staff-photo" aria-label="自分のスタッフ写真">
-      <h2>自分のスタッフ写真</h2>
+    <section className="panel own-staff-photo" aria-label={tr("自分のスタッフ写真")}>
+      <h2>{tr("自分のスタッフ写真")}</h2>
       <p>
-        写真を選んで保存すると、お客様の「お店のこと」とスタッフを指名した予約画面に表示されます。
-      </p>
+        {tr("写真を選んで保存すると、お客様の「お店のこと」とスタッフを指名した予約画面に表示されます。")}</p>
       {error && (
         <p className="alert" role="alert">
           {error}
@@ -356,8 +340,7 @@ export function StaffPhoto({
               void load().catch((error) => setError(error.message));
             }}
           >
-            最新の写真を確認
-          </button>
+            {tr("最新の写真を確認")}</button>
         </p>
       )}
       {notice && (
@@ -371,7 +354,7 @@ export function StaffPhoto({
           <fieldset disabled={busy}>
             <MenuImageEditor
               shopId={shop.id}
-              label="スタッフ写真（任意）"
+              label={tr("スタッフ写真（任意）")}
               name={staff.name}
               imageId={imageId}
               change={(value) => {
@@ -400,7 +383,7 @@ export function StaffPhoto({
                 });
                 await load();
                 await reload();
-                setNotice("スタッフ写真を保存しました。");
+                setNotice(tr("スタッフ写真を保存しました。"));
               } catch (error) {
                 setError(
                   error instanceof Error ? error.message : String(error),
@@ -410,8 +393,7 @@ export function StaffPhoto({
               }
             }}
           >
-            写真を保存
-          </button>
+            {tr("写真を保存")}</button>
         </>
       )}
     </section>

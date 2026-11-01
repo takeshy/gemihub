@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { google } from "googleapis";
 import { z } from "zod";
 import { oauth, encrypt, decrypt } from "./google.ts";
@@ -32,7 +33,7 @@ export const calendarGateway = {
       !tokens.scope?.split(" ").includes(calendarScope) || !tokens.refresh_token
     )
       throw Object.assign(
-        new Error("Google Calendar の空き状況へのアクセスを承認してください"),
+        new Error(tr("Google Calendar の空き状況へのアクセスを承認してください")),
         { status: 400 },
       );
     return {
@@ -51,7 +52,7 @@ export const calendarGateway = {
     });
     const calendar = data.calendars?.primary;
     if (!calendar || calendar.errors?.length || !calendar.busy)
-      throw new Error("空き状況を取得できません");
+      throw new Error(tr("空き状況を取得できません"));
     return busySchema.parse(calendar.busy);
   },
 };
@@ -92,7 +93,7 @@ export async function availableSlots(
         });
   } catch {
     throw Object.assign(
-      new Error("Google Calendar の空き状況を確認できません。運営メンバーに再接続を依頼してから再試行してください。"),
+      new Error(tr("Google Calendar の空き状況を確認できません。運営メンバーに再接続を依頼してから再試行してください。")),
       { status: 503 },
     );
   }

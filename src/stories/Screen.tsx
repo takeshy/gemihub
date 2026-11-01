@@ -1,3 +1,4 @@
+import { tr } from "../../shared/i18n";
 import React, { useMemo, useState } from "react";
 import { App } from "../App";
 import { ApiProvider } from "../api";
@@ -33,7 +34,7 @@ export function Screen({ scenario }: { scenario: Scenario }) {
         if (link && !link.getAttribute("href")?.startsWith("#")) {
           event.preventDefault();
           setNotice(
-            "Storybook では外部画面への移動を省略します。左の一覧から確認する画面を選んでください。",
+            tr("Storybook では外部画面への移動を省略します。左の一覧から確認する画面を選んでください。"),
           );
         }
       }}

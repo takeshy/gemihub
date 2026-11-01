@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import type { Store, Shop } from "./store.ts";
 import type { ShopConfig } from "./domain.ts";
 import { documents } from "./domain.ts";
@@ -75,7 +76,7 @@ export async function articleToolContext(
     )
       throw Object.assign(
         new Error(
-          "参照するお店のファイルが見つかりません。パスを確認してください。",
+          tr("参照するお店のファイルが見つかりません。パスを確認してください。"),
         ),
         { status: 404 },
       );
@@ -91,7 +92,7 @@ export async function articleToolContext(
         .filter(Boolean),
     ).size > 15
   )
-    throw Object.assign(new Error("画像は15枚まで参照できます。"), {
+    throw Object.assign(new Error(tr("画像は15枚まで参照できます。")), {
       status: 400,
     });
   const readImages = new Set<string>();
@@ -104,7 +105,7 @@ export async function articleToolContext(
         return { path, text: catalog.texts.get(path)!.slice(0, 30000) };
       readImages.add(file.imageId!);
       if (readImages.size > 15)
-        throw Object.assign(new Error("画像は15枚まで参照できます。"), {
+        throw Object.assign(new Error(tr("画像は15枚まで参照できます。")), {
           status: 400,
         });
       const image = (

@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 // Adapted from kakeratta's browser_speech.js: preserve edits, consume cumulative
 // results once, and send only on a final trailing command.
 export const defaultEndKeyword = "以上";
@@ -25,9 +26,9 @@ export function speechDraft(base:string,transcript:string,final:boolean,keywords
   const spoken=send&&command?transcript.replace(command,"").trimEnd():transcript;
   return {text:base+(base&&spoken&&!/\s$/.test(base)&&!/^[\s,.?!、。？！]/.test(spoken)?" ":"")+spoken,send};
 }
-export function createDictation({createRecognition,getText,onInput,onSend,onState,maxLength=4000}:{
+export function createDictation({createRecognition,getText,onInput,onSend,onState,maxLength=4000,language="ja-JP"}:{
   createRecognition:()=>Recognition;getText:()=>string;onInput:(text:string)=>void;
-  onSend?:(text:string)=>void;onState:(state:{listening:boolean;error:string})=>void;maxLength?:number;
+  onSend?:(text:string)=>void;onState:(state:{listening:boolean;error:string})=>void;maxLength?:number;language?:string;
 }) {
   let recognition:Recognition|null=null;
   function stop(error="") {
@@ -38,9 +39,9 @@ export function createDictation({createRecognition,getText,onInput,onSend,onStat
   function start(keywords=defaultEndKeyword) {
     stop();
     let current:Recognition;
-    try{current=createRecognition();}catch{onState({listening:false,error:"このブラウザでは音声入力を利用できません。文字で入力してください。"});return;}
+    try{current=createRecognition();}catch{onState({listening:false,error:tr("このブラウザでは音声入力を利用できません。文字で入力してください。")});return;}
     recognition=current;
-    current.lang="ja-JP";current.continuous=true;current.interimResults=true;
+    current.lang=language;current.continuous=true;current.interimResults=true;
     let base=getText(),lastRendered=base,results:SpeechResult[]=[],consumed=0;
     function preserveEdits(){const edited=getText();if(edited===lastRendered)return;base=edited;lastRendered=edited;consumed=Math.max(consumed,results.length);}
     current.onresult=event=>{
@@ -56,11 +57,11 @@ export function createDictation({createRecognition,getText,onInput,onSend,onStat
     current.onend=()=>{if(recognition===current)stop();};
     current.onerror=event=>{
       if(recognition!==current)return;
-      const message=event.error==="not-allowed"?"マイクの使用が許可されていません。":event.error==="network"?"音声認識に接続できませんでした。":event.error==="audio-capture"?"マイクを利用できませんでした。":"音声を聞き取れませんでした。";
-      stop(message+"入力済みの文章を確認し、文字入力か音声入力で続けてください。");
+      const message=event.error==="not-allowed"?tr("マイクの使用が許可されていません。"):event.error==="network"?tr("音声認識に接続できませんでした。"):event.error==="audio-capture"?tr("マイクを利用できませんでした。"):tr("音声を聞き取れませんでした。");
+      stop(message+tr("入力済みの文章を確認し、文字入力か音声入力で続けてください。"));
     };
     onState({listening:true,error:""});
-    try{current.start();}catch{stop("音声入力を開始できませんでした。もう一度お試しください。");}
+    try{current.start();}catch{stop(tr("音声入力を開始できませんでした。もう一度お試しください。"));}
   }
   return {start,stop,listening:()=>!!recognition};
 }

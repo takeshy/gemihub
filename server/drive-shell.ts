@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { readFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
 
@@ -5,7 +6,7 @@ export type ReadBuildAsset = (path: string) => string;
 const readBuildAsset: ReadBuildAsset = path => {
   const root = resolve("dist");
   const file = resolve(root, path.replace(/^\//, ""));
-  if (!file.startsWith(root + sep) || /[?#]/.test(path)) throw new Error("Drive用のビルドファイルのパスを確認してください");
+  if (!file.startsWith(root + sep) || /[?#]/.test(path)) throw new Error(tr("Drive用のビルドファイルのパスを確認してください"));
   return readFileSync(file, "utf8");
 };
 
@@ -13,7 +14,7 @@ const readBuildAsset: ReadBuildAsset = path => {
 export function inlineDriveShell(shell: string, readAsset: ReadBuildAsset = readBuildAsset) {
   const attribute = (tag: string, name: string) => tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1];
   const localAsset = (path: string) => {
-    if (!/^\/?assets\/[a-zA-Z0-9_.\/-]+$/.test(path) || path.split("/").includes("..")) throw new Error(`Driveに同梱できないビルドファイルです: ${path}`);
+    if (!/^\/?assets\/[a-zA-Z0-9_.\/-]+$/.test(path) || path.split("/").includes("..")) throw new Error(tr("Driveに同梱できないビルドファイルです: {0}", path));
     return readAsset(path);
   };
   return shell

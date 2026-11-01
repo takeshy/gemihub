@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { customerNoteSchema } from "./customers.ts";
 import { clients } from "./google.ts";
 import type { Shop } from "./store.ts";
@@ -44,7 +45,7 @@ const layouts: Record<string, { tab: string; columns: string[] }> = {
 };
 async function table(shop: Shop, kind: string, token: string) {
   const layout = layouts[kind];
-  if (!layout || !shop.google) throw new Error("保存先がありません");
+  if (!layout || !shop.google) throw new Error(tr("保存先がありません"));
   const { sheets } = clients(token);
   const spreadsheetId = shop.google.sheetId;
   const metadata = await sheets.spreadsheets.get({
@@ -81,7 +82,7 @@ async function table(shop: Shop, kind: string, token: string) {
     header.some((v, i) => v !== layout.columns[i]) ||
     (header.length && header.length !== layout.columns.length)
   ))
-    throw Object.assign(new Error(`${layout.tab} の列構造を確認してください`), {
+    throw Object.assign(new Error(tr("{0} の列構造を確認してください", layout.tab)), {
       status: 409,
     });
   const identities = rows
@@ -89,7 +90,7 @@ async function table(shop: Shop, kind: string, token: string) {
     .filter((row) => row[0])
     .map((row) => String(row[0]).trim().toLowerCase());
   if (new Set(identities).size !== identities.length)
-    throw Object.assign(new Error(`${layout.tab} の識別子が重複しています`), {
+    throw Object.assign(new Error(tr("{0} の識別子が重複しています", layout.tab)), {
       status: 409,
     });
   if (header.length !== layout.columns.length) {
@@ -123,7 +124,7 @@ export async function readRecords(
         try {
           value.attachments = JSON.parse(String(value.attachments || "[]"));
           return customerNoteSchema.parse(value);
-        } catch { throw Object.assign(new Error("お客様メモの記録を確認してください"), { status: 409 }); }
+        } catch { throw Object.assign(new Error(tr("お客様メモの記録を確認してください")), { status: 409 }); }
       }
       if (kind === "member" || kind === "customer") {
         value.email = String(value.email).trim().toLowerCase();
@@ -136,7 +137,7 @@ export async function readRecords(
       if (kind === "booking") {
         const price = Number(value.price);
         if (String(value.price).trim() === "" || !Number.isSafeInteger(price) || price < 0)
-          throw Object.assign(new Error("予約台帳の料金を確認してください"), { status: 409 });
+          throw Object.assign(new Error(tr("予約台帳の料金を確認してください")), { status: 409 });
         value.price = price;
       }
       if (
@@ -146,7 +147,7 @@ export async function readRecords(
           !Number.isFinite(Date.parse(String(value.end))))
       )
         throw Object.assign(
-          new Error("予約台帳の日時・状態を確認してください"),
+          new Error(tr("予約台帳の日時・状態を確認してください")),
           { status: 409 },
         );
       return value;

@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import {postImageIds} from "../server/post-images";
 import { customerProfileSchema, type MemberProfile } from "../server/customer-profile";
 import { z } from "zod";
@@ -11,7 +12,7 @@ import type { ApiClient } from "./api";
 const bookingSchema = z.object({
   id: z.string().min(1), name: z.string().min(1), menuId: z.string(), staffId: z.string(),
   start: z.iso.datetime(), end: z.iso.datetime(), status: z.enum(["active", "cancelled", "no_show"]),
-}).refine(b => Date.parse(b.start) < Date.parse(b.end), "予約の終了は開始より後にしてください");
+}).refine(b => Date.parse(b.start) < Date.parse(b.end), { error: () => tr("予約の終了は開始より後にしてください") });
 export const fixturesSchema = z.object({
   customerName: z.string().min(1).max(100),
   bookings: z.array(bookingSchema).max(100),
@@ -24,12 +25,12 @@ export function sampleFixtures(config: ShopConfig): Fixtures {
   const menu = config.menus.find(m => first.menuIds.includes(m.id))!;
   const start = new Date(`${date}T${first.start}:00+09:00`);
   return {
-    customerName: "山田 花子（サンプル）",
-    bookings: [{ id: "sample-booking", name: "山田 花子（サンプル）", menuId: menu.id, staffId: first.id, start: start.toISOString(), end: new Date(start.getTime() + menu.duration * 60000).toISOString(), status: "active" }],
+    customerName: tr("山田 花子（サンプル）"),
+    bookings: [{ id: "sample-booking", name: tr("山田 花子（サンプル）"), menuId: menu.id, staffId: first.id, start: start.toISOString(), end: new Date(start.getTime() + menu.duration * 60000).toISOString(), status: "active" }],
     posts: ["blogs", "announcements"].map((category, i) => ({
       category: category as "blogs" | "announcements", date: dateJST(), slug: `sample-${i}`,
-      title: i ? "営業日のご案内（サンプル）" : "お店からのお便り（サンプル）",
-      excerpt: "表示を確かめるためのサンプルです。", body: "## お店からのご案内\n\nここに記事のサンプル本文が入ります。",
+      title: i ? tr("営業日のご案内（サンプル）") : tr("お店からのお便り（サンプル）"),
+      excerpt: tr("表示を確かめるためのサンプルです。"), body: tr("## お店からのご案内\n\nここに記事のサンプル本文が入ります。"),
     })),
   };
 }
@@ -62,7 +63,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     const image = action.match(/^\/api\/public\/local-preview\/(menu-images|images)\/([a-f0-9]{64})$/);
     if (image) {
       const ids = image[1] === "images" ? [...managedImageIds(config),...posts.flatMap(post=>postImageIds(post.body))] : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
-      if (!ids.includes(image[2]) || !readImage) throw new Error("画像がありません");
+      if (!ids.includes(image[2]) || !readImage) throw new Error(tr("画像がありません"));
       result = await readImage(image[2]);
     }
     else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5), customerProfile: profile, registrationRequired: false };
@@ -70,12 +71,12 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {
       const slot = slots(config, bookings, dateJST(new Date(input.start)), input.menuId, input.staffId || undefined).find(s => s.start === input.start);
-      if (!slot) throw new Error("この時間は予約できません。空き枠を選び直してください。");
+      if (!slot) throw new Error(tr("この時間は予約できません。空き枠を選び直してください。"));
       bookings.push({ ...slot, id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: config.menus.find(menu => menu.id === input.menuId)!.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() });
       result = { ok: true };
     } else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/cancel")) {
       const b = bookings.find(b => b.id === action.split("/").at(-2));
-      if (!b) throw new Error("サンプル予約がありません");
+      if (!b) throw new Error(tr("サンプル予約がありません"));
       b.status = "cancelled";
       result = { ok: true };
     } else if (action === `${base}/profile`) { if (data !== undefined) profile = customerProfileSchema.parse(data); result = {profile};
@@ -86,9 +87,9 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
       result = { items: all.slice((page - 1) * 12, page * 12), total: all.length, page, size: 12 };
     } else {
       const match = action.match(/^\/api\/public\/local-preview\/posts\/(blogs|announcements)\/([^/]+)$/);
-      if (!match) throw new Error("この操作は試す画面では利用できません");
+      if (!match) throw new Error(tr("この操作は試す画面では利用できません"));
       result = posts.find(p => p.category === match[1] && postKey(p) === match[2]);
-      if (!result) throw new Error("サンプル記事がありません");
+      if (!result) throw new Error(tr("サンプル記事がありません"));
     }
     return structuredClone(result) as T;
   };

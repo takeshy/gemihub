@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import type { RequestIntent } from "./request-intent.ts";
 export type HistoryMessage = {id:string;conversationId:string;requestId:string;role:"user"|"assistant";text:string;createdAt:string;sequence:number;detail:{partial?:boolean}};
 export type HistoricalContext = { conversationId:string; requestId:string; intent:RequestIntent; at:string; messages:{role:"user"|"assistant";text:string}[] };
@@ -26,6 +27,6 @@ export function findRelevantHistory(messages:HistoryMessage[],intents:Map<string
   return [...groups.values()].filter(group=>!words.length||group.score>0).sort((a,b)=>b.score-a.score||b.messages.at(-1)!.createdAt.localeCompare(a.messages.at(-1)!.createdAt)).slice(0,Math.min(10,Math.max(1,limit))).map(group=>{
     const sorted=group.messages.sort((a,b)=>a.sequence-b.sequence);
     const first=sorted[0];
-    return {conversationId:first.conversationId,requestId:first.requestId,intent:intents.get(first.conversationId)!,at:first.createdAt,messages:sorted.map(message=>({role:message.role,text:`${message.detail.partial?"（途中で終了した発言）":""}${excerpt(message.text,words)}`}))};
+    return {conversationId:first.conversationId,requestId:first.requestId,intent:intents.get(first.conversationId)!,at:first.createdAt,messages:sorted.map(message=>({role:message.role,text:`${message.detail.partial?tr("（途中で終了した発言）"):""}${excerpt(message.text,words)}`}))};
   });
 }

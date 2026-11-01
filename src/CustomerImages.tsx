@@ -1,9 +1,10 @@
+import { tr, intlLocale } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import type { CustomerAttachment, CustomerDetail, CustomerImage, CustomerImages } from "../server/customers";
 import { useApi } from "./api";
 
 type ImageItem = { file: CustomerAttachment; path: string; createdAt?: string };
-const when = (value: string) => new Date(value).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
+const when = (value: string) => new Date(value).toLocaleDateString(intlLocale(), { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
 
 function useImage(path: string, mimeType: string, active = true) {
   const api = useApi();
@@ -31,15 +32,15 @@ export function CustomerImageDialog({ items, initialIndex, close }: { items: Ima
   const { url, error, retry } = useImage(item.path, item.file.mimeType);
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="customer-image-dialog" aria-label="画像の拡大表示" onClose={close} onClick={event => { if (event.target === event.currentTarget) close(); }} onKeyDown={event => {
+  return <dialog ref={dialog} className="customer-image-dialog" aria-label={tr("画像の拡大表示")} onClose={close} onClick={event => { if (event.target === event.currentTarget) close(); }} onKeyDown={event => {
     if (event.key === "ArrowLeft") { event.preventDefault(); setIndex(value => Math.max(0, value - 1)); }
     if (event.key === "ArrowRight") { event.preventDefault(); setIndex(value => Math.min(items.length - 1, value + 1)); }
   }}>
-    <div className="customer-image-dialog-header"><div><h2>{item.file.name}</h2>{item.createdAt && <p>{when(item.createdAt)}</p>}</div><button type="button" autoFocus onClick={close}>閉じる</button></div>
+    <div className="customer-image-dialog-header"><div><h2>{item.file.name}</h2>{item.createdAt && <p>{when(item.createdAt)}</p>}</div><button type="button" autoFocus onClick={close}>{tr("閉じる")}</button></div>
     <div className="customer-image-stage">
-      {url ? <img src={url} alt={item.file.name} /> : error ? <div role="alert">{error}<button type="button" onClick={retry}>再読み込み</button></div> : <p role="status">画像を読み込んでいます…</p>}
+      {url ? <img src={url} alt={item.file.name} /> : error ? <div role="alert">{error}<button type="button" onClick={retry}>{tr("再読み込み")}</button></div> : <p role="status">{tr("画像を読み込んでいます…")}</p>}
     </div>
-    <div className="customer-image-navigation"><button type="button" disabled={index === 0} onClick={() => setIndex(value => value - 1)}>← 前の画像</button><span>{index + 1} / {items.length}</span><button type="button" disabled={index === items.length - 1} onClick={() => setIndex(value => value + 1)}>次の画像 →</button></div>
+    <div className="customer-image-navigation"><button type="button" disabled={index === 0} onClick={() => setIndex(value => value - 1)}>{tr("← 前の画像")}</button><span>{index + 1} / {items.length}</span><button type="button" disabled={index === items.length - 1} onClick={() => setIndex(value => value + 1)}>{tr("次の画像 →")}</button></div>
   </dialog>;
 }
 
@@ -54,10 +55,10 @@ function Thumbnail({ item, open }: { item: ImageItem; open: () => void }) {
     return () => observer.disconnect();
   }, []);
   return <>
-    <button type="button" className="customer-image-thumb" ref={ref} onClick={open} aria-label={`${item.file.name} を拡大表示`}>
-      {url ? <img src={url} alt={item.file.name} /> : <span>{error ? "画像を読み込めませんでした" : "画像を読み込んでいます…"}</span>}
+    <button type="button" className="customer-image-thumb" ref={ref} onClick={open} aria-label={tr("{0} を拡大表示", item.file.name)}>
+      {url ? <img src={url} alt={item.file.name} /> : <span>{error ? tr("画像を読み込めませんでした") : tr("画像を読み込んでいます…")}</span>}
     </button>
-    {error && <div role="alert">{error}<button type="button" onClick={retry}>再読み込み</button></div>}
+    {error && <div role="alert">{error}<button type="button" onClick={retry}>{tr("再読み込み")}</button></div>}
   </>;
 }
 export { Thumbnail as CustomerImageThumbnail };
@@ -89,20 +90,20 @@ export function CustomerImageGallery({ base, rangeQuery, back, saved }: { base: 
     finally { setBusy(false); }
   }
   return <section className="customer-image-gallery">
-    <button type="button" disabled={busy} onClick={back}>← お客様詳細へ</button>
+    <button type="button" disabled={busy} onClick={back}>{tr("← お客様詳細へ")}</button>
     <div className="panel">
-      <div className="section-top"><h2>{gallery?.name ? `${gallery.name} 様の画像一覧` : "画像一覧"}</h2><button type="button" disabled={busy} onClick={() => setAttempt(value => value + 1)}>再読み込み</button></div>
-      <p className="small muted">すべての期間の画像を新しい順に表示します。写真をクリックすると拡大できます。</p>
+      <div className="section-top"><h2>{gallery?.name ? tr("{0} 様の画像一覧", gallery.name) : tr("画像一覧")}</h2><button type="button" disabled={busy} onClick={() => setAttempt(value => value + 1)}>{tr("再読み込み")}</button></div>
+      <p className="small muted">{tr("すべての期間の画像を新しい順に表示します。写真をクリックすると拡大できます。")}</p>
       {error && <div className="alert" role="alert">{error}</div>}
-      {!gallery && !error && <p role="status">画像一覧を読み込んでいます…</p>}
-      {gallery?.images.length === 0 && <p className="empty">まだ画像はありません。お客様詳細のメモから画像を添付できます。</p>}
+      {!gallery && !error && <p role="status">{tr("画像一覧を読み込んでいます…")}</p>}
+      {gallery?.images.length === 0 && <p className="empty">{tr("まだ画像はありません。お客様詳細のメモから画像を添付できます。")}</p>}
       <div className="customer-image-grid">{gallery?.images.map((image, index) => <figure key={image.id}>
         <Thumbnail item={items[index]} open={() => setZoom(index)} />
         <figcaption><strong>{image.name}</strong><time dateTime={image.createdAt}>{when(image.createdAt)}</time></figcaption>
         {editing?.image.id === image.id ? <form onSubmit={rename}>
-          <label>ファイル名<input required maxLength={255} value={editing.name} disabled={busy} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
-          <div className="actions"><button type="submit" disabled={busy || !editing.name.trim()}>名前を保存</button><button type="button" disabled={busy} onClick={() => setEditing(undefined)}>変更をやめる</button></div>
-        </form> : <button type="button" disabled={busy} onClick={() => setEditing({ image, name: image.name })} aria-label={`${image.name} のファイル名を変更`}>ファイル名を変更</button>}
+          <label>{tr("ファイル名")}<input required maxLength={255} value={editing.name} disabled={busy} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
+          <div className="actions"><button type="submit" disabled={busy || !editing.name.trim()}>{tr("名前を保存")}</button><button type="button" disabled={busy} onClick={() => setEditing(undefined)}>{tr("変更をやめる")}</button></div>
+        </form> : <button type="button" disabled={busy} onClick={() => setEditing({ image, name: image.name })} aria-label={tr("{0} のファイル名を変更", image.name)}>{tr("ファイル名を変更")}</button>}
       </figure>)}</div>
     </div>
     {zoom !== undefined && items[zoom] && <CustomerImageDialog items={items} initialIndex={zoom} close={() => setZoom(undefined)} />}

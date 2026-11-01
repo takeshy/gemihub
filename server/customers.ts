@@ -1,20 +1,21 @@
+import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import { memberProfile, type MemberProfile } from "./customer-profile.ts";
 import { dateJST, type Booking } from "./domain.ts";
 
 export const customerPeriods = [
-  { value: "all", label: "全期間" },
-  { value: "week", label: "1週間前以降" },
-  { value: "month", label: "1か月前以降" },
-  { value: "quarter", label: "3か月前以降" },
-  { value: "half-year", label: "半年前以降" },
-  { value: "year", label: "1年前以降" },
-  { value: "custom", label: "任意の開始日" },
+  { value: "all", get label() { return tr("全期間"); } },
+  { value: "week", get label() { return tr("1週間前以降"); } },
+  { value: "month", get label() { return tr("1か月前以降"); } },
+  { value: "quarter", get label() { return tr("3か月前以降"); } },
+  { value: "half-year", get label() { return tr("半年前以降"); } },
+  { value: "year", get label() { return tr("1年前以降"); } },
+  { value: "custom", get label() { return tr("任意の開始日"); } },
 ] as const;
 export const customerFilterSchema = z.object({
   period: z.enum(["all", "week", "month", "quarter", "half-year", "year", "custom"]).default("all"),
   since: z.iso.date().optional(),
-}).refine(filter => filter.period !== "custom" || !!filter.since, { message: "開始日を指定してください", path: ["since"] });
+}).refine(filter => filter.period !== "custom" || !!filter.since, { get message() { return tr("開始日を指定してください"); }, path: ["since"] });
 export type CustomerFilter = z.infer<typeof customerFilterSchema>;
 
 // Calendar periods start at JST midnight. Clamp month/year subtraction at month end.
@@ -71,7 +72,7 @@ export const customerNoteInputSchema = z.object({
   files: z.array(customerAttachmentSchema.omit({ id: true, size: true }).extend({
     data: z.string().max(Math.ceil(customerFileLimit / 3) * 4).regex(/^[A-Za-z0-9+/]*={0,2}$/),
   })).max(5).default([]),
-}).refine(input => !!input.text.trim() || input.files.length > 0, { message: "メモまたは添付ファイルを指定してください" });
+}).refine(input => !!input.text.trim() || input.files.length > 0, { get message() { return tr("メモまたは添付ファイルを指定してください"); } });
 export const previewCustomerImage = (mimeType: string) => ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(mimeType);
 export type CustomerImage = CustomerAttachment & { noteId: string; createdAt: string; noteUpdatedAt: string };
 export type CustomerImages = { name: string; images: CustomerImage[] };

@@ -28,7 +28,7 @@ try {
   const entries = Object.values(index.entries).filter(entry => entry.type === "story");
   assert.ok(entries.length > 0);
   const failures = [];
-  for (const host of ["127.0.0.1", "storybook.test"]) {
+  for (const language of ["ja", "en"]) for (const host of ["127.0.0.1", "storybook.test"]) {
     const context = await browser.newContext();
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
@@ -40,12 +40,13 @@ try {
     for (const entry of entries) {
       errors = [];
       try {
-        await page.goto(`http://${host}:${port}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story`);
+        await page.goto(`http://${host}:${port}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story&globals=locale:${language}`);
         await page.locator("#storybook-root h1, #storybook-root h2").first().waitFor({ state: "attached" });
+        assert.equal(await page.locator("html").getAttribute("lang"), language);
         assert.equal(await page.evaluate(() => isSecureContext), host === "127.0.0.1");
         await page.waitForFunction(() => {
           const editor = document.querySelector(".local-preview");
-          return !editor || editor.querySelector(".local-preview-screen") || editor.textContent.includes("画面を読み込めませんでした");
+          return !editor || editor.querySelector(".local-preview-screen") || /画面を読み込めませんでした|Unable to load this screen/.test(editor.textContent);
         });
         // Let the asynchronous effects and their error handlers finish rendering.
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -56,11 +57,15 @@ try {
         failures.push({ host, story: entry.id, error: error.message, alerts: await page.locator('[role="alert"]').allTextContents() });
       }
     }
-    console.log(`${host}: checked ${entries.length} stories`);
+    console.log(`${language} ${host}: checked ${entries.length} stories`);
     await context.close();
   }
   assert.deepEqual(failures, []);
-  console.log("All stories loaded in secure and insecure contexts, without loading errors or live API requests.");
+  const manager = await browser.newPage();
+  await manager.goto(`http://127.0.0.1:${port}/index.html?path=/story/${encodeURIComponent(entries[0].id)}`);
+  await manager.getByText("Management / 運営", { exact: true }).first().waitFor();
+  await manager.close();
+  console.log("All stories loaded in secure and insecure contexts, without loading errors or live API requests. Bilingual explorer verified.");
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

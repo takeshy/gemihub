@@ -1,3 +1,5 @@
+import { tr } from "../shared/i18n";
+import { getLocale } from "../shared/i18n";
 import { createContext, useContext } from "react";
 
 async function api<T = Record<string, unknown>>(
@@ -6,11 +8,11 @@ async function api<T = Record<string, unknown>>(
 ): Promise<T> {
   const r = await fetch(path, {
     method: data === undefined ? "GET" : "POST",
-    headers: data === undefined ? {} : { "Content-Type": "application/json" },
+    headers: { "X-Omaiweb-Language": getLocale(), ...(data === undefined ? {} : { "Content-Type": "application/json" }) },
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   const v = await r.json();
-  if (!r.ok) throw new Error(v.error || "操作できませんでした");
+  if (!r.ok) throw new Error(v.error || tr("操作できませんでした"));
   return v;
 }
 

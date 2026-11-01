@@ -1,6 +1,18 @@
+import React from "react";
+import { setLocaleResolver, parseLocale } from "../shared/i18n";
 import type { Preview } from "@storybook/react-vite";
 import "../src/style.css";
 const preview: Preview = {
+  initialGlobals: { locale: "ja" },
+  globalTypes: {
+    locale: { description: "Language / 言語", toolbar: { icon: "globe", items: [{ value: "ja", title: "日本語" }, { value: "en", title: "English" }], dynamicTitle: true } },
+  },
+  decorators: [(Story, context) => {
+    const locale = parseLocale(new URLSearchParams(location.search).get("lang")) || parseLocale(context.globals.locale) || "ja";
+    setLocaleResolver(() => locale);
+    document.documentElement.lang = locale;
+    return React.createElement("div", { key: locale }, React.createElement(Story));
+  }],
   parameters: {
     layout: "fullscreen",
     controls: { disable: true },

@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { randomUUID, createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { clients } from "./google.ts";
@@ -49,12 +50,12 @@ export function memoryCustomerFiles(store: Store): CustomerFiles {
     async upload(shop, _token, id, file) { await store.put("demoCustomerFile", id, { ...file, shopId: shop.id }); },
     async read(shop, _token, id) {
       const file = await store.get<FileUpload & { shopId: string }>("demoCustomerFile", id);
-      if (!file || file.shopId !== shop.id) throw Object.assign(new Error("添付ファイルがありません"), { status: 404 });
+      if (!file || file.shopId !== shop.id) throw Object.assign(new Error(tr("添付ファイルがありません")), { status: 404 });
       return Buffer.from(file.data, "base64");
     },
     async rename(shop, _token, id, name) {
       const file = await store.get<FileUpload & { shopId: string }>("demoCustomerFile", id);
-      if (!file || file.shopId !== shop.id) throw Object.assign(new Error("添付ファイルがありません"), { status: 404 });
+      if (!file || file.shopId !== shop.id) throw Object.assign(new Error(tr("添付ファイルがありません")), { status: 404 });
       await store.put("demoCustomerFile", id, { ...file, name });
     },
   };

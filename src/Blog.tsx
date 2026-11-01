@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import { createRequestId } from "./request-id";
 import { ArticleImageChooser } from "./ArticleImages";
 import type { ArticleFile } from "../server/article-files";
@@ -126,16 +127,14 @@ export function BlogEditor({
     <div className="blog-editor-layout">
       <div className="panel post-management-list">
         <div className="section-top">
-          <h2>お店のお便り</h2>
+          <h2>{tr("お店のお便り")}</h2>
           <button disabled={blocked} onClick={() => choose()}>
-            ＋ 新しい記事
-          </button>
+            {tr("＋ 新しい記事")}</button>
         </div>
         <p className="small muted">
-          保存前の編集は、お客様には反映されません。
-        </p>
+          {tr("保存前の編集は、お客様には反映されません。")}</p>
         {!posts.length && (
-          <p className="empty">最初のお便りを書いてみましょう。</p>
+          <p className="empty">{tr("最初のお便りを書いてみましょう。")}</p>
         )}
         {posts.map((post) => (
           <button
@@ -146,7 +145,7 @@ export function BlogEditor({
           >
             <span className="post-meta">
               <span className="pill">{postLabel(post.draft.category)}</span>
-              <small>{post.published ? "公開中" : "下書き・非公開"}</small>
+              <small>{post.published ? tr("公開中") : tr("下書き・非公開")}</small>
             </span>
             <strong>{post.draft.title}</strong>
             <small>{post.draft.date.replaceAll("-", "/")}</small>
@@ -156,14 +155,14 @@ export function BlogEditor({
       <div>
         <section className="panel post-editor">
           <span className="eyebrow">BLOG & NEWS</span>
-          <h2>{current ? "記事を編集する" : "新しいお便りを書く"}</h2>
+          <h2>{current ? tr("記事を編集する") : tr("新しいお便りを書く")}</h2>
           {!shop.isOwner && (
-            <p className="notice">記事の作成・変更・公開は店主が行います。</p>
+            <p className="notice">{tr("記事の作成・変更・公開は店主が行います。")}</p>
           )}
           <div
             className="article-methods"
             role="group"
-            aria-label="記事の作成方法"
+            aria-label={tr("記事の作成方法")}
           >
             <button
               type="button"
@@ -171,8 +170,8 @@ export function BlogEditor({
               aria-pressed={method === "ai"}
               onClick={() => setMethod("ai")}
             >
-              <b>AIに依頼する</b>
-              <span>書きたい内容や使う画像を伝えます</span>
+              <b>{tr("AIに依頼する")}</b>
+              <span>{tr("書きたい内容や使う画像を伝えます")}</span>
             </button>
             <button
               type="button"
@@ -180,8 +179,8 @@ export function BlogEditor({
               aria-pressed={method === "write"}
               onClick={() => setMethod("write")}
             >
-              <b>自分で作成する</b>
-              <span>見出しや写真を入れて記事を書きます</span>
+              <b>{tr("自分で作成する")}</b>
+              <span>{tr("見出しや写真を入れて記事を書きます")}</span>
             </button>
           </div>
           {method && (
@@ -189,7 +188,7 @@ export function BlogEditor({
               <fieldset disabled={blocked}>
                 <div className="form-grid">
                   <label className="field">
-                    <span>記事の種類</span>
+                    <span>{tr("記事の種類")}</span>
                     <select
                       value={content.category}
                       disabled={!!current?.address}
@@ -197,14 +196,14 @@ export function BlogEditor({
                         update("category", event.target.value as PostCategory)
                       }
                     >
-                      <option value="blogs">ブログ</option>
-                      <option value="announcements">お知らせ</option>
+                      <option value="blogs">{tr("ブログ")}</option>
+                      <option value="announcements">{tr("お知らせ")}</option>
                     </select>
                   </label>
                   <label className="field">
-                    <span>記事の日付（表示用）</span>
+                    <span>{tr("記事の日付（表示用）")}</span>
                     <DateInput
-                      aria-label="記事の日付（表示用）"
+                      aria-label={tr("記事の日付（表示用）")}
                       value={content.date}
                       disabled={!!current?.address}
                       onValueChange={(value) => update("date", value)}
@@ -215,15 +214,15 @@ export function BlogEditor({
               {method === "ai" ? (
                 <section
                   className="article-ai-chat"
-                  aria-label="AIと記事を作る"
+                  aria-label={tr("AIと記事を作る")}
                 >
-                  <div role="log" aria-label="記事の依頼">
+                  <div role="log" aria-label={tr("記事の依頼")}>
                     {messages.map((message, index) => (
                       <div
                         key={index}
                         className={`article-chat-message ${message.role}`}
                       >
-                        <b>{message.role === "user" ? "あなた" : "AI"}</b>
+                        <b>{message.role === "user" ? tr("あなた") : "AI"}</b>
                         <p>{message.text}</p>
                       </div>
                     ))}
@@ -263,22 +262,21 @@ export function BlogEditor({
                           { role: "user", text: instruction },
                           {
                             role: "assistant",
-                            text: "記事の案を作成しました。下のプレビューを確認してください。追加の依頼もできます。",
+                            text: tr("記事の案を作成しました。下のプレビューを確認してください。追加の依頼もできます。"),
                           },
                         ]);
                         setInstruction("");
                         setTurnId(createRequestId());
                         notify(
-                          "記事の案ができました。下のプレビューで確認できます。",
+                          tr("記事の案ができました。下のプレビューで確認できます。"),
                         );
                       });
                     }}
                   >
                     <label>
-                      AIに伝える内容
-                      <textarea
+                      {tr("AIに伝える内容")}<textarea
                         ref={requestInput}
-                        aria-label="AIに伝える内容"
+                        aria-label={tr("AIに伝える内容")}
                         rows={4}
                         maxLength={10000}
                         value={instruction}
@@ -287,7 +285,7 @@ export function BlogEditor({
                           setInstruction(event.target.value);
                           setTurnId(createRequestId());
                         }}
-                        placeholder="例：この写真を使って、秋のおすすめネイルを紹介してください。[[spec.md]]の情報も参考にしてください。"
+                        placeholder={tr("例：この写真を使って、秋のおすすめネイルを紹介してください。[[spec.md]]の情報も参考にしてください。")}
                       />
                     </label>
                     <div className="article-composer-actions">
@@ -296,12 +294,10 @@ export function BlogEditor({
                         disabled={blocked}
                         onClick={() => setImageOpen(true)}
                       >
-                        📎 画像を添付
-                      </button>
+                        {tr("📎 画像を添付")}</button>
                       <label>
-                        資料を選ぶ
-                        <select
-                          aria-label="記事の参照ファイル"
+                        {tr("資料を選ぶ")}<select
+                          aria-label={tr("記事の参照ファイル")}
                           value=""
                           disabled={blocked}
                           onChange={(event) => {
@@ -309,7 +305,7 @@ export function BlogEditor({
                               insertReference(event.target.value);
                           }}
                         >
-                          <option value="">お店のファイルから選ぶ</option>
+                          <option value="">{tr("お店のファイルから選ぶ")}</option>
                           {files.map((file) => (
                             <option key={file.path} value={file.path}>
                               {file.name}
@@ -321,12 +317,11 @@ export function BlogEditor({
                         className="primary"
                         disabled={blocked || !instruction.trim()}
                       >
-                        {busy ? "AIが記事を作成しています…" : "送信する"}
+                        {busy ? tr("AIが記事を作成しています…") : tr("送信する")}
                       </button>
                     </div>
                     <p className="small muted">
-                      [[パス]]でお店のファイルを参照できます。画像を添付すると、参照するパスが入力されます。
-                    </p>
+                      {tr("[[パス]]でお店のファイルを参照できます。画像を添付すると、参照するパスが入力されます。")}</p>
                   </form>
                   <ArticleImageChooser
                     shopId={shop.id}
@@ -341,25 +336,24 @@ export function BlogEditor({
                       disabled={blocked}
                       onClick={() => setMethod("write")}
                     >
-                      自分で編集する
-                    </button>
+                      {tr("自分で編集する")}</button>
                   )}
                 </section>
               ) : (
                 <>
                   <label className="field">
-                    <span>タイトル</span>
+                    <span>{tr("タイトル")}</span>
                     <input
                       maxLength={160}
                       value={content.title}
                       disabled={blocked}
                       onChange={(event) => update("title", event.target.value)}
-                      placeholder="秋の新しいデザインができました"
+                      placeholder={tr("秋の新しいデザインができました")}
                     />
                   </label>
                   <Suspense
                     fallback={
-                      <p role="status">記事の編集画面を読み込んでいます…</p>
+                      <p role="status">{tr("記事の編集画面を読み込んでいます…")}</p>
                     }
                   >
                     <ArticleEditor
@@ -374,8 +368,7 @@ export function BlogEditor({
                 </>
               )}
               <p className="small muted">
-                記事の紹介文とアドレスは、保存時にAIが自動で作成します。既存記事のアドレスは維持します。
-              </p>
+                {tr("記事の紹介文とアドレスは、保存時にAIが自動で作成します。既存記事のアドレスは維持します。")}</p>
               <button
                 className="primary"
                 disabled={
@@ -421,7 +414,7 @@ export function BlogEditor({
                             },
                       );
                       await accept(saved);
-                      notify("保存して本番に反映しました。");
+                      notify(tr("保存して本番に反映しました。"));
                     } catch (error) {
                       await load().catch(() => {});
                       throw error;
@@ -429,18 +422,16 @@ export function BlogEditor({
                   })
                 }
               >
-                保存
-              </button>
+                {tr("保存")}</button>
             </>
           )}
           {!clean && current && (
             <p className="small muted">
-              未保存の変更があります。保存すると本番に反映されます。
-            </p>
+              {tr("未保存の変更があります。保存すると本番に反映されます。")}</p>
           )}
           {current?.published && (
             <div className="post-published-note">
-              <b>公開中のページ</b>
+              <b>{tr("公開中のページ")}</b>
               <a
                 data-article-link
                 href={postPath(shop.publicUrl, current.published)}
@@ -459,29 +450,27 @@ export function BlogEditor({
                       }),
                     );
                     notify(
-                      "記事を非公開にしました。下書きと履歴は残っています。",
+                      tr("記事を非公開にしました。下書きと履歴は残っています。"),
                     );
                   })
                 }
               >
-                非公開にする
-              </button>
+                {tr("非公開にする")}</button>
             </div>
           )}
         </section>
         {method && (
-          <section className="panel post-preview" aria-label="記事のプレビュー">
-            <h2>記事のプレビュー</h2>
+          <section className="panel post-preview" aria-label={tr("記事のプレビュー")}>
+            <h2>{tr("記事のプレビュー")}</h2>
             <p className="small muted">
-              入力中の記事を確認できます。保存すると本番に反映されます。
-            </p>
+              {tr("入力中の記事を確認できます。保存すると本番に反映されます。")}</p>
             {content.title || content.body ? (
               <PostContent
                 post={{ ...content, excerpt: clean ? content.excerpt : "" }}
                 imageBase={`/api/shops/${shop.id}/images`}
               />
             ) : (
-              <p className="empty">入力した記事がここに表示されます。</p>
+              <p className="empty">{tr("入力した記事がここに表示されます。")}</p>
             )}
           </section>
         )}
@@ -503,7 +492,7 @@ export function RecentPosts({
   return (
     <section className="panel recent-posts">
       <div className="section-top">
-        <h2>お店からのお便り</h2>
+        <h2>{tr("お店からのお便り")}</h2>
         <a
           data-article-link
           href={`${basePath}/blogs`}
@@ -512,8 +501,7 @@ export function RecentPosts({
             navigate(`${basePath}/blogs`);
           }}
         >
-          ブログ一覧 →
-        </a>
+          {tr("ブログ一覧 →")}</a>
       </div>
       <div className="recent-post-list">
         {posts.map((post) => (
@@ -590,7 +578,7 @@ export function PublicBlog({
   if (error)
     return (
       <div className="panel">
-        <h2>記事を表示できません</h2>
+        <h2>{tr("記事を表示できません")}</h2>
         <p role="alert">{error}</p>
         <a
           data-article-link
@@ -600,8 +588,7 @@ export function PublicBlog({
             navigate(`${basePath}/${category}`);
           }}
         >
-          一覧に戻る
-        </a>
+          {tr("一覧に戻る")}</a>
       </div>
     );
   if (post)
@@ -615,8 +602,7 @@ export function PublicBlog({
             navigate(`${basePath}/${category}`);
           }}
         >
-          ← {postLabel(category)}の一覧
-        </a>
+          ← {postLabel(category)}{tr("の一覧")}</a>
         <PostContent post={post} imageBase={`${baseApi}/images`} />
         <div className="actions">
           <a
@@ -628,8 +614,7 @@ export function PublicBlog({
               navigate(basePath || "/");
             }}
           >
-            お店の予約ページへ →
-          </a>
+            {tr("お店の予約ページへ →")}</a>
         </div>
       </div>
     );
@@ -641,15 +626,15 @@ export function PublicBlog({
       <h2>{postLabel(category)}</h2>
       <p className="muted">
         {category === "blogs"
-          ? "お店の日々や、季節のおすすめをお届けします。"
-          : "お店からの大切なご案内です。"}
+          ? tr("お店の日々や、季節のおすすめをお届けします。")
+          : tr("お店からの大切なご案内です。")}
       </p>
       {!result ? (
-        <p>記事を読み込んでいます…</p>
+        <p>{tr("記事を読み込んでいます…")}</p>
       ) : (
         <>
           {!result.items.length && (
-            <p className="empty">記事はまだありません。</p>
+            <p className="empty">{tr("記事はまだありません。")}</p>
           )}
           <div className="post-archive-grid">
             {result.items.map((p) => (
@@ -669,7 +654,7 @@ export function PublicBlog({
                 </span>
                 <h3>{p.title}</h3>
                 <p>{p.excerpt}</p>
-                <span className="small">続きを読む →</span>
+                <span className="small">{tr("続きを読む →")}</span>
               </a>
             ))}
           </div>
@@ -679,8 +664,7 @@ export function PublicBlog({
                 disabled={page === 1}
                 onClick={() => setPage((p) => p - 1)}
               >
-                前のページ
-              </button>
+                {tr("前のページ")}</button>
               <span>
                 {page} / {Math.ceil(result.total / result.size)}
               </span>
@@ -688,8 +672,7 @@ export function PublicBlog({
                 disabled={page * result.size >= result.total}
                 onClick={() => setPage((p) => p + 1)}
               >
-                次のページ
-              </button>
+                {tr("次のページ")}</button>
             </div>
           )}
         </>

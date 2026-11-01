@@ -1,14 +1,16 @@
 # omaiweb
 
-GemiHub の共有 VM に Terraform で追加する構成と手順は [infra/README.md](infra/README.md) を参照してください。
+[English](README.md) · [日本語](README_ja.md)
 
-**“Oh my web” — お店のシステムが、言葉でできてしまう。**
+Terraform deployment on the shared GemiHub VM: [infra/README.md](infra/README.md).
 
-個人商店向けの予約システム。Google ログインから、お店の情報の入力、プランの確認・承認、仮公開・本番公開、公開までをひとつの画面で進めます。生成 AI は **Vertex AI の Gemini** をサーバーの認証情報で利用します。
+**“Oh my web” — build your shop's booking system in your own words.**
 
-## ローカルで試す
+A booking system for small independent businesses. Sign in with Google, describe your shop, review a proposal, publish a private preview, and then open it to customers. Generative AI uses **Gemini on Vertex AI**, authenticated by the server.
 
-Node.js 24 以上が必要です。
+## Try locally
+
+Requires Node.js 24 or later.
 
 ```sh
 npm ci
@@ -17,267 +19,208 @@ npm run build
 npm start
 ```
 
-http://localhost:3000 を開き、「サロンのデモを試す」を選びます。
+Open http://localhost:3000 and choose **Try the salon demo**. Select **English** at the top, or open http://localhost:3000/?lang=en. Japanese remains the default; `?lang=ja` selects Japanese.
 
-1. お店で用意したいページや機能を伝え、確認図を見て「仮公開する」を選びます。スタッフや料金は後で決められます。
-2. 「仮公開する」で、現在のユーザーだけがログインして見られるページを用意します。
-3. 各種設定メニューでスタッフ・料金・営業時間を更新します。デザインは各画面の編集画面、全体的な表示や機能は「AIとお店をつくる」で更新します。
-4. 「画面の確認・本番公開」で各画面を確認し、「本番公開する」で本人限定の閲覧制限を解除します。「お客様デモでログイン」すると予約・マイページ・キャンセル・お問い合わせを利用できます。
-5. 店主の画面に戻って予約・問い合わせを確認します。デモの変更は項目入力で行います。自然言語の変更には Vertex AI の接続が必要です。
+1. Describe the pages and features you want. Review the proposed screens and choose **Publish private preview**. Staff and prices can be decided later.
+2. Only the creator, signed in with the same Google account, can view the private preview.
+3. Update staff, services, prices, and hours in their dedicated settings. Edit designs per screen; discuss overall features in **Build your shop with AI**.
+4. Open **Review screens and publish**, check each screen, and choose **Publish publicly**. Log in as a demo customer to try booking, My page, cancellation, and inquiries.
+5. Return to management to see bookings and inquiries. The demo supports form-based edits; natural-language changes require Vertex AI.
 
-デモであっても承認・公開・権限確認・空き枠計算は実際のサーバー処理です。デモのデータはメモリ内で保持し、再起動すると消去します。Google への保存や実際のメール送信は行いません。本番ではデモログインを利用できません。
+The demo runs real approval, authorization, publication, and availability logic with in-memory data. Restarting clears it. It does not save to Google or send email. Demo login is unavailable in production.
 
-開発時は `npm run dev` でサーバーを監視起動します。画面の開発には別ターミナルで `npm run dev:web` を実行してください。Vite の画面は http://localhost:5173 です。この場合 `.env` の `APP_ORIGIN` と Google OAuth のリダイレクト URI を `http://localhost:5173` に合わせます。
+For development, run `npm run dev` for the watched server and `npm run dev:web` in another terminal for Vite at http://localhost:5173. Set `APP_ORIGIN` and the Google OAuth redirect URI to that origin when using Vite.
 
-## Storybook で画面を確認する
+## Languages
+
+The landing page, management screens, customer pages, manual, validation and API messages, generated documents, and AI instructions support Japanese and English. The language switcher is available before login, on public shop pages, and in offline Drive previews. The selection is stored in this browser and a same-site cookie; explicit `lang` links also work when storage is unavailable.
+
+- Requests carry `X-Omaiweb-Language`. Server language state is isolated per request, so concurrent English and Japanese users do not affect each other.
+- AI-generated explanations and new content follow the selected language. Existing shop text, articles, customer names, notes, and other saved content remain as entered; changing the interface does not translate or rewrite them.
+- Prices remain **Japanese yen** and booking times remain **Asia/Tokyo** in both languages. Date inputs stay `YYYY/MM/DD`, or `YYYY/MM/DD HH:mm`, while readable dates and weekdays use the selected language. ISO API values and ledger columns are unchanged.
+- Voice recognition uses `ja-JP` or `en-US`. The default end phrase is **以上** in Japanese and **send** in English. Each language has its own saved end-phrase preference.
+- Translation keys use the Japanese source text in `tr(...)`; English translations are in [shared/en.json](shared/en.json). See [docs/i18n.md](docs/i18n.md) for maintenance and verification.
+
+## Storybook
 
 ```sh
 npm run storybook
 ```
 
-http://localhost:6005 を開き、左側の「画面」から確認する画面を選びます。アプリのサーバーや `.env`、Google の認証情報は不要です。
+Open http://localhost:6005. Use the globe toolbar to select **English** or **日本語**. The explorer shows English/Japanese labels while existing story IDs and index metadata remain stable. Story iframes also accept `&globals=locale:en` or `&lang=en`.
 
-質問に答えて仮公開へ進む流れの例、画面一覧と機能の確認、本人だけの仮公開、画面の確認・本番公開・本番公開、公開後の変更、予約管理、問い合わせ返信、スタッフのGoogleログイン、データ・履歴、独自ドメイン、連携失敗・公開再試行、ブログ編集・一覧・記事・お知らせ・空の一覧、顧客の指名／指名なし予約、マイページ、問い合わせ、お客様管理・画像一覧、メニュー画像、追加データ管理、ログイン前の画面や使い方マニュアル、仕組み図・ペン入力を「運営」「お客様の会員登録」「お客様の予約」「お客様のマイページ」「お客様の追加ページ」「ブログ・お知らせ」「カレンダー連携」「使い方」に分類しています。「運営」は「はじめる」「お店づくり」「予約管理」「お問い合わせ」「お客様」「お店の基本情報」「メニュー・料金」「スタッフ・勤務」「画像管理」「メニュー画像」「データ管理」「公開・連携」に分け、直下に未分類の画面を置きません。ブラウザー幅を狭めるとスマートフォン表示も確認できます。
+Stories use the real `src/App.tsx` with isolated API mocks. They cover setup and publication, private previews, screen editing and conflicts, settings, bookings, inquiries and replies, staff Google login and Calendar, customer registration and My page, articles, private customer notes and image galleries, the image library, service and staff photos, additional data, domains, retry states, voice input, pen editing, and the manual. Resize the browser to check mobile layouts.
 
-画面は本体と同じ `src/App.tsx` を使います。Storybook 専用の API モック上でプラン承認・公開、予約・キャンセル、返信・スタッフ登録を試せます。Google、Vertex AI、本番 API には接続しません。外部リンクは移動を抑止し、ストーリーを再読込するとモックのデータが初期状態に戻ります。AI の出力・Google 認証・実メール送信の検証にはアプリ本体を利用してください。
+No app server, `.env`, Google credentials, Vertex AI, live API calls, or real email are needed. External navigation is intercepted and reloading a story resets its mock data. Google authentication, model output, and delivery require separate testing in the app.
 
-`npm run build-storybook` で `storybook-static/` に静的出力できます。
+```sh
+npm run build-storybook
+npm run check:storybook
+```
 
-ビルド後の `npm run check:storybook` は、通常の localhost と Web Crypto が使えない HTTP ホストの両方で全ストーリーを開き、読み込みエラーと本番 API への接続がないことを確認します。Playwright の Chromium を使い、`CHROMIUM` で実行ファイルを指定できます。画面の変更検出は HTTPS に依存せず、サーバーと同じ SHA-256 で比較します。
+The checker opens every story in Japanese and English on localhost and an insecure HTTP hostname, checks loading and browser errors, and rejects live API requests. Playwright Chromium is required; set `CHROMIUM` to override its executable. Screen fingerprints use SHA-256 without requiring Web Crypto.
 
-## 画面付きマニュアル
+## Illustrated manual
 
-アプリ上部や運営メニューの「使い方」、または管理側の `/manual` から開けます。ログイン前でも利用できます。Storybook では「使い方 → 使い方・画面付きマニュアル」を選んでください。
+Open **Help**, or `/manual`, before or after login. English instructions use English screenshots. Images can be enlarged; the table of contents links to each chapter. All captured data is fictional.
 
-実画面キャプチャで、機能の確認図・仮公開・設定・本番公開、顧客の予約とマイページ、予約管理、お客様の検索・期間集計・メモと添付・画像一覧、メニュー写真、追加シートのデータ管理、問い合わせ返信・スタッフのGoogleログイン、変更、ブログ・お知らせ、仕様と履歴、ドメイン、連携の再送を説明します。画像はクリックで拡大でき、目次から各章へ移動できます。キャプチャは個人情報を含まないサンプルデータで作成しています。
+The manual covers setup, settings, private preview and publication, customer registration and booking, My page, management, inquiries, staff login, CRM notes and attachments, images, additional data, articles, AI consultation and changes, pen editing, specifications, domains, and retries.
 
-画面を更新したときは、Storybook を起動してからキャプチャを再生成できます。
+To regenerate Japanese screenshots, start Storybook and run:
 
 ```sh
 npx playwright install chromium
 npm run capture:manual
-npm run check:multimodal
 ```
 
-`STORYBOOK_URL` で接続先、`CHROMIUM` でブラウザーの実行ファイルを指定できます。画像は `public/manual/` に保存し、通常のアプリビルドと Storybook の静的ビルドに含まれます。
+Use `npm run capture:manual:en` for English screenshots. `STORYBOOK_URL` selects the server; `CHROMIUM` overrides Chromium. Japanese assets live in `public/manual/`, English assets in `public/manual/en/`. Both are included in the app and static Storybook build.
 
-## Google と Vertex AI の接続
+## Connect Google and Vertex AI
 
-`.env` の次の値を設定します。
+Configure `.env`:
 
-- `DEMO_MODE=false`
-- `SESSION_SECRET`：32文字以上のランダム値。OAuth refresh token の暗号化にも使うため、永続的に管理します。
-- `GOOGLE_CLOUD_PROJECT`、`GOOGLE_CLOUD_LOCATION`、`VERTEX_MODEL`：使用する Vertex AI のプロジェクト、ロケーション、利用可能な Gemini モデル ID。
-- `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`：Google OAuth のウェブアプリ用認証情報。
-- `APP_ORIGIN`：管理側のオリジン。リダイレクト URI に `${APP_ORIGIN}/auth/google/callback` を登録します。
+| Variable | Purpose |
+| --- | --- |
+| `DEMO_MODE=false` | Use real Google integrations |
+| `SESSION_SECRET` | Persistent random secret, at least 32 characters; also encrypts refresh tokens |
+| `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `VERTEX_MODEL` | Vertex project, location, and an available Gemini model ID |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Web application OAuth credentials |
+| `APP_ORIGIN` | Management origin; register `${APP_ORIGIN}/auth/google/callback` as the redirect URI |
 
-Google Cloud で Vertex AI、Google Drive、Google Sheets、Gmail の各 API を有効化してください。サーバーには Vertex AI を呼び出せる Application Default Credentials を設定します。ローカル開発では `gcloud auth application-default login`、本番ではサービスアカウント等を使います。モデルの存在やアクセス権は環境に依存するため、モデル ID の暗黙のフォールバックは設けていません。
+Enable Vertex AI, Google Drive, Google Sheets, Gmail, and Google Calendar APIs in your project. Provide Application Default Credentials with Vertex access: locally, `gcloud auth application-default login`; in production, use the service account or equivalent runtime identity. Model availability depends on the project and location; the proposal model has no silent fallback. Integration follows the [Google Gen AI SDK](https://googleapis.github.io/js-genai/release_docs/classes/client.GoogleGenAI.html).
 
-店主の OAuth は `openid email profile drive.file gmail.send`、顧客の OAuth は `openid email profile` だけを要求します。Drive/Sheets とメール送信は店主の認証情報を使います。スタッフのOAuthは `openid email profile calendar.freebusy` です。スタッフには店主のトークンを渡しません。OAuth 同意画面をテスト公開している場合は店主・顧客・招待先をテストユーザーに追加してください。一般公開には Google 側の必要な審査・設定を別途完了してください。
+Owner OAuth requests `openid email profile drive.file gmail.send`; customer OAuth requests only `openid email profile`. Staff OAuth requests `openid email profile calendar.freebusy`, using the same callback. Staff never receive the owner's Drive or Gmail token. If the consent screen is in testing, register all participating accounts as test users. Complete Google's required production consent configuration separately.
 
-SDK の接続方法は [Google Gen AI SDK](https://googleapis.github.io/js-genai/release_docs/classes/client.GoogleGenAI.html) に準拠しています。
+### Staff login and Calendar
 
-## 実装範囲
+Under **Staff and schedules**, the owner registers one Google email per staff member and shares the staff login URL. The staff member signs in and grants Calendar access in one OAuth flow. Unregistered, revoked, removed, or mismatched accounts cannot manage the shop. Each staff member can have one account per shop, and each account maps to one staff member.
 
-- お店の情報からのプラン生成、差分提案、承認、仮公開、本番公開。AI は検証可能な設定データを生成し、固定の安全なテンプレートでページを構築します。
-- お店づくりと変更依頼は画面を見ながらチャットで進めます。音声はブラウザで入力欄に書き起こし、末尾の「以上」でキーワードを除いて送信します。AIの返答・変更案は画面で確認します。
-- 「画面を試す・編集」のペン入力。画面を囲み、Gemini が対象候補を特定し、対象を確認してローカルに変更します。店名・紹介文・アクセス・ページ本文・色・配置・紹介画像・共通ヘッダー・フッターに対応し、「反映する」で本番へ適用します。料金・スタッフ・営業時間・予約ルールは専用の管理メニューで編集します。
-- 運営画面の「お店の仕組み図」と質問応答。公開済み設定から決定的に SVG を生成し、公開時に Drive に保存します。質問は同じ設定の説明に限定し、変更は承認フローに進めます。
-- メニュー、スタッフ、勤務時間、定休日・臨時休業、受付期限、当日受付、キャンセル期限。
-- お客様が予約画面でスタッフの指名・指名なしを選択。店主側の方式設定は不要です。指名なしは空いている対応スタッフ1人に割り当てます。
-- 顧客の Google ログイン、予約、自分の予約のみの一覧・キャンセル、お問い合わせ。
-- 運営側の日付・スタッフによる予約絞り込み、キャンセル・無断キャンセルの状態記録、問い合わせへのメール返信・対応状況の管理。
-- 「スタッフ・勤務」でGoogleメールアドレスを登録し、本人がスタッフ用URLでGoogleログイン・カレンダーの利用許可を完了すると運営できます。登録解除で既存セッションの権限とカレンダー連携も解除します。
-- 店主の Drive へのスプレッドシート、`spec.md`、`history.md`、公開・運営ページの生成ファイル、設定・モック・シート構造の保存。
-- 予約確定・キャンセル等のメール。Google 連携の失敗を画面に表示し、永続キューから毎分または手動で再試行。
-- サブドメインでの公開と、TXT レコードによる独自ドメインの所有権確認・ホストルーティング。
+Calendar uses the primary calendar's FreeBusy intervals only. It never reads event titles or descriptions, stores busy intervals, creates calendar events, or shares calendar tokens. Busy times join opening hours, shifts, service duration, existing bookings, closures, and deadlines when calculating slots. Check again immediately before confirmation. A named staff selection never silently switches to someone else; no preference can use another qualified available person.
 
-生成前チェックとして設定形式、ID の一意性、メニュー参照、営業時間、HTML のエスケープ、固定された認証境界、モックの存在を確認します。AI が実行コード・権限・任意のデータ書き込みを生成することはありません。
+A Calendar error pauses affected availability and confirmation with HTTP 503 rather than assuming the person is free. Staff can reconnect or disconnect under My calendar. Revoking membership also removes their connection. Calendar edits and booking confirmation cannot be made atomic: a Google event created after the final check can still conflict.
 
-## 音声・ペン入力と仕組み図
+## Building and editing your shop
 
-書き起こしはブラウザの音声認識を使います。音声入力自体にVertex AIのモデル設定やWebSocket中継は不要です。画像の理解・AIへの相談・プラン生成には `VERTEX_MODEL` を設定し、サーバーのADCで接続します。
+AI proposes validated configuration, never arbitrary executable code. Fixed templates enforce authentication, customer isolation, and safe rendering. Initial setup asks only for the business type and desired features, adapting to answers. Before preparing screens, it asks whether there is anything else to add and waits for a reply. Staff, prices, and hours can be entered later.
 
-「音声入力」で入力欄に書き起こし、末尾の終了キーワード（既定は「以上」）を確定すると、その言葉を取り除いてチャットへ送信します。途中の言葉・認識中の仮の結果では送信しません。手動停止・無音終了・エラー時は下書きに残し、音声入力中に手で編集した内容も保持します。終了キーワードの案内・設定は音声入力モーダル内にまとめ、変更・無効化でき、このブラウザに保存します。画像生成・ペンでの依頼では終了キーワードは書き起こしの停止だけを行い、生成や反映は画面のボタンで実行します。HTTPS（またはlocalhost）と対応ブラウザ・マイク許可が必要です。音声はomaiwebのサーバーへ中継せず、録音ファイルも保存しません。
+**Build your shop with AI** offers Consultation, Changes, and New page. Questions do not change settings. Change and page proposals require review and an explicit on-screen action before applying. New pages include a new ID, address, content, and customer navigation label while preserving unrelated settings.
 
-ペン入力は店主のアカウントで、運営画面の「画面を試す・編集」にある「修正する」から利用します。仮公開・本番公開のページは表示確認・予約操作に使い、画面の修正は「画面を試す・編集」にまとめています。修正したい画面を表示してから操作してください。外部画像を取り込めない場合は画像枠で表します。画像 URL は HTTPS、色はグリーン／ローズ／ネイビー、配置はゆったり／コンパクトから選べます。画像の出所や URL を AI が補完することはありません。
+Current settings and a collapsed, newest-first change history appear together. The data and permissions diagram shows ledger-to-screen mappings, storage locations, and access rules, with spreadsheet and Drive links for connected shops. There is no separate history-management workflow for the owner.
 
-ペンの対象確認は30分有効です。対象確認後に公開・シートの設定が変わった場合は画面を開き直してください。サーバーで選択対象以外の変更を拒否します。音声・画面画像そのものは保存せず、確認済みの対象候補と設定だけを保持します。画面の仕様・仕組み図と回答は、シートの直接編集も含めた現在の設定に基づきます。Drive に生成済みの図は公開時の設定です。
+### Local screen editor
 
-`npm run check:multimodal` で、起動中の Storybook に対して音声と文字の併用、図への質問、画面取り込み、ペン描画、曖昧な対象の選択、画面編集へのローカル保存・本番反映とスマホ表示を検証し、マニュアル用の画像を撮影できます。`STORYBOOK_URL` と `CHROMIUM` で接続先とブラウザーを指定できます。
+**Try and edit screens** opens customer screens using isolated practice data. The persistent sidebar tree groups shared components, booking/shop screens, articles, and additional pages. Staff start in booking management instead.
 
-## ブログ・お知らせ
+- Edit a page body, title, address, image, or layout; edit headers and footers independently. Header/footer visibility is a temporary preview option and is not saved to production.
+- Practice bookings, cancellations, and inquiries stay in the local mock and never reach Sheets, Gmail, or Calendar. Sample names, bookings, and articles can be edited too.
+- Drafts are stored in this browser per account and shop. They survive reloads but not clearing site data, and are not shared across devices. Storage failures are visible and block applying changes.
+- Screens load their content automatically when opened. Metadata is checked initially, every 30 seconds, and on window focus. Only changed screens are marked.
+- Pen editing captures the current screen. Circle an area, add text or voice instructions, let Gemini identify candidates, then confirm the target. Changes stay local until reviewed and applied. External images may appear as placeholders.
+- Applying changes shows the difference and publishes only the selected page or shared component. It preserves other page drafts, sample data, and live prices/schedules. Shared settings must be applied before a new shop's additional page.
+- Concurrent changes show local and remote read-only previews. Choose either side or ask AI for a merge using only baseline/local/remote content for that screen. Review a merge before adopting it locally; publication remains separate. Up to 20 pre-resolution backups allow restoration.
+- Operation IDs and plan IDs are stored around publication requests. Retries resume the same operation without duplicate publication/history. An in-progress operation must finish or have its server status checked before returning to editing.
 
-店主の「ブログ・お知らせ」から記事を作成できます。最初に「AIに依頼する／自分で作成する」を選びます。AIには文章・画像・[[パス]]で資料を伝え、自分で書く場合はwysimark-liteで見出しや写真を入れて編集できます。入力中の記事は下にプレビューし、「保存」で本番へ反映します。紹介文とアドレスは保存時にAIが生成します。先にお店の予約ページを公開してください。
+Live services/prices, staff/schedules, hours/rules, booking status, inquiry replies, and articles use their dedicated management menus. Save applies them directly, including during a private preview. New services start inactive until staff assignments are set. Stale writes preserve edits and stop rather than overwriting concurrent changes.
 
-- 公開側にはブログ／お知らせそれぞれの一覧と、日付付きの個別記事ページを用意します。記事はログインなしで閲覧できます。
-- マイページの「お店からのお便り」には、両方を合わせた新着5件を表示します。一覧にはページ送りがあります。
-- 公開中の記事は「保存」で更新されます。保存前の編集やAIによる提案だけでは公開内容は変わりません。
-- 非公開にすると個別ページ・一覧・新着から外れます。下書きと変更履歴は残り、再公開もできます。
-- 一度公開した記事の種類・日付・アドレスは固定し、既存のリンクを保ちます。日付は表示用で、未来の日付を選んでも予約投稿にはなりません。
-- 作成・編集・公開・非公開は店主のみが行います。招待メンバーは管理画面から記事を確認できます。
+### Voice and pen input
 
-「AIに依頼する」では、文章・画像・[[パス]]でお店のファイルを参照し、Vertex AIで記事案を作成できます。「自分で作成する」ではwysimark-liteで編集できます。提案だけでは保存・公開しません。
+Voice is browser speech-to-text, not bidirectional AI audio. HTTPS or localhost, microphone permission, and a supported browser are required. Press Voice input to open the dialog and begin recognition; edit the draft while speaking if needed. A final trailing end phrase removes itself and sends chat text. Interim matches and mentions in the middle do not send. Blank end phrases disable automatic completion. Stopping, silence, errors, Escape, and closing preserve unsent drafts. Recognition stops on send or navigation.
 
-記事本文は安全なMarkdownとして表示し、HTML・スクリプトは使用しません。画像管理から選んだ写真だけを表示します。実際の Drive 接続と Vertex AI の推論にはクラウド設定が必要です。
+For image and pen requests, the end phrase only finishes input; generation or changes require a separate screen action. No audio recordings are stored. The demo requires Vertex AI for actual natural-language interpretation; Storybook simulates it.
 
-Google 接続後は記事と下書きを永続キューから店主の Drive に保存します。公開記事は `web/blogs/` または `web/announcements/` の日付付き HTML、各一覧は `index.html`、トップの新着は `web/recent-articles.json` に残ります。原稿と下書きの控えは `admin/posts/` に保存し、非公開にした記事の HTML も同フォルダー側に移して保管します。アプリの公開範囲はサーバーで強制し、Drive ファイルを直接配信することはありません。
+## Customers, bookings, and inquiries
 
-## データの保存先と変更履歴
+Customers verify their Google email and register a per-shop name, date of birth, and gender (including Prefer not to say). Birth dates cannot be in the future. Membership is required before booking or submitting inquiries; names are filled automatically and editable through My page. Profile data is visible only to the customer and authorized operators.
 
-「AIとお店をつくる」の先頭に変更履歴を新しい順で表示し、その下に現在のお店の設定と AI への相談を並べます。変更履歴と現在のお店の設定は画面内で確認できます。データの流れ、台帳と管理画面の対応、保存先、閲覧権限は「データと権限の仕組み」で図解し、店主のスプレッドシートと Drive へのリンクも同じ欄にまとめます。
+Before login, customers see About the shop, with registration and login below the header. After login, My page is the leftmost and initial destination, showing recent news and the customer's own bookings. Customers choose a service, no staff preference or a qualified staff member, and a slot. Changing service/staff/date clears the previous slot. Cancellation deadlines are enforced. Optional booking messages (up to 2,000 characters) appear in the owner's list, customer timeline, personal history, and notification email.
 
-予約・お客様・メニュー等の標準シートは各専用メニューで管理します。「データ管理」は店主専用で、台帳に後から追加したシートの一覧・検索・行追加・編集を扱います。1行目を重複のない列名（最大100列）、2行目以降をデータ（最大1000行）としてください。列名・列順・既存の数式は保持し、変更したセルだけを RAW で保存します。行全体の削除は提供しません。保存時に編集元を照合し、競合時は編集内容を残して停止します。追加シートの作成・列設定・数式設定はスプレッドシートで行います。
+CRM aggregates existing bookings and inquiries by normalized email without requiring extra owner data entry. It supports name/email search, sorting, and all-time, past week/month/three months/six months/year, or custom start periods. Boundaries use Japan midnight; calendar subtraction clamps to month end. Visits count only ended active bookings, excluding no-shows and cancellations. Spending uses historical booking prices, never current menu prices. Names use the latest record across all dates; future bookings stay visible.
 
-Google 接続後の初回公開時に、店主の Drive に専用フォルダーを作成します。
+Customer details show basic information, current bookings, expandable past bookings/cancellations, inquiry handling, and a timeline filtered by notes/bookings/inquiries. Notes and files are private to operators. Attach up to five files per note, 5 MB each and 10 MB total. PNG/JPEG/GIF/WebP display inline; other files download. Rename files before upload or while editing; names are synchronized to Drive and the ledger. Retry IDs prevent duplicate notes/files; stale edits are rejected. Deleted notes retain their records.
 
-| 保存物                             | 内容                                                                |
-| ---------------------------------- | ------------------------------------------------------------------- |
-| 予約台帳                           | `menus`、`staff`、`settings`、`reservations`、`inquiries`、`members`、`posts`、`pages`、`customers`、`customer_notes` の10シート |
-| `spec.md`                          | 公開済みの設定と権限規約                                            |
-| `history.md`                       | 承認・公開した変更の日時と内容                                      |
-| `web/index.html`                   | ビルド済みJS/CSSを同梱した、ダブルクリックで開ける店舗プレビュー     |
-| `web/data.js`                      | プレビュー用の店舗設定・お客様データ（index.htmlから相対参照）       |
-| `web/shop.json` / `web/mock.json`   | 同じ生成元から出力した設定とプレビュー用データ（他の道具・閲覧用）   |
-| `admin/system.svg`                 | 公開済みの設定から生成したお店の仕組み図                            |
-| `admin/index.html` / `schema.md`   | 管理画面のシェルとシートの構造                                      |
+The customer's image gallery shows active image attachments from all dates, newest first, without note text or email. Click to enlarge, use previous/next or arrow keys, and close with Escape. Names can be edited here too. Private CRM files never enter the general image library, AI references, or public pages.
 
-Drive のファイル名の `—` は公開・運営の分類を表します。公開ホストがこれらを直接配信することはありません。運営データは認可された管理 API からだけ取得します。
+Inquiries are newest first, with resolved items hidden by default. Filter by text, reply status, and inclusive received-date bounds in Japan time. Click an item to handle it on customer details. Replies go to the verified email, not an editable address. Resolution (`in_progress` / `completed`) is independent of whether a reply exists; replying never marks an inquiry resolved automatically. Legacy `open` and `replied` records remain readable. Reply/status writes detect conflicts and deduplicate retries; failed email delivery uses the normal queue.
 
-フォルダーをダウンロードし、`web/index.html` をダブルクリックすると店舗ページと予約画面を試せます。描画の入力は `web/data.js` の `window.__OMAIWEB_MOCK__` です。予約・問い合わせは空から始まり、操作はブラウザ内の練習用データにだけ反映され、再読み込みで破棄されます。`data.js` の店名などを書き換えると、HTMLを変更せず表示を変えられます。`data.js` がない場合は店名・紹介・メニューの静的表示を残します。`file://` と有効なモックデータの両方が揃った場合だけモックを使い、HTTP/HTTPSでは常にサーバーAPIを利用します。配信用の `dist/index.html` と `admin/index.html` はローカル実行用の変更対象に含めません。
+## Images
 
-実ファイルでの検証は `npm run build` の後に `npm run check:drive-artifacts` を実行します。PlaywrightのChromiumを使用し、必要なら `CHROMIUM` またはコマンド引数で実行ファイルを指定できます。
+The owner-only image library supports uploads, search, type filters, renaming, removal, and AI generation. Uploads support PNG/JPEG/GIF/WebP up to 5 MB each. Images need no destination at upload time; current usage appears in the list. Referenced images cannot be removed. Removing an unused library record leaves the Drive file intact.
 
-マスター（`menus`、`staff`、`settings`）は **毎回 Sheets から読み込み**、店主の直接編集を反映します。`settings.value`、スタッフの `menuIds`・`weekdays` は JSON 形式です。列名・順序と `schema.md` の型を維持してください。不正な設定を検出した場合は予約を受け付けません。プラン作成後にシートが編集された場合は公開を中止し、プランの作り直しを求めます。
+Select **Request in text** or **Request by voice**, then provide instructions, name, aspect ratio, and an optional reference image. Review transcribed voice instructions before generating. After Generate and review, choose Looks good or request more changes using the result as a reference. Results are saved in the library, not automatically applied to pages.
 
-公開処理の途中で Google 連携に失敗した場合は公開中のプランを記録し、予約受付を一時停止します。承認済みプランの公開を再試行すると処理を再開します。
+`GEMINI_IMAGE_MODEL` defaults to `gemini-nano-banana-2.1` in this checkout. Image location resolves through `VERTEX_IMAGE_LOCATION`, `GOOGLE_CLOUD_LOCATION`, then `global`. The server uses ADC and `GOOGLE_CLOUD_PROJECT`. Storybook alone returns simulated sample images. See [Vertex image generation](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/multimodal/image-generation).
 
-予約・問い合わせ・メンバーの招待／承諾／解除・記事の主データは店主のシートです。アプリはシートへの保存が成功してから応答します。読み取りもシートを参照するため、直接編集した変更を反映します。書き込みは `RAW` を使い、入力を数式として扱いません。予約のリクエスト ID は台帳にも記録し、Firestore の重複排除状態の保存直前に障害が起きても同じ予約を再利用します。シートが利用できない間は新規予約を確定しません。
+Generation has its own lock and request ID, so it does not block ordinary bookings/settings. Results survive interrupted Drive uploads without another paid model call. Temporary data uses small Firestore chunks, removed after saving or expired after 24 hours. Failed or uncertain generation is not silently repeated; check the library and explicitly start a new request.
 
-## 公開と運用
+AI requests accept up to 15 original images, 75 MB total. Above 12 MB, only model-bound copies are optimized to JPEG, up to 2048 px and 768 KB per image; originals and public images remain unchanged. IDs are preserved, and proposals cannot introduce unselected new image IDs.
 
-本番の運用状態は Firestore に保存します。`GOOGLE_CLOUD_PROJECT` に Firestore Native mode のデータベースを用意し、必要に応じて `FIRESTORE_DATABASE_ID` を設定します。ADC のサービスアカウントに Firestore の読み書き権限を付与してください。ローカルの接続検証には `FIRESTORE_EMULATOR_HOST` も使えます。`omaiweb_state` に暗号化 OAuth トークン、セッション、ドメインと公開状態、未承認プラン、聞き取り内容、通知・ファイル同期キューなどを保持します。予約・問い合わせ・メンバー・記事の行は保存しません。公開設定は配信のための公開スナップショットです。
+Service and staff photo controls offer Upload image or Choose an existing image. Selection alone does not publish: save the settings. The owner can manage all staff photos; staff can change only their own, using their current photo and their own uploads. `staff.imageId` and `menus.imageId` are trailing columns; legacy staff rows remain readable. Published staff photos appear on About the shop and named-staff booking screens. Lists/pickers load on opening and refresh after changes.
 
-`omaiweb_locks` の店舗単位ロックを複数プロセス間で共有し、予約の空き確認からシートへの登録まで直列化します。安全のためロックは時間切れで奪いません。プロセスが異常終了した場合、管理者が旧プロセスの停止とシートへの反映状況を確認してから該当ロックを削除します。Google シートを直接編集する操作はこのロックに参加しないため、予約の直接追加はアプリの受付と同時に行わないでください。
+Only images referenced by published headers, pages, active services, staff, or articles are publicly served. Unpublished uploads, private CRM files, and other-shop images stay inaccessible. Drive exports include referenced images.
 
-永続ディスクは不要です。旧 SQLite データの自動移行は行いません。既存環境を切り替える場合は、旧環境のデータとシートを確認してから運用を再開してください。`SESSION_SECRET` は引き続き永続管理します。本番では `NODE_ENV=production`、HTTPS の `APP_ORIGIN`、32文字以上の `SESSION_SECRET` が必須です。
+## Blog and announcements
 
-`SITE_DOMAIN=shops.example.com` を設定し、`*.shops.example.com` の DNS と TLS をリバースプロキシに設定すると、`shop-xxxxxxxx.shops.example.com` で公開します。未設定時は `/s/shop-xxxxxxxx` で確認できます。公開ホストから運営 API・管理画面にはアクセスできません。管理画面は `APP_ORIGIN` のホストでのみ提供します。プロキシは元の `Host` と `Origin` を保持してください。無条件で転送ヘッダーを信頼する実装にはしていません。
+The owner chooses Ask AI or Write it yourself. The visual editor uses `wysimark-lite`, stores Markdown, and shows a continuous preview below. Enter title, body, category, and display date. AI generates a summary (up to 300 characters) and a lowercase slug when saving, leaving title/body intact. Existing addresses remain stable, including drafts; collisions get suffixes. Published category/date/address are fixed. Generation failure leaves input intact without publishing.
 
-独自ドメインは「公開の設定」で登録し、表示された `_omaiweb.<domain>` の TXT レコードを追加して所有権を確認します。加えて運用側で対象ドメインの DNS と TLS 終端を設定してください。証明書の自動発行・ロードバランサーの自動操作は行いません。公開ホストの顧客認証は管理側で Google ログインを行い、ホストに紐づいた一回限りの短命チケットで公開側セッションに引き継ぎます。
+AI can read shop-specific `[[spec.md]]`, `[[history.md]]`, `[[shop.json]]`, `[[pages/slug.md]]`, `[[articles/category/date-slug.md]]`, and image paths through `read_shop_file`. Required references must be read before completion. The tool is read-only and cannot access OS files, external URLs, CRM files, or other shops. Function-call identities/signatures are preserved; retrieval is bounded to 30 calls and 15 images. Final structured generation is validated separately. Article request/reply history is private to its author.
 
-Gmail への送信は少なくとも一度の再試行方式です。Google が送信に成功した直後に応答が失われた場合、通知メールが重複する可能性があります。予約登録自体はリクエスト ID によって再送による重複を防ぎます。
+Article images use `shop-image:ID`. Only authorized managed images render; public API and Drive HTML expose only published article references. Saving publishes immediately, even for future display dates: there is no scheduled publication. Unsaved edits stay private. Unpublishing removes lists/recent news/the article page while preserving drafts and history. Customers can read archives, dated article URLs, and the five latest posts across categories on My page.
 
-## 検証
+## Storage and exports
+
+Business records live in the owner's spreadsheet; images and files live in the owner's Drive. On first connected publication, the app creates a dedicated folder:
+
+| Artifact | Contents |
+| --- | --- |
+| Booking ledger | `menus`, `staff`, `settings`, `reservations`, `inquiries`, `members`, `posts`, `pages`, `customers`, `customer_notes` |
+| `spec.md`, `history.md` | Published settings/permissions and dated changes |
+| `web/index.html` | Shop preview with built JS/CSS inlined; opens by double-click |
+| `web/data.js` | Separately editable preview config/data in `window.__OMAIWEB_MOCK__` |
+| `web/shop.json`, `web/mock.json` | Matching machine-readable export data |
+| `web/parts/`, `web/pages/` | Component/page HTML, JSON, and page index |
+| `admin/system.svg` | Deterministically generated shop diagram |
+| `admin/index.html`, `schema.md` | Management shell and ledger schema |
+
+Private chat records use `ai_chats` and `ai_chat_messages`. Only the signed-in author can resume them. Messages are journaled in Firestore before Sheets writes; retries restore the same rows. Pre-connection conversations migrate to private sheets after connection, then temporary copies are removed. AI can search relevant past exchanges for the same shop/account; past proposals are not treated as current facts or new requests. Users do not manage a separate history UI.
+
+Download the folder and double-click `web/index.html`. Only `file://` with valid `data.js` uses the mock API. Practice bookings/inquiries stay in browser memory and disappear on reload; files are never rewritten. Editing data.js changes the display without editing HTML. Missing data leaves a static shop/service fallback. HTTP/HTTPS always uses the real API, even if a mock global exists. Served builds and the admin shell never get the offline data.js reference.
+
+Masters are read from Sheets on each request; direct edits take effect. Preserve column names/order and `schema.md` types. `settings.value` and staff `menuIds`/`weekdays` contain JSON. Invalid master data blocks booking; stale publication plans must be recreated after sheet edits. Page-specific releases update only selected page rows/files while refreshing shared indexes, specs, history, and public snapshots. Removed/renamed page files move to Drive trash.
+
+Business writes must succeed in Sheets before the app reports success. Writes use RAW values, not formulas. Booking request keys in the ledger recover successful writes even if Firestore acknowledgement fails. Do not confirm new bookings while Sheets is unavailable. Cancellations, revoked members, and deleted notes preserve rows through status changes.
+
+Additional sheets use owner-only Data management: up to 100 unique columns and 1,000 data rows; add/search/edit rows, preserve formulas and column order, save only changed cells, reject stale edits, and reuse row identities on retry. Configure sheets/columns/formulas in Sheets itself. Entire-row deletion is not provided.
+
+## Deployment and operations
+
+Production operational state uses Firestore Native mode in `GOOGLE_CLOUD_PROJECT`; optionally set `FIRESTORE_DATABASE_ID`. Give ADC access to Firestore. `FIRESTORE_EMULATOR_HOST` supports local integration testing. `omaiweb_state` holds encrypted tokens, sessions, domains/publication, plans, conversation staging, and queues, not the primary business rows. Published configuration is a serving snapshot.
+
+`omaiweb_locks` serializes availability checks and ledger writes per shop across processes. Locks are not stolen after a timeout. After a crash, an administrator must confirm the old process has stopped and inspect ledger writes before removing a lock. Direct Sheets edits do not participate in these locks; avoid adding reservations there while app bookings are running.
+
+Persistent disk is unnecessary. There is no automatic migration from old SQLite data. Keep `SESSION_SECRET` stable. Production requires `NODE_ENV=production`, HTTPS `APP_ORIGIN`, a secret of at least 32 characters, and disabled demo mode.
+
+Set `SITE_DOMAIN=shops.example.com` and configure wildcard DNS/TLS at the reverse proxy to serve `shop-xxxxxxxx.shops.example.com`; otherwise use `/s/shop-xxxxxxxx`. Public hosts cannot access management pages/APIs; those are served only on `APP_ORIGIN`. Preserve the original Host and Origin; forwarded headers are not trusted unconditionally.
+
+For custom domains, register the domain in Publication settings, add the displayed `_omaiweb.<domain>` TXT record, and verify ownership. Administrators must separately configure DNS routing and TLS termination. Certificate issuance/load-balancer changes are not automated. Public-host customer authentication uses management-side Google login and a short-lived, one-time, host-bound handoff ticket.
+
+Interrupted publication records its plan and pauses bookings. Retry the approved plan to resume. Gmail delivery is at least once: losing the response after Google accepts a message may cause a duplicate email. Booking request IDs prevent duplicate bookings.
+
+## Verification
 
 ```sh
 npm test
 npm run build
+npm run check:i18n
+npm run build-storybook
+npm run check:storybook
+npm run check:i18n:browser
+npm run check:drive-artifacts
 ```
 
-営業日・臨時休業、受付期限、お客様による指名・指名なしの空き判定、承認前の公開拒否、仮公開の本人限定・本番公開への切替・廃止した旧プレビューの拒否、顧客の本人による絞り込み、同時予約、ソフトデリート、招待前後の権限、変更の承認・履歴、記事の下書き・承認・更新・非公開・新着と一覧、CSRF、公開ホストでの管理アクセス拒否を検証します。
+Focused browser checks are also available through `check:chat`, `check:multimodal`, `check:inquiries`, `check:images`, `check:staff-images`, and `check:publication-routing`. They use mocks where documented; they do not prove real microphone, Google OAuth, Vertex inference, Drive/Sheets writes, or email delivery.
 
-Google OAuth、Vertex AI の推論、Google Sheets/Drive/Gmail への実接続は、上記のクラウド設定後に別途確認が必要です。
+Automated coverage includes booking/closure/deadline calculations, staff choice, approval and private-preview authorization, safe public routes, customer isolation, concurrent bookings, soft deletion, staff access, article lifecycles, stale edits, request retries, and CSRF. English-specific checks cover request isolation, translated UI/API/exports, onboarding, and offline behavior.
 
-実装上の対応関係は [docs/implementation.md](docs/implementation.md) を参照してください。新しい要件の原稿は常に `docs/spec.md`（Git 管理対象外）で受け取り、実装・検証が完了したら `docs/spec_02.md` のように連番で保存します。今回の追加仕様は `docs/spec_02.md` を参照してください。
+See [docs/spec.md](docs/spec.md) for the Japanese requirements, [docs/spec.en.md](docs/spec.en.md) for the English counterpart, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party notices. Real Google and Vertex connections require a separately configured account and runtime.
 
-### スタッフの Google ログインとCalendar連携
-
-店主が「スタッフ・勤務」の「スタッフのGoogleログイン」で各スタッフのGoogleメールアドレスを登録し、表示されるスタッフ用ログインURLを本人に案内します。本人がGoogleログインとカレンダーの利用許可を行うと、対応するお店の予約管理画面が開きます。専用の招待・承諾画面はありません。スタッフにはDrive/Gmail権限を要求せず、店主用のお店を自動作成しません。1アカウントにつきお店ごとに1担当者、1担当者につき1アカウントとし、本人は別の担当者を選べません。Google CloudでGoogle Calendar APIを有効にし、OAuth同意画面に `https://www.googleapis.com/auth/calendar.freebusy` を追加してください。
-自分のメインカレンダーの FreeBusy を、空き枠表示時と予約確定直前に取得します。「予定あり」の時間と重なる枠は予約できません。終日・繰り返し予定は Google が返す busy 区間に従い、「予定なし」の予定は除外しません。件名・本文は取得せず、busy 区間も保存・公開しません。予約のカレンダーへの書き込みや追加・共有カレンダーの選択には対応していません。
-
-取得エラー時は空きとみなさず、該当担当者を候補に含む検索・予約を 503 で停止します。本人が再接続すると再試行できます。本人の連携解除または店主による参加解除で、保存した Calendar 用暗号化トークンを削除し参照を停止します（Google 側のアプリ許可の取消は Google アカウントの設定から行ってください）。他の家族の予定内容やトークンを共有することはありません。Google への別操作と予約確定を原子的には実行できないため、確定直前の確認後に追加された予定との競合は防げません。
-
-[Google Calendar FreeBusy API](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query)
-
-### 画面を試す・ローカル編集と本番への反映
-
-店主の運営メニュー「画面を試す・編集」から、本体と同じお客様向け8画面を試せます。共通のお店の情報・追加ページとサンプルのお客様名・予約・記事を変更でき、練習中の予約・キャンセル・問い合わせは専用のモック内で完結します。管理画面にはペン入力や共通のペン誘導を表示しません。
-
-GemiHub の「ブラウザで編集 → 変更一覧を確認 → 明示的に反映」を参考に、編集はアカウント・お店ごとの localStorage に保存します。サイトデータの削除で未反映の編集も消えるため、保存状態を画面に表示します。ペンで指定箇所を変更した場合も、まずローカルのプレビューに適用します。AI による対象確認・変更提案だけは、画像と設定をサーバーへ送信します。対応対象は店名・紹介文・アクセス・ページ本文・色・配置・紹介画像・共通ヘッダー・フッターです。
-
-画面はプルダウンではなくカテゴリ別のツリーから選びます。「AIとお店をつくる」の「新ページ作成」で、文章・音声で依頼し、ページ本文と公開メニュー名を確認して反映します。反映すると画面ツリーとお客様向けメニューへ追加されます。追加後はタイトル・メニュー名・アドレス・本文（Markdown）・画像・配置を編集できます。追加ページは `/s/{お店}/pages/{アドレス}`（独自ドメインでは `/pages/{アドレス}`）で公開され、公開ナビゲーションにも表示されます。
-
-「本番に反映する内容を確認」で差分を確認し、「この内容を本番に反映」で、選んだ追加ページだけを追加・更新・削除します。共通の店名・紹介文・見た目は共通設定として反映します。他のページのローカル編集は残り、同時に公開されません。サンプルの予約・問い合わせ・記事は反映しません。本番の更新やシートの直接編集を検出した場合は停止し、ローカル編集を保持します。未取得・未更新の画面は開くと自動取得し、取得ボタンは設けません。「変更を取り消す」は選択中の画面だけをリモートの最新内容に戻します。通信失敗時には保存済みの識別子で反映を再試行でき、成功済みの反映を重複実行しません。
-
-### 本番データの管理
-
-営業時間・定休日・臨時休業・予約ルールは「お店の基本情報」にまとめます。料金や勤務などは「お店の基本情報」「メニュー・料金」「スタッフ・勤務」の各管理メニューで編集し、「保存」で本番へ反映します。ページのローカル編集・反映には含めません。新しいメニューは無効で作成し、対応スタッフを設定してから有効にします。ブログ・お知らせも管理メニューの「保存」で公開内容へ反映し、プレビューは保存前の内容も確認できます。予約の状態変更や問い合わせへの返信は、それぞれの管理画面で行います。
-
-保存時は編集元のデータを照合し、別の操作で変更されていたら上書きを止めます。料金・勤務・営業時間・予約ルールの保存はリクエストの識別子をブラウザに保持し、通信失敗時は同じ保存を再試行できます。
-
-### 初期ツリーと競合の解決
-
-ログイン後は「画面を試す・編集」を最初に開き、サイドメニューの配下に画面ツリーを表示します。本番管理メニューへ移動してもツリーを保持します。店主以外の運営メンバーは予約管理から始めます。ツリーには変更がある項目だけ「変更あり」を表示し、変更なしやキャッシュの有無、確認中は表示しません。競合は色と補助説明で区別し、開くと比較画面を表示します。定期確認とウィンドウへ戻った時の確認ではメタデータだけを比較し、本文は画面を開いた時に自動取得します。ローカル変更は自動取得で上書きしません。
-
-編集画面は現在のプレビューを最初に表示し、変更がある時だけ「反映する」「変更を取り消す」を出します。共通のお店情報を編集するフォームはここには置かず、「お店の基本情報」の保存で本番に反映します。ページ本文の編集・サンプル編集はプレビューの下に折りたたみます。
-
-競合ではローカル／リモートのプレビューを比較し、ローカルを採用・リモートを採用・AIで結合案を作成、から選べます。AI案もプレビューを見て採用するまではローカルに適用せず、採用後も本番反映は別操作です。採用直前にリモートを再確認し、再更新されていたら選び直します。削除と編集の競合にも対応し、解決前の内容はこのブラウザに最大20件の控えを残します。
-
-Driveへのページ反映は、そのページのHTML・JSONを更新します。他のページ・メニュー・勤務のファイルや行は変更しません。ページ本文は台帳の pages タブでも1画面1行に分離し、選択した行だけを保存します。共有のページ索引、settings の pages 索引行、仕様書・履歴と、ダウンロード用の index.html・data.js・shop.json・mock.json の公開スナップショットは整合性のために更新します。新ページ作成も「AIとお店をつくる」のチャットにまとめ、文字入力と書き起こしを同じ入力欄で使えます。音声入力はHTTPSまたはlocalhostとマイク許可が必要です。
-
-ヘッダーとフッターはツリーの「共通パーツ」から別々に編集・反映できます。パーツごとのHTML・JSONと設定行を保存し、ダウンロード用の公開スナップショットも更新します。他のパーツやページの個別ファイルは変更しません。プレビュー上のツールバーには画面名とペン入力、表示メニューをコンパクトにまとめます。ヘッダー・フッターは編集プレビューで初期状態を非表示にし、「表示」で画面ごとに一時的に切り替えられます。この切替は編集プレビュー内だけに適用し、本番や編集データには保存しません。
-
-「AIとお店をつくる」には現在のお店の設定をメニュー・料金・勤務・営業時間・予約条件・公開ページのインフォグラフィックで表示し、変更履歴も同じ画面にまとめます。AIへの文字質問は直前の会話と現在の設定・履歴に基づいて回答し、変更相談は同じ画面で未承認プランを作成できます。音声は同じ入力欄への書き起こしとして使います。独立した「お店の仕組み図」メニューは表示しません。現在のお店の設定にはシートを直接編集した内容も反映し、文字相談・プラン作成時に表示元が古ければ更新を促します。
-
-依頼はチャットに入力します。「音声入力」で同じ入力欄に書き起こせます。どちらもお店の内容を確認し、「直したいことを伝える」で相談を続けるか、「仮公開する」で決められます。初回は、用意するページや機能だけを確認します。スタッフ・料金・営業時間などは、仮公開後に各種設定メニューで更新します。「仮公開する」で、ページを用意した本人のログインでだけページを表示できます。各メニューで設定を保存したあと「画面の確認・本番公開」で各画面を確認し、「本番公開する」で一般公開へ切り替えます。承認済みの中間画面や初回の一括設定画面はありません。デザインは各画面の編集画面で更新し、全体的な表示や機能の修正は「AIとお店をつくる」で行います。質問への回答もチャットに残り、そのまま続けて送信できます。
-
-### お客様管理（CRM）
-
-管理メニューの「お客様」で、予約・問い合わせをメールアドレス（前後空白除去・小文字）単位に自動集計します。氏名・メール検索、最終来店日・来店回数の並び替え、予約・問い合わせ・お店のメモをまとめたタイムライン、メモの投稿・編集・削除と画像／ファイルの添付に対応しています。集計期間は全期間・1週間前・1か月前・3か月前・半年前・1年前・任意の開始日から選べます。開始日の日本時間0時以降の予約・問い合わせを表示し、来店回数・最終来店日・合計金額・詳細の履歴も同じ期間にそろえます。未来の予約も表示します。月・年の指定は暦でさかのぼり、該当日がなければ月末に合わせます。氏名は全期間の最新記録を使います。メモも投稿日時で絞り込み、一覧のメモの有無は全期間で判定します。詳細の「タイムラインの表示」で「メモ・予約・お問い合わせ」を個別にチェックし、指定した集計期間のまま選択した種類を表示できます。初期状態はすべて選択です。店主と参加済みメンバーだけが利用できます。
-
-来店実績は終了時刻を過ぎた `active` の予約です。キャンセル・無断キャンセル・未来の予約は来店回数と合計金額に含めません。料金は予約時点のメニュー料金を `reservations.price` 列に記録します。予約料金は必須項目で、後日のメニュー料金変更には影響されません。
-
-お客様単位の情報は店主のスプレッドシートの `customers` シート（`email, updatedBy, updatedAt`）に集約します。メモは `customer_notes` シートに1投稿1行で保存し、投稿者・投稿日時・更新者・更新日時を残します。削除は `status=deleted` に変更し、行と添付ファイルを保持します。将来のお客様単位の情報も `customers` に追加します。ポイント・クーポン・一斉配信は今回の対象外です。
-
-添付は1投稿5ファイルまで、1ファイル5MB・合計10MB以内です。ファイル本体は店主の Drive フォルダーに保存し、公開用の共有権限は付けません。ファイルの取得も運営メンバー限定の API を通します。PNG・JPEG・GIF・WebP はタイムラインで画像表示し、その他のファイルはダウンロードできます。中断後の再試行は予約済みの Drive ファイルIDと投稿IDを再利用します。メモの同時編集では古い内容からの上書きを拒否します。ファイル名は登録前・メモの編集時に変更でき、Google Drive上の名前とシートの記録、ダウンロード名に反映します。
-
-お客様は予約時に任意のメッセージ（最大2,000文字）を入力できます。メッセージは `reservations.message` に保存し、運営の予約一覧・お客様タイムライン・本人の予約履歴と予約通知メールに表示します。運営画面の各ページには共通の宣伝見出しを表示せず、そのページの内容から始めます。
-
-お客様詳細の「画像一覧」から、そのお客様の全期間の画像（PNG・JPEG・GIF・WebP）をファイル名・登録日付きで表示できます。写真をクリックすると拡大表示し、前後ボタンまたは左右キーで切り替え、閉じるボタンまたはEscで戻れます。画像一覧でもファイル名を変更できます。一覧・拡大表示にはメモ本文やメールアドレスを表示しません。画像一覧も店主・参加済みメンバー専用です。
-
-### メニュー画像
-
-「メニュー・料金」でメニューごとに画像を1枚登録・差し替え・解除できます。PNG・JPEG・GIF・WebP、1枚5MBまでです。画像の選択後に「保存」すると予約画面と「お店のこと」に反映します。アップロードだけでは公開せず、現在公開中の有効なメニューに設定されている画像だけをお客様へ配信します。登録・変更は店主専用です。
-
-画像本体は店主の Drive に、参照は `menus` シートの末尾の `imageId` 列に保存します。CRM の添付ファイルや他店舗の画像はメニュー画像として公開できません。解除しても Drive のファイルは削除しません。ローカルプレビューや Drive に出力する閲覧用ファイルにも、公開中のメニュー画像を含めます。
-
-### 画像管理とAI画像生成
-
-店主の「画像管理」でアップロード画像とAI生成画像を一覧・検索し、名前の変更と一覧からの削除ができます。既存のメニュー画像も一覧に含みます。PNG・JPEG・GIF・WebP、1枚5MBまでです。画像を登録するときに使用先を指定する必要はありません。使用中の画面名は一覧に表示します。文章・音声・ペンで依頼するときやAIでページを作るときは「依頼に使う画像を選ぶ」pickerから管理画像を15枚まで（合計75MB以内）添付できます。AIには画像の実データと管理IDを渡し、選んだ画像を使った変更案を作ります。承認・公開またはローカルから「反映する」まで本番の表示は変わりません。追加ページの編集・AIページ案・共通ヘッダー・メニューの編集欄からも「画像管理から選ぶ・AIで生成」を利用できます。新しいページの画像も、そのページの編集欄から選べます。
-
-お客様メモの画像は「お客様」の詳細画面から「画像一覧」で確認できます。画像管理には表示せず、依頼の画像選択やAIへの参照画像にも含めません。
-
-「AIで生成」では「文章で依頼／音声で依頼」から選びます。文章ならイメージを書き、音声なら「音声で指示する」で話した内容を確認・修正します。名前・比率を指定し、任意で「参考画像を選ぶ」pickerから管理画像を1枚選びます。「音声で指示する」はブラウザーの音声認識で指示欄に文字を追加し、確認後の「生成して結果を確認」でサーバーから Gemini を呼び出します。生成後は画像を確認し、「さらに依頼する」でその画像を参考に修正を依頼できます。「これでOK」で一覧へ戻ります。生成画像は自動で画像管理へ保存し、生成の指示・モデルと登録元を保持します。サンプル画像だけを返すのは Storybook の API モックです。実際の画像生成にはサーバーの ADC と `GOOGLE_CLOUD_PROJECT` が必要です。
-
-画像生成モデルは `GEMINI_IMAGE_MODEL`（未指定時 `gemini-nano-banana-2.1`）、ロケーションは `VERTEX_IMAGE_LOCATION` → `GOOGLE_CLOUD_LOCATION` → `global` の順で指定します。Google Gen AI SDK の `generateContent` に画像出力と比率、参考画像がある場合はその画像を渡します。[Gemini画像生成の公式仕様](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/multimodal/image-generation)に沿った実装です。音声入力は HTTPS または localhost と対応ブラウザー・マイク許可が必要です。
-
-生成リクエストは操作IDで重複を防ぎ、Drive 保存が失敗した場合は保存済みの生成結果を再利用します。再生成を防ぐための一時データは Firestore の小さなチャンクに分け、保存後に削除します。残った一時データは24時間で期限切れとなり、定期クリーンアップで削除します。生成自体の失敗や結果不明時は同じ操作で再生成せず、一覧を確認して「新しい生成として入力し直す」から明示的にやり直します。画像生成は予約や設定更新のロックを保持しません。
-
-登録しただけの画像は非公開です。公開中のヘッダー・追加ページ・スタッフ写真・有効なメニュー・記事で参照する画像だけをお客様へ配信し、CRM の添付や他店の画像は使えません。使用中の画像は削除できません。一覧から削除しても Drive 本体は残し、編集中の古い画像参照は本番反映時に検証します。ヘッダーと追加ページの画像参照は各設定の `imageId` に保存し、Drive の閲覧用ファイルにも参照中の画像を含めます。
-
-`npm run check:images` はビルド済み Storybook 上でアップロード・名前変更・削除、音声入力の模擬イベント、参考画像付き生成、画像の選択、ページ単位の反映と公開表示をPC・スマホ幅で確認します。音声認識と生成はモックで、実際のマイクや Gemini には接続しません。
-
-日付欄はブラウザーの言語設定にかかわらず `YYYY/MM/DD`（日時は `YYYY/MM/DD HH:mm`）で表示・入力します。カレンダーからも選べます。非ログインのお客様には「お店のこと」を最初に表示し、ヘッダーの下に「初めての方」の会員登録ボタンと「登録済みの方」のログインボタンをまとめて表示します。
-
-お客様はGoogle認証によるメール確認後に、お店ごとの会員情報（名前・生年月日・性別）を登録します。登録名は予約とお問い合わせへ自動入力され、マイページから変更できます。会員情報は非公開の顧客台帳に保存し、本人と権限のある運営者だけが確認できます。
-
-「AIとお店をつくる」では「相談」「修正」「新ページ作成」を選べます。相談は設定を変更せず、修正と新ページ作成は変更案の確認後に反映します。新ページ作成では既存ページと予約設定を維持し、新しいページと公開メニューへの項目追加をまとめて扱います。
-
-「はじめる」でAIの質問が表示され、文章で答えながら依頼を進められます。「音声入力」を押すとモーダルが開き、話した内容を書き起こします。末尾で「以上」と言うと、その言葉を除いて送信します。AIの返答は画面で読みます。初回は必要な情報が揃ってもすぐに確認画面へ移らず、最後に「ほかに伝えたいことはありますか？」と聞き、回答を受けてから画面案へ進みます。履歴はサーバーへ自動保存され、AIが必要な過去のやりとりを検索・参照します。ユーザーが履歴を管理・選択する操作はありません。変更案はチャット内の「変更案を確認する」から確認して反映します。会話は非公開の専用シートに保存し、Google連携前や書き込み中断時はFirestoreで保護します。
-
-お問い合わせ一覧は対応済みを初期状態で非表示にし、「対応済みも表示する」で切り替えます。氏名・メール・本文・返信内容の検索、返信状況、受付日（日本時間）の開始・終了で絞り込めます。各項目を開くと、お客様画面の該当するお問い合わせへ移動し、メール返信と「対応中／対応済み」の変更ができます。返信の有無は対応状況と独立し、一覧にも表示します。返信だけでは対応済みにしません。既存の `open` は対応中、`replied` は対応済みとして表示します。返信は最新の内容を表示し、再送時の重複受付と古い画面からの返信の上書きを防ぎます。
-
-お客様画面の基本情報には名前・メール・生年月日・性別を表示し、会員情報がない項目は未登録とします。予約があれば日時・メニュー・担当・予約時点の金額・状態・予約時のメッセージを表示します。過去の予約とキャンセルは折りたたんで確認できます。基本情報と予約内容、お問い合わせへの対応は運営専用です。
-
-`npm run check:inquiries` は起動中の Storybook で一覧の絞り込み、返信表示、お客様画面への移動、基本情報・予約内容、返信保存と対応状況の変更をPC・スマートフォン幅で検証します。メール送信はモックです。
-
-メニュー画像とスタッフ写真の登録は「画像をアップロード／既存の画像から選ぶ」の2択です。既存画像はpickerで1枚選びます。店主はスタッフ・勤務で各スタッフの写真を管理でき、スタッフ本人は自分の写真だけを変更できます。スタッフ写真はお店のことと、予約で本人を指名したときに表示します。スタッフの既存列は維持し、末尾に `imageId` を追加しています。画像一覧とpickerは開くと自動で更新し、アップロードや変更後も自動更新します。
-
-AI依頼に選んだ元画像は最大15枚・合計75MBです。大きな組み合わせはAIへ送る分だけ軽量化し、Driveの元画像と公開ページの画像はそのまま保持します。
-
-ブログ・お知らせはタイトル・本文・種類・表示日を入力して保存します。記事の紹介文と新規記事のアドレスは保存時にAIが生成するため入力不要です。既存記事のアドレスは維持し、紹介文は本文に合わせて更新します。生成できない場合は公開せず、入力内容を残します。生成中も店舗の予約操作を妨げず、新規保存の再試行で記事を重複作成しません。
-
-記事作成のAIは `[[spec.md]]`、`[[history.md]]`、`[[shop.json]]`、`[[pages/ページのアドレス.md]]`、`[[articles/種類/記事のアドレス.md]]`、画像pickerが入力したパスを `read_shop_file` ツールで取得します。対象はそのお店の資料と管理画像だけで、CRM添付・他店舗・任意のサーバーファイル・外部URLは取得しません。AIの依頼と応答は本人の非公開チャットに保存します。画像は公開中の記事から参照するものだけ配信し、非公開にすると配信対象から外れます。Driveの記事HTMLにも写真を含めます。ツールでの参照と最終の記事生成を分け、Googleの[function calling](https://ai.google.dev/gemini-api/docs/function-calling)に沿ってツールの結果と画像を渡します。
-
-`npm run check:articles` は記事の2つの作成方法、wysimark-lite編集、画像のアップロード・既存picker、下部の自動プレビュー、保存と公開記事、AIへの[[パス]]挿入をPC・スマートフォンで確認します。AIの出力はモックです。
+`npm run check:articles` checks both article creation methods, visual editing, uploads and existing-image selection, automatic preview, saving/publication, and AI reference insertion on desktop and mobile. AI output is mocked.

@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { createHash } from "node:crypto";
 import type { Store, Shop } from "./store.ts";
 import type { CustomerFiles } from "./customer-files.ts";
@@ -8,14 +9,14 @@ export async function addCustomerNote(store: Store, shop: Shop, email: string, a
   const input = customerNoteInputSchema.parse(raw);
   const decoded = input.files.map(file => Buffer.from(file.data, "base64"));
   if (decoded.some((data, index) => data.length > customerFileLimit || data.toString("base64") !== input.files[index].data) || decoded.reduce((sum, data) => sum + data.length, 0) > customerTotalFileLimit)
-    throw Object.assign(new Error("添付は1ファイル5MB、合計10MB以内にしてください"), { status: 400 });
+    throw Object.assign(new Error(tr("添付は1ファイル5MB、合計10MB以内にしてください")), { status: 400 });
   const id = createHash("sha256").update(`${shop.id}:${email}:${author}:${input.requestId}`).digest("hex");
   const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
   let journal = await store.get<UploadJournal>("customerNoteUpload", id);
-  if (journal && journal.hash !== hash) throw Object.assign(new Error("投稿内容が変わっています。新しい投稿として送信してください"), { status: 409 });
+  if (journal && journal.hash !== hash) throw Object.assign(new Error(tr("投稿内容が変わっています。新しい投稿として送信してください")), { status: 409 });
   if (!journal) {
     const ids = input.files.length ? await files.reserve(input.files.length, token) : [];
-    if (ids.length !== input.files.length) throw new Error("添付ファイルの保存先を作成できませんでした");
+    if (ids.length !== input.files.length) throw new Error(tr("添付ファイルの保存先を作成できませんでした"));
     journal = { hash, createdAt: new Date().toISOString(), attachments: input.files.map((file, index) => ({ id: ids[index], name: file.name, mimeType: file.mimeType, size: decoded[index].length })) };
     // Persist reserved Drive identities before any upload. An interrupted request reuses them.
     await store.put("customerNoteUpload", id, journal);

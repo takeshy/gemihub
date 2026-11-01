@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Store, User } from "./store.ts";
@@ -42,7 +43,7 @@ export function equal(a: string, b: string) {
 }
 export function checkOrigin(req: IncomingMessage) {
   if (req.headers.origin !== origin())
-    throw Object.assign(new Error("この操作の送信元を確認できません"), {
+    throw Object.assign(new Error(tr("この操作の送信元を確認できません")), {
       status: 403,
     });
 }

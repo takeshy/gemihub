@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { Editable, useEditor } from "wysimark-lite";
 import { useApi } from "./api";
@@ -95,8 +96,7 @@ export default function ArticleEditor({
           disabled={disabled}
           onClick={() => setPick({ append: true })}
         >
-          画像を挿入
-        </button>
+          {tr("画像を挿入")}</button>
       </div>
       {error && (
         <p className="alert" role="alert">
@@ -105,7 +105,7 @@ export default function ArticleEditor({
       )}
       <div
         inert={disabled}
-        aria-label="記事の本文"
+        aria-label={tr("記事の本文")}
         className="article-wysimark"
       >
         <Editable
@@ -113,7 +113,7 @@ export default function ArticleEditor({
           value={value || "\n"}
           throttleInMs={0}
           onChange={onChange}
-          placeholder="記事の本文を書いてください"
+          placeholder={tr("記事の本文を書いてください")}
           resolveImageSrc={resolveImage}
           onFileSelect={() => new Promise((resolve) => setPick({ resolve }))}
           onImageChange={async (file) => {
@@ -123,7 +123,7 @@ export default function ArticleEditor({
                 file.type,
               )
             )
-              throw new Error("5MB以内の画像を選んでください");
+              throw new Error(tr("5MB以内の画像を選んでください"));
             onBusy(true);
             setError("");
             try {

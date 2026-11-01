@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApi } from "./api";
@@ -42,7 +43,7 @@ export function ArticleImageChooser({
       const data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(",")[1]);
-        reader.onerror = () => reject(new Error("画像を読み込めません"));
+        reader.onerror = () => reject(new Error(tr("画像を読み込めません")));
         reader.readAsDataURL(action.file);
       });
       const result = await api<{ imageId: string }>(
@@ -73,27 +74,25 @@ export function ArticleImageChooser({
     <dialog
       ref={dialog}
       className="article-image-dialog"
-      aria-label="記事に使う画像"
+      aria-label={tr("記事に使う画像")}
       onCancel={(event) => {
         if (busy) event.preventDefault();
         else close();
       }}
     >
       <div className="section-top">
-        <h2>記事に使う画像</h2>
+        <h2>{tr("記事に使う画像")}</h2>
         <button type="button" disabled={busy} onClick={close}>
-          閉じる
-        </button>
+          {tr("閉じる")}</button>
       </div>
-      <p>画像をアップロードするか、画像管理の画像を選んでください。</p>
+      <p>{tr("画像をアップロードするか、画像管理の画像を選んでください。")}</p>
       <div className="article-image-methods">
         <button
           type="button"
           disabled={busy}
           onClick={() => setMethod("upload")}
         >
-          画像をアップロード
-        </button>
+          {tr("画像をアップロード")}</button>
         <RequestImagePicker
           shopId={shopId}
           value={[]}
@@ -101,12 +100,12 @@ export function ArticleImageChooser({
           selectionOnly
           preview={false}
           disabled={busy}
-          label="既存の画像から選ぶ"
+          label={tr("既存の画像から選ぶ")}
           onChange={(ids) => {
             void api<LibraryImage[]>(`/api/shops/${shopId}/images`)
               .then((images) => {
                 const image = images.find((image) => image.id === ids[0]);
-                if (!image) throw new Error("画像がありません");
+                if (!image) throw new Error(tr("画像がありません"));
                 select({
                   id: image.id,
                   name: image.name,
@@ -120,8 +119,7 @@ export function ArticleImageChooser({
       </div>
       {method === "upload" && (
         <label>
-          記事用の画像ファイル
-          <input
+          {tr("記事用の画像ファイル")}<input
             type="file"
             accept="image/png,image/jpeg,image/gif,image/webp"
             disabled={busy}
@@ -138,7 +136,7 @@ export function ArticleImageChooser({
                   "image/webp",
                 ].includes(file.type)
               ) {
-                setError("5MB以内のPNG・JPEG・GIF・WebP画像を選んでください。");
+                setError(tr("5MB以内のPNG・JPEG・GIF・WebP画像を選んでください。"));
                 return;
               }
               const action = { file, requestId: createRequestId() };
@@ -148,7 +146,7 @@ export function ArticleImageChooser({
           />
         </label>
       )}
-      {busy && <p role="status">画像を保存しています…</p>}
+      {busy && <p role="status">{tr("画像を保存しています…")}</p>}
       {error && (
         <p className="alert" role="alert">
           {error}
@@ -156,8 +154,7 @@ export function ArticleImageChooser({
       )}
       {pending && !busy && error && (
         <button type="button" onClick={() => void upload(pending)}>
-          画像の保存を再試行
-        </button>
+          {tr("画像の保存を再試行")}</button>
       )}
     </dialog>,
     document.body,

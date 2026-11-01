@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
@@ -47,7 +48,7 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
   async function ensureChat() {
     if(current.current)return current.current;
     const saved=await api<ChatData>(`${prefix}/conversations`,{intent,requestId:creationId.current,begin:true});
-    if(!alive.current)throw new Error("画面を開き直してください");
+    if(!alive.current)throw new Error(tr("画面を開き直してください"));
     acceptChat(saved);return saved;
   }
   async function createPlan(requestText:string,reference:ChatReference,saved?:SavedChat) {
@@ -75,27 +76,27 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
     } catch(error) {setText(value);await reload(saved.id).catch(()=>{});throw error;}
   }
   function start(next:RequestIntent) {dictationStop.current?.();current.current=undefined;setChat(undefined);setIntent(next);setViewPlan(undefined);setPlans([]);setText("");setImageIds([]);setError("");pending.current=undefined;creationId.current=createRequestId();}
-  const description=!published?"「はじめる」を押して、AIの質問に答えながらお店のページをつくります。":intent==="consult"?"質問や使い方について相談できます。お店の設定は変更しません。":intent==="modify"?"直したいことを伝えてください。AIと話しながら内容をまとめられます。":"作りたいページを教えてください。本文とメニュー名を、AIと話しながら決められます。";
+  const description=!published?tr("「はじめる」を押して、AIの質問に答えながらお店のページをつくります。"):intent==="consult"?tr("質問や使い方について相談できます。お店の設定は変更しません。"):intent==="modify"?tr("直したいことを伝えてください。AIと話しながら内容をまとめられます。"):tr("作りたいページを教えてください。本文とメニュー名を、AIと話しながら決められます。");
   const messages=chat?.messages || [];
   const extraPages=viewPlan?.config.pages.filter(page=>!currentConfig?.pages.some(existing=>existing.id===page.id)) || [];
   if(!published&&viewPlan)return <div className="shop-request">{error&&<p className="alert" role="alert">{error}</p>}<InitialPlanReview shopId={shopId} plan={viewPlan} busy={busy} onBack={()=>{setViewPlan(undefined);}} onAccept={()=>void run(()=>onAccept(viewPlan))}/></div>;
   return <div className="shop-request shop-chat">
-    {published&&<div className="request-intents" role="group" aria-label="したいこと">{(["consult",...(isOwner?["modify","new-page"]:[])] as RequestIntent[]).map(item=><button type="button" key={item} aria-label={chatLabels[item]} aria-pressed={intent===item} className={intent===item?"selected":""} disabled={busy} onClick={()=>{if(item!==intent)start(item);}}><b>{chatLabels[item]}</b><small>{item==="consult"?"質問する・使い方を知る":item==="modify"?"今ある設定やページを直す":"ページとメニューを追加する"}</small></button>)}</div>}
+    {published&&<div className="request-intents" role="group" aria-label={tr("したいこと")}>{(["consult",...(isOwner?["modify","new-page"]:[])] as RequestIntent[]).map(item=><button type="button" key={item} aria-label={chatLabels[item]} aria-pressed={intent===item} className={intent===item?"selected":""} disabled={busy} onClick={()=>{if(item!==intent)start(item);}}><b>{chatLabels[item]}</b><small>{item==="consult"?tr("質問する・使い方を知る"):item==="modify"?tr("今ある設定やページを直す"):tr("ページとメニューを追加する")}</small></button>)}</div>}
     <p>{description}</p>
     {error&&<p className="alert" role="alert">{error}</p>}
-    {!chat?<div className={!published?"onboarding-request":undefined}><div><button className="primary begin-consultation" type="button" disabled={busy} onClick={()=>void run(async()=>{await ensureChat();})}>{busy?"準備しています…":"はじめる"}</button></div>{!published&&<OnboardingGuide/>}</div>:<>
-    <div ref={log} className="chat-log" role="log" aria-label="AIとのチャット" aria-live="polite">
-      {messages.length?messages.map(message=><article key={message.id} className={`chat-message chat-message-${message.role}`}><b>{message.role==="user"?"あなた":"AI"}</b><div className="pre-wrap">{message.text}</div>{message.detail.partial&&<small>途中で終了した会話です</small>}{message.detail.imageIds?.length?<small>画像{message.detail.imageIds.length}枚を添付</small>:null}{message.detail.planId&&<button type="button" disabled={busy} onClick={()=>{const target=plans.find(plan=>plan.id===message.detail.planId);if(target)setViewPlan(target);}}>変更案を確認する</button>}{message.role==="assistant"&&!message.detail.planId&&message.detail.changeRequest&&message.detail.ready&&isOwner&&intent!=="consult"&&chat&&<button type="button" disabled={busy} onClick={()=>void run(()=>createPlan(messages.find(item=>item.requestId===message.requestId&&item.role==="user")?.text||message.text,{id:chat.id,requestId:message.requestId},chat))}>変更案を作る</button>}</article>):<p className="chat-empty">{intent==="new-page"?"例：初めてのお客様向けに、よくある質問のページを追加したいです。":intent==="modify"?"例：水曜日もお休みにしたいです。":"例：指名なしの予約は、どのように決まりますか？"}</p>}
-      {busy&&<p role="status">AIが考えています…</p>}
+    {!chat?<div className={!published?"onboarding-request":undefined}><div><button className="primary begin-consultation" type="button" disabled={busy} onClick={()=>void run(async()=>{await ensureChat();})}>{busy?tr("準備しています…"):tr("はじめる")}</button></div>{!published&&<OnboardingGuide/>}</div>:<>
+    <div ref={log} className="chat-log" role="log" aria-label={tr("AIとのチャット")} aria-live="polite">
+      {messages.length?messages.map(message=><article key={message.id} className={`chat-message chat-message-${message.role}`}><b>{message.role==="user"?tr("あなた"):"AI"}</b><div className="pre-wrap">{message.text}</div>{message.detail.partial&&<small>{tr("途中で終了した会話です")}</small>}{message.detail.imageIds?.length?<small>{tr("画像")}{message.detail.imageIds.length}{tr("枚を添付")}</small>:null}{message.detail.planId&&<button type="button" disabled={busy} onClick={()=>{const target=plans.find(plan=>plan.id===message.detail.planId);if(target)setViewPlan(target);}}>{tr("変更案を確認する")}</button>}{message.role==="assistant"&&!message.detail.planId&&message.detail.changeRequest&&message.detail.ready&&isOwner&&intent!=="consult"&&chat&&<button type="button" disabled={busy} onClick={()=>void run(()=>createPlan(messages.find(item=>item.requestId===message.requestId&&item.role==="user")?.text||message.text,{id:chat.id,requestId:message.requestId},chat))}>{tr("変更案を作る")}</button>}</article>):<p className="chat-empty">{intent==="new-page"?tr("例：初めてのお客様向けに、よくある質問のページを追加したいです。"):intent==="modify"?tr("例：水曜日もお休みにしたいです。"):tr("例：指名なしの予約は、どのように決まりますか？")}</p>}
+      {busy&&<p role="status">{tr("AIが考えています…")}</p>}
     </div>
-    {viewPlan&&<section className="request-review" aria-label="変更案の確認"><h3>{intent==="new-page"?"このページを追加してよいですか？":"このように変更してよいですか？"}</h3><ul className="check-list">{viewPlan.summary.map((summary,index)=><li key={index}>{summary}</li>)}</ul><ConfigSummary config={viewPlan.config}/>{extraPages.length>0&&<section className="new-page-review" aria-label="追加するページ"><h4>追加するページとメニュー</h4>{extraPages.map(page=><div key={page.id}><h5>{page.title}</h5><p>お客様向けのメニューに「{page.navigationLabel}」を追加します。</p><details><summary>ページの内容を見る</summary><CustomPage page={page} imageBase={`${prefix}/images`}/></details></div>)}</section>}<p>{viewPlan.base===context?.revision?"まだ反映していません。直したいことは、下のチャットで続けて伝えられます。":"以前の変更案です。今の設定に合わせて直す場合は、チャットで続けて依頼してください。"}</p><div className="actions"><button type="button" onClick={()=>setViewPlan(undefined)}>チャットに戻る</button><button type="button" className="primary" disabled={busy||viewPlan.base!==context?.revision} onClick={()=>void run(()=>onAccept(viewPlan))}>変更内容を反映する</button></div></section>}
-    <form className="chat-composer" aria-label="メッセージの入力" onSubmit={event=>{event.preventDefault();dictationStop.current?.();void run(()=>send());}}>
-      <textarea aria-label="AIに伝えたいこと" rows={3} required maxLength={4000} disabled={busy} value={text} onChange={event=>setText(event.target.value)} placeholder="メッセージを入力…"/>
+    {viewPlan&&<section className="request-review" aria-label={tr("変更案の確認")}><h3>{intent==="new-page"?tr("このページを追加してよいですか？"):tr("このように変更してよいですか？")}</h3><ul className="check-list">{viewPlan.summary.map((summary,index)=><li key={index}>{summary}</li>)}</ul><ConfigSummary config={viewPlan.config}/>{extraPages.length>0&&<section className="new-page-review" aria-label={tr("追加するページ")}><h4>{tr("追加するページとメニュー")}</h4>{extraPages.map(page=><div key={page.id}><h5>{page.title}</h5><p>{tr("お客様向けのメニューに「")}{page.navigationLabel}{tr("」を追加します。")}</p><details><summary>{tr("ページの内容を見る")}</summary><CustomPage page={page} imageBase={`${prefix}/images`}/></details></div>)}</section>}<p>{viewPlan.base===context?.revision?tr("まだ反映していません。直したいことは、下のチャットで続けて伝えられます。"):tr("以前の変更案です。今の設定に合わせて直す場合は、チャットで続けて依頼してください。")}</p><div className="actions"><button type="button" onClick={()=>setViewPlan(undefined)}>{tr("チャットに戻る")}</button><button type="button" className="primary" disabled={busy||viewPlan.base!==context?.revision} onClick={()=>void run(()=>onAccept(viewPlan))}>{tr("変更内容を反映する")}</button></div></section>}
+    <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event=>{event.preventDefault();dictationStop.current?.();void run(()=>send());}}>
+      <textarea aria-label={tr("AIに伝えたいこと")} rows={3} required maxLength={4000} disabled={busy} value={text} onChange={event=>setText(event.target.value)} placeholder={tr("メッセージを入力…")}/>
 
       <div className="chat-composer-toolbar">
-        {isOwner&&<RequestImagePicker shopId={shopId} value={imageIds} onChange={setImageIds} disabled={busy||listening} label="画像を添付"/>}
+        {isOwner&&<RequestImagePicker shopId={shopId} value={imageIds} onChange={setImageIds} disabled={busy||listening} label={tr("画像を添付")}/>}
         {isOwner&&<DictationButton value={text} onChange={setText} onSend={value=>void run(()=>send(value))} onListening={setListening} stopRef={dictationStop} disabled={busy}/>}
-        <button type="submit" className="primary chat-send" disabled={busy||!text.trim()}>送信</button>
+        <button type="submit" className="primary chat-send" disabled={busy||!text.trim()}>{tr("送信")}</button>
       </div>
     </form>
     </>}

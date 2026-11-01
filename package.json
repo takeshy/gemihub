@@ -24,7 +24,10 @@
     "check:inquiries": "node scripts/check-inquiries.mjs",
     "check:images": "node scripts/check-image-library.mjs",
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs",
-    "check:publication-routing": "node scripts/check-publication-routing.mjs"
+    "check:publication-routing": "node scripts/check-publication-routing.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:i18n:browser": "node --import tsx scripts/check-i18n-browser.mjs",
+    "capture:manual:en": "node scripts/capture-manual-en.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",

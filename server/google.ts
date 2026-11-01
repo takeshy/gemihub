@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { google } from "googleapis";
 import {
   createCipheriv,
@@ -85,7 +86,7 @@ export async function provision(shop: Shop, config: ShopConfig, token: string) {
   });
   const file = await drive.files.create({
     requestBody: {
-      name: `${config.name} 予約台帳`,
+      name: tr("{0} 予約台帳", config.name),
       mimeType: "application/vnd.google-apps.spreadsheet",
       parents: [folder.data.id!],
     },
@@ -135,7 +136,7 @@ export async function syncConfig(
   scope?: ReleaseScope,
   menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>,
 ) {
-  if (!shop.google) throw new Error("Google の保存先が未作成です");
+  if (!shop.google) throw new Error(tr("Google の保存先が未作成です"));
   const { sheets, drive } = clients(token);
   const doc = documents(config, shop.history);
   // Prepare the runnable export before writing any remote data.
@@ -312,7 +313,7 @@ export async function readConfig(
     )
       throw Object.assign(
         new Error(
-          "スプレッドシートの列構造が変更されています。schema.md の列順に戻してください。",
+          tr("スプレッドシートの列構造が変更されています。schema.md の列順に戻してください。"),
         ),
         { status: 409 },
       );
@@ -323,7 +324,7 @@ export async function readConfig(
     ...Object.fromEntries(
       settings.map((r) => [r[0], JSON.parse(String(r[1]))]),
     ),
-    pages: pages.map(r => { const page = JSON.parse(String(r[1])); if (page.id !== String(r[0])) throw new Error("ページのIDと行が一致しません"); return page; }),
+    pages: pages.map(r => { const page = JSON.parse(String(r[1])); if (page.id !== String(r[0])) throw new Error(tr("ページのIDと行が一致しません")); return page; }),
     menus: menus.map((r) => ({
       id: String(r[0]),
       name: String(r[1]),
@@ -351,7 +352,7 @@ export async function sendMail(
   body: string,
 ) {
   if (!/^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/.test(to))
-    throw new Error("メール宛先が不正です");
+    throw new Error(tr("メール宛先が不正です"));
   const { gmail } = clients(token);
   const raw = Buffer.from(
     `To: ${to}\r\nSubject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString("base64")}`,

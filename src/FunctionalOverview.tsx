@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import React from "react";
 
 const paths = {
@@ -13,25 +14,25 @@ function Icon({ kind }: { kind: keyof typeof paths }) {
 }
 
 export function FunctionalOverview({ pages = [] }: { pages?: string[] }) {
-  return <div className="functional-overview" aria-label="用意するページと機能">
+  return <div className="functional-overview" aria-label={tr("用意するページと機能")}>
     <section className="feature-customer">
-      <div className="feature-audience"><span>お客様</span><h4>お客様が使うページ</h4></div>
+      <div className="feature-audience"><span>{tr("お客様")}</span><h4>{tr("お客様が使うページ")}</h4></div>
       <ol className="feature-flow">
-        <li><div className="feature-icon"><Icon kind="shop" /></div><span className="feature-number">01</span><h5>お店を知る</h5><p>お店の紹介や<br />メニューを見る</p></li>
-        <li><div className="feature-icon"><Icon kind="calendar" /></div><span className="feature-number">02</span><h5>予約する</h5><p>メニュー・担当者・<br />日時を選ぶ</p></li>
-        <li><div className="feature-icon"><Icon kind="check" /></div><span className="feature-number">03</span><h5>予約を確かめる</h5><p>自分の予約を確認<br />必要ならキャンセル</p></li>
+        <li><div className="feature-icon"><Icon kind="shop" /></div><span className="feature-number">01</span><h5>{tr("お店を知る")}</h5><p>{tr("お店の紹介や")}<br />{tr("メニューを見る")}</p></li>
+        <li><div className="feature-icon"><Icon kind="calendar" /></div><span className="feature-number">02</span><h5>{tr("予約する")}</h5><p>{tr("メニュー・担当者・")}<br />{tr("日時を選ぶ")}</p></li>
+        <li><div className="feature-icon"><Icon kind="check" /></div><span className="feature-number">03</span><h5>{tr("予約を確かめる")}</h5><p>{tr("自分の予約を確認")}<br />{tr("必要ならキャンセル")}</p></li>
       </ol>
-      <div className="feature-connection"><Icon kind="mail" /><p><strong>お問い合わせ</strong><span>分からないことは、お店にメッセージを送れます。</span></p></div>
+      <div className="feature-connection"><Icon kind="mail" /><p><strong>{tr("お問い合わせ")}</strong><span>{tr("分からないことは、お店にメッセージを送れます。")}</span></p></div>
     </section>
     <section className="feature-operations">
-      <div className="feature-audience"><span>お店</span><h4>お店で使う機能</h4></div>
+      <div className="feature-audience"><span>{tr("お店")}</span><h4>{tr("お店で使う機能")}</h4></div>
       <div className="feature-cards">
-        <div><Icon kind="calendar" /><h5>予約を管理</h5><p>いつ・誰の予約があるか<br />一覧で確認できます。</p></div>
-        <div><Icon kind="people" /><h5>お客様を覚える</h5><p>来店の記録やメモを<br />まとめて残せます。</p></div>
-        <div><Icon kind="news" /><h5>お知らせを届ける</h5><p>ブログやお知らせを<br />ページに載せられます。</p></div>
-        <div><Icon kind="mail" /><h5>メールでお知らせ</h5><p>予約の受付やキャンセルを<br />メールでお知らせします。</p></div>
+        <div><Icon kind="calendar" /><h5>{tr("予約を管理")}</h5><p>{tr("いつ・誰の予約があるか")}<br />{tr("一覧で確認できます。")}</p></div>
+        <div><Icon kind="people" /><h5>{tr("お客様を覚える")}</h5><p>{tr("来店の記録やメモを")}<br />{tr("まとめて残せます。")}</p></div>
+        <div><Icon kind="news" /><h5>{tr("お知らせを届ける")}</h5><p>{tr("ブログやお知らせを")}<br />{tr("ページに載せられます。")}</p></div>
+        <div><Icon kind="mail" /><h5>{tr("メールでお知らせ")}</h5><p>{tr("予約の受付やキャンセルを")}<br />{tr("メールでお知らせします。")}</p></div>
       </div>
     </section>
-    {pages.length > 0 && <section className="feature-extra"><h4>追加で用意するページ</h4><ul>{pages.map((title, index) => <li key={index}>{title}</li>)}</ul></section>}
+    {pages.length > 0 && <section className="feature-extra"><h4>{tr("追加で用意するページ")}</h4><ul>{pages.map((title, index) => <li key={index}>{title}</li>)}</ul></section>}
   </div>;
 }

@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { createHash } from "node:crypto";
 import type { Store, Shop } from "./store.ts";
 import type { ShopConfig } from "./domain.ts";
@@ -14,14 +15,14 @@ export async function uploadMenuImage(store: Store, shop: Shop, raw: unknown, fi
     : input.mimeType === "image/jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
     : input.mimeType === "image/gif" ? ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString())
     : bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP";
-  if (!valid || bytes.length > menuImageLimit || bytes.toString("base64") !== input.data) fail(400, "5MB以内のPNG・JPEG・GIF・WebP画像を選択してください");
+  if (!valid || bytes.length > menuImageLimit || bytes.toString("base64") !== input.data) fail(400, tr("5MB以内のPNG・JPEG・GIF・WebP画像を選択してください"));
   const imageId = createHash("sha256").update(author ? `${shop.id}:staff-image:${author}:${input.requestId}` : `${shop.id}:menu-image:${input.requestId}`).digest("hex");
   const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
   let upload = await store.get<ImageUpload>("menuImageUpload", imageId);
-  if (upload && upload.hash !== hash) fail(409, "画像が変更されています。選び直してください");
+  if (upload && upload.hash !== hash) fail(409, tr("画像が変更されています。選び直してください"));
   if (!upload) {
     const [fileId] = await files.reserve(1, token);
-    if (!fileId) throw new Error("画像の保存先を作成できませんでした");
+    if (!fileId) throw new Error(tr("画像の保存先を作成できませんでした"));
     upload = { shopId: shop.id, fileId, hash, mimeType: input.mimeType, size: bytes.length, complete: false, name: input.name, createdAt: new Date().toISOString(), source: "upload", ...(author ? {uploadedBy:author} : {}) };
     await store.put("menuImageUpload", imageId, upload);
   }
@@ -34,7 +35,7 @@ export async function uploadMenuImage(store: Store, shop: Shop, raw: unknown, fi
 }
 async function receipt(store: Store, shop: Shop, imageId: string) {
   const upload = await store.get<ImageUpload>("menuImageUpload", imageId);
-  return upload?.complete && !upload.archived && upload.shopId === shop.id ? upload : fail(404, "画像がありません");
+  return upload?.complete && !upload.archived && upload.shopId === shop.id ? upload : fail(404, tr("画像がありません"));
 }
 export async function validateMenuImages(store: Store, shop: Shop, config: ShopConfig) {
   for (const menu of config.menus) if (menu.imageId) await receipt(store, shop, menu.imageId);
@@ -43,7 +44,7 @@ export async function validateMenuImages(store: Store, shop: Shop, config: ShopC
 export async function readMenuImage(store: Store, shop: Shop, imageId: string, files: CustomerFiles, token: string): Promise<MenuImageData> {
   const upload = await receipt(store, shop, imageId);
   const bytes = await files.read(shop, token, upload.fileId);
-  if (bytes.length !== upload.size) fail(409, "メニュー画像が変更されています");
+  if (bytes.length !== upload.size) fail(409, tr("メニュー画像が変更されています"));
   return { mimeType: upload.mimeType, data: bytes.toString("base64") };
 }
 export async function menuImageSnapshot(store: Store, shop: Shop, config: ShopConfig, files: CustomerFiles, token: string, extraIds: string[] = []) {

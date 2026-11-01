@@ -1,3 +1,4 @@
+import { tr } from "../../shared/i18n";
 import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../server/post-images";
 import { inquiryStatus } from "../../server/inquiries";
 import { answeredFinalDetails, initialSetupDemoReply, openingQuestions } from "../../server/request-intent";
@@ -157,16 +158,16 @@ export function scenarioProps(scenario: Scenario) {
   };
 }
 export function createMockClient(scenario: Scenario): ApiClient {
-  let customerProfile: MemberProfile | null = scenario === "registration" ? null : { name: "山田 花子", birthDate: "1990-01-01", gender: "female" };
+  let customerProfile: MemberProfile | null = scenario === "registration" ? null : { name: tr("山田 花子"), birthDate: "1990-01-01", gender: "female" };
   const posts = scenario === "empty-blog" ? [] : storyPosts();
   const config = structuredClone(sample);
   config.hours.closedWeekdays = [];
   config.notificationEmail = "owner@example.com";
   if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-conflict", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
-    { id: "faq", slug: "faq", title: "よくある質問", navigationLabel: "よくある質問", body: "## 初めてでも予約できますか？\n\n初めてのお客様も歓迎しています。\n\n## 当日の持ち物は？\n\n特にありません。お気軽にお越しください。", layout: "standard", imageUrl: "" },
-    { id: "about-us", slug: "about-us", title: "私たちのお店", navigationLabel: "店舗紹介", body: "## 大切にしていること\n\n一人ひとりに合った時間をご用意します。", layout: "compact", imageUrl: "" },
+    { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("## 初めてでも予約できますか？\n\n初めてのお客様も歓迎しています。\n\n## 当日の持ち物は？\n\n特にありません。お気軽にお越しください。"), layout: "standard", imageUrl: "" },
+    { id: "about-us", slug: "about-us", title: tr("私たちのお店"), navigationLabel: tr("店舗紹介"), body: tr("## 大切にしていること\n\n一人ひとりに合った時間をご用意します。"), layout: "compact", imageUrl: "" },
   ];
-  if (["editor-remote", "editor-conflict"].includes(scenario)) config.pages[0].body = "## リモートの変更\n\nリモートで追加された案内です。";
+  if (["editor-remote", "editor-conflict"].includes(scenario)) config.pages[0].body = tr("## リモートの変更\n\nリモートで追加された案内です。");
   const menuImages = new Map<string, { mimeType: string; data: string }>();
   const imageMetadata = new Map<string, LibraryImage>();
   const generatedImages = new Map<string, string>();
@@ -177,11 +178,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
     context.fillStyle = "#465b50"; context.font = "32px sans-serif"; context.textAlign = "center"; context.fillText("Menu image sample", 320, 240);
     const imageId = "a".repeat(64); if (["manage-staff","calendar-member","calendar-connected"].includes(scenario)) config.staff[scenario === "calendar-member" ? 1 : 0].imageId = imageId; else config.menus[0].imageId = imageId; if(scenario === "menu-images-public")config.staff[0].imageId=imageId;
     menuImages.set(imageId, { mimeType: "image/png", data: canvas.toDataURL("image/png").split(",")[1] });
-    imageMetadata.set(imageId, { id: imageId, name: "お店の紹介.png", mimeType: "image/png", size: 12000, source: "upload", createdAt: new Date().toISOString(), usedBy: [] });
+    imageMetadata.set(imageId, { id: imageId, name: tr("お店の紹介.png"), mimeType: "image/png", size: 12000, source: "upload", createdAt: new Date().toISOString(), usedBy: [] });
     if (scenario.startsWith("image-") && scenario !== "image-library-empty") {
       const secondId = "b".repeat(64);
       menuImages.set(secondId, menuImages.get(imageId)!);
-      imageMetadata.set(secondId, { id: secondId, name: "AIで生成した季節のイメージ.png", mimeType: "image/png", size: 12000, source: "ai", model: "gemini-nano-banana-2.1", prompt: "明るい窓辺に季節の花を飾った、お店の紹介ページ向けの画像", createdAt: new Date().toISOString(), usedBy: [] });
+      imageMetadata.set(secondId, { id: secondId, name: tr("AIで生成した季節のイメージ.png"), mimeType: "image/png", size: 12000, source: "ai", model: "gemini-nano-banana-2.1", prompt: tr("明るい窓辺に季節の花を飾った、お店の紹介ページ向けの画像"), createdAt: new Date().toISOString(), usedBy: [] });
       if (scenario === "image-page") { config.header.imageId = imageId; config.pages[0].imageId = secondId; }
     }
   }
@@ -191,10 +192,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
       id: "story-reservation",
       shopId: "story-shop",
       customer: "guest@example.com",
-      name: "山田 花子",
+      name: tr("山田 花子"),
       menuId: "simple",
       price: 5500,
-      message: "前回と同じピンクで、短めにお願いします。",
+      message: tr("前回と同じピンクで、短めにお願いします。"),
       staffId: "aoi",
       start: new Date(`${tomorrow}T10:00:00+09:00`).toISOString(),
       end: new Date(`${tomorrow}T11:00:00+09:00`).toISOString(),
@@ -205,7 +206,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       id: "story-cancelled",
       shopId: "story-shop",
       customer: "other@example.com",
-      name: "鈴木 さくら",
+      name: tr("鈴木 さくら"),
       menuId: "design",
       price: 7800,
       message: "",
@@ -237,7 +238,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     revision: 0,
     history: unpublished
       ? []
-      : [{ at: new Date().toISOString(), summary: "お店の予約ページを公開" }],
+      : [{ at: new Date().toISOString(), summary: tr("お店の予約ページを公開") }],
     isOwner: true,
     plans: ["plan", "publication-error"].includes(
       scenario,
@@ -250,10 +251,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
     inquiries: [
       {
         id: "story-inquiry",
-        name: "佐藤 みどり",
+        name: tr("佐藤 みどり"),
         email: "midori@example.com",
         message:
-          "初めて伺います。ネイルの色を相談してから決めることはできますか？",
+          tr("初めて伺います。ネイルの色を相談してから決めることはできますか？"),
         reply: "",
         status: "open",
         at: new Date().toISOString(),
@@ -269,7 +270,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
             {
               type: "sync",
               error:
-                "スプレッドシートに接続できませんでした。再送をお試しください。",
+                tr("スプレッドシートに接続できませんでした。再送をお試しください。"),
             },
           ]
         : [],
@@ -282,9 +283,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
   };
   if (scenario === "inquiries") {
     shop.inquiries.push(
-      { id: "guest-inquiry", email: "guest@example.com", name: "山田 花子", message: "予約をしました。アートの相談をしたいです。", reply: "ご希望の写真があればお持ちください。", status: "in_progress", at: new Date(Date.now() - 86400000).toISOString() },
-      { id: "completed-inquiry", email: "guest@example.com", name: "山田 花子", message: "駐車場の場所を教えてください。", reply: "お店の裏にございます。", status: "completed", at: new Date(Date.now() - 2 * 86400000).toISOString() },
-      { id: "closed-unreplied", email: "midori@example.com", name: "佐藤 みどり", message: "電話で教えていただいた件です。ありがとうございました。", reply: "", status: "completed", at: new Date(Date.now() - 3 * 86400000).toISOString() },
+      { id: "guest-inquiry", email: "guest@example.com", name: tr("山田 花子"), message: tr("予約をしました。アートの相談をしたいです。"), reply: tr("ご希望の写真があればお持ちください。"), status: "in_progress", at: new Date(Date.now() - 86400000).toISOString() },
+      { id: "completed-inquiry", email: "guest@example.com", name: tr("山田 花子"), message: tr("駐車場の場所を教えてください。"), reply: tr("お店の裏にございます。"), status: "completed", at: new Date(Date.now() - 2 * 86400000).toISOString() },
+      { id: "closed-unreplied", email: "midori@example.com", name: tr("佐藤 みどり"), message: tr("電話で教えていただいた件です。ありがとうございました。"), reply: "", status: "completed", at: new Date(Date.now() - 3 * 86400000).toISOString() },
     );
   }
   const inquiryRequests = new Map<string, { text: string; previousReply: unknown }>();
@@ -299,8 +300,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
         end: new Date(Date.now() - days * 86400000 + 3600000).toISOString(),
         createdAt: new Date(Date.now() - (days + 1) * 86400000).toISOString(),
       })));
-      shop.inquiries.push({ id: "guest-inquiry", email: "guest@example.com", name: "山田 花子", message: "前回と同じ色でお願いします。", reply: "同じお色をご用意してお待ちしています。", status: "replied", at: new Date(Date.now() - 2 * 86400000).toISOString() });
-      customerNotes.push({ id: "story-note", shopId: shop.id, email: "guest@example.com", text: "落ち着いたピンクがお好み。次回は短めに整える。", attachments: [], createdBy: shop.owner, createdAt: new Date(Date.now() - 86400000).toISOString(), updatedBy: shop.owner, updatedAt: new Date(Date.now() - 86400000).toISOString(), status: "active" });
+      shop.inquiries.push({ id: "guest-inquiry", email: "guest@example.com", name: tr("山田 花子"), message: tr("前回と同じ色でお願いします。"), reply: tr("同じお色をご用意してお待ちしています。"), status: "replied", at: new Date(Date.now() - 2 * 86400000).toISOString() });
+      customerNotes.push({ id: "story-note", shopId: shop.id, email: "guest@example.com", text: tr("落ち着いたピンクがお好み。次回は短めに整える。"), attachments: [], createdBy: shop.owner, createdAt: new Date(Date.now() - 86400000).toISOString(), updatedBy: shop.owner, updatedAt: new Date(Date.now() - 86400000).toISOString(), status: "active" });
     }
   }
   if (scenario === "crm-images" || scenario.startsWith("image-library")) {
@@ -316,7 +317,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const id = `sample-image-${index}`;
       const createdAt = new Date(Date.now() - (index + 1) * 30 * 86400000).toISOString();
       customerFileData.set(id, data);
-      customerNotes.push({ id: `image-note-${index}`, shopId: shop.id, email: "guest@example.com", text: "共有画面には表示しない施術メモ", attachments: [{ id, name: ["ショートボブ.png", "肩までの長さ.png", "カラーの記録.png"][index], mimeType: "image/png", size: atob(data).length }], createdAt, createdBy: shop.owner, updatedAt: createdAt, updatedBy: shop.owner, status: "active" });
+      customerNotes.push({ id: `image-note-${index}`, shopId: shop.id, email: "guest@example.com", text: tr("共有画面には表示しない施術メモ"), attachments: [{ id, name: [tr("ショートボブ.png"), tr("肩までの長さ.png"), tr("カラーの記録.png")][index], mimeType: "image/png", size: atob(data).length }], createdAt, createdBy: shop.owner, updatedAt: createdAt, updatedBy: shop.owner, status: "active" });
     }
   }
   if (scenario === "publication-error") shop.publishingPlanId = plan.id;
@@ -334,14 +335,14 @@ export function createMockClient(scenario: Scenario): ApiClient {
       ? null
       : {
           email: customer ? "guest@example.com" : "owner@example.com",
-          name: customer ? "山田 花子" : "凪の店主",
+          name: customer ? tr("山田 花子") : tr("凪の店主"),
           role: customer ? "customer" : "owner",
           shopId: shop.id,
         },
   };
   if (scenario === "calendar-member") {
     shop.isOwner = false;
-    session.user = { email: "haru@example.com", name: "はる", role: "customer", shopId: shop.id };
+    session.user = { email: "haru@example.com", name: tr("はる"), role: "customer", shopId: shop.id };
   }
   const calendarConnection = {
     connected: ["calendar-connected", "calendar-member", "calendar-missing-staff"].includes(scenario),
@@ -352,7 +353,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   };
   const staffLogins = config.staff.map(staff => ({ staffId: staff.id, name: staff.name, email: staff.id === "aoi" ? shop.owner : "haru@example.com", accepted: staff.id === "aoi", connected: staff.id === "aoi" && calendarConnection.connected }));
   let visualConfig = structuredClone(config);
-  const extraData = { id: "100", title: "店販の記録", headers: ["商品", "個数", "金額", "確認済み"], rows: [{ row: 2, values: ["ヘアオイル", 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };
+  const extraData = { id: "100", title: tr("店販の記録"), headers: [tr("商品"), tr("個数"), tr("金額"), tr("確認済み")], rows: [{ row: 2, values: [tr("ヘアオイル"), 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };
   let chats: ShopChat[] = [];
   const chatCache = `omaiweb:storybook-chats:${scenario}:${session.user?.email || "anonymous"}`;
   try {
@@ -360,9 +361,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
     if(saved){ chats=saved.chats || []; if(saved.plans&&scenario!=="onboarding")shop.plans=saved.plans; if(saved.published&&scenario!=="onboarding"){shop.published=saved.published;shop.revision=saved.revision;shop.history=saved.history;} }
   } catch {}
   function saveChats(){try{localStorage.setItem(chatCache,JSON.stringify({chats,plans:shop.plans,published:shop.published,revision:shop.revision,history:shop.history}));}catch{}}
-  function chatData(id:string){const chat=chats.find(item=>item.id===id);if(!chat)throw new Error("チャットがありません");return {...chat,plans:shop.plans.filter(plan=>chat.messages.some(message=>message.detail.planId===plan.id))};}
+  function chatData(id:string){const chat=chats.find(item=>item.id===id);if(!chat)throw new Error(tr("チャットがありません"));return {...chat,plans:shop.plans.filter(plan=>chat.messages.some(message=>message.detail.planId===plan.id))};}
   function addChatTurn(id:string,requestId:string,text:string,answer:string,detail:ShopChatMessage["detail"]={}) {
-    const chat=chats.find(item=>item.id===id);if(!chat)throw new Error("チャットがありません");
+    const chat=chats.find(item=>item.id===id);if(!chat)throw new Error(tr("チャットがありません"));
     for(const [role,content] of [["user",text],["assistant",answer]] as const)if(content&&!chat.messages.some(message=>message.requestId===requestId&&message.role===role)){
       const at=new Date().toISOString();chat.messages.push({id:`${requestId}:${role}`,shopId:shop.id,conversationId:id,email:session.user!.email,role,text:content,requestId,sequence:chat.messages.length+1,createdAt:at,updatedAt:at,detail:role==="assistant"?detail:{}});chat.updatedAt=at;
     }
@@ -385,7 +386,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       else {
         const id=await fingerprint({shopId:shop.id,email:session.user!.email,requestId:input.requestId});
         let chat=chats.find(item=>item.id===id);
-        if(!chat){const now=new Date().toISOString();chat={id,shopId:shop.id,email:session.user!.email,intent:input.intent as ShopChat["intent"],title:"新しいチャット",createdAt:now,updatedAt:now,messages:[]};chats.push(chat);saveChats();}
+        if(!chat){const now=new Date().toISOString();chat={id,shopId:shop.id,email:session.user!.email,intent:input.intent as ShopChat["intent"],title:tr("新しいチャット"),createdAt:now,updatedAt:now,messages:[]};chats.push(chat);saveChats();}
         if(input.begin&&!chat.messages.length)addChatTurn(id,"opening","",openingQuestions[chat.intent]);
         result=chatData(id);
       }
@@ -398,7 +399,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const values = input.values as (string | number | boolean)[];
       const previous = input.previous as (string | number | boolean)[];
       const current = extraData.rows.find(item => item.row === row);
-      if (current && JSON.stringify(current.values) !== JSON.stringify(previous) && JSON.stringify(current.values) !== JSON.stringify(values)) throw new Error("この行が更新されています");
+      if (current && JSON.stringify(current.values) !== JSON.stringify(previous) && JSON.stringify(current.values) !== JSON.stringify(values)) throw new Error(tr("この行が更新されています"));
       if (current) current.values = [...values]; else { extraData.rows.push({ row, values: [...values] }); extraData.nextRow++; }
       result = { ok: true };
     }
@@ -408,9 +409,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (action.endsWith("/images") && data === undefined) result = current();
       else if (action.endsWith("/images")) {
         const id = String(menuImages.size+1).padStart(64,"0");menuImages.set(id,{mimeType:String(input.mimeType),data:String(input.data)});ownPhotoImages.add(id);imageMetadata.set(id,{id,name:String(input.name),mimeType:String(input.mimeType),size:atob(String(input.data)).length,source:"upload",usedBy:[],createdAt:new Date().toISOString()});result={imageId:id};
-      } else if (action.includes("/images/")) { const id=action.split("/").at(-1)!; if(!current().some(image=>image.id===id))throw new Error("画像がありません");result=menuImages.get(id); }
+      } else if (action.includes("/images/")) { const id=action.split("/").at(-1)!; if(!current().some(image=>image.id===id))throw new Error(tr("画像がありません"));result=menuImages.get(id); }
       else if (data === undefined) result={staffId:staff.id,name:staff.name,imageId:staff.imageId};
-      else {if((staff.imageId||"")!==input.previousImageId)throw new Error("写真が更新されています");staff.imageId=input.imageId as string|undefined;shop.revision++;result={ok:true};}
+      else {if((staff.imageId||"")!==input.previousImageId)throw new Error(tr("写真が更新されています"));staff.imageId=input.imageId as string|undefined;shop.revision++;result={ok:true};}
     }
     else if (action === `/api/shops/${shop.id}/images` && data === undefined) {
       result = [...imageMetadata.values()].map(image => ({ ...image, usedBy: imageUses(shop.published, image.id) }));
@@ -427,9 +428,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { imageId };
     }
     else if (/\/images\/[a-f0-9]{64}\/(rename|archive)$/.test(action) && data !== undefined) {
-      const parts = action.split("/"); const id = parts.at(-2)!; const image = imageMetadata.get(id); if (!image) throw new Error("画像がありません");
+      const parts = action.split("/"); const id = parts.at(-2)!; const image = imageMetadata.get(id); if (!image) throw new Error(tr("画像がありません"));
       if (parts.at(-1) === "rename") image.name = String(input.name);
-      else { if (imageUses(shop.published, id).length) throw new Error("使用中の画像は削除できません。"); imageMetadata.delete(id); menuImages.delete(id); }
+      else { if (imageUses(shop.published, id).length) throw new Error(tr("使用中の画像は削除できません。")); imageMetadata.delete(id); menuImages.delete(id); }
       result = { ok: true };
     }
     else if ([`/api/shops/${shop.id}/menu-images`, `/api/shops/${shop.id}/images`].includes(action) && data !== undefined) {
@@ -438,18 +439,18 @@ export function createMockClient(scenario: Scenario): ApiClient {
       imageMetadata.set(imageId, { id: imageId, name: String(input.name), mimeType: String(input.mimeType), size: atob(String(input.data)).length, source: "upload", createdAt: new Date().toISOString(), usedBy: [] });
     }
     else if (/\/(menu-images|images)\/[a-f0-9]{64}$/.test(action)) {
-      const image = menuImages.get(action.split("/").at(-1)!); if (!image) throw new Error("メニュー画像がありません"); result = image;
+      const image = menuImages.get(action.split("/").at(-1)!); if (!image) throw new Error(tr("メニュー画像がありません")); result = image;
     }
     else if (action.startsWith(`/api/shops/${shop.id}/customers`)) {
       const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
       const now = new Date();
-      const current = () => aggregateCustomers(shop.bookings, shop.inquiries.map(inquiry => ({ ...inquiry, shopId: shop.id, at: inquiry.at || now.toISOString() })) as Inquiry[], customerNotes, now, customerSince(filter, now), scenario === "crm-empty" ? [] : [{ shopId: shop.id, email: "guest@example.com", name: "山田 花子", birthDate: "1992-06-15", gender: "female", updatedBy: shop.owner, updatedAt: now.toISOString() }]);
+      const current = () => aggregateCustomers(shop.bookings, shop.inquiries.map(inquiry => ({ ...inquiry, shopId: shop.id, at: inquiry.at || now.toISOString() })) as Inquiry[], customerNotes, now, customerSince(filter, now), scenario === "crm-empty" ? [] : [{ shopId: shop.id, email: "guest@example.com", name: tr("山田 花子"), birthDate: "1992-06-15", gender: "female", updatedBy: shop.owner, updatedAt: now.toISOString() }]);
       const route = action.match(/\/customers(?:\/([^/]+)(?:\/(.*))?)?$/)!;
       if (!route[1]) result = customerSummaries(current());
       else {
         const email = normalizeEmail(decodeURIComponent(route[1]));
         const customer = current().find(customer => customer.email === email);
-        if (!customer) throw new Error("お客様が見つかりません");
+        if (!customer) throw new Error(tr("お客様が見つかりません"));
         const tail = route[2] || "";
         if (tail === "images") return structuredClone({ name: customer.name, images: customerImages(customerNotes.filter(note => note.email === email)) }) as T;
         if (tail === "notes") {
@@ -462,18 +463,18 @@ export function createMockClient(scenario: Scenario): ApiClient {
         } else if (tail) {
           const parts = tail.split("/");
           const note = customerNotes.find(note => note.id === parts[1] && note.email === email && note.status === "active");
-          if (!note) throw new Error("メモがありません");
+          if (!note) throw new Error(tr("メモがありません"));
           if (parts[2] === "files") {
-            if (!note.attachments.some(file => file.id === parts[3])) throw new Error("添付ファイルがありません");
+            if (!note.attachments.some(file => file.id === parts[3])) throw new Error(tr("添付ファイルがありません"));
             return { data: customerFileData.get(parts[3]) || "" } as T;
           }
-          if (input.previousUpdatedAt !== note.updatedAt) throw new Error("メモが更新されています。詳細を開き直してください。");
+          if (input.previousUpdatedAt !== note.updatedAt) throw new Error(tr("メモが更新されています。詳細を開き直してください。"));
           if (parts[2] === "delete") note.status = "deleted";
           else {
             if (input.text !== undefined) note.text = String(input.text);
             for (const change of (input.attachmentNames || []) as {id: string; name: string}[]) {
               const file = note.attachments.find(file => file.id === change.id);
-              if (!file) throw new Error("添付ファイルがありません");
+              if (!file) throw new Error(tr("添付ファイルがありません"));
               file.name = change.name.trim();
             }
           }
@@ -490,7 +491,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/pages/create-with-ai`) {
       const messages = input.messages as { role: string; text: string }[];
       const ready = input.mode === "write" || messages.filter(m => m.role === "user").length >= 2;
-      result = { reply: ready ? "FAQ のページ案ができました。内容を確認してツリーに追加してください。" : "どんな質問や案内を載せたいですか？", page: ready ? { slug: "new-faq", title: "新しいFAQ", navigationLabel: "よくある質問", body: "## 初めてのお客様へ\n\nご予約方法をご案内します。", layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] } : null };
+      result = { reply: ready ? tr("FAQ のページ案ができました。内容を確認してツリーに追加してください。") : tr("どんな質問や案内を載せたいですか？"), page: ready ? { slug: "new-faq", title: tr("新しいFAQ"), navigationLabel: tr("よくある質問"), body: tr("## 初めてのお客様へ\n\nご予約方法をご案内します。"), layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] } : null };
     }
     else if (action === `/api/shops/${shop.id}/local-editor/index`) result = {
       base: shop.revision, published: !!shop.published, lastPublishedPlanId: shop.lastPublishedPlanId,
@@ -504,7 +505,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const scope = input.scope as ReleaseScope;
       const remote = input.expectedRemote as Record<string, unknown> | null;
       const local = input.localValue as Record<string, unknown> | null;
-      result = { value: scope.kind === "page" ? { ...(remote || local), body: `## AIの結合案\n\n${String(local?.body || "")}\n\n${String(remote?.body || "")}` } : { ...remote, ...local }, explanation: "ローカルとリモートの案内を両方残した結合案です。" };
+      result = { value: scope.kind === "page" ? { ...(remote || local), body: tr("## AIの結合案\n\n{0}\n\n{1}", String(local?.body || ""), String(remote?.body || "")) } : { ...remote, ...local }, explanation: tr("ローカルとリモートの案内を両方残した結合案です。") };
     }
     else if (action === `/api/shops/${shop.id}/local-editor`) result = { base: shop.revision, source: shop.published, config: shop.published || config, lastPublishedPlanId: shop.lastPublishedPlanId };
     else if (action === `/api/shops/${shop.id}/visual/propose`) {
@@ -512,24 +513,24 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (String(input.target).startsWith("page:")) {
         const [, id, field] = String(input.target).split(":");
         const page = next.pages.find(p => p.id === id)!;
-        if (field === "body") page.body = "## ペンで変更した内容\n\nローカルのページ本文を更新しました。";
-        else page.title = "ペンで変更したページ";
-      } else if (input.target === "part:header") next.header.title = "季節を楽しむアトリエ";
-      else if (input.target === "part:footer") next.footer.text = "お会いできる日を楽しみにしています。";
-      else if (input.target === "name") next.name = "季節のアトリエ";
-      else next.description = "季節を楽しむ、小さなネイルサロン。";
-      result = { config: next, summary: ["選んだ対象をローカルで変更"] };
+        if (field === "body") page.body = tr("## ペンで変更した内容\n\nローカルのページ本文を更新しました。");
+        else page.title = tr("ペンで変更したページ");
+      } else if (input.target === "part:header") next.header.title = tr("季節を楽しむアトリエ");
+      else if (input.target === "part:footer") next.footer.text = tr("お会いできる日を楽しみにしています。");
+      else if (input.target === "name") next.name = tr("季節のアトリエ");
+      else next.description = tr("季節を楽しむ、小さなネイルサロン。");
+      result = { config: next, summary: [tr("選んだ対象をローカルで変更")] };
     }
     else if (action === `/api/shops/${shop.id}/posts/metadata`) {
       const article=input.content as {title:string;body:string};
       const current=posts.find(post=>post.id===input.postId);
-      if(current&&current.version!==input.version)throw new Error("記事が更新されています。一覧から記事を開き直してください");
+      if(current&&current.version!==input.version)throw new Error(tr("記事が更新されています。一覧から記事を開き直してください"));
       result={slug:current?.address?.slug||current?.draft.slug||`article-${(await fingerprint(article.title)).slice(0,12)}`,excerpt:(articlePlainText(article.body)||article.title).slice(0,140)};
     }
-    else if (action === `/api/shops/${shop.id}/posts/files`) result=[{path:"spec.md",name:"お店の設定（spec.md）",kind:"text"},{path:"history.md",name:"変更履歴（history.md）",kind:"text"},...[...imageMetadata.values()].map(image=>({path:articleImagePath(image.id,image.name),name:image.name,kind:"image",imageId:image.id}))];
+    else if (action === `/api/shops/${shop.id}/posts/files`) result=[{path:"spec.md",name:tr("お店の設定（spec.md）"),kind:"text"},{path:"history.md",name:tr("変更履歴（history.md）"),kind:"text"},...[...imageMetadata.values()].map(image=>({path:articleImagePath(image.id,image.name),name:image.name,kind:"image",imageId:image.id}))];
     else if (action === `/api/shops/${shop.id}/posts/propose`) {
       const selected=wikiPaths(String(input.instruction)).map(path=>[...imageMetadata.values()].find(image=>articleImagePath(image.id,image.name)===path)).filter(Boolean);
-      result={title:String(input.title||"季節のお店のお便り"),excerpt:"",body:[String(input.source||input.instruction).replace(/\[\[[^\]]+\]\]/g,""),...selected.map(image=>`![${image!.name}](shop-image:${image!.id})`)].join("\n\n"),conversationId:"c".repeat(64)};
+      result={title:String(input.title||tr("季節のお店のお便り")),excerpt:"",body:[String(input.source||input.instruction),...selected.map(image=>`![${image!.name}](shop-image:${image!.id})`)].join("\n\n"),conversationId:"c".repeat(64)};
     }
     else if (action === `/api/shops/${shop.id}/posts`) {
       if (data === undefined) result = posts;
@@ -554,16 +555,16 @@ export function createMockClient(scenario: Scenario): ApiClient {
       }
     } else if (action.match(/\/posts\/[^/]+\/(save|publish|unpublish)$/)) {
       const post = posts.find((p) => p.id === action.split("/").at(-2));
-      if (!post) throw new Error("記事がありません");
+      if (!post) throw new Error(tr("記事がありません"));
       if (post.version !== input.version)
-        throw new Error("記事が更新されています。一覧を更新してください");
+        throw new Error(tr("記事が更新されています。一覧を更新してください"));
       if (action.endsWith("/save")) {
         const content = postContentSchema.parse(input.content);
         validatePostAddress(post, content, posts);
         post.draft = content;
         if (input.publish) { post.published = structuredClone(content); post.publishedAt = new Date().toISOString(); post.address = postAddress(content); }
       } else if (action.endsWith("/publish")) {
-        if (input.approved !== true) throw new Error("内容を承認してください");
+        if (input.approved !== true) throw new Error(tr("内容を承認してください"));
         post.published = structuredClone(post.draft);
         post.publishedAt = new Date().toISOString();
         post.address = postAddress(post.draft);
@@ -582,31 +583,31 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const hasImages = !!(input.imageIds as string[] | undefined)?.length;
       const newPage = input.intent === "new-page";
       const creation=input.intent==="create-shop";
-      const changeRequest = input.intent !== "consult" && (newPage || /変更|したい|変え|追加|使って/.test(String(input.question)));
-      result = {answer: newPage && changeRequest ? "新しいページと、お客様向けのメニューに表示する名前を確認してください。" : hasImages && changeRequest ? "選んだ画像を使う変更ですね。変更案を確認してから承認・公開してください。" : changeRequest ? "水曜日も定休日にする変更ですね。変更プランを作り、内容を確認してから承認・公開してください。" : String(input.question).includes("履歴") ? "変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。" : "お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。", changeRequest};
+      const changeRequest = input.intent !== "consult" && (newPage || /変更|したい|変え|追加|使って|change|add|use|want/i.test(String(input.question)));
+      result = {answer: newPage && changeRequest ? tr("新しいページと、お客様向けのメニューに表示する名前を確認してください。") : hasImages && changeRequest ? tr("選んだ画像を使う変更ですね。変更案を確認してから承認・公開してください。") : changeRequest ? tr("水曜日も定休日にする変更ですね。変更プランを作り、内容を確認してから承認・公開してください。") : /履歴|history/i.test(String(input.question)) ? tr("変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。") : tr("お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。"), changeRequest};
       const currentMessages=chatReference?chats.find(chat=>chat.id===chatReference.id)?.messages || []:[];
       const related=findRelevantHistory(chats.flatMap(chat=>chat.messages),new Map(chats.map(chat=>[chat.id,chat.intent])),String(input.question),new Set(currentMessages.slice(-24).map(message=>message.id)));
       (window as unknown as {__omaiStoryLastHistory:unknown}).__omaiStoryLastHistory=related;
-      if(/前|以前/.test(String(input.question))&&related.length){const previous=related.flatMap(item=>item.messages).find(message=>message.role==="user");result={answer:`以前は「${previous?.text}」とお話しされていました。現在の設定と照らし合わせてお手伝いします。`,changeRequest:false};}
-      const ready=!newPage || /FAQ|よくある質問|メニュー|予約方法|持ち物/.test(String(input.question));
+      if(/前|以前|previous|earlier|before/i.test(String(input.question))&&related.length){const previous=related.flatMap(item=>item.messages).find(message=>message.role==="user");result={answer:tr("以前は「{0}」とお話しされていました。現在の設定と照らし合わせてお手伝いします。", previous?.text),changeRequest:false};}
+      const ready=!newPage || /FAQ|よくある質問|メニュー|予約方法|持ち物|menu|booking|bring/i.test(String(input.question));
       if(creation)result=initialSetupDemoReply(String(input.question),currentMessages);
-      if(newPage&&!ready)result={answer:"どんな内容を載せて、メニューには何と表示したいですか？",changeRequest:true,ready:false};
+      if(newPage&&!ready)result={answer:tr("どんな内容を載せて、メニューには何と表示したいですか？"),changeRequest:true,ready:false};
       else if(!creation) result={...(result as object),ready:changeRequest};
       if(chatReference){const reply=result as {answer:string;changeRequest:boolean;ready:boolean};const chat=addChatTurn(chatReference.id,chatReference.requestId,String(input.question),reply.answer,{changeRequest:reply.changeRequest,ready:reply.ready});result={...reply,chat};}
     } else if (action === `/api/shops/${shop.id}/visual/identify`) {
       visualConfig = structuredClone((input.displayed || config) as typeof config);
       const part = (input.local as { part?: "header" | "footer" } | undefined)?.part;
-      if (part) result = { id: "story-visual", explanation: "共通パーツの変更対象を確認してください。", candidates: [{ id: `part:${part}`, label: part === "header" ? "共通ヘッダー" : "共通フッター" }] };
-      else if (visualConfig.pages.length && String(input.instruction).includes("ページ")) {
+      if (part) result = { id: "story-visual", explanation: tr("共通パーツの変更対象を確認してください。"), candidates: [{ id: `part:${part}`, label: part === "header" ? tr("共通ヘッダー") : tr("共通フッター") }] };
+      else if (visualConfig.pages.length && /ページ|page/i.test(String(input.instruction))) {
         const pageId = (input.local as { pageId?: string } | undefined)?.pageId;
         const page = visualConfig.pages.find(p => p.id === pageId) || visualConfig.pages.at(-1)!;
-        result = { id: "story-visual", explanation: "ページの変更対象を確認してください。", candidates: [{ id: `page:${page.id}:title`, label: `ページ見出し：${page.title}` }, { id: `page:${page.id}:body`, label: `ページ本文：${page.title}` }] };
-      } else result = {id: "story-visual", explanation: "Storybook のサンプルでは、店名か紹介文を候補として表示します。", candidates: [{id: "name", label: `店名：${config.name}`}, {id: "description", label: `紹介文：${config.description}`}]};
+        result = { id: "story-visual", explanation: tr("ページの変更対象を確認してください。"), candidates: [{ id: `page:${page.id}:title`, label: tr("ページ見出し：{0}", page.title) }, { id: `page:${page.id}:body`, label: tr("ページ本文：{0}", page.title) }] };
+      } else result = {id: "story-visual", explanation: tr("Storybook のサンプルでは、店名か紹介文を候補として表示します。"), candidates: [{id: "name", label: tr("店名：{0}", config.name)}, {id: "description", label: tr("紹介文：{0}", config.description)}]};
     } else if (action === `/api/shops/${shop.id}/plan`) {
       const reference=input.chat as {id:string;requestId:string}|undefined;
       const previousReply=reference?chats.find(chat=>chat.id===reference.id)?.messages.find(message=>message.requestId===reference.requestId&&message.role==="assistant"):undefined;
       if(previousReply?.detail.planId){const previous=shop.plans.find(plan=>plan.id===previousReply.detail.planId);if(previous)return structuredClone(previous) as T;}
-      if(input.intent==="create-shop"&&reference){const messages=chats.find(chat=>chat.id===reference.id)?.messages || [];if(!previousReply?.detail.ready||!answeredFinalDetails(messages.filter(message=>message.sequence<=previousReply.sequence)))throw new Error("確認画面へ進む前に、ほかに伝えたいことがあるかお答えください");}
+      if(input.intent==="create-shop"&&reference){const messages=chats.find(chat=>chat.id===reference.id)?.messages || [];if(!previousReply?.detail.ready||!answeredFinalDetails(messages.filter(message=>message.sequence<=previousReply.sequence)))throw new Error(tr("確認画面へ進む前に、ほかに伝えたいことがあるかお答えください"));}
       let next = input.config
         ? structuredClone(input.config as typeof config)
         : structuredClone(config);
@@ -614,11 +615,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (local?.scope) next = scopedConfig(shop.published, next, local.scope);
       if (input.intent === "new-page") {
         const id = `faq-${shop.plans.length + 1}`;
-        next = { ...structuredClone(shop.published || config), pages: [...(shop.published || config).pages, { id, slug: id, title: "よくある質問", navigationLabel: "よくある質問", body: "## 初めてのお客様へ\n\n予約方法・持ち物・キャンセルについてご案内します。", layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] }] };
+        next = { ...structuredClone(shop.published || config), pages: [...(shop.published || config).pages, { id, slug: id, title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("## 初めてのお客様へ\n\n予約方法・持ち物・キャンセルについてご案内します。"), layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] }] };
       } else if (input.visual) {
         const target = (input.visual as {target: string}).target;
-        if (target === "name") next.name = "季節のアトリエ";
-        else next.description = "季節を楽しむ、小さなネイルサロン。";
+        if (target === "name") next.name = tr("季節のアトリエ");
+        else next.description = tr("季節を楽しむ、小さなネイルサロン。");
       } else if (!input.config && (input.imageIds as string[] | undefined)?.length) {
         const imageId = (input.imageIds as string[])[0];
         if (/FAQ|よくある質問/.test(String(input.text)) && next.pages.length) { next.pages[0].imageId = imageId; next.pages[0].imageUrl = ""; }
@@ -627,7 +628,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         next.hours.closedWeekdays = [3];
         next.menus.push({
           id: "special",
-          name: "ご褒美ケアコース",
+          name: tr("ご褒美ケアコース"),
           duration: 90,
           price: 8500,
           active: true,
@@ -648,12 +649,12 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action.startsWith(`/api/shops/${shop.id}/plans/`)) {
       const id = action.split("/").at(-2);
       const current = shop.plans.find((p) => p.id === id);
-      if (!current) throw new Error("プランが見つかりません");
+      if (!current) throw new Error(tr("プランが見つかりません"));
       if (action.endsWith("/approve")) {
         current.approved = true;
         shop.draft = current.config;
       } else if (action.endsWith("/publish")) {
-        if (!current.approved) throw new Error("先にプランを承認してください");
+        if (!current.approved) throw new Error(tr("先にプランを承認してください"));
         const publication = input.publication as "provisional" | "public" | undefined || shop.publication || (shop.published ? "public" : "provisional");
         shop.publication = publication;
         shop.published = current.config;
@@ -666,15 +667,15 @@ export function createMockClient(scenario: Scenario): ApiClient {
         shop.lastPublishedPlanId = current.id;
         if(chats.length)saveChats();
         delete shop.publishingPlanId;
-      } else throw new Error("未対応のモック操作");
+      } else throw new Error(tr("未対応のモック操作"));
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/publication-preview`) {
       const current = shop.published || config;
       const live = publicPosts(posts);
       result = { config: current, posts: live, revision: shop.revision, hash: await fingerprint({ config: current, posts: live }) };
     } else if (action === `/api/shops/${shop.id}/publication`) {
-      if (input.hash !== await fingerprint({ config: shop.published || config, posts: publicPosts(posts) })) throw new Error("プレビュー後に内容が変わりました");
-      if (input.revision !== shop.revision) throw new Error("お店の内容が変わりました");
+      if (input.hash !== await fingerprint({ config: shop.published || config, posts: publicPosts(posts) })) throw new Error(tr("プレビュー後に内容が変わりました"));
+      if (input.revision !== shop.revision) throw new Error(tr("お店の内容が変わりました"));
       shop.publication = "public";
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/documents`)
@@ -683,9 +684,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/staff-accounts` && data === undefined) result = { staff: staffLogins, configured: true, loginUrl: `/staff-login/${shop.id}` };
     else if (action === `/api/shops/${shop.id}/staff-accounts`) {
       const staff = staffLogins.find(staff => staff.staffId === input.staffId);
-      if (!staff) throw new Error("担当スタッフがありません");
-      if (staff.email !== input.previousEmail) throw new Error("登録内容が更新されています");
-      if (input.email && staffLogins.some(other => other !== staff && other.email === input.email)) throw new Error("このアカウントは別のスタッフに登録されています");
+      if (!staff) throw new Error(tr("担当スタッフがありません"));
+      if (staff.email !== input.previousEmail) throw new Error(tr("登録内容が更新されています"));
+      if (input.email && staffLogins.some(other => other !== staff && other.email === input.email)) throw new Error(tr("このアカウントは別のスタッフに登録されています"));
       staff.email = String(input.email); staff.accepted = false; staff.connected = false; result = { ok: true };
     }
     else if (action === `/api/shops/${shop.id}/calendar`) {
@@ -697,19 +698,19 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { ok: true };
     }
     else if (action === `/api/shops/${shop.id}/calendar/connect`) {
-      throw new Error("Storybook のサンプルです。実際の Google 認証は行いません。連携後の画面は「Calendar 連携中」で確認できます。");
+      throw new Error(tr("Storybook のサンプルです。実際の Google 認証は行いません。連携後の画面は「Calendar 連携中」で確認できます。"));
     }
     else if (action === `/api/shops/${shop.id}/invite`) {
       shop.members.push({ email: String(input.email), accepted: false });
       result = { ok: true };
     } else if (action.endsWith("/reply")) {
       const q = shop.inquiries.find((q) => q.id === action.split("/").at(-2));
-      if (!q) throw new Error("お問い合わせがありません");
+      if (!q) throw new Error(tr("お問い合わせがありません"));
       const previous = input.requestId ? inquiryRequests.get(String(input.requestId)) : undefined;
-      if (previous && (previous.text !== input.text || previous.previousReply !== input.previousReply)) throw new Error("返信内容が変わっています。入力し直してください");
+      if (previous && (previous.text !== input.text || previous.previousReply !== input.previousReply)) throw new Error(tr("返信内容が変わっています。入力し直してください"));
       if (!previous) {
-        if (input.previousReply !== undefined && input.previousReply !== q.reply) throw new Error("他の担当者が返信しています。最新の状態を確認してください");
-        if (!String(input.text).trim()) throw new Error("返信内容を入力してください");
+        if (input.previousReply !== undefined && input.previousReply !== q.reply) throw new Error(tr("他の担当者が返信しています。最新の状態を確認してください"));
+        if (!String(input.text).trim()) throw new Error(tr("返信内容を入力してください"));
         q.reply = String(input.text).trim();
         q.status = inquiryStatus(q);
         if (input.requestId) inquiryRequests.set(String(input.requestId), { text: String(input.text), previousReply: input.previousReply });
@@ -717,14 +718,14 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { ok: true };
     } else if (action.includes("/inquiries/") && action.endsWith("/status")) {
       const q = shop.inquiries.find(q => q.id === action.split("/").at(-2));
-      if (!q) throw new Error("お問い合わせがありません");
-      if (!["in_progress", "completed"].includes(String(input.status))) throw new Error("対応状況を選択してください");
-      if (input.previousStatus && input.previousStatus !== inquiryStatus(q) && input.status !== inquiryStatus(q)) throw new Error("対応状況が更新されています。最新の状態を確認してください");
+      if (!q) throw new Error(tr("お問い合わせがありません"));
+      if (!["in_progress", "completed"].includes(String(input.status))) throw new Error(tr("対応状況を選択してください"));
+      if (input.previousStatus && input.previousStatus !== inquiryStatus(q) && input.status !== inquiryStatus(q)) throw new Error(tr("対応状況が更新されています。最新の状態を確認してください"));
       q.status = String(input.status);
       result = { ok: true };
     } else if (action.endsWith("/status")) {
       const b = shop.bookings.find((b) => b.id === action.split("/").at(-2));
-      if (!b) throw new Error("予約がありません");
+      if (!b) throw new Error(tr("予約がありません"));
       b.status = input.status as Booking["status"];
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/retry`) {
@@ -760,7 +761,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         result = publicPosts(posts).find(
           (p) => p.category === parts.at(-2) && postKey(p) === parts.at(-1),
         );
-        if (!result) throw new Error("記事がありません");
+        if (!result) throw new Error(tr("記事がありません"));
       } else if (action.endsWith("/slots"))
         result = slots(
           current,
@@ -784,7 +785,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           input.staffId ? String(input.staffId) : undefined,
         ).find((s) => s.start === start);
         if (!slot)
-          throw new Error("この枠は予約できません。別の時間を選んでください。");
+          throw new Error(tr("この枠は予約できません。別の時間を選んでください。"));
         if (!preview)
           shop.bookings.push({
             id: createRequestId(),
@@ -805,7 +806,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
             b.id === action.split("/").at(-2) &&
             b.customer === "guest@example.com",
         );
-        if (!b) throw new Error("予約がありません");
+        if (!b) throw new Error(tr("予約がありません"));
         b.status = "cancelled";
         result = { ok: true };
       } else if (action.endsWith("/profile")) {
@@ -825,7 +826,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
             ? []
             : publicPosts(posts).slice(0, 5).map(summarizePost),
         };
-    } else throw new Error(`Storybook に未定義の操作です: ${action}`);
+    } else throw new Error(tr("Storybook に未定義の操作です: {0}", action));
     // Match JSON transport semantics: callers cannot mutate the fixture through returned objects.
     return structuredClone(result) as T;
   };

@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { Firestore } from "@google-cloud/firestore";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID, createHash } from "node:crypto";
@@ -52,7 +53,7 @@ export class Store {
         process.env.NODE_ENV !== "production");
     if (mode && mode !== ":memory:")
       throw new Error(
-        "ファイル保存は廃止しました。Firestore を設定してください",
+        tr("ファイル保存は廃止しました。Firestore を設定してください"),
       );
     if (!this.memory) {
       if (!process.env.GOOGLE_CLOUD_PROJECT)
@@ -96,7 +97,7 @@ export class Store {
     return doc.exists ? JSON.parse(doc.get("json")) : undefined;
   }
   async take<T>(kind: string, id: string): Promise<T | undefined> {
-    if (businessKinds.has(kind)) throw new Error("業務記録は消費できません");
+    if (businessKinds.has(kind)) throw new Error(tr("業務記録は消費できません"));
     if (this.memory) {
       const key = this.key(kind, id);
       const value = this.values.get(key)?.value;
@@ -116,12 +117,12 @@ export class Store {
       const shop = await this.shop((value as { shopId: string }).shopId);
       if (!shop?.google && !chatKinds.has(kind))
         throw Object.assign(
-          new Error("先にお店を公開して保存先を作成してください"),
+          new Error(tr("先にお店を公開して保存先を作成してください")),
           { status: 409 },
         );
       if (shop?.google) {
         const token = (await this.get<User>("user", shop.owner))?.refreshToken;
-        if (!token) throw new Error("店主の Google 再接続が必要です");
+        if (!token) throw new Error(tr("店主の Google 再接続が必要です"));
         // Keep Live transcripts durable while the owner sheet is being updated.
         if (chatKinds.has(kind)) await this.persist([{kind,id,value:structuredClone(value)}]);
         await writeRecord(shop, kind, id, value as Record<string, unknown>, token);
@@ -153,7 +154,7 @@ export class Store {
   }
   async delete(kind: string, id: string) {
     if (businessKinds.has(kind))
-      throw new Error("お店の記録は状態変更で保持してください");
+      throw new Error(tr("お店の記録は状態変更で保持してください"));
     if (this.memory) this.values.delete(this.key(kind, id));
     else await this.ref(kind, id).delete();
   }
@@ -166,7 +167,7 @@ export class Store {
     if (!shop.google) return staged.map(entry => entry.value as T);
     const token = (await this.get<User>("user", shop.owner))?.refreshToken;
     if (!token)
-      throw Object.assign(new Error("店主の Google 再接続が必要です"), {
+      throw Object.assign(new Error(tr("店主の Google 再接続が必要です")), {
         status: 503,
       });
     const rows = await readRecords(shop, kind, token);
@@ -181,7 +182,7 @@ export class Store {
     return rows as T[];
   }
   async entries<T>(kind: string): Promise<{ id: string; value: T }[]> {
-    if (businessKinds.has(kind)) throw new Error("業務記録には専用の読み取りを使ってください");
+    if (businessKinds.has(kind)) throw new Error(tr("業務記録には専用の読み取りを使ってください"));
     if (this.memory) return [...this.values.values()].filter(entry => entry.kind === kind).map(entry => ({ id: entry.id, value: structuredClone(entry.value) as T }));
     const result = await this.firestore!.collection("omaiweb_state").where("kind", "==", kind).get();
     return result.docs.map(doc => ({ id: doc.get("id") as string, value: JSON.parse(doc.get("json")) as T }));
@@ -291,7 +292,7 @@ export class Store {
         }
         if (!acquired)
           throw Object.assign(
-            new Error("別の操作を処理中です。少し待って再試行してください"),
+            new Error(tr("別の操作を処理中です。少し待って再試行してください")),
             { status: 503 },
           );
         // No lease timeout: a paused process must never overlap a new Sheets writer.

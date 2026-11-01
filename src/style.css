@@ -2244,6 +2244,11 @@ pre {
 .article-managed-image { display: block; margin: 16px 0; }
 .article-managed-image img, .post-content img { max-width: 100%; height: auto; border-radius: 10px; }
 @media(max-width:600px) { .article-methods { grid-template-columns: minmax(0,1fr); } .article-wysimark { overflow-x: auto; } .article-wysimark [contenteditable="true"] { min-width: 0; } }
+
+.language-switcher { display:flex; justify-content:flex-end; gap:.25rem; padding:.4rem max(1rem, calc((100vw - 1200px)/2)); background:var(--paper, #faf9f6); }
+.language-switcher button { padding:.3rem .65rem; font-size:.8rem; min-height:32px; }
+.language-switcher button[aria-current="true"] { font-weight:700; opacity:1; text-decoration:underline; }
+
 .blog-editor-layout, .blog-editor-layout > div, .article-rich-editor { min-width: 0; }
 .post-content { overflow-wrap: anywhere; }
 .article-composer-actions label { min-width: 0; max-width: 100%; }

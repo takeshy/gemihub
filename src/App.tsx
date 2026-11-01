@@ -1,3 +1,5 @@
+import { tr, intlLocale } from "../shared/i18n";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
 import { Inquiries } from "./Inquiries";
 import type { RequestIntent } from "../server/request-intent";
@@ -53,9 +55,9 @@ export type Workspace = Shop & {
   publicUrl: string;
 };
 export type Session = { user: User | null; demo: boolean; hosted?: string };
-const yen = (n: number) => `¥${n.toLocaleString("ja-JP")}`;
+const yen = (n: number) => `¥${n.toLocaleString(intlLocale())}`;
 const when = (s: string) =>
-  new Date(s).toLocaleString("ja-JP", {
+  new Date(s).toLocaleString(intlLocale(), {
     timeZone: "Asia/Tokyo",
     month: "numeric",
     day: "numeric",
@@ -65,7 +67,7 @@ const when = (s: string) =>
   });
 const localDate = () =>
   new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
-const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+const weekdays = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
 function Brand() {
   return (
     <a href="/" className="brand">
@@ -117,7 +119,7 @@ export function App({
       location.href = "/";
     });
   if (!session)
-    return <div className="loading">{error || "お店の準備をしています…"}</div>;
+    return <div className="loading">{error || tr("お店の準備をしています…")}</div>;
   const match = path.match(
     /^\/(s)\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
   );
@@ -127,34 +129,32 @@ export function App({
   const isPublic = !!match || !!session.hosted;
   return (
     <>
+      <LanguageSwitcher />
       {!isPublic && <header>
         <Brand />
         <div className="header-right">
           <span className="small muted">
-            {session.user?.name || "あなたのお店を、あなたの言葉で。"}
+            {session.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
           {!isPublic && (
             <a className="text-button" href="/manual">
-              使い方
-            </a>
+              {tr("使い方")}</a>
           )}
           {session.user && (
             <button className="text-button" onClick={logout}>
-              ログアウト
-            </button>
+              {tr("ログアウト")}</button>
           )}
         </div>
       </header>}
       <main>
         {session.demo && (
           <div className="demo-banner">
-            デモモード · Google には接続せず、サンプルで動作を確認できます。
-          </div>
+            {tr("デモモード · Google には接続せず、サンプルで動作を確認できます。")}</div>
         )}
         {error && (
           <div className="alert" role="alert">
             {error}
-            <button onClick={() => setError("")} aria-label="エラーを閉じる">
+            <button onClick={() => setError("")} aria-label={tr("エラーを閉じる")}>
               ×
             </button>
           </div>
@@ -215,12 +215,11 @@ export function App({
       </main>
       {!isPublic && <footer>
         <span>omaiweb — Oh my web.</span>
-        <span>データも、仕様も、あなたの手の中に。</span>
+        <span>{tr("データも、仕様も、あなたの手の中に。")}</span>
       </footer>}
       {busy && (
         <div className="busy" role="status">
-          処理しています…
-        </div>
+          {tr("処理しています…")}</div>
       )}
     </>
   );
@@ -230,19 +229,16 @@ function Landing({ demo, run }: { demo: boolean; run: Run }) {
   const api = useApi();
   return (
     <div className="landing">
-      <div className="eyebrow">小さなお店に、ぴったりの予約システム。</div>
+      <div className="eyebrow">{tr("小さなお店に、ぴったりの予約システム。")}</div>
       <h1>
-        お店のことを話す。
-        <br />
-        予約の仕組みが、<em>できあがる。</em>
+        {tr("お店のことを話す。")}<br />
+        {tr("予約の仕組みが、")}<em>{tr("できあがる。")}</em>
       </h1>
       <p className="lead">
-        メニューも、営業時間も、いつもの言葉で。
-        <br />
-        あなたのお店のルールに合う予約ページを、一緒に作ります。
-      </p>
+        {tr("メニューも、営業時間も、いつもの言葉で。")}<br />
+        {tr("あなたのお店のルールに合う予約ページを、一緒に作ります。")}</p>
       <a className="button primary" href="/auth/google">
-        G　Google でお店をはじめる <span>↗</span>
+        {tr("G　Google でお店をはじめる ")}<span>↗</span>
       </a>
       {demo && (
         <button
@@ -254,42 +250,37 @@ function Landing({ demo, run }: { demo: boolean; run: Run }) {
             })
           }
         >
-          サロンのデモを試す →
-        </button>
+          {tr("サロンのデモを試す →")}</button>
       )}
       <div className="hero-card">
-        <span className="pill">あなたの言葉が、はじまり。</span>
+        <span className="pill">{tr("あなたの言葉が、はじまり。")}</span>
         <div className="chat-message">
-          夫婦で営む、小さなネイルサロンです。
-          <br />
-          火曜日はお休み。指名なしでも予約できるようにしたい。
-        </div>
+          {tr("夫婦で営む、小さなネイルサロンです。")}<br />
+          {tr("火曜日はお休み。指名なしでも予約できるようにしたい。")}</div>
         <div className="chat-answer">
           <span>✳</span>
           <p>
-            お二人のどちらかが空いていれば予約できる、
-            <br />
-            お店専用の仕組みをご提案します。
-          </p>
+            {tr("お二人のどちらかが空いていれば予約できる、")}<br />
+            {tr("お店専用の仕組みをご提案します。")}</p>
         </div>
         <div className="flow">
-          <span>01 話す</span>
-          <span>02 確かめる</span>
-          <span>03 公開する</span>
+          <span>{tr("01 話す")}</span>
+          <span>{tr("02 確かめる")}</span>
+          <span>{tr("03 公開する")}</span>
         </div>
       </div>
       <div className="values">
         <div>
-          <b>あなたのお店に合わせる</b>
-          <p>メニュー、スタッフ、予約のルールまで。</p>
+          <b>{tr("あなたのお店に合わせる")}</b>
+          <p>{tr("メニュー、スタッフ、予約のルールまで。")}</p>
         </div>
         <div>
-          <b>公開したあとも、言葉で</b>
-          <p>変更内容を確認してから、お店に反映。</p>
+          <b>{tr("公開したあとも、言葉で")}</b>
+          <p>{tr("変更内容を確認してから、お店に反映。")}</p>
         </div>
         <div>
-          <b>データは、あなたのもの</b>
-          <p>Google スプレッドシートでいつでも確認。</p>
+          <b>{tr("データは、あなたのもの")}</b>
+          <p>{tr("Google スプレッドシートでいつでも確認。")}</p>
         </div>
       </div>
     </div>
@@ -357,7 +348,7 @@ function Dashboard({
     await request(`plans/${p.id}/publish`, { publication });
     setPlan(undefined);
     await load();
-    notify(publication === "provisional" ? "仮公開しました。あなたのログインでだけページを表示できます。" : "変更を反映しました。");
+    notify(publication === "provisional" ? tr("仮公開しました。あなたのログインでだけページを表示できます。") : tr("変更を反映しました。"));
   };
   return (
     <div className="dashboard">
@@ -365,7 +356,7 @@ function Dashboard({
         <div className="sidebar-label">MY SHOP</div>
         <div className="shop-switch">
           <span className="shop-avatar">✳</span>
-          <strong>{shop?.published?.name || "わたしのお店"}</strong>
+          <strong>{shop?.published?.name || tr("わたしのお店")}</strong>
         </div>
         {shops.length > 1 && (
           <select
@@ -384,17 +375,17 @@ function Dashboard({
         )}
         <nav>
           {[
-            ["build", "✧", "AIとお店をつくる"],
-            ...(shop?.isOwner ? [["try", "▣", "画面を試す・編集"], ["images", "▧", "画像管理"]] : []),
-            ["bookings", "▦", "予約を管理"],
-            ...(shop ? [["customers", "♧", "お客様"]] : []),
-            ...(shop?.isOwner ? [["basic", "⌂", "お店の基本情報"], ["menus", "≡", "メニュー・料金"], ["staff", "♧", "スタッフ・勤務"]] : []),
-            ["inquiries", "✉", "お問い合わせ"],
-            ["blog", "✎", "ブログ・お知らせ"],
-            ...(!shop?.isOwner ? [["staff", "♧", "自分のカレンダー"]] : []),
-            ...(shop?.isOwner ? [["data", "▤", "データ管理"]] : []),
-            ["settings", "⚙", "公開の設定"],
-            ["manual", "?", "使い方"],
+            ["build", "✧", tr("AIとお店をつくる")],
+            ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")], ["images", "▧", tr("画像管理")]] : []),
+            ["bookings", "▦", tr("予約を管理")],
+            ...(shop ? [["customers", "♧", tr("お客様")]] : []),
+            ...(shop?.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")]] : []),
+            ["inquiries", "✉", tr("お問い合わせ")],
+            ["blog", "✎", tr("ブログ・お知らせ")],
+            ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
+            ...(shop?.isOwner ? [["data", "▤", tr("データ管理")]] : []),
+            ["settings", "⚙", tr("公開の設定")],
+            ["manual", "?", tr("使い方")],
           ].map(([id, icon, label]) => (
             <React.Fragment key={id}><button
               className={tab === id ? "active" : ""}
@@ -407,45 +398,40 @@ function Dashboard({
         </nav>
         <div className="sidebar-bottom">
           <i className={shop?.published ? "online" : ""} />
-          {shop?.published ? "予約ページを公開中" : "公開前の準備中"}
+          {shop?.published ? tr("予約ページを公開中") : tr("公開前の準備中")}
           <p>
-            まずは、お店のことを
-            <br />
-            聞かせてください。
-          </p>
+            {tr("まずは、お店のことを")}<br />
+            {tr("聞かせてください。")}</p>
         </div>
       </aside>
       <section className="workspace">
         {!shop ? (
           <p>
-            運営できるお店はありません。スタッフの方は、店主から案内されたスタッフ用ログインURLからログインしてください。
-          </p>
+            {tr("運営できるお店はありません。スタッフの方は、店主から案内されたスタッフ用ログインURLからログインしてください。")}</p>
         ) : (
           <>
             {tab === "manual" ? (
               <Manual />
             ) : (
               <>
-                {shop.published && shop.publication === "provisional" && <section className="notice publication-status" aria-label="公開状態">
-                  <div className="publication-status-top"><div><h2>仮公開中</h2>
-                  <p>ページを用意したGoogleアカウントでログインした本人だけが見られます。</p></div>
-                  {shop.isOwner && <div className="publication-next-step"><b>お客様への公開はこちら</b>
-                    <a className="button primary" data-publication-preview-link href={`/publication-preview/${shop.id}`}>画面を確認して本番公開へ <span aria-hidden="true">→</span></a>
-                    <p>次の画面で表示を確かめてから、本番公開できます。</p>
+                {shop.published && shop.publication === "provisional" && <section className="notice publication-status" aria-label={tr("公開状態")}>
+                  <div className="publication-status-top"><div><h2>{tr("仮公開中")}</h2>
+                  <p>{tr("ページを用意したGoogleアカウントでログインした本人だけが見られます。")}</p></div>
+                  {shop.isOwner && <div className="publication-next-step"><b>{tr("お客様への公開はこちら")}</b>
+                    <a className="button primary" data-publication-preview-link href={`/publication-preview/${shop.id}`}>{tr("画面を確認して本番公開へ ")}<span aria-hidden="true">→</span></a>
+                    <p>{tr("次の画面で表示を確かめてから、本番公開できます。")}</p>
                   </div>}</div>
-                  <p>スタッフ・メニュー・料金・営業時間などは、それぞれの設定メニューで更新できます。</p>
-                  <p className="editing-guidance">デザインは各画面の編集画面で更新してください。<button className="text-button" onClick={() => setTab("try")}>画面を試す・編集を開く →</button><br />全体的な表示や機能の修正は<button className="text-button" onClick={() => setTab("build")}>AIとお店をつくる</button>で相談できます。</p>
+                  <p>{tr("スタッフ・メニュー・料金・営業時間などは、それぞれの設定メニューで更新できます。")}</p>
+                  <p className="editing-guidance">{tr("デザインは各画面の編集画面で更新してください。")}<button className="text-button" onClick={() => setTab("try")}>{tr("画面を試す・編集を開く →")}</button><br />{tr("全体的な表示や機能の修正は")}<button className="text-button" onClick={() => setTab("build")}>{tr("AIとお店をつくる")}</button>{tr("で相談できます。")}</p>
                 </section>}
                 {shop.publishingPlanId && (
                   <div className="alert">
-                    保存・反映が未完了です。予約受付を一時停止しています。操作した管理画面から再試行してください。
-                  </div>
+                    {tr("保存・反映が未完了です。予約受付を一時停止しています。操作した管理画面から再試行してください。")}</div>
                 )}
                 {shop.jobs.length > 0 && (
                   <div className="alert">
-                    Google 連携に未処理が {shop.jobs.length}{" "}
-                    件あります。予約は保存されています。
-                    <button
+                    {tr("Google 連携に未処理が ")}{shop.jobs.length}{" "}
+                    {tr("件あります。予約は保存されています。")}<button
                       onClick={() =>
                         run(async () => {
                           await request("retry");
@@ -453,8 +439,7 @@ function Dashboard({
                         })
                       }
                     >
-                      再送する
-                    </button>
+                      {tr("再送する")}</button>
                     {shop.jobs.some((j) => j.error) && (
                       <p className="small">
                         {shop.jobs.find((j) => j.error)?.error}
@@ -468,15 +453,15 @@ function Dashboard({
                       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds, intent, chat });
                       setPlan(p); await load(); return p;
                     }} />}
-                    {!shop.published && <div className="steps initial-steps">{["内容を確認", "仮公開", "本番公開"].map((label, i) => <div key={label} className={i === 0 ? "current" : ""} aria-current={i === 0 ? "step" : undefined}><span>0{i + 1}</span>{label}</div>)}</div>}
+                    {!shop.published && <div className="steps initial-steps">{[tr("内容を確認"), tr("仮公開"), tr("本番公開")].map((label, i) => <div key={label} className={i === 0 ? "current" : ""} aria-current={i === 0 ? "step" : undefined}><span>0{i + 1}</span>{label}</div>)}</div>}
                     <div ref={buildReview} className="build-plan-area">
                       <div>
-                        {!shop.published && <div className="panel interview">{!activePlan && <h2>AIとお店をつくる</h2>}<ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} context={{revision:shop.revision,hash:""}} plan={activePlan} onPlan={async (text, imageIds, intent, chat) => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, imageIds, intent, chat }); setPlan(p); await load(); return p; }} onAccept={acceptPlan} /></div>}
+                        {!shop.published && <div className="panel interview">{!activePlan && <h2>{tr("AIとお店をつくる")}</h2>}<ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} context={{revision:shop.revision,hash:""}} plan={activePlan} onPlan={async (text, imageIds, intent, chat) => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, imageIds, intent, chat }); setPlan(p); await load(); return p; }} onAccept={acceptPlan} /></div>}
                       </div>
                     </div>
                   </>
                 )}
-                {tab === "basic" && shop.isOwner && <section className="basic-settings" aria-label="お店の基本情報と予約の設定">{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
+                {tab === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {tab === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
                 {tab === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop}/></>}<StaffCalendar key={shop.id} shop={shop}/>{!shop.isOwner && <StaffPhoto shop={shop} reload={load}/>}</>}
                 {tab === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
@@ -515,51 +500,50 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
       <p>{c.description}</p>
       <div className="summary-grid">
         <div>
-          <span>営業時間</span>
+          <span>{tr("営業時間")}</span>
           <b>
             {c.hours.start} – {c.hours.end}
           </b>
         </div>
         <div>
-          <span>定休日</span>
+          <span>{tr("定休日")}</span>
           <b>
-            {c.hours.closedWeekdays.map((d) => weekdays[d]).join("・") ||
-              "なし"}
+            {c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・") ||
+              tr("なし")}
           </b>
         </div>
         <div>
-          <span>予約の受け方</span>
+          <span>{tr("予約の受け方")}</span>
           <b>
-            お客様が指名・指名なしを選ぶ
-          </b>
+            {tr("お客様が指名・指名なしを選ぶ")}</b>
         </div>
         <div>
-          <span>予約のお知らせを受け取るメール</span>
+          <span>{tr("予約のお知らせを受け取るメール")}</span>
           <b>{c.notificationEmail}</b>
         </div>
-        <div><span>住所・アクセス</span><b>{c.address || "未入力"}</b></div>
+        <div><span>{tr("住所・アクセス")}</span><b>{c.address || tr("未入力")}</b></div>
       </div>
       {c.menus
         .filter((m) => m.active)
         .map((m) => (
           <div className="menu-row" key={m.id}>
             <span>
-              {m.name} <small>{m.duration}分</small>
+              {m.name} <small>{m.duration}{tr("分")}</small>
             </span>
             <b>{yen(m.price)}</b>
           </div>
         ))}
       <details>
-        <summary>スタッフと予約の決まりを見る</summary>
-        <h4>スタッフが働く日と時間</h4>
-        <ul>{c.staff.map(staff => <li key={staff.id}><b>{staff.name}</b>：{staff.weekdays.map(day => weekdays[day]).join("・") || "勤務日なし"} {staff.start}〜{staff.end}（担当：{staff.menuIds.map(id => c.menus.find(menu => menu.id === id)?.name).filter(Boolean).join("、") || "なし"}）</li>)}</ul>
-        <h4>予約の決まり</h4>
+        <summary>{tr("スタッフと予約の決まりを見る")}</summary>
+        <h4>{tr("スタッフが働く日と時間")}</h4>
+        <ul>{c.staff.map(staff => <li key={staff.id}><b>{staff.name}</b>：{staff.weekdays.map(day => weekdays()[day]).join("・") || tr("勤務日なし")} {staff.start}〜{staff.end}{tr("（担当：")}{staff.menuIds.map(id => c.menus.find(menu => menu.id === id)?.name).filter(Boolean).join("、") || tr("なし")}）</li>)}</ul>
+        <h4>{tr("予約の決まり")}</h4>
         <ul>
-          <li>予約できるのは{c.rules.advanceDays}日先まで、開始の{c.rules.leadMinutes}分前までです。</li>
-          <li>当日の予約は{c.rules.sameDay ? "受け付けます" : "受け付けません"}。</li>
-          <li>予約の時刻は{c.rules.interval}分ごとに選べます。</li>
-          <li>キャンセルは開始の{c.rules.cancelHours}時間前までです。</li>
-          <li>臨時のお休み：{c.hours.holidays.join("、") || "なし"}</li>
+          <li>{tr("予約できるのは")}{c.rules.advanceDays}{tr("日先まで、開始の")}{c.rules.leadMinutes}{tr("分前までです。")}</li>
+          <li>{tr("当日の予約は")}{c.rules.sameDay ? tr("受け付けます") : tr("受け付けません")}。</li>
+          <li>{tr("予約の時刻は")}{c.rules.interval}{tr("分ごとに選べます。")}</li>
+          <li>{tr("キャンセルは開始の")}{c.rules.cancelHours}{tr("時間前までです。")}</li>
+          <li>{tr("臨時のお休み：")}{c.hours.holidays.join("、") || tr("なし")}</li>
         </ul>
       </details>
     </div>
@@ -598,35 +582,35 @@ export function ConfigEditor({
     <div className="editor">
       {(!section || section === "profile" || section === "basic") && <>
       <div className="form-grid">
-        <Field label="店名">
+        <Field label={tr("店名")}>
           <input value={c.name} onChange={(e) => put("name", e.target.value)} />
         </Field>
-        <Field label="業種">
+        <Field label={tr("業種")}>
           <select
             value={c.industry}
             onChange={(e) =>
               put("industry", e.target.value as ShopConfig["industry"])
             }
           >
-            <option value="nail">ネイルサロン</option>
-            <option value="hair">美容室</option>
-            <option value="other">その他</option>
+            <option value="nail">{tr("ネイルサロン")}</option>
+            <option value="hair">{tr("美容室")}</option>
+            <option value="other">{tr("その他")}</option>
           </select>
         </Field>
       </div>
-      <Field label="お店の紹介">
+      <Field label={tr("お店の紹介")}>
         <textarea
           value={c.description}
           onChange={(e) => put("description", e.target.value)}
         />
       </Field>
-      <Field label="住所・アクセス">
+      <Field label={tr("住所・アクセス")}>
         <input
           value={c.address}
           onChange={(e) => put("address", e.target.value)}
         />
       </Field>
-      <Field label="通知メールの宛先">
+      <Field label={tr("通知メールの宛先")}>
         <input
           type="email"
           value={c.notificationEmail}
@@ -635,11 +619,11 @@ export function ConfigEditor({
       </Field>
       </>}
       {(!section || section === "menus") && <>
-      <h3>メニュー</h3>
+      <h3>{tr("メニュー")}</h3>
       {c.menus.map((m, i) => (
         <div className="menu-edit-block" key={m.id}><div className="edit-row">
           <input
-            aria-label="メニュー名"
+            aria-label={tr("メニュー名")}
             value={m.name}
             onChange={(e) =>
               put(
@@ -650,7 +634,7 @@ export function ConfigEditor({
               )
             }
           />
-          <Field label="所要時間（分）">
+          <Field label={tr("所要時間（分）")}>
             <input
               type="number"
               min="15"
@@ -665,7 +649,7 @@ export function ConfigEditor({
               }
             />
           </Field>
-          <Field label="料金（円）">
+          <Field label={tr("料金（円）")}>
             <input
               type="number"
               min="0"
@@ -693,8 +677,7 @@ export function ConfigEditor({
                 )
               }
             />
-            有効
-          </label>
+            {tr("有効")}</label>
         </div>{shopId && <MenuImageEditor shopId={shopId} imageId={m.imageId} name={m.name} uploading={onImageUploading} change={imageId => put("menus", c.menus.map((menu, index) => index === i ? { ...menu, imageId } : menu))} />}</div>
       ))}
       <button
@@ -703,7 +686,7 @@ export function ConfigEditor({
             ...c.menus,
             {
               id: `menu-${Date.now()}`,
-              name: "新しいコース",
+              name: tr("新しいコース"),
               duration: 60,
               price: 5000,
               active: section === "menus" ? false : true,
@@ -711,23 +694,22 @@ export function ConfigEditor({
           ])
         }
       >
-        ＋ メニューを追加
-      </button>
+        {tr("＋ メニューを追加")}</button>
       </>}
       {(!section || section === "profile") && <>
-      <h3>ページの見た目</h3>
+      <h3>{tr("ページの見た目")}</h3>
       <div className="form-grid">
-        <Field label="色"><select value={c.appearance?.accent || "sage"} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), accent: e.target.value as "sage" | "rose" | "navy"})}><option value="sage">グリーン</option><option value="rose">ローズ</option><option value="navy">ネイビー</option></select></Field>
-        <Field label="配置"><select value={c.appearance?.layout || "standard"} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), layout: e.target.value as "standard" | "compact"})}><option value="standard">ゆったり</option><option value="compact">コンパクト</option></select></Field>
-        <Field label="紹介画像の URL（HTTPS）"><input type="url" value={c.appearance?.imageUrl || ""} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), imageUrl: e.target.value})}/></Field>
+        <Field label={tr("色")}><select value={c.appearance?.accent || "sage"} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), accent: e.target.value as "sage" | "rose" | "navy"})}><option value="sage">{tr("グリーン")}</option><option value="rose">{tr("ローズ")}</option><option value="navy">{tr("ネイビー")}</option></select></Field>
+        <Field label={tr("配置")}><select value={c.appearance?.layout || "standard"} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), layout: e.target.value as "standard" | "compact"})}><option value="standard">{tr("ゆったり")}</option><option value="compact">{tr("コンパクト")}</option></select></Field>
+        <Field label={tr("紹介画像の URL（HTTPS）")}><input type="url" value={c.appearance?.imageUrl || ""} onChange={e => put("appearance", {...(c.appearance || {accent: "sage", layout: "standard", imageUrl: ""}), imageUrl: e.target.value})}/></Field>
       </div>
       </>}
       {(!section || section === "staff") && <>
-      <h3>スタッフと勤務</h3>
+      <h3>{tr("スタッフと勤務")}</h3>
       {c.staff.map((p, i) => (
         <div className="staff-editor" key={p.id}>
-          {shopId && <MenuImageEditor shopId={shopId} imageId={p.imageId} name={p.name} label="スタッフ写真（任意）" uploading={onImageUploading} change={imageId => put("staff", c.staff.map((staff,j) => j===i ? {...staff,imageId} : staff))}/>}
-          <Field label="名前">
+          {shopId && <MenuImageEditor shopId={shopId} imageId={p.imageId} name={p.name} label={tr("スタッフ写真（任意）")} uploading={onImageUploading} change={imageId => put("staff", c.staff.map((staff,j) => j===i ? {...staff,imageId} : staff))}/>}
+          <Field label={tr("名前")}>
             <input
               value={p.name}
               onChange={(e) =>
@@ -741,7 +723,7 @@ export function ConfigEditor({
             />
           </Field>
           <div className="form-grid">
-            <Field label="勤務開始">
+            <Field label={tr("勤務開始")}>
               <input
                 type="time"
                 value={p.start}
@@ -755,7 +737,7 @@ export function ConfigEditor({
                 }
               />
             </Field>
-            <Field label="勤務終了">
+            <Field label={tr("勤務終了")}>
               <input
                 type="time"
                 value={p.end}
@@ -770,9 +752,9 @@ export function ConfigEditor({
               />
             </Field>
           </div>
-          <span className="small">勤務曜日</span>
+          <span className="small">{tr("勤務曜日")}</span>
           <div className="checkboxes">
-            {weekdays.map((d, n) => (
+            {weekdays().map((d, n) => (
               <label key={d}>
                 <input
                   type="checkbox"
@@ -797,7 +779,7 @@ export function ConfigEditor({
               </label>
             ))}
           </div>
-          <span className="small">対応メニュー</span>
+          <span className="small">{tr("対応メニュー")}</span>
           <div className="checkboxes">
             {c.menus.map((m) => (
               <label key={m.id}>
@@ -833,8 +815,7 @@ export function ConfigEditor({
               )
             }
           >
-            このスタッフを削除
-          </button>
+            {tr("このスタッフを削除")}</button>
         </div>
       ))}
       <button
@@ -843,7 +824,7 @@ export function ConfigEditor({
             ...c.staff,
             {
               id: `staff-${Date.now()}`,
-              name: "新しいスタッフ",
+              name: tr("新しいスタッフ"),
               start: c.hours.start,
               end: c.hours.end,
               weekdays: [1, 2, 3, 4, 5, 6],
@@ -852,14 +833,13 @@ export function ConfigEditor({
           ])
         }
       >
-        ＋ スタッフを追加
-      </button>
+        {tr("＋ スタッフを追加")}</button>
       </>}
       {(!section || section === "hours") && <>
-      <h3>営業時間とお休み</h3>
+      <h3>{tr("営業時間とお休み")}</h3>
       <div className="form-grid">
         {(["start", "end"] as const).map((k) => (
-          <Field key={k} label={k === "start" ? "開店" : "閉店"}>
+          <Field key={k} label={k === "start" ? tr("開店") : tr("閉店")}>
             <input
               type="time"
               value={c.hours[k]}
@@ -870,9 +850,9 @@ export function ConfigEditor({
           </Field>
         ))}
       </div>
-      <span className="small">定休日</span>
+      <span className="small">{tr("定休日")}</span>
       <div className="checkboxes">
-        {weekdays.map((d, i) => (
+        {weekdays().map((d, i) => (
           <label key={d}>
             <input
               type="checkbox"
@@ -890,7 +870,7 @@ export function ConfigEditor({
           </label>
         ))}
       </div>
-      <Field label="臨時休業日（カンマ区切り・例：2026/12/31,2027/01/01）">
+      <Field label={tr("臨時休業日（カンマ区切り・例：2026/12/31,2027/01/01）")}>
         <input
           value={c.hours.holidays.map(value => value.replace(/-/g, "/")).join(",")}
           onChange={(e) =>
@@ -905,15 +885,15 @@ export function ConfigEditor({
       </Field>
       </>}
       {(!section || section === "rules") && <>
-      <h3>予約のルール</h3>
-      <p className="muted">お客様が予約時に、指名なしまたは希望するスタッフを選べます。</p>
+      <h3>{tr("予約のルール")}</h3>
+      <p className="muted">{tr("お客様が予約時に、指名なしまたは希望するスタッフを選べます。")}</p>
       <div className="form-grid">
         {(
           [
-            ["interval", "予約枠の間隔（分）"],
-            ["advanceDays", "何日先まで予約できるか"],
-            ["leadMinutes", "開始何分前まで予約できるか"],
-            ["cancelHours", "開始何時間前までキャンセルできるか"],
+            ["interval", tr("予約枠の間隔（分）")],
+            ["advanceDays", tr("何日先まで予約できるか")],
+            ["leadMinutes", tr("開始何分前まで予約できるか")],
+            ["cancelHours", tr("開始何時間前までキャンセルできるか")],
           ] as const
         ).map(([k, label]) => (
           <Field key={k} label={label}>
@@ -936,10 +916,9 @@ export function ConfigEditor({
             put("rules", { ...c.rules, sameDay: e.target.checked })
           }
         />{" "}
-        当日の予約を受け付ける
-      </label>
+        {tr("当日の予約を受け付ける")}</label>
       <p className="small muted">
-        {section ? "この項目は保存すると反映されます。" : "設定はプラン確認・承認・公開のあとに反映されます。"}
+        {section ? tr("この項目は保存すると反映されます。") : tr("設定はプラン確認・承認・公開のあとに反映されます。")}
       </p>
       </>}
     </div>
@@ -969,7 +948,7 @@ function Reservations({
     <div className="panel">
       <div className="section-top">
         <h2>
-          予約一覧{" "}
+          {tr("予約一覧")}{" "}
           <span className="count">
             {shop.bookings.filter((b) => b.status === "active").length}
           </span>
@@ -981,18 +960,17 @@ function Reservations({
             })
           }
         >
-          更新
-        </button>
+          {tr("更新")}</button>
       </div>
       <div className="filters">
-        <Field label="日付（日本時間）">
-          <DateInput aria-label="日付（日本時間）"
+        <Field label={tr("日付（日本時間）")}>
+          <DateInput aria-label={tr("日付（日本時間）")}
             value={date}
             onValueChange={value => setDate(value)} />
         </Field>
-        <Field label="スタッフ">
+        <Field label={tr("スタッフ")}>
           <select value={staff} onChange={(e) => setStaff(e.target.value)}>
-            <option value="">すべて</option>
+            <option value="">{tr("すべて")}</option>
             {shop.published?.staff.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -1006,11 +984,10 @@ function Reservations({
             setStaff("");
           }}
         >
-          絞り込みを解除
-        </button>
+          {tr("絞り込みを解除")}</button>
       </div>
       {!shop.bookings.length && (
-        <Empty text="最初の予約を、楽しみに待ちましょう。" />
+        <Empty text={tr("最初の予約を、楽しみに待ちましょう。")} />
       )}
       <div className="booking-list">
         {shop.bookings
@@ -1027,13 +1004,13 @@ function Reservations({
               <div>
                 <span className={`status ${b.status}`}>
                   {b.status === "active"
-                    ? "予約確定"
+                    ? tr("予約確定")
                     : b.status === "no_show"
-                      ? "無断キャンセル"
-                      : "キャンセル済み"}
+                      ? tr("無断キャンセル")
+                      : tr("キャンセル済み")}
                 </span>
                 <h3>
-                  {b.name} 様 <small>{when(b.start)}</small>
+                  {b.name} {tr(" 様 ")}<small>{when(b.start)}</small>
                 </h3>
                 <p>
                   {shop.published?.menus.find((m) => m.id === b.menuId)?.name ||
@@ -1043,7 +1020,7 @@ function Reservations({
                     ?.name || b.staffId}
                 </p>
                 <span className="small muted">{b.customer}</span>
-                {b.message && <p className="pre-wrap"><b>予約時のメッセージ</b><br />{b.message}</p>}
+                {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
               </div>
               {b.status === "active" && (
                 <div className="actions">
@@ -1061,8 +1038,8 @@ function Reservations({
                       }
                     >
                       {status === "cancelled"
-                        ? "予約をキャンセル"
-                        : "無断キャンセルを記録"}
+                        ? tr("予約をキャンセル")
+                        : tr("無断キャンセルを記録")}
                     </button>
                   ))}
                 </div>
@@ -1086,23 +1063,20 @@ function Settings({
   const [domain, setDomain] = useState(shop.domain || "");
   return (
     <div className="panel">
-      <h2>予約ページのアドレス</h2>
+      <h2>{tr("予約ページのアドレス")}</h2>
       {shop.published ? (
         <>
-          <p className="muted">お客様に公開している本番のお店を別タブで開きます。</p>
+          <p className="muted">{tr("お客様に公開している本番のお店を別タブで開きます。")}</p>
           <a className="button" href={shop.publicUrl} target="_blank" rel="noreferrer">
-            公開中のお店を開く ↗
-          </a>
+            {tr("公開中のお店を開く ↗")}</a>
           <p className="small muted">{shop.publicUrl}</p>
         </>
       ) : (
-        <p>お店のページを公開すると、アドレスができあがります。</p>
+        <p>{tr("お店のページを公開すると、アドレスができあがります。")}</p>
       )}
-      <h3>お店独自のドメイン</h3>
+      <h3>{tr("お店独自のドメイン")}</h3>
       <p className="muted">
-        お持ちのドメインを使う場合に設定してください。DNS と HTTPS
-        の接続設定が必要です。
-      </p>
+        {tr("お持ちのドメインを使う場合に設定してください。DNS と HTTPS の接続設定が必要です。")}</p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -1112,7 +1086,7 @@ function Settings({
           });
         }}
       >
-        <Field label="ドメイン名">
+        <Field label={tr("ドメイン名")}>
           <input
             value={domain}
             placeholder="reserve.example.com"
@@ -1120,19 +1094,17 @@ function Settings({
             disabled={!shop.isOwner}
           />
         </Field>
-        <button disabled={!shop.isOwner}>ドメインを設定</button>
+        <button disabled={!shop.isOwner}>{tr("ドメインを設定")}</button>
       </form>
       {shop.domainToken && (
         <div className="config-summary">
-          <p>DNS 管理画面で次のレコードを追加してください。</p>
+          <p>{tr("DNS 管理画面で次のレコードを追加してください。")}</p>
           <code>TXT _omaiweb.{shop.domain}</code>
           <pre>{shop.domainToken}</pre>
           <p className="small">
-            加えて、このサービスの公開先への DNS 接続と HTTPS
-            証明書をサーバーの運用担当者に設定してもらってください。
-          </p>
+            {tr("加えて、このサービスの公開先への DNS 接続と HTTPS 証明書をサーバーの運用担当者に設定してもらってください。")}</p>
           <p className="pill">
-            {shop.domainVerified ? "所有権を確認済み" : "所有権の確認待ち"}
+            {shop.domainVerified ? tr("所有権を確認済み") : tr("所有権の確認待ち")}
           </p>
           <button
             disabled={!shop.isOwner}
@@ -1143,8 +1115,7 @@ function Settings({
               })
             }
           >
-            DNS の所有権を確認する
-          </button>
+            {tr("DNS の所有権を確認する")}</button>
         </div>
       )}
     </div>
@@ -1263,17 +1234,17 @@ export function PublicShop({
     run(loadMine);
   }, [isCustomer]);
   if (!data)
-    return <div className="loading">お店のページを準備しています…</div>;
+    return <div className="loading">{tr("お店のページを準備しています…")}</div>;
   const c = data.config;
   return (
     <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}`}>
-      {data.publication === "provisional" && <div className="preview-banner">仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。</div>}
+      {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
       {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
       <nav className="public-nav">
-        {(session.user ? [["mine", "マイページ"],
-          ["reserve", "ご予約"],
-          ["about", "お店のこと"],
-          ["contact", "お問い合わせ"]] : [["about", "お店のこと"], ["reserve", "ご予約"], ["contact", "お問い合わせ"]]).map(([id, label]) => (
+        {(session.user ? [["mine", tr("マイページ")],
+          ["reserve", tr("ご予約")],
+          ["about", tr("お店のこと")],
+          ["contact", tr("お問い合わせ")]] : [["about", tr("お店のこと")], ["reserve", tr("ご予約")], ["contact", tr("お問い合わせ")]]).map(([id, label]) => (
           <button
             className={!category && !pageSlug && pane === id ? "active" : ""}
             onClick={() =>
@@ -1291,18 +1262,18 @@ export function PublicShop({
               className={category === cat ? "active" : ""}
               onClick={() => navigate(`${basePath}/${cat}`)}
             >
-              {cat === "blogs" ? "ブログ" : "お知らせ"}
+              {cat === "blogs" ? tr("ブログ") : tr("お知らせ")}
             </button>
           ))}
         {c.pages.map(page => <button key={page.id} className={pageSlug === page.slug ? "active" : ""} onClick={() => navigate(`${basePath}/pages/${page.slug}`)}>{page.navigationLabel}</button>)}
       </nav>
       </SiteHeader>}
-      {!hideHeader&&!isCustomer&&<section className="public-auth" aria-label="会員登録・ログイン">
-        <div className="public-auth-intro"><strong>ご予約をご利用の方へ</strong><p>Googleアカウントでご利用いただけます。</p></div>
-        <div className="public-auth-actions"><div><span>初めての方</span><a className="button primary" href={data.authUrl}>会員登録</a></div><div><span>登録済みの方</span><a className="button" href={data.authUrl}>ログイン</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>お客様デモでログイン</button>}</div>
+      {!hideHeader&&!isCustomer&&<section className="public-auth" aria-label={tr("会員登録・ログイン")}>
+        <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{tr("Googleアカウントでご利用いただけます。")}</p></div>
+        <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><a className="button primary" href={data.authUrl}>{tr("会員登録")}</a></div><div><span>{tr("登録済みの方")}</span><a className="button" href={data.authUrl}>{tr("ログイン")}</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
       </section>}
       {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={session.user!.email} name={session.user!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
-        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">ページがありません。</p>
+        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">{tr("ページがありません。")}</p>
       ) : category ? (
         <PublicBlog
           baseApi={base}
@@ -1320,13 +1291,13 @@ export function PublicShop({
               navigate={navigate}
             />
           )}
-          {pane === "mine" && isCustomer && <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} さん</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>会員情報を変更</button></div>}
+          {pane === "mine" && isCustomer && <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div>}
           {pane === "reserve" && (
             <div className="reservation-layout">
               <div className="panel">
                 <span className="eyebrow">RESERVATION</span>
-                <h2>自分のための、ひとときを。</h2>
-                <h3>01 メニューを選ぶ</h3>
+                <h2>{tr("自分のための、ひとときを。")}</h2>
+                <h3>{tr("01 メニューを選ぶ")}</h3>
                 <div className="menu-options">
                   {c.menus
                     .filter((m) => m.active)
@@ -1342,7 +1313,7 @@ export function PublicShop({
                         <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} name={m.name} />
                         <span>
                           <b>{m.name}</b>
-                          <small>{m.duration}分</small>
+                          <small>{m.duration}{tr("分")}</small>
                         </span>
                         <strong>
                           {yen(m.price)}{" "}
@@ -1351,13 +1322,13 @@ export function PublicShop({
                       </button>
                     ))}
                 </div>
-                <h3>02 スタッフと日時</h3>
-                <Field label="スタッフ">
+                <h3>{tr("02 スタッフと日時")}</h3>
+                <Field label={tr("スタッフ")}>
                   <select
                     value={staff}
                     onChange={(e) => setStaff(e.target.value)}
                   >
-                    <option value="">指名なし（空いているスタッフ）</option>
+                    <option value="">{tr("指名なし（空いているスタッフ）")}</option>
                     {c.staff
                       .filter((p) => p.menuIds.includes(menu))
                       .map((p) => (
@@ -1367,9 +1338,9 @@ export function PublicShop({
                       ))}
                   </select>
                 </Field>
-                {staff && <MenuImage imageId={c.staff.find(person=>person.id===staff)?.imageId} imageBase={`${base}/images`} name={c.staff.find(person=>person.id===staff)?.name || "スタッフ"} className="staff-photo"/>}
-                <Field label="ご希望の日付（日本時間）">
-                  <DateInput aria-label="ご希望の日付（日本時間）"
+                {staff && <MenuImage imageId={c.staff.find(person=>person.id===staff)?.imageId} imageBase={`${base}/images`} name={c.staff.find(person=>person.id===staff)?.name || tr("スタッフ")} className="staff-photo"/>}
+                <Field label={tr("ご希望の日付（日本時間）")}>
+                  <DateInput aria-label={tr("ご希望の日付（日本時間）")}
                     min={localDate()}
                     value={date}
                     onValueChange={value => setDate(value)} />
@@ -1385,7 +1356,7 @@ export function PublicShop({
                         setRequestId(createRequestId());
                       }}
                     >
-                      {new Date(t.start).toLocaleTimeString("ja-JP", {
+                      {new Date(t.start).toLocaleTimeString(intlLocale(), {
                         timeZone: "Asia/Tokyo",
                         hour: "2-digit",
                         minute: "2-digit",
@@ -1395,24 +1366,22 @@ export function PublicShop({
                 </div>
                 {!times.length && (
                   <p className="empty-slots">
-                    この日にご案内できる時間はありません。別の日付をお選びください。
-                  </p>
+                    {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}</p>
                 )}
-                <h3>03 予約内容を確認</h3>
-                <Field label="お名前">
+                <h3>{tr("03 予約内容を確認")}</h3>
+                <Field label={tr("お名前")}>
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="お名前"
+                    placeholder={tr("お名前")}
                   />
                 </Field>
-                <Field label="お店へのメッセージ（任意）">
-                  <textarea maxLength={2000} rows={3} value={bookingMessage} onChange={event => { setBookingMessage(event.target.value); setRequestId(createRequestId()); }} placeholder="ご希望や事前に伝えたいことがあればご記入ください" />
+                <Field label={tr("お店へのメッセージ（任意）")}>
+                  <textarea maxLength={2000} rows={3} value={bookingMessage} onChange={event => { setBookingMessage(event.target.value); setRequestId(createRequestId()); }} placeholder={tr("ご希望や事前に伝えたいことがあればご記入ください")} />
                 </Field>
                 <p className="small muted">
-                  キャンセルは開始 {c.rules.cancelHours}{" "}
-                  時間前までマイページで承ります。それ以降はお問い合わせください。
-                </p>
+                  {tr("キャンセルは開始 ")}{c.rules.cancelHours}{" "}
+                  {tr("時間前までマイページで承ります。それ以降はお問い合わせください。")}</p>
                 <button
                   className="primary wide"
                   disabled={
@@ -1434,30 +1403,30 @@ export function PublicShop({
                       });
                       setComplete(true);
                       notify(
-                        "ご予約を承りました。マイページからご確認いただけます。",
+                        tr("ご予約を承りました。マイページからご確認いただけます。"),
                       );
                       await loadMine();
                     })
                   }
                 >
                   {complete
-                    ? "✓ 予約を受け付けました"
-                    : "この内容で予約する"}{" "}
+                    ? tr("✓ 予約を受け付けました")
+                    : tr("この内容で予約する")}{" "}
                   →
                 </button>
               </div>
               <div className="panel booking-summary">
                 <span className="line-flower">✳</span>
-                <h3>ご予約内容</h3>
+                <h3>{tr("ご予約内容")}</h3>
                 <p>{c.menus.find((m) => m.id === menu)?.name}</p>
                 <p className="price">
                   {yen(c.menus.find((m) => m.id === menu)?.price || 0)}
                 </p>
                 <hr />
-                <p>{selected ? when(selected) : "日時をお選びください"}</p>
+                <p>{selected ? when(selected) : tr("日時をお選びください")}</p>
                 <p className="small muted">
                   {!staff
-                    ? "スタッフの指名なし"
+                    ? tr("スタッフの指名なし")
                     : c.staff.find((p) => p.id === staff)?.name}
                 </p>
                 <p className="small muted">{c.address}</p>
@@ -1468,52 +1437,51 @@ export function PublicShop({
             <div className="panel about">
               <h2>{c.name}</h2>
               <p>{c.description}</p>
-              <h3>メニュー</h3>
+              <h3>{tr("メニュー")}</h3>
               {c.menus
                 .filter((m) => m.active)
                 .map((m) => (
                   <div className="menu-row" key={m.id}>
                     <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} name={m.name} />
-                    {m.name} · {m.duration}分 <b>{yen(m.price)}</b>
+                    {m.name} · {m.duration}{tr("分 ")}<b>{yen(m.price)}</b>
                   </div>
                 ))}
-              <h3>スタッフ</h3>
+              <h3>{tr("スタッフ")}</h3>
               <div className="public-staff-list">{c.staff.map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>
-              <h3>アクセス</h3>
+              <h3>{tr("アクセス")}</h3>
               <p>{c.address}</p>
-              <h3>営業時間</h3>
+              <h3>{tr("営業時間")}</h3>
               <p>
-                {c.hours.start} – {c.hours.end} / 定休日：
-                {c.hours.closedWeekdays.map((d) => weekdays[d]).join("・")}
+                {c.hours.start} – {c.hours.end} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・")}
               </p>
               {c.hours.holidays.length > 0 && (
-                <p>臨時休業：{c.hours.holidays.join("、")}</p>
+                <p>{tr("臨時休業：")}{c.hours.holidays.join("、")}</p>
               )}
             </div>
           )}
           {pane === "mine" && (
             <div className="panel">
-              <h2>あなたのご予約</h2>
+              <h2>{tr("あなたのご予約")}</h2>
               {!mine.length ? (
-                <Empty text="ご予約はまだありません。" />
+                <Empty text={tr("ご予約はまだありません。")} />
               ) : (
                 mine.map((b) => (
                   <div className="booking-card" key={b.id}>
                     <div>
                       <span className={`status ${b.status}`}>
                         {b.status === "active"
-                          ? "予約確定"
+                          ? tr("予約確定")
                           : b.status === "no_show"
-                            ? "無断キャンセル"
-                            : "キャンセル済み"}
+                            ? tr("無断キャンセル")
+                            : tr("キャンセル済み")}
                       </span>
                       <h3>{when(b.start)}</h3>
                       <p>
                         {c.menus.find((m) => m.id === b.menuId)?.name ||
                           b.menuId}
                       </p>
-                      {b.message && <p className="pre-wrap"><b>予約時のメッセージ</b><br />{b.message}</p>}
-                      <p className="small muted">予約番号：{b.id}</p>
+                      {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
+                      <p className="small muted">{tr("予約番号：")}{b.id}</p>
                     </div>
                     {b.status === "active" && (
                       <button
@@ -1521,12 +1489,11 @@ export function PublicShop({
                           run(async () => {
                             await api(`${base}/bookings/${b.id}/cancel`, {});
                             await loadMine();
-                            notify("予約をキャンセルしました。");
+                            notify(tr("予約をキャンセルしました。"));
                           })
                         }
                       >
-                        キャンセルする
-                      </button>
+                        {tr("キャンセルする")}</button>
                     )}
                   </div>
                 ))
@@ -1542,13 +1509,13 @@ export function PublicShop({
                   await api(`${base}/inquiries`, { name, message });
                   setMessage("");
                   notify(
-                    "お問い合わせを受け付けました。返信はメールでお送りします。",
+                    tr("お問い合わせを受け付けました。返信はメールでお送りします。"),
                   );
                 });
               }}
             >
-              <h2>お問い合わせ</h2>
-              <Field label="お名前">
+              <h2>{tr("お問い合わせ")}</h2>
+              <Field label={tr("お名前")}>
                 <input
                   required
                   autoComplete="name"
@@ -1556,11 +1523,11 @@ export function PublicShop({
                   onChange={(e) => setName(e.target.value)}
                 />
               </Field>
-              <Field label="メールアドレス">
-                <input aria-label="メールアドレス" type="email" autoComplete="email" required readOnly value={session.user?.email || ""} />
-                <small className="muted">{session.user ? "ログイン中のGoogleアカウントのメールアドレスです。返信はこちらに届きます。" : "ログインすると、お名前とメールアドレスが自動入力されます。"}</small>
+              <Field label={tr("メールアドレス")}>
+                <input aria-label={tr("メールアドレス")} type="email" autoComplete="email" required readOnly value={session.user?.email || ""} />
+                <small className="muted">{session.user ? tr("ログイン中のGoogleアカウントのメールアドレスです。返信はこちらに届きます。") : tr("ログインすると、お名前とメールアドレスが自動入力されます。")}</small>
               </Field>
-              <Field label="ご相談内容">
+              <Field label={tr("ご相談内容")}>
                 <textarea
                   required
                   rows={6}
@@ -1572,8 +1539,7 @@ export function PublicShop({
                 className="primary"
                 disabled={busy || (!isCustomer)}
               >
-                お問い合わせを送る →
-              </button>
+                {tr("お問い合わせを送る →")}</button>
             </form>
           )}
         </>

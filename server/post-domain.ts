@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 export const postCategorySchema = z.enum(["blogs", "announcements"]);
 export type PostCategory = z.infer<typeof postCategorySchema>;
@@ -28,7 +29,7 @@ export type Post = {
 export type PublicPost = PostContent & { id: string; publishedAt: string };
 export type PostSummary = Omit<PublicPost, "body">;
 export const postLabel = (category: PostCategory) =>
-  category === "blogs" ? "ブログ" : "お知らせ";
+  category === "blogs" ? tr("ブログ") : tr("お知らせ");
 export const postKey = (post: Pick<PostContent, "date" | "slug">) =>
   `${post.date}-${post.slug}`;
 export const postPath = (
@@ -68,7 +69,7 @@ export function validatePostAddress(
   )
     throw Object.assign(
       new Error(
-        "公開した記事の種類・日付・アドレスは変更できません。本文とタイトルは編集できます。",
+        tr("公開した記事の種類・日付・アドレスは変更できません。本文とタイトルは編集できます。"),
       ),
       { status: 409 },
     );
@@ -82,7 +83,7 @@ export function validatePostAddress(
   )
     throw Object.assign(
       new Error(
-        "同じ日付・アドレスの記事があります。アドレスを変更してください。",
+        tr("同じ日付・アドレスの記事があります。アドレスを変更してください。"),
       ),
       { status: 409 },
     );

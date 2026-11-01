@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
 import {useApi} from "./api";
@@ -31,7 +32,7 @@ export async function capturePage(root: HTMLElement) {
       const img = original[i] as HTMLImageElement;
       const replacement = document.createElement("div");
       replacement.style.cssText = copies[i].style.cssText;
-      replacement.textContent = img.alt || "紹介画像";
+      replacement.textContent = img.alt || tr("紹介画像");
       // Existing image pixels can be inlined only when their origin permits it.
       try {
         const canvas = document.createElement("canvas"); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
@@ -45,12 +46,12 @@ export async function capturePage(root: HTMLElement) {
   clone.style.margin = "0";
   const width = Math.ceil(root.getBoundingClientRect().width);
   const height = root.scrollHeight;
-  if (!width || !height) throw new Error("画面を表示してからお試しください");
+  if (!width || !height) throw new Error(tr("画面を表示してからお試しください"));
   clone.style.width = `${width}px`;
   clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${new XMLSerializer().serializeToString(clone)}</foreignObject></svg>`;
   const image = new Image();
-  await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("画面の取り込みに失敗しました。ページを再読み込みしてください。")); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`; });
+  await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error(tr("画面の取り込みに失敗しました。ページを再読み込みしてください。"))); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`; });
   const canvas = document.createElement("canvas");
   const scale = Math.min(1, 1100 / width, 6000 / height);
   canvas.width = Math.ceil(width * scale); canvas.height = Math.ceil(height * scale);
@@ -87,15 +88,15 @@ export function VisualRequest({shopId, config, root, local, onLocalChange, onBus
   }
   useEffect(() => { if (image) void reset(); }, [image]);
   async function run(fn: () => Promise<void>) {setBusy(true); onBusyChange?.(true); setError(""); try {await fn();} catch(e) {setError(e instanceof Error ? e.message : String(e));} finally {setBusy(false); onBusyChange?.(false);}}
-  const trigger = <button className={triggerHost ? "editor-pen-button" : undefined} title="この画面を修正する" disabled={busy} onClick={() => run(async () => { if (root.current) setImage(await capturePage(root.current)); })}>修正する</button>;
+  const trigger = <button className={triggerHost ? "editor-pen-button" : undefined} title={tr("この画面を修正する")} disabled={busy} onClick={() => run(async () => { if (root.current) setImage(await capturePage(root.current)); })}>{tr("修正する")}</button>;
   return <>
     {triggerHost && createPortal(trigger, triggerHost)}
     {(!triggerHost || image || error) && <div className="visual-request panel" data-capture-ignore>
     {!triggerHost && trigger}
     {error && <p className="alert" role="alert">{error}</p>}
     {image && <>
-      <p>変更したい文言や画像、配置を赤いペンで囲んで、希望を教えてください。外部画像は枠で表示される場合があります。ペンでは店名・紹介文・アクセス・ページ本文・画像・配置を変更できます。料金・スタッフ・営業時間・予約ルールはそれぞれの管理メニューで保存してください。</p>
-      <canvas ref={canvas} aria-label="変更したい箇所を囲む画面" className="annotation-canvas"
+      <p>{tr("変更したい文言や画像、配置を赤いペンで囲んで、希望を教えてください。外部画像は枠で表示される場合があります。ペンでは店名・紹介文・アクセス・ページ本文・画像・配置を変更できます。料金・スタッフ・営業時間・予約ルールはそれぞれの管理メニューで保存してください。")}</p>
+      <canvas ref={canvas} aria-label={tr("変更したい箇所を囲む画面")} className="annotation-canvas"
         onPointerDown={e => {
           if (busy) return;
           e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); drawing.current = true;
@@ -110,8 +111,8 @@ export function VisualRequest({shopId, config, root, local, onLocalChange, onBus
           ctx.lineTo((e.clientX - rect.left) * e.currentTarget.width / rect.width, (e.clientY - rect.top) * e.currentTarget.height / rect.height); ctx.stroke();
         }} onPointerUp={() => {drawing.current = false;}} onPointerCancel={() => {drawing.current = false;}}
       />
-      <button disabled={busy} onClick={() => reset()}>印を消して描き直す</button>
-      <label>ここをどう変えたいですか<textarea maxLength={4000} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined);}} placeholder="ここを『季節を楽しむネイル』に変えて"/></label>
+      <button disabled={busy} onClick={() => reset()}>{tr("印を消して描き直す")}</button>
+      <label>{tr("ここをどう変えたいですか")}<textarea maxLength={4000} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined);}} placeholder={tr("ここを『季節を楽しむネイル』に変えて")}/></label>
       <RequestImagePicker shopId={shopId} value={imageIds} disabled={busy} onChange={ids => { setImageIds(ids); setResult(undefined); }} />
       <DictationButton onListening={setListening} value={instruction} onChange={text=>{setInstruction(text);setResult(undefined);}} disabled={busy}/>
       <button disabled={busy || listening || !marked || !instruction.trim()} onClick={() => run(async () => {
@@ -119,12 +120,12 @@ export function VisualRequest({shopId, config, root, local, onLocalChange, onBus
         setResult(undefined); setTarget("");
         const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, displayed: config, local});
         setResult(r); if (r.candidates.length === 1) setTarget(r.candidates[0].id);
-      })}>{busy ? "確認しています…" : "Gemini に印の対象を確認してもらう"}</button>
-      {result && <div className="notice"><p>{result.explanation}</p><label>変更する対象を確認<select value={target} onChange={e => setTarget(e.target.value)}><option value="">対象を選んでください</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {
+      })}>{busy ? tr("確認しています…") : tr("Gemini に印の対象を確認してもらう")}</button>
+      {result && <div className="notice"><p>{result.explanation}</p><label>{tr("変更する対象を確認")}<select value={target} onChange={e => setTarget(e.target.value)}><option value="">{tr("対象を選んでください")}</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {
           const proposed = await api<{config: ShopConfig}>(`/api/shops/${shopId}/visual/propose`, {id: result.id, target, instruction, imageIds});
           onLocalChange(proposed.config);
-        })}>この対象をローカルに変更</button></div>}
-      <button disabled={busy} onClick={() => {setImage(""); setResult(undefined);}}>ペン入力を閉じる</button>
+        })}>{tr("この対象をローカルに変更")}</button></div>}
+      <button disabled={busy} onClick={() => {setImage(""); setResult(undefined);}}>{tr("ペン入力を閉じる")}</button>
     </>}
   </div>}
   </>;

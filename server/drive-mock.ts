@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import { shopSchema, type ShopConfig } from "./domain.ts";
 import { menuImageDataSchema, type MenuImageData } from "./menu-image-domain.ts";
@@ -16,7 +17,7 @@ export type DriveMock = z.infer<typeof driveMockSchema>;
 export function driveMock(config: ShopConfig, menuImages?: Record<string, MenuImageData>): DriveMock {
   return driveMockSchema.parse({
     shop: config,
-    auth: { email: "preview@example.com", name: "プレビューのお客様" },
+    auth: { email: "preview@example.com", name: tr("プレビューのお客様") },
     bookings: [], inquiries: [], mode: "mock", writes: "discarded",
     ...(menuImages ? { menuImages: Object.fromEntries(Object.entries(menuImages).filter(([id]) => managedImageIds(config).includes(id))) } : {}),
   });

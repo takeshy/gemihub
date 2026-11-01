@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import { pageValue, scopedSource, type ReleaseScope } from "../server/pages";
 import { sha256 } from "@noble/hashes/sha2.js";
 import type { EditorIndex } from "../server/editor-index-schema";
@@ -25,7 +26,7 @@ export function replaceScope(config: ShopConfig, scope: ReleaseScope, value: unk
   if (scope.kind === "shared") return shopSchema.parse(value === null ? config : { ...config, ...(value as object), appearance: (value as Partial<ShopConfig>).appearance });
   if (scope.kind === "part") return shopSchema.parse({ ...config, [scope.part]: (scope.part === "header" ? headerSchema : footerSchema).parse(value) });
   const page = value === null ? null : pageSchema.parse(value);
-  if (page && page.id !== scope.pageId) throw new Error("ページIDが一致しません");
+  if (page && page.id !== scope.pageId) throw new Error(tr("ページIDが一致しません"));
   const exists = config.pages.some(p => p.id === scope.pageId);
   const pages = page ? (exists ? config.pages.map(p => p.id === scope.pageId ? page : p) : [...config.pages, page]) : config.pages.filter(p => p.id !== scope.pageId);
   return shopSchema.parse({ ...config, pages });

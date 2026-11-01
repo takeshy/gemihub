@@ -1,3 +1,4 @@
+import { tr } from "../shared/i18n";
 import React from "react";
 import Markdown,{defaultUrlTransform} from "react-markdown";
 import { MenuImage } from "./MenuImage";
@@ -18,7 +19,7 @@ export function PostContent({ post, imageBase, inlineImages }: { post: Content; 
         <Markdown
           skipHtml
           urlTransform={(url,key)=>key === "src" && articleImageId(url) ? url : defaultUrlTransform(url)}
-          components={{img:({src,alt})=>{const id=articleImageId(typeof src === "string" ? src : "");if(!id)return null;const image=inlineImages?.[id];return image?<img src={`data:${image.mimeType};base64,${image.data}`} alt={alt||"記事の画像"}/>:imageBase?<MenuImage imageId={id} imageBase={imageBase} name={alt||"記事"} className="article-managed-image"/>:null;}}}
+          components={{img:({src,alt})=>{const id=articleImageId(typeof src === "string" ? src : "");if(!id)return null;const image=inlineImages?.[id];return image?<img src={`data:${image.mimeType};base64,${image.data}`} alt={alt||tr("記事の画像")}/>:imageBase?<MenuImage imageId={id} imageBase={imageBase} name={alt||tr("記事")} className="article-managed-image"/>:null;}}}
           disallowedElements={[
             "iframe",
             "script",
