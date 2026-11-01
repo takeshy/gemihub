@@ -1,5 +1,7 @@
 # omaiweb
 
+GemiHub の共有 VM に Terraform で追加する構成と手順は [infra/README.md](infra/README.md) を参照してください。
+
 **“Oh my web” — お店のシステムが、言葉でできてしまう。**
 
 個人商店向けの予約システム。Google ログインから、お店の情報の入力、プランの確認・承認、仮公開・本番公開、公開までをひとつの画面で進めます。生成 AI は **Vertex AI の Gemini** をサーバーの認証情報で利用します。

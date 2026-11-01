@@ -248,3 +248,9 @@ Storybook の画面は「はじめる」「お店づくり」「運営」「お�
 - 参照のパスは店舗限定の仮想ファイル一覧から解決する。spec.md・history.md・shop.json・pages/slug.md・articles/category/date-slug.md・images/id/nameが対象。任意のOSパス、外部URL、他店舗やCRMファイルの参照は拒否する。
 - AIのツール取得は読み取りだけ。最大30呼び出し・画像15枚で制限し、取得画像は送信用に軽量化する。モデルのfunction-call IDと署名を維持して結果を戻し、最終の記事は別の構造化出力で検証する。記事の依頼・応答は本人の非公開チャットに残し、同じ操作の再試行で完成済みの案を再利用する。
 - 記事内画像はshop-image:IDとして保存し、許可済みの管理画像だけ描画する。本文から他店舗の画像やCRM添付を参照させない。公開記事の画像は公開APIとDriveの記事HTMLに反映し、下書き・アップロードだけでは配信しない。記事で使用中の画像は削除を拒否する。通常プレビューでも記事内画像を表示する。
+
+## GemiHub 共有 VM での運用構成
+
+`infra/` は既存の共有 VM に本アプリを追加する Terraform 設定を持つ。アプリ用サービスアカウント、名前付き Firestore DB、Secret Manager の参照、Artifact Registry、Cloud Build、DNS・証明書を定義する。共有 VM 本体と追加 backend は Kakeratta、HTTPS URL map は GemiHub の既存 state が管理し、同じリソースを二重に管理しない。管理ドメイン・店舗サブドメインの suffix・OAuth client ID・利用可能なモデルは明示的に指定する。
+
+秘密値は Terraform で生成・取得せず、Secret Manager の version 参照で渡す。ランタイムは専用 Docker ネットワークを使い、共有 broker から専用サービスアカウントの短期認証を取得する。コンテナ内はポート8080、ホスト側は8105を使う。起動・再デプロイ・復旧手順と本番未検証の範囲は `infra/README.md` に記載する。

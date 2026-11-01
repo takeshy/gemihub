@@ -3,3 +3,8 @@ node_modules
 dist
 .data
 .env
+.env.*
+!.env.example
+infra
+tmp
+storybook-static

@@ -1,0 +1,3 @@
+# Use an existing private state bucket, with a dedicated prefix.
+bucket = "takeshy-work-kakeratta-terraform"
+prefix = "state/omaiweb"
