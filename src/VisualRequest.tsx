@@ -1,7 +1,7 @@
 import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
 import {useApi} from "./api";
-import {VoiceInput} from "./VoiceInput";
+import {DictationButton} from "./DictationButton";
 import { RequestImagePicker } from "./RequestImagePicker";
 import type {ShopConfig} from "../server/domain";
 
@@ -71,6 +71,7 @@ export function VisualRequest({shopId, config, root, local, onLocalChange, onBus
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listening,setListening]=useState(false);
   const [error, setError] = useState("");
   const [marked, setMarked] = useState(false);
   const [result, setResult] = useState<{id: string; explanation: string; candidates: {id: string; label: string}[]}>();
@@ -112,8 +113,8 @@ export function VisualRequest({shopId, config, root, local, onLocalChange, onBus
       <button disabled={busy} onClick={() => reset()}>印を消して描き直す</button>
       <label>ここをどう変えたいですか<textarea maxLength={4000} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined);}} placeholder="ここを『季節を楽しむネイル』に変えて"/></label>
       <RequestImagePicker shopId={shopId} value={imageIds} disabled={busy} onChange={ids => { setImageIds(ids); setResult(undefined); }} />
-      <VoiceInput shopId={shopId} imageIds={imageIds} onText={t => {setInstruction(v => v ? `${v}\n${t}` : t); setResult(undefined);}} disabled={busy}/>
-      <button disabled={busy || !marked || !instruction.trim()} onClick={() => run(async () => {
+      <DictationButton onListening={setListening} value={instruction} onChange={text=>{setInstruction(text);setResult(undefined);}} disabled={busy}/>
+      <button disabled={busy || listening || !marked || !instruction.trim()} onClick={() => run(async () => {
         const media = {mimeType: "image/png", data: canvas.current!.toDataURL("image/png").split(",")[1]};
         setResult(undefined); setTarget("");
         const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, displayed: config, local});

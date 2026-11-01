@@ -10,4 +10,6 @@ export const shopData = [
   { sheet: "pages", label: "追加ページ", screen: "try", screenLabel: "画面を試す・編集", ownerOnly: true },
   { sheet: "customers", label: "お客様ごとの情報", screen: "customers", screenLabel: "お客様", ownerOnly: false },
   { sheet: "customer_notes", label: "お客様メモ・画像・添付", screen: "customers", screenLabel: "お客様", ownerOnly: false },
+  { sheet: "ai_chats", internal: true, label: "AIとのチャット一覧", screen: "build", screenLabel: "AIとお店をつくる", ownerOnly: false },
+  { sheet: "ai_chat_messages", internal: true, label: "AIとの会話履歴", screen: "build", screenLabel: "AIとお店をつくる", ownerOnly: false },
 ] as const;

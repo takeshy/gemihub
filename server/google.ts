@@ -64,6 +64,8 @@ const tabs = [
   "pages",
   "customers",
   "customer_notes",
+  "ai_chats",
+  "ai_chat_messages",
 ];
 const headers = [
   ["id", "name", "duration", "price", "active", "imageId"],
@@ -353,72 +355,6 @@ export async function sendMail(
     `To: ${to}\r\nSubject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString("base64")}`,
   ).toString("base64url");
   await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
-}
-
-export async function readDriveNote(token: string, link: string) {
-  let id = "";
-  try {
-    const url = new URL(link);
-    if (!["drive.google.com", "docs.google.com"].includes(url.hostname))
-      throw new Error();
-    id =
-      url.pathname.match(/\/d\/([A-Za-z0-9_-]+)/)?.[1] ||
-      url.searchParams.get("id") ||
-      "";
-  } catch {
-    throw Object.assign(
-      new Error(
-        "Google ドライブまたは Google ドキュメントのメモのリンクを入力してください",
-      ),
-      { status: 400 },
-    );
-  }
-  if (!/^[A-Za-z0-9_-]{10,200}$/.test(id))
-    throw Object.assign(new Error("メモのリンクを確認してください"), {
-      status: 400,
-    });
-  const { drive } = clients(token);
-  try {
-    const meta = await drive.files.get({
-      fileId: id,
-      fields: "name,mimeType,size,trashed",
-    });
-    if (meta.data.trashed || Number(meta.data.size || 0) > 100000)
-      throw Object.assign(new Error("読み込めるメモは10万バイト以内です"), {
-        status: 400,
-      });
-    const doc = meta.data.mimeType === "application/vnd.google-apps.document";
-    if (!doc && !/\.(md|markdown|txt)$/i.test(meta.data.name || ""))
-      throw Object.assign(
-        new Error(
-          "テキスト・Markdown、または Google ドキュメントを選んでください",
-        ),
-        { status: 400 },
-      );
-    const result = doc
-      ? await drive.files.export(
-          { fileId: id, mimeType: "text/plain" },
-          { responseType: "text", maxContentLength: 100000 },
-        )
-      : await drive.files.get(
-          { fileId: id, alt: "media" },
-          { responseType: "text", maxContentLength: 100000 },
-        );
-    const text = String(result.data);
-    if (text.length > 20000)
-      throw Object.assign(new Error("メモを2万文字以内にしてください"), {
-        status: 400,
-      });
-    return { name: meta.data.name || "メモ", text };
-  } catch (error) {
-    if ((error as { status?: number }).status === 400) throw error;
-    throw Object.assign(
-      new Error(
-        "このメモを読み込めませんでした。このアプリでアクセスできるファイルか確認するか、本文を貼り付けてください。",
-      ),
-      { status: 403 },
-    );
-  }
 }
 
 export async function syncPostFiles(

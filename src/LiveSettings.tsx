@@ -31,9 +31,9 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
       void load().catch(e => setError(e.message));
     } catch { setError("保存中のデータを読み込めませんでした。最新の内容を読み直してください。"); }
   }, [key]);
-  return <div className="panel">
+  return <div className={`panel live-settings live-settings-${section}`}>
     <h2>{{ basic: "お店の基本情報", menus: "メニュー・料金", staff: "スタッフ・勤務", hours: "営業時間・休業日", rules: "予約ルール" }[section]}</h2>
-    <p>本番のお店のデータです。「保存」で反映します。</p>
+    <p>{shop.publication === "provisional" ? "仮公開中のお店の設定です。「保存」で仮公開の内容に反映します。" : "本番のお店のデータです。「保存」で反映します。"}</p>
     {section === "menus" && <p className="small muted">新しいメニューは無効の状態で追加します。スタッフの対応メニューに追加してから有効にしてください。</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
@@ -59,7 +59,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
             localStorage.setItem(key, JSON.stringify(action)); setPending(action);
           }
           await api(`/api/shops/${shop.id}/live-settings/${section}`, { value: liveValue(action.config, section), previous: action.previous, requestId: action.requestId });
-          await load(); localStorage.removeItem(key); setPending(undefined); await reload(); setNotice("保存して本番に反映しました。");
+          await load(); localStorage.removeItem(key); setPending(undefined); await reload(); setNotice(shop.publication === "provisional" ? "保存して仮公開に反映しました。" : "保存して本番に反映しました。");
         } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
       }}>{pending ? "保存を再試行" : "保存"}</button>

@@ -3,7 +3,7 @@ import { useApi } from "./api";
 import { shopData } from "../server/shop-data";
 import type { DataCell, DataSheet, DataTable } from "../server/data-management";
 
-export function DataManagement({ shopId, open }: { shopId: string; open: (screen: string) => void }) {
+export function DataManagement({ shopId, open, showMenus = false }: { shopId: string; open: (screen: string) => void; showMenus?: boolean }) {
   const api = useApi();
   const [sheets, setSheets] = useState<DataSheet[]>();
   const [chosen, setChosen] = useState("");
@@ -37,8 +37,8 @@ export function DataManagement({ shopId, open }: { shopId: string; open: (screen
     finally { setBusy(false); }
   }
   return <section className="panel data-management">
-    <h2>データ管理</h2><p>専用メニューのない追加シートのデータを管理します。</p>
-    <details className="data-menu-links"><summary>専用メニューで管理するデータ</summary><div className="actions">{Array.from(new Map(shopData.map(data => [data.screen, data.screenLabel])).entries()).map(([screen, label]) => <button key={screen} type="button" onClick={() => open(screen)}>{label} →</button>)}</div></details>
+    <h2>データ管理</h2><p>メニュー・料金や予約などは下の管理メニューから、その他のデータは一覧から変更できます。</p>
+    <details className="data-menu-links" open={showMenus||undefined}><summary>専用メニューで管理するデータ</summary><div className="actions">{Array.from(new Map(shopData.filter(data=>!("internal" in data&&data.internal)).map(data => [data.screen, data.screenLabel])).entries()).map(([screen, label]) => <button key={screen} type="button" onClick={() => open(screen)}>{label} →</button>)}</div></details>
     {error && <p className="alert" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     <div className="actions"><button type="button" disabled={busy || !!draft} onClick={() => setAttempt(value => value + 1)}>最新の内容を読み直す</button></div>
     {!sheets && !error && <p role="status">追加データを読み込んでいます…</p>}

@@ -1,15 +1,19 @@
+import type { RequestIntent } from "../server/request-intent";
+import type { ChatReference } from "../server/shop-chat";
+import { DateInput } from "./DateInput";
+import { CustomerRegistration } from "./CustomerRegistration";
+import type { MemberProfile } from "../server/customer-profile";
 import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
 import { DataManagement } from "./DataManagement";
-import { DataOverview } from "./DataOverview";
 import { ShopOverview } from "./ShopOverview";
 import { ImageLibrary } from "./ImageLibrary";
+import { PublicationPreview } from "./PublicationPreview";
 import { ShopRequest } from "./ShopRequest";
 import { SiteHeader, SiteFooter } from "./SiteChrome";
 import { CustomPage } from "./CustomPage";
 import { LiveSettings } from "./LiveSettings";
-import { PageBuilder } from "./PageBuilder";
-import { LocalPreview, type LocalEditorHandle } from "./LocalPreview";
+import { LocalPreview } from "./LocalPreview";
 import { Manual } from "./Manual";
 import { MenuImage, MenuImageEditor } from "./MenuImage";
 import { Customers } from "./Customers";
@@ -17,7 +21,6 @@ import { createRequestId } from "./request-id";
 import React, { useEffect, useState, useRef } from "react";
 import { useApi } from "./api";
 import type { ShopConfig, Booking } from "../server/domain";
-import { sample } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 export type Plan = {
@@ -25,6 +28,8 @@ export type Plan = {
   config: ShopConfig;
   summary: string[];
   approved: boolean;
+  requiresSetup?: boolean;
+  chat?: ChatReference;
   base: number;
 };
 export type Inquiry = {
@@ -80,7 +85,7 @@ export function App({
   path = location.pathname,
   search = location.search,
   initialTab = new URLSearchParams(search).has("customer") ? "customers" : new URLSearchParams(search).get("calendar") === "connected" ? "team" : "try",
-  initialPane = "mine",
+  initialPane,
   navigate = (href) => location.assign(href),
 }: AppProps = {}) {
   const api = useApi();
@@ -112,7 +117,7 @@ export function App({
   if (!session)
     return <div className="loading">{error || "お店の準備をしています…"}</div>;
   const match = path.match(
-    /^\/(s|preview)\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
+    /^\/(s)\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
   );
   const hostedPost = session.hosted
     ? path.match(/^\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?$/)
@@ -168,7 +173,7 @@ export function App({
                 new URLSearchParams(search).get("pane") || "",
               )
                 ? new URLSearchParams(search).get("pane")
-                : match?.[1] === "preview" ? "reserve" : initialPane)!
+                : initialPane || (session.user ? "mine" : "about"))!
             }
             pageSlug={(match?.[3] || hostedPost?.[1]) === "pages" ? match?.[4] || hostedPost?.[2] : undefined}
             category={
@@ -177,14 +182,21 @@ export function App({
             articleKey={match?.[4] || hostedPost?.[2]}
             navigate={navigate}
             slug={session.hosted || match![2]}
-            preview={match?.[1] === "preview"}
             run={run}
             busy={busy}
             notify={setNotice}
           />
+        ) : /^\/publication-preview\/[^/]+$/.test(path) ? (
+          <PublicationPreview shopId={path.split("/")[2]} />
         ) : session.user ? (
           <Dashboard
-            initialTab={initialTab}
+            initialTab={["build","try","data"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
+            initialScreen={new URLSearchParams(search).get("screen") || undefined}
+            initialArticleKey={new URLSearchParams(search).get("article") || undefined}
+            requestIntent={new URLSearchParams(search).get("intent") === "modify" ? "modify" : undefined}
+            openDataMenu={new URLSearchParams(search).get("dataMenu") === "1"}
+            initialShop={new URLSearchParams(search).get("shop") || ""}
+            focusRequest={new URLSearchParams(search).get("request") === "1"}
             initialCustomer={new URLSearchParams(search).get("customer") || ""}
             initialCustomerImages={new URLSearchParams(search).get("customerView") === "images"}
             session={session}
@@ -280,6 +292,12 @@ function Landing({ demo, run }: { demo: boolean; run: Run }) {
 }
 function Dashboard({
   initialTab = "try",
+  initialShop = "",
+  focusRequest = false,
+  initialScreen,
+  initialArticleKey,
+  requestIntent,
+  openDataMenu = false,
   initialCustomer = "",
   initialCustomerImages = false,
   session,
@@ -288,6 +306,12 @@ function Dashboard({
   notify,
 }: {
   initialTab?: string;
+  initialShop?: string;
+  focusRequest?: boolean;
+  initialScreen?: string;
+  initialArticleKey?: string;
+  requestIntent?: RequestIntent;
+  openDataMenu?: boolean;
   initialCustomer?: string;
   initialCustomerImages?: boolean;
   session: Session;
@@ -297,13 +321,11 @@ function Dashboard({
 }) {
   const api = useApi();
   const [shops, setShops] = useState<Workspace[]>([]);
-  const [chosen, setChosen] = useState(() => new URLSearchParams(location.search).get("shop") || "");
-  const [tab, setTab] = useState(initialTab);
+  const [chosen, setChosen] = useState(initialShop);
+  const [tab, setTab] = useState(initialTab === "create-page" ? "build" : ["hours","rules"].includes(initialTab)?"basic":initialTab);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
-  const editorRef = useRef<LocalEditorHandle>(null);
   const buildReview = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<Plan>();
-  const [edit, setEdit] = useState<ShopConfig>();
   const [invites, setInvites] = useState<{ shopId: string; name: string }[]>(
     [],
   );
@@ -322,24 +344,21 @@ function Dashboard({
     });
   }, []);
   const shop = shops.find((s) => s.id === chosen) || shops[0];
-  useEffect(() => { if (shop && !shop.isOwner && ["try", "create-page", "data"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
+  useEffect(() => { if (shop && !shop.isOwner && ["try", "data"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
   const activePlan =
     plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
       ? plan
       : shop?.plans.find(p => p.base === shop.revision && p.id === new URLSearchParams(location.search).get("plan")) || shop?.plans.filter((p) => p.base === shop.revision).at(-1);
   const request = (action: string, data: unknown = {}) =>
     api(`/api/shops/${shop.id}/${action}`, data);
-  const generate = () =>
-    run(async () => {
-      const p = await api<Plan>(`/api/shops/${shop.id}/plan`, {
-        text: "入力したお店の情報で作成",
-        ...(edit ? { config: edit } : {}),
-      });
-      setPlan(p);
-      setEdit(undefined);
-      await load();
-      notify("プランができました。内容を確認してから承認してください。");
-    });
+  const acceptPlan = async (p: Plan) => {
+    const publication = !shop.published || shop.publication === "provisional" ? "provisional" : "public";
+    await request(`plans/${p.id}/approve`);
+    await request(`plans/${p.id}/publish`, { publication });
+    setPlan(undefined);
+    await load();
+    notify(publication === "provisional" ? "仮公開しました。あなたのログインでだけページを表示できます。" : "変更を反映しました。");
+  };
   return (
     <div className="dashboard">
       <aside>
@@ -354,7 +373,6 @@ function Dashboard({
             onChange={(e) => {
               setChosen(e.target.value);
               setPlan(undefined);
-              setEdit(undefined);
             }}
           >
             {shops.map((s) => (
@@ -366,11 +384,11 @@ function Dashboard({
         )}
         <nav>
           {[
-            ["build", "✧", "お店をつくる・直す"],
-            ...(shop?.isOwner ? [["try", "▣", "画面を試す・編集"], ["create-page", "＋", "ページをつくる"], ["images", "▧", "画像管理"]] : []),
+            ["build", "✧", "AIとお店をつくる"],
+            ...(shop?.isOwner ? [["try", "▣", "画面を試す・編集"], ["images", "▧", "画像管理"]] : []),
             ["bookings", "▦", "予約を管理"],
             ...(shop ? [["customers", "♧", "お客様"]] : []),
-            ...(shop?.isOwner ? [["basic", "⌂", "お店の基本情報"], ["menus", "≡", "メニュー・料金"], ["staff", "♧", "スタッフ・勤務"], ["hours", "◷", "営業時間・休業日"], ["rules", "⚙", "予約ルール"]] : []),
+            ...(shop?.isOwner ? [["basic", "⌂", "お店の基本情報"], ["menus", "≡", "メニュー・料金"], ["staff", "♧", "スタッフ・勤務"]] : []),
             ["inquiries", "✉", "お問い合わせ"],
             ["blog", "✎", "ブログ・お知らせ"],
             ["team", "♧", "家族・スタッフ"],
@@ -425,6 +443,16 @@ function Dashboard({
               <Manual />
             ) : (
               <>
+                {shop.published && shop.publication === "provisional" && <section className="notice publication-status" aria-label="公開状態">
+                  <div className="publication-status-top"><div><h2>仮公開中</h2>
+                  <p>ページを用意したGoogleアカウントでログインした本人だけが見られます。</p></div>
+                  {shop.isOwner && <div className="publication-next-step"><b>お客様への公開はこちら</b>
+                    <a className="button primary" data-publication-preview-link href={`/publication-preview/${shop.id}`}>画面を確認して本番公開へ <span aria-hidden="true">→</span></a>
+                    <p>次の画面で表示を確かめてから、本番公開できます。</p>
+                  </div>}</div>
+                  <p>スタッフ・メニュー・料金・営業時間などは、それぞれの設定メニューで更新できます。</p>
+                  <p className="editing-guidance">デザインは各画面の編集画面で更新してください。<button className="text-button" onClick={() => setTab("try")}>画面を試す・編集を開く →</button><br />全体的な表示や機能の修正は<button className="text-button" onClick={() => setTab("build")}>AIとお店をつくる</button>で相談できます。</p>
+                </section>}
                 {shop.publishingPlanId && (
                   <div className="alert">
                     保存・反映が未完了です。予約受付を一時停止しています。操作した管理画面から再試行してください。
@@ -453,165 +481,20 @@ function Dashboard({
                 )}
                 {tab === "build" && (
                   <>
-                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} google={shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); requestAnimationFrame(() => buildReview.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} onPlan={async (text, context, imageIds) => {
-                      const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds });
-                      setPlan(p); setEdit(undefined); await load(); return p;
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
+                      const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds, intent, chat });
+                      setPlan(p); await load(); return p;
                     }} />}
-                    {!shop.published && <div className="steps">
-                      {["お店の情報", "プランを確認", "プレビュー", "公開"].map(
-                        (s, i) => (
-                          <div
-                            className={
-                              (i === 0 && !activePlan) ||
-                              (i === 1 && activePlan && !activePlan.approved) ||
-                              (i === 2 && activePlan?.approved) ||
-                              (i === 3 && shop.published && !activePlan)
-                                ? "current"
-                                : ""
-                            }
-                            key={s}
-                          >
-                            <span>0{i + 1}</span>
-                            {s}
-                          </div>
-                        ),
-                      )}
-                    </div>}
-                    <div ref={buildReview} className={shop.published ? "build-plan-area" : "build-grid"}>
+                    {!shop.published && <div className="steps initial-steps">{["内容を確認", "仮公開", "本番公開"].map((label, i) => <div key={label} className={i === 0 ? "current" : ""} aria-current={i === 0 ? "step" : undefined}><span>0{i + 1}</span>{label}</div>)}</div>}
+                    <div ref={buildReview} className="build-plan-area">
                       <div>
-                        {!shop.published && <div className="panel interview"><h2>どんなお店をつくりますか？</h2><ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} plan={activePlan} onPlan={async (text, imageIds) => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, imageIds }); setPlan(p); await load(); return p; }} onAccept={async p => { await request(`plans/${p.id}/approve`); setPlan({ ...p, approved: true }); await load(); }} /><button disabled={!shop.isOwner} onClick={() => setEdit(structuredClone(sample))}>項目ごとに入力・修正</button></div>}
-                        {edit && (
-                          <div className="panel">
-                            <h2>お店の情報</h2>
-                            <ConfigEditor config={edit} onChange={setEdit} shopId={shop.id} />
-                            <button
-                              className="primary"
-                              onClick={generate}
-                              disabled={busy}
-                            >
-                              この内容でプランを確認 →
-                            </button>
-                          </div>
-                        )}
-                        {activePlan?.approved && (
-                          <div className="panel plan">
-                            <span className="pill">
-                              {activePlan.approved ? "承認済み" : "ご提案"}
-                            </span>
-                            <h2>こんな予約システムをつくります。</h2>
-                            <ul className="check-list">
-                              {activePlan.summary.map((s) => (
-                                <li key={s}>
-                                  ✓ <span>{s}</span>
-                                </li>
-                              ))}
-                            </ul>
-                            <ConfigSummary config={activePlan.config} />
-                            <details>
-                              <summary>すべての設定を確認</summary>
-                              <pre>
-                                {JSON.stringify(activePlan.config, null, 2)}
-                              </pre>
-                            </details>
-                            <div className="actions">
-                              <button
-                                onClick={() => {
-                                  setEdit(structuredClone(activePlan.config));
-                                  setPlan(undefined);
-                                }}
-                              >
-                                内容を修正する
-                              </button>
-                              {!activePlan.approved ? (
-                                <button
-                                  className="primary"
-                                  disabled={busy || !shop.isOwner}
-                                  onClick={() =>
-                                    run(async () => {
-                                      await request(
-                                        `plans/${activePlan.id}/approve`,
-                                      );
-                                      setPlan({
-                                        ...activePlan,
-                                        approved: true,
-                                      });
-                                      await load();
-                                      notify(
-                                        "承認しました。公開前にプレビューでお確かめください。",
-                                      );
-                                    })
-                                  }
-                                >
-                                  このプランでつくる →
-                                </button>
-                              ) : (
-                                <>
-                                  <a
-                                    className="button"
-                                    href={`/preview/${shop.id}?plan=${activePlan.id}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    プレビュー ↗
-                                  </a>
-                                  <button
-                                    className="primary"
-                                    disabled={busy || !shop.isOwner}
-                                    onClick={() =>
-                                      run(async () => {
-                                        await request(
-                                          `plans/${activePlan.id}/publish`,
-                                        );
-                                        setPlan(undefined);
-                                        await load();
-                                        notify(
-                                          "予約ページを公開しました。お客様の予約を受け付けられます。",
-                                        );
-                                      })
-                                    }
-                                  >
-                                    お店のページを公開 →
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                        {!shop.published && <div className="panel interview">{!activePlan && <h2>AIとお店をつくる</h2>}<ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} context={{revision:shop.revision,hash:""}} plan={activePlan} onPlan={async (text, imageIds, intent, chat) => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, imageIds, intent, chat }); setPlan(p); await load(); return p; }} onAccept={acceptPlan} /></div>}
                       </div>
-                      {!shop.published && <div className="right-column">
-                        <div className="panel guide">
-                          <div className="line-flower">✳</div>
-                          <h2>
-                            お店に合わせて、
-                            <br />
-                            少しずつ。
-                          </h2>
-                          <p>
-                            最初から完璧でなくても大丈夫。
-                            <br />
-                            プランを確かめて、試してから公開。
-                            <br />
-                            あとから何度でも直せます。
-                          </p>
-                          <hr />
-                          <b>データは、あなたのもの。</b>
-                          <p className="small">
-                            予約はあなたの Google
-                            スプレッドシートに。お店の仕様と変更履歴も、あなたのドライブに残ります。
-                          </p>
-                        </div>
-                        <div className="small muted tip">
-                          ☀ プレビューでの予約は練習用です。
-                          <br />
-                          実際の予約には影響しません。
-                        </div>
-                      </div>}
                     </div>
-                    {!shop.published && <DataOverview isOwner={shop.isOwner} google={shop.google} open={setTab} />}
                   </>
                 )}
-                {["basic", "menus", "staff", "hours", "rules"].includes(tab) && shop.isOwner && <LiveSettings key={`${shop.id}-${tab}`} shop={shop} section={tab as "basic" | "menus" | "staff" | "hours" | "rules"} reload={load} />}
-                {tab === "create-page" && shop.isOwner && <PageBuilder key={shop.id} shopId={shop.id} email={session.user!.email} onAdd={page => { if (!editorRef.current) throw new Error("画面の読み込みが完了するまでお待ちください"); editorRef.current.addPage(page); setTab("try"); }} />}
+                {tab === "basic" && shop.isOwner && <section className="basic-settings" aria-label="お店の基本情報と予約の設定">{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
+                {["menus", "staff"].includes(tab) && shop.isOwner && <LiveSettings key={`${shop.id}-${tab}`} shop={shop} section={tab as "menus" | "staff"} reload={load} />}
                 {tab === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {tab === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
@@ -649,7 +532,7 @@ function Dashboard({
                   </div>
                 )}
                 {tab === "team" && <Team shop={shop} run={run} reload={load} />}
-                {tab === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} />}
+                {tab === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} showMenus={openDataMenu} />}
                 {tab === "settings" && (
                   <Settings shop={shop} run={run} reload={load} />
                 )}
@@ -657,7 +540,7 @@ function Dashboard({
             )}
           </>
         )}
-        {shop?.isOwner && <div hidden={tab !== "try"}><LocalPreview key={shop.id} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} activate={() => setTab("try")} actionsRef={editorRef} /></div>}
+        {shop?.isOwner && <div hidden={tab !== "try"}><LocalPreview key={shop.id} initialScreen={initialScreen} initialArticleKey={initialArticleKey} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} activate={() => setTab("try")} /></div>}
       </section>
     </div>
   );
@@ -688,9 +571,10 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
           </b>
         </div>
         <div>
-          <span>通知先</span>
+          <span>予約のお知らせを受け取るメール</span>
           <b>{c.notificationEmail}</b>
         </div>
+        <div><span>住所・アクセス</span><b>{c.address || "未入力"}</b></div>
       </div>
       {c.menus
         .filter((m) => m.active)
@@ -702,6 +586,19 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
             <b>{yen(m.price)}</b>
           </div>
         ))}
+      <details>
+        <summary>スタッフと予約の決まりを見る</summary>
+        <h4>スタッフが働く日と時間</h4>
+        <ul>{c.staff.map(staff => <li key={staff.id}><b>{staff.name}</b>：{staff.weekdays.map(day => weekdays[day]).join("・") || "勤務日なし"} {staff.start}〜{staff.end}（担当：{staff.menuIds.map(id => c.menus.find(menu => menu.id === id)?.name).filter(Boolean).join("、") || "なし"}）</li>)}</ul>
+        <h4>予約の決まり</h4>
+        <ul>
+          <li>予約できるのは{c.rules.advanceDays}日先まで、開始の{c.rules.leadMinutes}分前までです。</li>
+          <li>当日の予約は{c.rules.sameDay ? "受け付けます" : "受け付けません"}。</li>
+          <li>予約の時刻は{c.rules.interval}分ごとに選べます。</li>
+          <li>キャンセルは開始の{c.rules.cancelHours}時間前までです。</li>
+          <li>臨時のお休み：{c.hours.holidays.join("、") || "なし"}</li>
+        </ul>
+      </details>
     </div>
   );
 }
@@ -1029,14 +926,14 @@ export function ConfigEditor({
           </label>
         ))}
       </div>
-      <Field label="臨時休業日（カンマ区切り・例：2026-12-31,2027-01-01）">
+      <Field label="臨時休業日（カンマ区切り・例：2026/12/31,2027/01/01）">
         <input
-          value={c.hours.holidays.join(",")}
+          value={c.hours.holidays.map(value => value.replace(/-/g, "/")).join(",")}
           onChange={(e) =>
             put("hours", {
               ...c.hours,
               holidays: e.target.value
-                ? e.target.value.split(",").map((v) => v.trim())
+                ? e.target.value.split(",").map((v) => v.trim().replace(/\//g, "-"))
                 : [],
             })
           }
@@ -1125,11 +1022,9 @@ function Reservations({
       </div>
       <div className="filters">
         <Field label="日付（日本時間）">
-          <input
-            type="date"
+          <DateInput aria-label="日付（日本時間）"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+            onValueChange={value => setDate(value)} />
         </Field>
         <Field label="スタッフ">
           <select value={staff} onChange={(e) => setStaff(e.target.value)}>
@@ -1412,11 +1307,10 @@ export function PublicShop({
   articleKey,
   navigate,
   search = location.search,
-  initialPane = "mine",
+  initialPane,
   onPaneChange,
   session,
   slug,
-  preview,
   run,
   busy,
   notify,
@@ -1432,21 +1326,21 @@ export function PublicShop({
   onPaneChange?: (pane: string) => void;
   session: Session;
   slug: string;
-  preview: boolean;
   run: Run;
   busy: boolean;
   notify: (s: string) => void;
 }) {
   const api = useApi();
-  const plan = new URLSearchParams(search).get("plan");
   const basePath = session.hosted ? "" : `/s/${slug}`;
-  const base = preview ? `/api/preview/${slug}` : `/api/public/${slug}`;
-  const suffix = preview ? `?plan=${plan}` : "";
+  const base = `/api/public/${slug}`;
   const [data, setData] = useState<{
     config: ShopConfig;
     shopId: string;
     authUrl?: string;
+    publication?: "provisional" | "public";
     recentPosts?: PostSummary[];
+    customerProfile?: MemberProfile | null;
+    registrationRequired?: boolean;
   }>();
   const [menu, setMenu] = useState("");
   const [staff, setStaff] = useState("");
@@ -1456,16 +1350,17 @@ export function PublicShop({
   >([]);
   const [selected, setSelected] = useState("");
   const [name, setName] = useState(session.user?.name || "");
+  useEffect(() => { setName(session.user?.name || ""); }, [session.user?.email, session.user?.name]);
   const [mine, setMine] = useState<Booking[]>([]);
   const [message, setMessage] = useState("");
   const [bookingMessage, setBookingMessage] = useState("");
-  const [pane, setPane] = useState(initialPane);
+  const [pane, setPane] = useState(initialPane || (session.user ? "mine" : "about"));
   const [complete, setComplete] = useState(false);
   const [requestId, setRequestId] = useState(() => createRequestId());
   const isCustomer =
     session.user?.role === "customer" && session.user.shopId === data?.shopId;
   const loadMine = async () => {
-    if (!preview && isCustomer) setMine(await api(`${base}/bookings`));
+    if (isCustomer) setMine(await api(`${base}/bookings`));
   };
   useEffect(() => {
     run(async () => {
@@ -1473,8 +1368,11 @@ export function PublicShop({
         config: ShopConfig;
         shopId: string;
         authUrl: string;
-      }>(base + suffix);
+        customerProfile?: MemberProfile | null;
+        registrationRequired?: boolean;
+      }>(base);
       setData(d);
+      if (d.customerProfile) setName(d.customerProfile.name);
       setMenu(d.config.menus.find((m) => m.active)?.id || "");
       setStaff("");
     });
@@ -1497,7 +1395,7 @@ export function PublicShop({
       date,
       menu,
       staff,
-      ...(preview ? { plan: plan || "" } : {}),
+
     });
     api<typeof times>(`${base}/slots?${query}`)
       .then((t) => {
@@ -1518,19 +1416,13 @@ export function PublicShop({
   const c = data.config;
   return (
     <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}`}>
-      {preview && (
-        <div className="preview-banner">
-          ✧ プレビュー · 練習用の予約画面です。実際の予約は作成されません。
-        </div>
-      )}
-      {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`} imageSuffix={suffix}>
+      {data.publication === "provisional" && <div className="preview-banner">仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。</div>}
+      {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
       <nav className="public-nav">
-        {[
-          ["mine", "マイページ"],
+        {(session.user ? [["mine", "マイページ"],
           ["reserve", "ご予約"],
           ["about", "お店のこと"],
-          ["contact", "お問い合わせ"],
-        ].map(([id, label]) => (
+          ["contact", "お問い合わせ"]] : [["about", "お店のこと"], ["reserve", "ご予約"], ["contact", "お問い合わせ"]]).map(([id, label]) => (
           <button
             className={!category && !pageSlug && pane === id ? "active" : ""}
             onClick={() =>
@@ -1541,7 +1433,7 @@ export function PublicShop({
             {label}
           </button>
         ))}
-        {!preview &&
+        {
           (["blogs", "announcements"] as const).map((cat) => (
             <button
               key={cat}
@@ -1554,8 +1446,12 @@ export function PublicShop({
         {c.pages.map(page => <button key={page.id} className={pageSlug === page.slug ? "active" : ""} onClick={() => navigate(`${basePath}/pages/${page.slug}`)}>{page.navigationLabel}</button>)}
       </nav>
       </SiteHeader>}
-      {pageSlug ? (
-        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} imageSuffix={suffix} /> : <p className="alert">ページがありません。</p>
+      {!hideHeader&&!isCustomer&&<section className="public-auth" aria-label="会員登録・ログイン">
+        <div className="public-auth-intro"><strong>ご予約をご利用の方へ</strong><p>Googleアカウントでご利用いただけます。</p></div>
+        <div className="public-auth-actions"><div><span>初めての方</span><a className="button primary" href={data.authUrl}>会員登録</a></div><div><span>登録済みの方</span><a className="button" href={data.authUrl}>ログイン</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>お客様デモでログイン</button>}</div>
+      </section>}
+      {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={session.user!.email} name={session.user!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
+        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">ページがありません。</p>
       ) : category ? (
         <PublicBlog
           baseApi={base}
@@ -1566,39 +1462,14 @@ export function PublicShop({
         />
       ) : (
         <>
-          {!preview && pane === "mine" && (
+          {pane === "mine" && (
             <RecentPosts
               posts={data.recentPosts || []}
               basePath={basePath}
               navigate={navigate}
             />
           )}
-          {!preview && !isCustomer && (
-            <div className="login-strip">
-              <span>
-                ご予約・マイページは Google
-                アカウントでログインしてご利用ください。
-              </span>
-              <a className="button primary" href={data.authUrl}>
-                Google でログイン
-              </a>
-              {session.demo && (
-                <button
-                  onClick={() =>
-                    run(async () => {
-                      await api("/api/demo-login", {
-                        role: "customer",
-                        shopId: data.shopId,
-                      });
-                      location.reload();
-                    })
-                  }
-                >
-                  お客様デモでログイン
-                </button>
-              )}
-            </div>
-          )}
+          {pane === "mine" && isCustomer && <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} さん</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>会員情報を変更</button></div>}
           {pane === "reserve" && (
             <div className="reservation-layout">
               <div className="panel">
@@ -1617,7 +1488,7 @@ export function PublicShop({
                         }}
                         key={m.id}
                       >
-                        <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} suffix={suffix} name={m.name} />
+                        <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} name={m.name} />
                         <span>
                           <b>{m.name}</b>
                           <small>{m.duration}分</small>
@@ -1646,12 +1517,10 @@ export function PublicShop({
                   </select>
                 </Field>
                 <Field label="ご希望の日付（日本時間）">
-                  <input
-                    type="date"
+                  <DateInput aria-label="ご希望の日付（日本時間）"
                     min={localDate()}
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
+                    onValueChange={value => setDate(value)} />
                 </Field>
                 <div className="time-grid">
                   {times.map((t) => (
@@ -1698,12 +1567,12 @@ export function PublicShop({
                     busy ||
                     !selected ||
                     !name.trim() ||
-                    (!preview && !isCustomer) ||
+                    (!isCustomer) ||
                     complete
                   }
                   onClick={() =>
                     run(async () => {
-                      await api(`${base}/bookings${suffix}`, {
+                      await api(`${base}/bookings`, {
                         name,
                         message: bookingMessage,
                         menuId: menu,
@@ -1713,9 +1582,7 @@ export function PublicShop({
                       });
                       setComplete(true);
                       notify(
-                        preview
-                          ? "プレビューで予約を確認しました。実際のデータは変更していません。"
-                          : "ご予約を承りました。マイページからご確認いただけます。",
+                        "ご予約を承りました。マイページからご確認いただけます。",
                       );
                       await loadMine();
                     })
@@ -1723,9 +1590,7 @@ export function PublicShop({
                 >
                   {complete
                     ? "✓ 予約を受け付けました"
-                    : preview
-                      ? "プレビューで予約を試す"
-                      : "この内容で予約する"}{" "}
+                    : "この内容で予約する"}{" "}
                   →
                 </button>
               </div>
@@ -1756,7 +1621,7 @@ export function PublicShop({
                 .filter((m) => m.active)
                 .map((m) => (
                   <div className="menu-row" key={m.id}>
-                    <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} suffix={suffix} name={m.name} />
+                    <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} name={m.name} />
                     {m.name} · {m.duration}分 <b>{yen(m.price)}</b>
                   </div>
                 ))}
@@ -1777,9 +1642,7 @@ export function PublicShop({
           {pane === "mine" && (
             <div className="panel">
               <h2>あなたのご予約</h2>
-              {preview ? (
-                <Empty text="プレビューでは実際のお客様の予約を読み込みません。" />
-              ) : !mine.length ? (
+              {!mine.length ? (
                 <Empty text="ご予約はまだありません。" />
               ) : (
                 mine.map((b) => (
@@ -1820,16 +1683,10 @@ export function PublicShop({
           )}
           {pane === "contact" && (
             <form
-              className="panel"
+              className="panel contact-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 run(async () => {
-                  if (preview) {
-                    notify(
-                      "プレビューのお問い合わせです。実際の送信は行いません。",
-                    );
-                    return;
-                  }
                   await api(`${base}/inquiries`, { name, message });
                   setMessage("");
                   notify(
@@ -1842,9 +1699,14 @@ export function PublicShop({
               <Field label="お名前">
                 <input
                   required
+                  autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
+              </Field>
+              <Field label="メールアドレス">
+                <input aria-label="メールアドレス" type="email" autoComplete="email" required readOnly value={session.user?.email || ""} />
+                <small className="muted">{session.user ? "ログイン中のGoogleアカウントのメールアドレスです。返信はこちらに届きます。" : "ログインすると、お名前とメールアドレスが自動入力されます。"}</small>
               </Field>
               <Field label="ご相談内容">
                 <textarea
@@ -1856,7 +1718,7 @@ export function PublicShop({
               </Field>
               <button
                 className="primary"
-                disabled={busy || (!preview && !isCustomer)}
+                disabled={busy || (!isCustomer)}
               >
                 お問い合わせを送る →
               </button>

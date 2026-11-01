@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { memberProfile, type MemberProfile } from "./customer-profile.ts";
 import { dateJST, type Booking } from "./domain.ts";
 
 export const customerPeriods = [
@@ -43,7 +44,7 @@ export type Inquiry = {
   status: string;
   at: string;
 };
-export type CustomerRecord = {
+export type CustomerRecord = Partial<MemberProfile> & {
   shopId: string;
   email: string;
   updatedBy: string;
@@ -86,6 +87,7 @@ export type CustomerSummary = {
   lastVisit: string | null;
   totalAmount: number;
   hasNote: boolean;
+  registered?: boolean;
 };
 export type CustomerEvent =
   | { kind: "booking"; at: string; booking: Booking }
@@ -93,6 +95,7 @@ export type CustomerEvent =
   | { kind: "note"; at: string; note: CustomerNote };
 export type CustomerDetail = CustomerSummary & {
   history: CustomerEvent[];
+  profile?: MemberProfile;
 };
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const timestamp = (value: string) => Date.parse(value) || 0;
@@ -107,6 +110,7 @@ export function aggregateCustomers(
   notes: CustomerNote[],
   now: Date,
   since?: string,
+  records: CustomerRecord[] = [],
 ): CustomerDetail[] {
   const start = since ? Date.parse(`${since}T00:00:00+09:00`) : -Infinity;
   const groups = new Map<string, CustomerEvent[]>();
@@ -119,6 +123,8 @@ export function aggregateCustomers(
   }
   for (const booking of bookings) add(booking.customer, { kind: "booking", at: booking.start, booking });
   for (const inquiry of inquiries) add(inquiry.email, { kind: "inquiry", at: inquiry.at, inquiry });
+  const profiles = new Map(records.flatMap(record => { const profile = memberProfile(record); return profile ? [[normalizeEmail(record.email), profile] as const] : []; }));
+  for (const email of profiles.keys()) if (!groups.has(email)) groups.set(email, []);
   const notesByEmail = new Map<string, CustomerNote[]>();
   for (const note of notes.filter(note => note.status === "active")) {
     const email = normalizeEmail(note.email);
@@ -130,11 +136,13 @@ export function aggregateCustomers(
     // Equal timestamps use a stable identity tie-break, independent of sheet row order.
     const latest = [...history].sort((a, b) => timestamp(recordedAt(b)) - timestamp(recordedAt(a)) || compare(eventId(b), eventId(a)))[0];
     const customerNotes = notesByEmail.get(email) || [];
+    const profile = profiles.get(email);
     const selectedHistory: CustomerEvent[] = [...history, ...customerNotes.map(note => ({ kind: "note" as const, at: note.createdAt, note }))].filter(event => timestamp(event.at) >= start);
     const visits = selectedHistory.flatMap(event => event.kind === "booking" && isVisit(event.booking, now) ? [event.booking] : []);
     return {
       email,
-      name: latest.kind === "booking" ? latest.booking.name : latest.kind === "inquiry" ? latest.inquiry.name : "",
+      name: profile?.name || (latest?.kind === "booking" ? latest.booking.name : latest?.kind === "inquiry" ? latest.inquiry.name : ""),
+      ...(profile ? { profile, registered: true } : {}),
       visitCount: visits.length,
       lastVisit: visits.map(booking => booking.start).sort((a, b) => timestamp(b) - timestamp(a))[0] || null,
       totalAmount: visits.reduce((sum, booking) => sum + booking.price, 0),
@@ -145,5 +153,5 @@ export function aggregateCustomers(
 }
 
 export function customerSummaries(customers: CustomerDetail[]): CustomerSummary[] {
-  return customers.filter(customer => customer.history.length > 0).map(({ history, ...summary }) => summary);
+  return customers.filter(customer => customer.history.length > 0 || customer.registered).map(({ history, profile, ...summary }) => summary);
 }

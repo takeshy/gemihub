@@ -31,22 +31,8 @@ export const CustomerChoice: Story = {
   args: { scenario: "customer-choice" },
 };
 
-export const MyPage: Story = {
-  name: "顧客・マイページ",
-  args: { scenario: "mypage" },
-};
 
 export const Contact: Story = {
   name: "顧客・お問い合わせ",
   args: { scenario: "contact" },
-};
-
-export const Anonymous: Story = {
-  name: "顧客・ログイン前",
-  args: { scenario: "anonymous" },
-};
-
-export const CustomPage: Story = {
-  name: "追加ページ・よくある質問",
-  args: { scenario: "custom-page" },
 };

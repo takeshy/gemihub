@@ -9,4 +9,3 @@ export const generateImageSchema = z.object({
 });
 export type GenerateImageInput = z.infer<typeof generateImageSchema>;
 export type LibraryImage = { id: string; name: string; mimeType: string; size: number; createdAt: string; source: "upload" | "ai"; prompt?: string; model?: string; usedBy: string[] };
-export type CustomerMemoImage = { id: string; noteId: string; email: string; customerName: string; name: string; mimeType: string; size: number; createdAt: string };

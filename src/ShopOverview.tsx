@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import type { ChatReference } from "../server/shop-chat";
+import type { RequestIntent } from "../server/request-intent";
+import React, { useEffect, useRef, useState } from "react";
 import type { ShopConfig } from "../server/domain";
 import { useApi } from "./api";
 import { DataOverview } from "./DataOverview";
@@ -7,14 +9,15 @@ import type { Plan, Workspace } from "./App";
 export type BuildContext = { config: ShopConfig | null; published: boolean; revision: number; hash: string; history: { at: string; summary: string }[] };
 const days = ["日", "月", "火", "水", "木", "金", "土"];
 const money = (price: number) => `¥${price.toLocaleString("ja-JP")}`;
-export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, open }: { google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[]) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
+export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, open, focusRequest = false, initialIntent }: { initialIntent?: RequestIntent; focusRequest?: boolean; google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[], intent?: RequestIntent, chat?: ChatReference) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
   const api = useApi();
   const [data, setData] = useState<BuildContext>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [planning, setPlanning] = useState(false);
-  const [downloading, setDownloading] = useState<"spec" | "history">();
   const [generation, setGeneration] = useState(0);
+  const requestSection = useRef<HTMLElement>(null);
+  useEffect(() => { if (data && focusRequest) requestSection.current?.scrollIntoView({ block: "start" }); }, [!!data, focusRequest]);
   async function refresh() {
     setLoading(true); setError("");
     try { setData(await api<BuildContext>(`/api/shops/${shopId}/build-context`)); setGeneration(v => v + 1); }
@@ -22,28 +25,26 @@ export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, 
     finally { setLoading(false); }
   }
   useEffect(() => { void refresh(); }, [shopId]);
-  async function download(kind: "spec" | "history") {
-    setDownloading(kind); setError("");
-    try {
-      const docs = await api<{ spec: string; history: string }>(`/api/shops/${shopId}/documents`);
-      const url = URL.createObjectURL(new Blob([docs[kind]], { type: "text/markdown" }));
-      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${kind}.md`; anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setDownloading(undefined); }
-  }
   const config = data?.config;
   return <div className="shop-build-layout">
     <section className="panel shop-history" aria-label="お店の変更履歴">
-      <div className="section-top"><h2>変更履歴</h2><div className="actions"><span className="small muted">{data ? `${data.history.length}件` : "読み込み中…"}</span><button disabled={!!downloading} onClick={() => void download("history")}>{downloading === "history" ? "ダウンロード中…" : "history.md をダウンロード"}</button><button disabled={loading || planning} onClick={() => void refresh()}>最新に更新</button></div></div>
-      {error && <p className="alert" role="alert">{error}</p>}
+      {error && <div className="alert" role="alert"><p>{error}</p><button disabled={loading || planning} onClick={() => void refresh()}>もう一度読み込む</button></div>}
+      <details>
+      <summary><h2>変更履歴</h2><span className="small muted">{data ? `${data.history.length}件` : "読み込み中…"}</span><span className="history-chevron" aria-hidden="true">⌄</span></summary>
       {data && !data.history.length && <p className="muted">まだ変更履歴はありません。</p>}
       <ol>{[...(data?.history || [])].reverse().map((entry, i) => <li key={`${entry.at}-${i}`}><time dateTime={entry.at}>{new Date(entry.at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</time><p>{entry.summary}</p></li>)}</ol>
+      </details>
+    </section>
+    <section ref={requestSection} className="panel shop-consultation" aria-label="AIへの相談">
+      <div className="section-top"><span className="ai-mark">✳</span><div><h2>AIとお店をつくる</h2><p className="small muted">相談・修正・新ページ作成を選べます。</p></div></div>
+      <p className="muted">現在のお店の設定と変更履歴を見ながら、音声や文字でやりとりできます。</p>
+      {data && config && <ShopRequest key={`${data.hash}-${generation}`} shopId={shopId} initialIntent={initialIntent} published={data.published} isOwner={isOwner} context={{ revision: data.revision, hash: data.hash }} currentConfig={config} plan={plan} onAccept={onAccept} onPlan={async (text, imageIds, intent, chat) => { setPlanning(true); try { return await onPlan(text, { revision: data.revision, hash: data.hash }, imageIds, intent, chat); } finally { setPlanning(false); } }} />}
+      {planning && <p role="status">変更プランを作成しています…</p>}
     </section>
     <div className="shop-spec-column">
-      <section className="panel shop-spec" aria-label="現在のお店の仕様">
-        <div className="section-top"><h2>現在の仕様</h2><button disabled={!!downloading} onClick={() => void download("spec")}>{downloading === "spec" ? "ダウンロード中…" : "spec.md をダウンロード"}</button></div>
-        {!data && <p>{loading ? "現在の仕様を読み込んでいます…" : "仕様を読み込めませんでした。最新に更新してください。"}</p>}
+      <section className="panel shop-spec" aria-label="現在のお店の設定">
+        <div className="section-top"><h2>現在のお店の設定</h2></div>
+        {!data && <p>{loading ? "現在のお店の設定を読み込んでいます…" : "設定を読み込めませんでした。もう一度読み込んでください。"}</p>}
         {config && <>
           <div className="shop-spec-intro"><h3>{config.name}</h3><p>{config.description}</p><span className="pill">{data.published ? "現在の設定" : "公開前の設定"}</span></div>
           <div className="spec-stats"><div><strong>{config.menus.filter(m => m.active).length}</strong><span>メニュー</span></div><div><strong>{config.staff.length}</strong><span>スタッフ</span></div><div><strong>{8 + config.pages.length}</strong><span>お客様向け画面</span></div></div>
@@ -59,11 +60,5 @@ export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, 
       </section>
       <DataOverview isOwner={isOwner} google={google} open={open} />
     </div>
-    <section className="panel shop-consultation" aria-label="AIへの相談">
-      <div className="section-top"><span className="ai-mark">✳</span><div><h2>AIとお店をつくる</h2><p className="small muted">質問も、変更の相談も、ここから。</p></div></div>
-      <p className="muted">現在の仕様と変更履歴を見ながら、音声や文字でやりとりできます。</p>
-      {data && config && <ShopRequest key={`${data.hash}-${generation}`} shopId={shopId} published={data.published} isOwner={isOwner} context={{ revision: data.revision, hash: data.hash }} plan={plan} onAccept={onAccept} onPlan={async (text, imageIds) => { setPlanning(true); try { return await onPlan(text, { revision: data.revision, hash: data.hash }, imageIds); } finally { setPlanning(false); } }} />}
-      {planning && <p role="status">変更プランを作成しています…</p>}
-    </section>
   </div>;
 }

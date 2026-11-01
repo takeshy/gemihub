@@ -187,7 +187,7 @@ test("removed uploads, image identification, ambiguous target selection, explana
       .status,
     409,
   );
-  await request(base + `/plans/${created.id}/publish`, {}, owner);
+  await request(base + `/plans/${created.id}/publish`, { publication: "public" }, owner);
   assert.equal((await request(base + "/plan", input, owner)).status, 409);
   const diagram = await request(base + "/system", undefined, owner);
   assert.equal(diagram.status, 200);

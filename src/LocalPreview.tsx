@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useImperativeHandle } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChromeEditor, ChromePreview } from "./SiteChrome";
 import { ScreenTree } from "./ScreenTree";
@@ -12,18 +12,32 @@ import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, t
 import { FixtureEditor } from "./FixtureEditor";
 import { VisualRequest } from "./VisualRequest";
 import { shopSchema, planSummary, type ShopConfig } from "../server/domain";
-import { postKey, type PostCategory } from "../server/post-domain";
+import { postKey, type PostCategory, type PublicPost } from "../server/post-domain";
 import { createRequestId } from "./request-id";
 import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
 
-export type LocalEditorHandle = { addPage: (page: ShopPage) => void };
 type Snapshot = Pick<LocalDraft, "base" | "source" | "config"> & { lastPublishedPlanId?: string };
-export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRef }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; activate?: () => void; actionsRef?: React.Ref<LocalEditorHandle> }) {
+export function LocalPreview({ shop, email, reload, sidebar, activate, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; activate?: () => void; initialScreen?: string; initialArticleKey?: string }) {
   const api = useApi();
   const key = draftKey(email, shop.id);
   const [draft, setDraft] = useState<LocalDraft>();
   const latestDraft = useRef<LocalDraft | undefined>(undefined);
+  const entrySelected=useRef(false);
   const [fixtureEditing, setFixtureEditing] = useState<Fixtures>();
+  const displayMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    function closeOutside(event: PointerEvent) {
+      const menu = displayMenu.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      const menu = displayMenu.current;
+      if (event.key === "Escape" && menu?.open) { menu.open = false; menu.querySelector("summary")?.focus(); }
+    }
+    document.addEventListener("pointerdown", closeOutside, true);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("pointerdown", closeOutside, true); document.removeEventListener("keydown", closeOnEscape); };
+  }, []);
   const [screen, setScreen] = useState("reserve");
   const [penHost, setPenHost] = useState<HTMLSpanElement | null>(null);
   const [visibility, setVisibility] = useState<Record<string, { header?: boolean; footer?: boolean }>>({});
@@ -78,6 +92,12 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     return () => { active = false; };
   }, [key]);
   useEffect(() => {
+    if (!latestDraft.current) return;
+    let active = true;
+    void api<EditorIndex>(`/api/shops/${shop.id}/local-editor/index`).then(remote => { if (active) setIndex(remote); }).catch(() => { if (active) setError("最新の画面一覧を確認できませんでした。"); });
+    return () => { active = false; };
+  }, [key, shop.revision]);
+  useEffect(() => {
     if (!draft || !index) return;
     let active = true;
     const ids = [...new Set([...draft.config.pages, ...draft.source?.pages || [], ...index.pages].map(p => p.id))];
@@ -115,12 +135,6 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     setInvalid(""); save({ ...draft, config: valid.data });
     setRoute({ pane: "reserve", pageSlug: page.slug });
   }
-  useImperativeHandle(actionsRef, () => ({ addPage(page) {
-    if (!draft || draft.pending) throw new Error("画面の読み込み、または反映処理の完了を待ってください");
-    const config = shopSchema.parse({ ...draft.config, pages: [...draft.config.pages, page] });
-    const next = { ...draft, config, downloaded: [...new Set([...(draft.downloaded || []), page.id])] };
-    writeDraft(localStorage, key, next); restore(next); setScreen(`page:${page.id}`); setPageEditing(page); setRoute({ pane: "reserve", pageSlug: page.slug }); activate?.();
-  } }), [draft]);
   function changeConfig(config: ShopConfig) {
     if (!draft || draft.pending) return;
     const parsed = shopSchema.safeParse(config);
@@ -139,7 +153,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     if (currentStatus === "conflict") await compareConflict(target);
     setInvalid("");
     if (value.startsWith("page:")) {
-      const page = draft?.config.pages.find(p => p.id === value.slice(5));
+      const page = latestDraft.current?.config.pages.find(p => p.id === value.slice(5)) || currentIndex?.pages.find(p=>p.id===value.slice(5));
       setPageEditing(undefined); setRoute({ pane: "reserve", pageSlug: page?.slug }); setVersion(v => v + 1); return;
     }
     if (target.kind === "part") { setRoute({ pane: "reserve" }); setVersion(v => v + 1); return; }
@@ -150,6 +164,29 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     } else setRoute({ pane: value });
     setVersion(v => v + 1);
   }
+  useEffect(()=>{
+    if(entrySelected.current||!initialScreen||!draft||!index||draft.pending)return;
+    entrySelected.current=true;
+    const screens=["reserve","about","mine","contact","blogs","blogs:article","announcements","announcements:article",...index.pages.map(page=>`page:${page.id}`),...draft.config.pages.map(page=>`page:${page.id}`)];
+    if(!screens.includes(initialScreen)){setError("指定された画面が見つかりません。画面一覧から選んでください。");return;}
+    void run(async()=>{
+      await choose(initialScreen);
+      const category=initialScreen.split(":")[0];
+      if(initialArticleKey&&initialScreen.endsWith(":article")&&(category==="blogs"||category==="announcements")){
+        const snapshot=await api<{posts:PublicPost[]}>(`/api/shops/${shop.id}/publication-preview`);
+        const post=snapshot.posts.find(post=>post.category===category&&postKey(post)===initialArticleKey);
+        if(post&&latestDraft.current){
+          const current=latestDraft.current;
+          const fixtures={...current.fixtures,posts:[...current.fixtures.posts.filter(item=>item.category!==category||postKey(item)!==initialArticleKey).slice(0,49),post]};
+          save({...current,fixtures});setFixtureEditing(structuredClone(fixtures));
+          setRoute({category,articleKey:initialArticleKey,pane:"reserve"});setVersion(value=>value+1);
+        }else{
+          setScreen(category);setRoute({category,pane:"reserve"});
+          setNotice("選んだ記事は公開内容から見つかりませんでした。一覧から確認してください。");
+        }
+      }
+    });
+  },[draft,index,initialScreen,initialArticleKey]);
   async function remoteValue(target: ReleaseScope) {
     if (target.kind === "page") return (await api<{ page: ShopPage | null }>(`/api/shops/${shop.id}/local-editor/pages/${target.pageId}`)).page;
     return scopedSource((await api<Snapshot>(`/api/shops/${shop.id}/local-editor/shared`)).source, target);
@@ -248,7 +285,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
     <div className="editor-toolbar">
       <div><strong>{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || "ページ" : scope.kind === "part" ? (scope.part === "header" ? "ヘッダー" : "フッター") : ({ reserve: "予約", about: "お店のこと", mine: "マイページ", contact: "お問い合わせ", blogs: "ブログ一覧", "blogs:article": "ブログ記事", announcements: "お知らせ一覧", "announcements:article": "お知らせ記事" } as Record<string, string>)[screen]}</strong>{summary.length > 0 && <span className={`editor-change-badge ${saved ? "" : "unsaved"}`}>{saved ? "変更あり" : "未保存"}</span>}</div>
       <div className="editor-tools"><span ref={setPenHost} />
-        {scope.kind !== "part" && <details className="preview-display-menu"><summary>表示</summary><div>
+        {scope.kind !== "part" && <details ref={displayMenu} className="preview-display-menu"><summary>表示</summary><div>
           <label><input type="checkbox" checked={visibility[screen]?.header === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />ヘッダーを表示</label>
           <label><input type="checkbox" checked={visibility[screen]?.footer === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], footer: !event.target.checked } }))} />フッターを表示</label>
           <p>この画面のプレビューだけに適用</p>
@@ -297,7 +334,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, actionsRe
         }
       }}>
         {scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
-          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} preview={false} hideHeader={visibility[screen]?.header !== false} hideFooter={visibility[screen]?.footer !== false} busy={busy} run={run} notify={setNotice} navigate={href => {
+          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} hideHeader={visibility[screen]?.header !== false} hideFooter={visibility[screen]?.footer !== false} busy={busy} run={run} notify={setNotice} navigate={href => {
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
             const pageMatch = url.pathname.match(/^\/s\/local-preview\/pages\/([^/]+)$/);

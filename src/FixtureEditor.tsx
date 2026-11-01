@@ -1,3 +1,4 @@
+import { DateInput } from "./DateInput";
 import React from "react";
 import { dateJST, type ShopConfig } from "../server/domain";
 import { createRequestId } from "./request-id";
@@ -20,8 +21,8 @@ export function FixtureEditor({ value, onChange, config }: { value: Fixtures; on
       <div className="form-grid">
         <label>予約のメニュー<select value={b.menuId} onChange={e => booking(index, { menuId: e.target.value })}>{config.menus.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
         <label>予約の担当者<select value={b.staffId} onChange={e => booking(index, { staffId: e.target.value })}>{config.staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-        <label>開始日時（日本時間）<input type="datetime-local" value={localTime(b.start)} onChange={e => booking(index, { start: utcTime(e.target.value) })} /></label>
-        <label>終了日時（日本時間）<input type="datetime-local" value={localTime(b.end)} onChange={e => booking(index, { end: utcTime(e.target.value) })} /></label>
+        <label>開始日時（日本時間）<DateInput aria-label="開始日時（日本時間）" withTime value={localTime(b.start)} onValueChange={value => booking(index, { start: utcTime(value) })} /></label>
+        <label>終了日時（日本時間）<DateInput aria-label="終了日時（日本時間）" withTime value={localTime(b.end)} onValueChange={value => booking(index, { end: utcTime(value) })} /></label>
         <label>予約の状態<select value={b.status} onChange={e => booking(index, { status: e.target.value as typeof b.status })}><option value="active">予約確定</option><option value="cancelled">キャンセル済み</option><option value="no_show">無断キャンセル</option></select></label>
       </div>
       <button onClick={() => onChange({ ...value, bookings: value.bookings.filter((_, i) => i !== index) })}>このサンプル予約を削除</button>
@@ -32,7 +33,7 @@ export function FixtureEditor({ value, onChange, config }: { value: Fixtures; on
       <legend>記事 {index + 1}</legend>
       <label>記事の種類<select value={p.category} onChange={e => post(index, { category: e.target.value as typeof p.category })}><option value="blogs">ブログ</option><option value="announcements">お知らせ</option></select></label>
       <label>記事タイトル<input value={p.title} onChange={e => post(index, { title: e.target.value })} /></label>
-      <label>記事の日付<input type="date" value={p.date} onChange={e => post(index, { date: e.target.value })} /></label>
+      <label>記事の日付<DateInput aria-label="記事の日付" value={p.date} onValueChange={value => post(index, { date: value })} /></label>
       <label>記事の紹介文<textarea value={p.excerpt} onChange={e => post(index, { excerpt: e.target.value })} /></label>
       <label>記事の本文<textarea rows={6} value={p.body} onChange={e => post(index, { body: e.target.value })} /></label>
       <button onClick={() => onChange({ ...value, posts: value.posts.filter((_, i) => i !== index) })}>このサンプル記事を削除</button>

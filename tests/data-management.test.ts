@@ -52,7 +52,7 @@ test("Data management lists only extra sheets, enforces ownership, preserves cel
   assert.equal((await request("/42")).body.nextRow, 4);
   assert.deepEqual((await request("/42")).body.headers, sheet.headers);
   assert.equal((await store.records<any>("demoDataSheet", shop)).find(s => s.id === "0").values[0][1], 2);
-  assert.equal(new Set(shopData.map(data => data.sheet)).size, 10);
+  assert.equal(new Set(shopData.map(data => data.sheet)).size, 12);
 });
 
 test("Extra Sheets use quoted names and RAW updates for changed cells while leaving headers and formulas intact", async t => {

@@ -15,6 +15,7 @@ export function Screen({ scenario }: { scenario: Scenario }) {
     <div
       onClickCapture={(event) => {
         const link = (event.target as HTMLElement).closest("a");
+        if(link?.hasAttribute("data-article-link")&&link.closest(".preview-surface,.local-preview-screen"))return;
         if (
           link &&
           ["/", "/manual"].includes(link.getAttribute("href") || "")
@@ -23,7 +24,7 @@ export function Screen({ scenario }: { scenario: Scenario }) {
           navigate(link.getAttribute("href")!);
           return;
         }
-        if (link?.hasAttribute("data-article-link")) {
+        if (link?.hasAttribute("data-publication-preview-link") || link?.hasAttribute("data-shop-request-link") || link?.hasAttribute("data-article-link")) {
           event.preventDefault();
           navigate(link.getAttribute("href")!);
           return;

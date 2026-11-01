@@ -2,12 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../server/app.ts";
 import { Store, type Shop } from "../server/store.ts";
-import { sample, dateJST, type Booking } from "../server/domain.ts";
+import { sample, dateJST, slots, type Booking } from "../server/domain.ts";
 import type { AddressInfo } from "node:net";
 import { request as httpRequest } from "node:http";
 process.env.DEMO_MODE = "true";
 process.env.APP_ORIGIN = "http://127.0.0.1";
-test("approval, isolated preview, publication, customer authorization, conflict locking, operations and invitations", async (t) => {
+test("approval, retired preview routes, publication, customer authorization, conflict locking, operations and invitations", async (t) => {
   const store = new Store(":memory:");
   const server = createApp(store);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -38,6 +38,12 @@ test("approval, isolated preview, publication, customer authorization, conflict 
   const owner = login.cookie;
   const work = await request("/api/workspace", undefined, owner);
   const shop: Shop = work.body.shops[0];
+  assert.equal(server.listenerCount("upgrade"),0,"no LIVE WebSocket relay remains");
+  for(const action of ["interview","interview/turn","interview/plan","live","posts/source"]){
+    assert.equal((await request(`/api/shops/${shop.id}/${action}`,undefined,owner)).status,404);
+    assert.equal((await request(`/api/shops/${shop.id}/${action}`,{},owner)).status,404);
+  }
+  assert.equal((await request("/live-audio.js",undefined,owner)).status,404);
   const c = structuredClone(sample);
   c.rules.cancelHours = 0;
   c.hours.closedWeekdays = [];
@@ -57,33 +63,13 @@ test("approval, isolated preview, publication, customer authorization, conflict 
     404,
   );
   await request(`/api/shops/${shop.id}/plans/${plan.id}/approve`, {}, owner);
-  const preview = await request(
-    `/api/preview/${shop.id}?plan=${plan.id}`,
-    undefined,
-    owner,
-  );
-  assert.equal(preview.status, 200);
+  assert.equal((await request(`/api/preview/${shop.id}?plan=${plan.id}`, undefined, owner)).status, 404);
   const date = dateJST(new Date(Date.now() + 3 * 86400000));
-  const previewSlots = await request(
-    `/api/preview/${shop.id}/slots?plan=${plan.id}&date=${date}&menu=simple`,
-    undefined,
-    owner,
-  );
-  const slot = previewSlots.body[0];
+  const slot = slots(c, [], date, "simple")[0];
   assert.ok(slot);
-  assert.equal(
-    (
-      await request(
-        `/api/preview/${shop.id}/bookings?plan=${plan.id}`,
-        { name: "練習", menuId: "simple", start: slot.start },
-        owner,
-      )
-    ).status,
-    200,
-  );
   assert.equal((await store.bookings(shop.id)).length, 0);
+  assert.equal((await request(publish, { publication: "public" }, owner)).status, 200);
   assert.equal((await request(publish, {}, owner)).status, 200);
-  assert.equal((await request(publish, {}, owner)).status, 409);
   assert.equal((await request(`/api/public/${shop.slug}`)).status, 200);
   const alice = (
     await request("/api/demo-login", {
@@ -107,7 +93,7 @@ test("approval, isolated preview, publication, customer authorization, conflict 
   assert.equal(
     (await request(`/api/preview/${shop.id}?plan=${plan.id}`, undefined, alice))
       .status,
-    403,
+    404,
   );
   const bookingPath = `/api/public/${shop.slug}/bookings`;
   assert.equal((await request(bookingPath)).status, 401);

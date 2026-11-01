@@ -14,14 +14,12 @@ import { artifacts } from "../server/artifacts.ts";
 import { driveMock } from "../server/drive-mock.ts";
 import { createPreviewClient } from "../src/local-preview.ts";
 import { requestImageParts, readRequestImages, type RequestImage } from "../server/request-images.ts";
-import { WebSocket } from "ws";
-import type { Session, LiveConnectParameters } from "@google/genai";
 
 const image = { mimeType: "image/png" as const, data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" };
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 process.env.DEMO_MODE = "true";
 
-test("Private memo images remain read-only and absent from request inputs; selected managed bytes reach text, page and voice models", async t => {
+test("Private memo images stay on customer pages and out of managed inputs; selected managed bytes reach text and page models", async t => {
   const store = new Store(":memory:"); const shop = await store.createShop("owner@example.com"); shop.published = structuredClone(sample); await store.saveShop(shop);
   const other = await store.createShop("other@example.com");
   for (const [id, email] of [["owner", shop.owner], ["staff", "staff@example.com"], ["customer", "guest@example.com"], ["other", other.owner]]) await store.put("session", digest(id), { user: { email, name: id }, expires: Date.now() + 600000 });
@@ -33,25 +31,24 @@ test("Private memo images remain read-only and absent from request inputs; selec
   await files.upload(shop, "", privateId, { ...image, name: "非公開.png" });
   const note = { id: "memo", shopId: shop.id, email: "guest@example.com", text: "PRIVATE MEMO BODY", attachments: [{ id: privateId, name: "非公開.png", mimeType: image.mimeType, size: Buffer.byteLength(image.data, "base64") }, { id: "pdf", name: "文書.pdf", mimeType: "application/pdf", size: 5 }], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: shop.owner, updatedBy: shop.owner, status: "active" };
   await store.put("customerNote", note.id, note);
+  await store.put("customer",`${shop.id}:guest@example.com`,{shopId:shop.id,email:"guest@example.com",name:"お客様",birthDate:"1990-01-01",gender:"not_specified",updatedBy:shop.owner,updatedAt:new Date().toISOString()});
   await store.put("customerNote", "deleted", { ...note, id: "deleted", status: "deleted" });
   await store.put("customerNote", "foreign", { ...note, id: "foreign", shopId: other.id });
   let proposedImages: RequestImage[] = [], pageImages: RequestImage[] = [], questionImages: RequestImage[] = [], calls = 0, inject = false;
-  const contexts: unknown[] = []; const connections: LiveConnectParameters[] = [];
-  process.env.VERTEX_LIVE_MODEL = "fixture-live";
   const server = createApp(store, {
     propose: async (_text, current, _email, _demo, images = []) => { calls++; proposedImages = images; const config = structuredClone(current || sample); config.header.imageId = inject ? foreign.imageId : images[0]?.id; config.header.imageUrl = ""; return { config, summary: ["画像変更"] }; },
     proposeArticle, identifyVisual,
     explainSystem: async (_text, _config, _demo, context) => { questionImages = context?.images || []; return { answer: "選択画像を確認", changeRequest: true }; },
     createPage: async (_messages, _context, _mode, images = []) => { pageImages = images; return { reply: "画像を使った案", page: { slug: "photo", title: "紹介", navigationLabel: "紹介", body: "紹介文", layout: "standard", imageUrl: "", imageId: inject ? foreign.imageId : images[0]?.id } }; },
-  }, async parameters => { connections.push(parameters); return { sendClientContent(value: unknown) { contexts.push(value); }, close() {}, sendRealtimeInput() {} } as unknown as Session; });
+  });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
-  t.after(() => { server.close(); void store.close(); delete process.env.VERTEX_LIVE_MODEL; });
+  t.after(() => { server.close(); void store.close(); });
   const base = `/api/shops/${shop.id}/`;
   async function api(path: string, data?: unknown, user = "owner") { const response = await fetch(origin + base + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `omai_session=${user}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) }); return { status: response.status, body: await response.json() }; }
-  const memos = await api("images/customer-memos"); assert.equal(memos.status, 200); assert.equal(memos.body.length, 1); assert.equal(memos.body[0].id, privateId); assert.equal(JSON.stringify(memos.body).includes(note.text), false);
+  assert.equal((await api("images/customer-memos")).status,404);
+  const customerImages=await api("customers/guest%40example.com/images");assert.equal(customerImages.status,200);assert.deepEqual(customerImages.body.images.map((item:{id:string})=>item.id),[privateId]);
   assert.deepEqual((await api("images")).body.map((item: LibraryImage) => item.id), [uploaded.imageId]);
-  for (const user of ["staff", "customer", "other", "anonymous"]) assert.equal((await api("images/customer-memos", undefined, user)).status, 403);
   assert.equal((await api("images/customer-memos", { name: "edit" })).status, 404);
   const request = { text: "選んだ画像をヘッダーに使って", imageIds: [uploaded.imageId] };
   const result = await api("plan", request); assert.equal(result.status, 200); assert.equal(result.body.config.header.imageId, uploaded.imageId); assert.equal((await store.shop(shop.id))!.published!.header.imageId, undefined);
@@ -68,14 +65,6 @@ test("Private memo images remain read-only and absent from request inputs; selec
   }
   assert.equal((await api("plan", { ...request, imageIds: [uploaded.imageId, uploaded.imageId] })).status, 400);
   inject = true; assert.equal((await api("plan", request)).status, 400); assert.equal((await api("pages/create-with-ai", pageRequest)).status, 400); inject = false;
-  await store.put("interview", shop.id, { shopId: shop.id, base: shop.revision, fields: {}, version: 0, handle: "old-session", updatedAt: Date.now() });
-  async function voice(ids: string[]) {
-    const ws = new WebSocket(origin.replace("http:", "ws:") + base + `live?images=${ids.join(",")}`, { headers: { Origin: origin, Cookie: "omai_session=owner" } });
-    t.after(() => ws.terminate());
-    return await new Promise<"ready" | "closed">((resolve, reject) => { const timer = setTimeout(() => { ws.terminate(); reject(new Error("voice timeout")); }, 3000); ws.on("message", data => { if (JSON.parse(data.toString()).type === "ready") { clearTimeout(timer); ws.close(); resolve("ready"); } }); ws.on("close", () => { clearTimeout(timer); resolve("closed"); }); ws.on("error", () => { clearTimeout(timer); resolve("closed"); }); });
-  }
-  assert.equal(await voice(request.imageIds), "ready"); assert.deepEqual(connections[0].config?.sessionResumption, {}); assert.ok(JSON.stringify(contexts).includes(image.data)); assert.ok(JSON.stringify(contexts).includes(uploaded.imageId));
-  const before = connections.length; assert.equal(await voice([privateId]), "closed"); assert.equal(await voice([foreign.imageId]), "closed"); assert.equal(await voice(["invalid"]), "closed"); assert.equal(connections.length, before);
   const archived = await uploadMenuImage(store, shop, { ...image, name: "削除.png", requestId: randomUUID() }, files, ""); await api(`images/${archived.imageId}/archive`, {}); assert.equal((await api("plan", { ...request, imageIds: [archived.imageId] })).status, 404);
   const huge = { ...image, data: Buffer.concat([Buffer.from(image.data, "base64"), Buffer.alloc(4 * 1024 * 1024)]).toString("base64") };
   const largeIds = await Promise.all([1, 2, 3].map(async n => (await uploadMenuImage(store, shop, { ...huge, name: `${n}.png`, requestId: randomUUID() }, files, "")).imageId));

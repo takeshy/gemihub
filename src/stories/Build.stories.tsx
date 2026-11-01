@@ -3,7 +3,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
 
 const meta = {
-  title: "お店づくり",
+  id: "お店づくり",
+  title: "運営/お店づくり",
   component: Screen,
   parameters: { layout: "fullscreen" },
   render: (args) => <Screen key={args.scenario} {...args} />,
@@ -17,18 +18,28 @@ export const Onboarding: Story = {
 };
 
 export const PlanReview: Story = {
-  name: "プランを確認・承認",
+  name: "用意するページと機能を確認",
   args: { scenario: "plan" },
 };
 
-export const Approved: Story = {
-  name: "承認済み・公開前",
-  args: { scenario: "approved" },
+export const ProductionPreview: Story = {
+  name: "本番公開前に各画面を確認",
+  args: { scenario: "production-preview" },
 };
 
-export const Preview: Story = {
-  name: "モックプレビュー",
-  args: { scenario: "preview" },
+export const Provisional: Story = {
+  name: "仮公開中・本人のみ閲覧・本番公開前の確認へ",
+  args: { scenario: "provisional" },
+};
+
+export const ProvisionalNeedsSettings: Story = {
+  name: "仮公開後は各メニューで設定",
+  args: { scenario: "provisional-unconfigured" },
+};
+
+export const ProvisionalPage: Story = {
+  name: "仮公開ページ・本人のログイン中",
+  args: { scenario: "provisional-page" },
 };
 
 export const Changes: Story = {
@@ -36,7 +47,7 @@ export const Changes: Story = {
   args: { scenario: "changes" },
 };
 
-export const ShopSpecification: Story = { name: "トップの変更履歴・現在の仕様とAI相談", args: {scenario: "system"} };
+export const ShopSpecification: Story = { name: "トップの変更履歴・現在のお店の設定とAI相談", args: {scenario: "system"} };
 
 export const LocalEditor: Story = {
   name: "画面を試す・ローカル編集と反映",
@@ -67,4 +78,4 @@ export const PageConflict: Story = {
   args: { scenario: "editor-conflict" },
   loaders: [async () => { const { seedEditor } = await import("./sync-fixtures"); seedEditor("conflict"); return {}; }],
 };
-export const AIPageBuilder: Story = { name: "別メニューでAIとページをつくる", args: { scenario: "page-builder" } };
+export const AIPageBuilder: Story = { name: "相談・修正・新ページ作成を選ぶ", args: { scenario: "page-builder" } };

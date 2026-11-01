@@ -37,8 +37,10 @@ const layouts: Record<string, { tab: string; columns: string[] }> = {
     ],
   },
   post: { tab: "posts", columns: ["id", "record"] },
-  customer: { tab: "customers", columns: ["email", "updatedBy", "updatedAt"] },
+  customer: { tab: "customers", columns: ["email", "updatedBy", "updatedAt", "name", "birthDate", "gender"] },
   customerNote: { tab: "customer_notes", columns: ["id", "email", "text", "attachments", "createdAt", "createdBy", "status", "updatedAt", "updatedBy"] },
+  shopChat: {tab:"ai_chats",columns:["id","email","intent","title","createdAt","updatedAt"]},
+  shopChatMessage: {tab:"ai_chat_messages",columns:["id","conversationId","email","role","text","requestId","sequence","createdAt","updatedAt","detail"]},
 };
 async function table(shop: Shop, kind: string, token: string) {
   const layout = layouts[kind];
@@ -74,10 +76,11 @@ async function table(shop: Shop, kind: string, token: string) {
   });
   const rows = response.data.values || [];
   const header = rows[0] || [];
-  if (
+  const legacyCustomerHeader = kind === "customer" && header.length === 3 && header.every((value, index) => value === layout.columns[index]);
+  if (!legacyCustomerHeader && (
     header.some((v, i) => v !== layout.columns[i]) ||
     (header.length && header.length !== layout.columns.length)
-  )
+  ))
     throw Object.assign(new Error(`${layout.tab} の列構造を確認してください`), {
       status: 409,
     });
@@ -114,6 +117,7 @@ export async function readRecords(
         layout.columns.map((k, i) => [k, row[i] ?? ""]),
       );
       value.shopId = shop.id;
+      if (kind === "shopChatMessage") { value.detail = JSON.parse(String(value.detail || "{}")); value.sequence = Number(value.sequence); }
       if (kind === "customerNote") {
         value.email = String(value.email).trim().toLowerCase();
         try {
@@ -167,7 +171,7 @@ export async function writeRecord(
   const row =
     kind === "post"
       ? [id, JSON.stringify(value)]
-      : layout.columns.map((k) => kind === "customerNote" && k === "attachments" ? JSON.stringify(value[k] || []) : value[k] ?? "");
+      : layout.columns.map((k) => kind === "customerNote" && k === "attachments" ? JSON.stringify(value[k] || []) : kind === "shopChatMessage" && k === "detail" ? JSON.stringify(value[k] || {}) : value[k] ?? "");
   // A retry reads by identity before choosing its fixed row; it never appends blindly.
   const number = index < 0 ? rows.length + 2 : index + 2;
   await sheets.spreadsheets.values.update({

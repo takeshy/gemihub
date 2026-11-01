@@ -25,6 +25,7 @@ test("Calendar OAuth is bound to member, shop, staff and account; busy slots are
     outsider: { email: "outsider@example.com", name: "Outsider", role: "customer", shopId: shop.id },
   };
   for (const [id, user] of Object.entries(sessions)) await store.put("session", digest(id), { user, expires: Date.now() + 600000 });
+  await store.put("customer", `${shop.id}:outsider@example.com`, { shopId: shop.id, email: "outsider@example.com", name: "Outsider", birthDate: "1990-01-01", gender: "not_specified", updatedAt: new Date().toISOString(), updatedBy: "outsider@example.com" });
   let busy: Busy = [];
   let broken = false;
   let identityEmail = member.email;
@@ -39,7 +40,7 @@ test("Calendar OAuth is bound to member, shop, staff and account; busy slots are
       return busy;
     },
   };
-  const server = createApp(store, undefined, undefined, gateway);
+  const server = createApp(store, undefined, gateway);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   process.env.APP_ORIGIN = origin;

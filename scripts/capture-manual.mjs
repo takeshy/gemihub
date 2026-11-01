@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 
 // Run against Storybook only: all records are isolated sample data.
 const origin = process.env.STORYBOOK_URL || "http://localhost:6005";
-const output = resolve("public/manual");
+const output = resolve(process.env.MANUAL_OUTPUT || "public/manual");
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
@@ -70,36 +70,40 @@ try {
   const bookingDate = bookingDay.toISOString().slice(0, 10);
   await open("landing", /お店のことを話す/);
   await capture("01-start.jpg");
-  await open("onboarding", "どんなお店をつくりますか？");
-  await page.getByRole("button", {name:/文章で依頼/}).click();
+  await open("onboarding", "AIとお店をつくる");
+  await capture("02-start-guide.jpg", ".interview");
+  await page.getByRole("button", {name:"はじめる",exact:true}).click();
   await page
-    .getByRole("textbox", { name: "質問・変更したいこと" })
+    .getByRole("textbox", { name: "AIに伝えたいこと" })
     .fill(
-      "夫婦で営むネイルサロン「凪」です。\nシンプルネイルは60分5,500円、季節のデザインは90分7,800円です。\nスタッフはあおい・はるの二人。営業時間は10〜18時、火曜定休。\n予約は30日前から、開始1時間前まで受け付けたいです。",
+      "ネイルサロンです。",
     );
+  await page.getByRole("button", {name:"送信",exact:true}).click();
+  await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText(/ほしい機能を次から選んでください。/).waitFor();
   await capture("02-interview.jpg", ".interview");
-  await page
-    .getByRole("button", { name: "項目ごとに入力・修正", exact: true })
-    .click();
-  await page
-    .getByRole("heading", { name: "お店の情報", exact: true })
-    .waitFor();
+  await open("staff", "スタッフ・勤務", "運営/スタッフ・勤務");
   await capture("03-edit.jpg", ".panel:has(.editor)");
-  await capture("03-rules.jpg", ".editor h3:last-of-type");
-  await open("plan-review", "依頼の結果を確認");
+  await capture("04-settings.jpg", ".panel:has(.editor)");
+  await open("rules", "予約ルール", "運営/お店の基本情報");
+  await capture("03-rules.jpg", ".live-settings-rules");
+  await open("plan-review", "下記の画面でいいですか？");
   await capture("04-plan.jpg", ".request-review");
-  await open("preview", "自分のための、ひとときを。");
-  await capture("05-preview.jpg");
-  await page.getByLabel("ご希望の日付（日本時間）").fill(bookingDate);
-  await page.getByRole("button", { name: "10:00", exact: true }).click();
-  await page.getByRole("button", { name: "プレビューで予約を試す →" }).click();
-  await page
-    .getByRole("status")
-    .filter({ hasText: "プレビューで予約を確認しました" })
-    .waitFor();
-  await capture("05-preview-booking.jpg", ".reservation-layout .wide");
-  await open("approved", "こんな予約システムをつくります。");
-  await capture("06-publish.jpg", ".panel.plan");
+  await open("provisional-page", "自分のための、ひとときを。");
+  await capture("05-provisional-page.jpg");
+  await open("provisional", "現在のお店の設定");
+  await capture("05-provisional.jpg", ".publication-status");
+  await open("production-preview", "画面の確認・本番公開");
+  await capture("06-publish.jpg", ".publication-preview");
+  await page.getByRole("button",{name:"修正依頼する",exact:true}).click();
+  await capture("06-correction-choice.jpg", ".publication-request-dialog");
+  await page.getByRole("button",{name:"プレビューに戻る",exact:true}).click();
+  await open("registration", "会員情報を登録する", "お客様の会員登録");
+  await page.getByRole("textbox", {name:"お名前",exact:true}).fill("山田 花子");
+  await page.getByRole("textbox", {name:"生年月日",exact:true}).fill("1995/02/28");
+  await page.getByLabel("性別", {exact:true}).selectOption("not_specified");
+  await capture("07-registration.jpg", ".customer-registration");
+  await open("anonymous", "メニュー", "お客様の会員登録");
+  await capture("07-login-entry.jpg");
   await open("customer", "自分のための、ひとときを。");
   assert.equal(await page.getByRole("heading", { name: "お店からのお便り", exact: true }).count(), 0);
   await page.getByLabel("ご希望の日付（日本時間）").fill(bookingDate);
@@ -121,6 +125,8 @@ try {
   await open("reservations", /予約一覧/);
   await page.getByRole("heading", { name: /山田 花子 様/ }).waitFor();
   await capture("09-bookings.jpg");
+  await open("contact", "お問い合わせ", "お客様の予約");
+  await capture("10-contact-form.jpg", ".contact-form");
   await open("inquiries", "お問い合わせ");
   await page
     .getByRole("textbox", { name: "返信内容" })
@@ -133,25 +139,44 @@ try {
     .getByLabel("招待する Google アカウントのメールアドレス")
     .fill("new-staff@example.com");
   await capture("11-team.jpg");
-  await open("changes", "現在の仕様");
-  await page.getByRole("button", {name:/文章で依頼/}).click();
+  await open("changes", "現在のお店の設定");
+  await page.getByRole("button",{name:"修正",exact:true}).click();
+  await page.getByRole("button", {name:"はじめる",exact:true}).click();
   await page
-    .getByRole("textbox", { name: "質問・変更したいこと" })
+    .getByRole("textbox", { name: "AIに伝えたいこと" })
     .fill(
       "水曜日も定休日にして、90分8,500円の「ご褒美ケアコース」を追加してください。",
     );
-  await page.getByRole("button", { name: "依頼して結果を確認", exact: true }).click();
+  await page.getByRole("button", { name: "送信", exact: true }).click();
+  await page.getByRole("button", {name:"変更案を確認する",exact:true}).last().click();
   await page
-    .getByRole("heading", { name: "依頼の結果を確認" })
+    .getByRole("heading", { name: "このように変更してよいですか？" })
     .waitFor();
   await capture("12-changes.jpg", ".request-review");
-  await open("shop-specification", "現在の仕様");
+  await open("shop-specification", "現在のお店の設定");
   await page.getByRole("heading", { name: "変更履歴", exact: true }).waitFor();
   assert.equal(await page.locator(".shop-build-layout > :first-child").getAttribute("aria-label"), "お店の変更履歴");
   assert.equal(await page.getByRole("heading", { name: "データとファイル", exact: true }).count(), 0);
   assert.equal(await page.getByRole("button", { name: "項目ごとに入力・修正", exact: true }).count(), 0);
   await capture("13-data.jpg", ".shop-history");
   await capture("13-storage.jpg", ".data-overview");
+  await capture("21-ai-options.jpg", ".shop-consultation");
+  await page.getByRole("button",{name:"修正",exact:true}).click();
+  await page.getByRole("button",{name:"はじめる",exact:true}).click();
+  await page.evaluate(()=>{window.SpeechRecognition=class {
+    start(){this.onstart?.();this.onresult?.({results:[{isFinal:false,0:{transcript:"水曜日も定休日に変更したいです。"}}]});}
+    stop(){}abort(){}
+  };});
+  await page.getByRole("button",{name:"音声入力",exact:true}).click();
+  await capture("24-voice.jpg", ".dictation-dialog");
+  await page.getByRole("dialog",{name:"音声入力",exact:true}).getByRole("button",{name:"下書きに戻る",exact:true}).click();
+  await page.getByRole("button", {name:"新ページ作成",exact:true}).click();
+  await page.getByRole("button", {name:"はじめる",exact:true}).click();
+  await page.getByLabel("AIに伝えたいこと", {exact:true}).fill("初めてのお客様向けのFAQページを追加したいです。メニューには「よくある質問」と表示してください。");
+  await page.getByRole("button", {name:"送信",exact:true}).click();
+  await page.getByRole("button", {name:"変更案を確認する",exact:true}).last().click();
+  await page.getByRole("heading", {name:"このページを追加してよいですか？",exact:true}).waitFor();
+  await capture("21-new-page.jpg", ".new-page-review");
   await open("settings", "予約ページのアドレス");
   await capture("14-domain.jpg");
   await open("sync-error", /予約一覧/);
@@ -159,6 +184,10 @@ try {
   await capture("15-retry.jpg");
   await open("blog-editor", "お店のお便り");
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
+  await page.locator('.post-writing-help summary').click();
+  assert.equal(await page.getByText("Google ドライブのメモのリンク",{exact:true}).count(),0);
+  await page.getByLabel("元になるメモ",{exact:true}).waitFor();
+  await page.locator('.post-writing-help summary').click();
   await capture("16-blog-edit.jpg", ".post-editor");
   await page
     .getByRole("button", { name: "プレビュー", exact: true })
@@ -228,7 +257,7 @@ try {
   await page.locator(".customer-image-dialog img").waitFor();
   await capture("28-customer-image-zoom.jpg");
   await page.getByRole("button", { name: "閉じる", exact: true }).click();
-  await open("data", "データ管理", "運営");
+  await open("data", "データ管理", "運営/データ管理");
   await page.getByRole("button", { name: "編集", exact: true }).first().waitFor();
   await capture("29-data-management.jpg", ".data-management");
   await page.getByRole("button", { name: "編集", exact: true }).first().click();
@@ -258,16 +287,13 @@ try {
   await page.locator(".image-generation-result img").waitFor();
   await capture("35-image-generation-result.jpg", ".image-generation-result");
   await page.getByRole("region", { name: "生成した画像を確認", exact: true }).getByRole("button", { name: "これでOK", exact: true }).click();
-  await page.getByRole("tab", { name: "お客様メモの画像", exact: true }).click();
-  await page.locator(".customer-memo-images figure").first().scrollIntoViewIfNeeded();
-  await page.locator(".customer-memo-images img").first().waitFor();
-  await capture("33-customer-memo-images.jpg", ".customer-memo-images");
-  await page.locator("aside nav").getByRole("button", { name: /お店をつくる・直す$/ }).click();
-  await page.getByRole("button", { name: /文章で依頼/ }).click();
-  await page.getByLabel("質問・変更したいこと").fill("選んだ画像をよくある質問のページに使ってください。");
-  await page.getByRole("button", { name: "依頼に使う画像を選ぶ", exact: true }).click();
+  await page.locator("aside nav").getByRole("button", { name: /AIとお店をつくる$/ }).click();
+  await page.getByRole("button",{name:"修正",exact:true}).click();
+  await page.getByRole("button", {name:"はじめる",exact:true}).click();
+  await page.getByLabel("AIに伝えたいこと").fill("選んだ画像をよくある質問のページに使ってください。");
+  await page.getByRole("button", { name: "画像を添付", exact: true }).click();
   const requestPicker = page.getByRole("dialog", { name: "依頼の画像を選ぶ", exact: true });
-  await requestPicker.getByRole("button", { name: "季節の花の紹介画像.pngを選択", exact: true }).click();
+  await requestPicker.getByRole("button", { name: "お店の紹介.pngを選択", exact: true }).click();
   await requestPicker.locator("img").first().waitFor();
   await capture("32-page-image.jpg");
   assert.deepEqual(errors, []);

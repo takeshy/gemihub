@@ -1,3 +1,4 @@
+import { customerProfileSchema, type MemberProfile } from "../server/customer-profile";
 import { z } from "zod";
 import { shopSchema, slots, dateJST, type ShopConfig } from "../server/domain";
 import { editorIndexSchema } from "../server/editor-index-schema";
@@ -51,6 +52,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
   const bookings = fixtures.bookings.map(b => ({ ...b, shopId, price: config.menus.find(menu => menu.id === b.menuId)?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }));
   const posts: PublicPost[] = fixtures.posts.map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
+  let profile: MemberProfile = { name: fixtures.customerName, birthDate: "1990-01-01", gender: "not_specified" };
   return async <T>(path: string, data?: unknown): Promise<T> => {
     const url = new URL(path, "https://preview.invalid");
     const action = url.pathname;
@@ -62,7 +64,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
       if (!ids.includes(image[2]) || !readImage) throw new Error("画像がありません");
       result = await readImage(image[2]);
     }
-    else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5) };
+    else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5), customerProfile: profile, registrationRequired: false };
     else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined);
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {
@@ -75,6 +77,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
       if (!b) throw new Error("サンプル予約がありません");
       b.status = "cancelled";
       result = { ok: true };
+    } else if (action === `${base}/profile`) { if (data !== undefined) profile = customerProfileSchema.parse(data); result = {profile};
     } else if (action === `${base}/inquiries`) result = { ok: true };
     else if (action === `${base}/posts`) {
       const all = posts.filter(p => !url.searchParams.get("category") || p.category === url.searchParams.get("category"));

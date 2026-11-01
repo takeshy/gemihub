@@ -4,9 +4,9 @@ import type { ShopConfig } from "../server/domain";
 import { MenuImage } from "./MenuImage";
 import { ImagePicker } from "./ImageLibrary";
 const days = ["日", "月", "火", "水", "木", "金", "土"];
-export function SiteHeader({ config: c, children, imageBase, imageSuffix }: { config: ShopConfig; children?: React.ReactNode; imageBase?: string; imageSuffix?: string }) {
+export function SiteHeader({ config: c, children, actions, imageBase, imageSuffix }: { config: ShopConfig; children?: React.ReactNode; actions?: React.ReactNode; imageBase?: string; imageSuffix?: string }) {
   const image = c.header.imageUrl || c.appearance?.imageUrl;
-  return <header className="site-header"><section className="salon-hero">
+  return <header className="site-header">{actions}<section className="salon-hero">
     <span className="eyebrow">A LITTLE MOMENT, JUST FOR YOU.</span>
     <h1>{c.header.title || c.name}</h1><p>{c.header.subtitle || c.description}</p>
     {c.header.showDetails && <div className="salon-details"><span>◷ {c.hours.start} – {c.hours.end}</span><span>定休日：{c.hours.closedWeekdays.map(d => `${days[d]}曜`).join("・") || "なし"}</span></div>}

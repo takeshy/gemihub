@@ -1,3 +1,6 @@
+import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, type ChatReference } from "./shop-chat.ts";
+import { answeredFinalDetails, finalDetailsQuestion, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
+import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
 import {
   createServer,
   type IncomingMessage,
@@ -13,7 +16,7 @@ import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSi
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
 import { listDataSheets, readDataTable, writeDataRow } from "./data-management.ts";
 import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot } from "./menu-images.ts";
-import { listImages, listCustomerMemoImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
+import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
 import { generateImage } from "./image-generation.ts";
 import { managedImageIds } from "./image-references.ts";
 import { generateImageSchema, requestImageIdsSchema } from "./image-library-domain.ts";
@@ -35,7 +38,6 @@ import {
   syncConfig,
   readConfig,
   sendMail,
-  readDriveNote,
   syncPostFiles,
 } from "./google.ts";
 import {
@@ -48,14 +50,7 @@ import {
   origin,
   demoEnabled,
 } from "./auth.ts";
-import {
-  attachLive,
-  interview,
-  saveInterview,
-  interviewText,
-  normalizeTurn,
-  type LiveConnector,
-} from "./interview.ts";
+
 import {
   propose,
   proposeArticle,
@@ -104,6 +99,8 @@ type Plan = {
   config: ShopConfig;
   summary: string[];
   approved: boolean;
+  requiresSetup?: boolean;
+  chat?: ChatReference;
   local?: boolean;
   scope?: ReleaseScope;
   createdAt: number;
@@ -153,12 +150,10 @@ export function createApp(
     proposeArticle: typeof proposeArticle;
     identifyVisual: typeof identifyVisual;
     explainSystem: typeof explainSystem;
-    normalizeTurn?: typeof normalizeTurn;
     createPage?: typeof createPageWithAI;
     mergePage?: typeof mergePageWithAI;
     generateImage?: typeof generateImage;
-  } = { propose, proposeArticle, identifyVisual, explainSystem, normalizeTurn },
-  liveConnector?: LiveConnector,
+  } = { propose, proposeArticle, identifyVisual, explainSystem },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
 ) {
@@ -243,8 +238,8 @@ export function createApp(
     for (const address of new Set([to, config.notificationEmail]))
       await enqueue(shop, "mail", { to: address, subject, body: text });
   }
-  async function publishConfiguration(fresh: Shop, plan: Plan) {
-    if (plan.local && fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
+  async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional")) {
+    if (fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
     if (plan.base !== fresh.revision) fail(409, "本番の内容が変わりました。最新の内容を読み直してください");
     if (!plan.approved) fail(409, "先にプランを承認してください");
     if (
@@ -298,6 +293,7 @@ export function createApp(
       delete fresh.publishingError;
     }
     fresh.published = plan.config;
+    fresh.publication = publication;
     fresh.draft = null;
     fresh.history = history;
     fresh.revision++;
@@ -343,6 +339,14 @@ export function createApp(
       const publicHost = !!hosted;
       const s = await session(store, req);
       const user = s?.user;
+      const assertStorefrontAccess = (shop: Shop) => {
+        if (shop.publication === "provisional" && user?.email !== shop.owner)
+          fail(user ? 403 : 401, "仮公開中のため、このページを用意したユーザーのログインが必要です");
+        if (shop.publication === "provisional") {
+          res.setHeader("Vary", "Cookie");
+          res.setHeader("X-Robots-Tag", "noindex, nofollow");
+        }
+      };
       if (method !== "GET" && method !== "HEAD") {
         if (req.headers.origin !== (publicHost ? `https://${host}` : origin()))
           checkOrigin(req);
@@ -558,6 +562,9 @@ export function createApp(
           shopId: shop.id,
         };
         if (input.role === "owner") await store.put("user", email, u);
+        else if (!await store.get("customer", `${shop.id}:${email}`)) await store.put("customer", `${shop.id}:${email}`, {
+          shopId: shop.id, email, name: u.name, birthDate: "1990-01-01", gender: "not_specified", updatedBy: email, updatedAt: new Date().toISOString(),
+        });
         await login(store, res, u);
         return json(res, { ok: true });
       }
@@ -663,10 +670,6 @@ export function createApp(
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
-          if (action === "images/customer-memos" && method === "GET") {
-            assertOwner(user, fresh);
-            return json(res, await listCustomerMemoImages(store, fresh));
-          }
           const libraryRoute = action.match(/^images(?:\/([a-f0-9]{64})(?:\/(rename|archive))?)?$/);
           if (libraryRoute && (method === "GET" || method === "POST")) {
             assertOwner(user, fresh);
@@ -806,52 +809,6 @@ export function createApp(
             res.setHeader("Set-Cookie", `omai_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
             return json(res, { authUrl: oauth().generateAuthUrl({ access_type: "offline", prompt: "consent", login_hint: user!.email, scope: ["openid", "email", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }) });
           }
-          if (action === "interview" && method === "GET") {
-            assertOwner(user, fresh);
-            return json(res, await interview(store, fresh));
-          }
-          if (action === "interview" && method === "POST") {
-            assertOwner(user, fresh);
-            const input = z
-              .object({ fields: z.unknown(), version: z.number().int() })
-              .parse(await body(req));
-            return json(
-              res,
-              await saveInterview(store, fresh, input.fields, input.version),
-            );
-          }
-          if (action === "interview/plan" && method === "POST") {
-            assertOwner(user, fresh);
-            const input = z
-              .object({ fields: z.unknown(), version: z.number().int() })
-              .parse(await body(req));
-            const state = await saveInterview(
-              store,
-              fresh,
-              input.fields,
-              input.version,
-            );
-            return json(res, {
-              state,
-              text: interviewText(state, !!fresh.published),
-            });
-          }
-          if (action === "interview/turn" && method === "POST") {
-            assertOwner(user, fresh);
-            const input = z
-              .object({ text: z.string().trim().min(1).max(10000) })
-              .parse(await body(req));
-            const current = await interview(store, fresh);
-            const result = await (intelligence.normalizeTurn || normalizeTurn)(
-              input.text,
-              current,
-              !!fresh.published,
-            );
-            const state = await saveInterview(store, fresh, result.fields);
-            let text: string | undefined;
-            if (result.ready) text = interviewText(state, !!fresh.published);
-            return json(res, { state, question: result.question, text });
-          }
           if (action === "system" && method === "GET") {
             if (!fresh.published) fail(409, "公開後に仕組み図を表示します");
             const config = await effective(fresh);
@@ -866,29 +823,55 @@ export function createApp(
             const config = fresh.published ? await effective(fresh) : fresh.draft;
             return json(res, { config, revision: fresh.revision, hash: contentHash(config), history: fresh.history, published: !!fresh.published });
           }
+          if (action === "conversations" && method === "GET") return json(res,{email:user!.email,conversations:await conversations(store,fresh,user!.email)});
+          if (action === "conversations" && method === "POST") {
+            const input = conversationInputSchema.parse(await body(req));
+            if (input.intent !== "consult") assertOwner(user,fresh);
+            return json(res,await createConversation(store,fresh,user!.email,input.intent,input.requestId,!!input.begin));
+          }
+          const conversationRoute = action.match(/^conversations\/([a-f0-9]{64})$/);
+          if (conversationRoute && method === "GET") {
+            const chat = await readConversation(store,fresh,user!.email,conversationRoute[1]);
+            const linked = [...new Set(chat.messages.flatMap(message => message.detail.planId ? [message.detail.planId] : []))];
+            const plans = (await Promise.all(linked.map(id => store.get<Plan>("plan",id)))).filter(plan => plan?.shopId === fresh.id);
+            return json(res,{...chat,plans});
+          }
           if (action === "system/question" && method === "POST") {
-            if (!fresh.published) fail(409, "公開後に質問できます");
             const input = z
               .object({
                 question: z.string().trim().min(1).max(4000),
+                chat: chatReferenceSchema.optional(),
+                intent: requestIntentSchema.optional(),
                 revision: z.number().int(),
                 hash: z.string().optional(),
                 messages: z.array(messageSchema).max(30).default([]),
                 imageIds: requestImageIdsSchema.default([]),
               })
               .parse(await body(req, 1500000));
+            if(!fresh.published&&input.intent!=="create-shop")fail(409,"先にお店づくりを始めてください");
+            if(input.intent==="create-shop"){assertOwner(user,fresh);if(fresh.published)fail(409,"お店ができました。相談・修正・新ページ作成から選んでください");}
+            let savedChat = input.chat ? await readConversation(store,fresh,user!.email,input.chat.id) : undefined;
+            if (savedChat && savedChat.intent !== input.intent) fail(409,"依頼の種類が変わっています。もう一度お話しください");
+            if (savedChat) {
+              await appendChatMessage(store,fresh,savedChat,{role:"user",text:input.question,requestId:input.chat!.requestId,detail:{imageIds:input.imageIds}});
+              savedChat = await readConversation(store,fresh,user!.email,savedChat.id);
+              const previous = savedChat.messages.find(message => message.role === "assistant" && message.requestId === input.chat!.requestId);
+              if (previous) return json(res,{answer:previous.text,...previous.detail,chat:savedChat});
+            }
             if (input.revision !== fresh.revision)
               fail(409, "お店の仕様が変わりました。現在の仕様を更新してください");
-            const config = await effective(fresh);
+            const config = fresh.published ? await effective(fresh) : fresh.draft || {...structuredClone(sample),notificationEmail:user!.email};
             if (input.hash && input.hash !== contentHash(config)) fail(409, "お店の仕様が変わりました。現在の仕様を更新してください");
             if (input.imageIds.length) assertOwner(user, fresh);
             const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です"));
-            const response = await intelligence.explainSystem(input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: input.messages, history: fresh.history, ...(images.length ? { images } : {}) });
-            if (!same(config, await effective(fresh))) fail(409, "回答中にお店の仕様が変わりました。現在の仕様を更新して質問し直してください");
-            return json(
-              res,
-              response,
-            );
+            const excluded = new Set(savedChat?.messages.slice(-25).map(message=>message.id) || []);
+            const relatedHistory = await searchConversationHistory(store,fresh,user!.email,input.question,excluded);
+            const response = await intelligence.explainSystem(input.intent ? `${requestIntentInstruction[input.intent]}\n${input.question}` : input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: savedChat ? conversationContext({...savedChat,messages:savedChat.messages.filter(message => message.requestId !== input.chat!.requestId)}) : input.messages, history: fresh.history, initialSetup:!fresh.published, relatedHistory, searchHistory:query=>searchConversationHistory(store,fresh,user!.email,query,excluded), ...(images.length ? { images } : {}) });
+            if (fresh.published && !same(config, await effective(fresh))) fail(409, "回答中にお店の仕様が変わりました。現在の仕様を更新して質問し直してください");
+            let answer: {answer:string;changeRequest:boolean;ready?:boolean} = input.intent === "consult" ? { ...response, changeRequest: false, ready: false } : response;
+            if(input.intent==="create-shop"&&answer.ready&&!answeredFinalDetails(savedChat?.messages || [...input.messages,{role:"user",text:input.question}])) answer={answer:finalDetailsQuestion,changeRequest:true,ready:false};
+            if (savedChat) await appendChatMessage(store,fresh,savedChat,{role:"assistant",text:answer.answer,requestId:input.chat!.requestId,detail:{changeRequest:answer.changeRequest,ready:answer.ready}});
+            return json(res,{...answer,...(savedChat ? {chat:await readConversation(store,fresh,user!.email,savedChat.id)} : {})});
           }
           if (action === "visual/identify" && method === "POST") {
             assertOwner(user, fresh);
@@ -970,23 +953,6 @@ export function createApp(
           }
           if (action === "posts" && method === "GET")
             return json(res, await postsFor(fresh));
-          if (action === "posts/source" && method === "POST") {
-            assertOwner(user, fresh);
-            const { url } = z
-              .object({ url: z.string().max(2048) })
-              .parse(await body(req));
-            return json(
-              res,
-              await readDriveNote(
-                (await ownerToken(fresh)) ||
-                  fail(
-                    503,
-                    "Google に接続してから読み込むか、メモを本文に貼り付けてください",
-                  ),
-                url,
-              ),
-            );
-          }
           if (action === "posts/propose" && method === "POST") {
             assertOwner(user, fresh);
             const input = z
@@ -1110,6 +1076,8 @@ export function createApp(
             const input = z
               .object({
                 text: z.string().min(1).max(10000),
+                chat: chatReferenceSchema.optional(),
+                intent: requestIntentSchema.optional(),
                 imageIds: requestImageIdsSchema.default([]),
                 config: shopSchema.optional(),
                 context: z.object({ revision: z.number().int(), hash: z.string() }).optional(),
@@ -1119,7 +1087,22 @@ export function createApp(
                   .optional(),
               })
               .parse(await body(req, 1500000));
+            const savedChat = input.chat ? await readConversation(store,fresh,user!.email,input.chat.id) : undefined;
+            if (savedChat && savedChat.intent !== input.intent) fail(409,"チャットの種類が変わっています");
+            const chatPlanId = input.chat ? digest(`${fresh.id}:chat-plan:${input.chat.id}:${input.chat.requestId}`) : undefined;
+            const existingChatPlan = chatPlanId ? await store.get<Plan>("plan",chatPlanId) : undefined;
+            if (existingChatPlan?.shopId === fresh.id && input.chat) { await attachChatPlan(store,fresh,user!.email,input.chat,existingChatPlan.id); return json(res,existingChatPlan); }
+            const previousReply = savedChat?.messages.find(message => message.role === "assistant" && message.requestId === input.chat!.requestId);
+            if (input.chat && !previousReply) fail(409,"変更案の元になった会話が見つかりません");
+            if(input.intent==="create-shop"&&savedChat&&(!previousReply?.detail.ready||!answeredFinalDetails(savedChat.messages.filter(message=>message.sequence<=previousReply.sequence))))fail(409,"確認画面へ進む前に、ほかに伝えたいことがあるかお答えください");
+            if (previousReply?.detail.planId) {
+              const previous = await store.get<Plan>("plan",previousReply.detail.planId);
+              if (previous?.shopId === fresh.id) return json(res,previous);
+            }
             const current = fresh.published ? await effective(fresh) : null;
+            if(input.intent==="create-shop"&&current)fail(409,"お店は作成済みです。修正を選んでください");
+            if (input.intent === "consult") fail(400, "相談では設定を変更しません。修正または新ページ作成を選んでください");
+            if (input.intent === "new-page" && (!current || input.config || input.local || input.visual)) fail(400, "新ページ作成は仮公開したあとに依頼してください");
             if (input.context && (input.context.revision !== fresh.revision || input.context.hash !== contentHash(current))) fail(409, "お店の仕様が変わりました。現在の仕様を更新して変更を相談し直してください");
             let releaseConfig = input.config;
             if (input.local?.scope && input.config) releaseConfig = shopSchema.parse(scopedConfig(current, input.config, input.local.scope));
@@ -1156,6 +1139,8 @@ export function createApp(
                 fail(409, "設定が変わりました。画面を開き直してください");
             }
             const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, "店主の Google 再接続が必要です"));
+            const relatedHistory = input.intent ? await searchConversationHistory(store,fresh,user!.email,input.text,new Set(savedChat?.messages.slice(-24).map(message=>message.id) || [])) : [];
+            const historicalContext = relatedHistory.length ? `参照用の過去の会話です。今回の変更依頼でも、反映済みという意味でもありません。現在の設定を優先してください。\n${JSON.stringify(relatedHistory)}\n今回の会話と依頼:\n` : "";
             const proposed = input.config
               ? {
                   config: releaseConfig!,
@@ -1164,12 +1149,18 @@ export function createApp(
               : await intelligence.propose(
                   visual
                     ? `ペンで選んだ対象 ${input.visual!.target} のみ変更する。予約ルール・料金・所要時間など他の箇所は一切変えない。依頼：${input.text}`
-                    : input.text,
+                    : input.intent ? `${requestIntentInstruction[input.intent]}\n${historicalContext}${savedChat ? conversationContext(savedChat).map(message => `${message.role === "user" ? "店主" : "AI"}: ${message.text}`).join("\n") : input.text}` : input.text,
                   visual?.config || current,
                   user!.email,
                   demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT,
                   images,
                 );
+            if (input.intent === "new-page") {
+              const added = proposed.config.pages.filter(page => !current!.pages.some(existing => existing.id === page.id));
+              if (!added.length) fail(400, "新しいページが見つかりませんでした。追加したいページをもう一度教えてください");
+              proposed.config = shopSchema.parse({ ...current!, pages: [...current!.pages, ...added] });
+              proposed.summary = planSummary(current, proposed.config);
+            }
             if (!input.config) validateProposedImages(proposed.config, visual?.config || current, images);
             if (visual) {
               proposed.config = validateVisualChange(
@@ -1180,20 +1171,23 @@ export function createApp(
               proposed.summary = planSummary(current, proposed.config);
             }
             const plan: Plan = {
-              id: localPlanId || randomUUID(),
+              id: localPlanId || chatPlanId || randomUUID(),
               local: !!input.local,
               scope: input.local?.scope,
               shopId: fresh.id,
               base: fresh.revision,
               ...proposed,
               approved: false,
+              requiresSetup: !current && !input.config,
               createdAt: Date.now(),
               checklist,
               source: current,
+              ...(input.chat ? {chat:input.chat} : {}),
             };
             if (!plan.summary.length) fail(400, "変更点がありません");
             artifacts(plan.config, '<title></title><div id="root"></div>');
             await store.put("plan", plan.id, plan);
+            if (input.chat) await attachChatPlan(store,fresh,user!.email,input.chat,plan.id);
             return json(res, plan);
           }
           const p = action.match(/^plans\/([^/]+)\/(approve|publish)$/);
@@ -1202,7 +1196,7 @@ export function createApp(
             const plan = await store.get<Plan>("plan", p[1]);
             if (!plan || plan.shopId !== fresh.id)
               fail(404, "プランがありません");
-            if (plan.local && fresh.lastPublishedPlanId === plan.id)
+            if (fresh.lastPublishedPlanId === plan.id)
               return json(res, { ok: true, url: `/s/${fresh.slug}` });
             if (plan.base !== fresh.revision)
               fail(409, "公開内容が変わりました。プランを作り直してください");
@@ -1213,7 +1207,30 @@ export function createApp(
               await store.saveShop(fresh);
               return json(res, { ok: true });
             }
-            return json(res, await publishConfiguration(fresh, plan));
+            const input = z.object({ publication: z.enum(["provisional", "public"]).optional() }).parse(await body(req));
+            return json(res, await publishConfiguration(fresh, plan, input.publication));
+          }
+          if (action === "publication-preview" && method === "GET") {
+            assertOwner(user, fresh);
+            if (!fresh.published || fresh.publishingPlanId) fail(409, "先に仮公開を完了してください");
+            const config = await effective(fresh);
+            const posts = publicPosts(await postsFor(fresh));
+            return json(res, { config, posts, revision: fresh.revision, hash: contentHash({ config, posts }) });
+          }
+          if (action === "publication" && method === "POST") {
+            assertOwner(user, fresh);
+            const input = z.object({ publication: z.literal("public"), revision: z.number().int().nonnegative(), hash: z.string().regex(/^[a-f0-9]{64}$/) }).parse(await body(req));
+            if (!fresh.published || fresh.publishingPlanId) fail(409, "先に仮公開を完了してください");
+            if (fresh.revision !== input.revision) fail(409, "お店の内容が変わりました。最新の内容を確認してから全公開してください");
+            const config = await effective(fresh);
+            const posts = publicPosts(await postsFor(fresh));
+            if (input.hash !== contentHash({ config, posts })) fail(409, "プレビュー後に内容が変わりました。最新の内容を読み直して確認してください");
+            if (fresh.publication !== "public") {
+              fresh.publication = "public";
+              fresh.history.push({ at: new Date().toISOString(), summary: "本番公開に切り替えました" });
+              await store.saveShop(fresh);
+            }
+            return json(res, { ok: true, url: `/s/${fresh.slug}` });
           }
           if (action === "operations" && method === "GET") {
             return json(res, {
@@ -1225,7 +1242,7 @@ export function createApp(
           if (customerRoute && (method === "GET" || method === "POST")) {
             const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
             const now = new Date();
-            const loadCustomers = async () => aggregateCustomers(await store.bookings(fresh.id), await inquiries(fresh), await store.records<CustomerNote>("customerNote", fresh), now, customerSince(filter, now));
+            const loadCustomers = async () => aggregateCustomers(await store.bookings(fresh.id), await inquiries(fresh), await store.records<CustomerNote>("customerNote", fresh), now, customerSince(filter, now), await store.records<import("./customers.ts").CustomerRecord>("customer", fresh));
             const customers = await loadCustomers();
             if (!customerRoute[1] && method === "GET") return json(res, customerSummaries(customers));
             const email = normalizeEmail(decodeURIComponent(customerRoute[1] || ""));
@@ -1423,71 +1440,6 @@ export function createApp(
           fail(404, "見つかりません");
         });
       }
-      const preview = path.match(/^\/api\/preview\/([^/]+)(?:\/(.*))?$/);
-      if (preview && !publicHost) {
-        const shop =
-          (await store.shop(preview[1])) || fail(404, "お店がありません");
-        await assertOperator(user, shop);
-        const plan = await store.get<Plan>(
-          "plan",
-          url.searchParams.get("plan") || "",
-        );
-        if (!plan || plan.shopId !== shop.id || !plan.approved)
-          fail(404, "承認済みのプランがありません");
-        const previewImage = preview[2]?.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
-        if (previewImage && method === "GET") {
-          const ids = previewImage[1] === "images" ? managedImageIds(plan.config) : plan.config.menus.filter(menu => menu.active).map(menu => menu.imageId);
-          if (!ids.includes(previewImage[2])) fail(404, "画像がありません");
-          return json(res, await readMenuImage(store, shop, previewImage[2], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, "店主の Google 再接続が必要です")));
-        }
-        if (method === "GET" && (!preview[2] || preview[2] === "slots")) {
-          if (preview[2] === "slots")
-            return json(
-              res,
-              slots(
-                plan.config,
-                [],
-                url.searchParams.get("date") || "",
-                url.searchParams.get("menu") || "",
-                url.searchParams.get("staff") || undefined,
-              ),
-            );
-          return json(res, {
-            config: plan.config,
-            shopId: shop.id,
-            canEdit: user?.email === shop.owner,
-            preview: true,
-          });
-        }
-        if (preview[2] === "bookings" && method === "POST") {
-          const b = z
-            .object({
-              name: z.string().min(1).max(100),
-              message: z.string().max(2000).default(""),
-              menuId: z.string(),
-              staffId: z.string().optional(),
-              start: z.iso.datetime(),
-            })
-            .parse(await body(req));
-          const slot = slots(
-            plan.config,
-            [],
-            new Date(Date.parse(String(b.start)) + 9 * 3600000)
-              .toISOString()
-              .slice(0, 10),
-            b.menuId,
-            b.staffId,
-          ).find((t) => t.start === b.start);
-          if (!slot) fail(409, "予約枠を選び直してください");
-          return json(res, {
-            ok: true,
-            preview: true,
-            message:
-              "プレビューの予約を確認しました。実データには保存されません。",
-          });
-        }
-        fail(404, "見つかりません");
-      }
       const publicRoute = path.match(/^\/api\/public\/([^/]+)(?:\/(.*))?$/);
       if (publicRoute) {
         const shopRef =
@@ -1497,6 +1449,7 @@ export function createApp(
         const action = publicRoute[2] || "";
         return await store.locked(shopRef.id, async () => {
           const shop = (await store.shop(shopRef.id))!;
+          assertStorefrontAccess(shop);
           const livePosts = publicPosts(await postsFor(shop));
           if (action === "posts" && method === "GET") {
             const category = postCategorySchema
@@ -1544,7 +1497,22 @@ export function createApp(
               fail(401, "このお店のお客様としてログインしてください");
             return user!;
           };
-          if (!action && method === "GET")
+          const ownProfile = async () => memberProfile(await store.get("customer", `${shop.id}:${customer().email}`));
+          if (action === "profile" && method === "GET") {
+            const u = customer();
+            return json(res, { email: u.email, profile: await ownProfile(), suggestedName: u.name });
+          }
+          if (action === "profile" && method === "POST") {
+            const u = customer();
+            const profile = customerProfileSchema.parse(await body(req));
+            const key = `${shop.id}:${u.email}`;
+            const previous = await store.get<Record<string, unknown>>("customer", key);
+            await store.put("customer", key, { ...previous, ...profile, shopId: shop.id, email: u.email, updatedBy: u.email, updatedAt: new Date().toISOString() });
+            return json(res, { profile });
+          }
+          if (!action && method === "GET") {
+            const isCustomer = user?.role === "customer" && user.shopId === shop.id;
+            const profile = isCustomer ? await ownProfile() : undefined;
             return json(res, {
               config:
                 user?.email === shop.owner && !publicHost
@@ -1552,10 +1520,14 @@ export function createApp(
                   : { ...config, notificationEmail: undefined },
               shopId: shop.id,
               canEdit: user?.email === shop.owner && !publicHost,
+              customerProfile: profile,
+              registrationRequired: isCustomer && !profile,
               preview: false,
+              publication: shop.publication || "public",
               recentPosts: livePosts.slice(0, 5).map(summarizePost),
               authUrl: `${origin()}/auth/google?shop=${shop.slug}${hosted ? `&host=${host}` : ""}`,
             });
+          }
           if (action === "slots" && method === "GET")
             return json(
               res,
@@ -1575,6 +1547,7 @@ export function createApp(
           }
           if (action === "bookings" && method === "POST") {
             const u = customer();
+            if (!await ownProfile()) fail(428, "先に会員情報を登録してください");
             const input = z
               .object({
                 name: z.string().min(1).max(100),
@@ -1665,6 +1638,7 @@ export function createApp(
           }
           if (action === "inquiries" && method === "POST") {
             const u = customer();
+            if (!await ownProfile()) fail(428, "先に会員情報を登録してください");
             const input = z
               .object({
                 name: z.string().min(1).max(100),
@@ -1699,12 +1673,19 @@ export function createApp(
       if (
         publicHost &&
         (path.startsWith("/admin") ||
-          path.startsWith("/preview") ||
+          path.startsWith("/publication-preview") ||
           path.startsWith("/s/"))
       )
         fail(404, "見つかりません");
       if (method !== "GET" && method !== "HEAD")
         fail(405, "利用できない操作です");
+      const publicationPreviewPage = path.match(/^\/publication-preview\/([^/]+)$/);
+      if (publicationPreviewPage) {
+        const shop = await store.shop(publicationPreviewPage[1]) || fail(404, "お店がありません");
+        assertOwner(user, shop);
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+        res.setHeader("Vary", "Cookie");
+      }
       const root = resolve("dist");
       const file = resolve(root, `.${path}`);
       if (!file.startsWith(`${root}/`)) {
@@ -1712,14 +1693,14 @@ export function createApp(
       }
       const manualAsset = /^\/manual\/[a-z0-9-]+\.jpg$/.test(path);
       const asset =
-        path.startsWith("/assets/") || path === "/live-audio.js" || manualAsset;
+        path.startsWith("/assets/") || manualAsset;
       if (
         !asset &&
         path !== "/" &&
         (publicHost
           ? !/^\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?$/.test(path)
-          : path !== "/manual" &&
-            !/^\/(s|preview)\/[^/]+(?:\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?)?$/.test(
+          : path !== "/manual" && !/^\/publication-preview\/[^/]+$/.test(path) &&
+            !/^\/(s)\/[^/]+(?:\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?)?$/.test(
               path,
             ))
       )
@@ -1737,11 +1718,21 @@ export function createApp(
         const custom = publicHost
           ? path.match(/^\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?$/)
           : null;
-        const shop =
+        const shopRef =
           hosted || allShops.find((s) => s.slug === local?.[1] && s.published);
         const category = local?.[2] || custom?.[1];
         const key = local?.[3] || custom?.[2];
-        if (shop?.published) {
+        if (shopRef?.published) {
+          await store.locked(shopRef.id, async () => {
+          const shop = await store.shop(shopRef.id);
+          if (!shop?.published) fail(404, "公開されたお店がありません");
+          if (shop.publication === "provisional" && !user) {
+            res.setHeader("Cache-Control", "no-store");
+            res.setHeader("Vary", "Cookie");
+            res.setHeader("X-Robots-Tag", "noindex, nofollow");
+            return redirect(res, `${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${publicHost ? `&host=${encodeURIComponent(host)}` : ""}`);
+          }
+          assertStorefrontAccess(shop);
           const posts = publicPosts(await postsFor(shop));
           const base = publicHost ? "" : `/s/${shop.slug}`;
           const shell = data.toString("utf8");
@@ -1768,6 +1759,8 @@ export function createApp(
                 base,
               ),
             );
+          });
+          if (res.writableEnded) return;
         } else if (category || local) fail(404, "公開されたお店がありません");
       }
       res.setHeader(
@@ -1787,7 +1780,7 @@ export function createApp(
           ? "no-cache"
           : asset
             ? "public, max-age=31536000, immutable"
-            : "no-cache",
+            : res.hasHeader("X-Robots-Tag") ? "private, no-store" : "no-cache",
       );
       res.end(method === "HEAD" ? undefined : data);
     } catch (error) {
@@ -1834,6 +1827,5 @@ export function createApp(
   }, 60000);
   timer.unref();
   server.on("close", () => clearInterval(timer));
-  attachLive(server, store, liveConnector, crmFiles);
   return server;
 }

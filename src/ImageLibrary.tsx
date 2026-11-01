@@ -5,7 +5,6 @@ import { DictationButton } from "./DictationButton";
 import { CustomerImageDialog } from "./CustomerImages";
 import { createRequestId } from "./request-id";
 import { generateImageSchema, type GenerateImageInput, type LibraryImage } from "../server/image-library-domain";
-import { CustomerMemoImages } from "./CustomerMemoImages";
 import { RequestImagePicker } from "./RequestImagePicker";
 
 const toData = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]); reader.onerror = () => reject(new Error("画像を読み込めませんでした")); reader.readAsDataURL(file); });
@@ -32,7 +31,6 @@ export function ImageLibrary({ shopId, onSelect, selectedId }: { shopId: string;
   const [editing, setEditing] = useState<{ id: string; name: string }>();
   const [deleting, setDeleting] = useState<string>();
   const [zoomId, setZoomId] = useState<string>();
-  const [tab, setTab] = useState<"managed" | "customer">("managed");
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
@@ -59,9 +57,7 @@ export function ImageLibrary({ shopId, onSelect, selectedId }: { shopId: string;
   const visible = images?.filter(image => (source === "all" || image.source === source) && `${image.name} ${image.prompt || ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   const zoomIndex = visible?.findIndex(image => image.id === zoomId) ?? -1;
   return <section className={onSelect ? "image-library image-picker-library" : "panel image-library"} aria-label={onSelect ? "画像を選ぶ" : "画像管理"}>
-    <div className="section-top">{onSelect ? <h3>画像を選ぶ</h3> : <h2>画像管理</h2>}{tab === "managed" && <button type="button" disabled={busy || listening} onClick={() => setAttempt(v => v + 1)}>一覧を更新</button>}</div>
-    {!onSelect && <div role="tablist" aria-label="画像の分類" className="image-library-tabs"><button type="button" role="tab" disabled={busy || listening} aria-selected={tab === "managed"} onClick={() => setTab("managed")}>管理画像</button><button type="button" role="tab" disabled={busy || listening} aria-selected={tab === "customer"} onClick={() => setTab("customer")}>お客様メモの画像</button></div>}
-    {tab === "customer" ? <CustomerMemoImages shopId={shopId} /> : <>
+    <div className="section-top">{onSelect ? <h3>画像を選ぶ</h3> : <h2>画像管理</h2>}<button type="button" disabled={busy || listening} onClick={() => setAttempt(v => v + 1)}>一覧を更新</button></div>
     <p>アップロードした画像とAIで生成した画像をまとめて管理します。ページやメニューで使って保存・反映するまで、お客様には公開されません。</p>
     {error && <p className="alert" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     <div className="image-library-tools"><label>画像をアップロード<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy || listening} onChange={event => {
@@ -85,7 +81,7 @@ export function ImageLibrary({ shopId, onSelect, selectedId }: { shopId: string;
       const result = await api<{ imageId: string }>(`${base}/generate`, input);
       localStorage.removeItem(pendingKey); setPending(undefined); setAttempt(v => v + 1); setGenerated({ id: result.imageId, name: input.name }); setNotice("AIで生成した画像を画像管理に保存しました。内容を確認してから使用してください。");
     }); }}>
-      {method === "voice" && <div className="image-voice-request"><h4>作りたい画像を声で伝える</h4><p>下のボタンを押して話してください。話した内容を確認・修正してから生成します。</p><DictationButton disabled={busy || !!pending} onListening={setListening} onText={text => setPrompt(value => `${value}${value ? "\n" : ""}${text}`.slice(0, 4000))} /></div>}
+      {method === "voice" && <div className="image-voice-request"><h4>作りたい画像を声で伝える</h4><p>下のボタンを押して話してください。話した内容を確認・修正してから生成します。</p><DictationButton disabled={busy || !!pending} onListening={setListening} value={prompt} onChange={setPrompt} label="音声で指示する" /></div>}
       <fieldset disabled={busy || !!pending || listening}>
         <label>画像の名前<input required value={name} maxLength={255} onChange={event => setName(event.target.value)} /></label>
         <label>{method === "voice" ? "音声で伝えた内容・修正" : "生成したい画像"}<textarea aria-label={method === "voice" ? "音声で伝えた内容・修正" : "生成したい画像"} required rows={4} maxLength={4000} value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={method === "voice" ? "話した内容がここに表示されます。文字でも修正できます。" : "例：明るい窓辺に季節の花を飾った、お店の紹介ページ向けの写真"} /></label>
@@ -109,7 +105,6 @@ export function ImageLibrary({ shopId, onSelect, selectedId }: { shopId: string;
       {deleting === image.id ? <div className="notice">画像管理から削除します。Drive のファイルは残ります。<div className="actions"><button type="button" disabled={busy} onClick={() => void run(async () => { await api(`${base}/${image.id}/archive`, {}); setDeleting(undefined); setAttempt(v => v + 1); setNotice("画像管理から削除しました。"); })}>削除する</button><button type="button" disabled={busy} onClick={() => setDeleting(undefined)}>やめる</button></div></div> : <button type="button" disabled={busy || image.usedBy.length > 0} onClick={() => setDeleting(image.id)}>画像管理から削除</button>}
     </figure>)}</div>
     {zoomIndex >= 0 && <CustomerImageDialog items={visible!.map(image => ({ file: { id: image.id, name: image.name, mimeType: image.mimeType, size: image.size }, path: `${base}/${image.id}`, createdAt: image.createdAt || undefined }))} initialIndex={zoomIndex} close={() => setZoomId(undefined)} />}
-    </>}
   </section>;
 }
 

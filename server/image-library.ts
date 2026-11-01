@@ -7,15 +7,6 @@ import { managedImageIds, imageUses } from "./image-references.ts";
 import { generateImageSchema, imageNameSchema, type LibraryImage } from "./image-library-domain.ts";
 import { generateImage } from "./image-generation.ts";
 import type { MenuImageData } from "./menu-image-domain.ts";
-import { aggregateCustomers, customerImages, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
-import type { CustomerMemoImage } from "./image-library-domain.ts";
-
-export async function listCustomerMemoImages(store: Store, shop: Shop): Promise<CustomerMemoImage[]> {
-  const [bookings, inquiries, notes] = await Promise.all([store.bookings(shop.id), store.records<Inquiry>("inquiry", shop), store.records<CustomerNote>("customerNote", shop)]);
-  const names = new Map(aggregateCustomers(bookings, inquiries, notes, new Date()).map(customer => [customer.email, customer.name]));
-  return notes.flatMap(note => customerImages([note]).map(image => ({ id: image.id, noteId: note.id, email: normalizeEmail(note.email), customerName: names.get(normalizeEmail(note.email)) || "", name: image.name, mimeType: image.mimeType, size: image.size, createdAt: image.createdAt }))).sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
-}
-
 export async function listImages(store: Store, shop: Shop, config: ShopConfig | null): Promise<LibraryImage[]> {
   return (await store.entries<ImageUpload>("menuImageUpload")).flatMap(({ id, value }) => value.shopId === shop.id && value.complete && !value.archived ? [{
     id, name: value.name || `メニュー画像-${id.slice(0, 8)}`, mimeType: value.mimeType, size: value.size, createdAt: value.createdAt || "", source: value.source || "upload", prompt: value.prompt, model: value.model, usedBy: imageUses(config, id),

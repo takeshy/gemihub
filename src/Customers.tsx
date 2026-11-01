@@ -1,3 +1,5 @@
+import { DateInput } from "./DateInput";
+import { genderOptions } from "../server/customer-profile";
 import React, { useEffect, useState } from "react";
 import { dateJST, type ShopConfig } from "../server/domain";
 import { customerPeriods, customerFilterSchema, customerSince, type CustomerFilter, type CustomerSummary, type CustomerDetail } from "../server/customers";
@@ -52,7 +54,7 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
       <label>集計期間<select value={period} onChange={event => { setCustomers(undefined); setPeriod(event.target.value as CustomerFilter["period"]); }}>
         {customerPeriods.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select></label>
-      {period === "custom" && <label>開始日（日本時間）<input type="date" value={customSince} onChange={event => { setCustomers(undefined); setCustomSince(event.target.value); }} /></label>}
+      {period === "custom" && <label>開始日（日本時間）<DateInput aria-label="開始日（日本時間）" value={customSince} onValueChange={value => { setCustomers(undefined); setCustomSince(value); }} /></label>}
     </div>
     <p className="small muted">{ready ? `集計対象：${rangeLabel}。来店回数・最終来店日・合計金額・履歴に適用します。未来の予約も表示します。` : "開始日を指定してください。"}</p>
     <div className="customer-controls">
@@ -99,6 +101,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
       <div className="panel customer-profile">
         <div className="section-top"><h2>{customer.name || "氏名未記入"}</h2><a data-customer-images-link className="button" href={`?${new URLSearchParams({ shop: shopId, customer: email, customerView: "images" })}`} onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); setImagesOpen(true); } }}>画像一覧</a></div><p>{customer.email}</p>
         <p className="small muted">集計対象：{rangeLabel}</p>
+        {customer.profile && <p className="member-profile-details">生年月日：{customer.profile.birthDate.replace(/-/g, "/")} ／ 性別：{genderOptions.find(option => option.value === customer.profile!.gender)?.label}</p>}
         <dl className="customer-stats"><div><dt>来店回数</dt><dd>{customer.visitCount}回</dd></div><div><dt>最終来店日</dt><dd>{customer.lastVisit ? when(customer.lastVisit) : "来店なし"}</dd></div><div><dt>合計金額</dt><dd>{yen(customer.totalAmount)}</dd></div></dl>
         <CustomerNoteComposer base={base} rangeQuery={rangeQuery} saved={changed} />
       </div>

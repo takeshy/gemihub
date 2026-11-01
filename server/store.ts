@@ -8,6 +8,7 @@ export type Shop = {
   owner: string;
   slug: string;
   published: ShopConfig | null;
+  publication?: "provisional" | "public";
   draft: ShopConfig | null;
   revision: number;
   history: { at: string; summary: string }[];
@@ -34,7 +35,8 @@ export type User = {
   refreshToken?: string;
 };
 
-const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote"]);
+const chatKinds = new Set(["shopChat", "shopChatMessage"]);
+const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote", ...chatKinds]);
 type Entry = { kind: string; id: string; value: unknown };
 export class Store {
   readonly memory: boolean;
@@ -112,21 +114,20 @@ export class Store {
   async put(kind: string, id: string, value: unknown): Promise<void> {
     if (!this.memory && businessKinds.has(kind)) {
       const shop = await this.shop((value as { shopId: string }).shopId);
-      if (!shop?.google)
+      if (!shop?.google && !chatKinds.has(kind))
         throw Object.assign(
           new Error("先にお店を公開して保存先を作成してください"),
           { status: 409 },
         );
-      const token = (await this.get<User>("user", shop.owner))?.refreshToken;
-      if (!token) throw new Error("店主の Google 再接続が必要です");
-      await writeRecord(
-        shop,
-        kind,
-        id,
-        value as Record<string, unknown>,
-        token,
-      );
-      return;
+      if (shop?.google) {
+        const token = (await this.get<User>("user", shop.owner))?.refreshToken;
+        if (!token) throw new Error("店主の Google 再接続が必要です");
+        // Keep Live transcripts durable while the owner sheet is being updated.
+        if (chatKinds.has(kind)) await this.persist([{kind,id,value:structuredClone(value)}]);
+        await writeRecord(shop, kind, id, value as Record<string, unknown>, token);
+        if (chatKinds.has(kind)) await this.ref(kind,id).delete();
+        return;
+      }
     }
     const entry = { kind, id, value: structuredClone(value) };
     if (this.batch.getStore()) {
@@ -161,13 +162,23 @@ export class Store {
       return (await this.list<T & { shopId: string }>(kind)).filter(
         (v) => v.shopId === shop.id,
       );
-    if (!shop.google) return [];
+    const staged = chatKinds.has(kind) ? (await this.firestore!.collection("omaiweb_state").where("kind", "==", kind).get()).docs.map(doc => ({id:doc.get("id") as string,value:JSON.parse(doc.get("json")) as {shopId:string;updatedAt:string}})).filter(entry => entry.value.shopId === shop.id) : [];
+    if (!shop.google) return staged.map(entry => entry.value as T);
     const token = (await this.get<User>("user", shop.owner))?.refreshToken;
     if (!token)
       throw Object.assign(new Error("店主の Google 再接続が必要です"), {
         status: 503,
       });
-    return (await readRecords(shop, kind, token)) as T[];
+    const rows = await readRecords(shop, kind, token);
+    for (const entry of staged) {
+      const existing = rows.find(row => row.id === entry.id);
+      if (!existing || String(existing.updatedAt) <= entry.value.updatedAt) {
+        await writeRecord(shop,kind,entry.id,entry.value,token);
+        if (existing) rows.splice(rows.indexOf(existing),1,entry.value); else rows.push(entry.value);
+      }
+      await this.ref(kind,entry.id).delete();
+    }
+    return rows as T[];
   }
   async entries<T>(kind: string): Promise<{ id: string; value: T }[]> {
     if (businessKinds.has(kind)) throw new Error("業務記録には専用の読み取りを使ってください");

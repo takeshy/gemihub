@@ -17,9 +17,11 @@
     "build-storybook": "storybook build --disable-telemetry",
     "capture:manual": "node scripts/capture-manual.mjs",
     "check:multimodal": "node scripts/check-multimodal.mjs",
+    "check:chat": "node scripts/check-chat.mjs",
     "check:storybook": "node scripts/check-storybook.mjs",
     "check:images": "node scripts/check-image-library.mjs",
-    "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs"
+    "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs",
+    "check:publication-routing": "node scripts/check-publication-routing.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",
@@ -29,7 +31,6 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
-    "ws": "^8.22.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -37,7 +38,6 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@types/ws": "^8.18.2",
     "playwright": "^1.63.0",
     "storybook": "^10.6.2",
     "tsx": "^4.21.0",

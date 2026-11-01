@@ -1,3 +1,4 @@
+import { DateInput } from "./DateInput";
 import React, { useEffect, useState, useRef } from "react";
 import { useApi } from "./api";
 import { PostContent } from "./PostContent";
@@ -55,7 +56,6 @@ export function BlogEditor({
   }, [review]);
   const [instruction, setInstruction] = useState("");
   const [source, setSource] = useState("");
-  const [driveUrl, setDriveUrl] = useState("");
   const base = `/api/shops/${shop.id}/posts`;
   const clean =
     !!current && JSON.stringify(content) === JSON.stringify(current.draft);
@@ -158,12 +158,10 @@ export function BlogEditor({
               </label>
               <label className="field">
                 <span>記事の日付（表示用）</span>
-                <input
-                  type="date"
+                <DateInput aria-label="記事の日付（表示用）"
                   value={content.date}
                   disabled={!!current?.address}
-                  onChange={(e) => update("date", e.target.value)}
-                />
+                  onValueChange={value => update("date", value)} />
               </label>
             </div>
             <label className="field">
@@ -257,32 +255,7 @@ export function BlogEditor({
                   }}
                 />
               </label>
-              <label className="field">
-                <span>Google ドライブのメモのリンク</span>
-                <input
-                  type="url"
-                  value={driveUrl}
-                  onChange={(e) => setDriveUrl(e.target.value)}
-                  placeholder="https://drive.google.com/file/d/.../view"
-                />
-              </label>
-              <button
-                disabled={!driveUrl}
-                onClick={() =>
-                  run(async () => {
-                    const note = await api<{ name: string; text: string }>(
-                      `${base}/source`,
-                      { url: driveUrl },
-                    );
-                    setSource(note.text);
-                    notify(
-                      `「${note.name}」を読み込みました。公開する内容を確認してください。`,
-                    );
-                  })
-                }
-              >
-                Drive のメモを読み込む
-              </button>
+
               <p className="small muted">
                 このアプリがアクセスできるメモを読み込めます。読み込めない場合は、本文を貼り付けるかファイルを選んでください。
               </p>
