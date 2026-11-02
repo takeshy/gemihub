@@ -2029,7 +2029,7 @@ export function createApp(
         path !== "/" &&
         (publicHost
           ? !/^\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?$/.test(path)
-          : path !== "/manual" && !/^\/publication-preview\/[^/]+$/.test(path) &&
+          : path !== "/manual" && path !== "/settings/migration" && !/^\/publication-preview\/[^/]+$/.test(path) &&
             !/^\/(s)\/[^/]+(?:\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?)?$/.test(
               path,
             ))

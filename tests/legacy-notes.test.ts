@@ -3,6 +3,8 @@ import { test } from "node:test";
 import type { AddressInfo } from "node:net";
 import { google } from "googleapis";
 import { readFile } from "node:fs/promises";
+import fs from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import vm from "node:vm";
 import { renderLegal } from "../server/legal.ts";
 import { requestLocale } from "../server/i18n.ts";
@@ -36,6 +38,10 @@ test("legacy detection requires the old note schema, not just a settings filenam
 });
 
 test("old note owners must migrate before creating or managing a shop; completion is rechecked server-side", async t => {
+  const shell = '<!doctype html><html><body><div id="root"></div></body></html>';
+  const shellRead = t.mock.method(fs, "readFile", async () => Buffer.from(shell));
+  syncBuiltinESMExports();
+  t.after(() => { shellRead.mock.restore(); syncBuiltinESMExports(); });
   process.env.GOOGLE_CLIENT_ID = "test-client";
   process.env.DEMO_MODE = "true";
   let email = "notes@example.com", pending = true, checks = 0;
@@ -71,6 +77,14 @@ test("old note owners must migrate before creating or managing a shop; completio
   assert.equal(login.headers.get("Location"), "/settings/migration");
   let cookie = login.headers.get("Set-Cookie")!.split(";")[0];
   const call = (path: string, method = "GET", origin = base) => originalFetch(base + path, { method, headers: { Cookie: cookie, Origin: origin } });
+  const guidance = await call(login.headers.get("Location")!);
+  assert.equal(guidance.status, 200);
+  assert.match(guidance.headers.get("Content-Type")!, /^text\/html/);
+  assert.ok((await guidance.text()).includes('<div id="root"></div>'));
+  const guidanceHead = await call("/settings/migration?lang=en", "HEAD");
+  assert.equal(guidanceHead.status, 200);
+  assert.equal(await guidanceHead.text(), "");
+  assert.equal((await call("/settings/unknown")).status, 404);
   assert.equal((await store.list("shop")).length, 0);
   const session = await (await call("/api/session")).json() as { user: Record<string, unknown> };
   assert.equal(session.user.legacyNotes, true);
