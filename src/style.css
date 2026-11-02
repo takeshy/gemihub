@@ -293,6 +293,9 @@ small {
   grid-template-columns: 236px 1fr;
   min-height: calc(100vh - 150px);
 }
+.dashboard.dashboard-creation {
+  grid-template-columns: minmax(0, 1fr);
+}
 aside {
   background: #fff;
   border-right: 1px solid var(--line);

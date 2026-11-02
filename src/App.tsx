@@ -335,6 +335,8 @@ function Dashboard({
     });
   }, []);
   const shop = shops.find((s) => s.id === chosen) || shops[0];
+  const creating = !!shop?.isOwner && !shop.published;
+  const view = creating ? "build" : tab;
   useEffect(() => { if (shop && !shop.isOwner && ["try", "data"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
   const activePlan =
     plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
@@ -348,11 +350,12 @@ function Dashboard({
     await request(`plans/${p.id}/publish`, { publication });
     setPlan(undefined);
     await load();
+    if (!shop.published) setTab("try");
     notify(publication === "provisional" ? tr("仮公開しました。あなたのログインでだけページを表示できます。") : tr("変更を反映しました。"));
   };
   return (
-    <div className="dashboard">
-      <aside>
+    <div className={`dashboard${creating || !shop ? " dashboard-creation" : ""}`}>
+      {shop && !creating && <aside>
         <div className="sidebar-label">MY SHOP</div>
         <div className="shop-switch">
           <span className="shop-avatar">✳</span>
@@ -388,7 +391,7 @@ function Dashboard({
             ["manual", "?", tr("使い方")],
           ].map(([id, icon, label]) => (
             <React.Fragment key={id}><button
-              className={tab === id ? "active" : ""}
+              className={view === id ? "active" : ""}
               onClick={() => setTab(id)}
             >
               <span>{icon}</span>
@@ -403,14 +406,14 @@ function Dashboard({
             {tr("まずは、お店のことを")}<br />
             {tr("聞かせてください。")}</p>
         </div>
-      </aside>
+      </aside>}
       <section className="workspace">
         {!shop ? (
           <p>
             {tr("運営できるお店はありません。スタッフの方は、店主から案内されたスタッフ用ログインURLからログインしてください。")}</p>
         ) : (
           <>
-            {tab === "manual" ? (
+            {view === "manual" ? (
               <Manual />
             ) : (
               <>
@@ -447,7 +450,7 @@ function Dashboard({
                     )}
                   </div>
                 )}
-                {tab === "build" && (
+                {view === "build" && (
                   <>
                     {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
                       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds, intent, chat });
@@ -461,15 +464,15 @@ function Dashboard({
                     </div>
                   </>
                 )}
-                {tab === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
-                {tab === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
-                {tab === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop}/></>}<StaffCalendar key={shop.id} shop={shop}/>{!shop.isOwner && <StaffPhoto shop={shop} reload={load}/>}</>}
-                {tab === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
-                {tab === "bookings" && (
+                {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
+                {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
+                {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop}/></>}<StaffCalendar key={shop.id} shop={shop}/>{!shop.isOwner && <StaffPhoto shop={shop} reload={load}/>}</>}
+                {view === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
+                {view === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
-                {tab === "customers" && <Customers key={shop.id} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={load} />}
-                {tab === "blog" && (
+                {view === "customers" && <Customers key={shop.id} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={load} />}
+                {view === "blog" && (
                   <BlogEditor
                     shop={shop}
                     run={run}
@@ -479,16 +482,16 @@ function Dashboard({
                     demo={session.demo}
                   />
                 )}
-                <div hidden={tab!=="inquiries"}><Inquiries shopId={shop.id} inquiries={shop.inquiries}/></div>
-                {tab === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} showMenus={openDataMenu} />}
-                {tab === "settings" && (
+                {!creating && <div hidden={view!=="inquiries"}><Inquiries shopId={shop.id} inquiries={shop.inquiries}/></div>}
+                {view === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} showMenus={openDataMenu} />}
+                {view === "settings" && (
                   <Settings shop={shop} run={run} reload={load} hasLegacyNotes={!!session.user?.legacyNotes} />
                 )}
               </>
             )}
           </>
         )}
-        {shop?.isOwner && <div hidden={tab !== "try"}><LocalPreview key={shop.id} initialScreen={initialScreen} initialArticleKey={initialArticleKey} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} activate={() => setTab("try")} /></div>}
+        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} initialScreen={initialScreen} initialArticleKey={initialArticleKey} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} activate={() => setTab("try")} /></div>}
       </section>
     </div>
   );

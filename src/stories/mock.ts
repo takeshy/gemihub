@@ -145,7 +145,7 @@ export function scenarioProps(scenario: Scenario) {
                 ? "/s/salon-nagi"
                 : "/",
     search: scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
-    initialTab: scenario === "editor-unfetched" ? undefined :
+    initialTab: ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
           "image-library": "images", "image-library-empty": "images", "image-library-generation": "images",
@@ -260,13 +260,13 @@ export function createMockClient(scenario: Scenario): ApiClient {
     approved: scenario === "publication-error",
     requiresSetup: scenario === "plan",
   };
-  const unpublished = ["local-editor-new", "onboarding", "plan"].includes(
+  const unpublished = ["onboarding", "plan"].includes(
     scenario,
   );
   const shop: Workspace = {
     id: scenario === "local-editor-new" ? "story-new-shop" : "story-shop",
     owner: "owner@example.com",
-    publication: scenario.startsWith("provisional") || scenario === "production-preview" ? "provisional" : undefined,
+    publication: scenario.startsWith("provisional") || scenario === "production-preview" || scenario === "local-editor-new" ? "provisional" : undefined,
     slug: "salon-nagi",
     published: unpublished ? null : config,
     draft: plan.approved ? config : null,

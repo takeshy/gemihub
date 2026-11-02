@@ -19,6 +19,31 @@ const context=await browser.newContext({viewport:{width:1280,height:900},locale:
 const page=await context.newPage();page.setDefaultTimeout(15000);
 const errors=[];page.on('pageerror',error=>errors.push(error.message));
 try{
+  const firstLogin=await browser.newContext({locale:'ja-JP'});
+  try{
+    const response=await firstLogin.request.post(origin+'/api/demo-login',{headers:{Origin:origin},data:{role:'owner',email:'first-login@example.com'}});
+    assert.equal(response.status(),200);
+    const initial=await firstLogin.newPage();
+    initial.on('pageerror',error=>errors.push(error.message));
+    const editorRequests=[];
+    initial.on('request',request=>{if(request.url().includes('/local-editor'))editorRequests.push(request.url());});
+    for(const width of [1280,390]){
+      await initial.setViewportSize({width,height:900});
+      for(const path of ['/?lang=ja','/?lang=ja&tab=settings','/?lang=ja&tab=try']){
+        await initial.goto(origin+path);
+        await initial.getByRole('heading',{name:'AIとお店をつくる',exact:true}).waitFor();
+        assert.equal(await initial.locator('.dashboard > aside,.local-preview,.shop-switch').count(),0);
+        assert.equal(await initial.getByText('nail atelier 凪',{exact:true}).count(),0);
+        assert.ok(await initial.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+      }
+      await initial.reload();
+      await initial.getByRole('button',{name:'はじめる',exact:true}).waitFor();
+      assert.equal(await initial.locator('.dashboard > aside,.local-preview').count(),0);
+      await mkdir('tmp',{recursive:true});
+      await initial.screenshot({path:`tmp/first-login-${width}.png`,fullPage:true});
+    }
+    assert.deepEqual(editorRequests,[],'creation must not fetch sample editor data');
+  }finally{await firstLogin.close();}
   await page.goto(origin+'/?lang=en');
   await page.getByRole('heading',{name:/Tell us about your shop/}).waitFor();
   assert.equal(await page.locator('html').getAttribute('lang'),'en');
@@ -29,8 +54,15 @@ try{
   await page.goto(origin+'/');
   await page.getByRole('heading',{name:/Tell us about your shop/}).waitFor();
   assert.ok((await context.cookies()).some(cookie=>cookie.name==='gemihub_locale'&&cookie.value==='en'));
+  const editorRequests=[];
+  page.on('request',request=>{if(request.url().includes('/local-editor'))editorRequests.push(request.url());});
   await page.getByRole('button',{name:'Try the salon demo →',exact:true}).click();
-  await page.locator('aside nav').getByRole('button',{name:/Build your shop with AI$/}).click();
+  await page.getByRole('heading',{name:'Build your shop with AI',exact:true}).waitFor();
+  assert.equal(await page.locator('.dashboard > aside,.local-preview').count(),0);
+  await page.goto(origin+'/?tab=settings');
+  await page.getByRole('heading',{name:'Build your shop with AI',exact:true}).waitFor();
+  assert.equal(await page.locator('.dashboard > aside,.local-preview').count(),0);
+  assert.deepEqual(editorRequests,[]);
   await page.getByRole('button',{name:'Get started',exact:true}).click();
   const chat=page.getByRole('log',{name:'Chat with AI',exact:true});
   await chat.getByText('What kind of business do you run?',{exact:true}).waitFor();
@@ -44,6 +76,8 @@ try{
   await page.getByRole('button',{name:'Send',exact:true}).click();
   await page.getByRole('heading',{name:'Are these screens right for your shop?',exact:true}).waitFor();
   await page.getByRole('button',{name:'Publish private preview',exact:true}).click();
+  await page.locator('aside nav').getByRole('button',{name:/Try and edit screens$/}).waitFor();
+  await page.locator('.local-preview-screen').waitFor();
   await page.getByRole('link',{name:'Review screens and publish',exact:true}).click();
   await page.getByRole('heading',{name:'Review screens and publish',exact:true}).waitFor();
   await page.getByRole('button',{name:'Publish publicly',exact:true}).click();

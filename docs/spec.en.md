@@ -14,6 +14,8 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 ## Initial setup, private preview, and public publication
 
+- Before the first private publication, show only Build your shop with AI. Hide the management sidebar, shop name, sample storefront, and screen editor, and do not fetch editor data. Return to creation on subsequent logins and direct management links until a private preview has been published. Then reveal management and editing.
+
 - Interview by text or dictation about business type and desired features/pages; do not require staff, prices, or hours at the start. Adapt questions to known information rather than following a fixed checklist. Before preparing screens, always ask whether there is anything else to add, wait for the answer, and include any additions.
 - Show a plain-language feature diagram and thumbnails for booking, about, My page, contact, blog/archive/article, announcements/archive/article, and additional pages. Mark content provisional. Explain that designs and detailed settings can be adjusted after the private preview.
 - Publish a private preview directly from the review. No intermediate approved-only or initial bulk-details screen. Only the creator signed in with the same Google account can view it; other customers and staff cannot. Apply this to HTML, APIs, articles, additional pages, images, availability, and custom domains. Use private caching and noindex headers.
@@ -32,7 +34,7 @@ Consultation answers questions without proposing changes. Changes clarifies a re
 
 ## Local screen editor and scoped releases
 
-The owner starts in Try and edit screens; staff start in booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Sheets, Gmail, Calendar, or production data.
+After private publication, the owner starts in Try and edit screens; staff start in booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Sheets, Gmail, Calendar, or production data.
 
 Show the selected screen first, without a repeated marketing heading or shared shop-details form. Collapse page/sample editors below it. Show Apply changes and Discard changes only when needed. Save local drafts per account/shop in localStorage; retain them on reload, make storage failures visible, and refuse to publish unsaved drafts. Drafts are local to the device and may be lost when site data is cleared.
 

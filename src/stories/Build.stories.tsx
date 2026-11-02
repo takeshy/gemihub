@@ -13,7 +13,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Onboarding: Story = {
-  name: "お店の情報を入力",
+  name: "初回ログイン・お店づくりだけを表示",
   args: { scenario: "onboarding" },
 };
 
@@ -54,7 +54,7 @@ export const LocalEditor: Story = {
   args: { scenario: "local-editor" },
 };
 export const LocalEditorNew: Story = {
-  name: "公開前のお店をローカルで試す",
+  name: "仮公開したお店をローカルで試す",
   args: { scenario: "local-editor-new" },
 };
 

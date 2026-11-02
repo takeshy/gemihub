@@ -57,6 +57,7 @@ try {
   await page.getByRole("region",{name:"お店の変更履歴"}).getByText("営業時間・休業日を更新",{exact:false}).waitFor();
 
   await open("onboarding", "AIとお店をつくる");
+  assert.equal(await page.locator(".dashboard > aside,.local-preview,.shop-switch").count(),0,"first login shows only shop creation");
   assert.equal(await page.getByRole("region", {name:"データと権限の仕組み",exact:true}).count(),0);
   await page.getByRole("heading", {name:"こんな風にすすみます",exact:true}).waitFor();
   assert.equal(await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).count(),0);
