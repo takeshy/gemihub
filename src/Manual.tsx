@@ -23,6 +23,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
         get instructions() { return [
           tr("「Google でお店をはじめる」を選び、お店の店主として使うアカウントでログインします。"),
           tr("Google の確認画面で保存や通知に必要なアクセスを許可すると、お店の情報を入力する画面が開きます。"),
+          tr("以前のGemiHubでノートを使っていた方には、設定の「旧環境からの引き継ぎ」が表示されます。「kiokuflowで引き継ぐ」から同じGoogleアカウントでログインし、データをコピーしてください。完了後にこの画面へ戻り「移行完了を確認する」を選ぶと、お店づくりを始められます。"),
         ]; },
         image: "01-start.jpg",
         get caption() { return tr("はじめの画面。店主が使う Google アカウントでログインします。"); },

@@ -72,6 +72,6 @@ export function LandingPage() {
       ].map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden="true">＋</span></summary><p>{answer}</p></details>)}</div></section>
       <section className="lp-final"><div className="lp-container"><Flower /><span className="lp-kicker">YOUR SHOP, YOUR WORDS.</span><h2>{tr("あなたらしいお店を、")}<br />{tr("あなたの言葉から。")}</h2><p>{tr("お店のこと、少し聞かせてください。")}</p><a className="lp-button" href={start}>{tr("お店づくりをはじめる")}<Arrow /></a></div></section>
     </main>
-    <footer className="lp-footer lp-container"><div><Brand href="/lp" /><p>{tr("お店のシステムを、言葉で。")}</p></div><nav aria-label={tr("関連ページ")}><a href={`/manual?lang=${getLocale()}`}>{tr("使い方")}</a><a href={start}>{tr("お店の管理画面へ")}<Arrow diagonal /></a></nav><span>© gemihub</span></footer>
+    <footer className="lp-footer lp-container"><div><Brand href="/lp" /><p>{tr("お店のシステムを、言葉で。")}</p></div><nav aria-label={tr("関連ページ")}><a href={`/manual?lang=${getLocale()}`}>{tr("使い方")}</a><a href={`/policy?lang=${getLocale()}`}>{tr("プライバシーポリシー")}</a><a href={`/terms?lang=${getLocale()}`}>{tr("利用規約")}</a><a href={start}>{tr("お店の管理画面へ")}<Arrow diagonal /></a></nav><span>© gemihub</span></footer>
   </div>;
 }

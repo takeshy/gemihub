@@ -1,5 +1,7 @@
 import { googleCallbackPath } from "../shared/brand.ts";
 import { renderLanding } from "./landing.ts";
+import { renderLegal } from "./legal.ts";
+import { hasLegacyNotes } from "./legacy-notes.ts";
 import { localizeShell } from "../shared/html.ts";
 import { tr, intlLocale, getLocale } from "../shared/i18n.ts";
 import { localeForRequest, requestLocale } from "./i18n.ts";
@@ -46,6 +48,7 @@ import {
 } from "./domain.ts";
 import {
   oauth,
+  clients,
   encrypt,
   provision,
   syncConfig,
@@ -371,6 +374,19 @@ export function createApp(
         res.end(method === "HEAD" ? undefined : renderLanding(shell!));
         return;
       }
+      if (path === "/sw.js" && host === appHost && (method === "GET" || method === "HEAD")) {
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Service-Worker-Allowed", "/");
+        res.end(method === "HEAD" ? undefined : await readFile(resolve("dist/sw.js"), "utf8"));
+        return;
+      }
+      if ((path === "/policy" || path === "/terms") && host === appHost && (method === "GET" || method === "HEAD")) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(method === "HEAD" ? undefined : renderLegal(path === "/policy" ? "policy" : "terms"));
+        return;
+      }
       const allShops = await store.list<Shop>("shop");
       const hosted =
         host !== appHost
@@ -416,11 +432,26 @@ export function createApp(
                 name: user.name,
                 role: user.role,
                 shopId: user.shopId,
+                ...(user.role === "owner" && user.legacyNotes ? { legacyNotes: true } : {}),
               }
             : null,
           demo: demoEnabled(),
           hosted: hosted?.slug,
         });
+      if (path === "/api/legacy-notes/check" && method === "POST" && !publicHost) {
+        if (user?.role !== "owner") fail(403, tr("店主としてログインしてください"));
+        const saved = await store.get<User>("user", user.email);
+        if (!saved?.refreshToken) fail(403, tr("Google のアクセス権を再承認してください"));
+        let accessToken: string;
+        try { accessToken = (await clients(saved.refreshToken).auth.getAccessToken()).token || ""; }
+        catch { fail(401, tr("Google のアクセス権を再承認してください")); }
+        if (await hasLegacyNotes(accessToken)) fail(409, tr("旧設定が残っています。kiokuflowでデータの引き継ぎを完了してから、もう一度確認してください。"));
+        const own = allShops.find(shop => shop.owner === user.email) || await store.createShop(user.email);
+        const updated: User = { ...saved, shopId: own.id, legacyNotes: false };
+        await store.put("user", user.email, updated);
+        await login(store, res, updated);
+        return json(res, { success: true });
+      }
       if (path === "/api/logout" && method === "POST") {
         const id = cookie(req, "gemihub_session");
         if (id) await store.delete("session", digest(id));
@@ -590,10 +621,11 @@ export function createApp(
           shopId: pending.shopId,
         };
         if (!pending.shopId) {
-          const own =
-            allShops.find((s) => s.owner === email) ||
-            (await store.createShop(email));
-          u.shopId = own.id;
+          u.legacyNotes = await hasLegacyNotes(tokens.access_token || "");
+          // Do not create an empty shop just because an existing note user signed in.
+          const own = allShops.find((s) => s.owner === email)
+            || (!u.legacyNotes ? await store.createShop(email) : undefined);
+          u.shopId = own?.id;
           u.refreshToken = tokens.refresh_token
             ? encrypt(tokens.refresh_token)
             : existing?.refreshToken;
@@ -615,6 +647,9 @@ export function createApp(
           );
         }
         await login(store, res, u);
+        if (!pending.shopId && u.legacyNotes) {
+          return redirect(res, "/settings/migration");
+        }
         return redirect(
           res,
           pending.shopId
@@ -651,6 +686,9 @@ export function createApp(
         });
         await login(store, res, u);
         return json(res, { ok: true });
+      }
+      if (user?.role === "owner" && user.legacyNotes && !publicHost && path.startsWith("/api/")) {
+        fail(409, tr("旧設定が残っています。kiokuflowでデータの引き継ぎを完了してから、もう一度確認してください。"));
       }
       if (path === "/api/workspace" && method === "GET" && !publicHost) {
         if (!user) fail(401, tr("Google アカウントでログインしてください"));

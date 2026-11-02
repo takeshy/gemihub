@@ -282,3 +282,9 @@ PayPalが`REFUND_FAILED_INSUFFICIENT_FUNDS`を返した場合は、運営画面�
 `npm run check:paypal:recovery`は、完了済みのSandbox全額返金について応答消失を再現し、アプリの再確認APIから同じ処理ID・金額で同じ返金IDを取得できるか検証します。追加の課金はせず、最初の返金送信から5時間以内だけ実行できます。
 
 Google OAuth for gemihub.net reuses `projects/495062043717/secrets/google-client-id/versions/1` and `projects/495062043717/secrets/google-client-secret/versions/1`. Both enabled version numbers were checked without reading payloads. Terraform grants the service runtime access to these two secrets and exports versioned references for the shared deployer; credentials are not copied into this repository. To supply the client ID directly, set both `google_client_id_secret_ref` and `google_client_secret_ref` to null and configure the client ID and managed secret version.
+
+## Existing note users moving to kiokuflow
+
+This app serves `gemihub.net`, so it detects existing note users after owner Google login by reading the legacy `settings.json`. Matching users reach `/settings/migration`, which explains the move and links to `https://kiokuflow.net/settings/migration`. They authenticate there with the same Google account to copy their workspace. Tokens, settings contents and folder IDs never appear in the handoff URL or session response.
+
+Existing note users must finish migration before creating or managing a shop. There is no pre-migration bypass. After kiokuflow verifies the copy and moves the old `settings.json` to Trash, Check migration completion verifies its absence before opening the shop workflow. Customer/staff login does not run the detector. The copy and resumable state belong to kiokuflow; this app never modifies or deletes old note files.

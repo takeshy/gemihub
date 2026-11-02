@@ -8,6 +8,13 @@ import "./landing.css";
 import { DrivePreview } from "./DrivePreview";
 import { drivePreviewData } from "./drive-preview";
 
+// Update an existing note worker to the retirement script. Never remove local note databases.
+if (location.protocol !== "file:" && "serviceWorker" in navigator) {
+  void navigator.serviceWorker.getRegistrations().then(registrations => Promise.all(registrations
+    .filter(registration => registration.active && new URL(registration.active.scriptURL).pathname === "/sw.js")
+    .map(registration => registration.update()))).catch(() => {});
+}
+
 document.documentElement.lang = getLocale();
 if (document.title === serviceTitles.ja || document.title === serviceTitles.en) document.title = serviceTitles[getLocale()];
 if (new URLSearchParams(location.search).has("lang")) {

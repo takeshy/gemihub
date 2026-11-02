@@ -35,6 +35,7 @@ export type User = {
   shopId?: string;
   role: "owner" | "customer";
   refreshToken?: string;
+  legacyNotes?: boolean;
 };
 
 const chatKinds = new Set(["shopChat", "shopChatMessage"]);

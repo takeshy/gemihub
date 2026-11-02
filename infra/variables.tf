@@ -28,6 +28,12 @@ variable "site_domain" {
   }
 }
 
+variable "manage_app_domain_dns_certificate" {
+  description = "Manage apex DNS/TLS only for a fresh domain. Disable when kiokuflow already owns the gemihub.net resources."
+  type        = bool
+  default     = true
+}
+
 variable "dns_project_id" {
   description = "Project owning the existing Cloud DNS zone."
   type        = string

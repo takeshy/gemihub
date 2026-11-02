@@ -31,6 +31,7 @@ import { useApi } from "./api";
 import type { ShopConfig, Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
+import { LegacyNotes } from "./LegacyNotes";
 export type Plan = {
   id: string;
   config: ShopConfig;
@@ -131,6 +132,7 @@ export function App({
           <span className="small muted">
             {session.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
+          {session.user?.role === "owner" && session.user.legacyNotes && <a className="text-button" href="/settings/migration">{tr("旧環境からの引き継ぎ")}</a>}
           {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
           {!isPublic && (
             <a className="text-button" href="/manual">
@@ -160,7 +162,9 @@ export function App({
             {notice}
           </div>
         )}
-        {path === "/manual" && !isPublic ? (
+        {path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.legacyNotes ? (
+          <LegacyNotes email={session.user.email} onCheck={() => void run(async () => { await api("/api/legacy-notes/check", {}); navigate("/"); })} />
+        ) : path === "/manual" && !isPublic ? (
           <Manual />
         ) : isPublic ? (
           <PublicShop
@@ -478,7 +482,7 @@ function Dashboard({
                 <div hidden={tab!=="inquiries"}><Inquiries shopId={shop.id} inquiries={shop.inquiries}/></div>
                 {tab === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} showMenus={openDataMenu} />}
                 {tab === "settings" && (
-                  <Settings shop={shop} run={run} reload={load} />
+                  <Settings shop={shop} run={run} reload={load} hasLegacyNotes={!!session.user?.legacyNotes} />
                 )}
               </>
             )}
@@ -1069,15 +1073,18 @@ function Settings({
   shop,
   run,
   reload,
+  hasLegacyNotes = false,
 }: {
   shop: Workspace;
   run: Run;
   reload: () => Promise<unknown>;
+  hasLegacyNotes?: boolean;
 }) {
   const api = useApi();
   const [domain, setDomain] = useState(shop.domain || "");
   return (
     <div className="panel">
+      {hasLegacyNotes && <section className="legacy-notes-settings"><h2>{tr("旧環境からの引き継ぎ")}</h2><p>{tr("ノートとAIチャットはkiokuflowへ移動しました")}</p><a className="button" href="/settings/migration">{tr("引き継ぎの案内を開く")}</a></section>}
       <h2>{tr("予約ページのアドレス")}</h2>
       {shop.published ? (
         <>

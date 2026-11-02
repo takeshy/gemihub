@@ -234,3 +234,5 @@
 }
 @media(max-width:480px) { .lp-header-start { display:none; } }
 @media(prefers-reduced-motion:reduce) { .lp *, .lp *::before, .lp *::after { transition:none !important; scroll-behavior:auto !important; } }
+
+.lp-footer nav { flex-wrap: wrap; }

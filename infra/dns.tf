@@ -10,7 +10,8 @@ data "google_compute_global_address" "shared" {
 }
 
 locals {
-  certificate_domains = toset([var.app_domain, var.site_domain])
+  certificate_domains = toset(var.manage_app_domain_dns_certificate ? [var.app_domain, var.site_domain] : [var.site_domain])
+  managed_hosts       = toset(var.manage_app_domain_dns_certificate ? local.hosts : ["*.${var.site_domain}"])
 }
 
 resource "google_certificate_manager_dns_authorization" "app" {
@@ -35,14 +36,14 @@ resource "google_certificate_manager_certificate" "app" {
   provider = google.shared
   name     = "gemihub-web"
   managed {
-    domains            = distinct([var.app_domain, var.site_domain, "*.${var.site_domain}"])
+    domains            = distinct(concat(var.manage_app_domain_dns_certificate ? [var.app_domain] : [], [var.site_domain, "*.${var.site_domain}"]))
     dns_authorizations = [for auth in google_certificate_manager_dns_authorization.app : auth.id]
   }
   depends_on = [google_dns_record_set.validation]
 }
 
 resource "google_certificate_manager_certificate_map_entry" "app" {
-  for_each     = toset(local.hosts)
+  for_each     = local.managed_hosts
   provider     = google.shared
   name         = "gemihub-web-${each.value == var.app_domain ? "app" : "shops"}"
   map          = var.certificate_map
@@ -51,7 +52,7 @@ resource "google_certificate_manager_certificate_map_entry" "app" {
 }
 
 resource "google_dns_record_set" "app" {
-  for_each     = toset(local.hosts)
+  for_each     = local.managed_hosts
   project      = var.dns_project_id
   managed_zone = var.dns_zone
   name         = "${each.value}."

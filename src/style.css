@@ -2258,3 +2258,11 @@ pre {
 .payment-policy, .payment-details { padding: 1rem; border: 1px solid var(--line, #d8e1d9); border-radius: 12px; margin: .75rem 0; background: #f6f8f4; }
 .payment-policy label { display: flex; gap: .5rem; align-items: baseline; }
 .payment-details p { margin: .35rem 0; }
+
+/* Existing note users arrive here before any shop is created. */
+.legacy-notes { max-width: 720px; margin: 24px auto; overflow-wrap: anywhere; }
+.legacy-notes h1 { font-size: clamp(1.25rem, 4vw, 1.75rem); line-height: 1.5; }
+.legacy-notes-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 24px 0; }
+.legacy-notes-actions > * { min-height: 44px; white-space: normal; }
+.legacy-notes-settings { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+@media (max-width: 600px) { .legacy-notes-actions { flex-direction: column; } .legacy-notes-actions > * { width: 100%; text-align: center; } }

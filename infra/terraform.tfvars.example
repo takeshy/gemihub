@@ -3,6 +3,8 @@ app_domain       = "gemihub.net"
 site_domain      = "shops.gemihub.net"
 dns_project_id   = "your-dns-project"
 dns_zone         = "gemihub-net"
+# Reuse the existing apex A record and certificate-map entry owned by kiokuflow.
+manage_app_domain_dns_certificate = false
 # Existing OAuth secrets; references only, never copy payloads into tfvars.
 google_client_id_secret_ref = { project = "495062043717", name = "google-client-id", version = "1" }
 google_client_secret_ref    = { project = "495062043717", name = "google-client-secret", version = "1" }

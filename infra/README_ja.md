@@ -132,3 +132,5 @@ terraform -chdir=infra test
 Terraform のテストはモックプロバイダーを使い、クラウドへ適用しません。共有 VM の Python テストと kiokuflow のホスト規則テストも各リポジトリで実行します。実際の初回 Docker build、GCP plan / apply、OAuth / DB / AI の本番接続は、ドメイン等の設定後に別途確認が必要です。
 
 Google OAuthは `projects/495062043717/secrets/google-client-id/versions/1` と `projects/495062043717/secrets/google-client-secret/versions/1` を参照します。有効バージョン番号のみ確認済みで、秘密値は取得・コピーしません。Terraformはこの2つの既存シークレットに実行アカウントの参照権限を設定し、共有デプロイヤーへバージョン固定の参照を出力します。従来の認証情報を使う場合は両方の `*_secret_ref` をnullにして、既存Client IDと従来のsecretバージョンを指定できます。
+
+既存の `gemihub.net` のDNS・証明書・certificate-map entryはkiokuflow側のstateに残します。初回配置のprivate tfvarsに `manage_app_domain_dns_certificate = false` を設定してください。このモジュールは店舗用の追加DNS/TLSだけを作り、apexの同じリソースを重複作成しません。新規ドメインを一から管理する場合だけtrueにします。

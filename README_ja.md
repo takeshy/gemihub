@@ -311,3 +311,9 @@ Storybookは上部の地球アイコンから言語を切り替えられます�
 `npm run check:articles` は記事の2つの作成方法、wysimark-lite編集、画像のアップロード・既存picker、下部の自動プレビュー、保存と公開記事、AIへの[[パス]]挿入をPC・スマートフォンで確認します。AIの出力はモックです。
 
 Google OAuthは `projects/495062043717/secrets/google-client-id/versions/1` と `projects/495062043717/secrets/google-client-secret/versions/1` を参照します。有効バージョン番号のみ確認済みで、秘密値は取得・コピーしません。Terraformはこの2つの既存シークレットに実行アカウントの参照権限を設定し、共有デプロイヤーへバージョン固定の参照を出力します。従来の認証情報を使う場合は両方の `*_secret_ref` をnullにして、既存Client IDと従来のsecretバージョンを指定できます。
+
+## 旧ノート利用者のkiokuflowへの案内
+
+`gemihub.net` はこの予約サービスが配信するため、旧ノート利用者の検出もこちらで行います。店主のGoogleログイン後、旧ノート用の `settings.json` を読み取り専用で確認し、該当する方を設定の `/settings/migration` へ案内します。案内から `https://kiokuflow.net/settings/migration` へ進み、同じGoogleアカウントで認証してデータをコピーします。トークン・設定ファイル・フォルダIDをブラウザや移行URLへ渡しません。
+
+旧設定がある間は、店舗を自動作成せず、店舗の管理APIも保留します。引き継ぎ前にお店づくりへ進む選択肢はありません。kiokuflow側でコピーと検証を完了して旧 `settings.json` をゴミ箱へ移した後、「移行完了を確認する」で旧設定がなくなったことを再確認して店舗画面へ進みます。お客様・スタッフ用ログインには、この検出・案内を挟みません。ノート本体のコピーと再開処理はkiokuflow側の責務で、こちらでは旧ファイルを変更・削除しません。
