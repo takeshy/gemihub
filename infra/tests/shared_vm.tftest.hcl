@@ -6,6 +6,7 @@ variables {
   dns_zone       = "gemihub-net"
   vertex_model   = "configured-text-model"
   image_model    = "configured-image-model"
+  repository     = ""
 }
 
 run "isolated_runtime" {
@@ -74,7 +75,7 @@ run "reuse_existing_apex" {
   command = plan
   variables { manage_app_domain_dns_certificate = false }
   assert {
-    condition = keys(google_certificate_manager_dns_authorization.app) == ["shops.gemihub.net"] && keys(google_certificate_manager_certificate_map_entry.app) == ["*.shops.gemihub.net"] && keys(google_dns_record_set.app) == ["*.shops.gemihub.net"]
+    condition     = keys(google_certificate_manager_dns_authorization.app) == ["shops.gemihub.net"] && keys(google_certificate_manager_certificate_map_entry.app) == ["*.shops.gemihub.net"] && keys(google_dns_record_set.app) == ["*.shops.gemihub.net"]
     error_message = "Never duplicate gemihub.net DNS or certificate-map entries already managed by kiokuflow."
   }
 }

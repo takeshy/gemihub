@@ -35,6 +35,8 @@ Defaults are project `geminihub-486523` and a dedicated `gemihub` database. Exis
 
 Initially leave `repository` empty to disable automatic deployment. Complete Google's OAuth consent for the GitHub/Cloud Build v2 connection separately before setting its resource name.
 
+The GitHub repository is `takeshy/gemihub`. Select a Cloud Build repository with `remoteUri = https://github.com/takeshy/gemihub.git`; the current resource is `projects/geminihub-486523/locations/asia-northeast1/connections/gemini-hub-github/repositories/gemihub`. After a GitHub rename, check both `repository` and the trigger's repository reference. Git redirects alone do not verify automatic deployment. After pushing, check that a build for that commit SHA starts and succeeds, then verify the updated production page.
+
 ## 2. Secrets and OAuth
 
 Terraform creates secret containers and access rules only. It does not generate, retrieve, or store secret values in state.

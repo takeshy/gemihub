@@ -119,6 +119,8 @@ kiokuflow の既存 private 設定に、出力の `shared_vm_backends.gemihub-we
 
 初回の検証後に `repository` を設定して plan / apply すると、指定ブランチの push から Cloud Build が実行されます。`cloudbuild.yaml` はイメージを作成して IAP 経由で `deploy.py --app gemihub-web` を実行し、manifest を Secret Manager に保存します。アプリ内ポートは既存の共有デプロイヤーに合わせて `8080` です。
 
+GitHubリポジトリは `takeshy/gemihub` です。Cloud Buildの接続先は `remoteUri = https://github.com/takeshy/gemihub.git` の登録を選びます。現在の登録名は `projects/geminihub-486523/locations/asia-northeast1/connections/gemini-hub-github/repositories/gemihub` です。リポジトリ名を変更した場合は、Gitの転送だけに頼らず、`repository` とトリガーの参照先も確認してください。push後は、そのコミットSHAのビルドが起動・成功したことと、本番の画面が更新されたことを確認します。
+
 ```sh
 cd /path/to/omaiweb
 npm ci --ignore-scripts
