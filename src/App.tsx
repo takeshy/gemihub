@@ -32,6 +32,8 @@ import type { ShopConfig, Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 import { LegacyNotes } from "./LegacyNotes";
+import { JudgeStart, JudgeMenu, JudgeBar, AccessPassword } from "./JudgeAccess";
+import { Admin } from "./Admin";
 export type Plan = {
   id: string;
   config: ShopConfig;
@@ -60,7 +62,7 @@ export type Workspace = Shop & {
   jobs: { type: string; error?: string }[];
   publicUrl: string;
 };
-export type Session = { user: User | null; demo: boolean; hosted?: string };
+export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean };
 const yen = (n: number) => `¥${n.toLocaleString(intlLocale())}`;
 const when = (s: string) =>
   new Date(s).toLocaleString(intlLocale(), {
@@ -133,6 +135,8 @@ export function App({
             {session.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
           {session.user?.role === "owner" && session.user.legacyNotes && <a className="text-button" href="/settings/migration">{tr("旧環境からの引き継ぎ")}</a>}
+          {session.user?.judge && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
+          {session.user?.admin && <a className="text-button" href="/admin">{tr("運営管理")}</a>}
           {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
           {!isPublic && (
             <a className="text-button" href="/manual">
@@ -149,6 +153,11 @@ export function App({
           <div className="demo-banner">
             {tr("デモモード · Google には接続せず、サンプルで動作を確認できます。")}</div>
         )}
+        {session.user?.judge && !isPublic && (
+          <div className="demo-banner judge-banner">
+            {tr("審査員アクセス · メールは送信されません。内容は")}<a href="/judge-menu">{tr("審査メニュー")}</a>{tr("で確認できます。")}</div>
+        )}
+        {isPublic && !session.hosted && (session.judgeCustomer || session.user?.judge) && <JudgeBar customer={!!session.judgeCustomer} run={run} />}
         {error && (
           <div className="alert" role="alert">
             {error}
@@ -162,7 +171,15 @@ export function App({
             {notice}
           </div>
         )}
-        {path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.legacyNotes ? (
+        {/^\/judge\/[^/]+$/.test(path) ? (
+          <JudgeStart invite={path.split("/")[2]} signedIn={!!session.user?.judge} run={run} />
+        ) : path === "/judge-menu" && session.user?.judge ? (
+          <JudgeMenu run={run} />
+        ) : path === "/admin" && session.user?.admin ? (
+          <Admin run={run} />
+        ) : path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.accessPending ? (
+          <AccessPassword email={session.user.email} run={run} />
+        ) : path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.legacyNotes ? (
           <LegacyNotes email={session.user.email} onCheck={() => void run(async () => { await api("/api/legacy-notes/check", {}); navigate("/"); })} />
         ) : path === "/manual" && !isPublic ? (
           <Manual />
@@ -210,7 +227,7 @@ export function App({
             notify={setNotice}
           />
         ) : (
-          <Landing demo={session.demo} run={run} />
+          <Landing demo={session.demo} invite={!!session.invite} run={run} />
         )}
       </main>
       {!isPublic && <footer>
@@ -225,7 +242,7 @@ export function App({
   );
 }
 type Run = (fn: () => Promise<void>) => Promise<void>;
-function Landing({ demo, run }: { demo: boolean; run: Run }) {
+function Landing({ demo, invite, run }: { demo: boolean; invite: boolean; run: Run }) {
   const api = useApi();
   return (
     <div className="landing">
@@ -240,6 +257,7 @@ function Landing({ demo, run }: { demo: boolean; run: Run }) {
       <a className="button primary" href="/auth/google">
         {tr("G　Google でお店をはじめる ")}<span>↗</span>
       </a>
+      {invite && <p className="small muted invite-note">{tr("現在は招待制です。新しくお店をはじめるには、ログイン後に招待パスワードが必要です。")}</p>}
       {demo && (
         <button
           className="button"
@@ -452,7 +470,7 @@ function Dashboard({
                 )}
                 {view === "build" && (
                   <>
-                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.judge ? undefined : shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
                       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds, intent, chat });
                       setPlan(p); await load(); return p;
                     }} />}

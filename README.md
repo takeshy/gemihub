@@ -209,6 +209,27 @@ Business writes must succeed in Sheets before the app reports success. Writes us
 
 Additional sheets use owner-only Data management: up to 100 unique columns and 1,000 data rows; add/search/edit rows, preserve formulas and column order, save only changed cells, reject stale edits, and reuse row identities on retry. Configure sheets/columns/formulas in Sheets itself. Entire-row deletion is not provided.
 
+## Judge access, invitation-only sign-up, and administration
+
+These features prepare `gemihub.net` for hackathon judging while PayPal stays in the Sandbox. See [the specification](specs/judge-access-spec.md).
+
+| Variable | Purpose |
+| --- | --- |
+| `JUDGE_INVITE` | Unguessable invitation token (32+ characters). Unset disables judge access |
+| `JUDGE_UNTIL` | RFC 3339 end of judge access (production: `2027-01-31T15:00:00Z`). Afterwards judges are signed out and their shops return 404 |
+| `JUDGE_AI_LIMIT` | AI requests per judge (default 200) |
+| `ACCESS_PASSWORD` | Invitation password required before a new Google owner creates a shop. Unset keeps open sign-up |
+| `ADMIN_EMAILS` | Comma-separated Google accounts allowed to open `/admin` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_IMAGE_MODEL` | Optional OpenAI provider |
+
+**Judge access.** `https://gemihub.net/judge/<invite>` lets judges start as a shop owner without Google. A fresh browser opens it in English. Each judge's shop is stored in the operator's demo Google Drive under `gemihub judges/<judge>/`, so storage, images and Sheets use the ordinary code path. Mail is never sent: each message is recorded and shown in the judge menu (`/judge-menu`), which also shows AI usage, the trial path and **Reset account data**. A reset moves the shop folder to the Drive trash, archives the shop, clears recorded mail and trial customers, and starts a new shop; AI usage is kept. On their own public page judges choose **Try as a customer** to book and pay with the PayPal Sandbox, then **Back to owner**. The same browser resumes the same judge; another browser starts a new one. Starting with live PayPal is refused while judge access is configured.
+
+**Invitation-only sign-up.** "Sign in with Google" stays open, because existing owners and former note users must sign in before gemihub knows who they are. A new owner without a shop sees the invitation password screen before any shop is created; five wrong attempts within ten minutes are refused. Existing owners, former note users, customers and staff never see it.
+
+**Administration (`/admin`).** Listed administrators connect the demo Google account (`drive.file` only; it is stored separately from their own shop token), copy the English and Japanese invitation URLs, review judges (shop, AI usage, resets, recorded mail, last use), and switch the AI provider for every shop between Vertex AI (Gemini) and OpenAI. Switching requires that provider's key and models; a connection test sends one short request. There is no silent fallback between providers. OpenAI uses the Responses API for structured output, image input and tool calls, and the Images API for generation and reference edits.
+
+Put the invitation URL and password only in the submission form's testing instructions, never in this public README.
+
 ## Deployment and operations
 
 Production operational state uses Firestore Native mode in `GOOGLE_CLOUD_PROJECT`; optionally set `FIRESTORE_DATABASE_ID`. Give ADC access to Firestore. `FIRESTORE_EMULATOR_HOST` supports local integration testing. `gemihub_state` holds encrypted tokens, sessions, domains/publication, plans, conversation staging, and queues, not the primary business rows. Published configuration is a serving snapshot.

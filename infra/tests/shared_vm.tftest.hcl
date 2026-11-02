@@ -1,5 +1,6 @@
 mock_provider "google" {}
 mock_provider "google" { alias = "shared" }
+mock_provider "random" {}
 
 variables {
   dns_project_id = "example-dns"
@@ -77,5 +78,45 @@ run "reuse_existing_apex" {
   assert {
     condition     = keys(google_certificate_manager_dns_authorization.app) == ["shops.gemihub.net"] && keys(google_certificate_manager_certificate_map_entry.app) == ["*.shops.gemihub.net"] && keys(google_dns_record_set.app) == ["*.shops.gemihub.net"]
     error_message = "Never duplicate gemihub.net DNS or certificate-map entries already managed by kiokuflow."
+  }
+}
+
+run "judge_access_and_admin" {
+  command = plan
+  variables {
+    admin_emails       = ["admin@example.com"]
+    openai_model       = "configured-openai-model"
+    openai_image_model = "configured-openai-image-model"
+  }
+  assert {
+    condition = (
+      output.shared_vm_registration.additional_apps.gemihub-web.env.JUDGE_UNTIL == "2027-01-31T15:00:00Z" &&
+      output.shared_vm_registration.additional_apps.gemihub-web.env.JUDGE_AI_LIMIT == "200" &&
+      output.shared_vm_registration.additional_apps.gemihub-web.env.ADMIN_EMAILS == "admin@example.com" &&
+      output.shared_vm_registration.additional_apps.gemihub-web.secrets.JUDGE_INVITE.name == "gemihub-web-judge-invite" &&
+      output.shared_vm_registration.additional_apps.gemihub-web.secrets.ACCESS_PASSWORD.name == "gemihub-web-access-password" &&
+      output.shared_vm_registration.additional_apps.gemihub-web.secrets.OPENAI_API_KEY.name == "gemihub-web-openai-api-key" &&
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.env), "JUDGE_INVITE") &&
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.env), "OPENAI_API_KEY")
+    )
+    error_message = "Judge access, the invitation password and the OpenAI key must arrive as versioned secrets."
+  }
+}
+
+run "judge_access_disabled" {
+  command = plan
+  variables {
+    enable_judge_access    = false
+    enable_access_password = false
+  }
+  assert {
+    condition = (
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.secrets), "JUDGE_INVITE") &&
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.secrets), "ACCESS_PASSWORD") &&
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.secrets), "OPENAI_API_KEY") &&
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.env), "JUDGE_UNTIL") &&
+      length(random_id.judge_invite) == 0
+    )
+    error_message = "Disabled judge access and sign-up gating must not inject their settings."
   }
 }

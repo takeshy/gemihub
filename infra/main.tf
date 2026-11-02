@@ -59,7 +59,12 @@ resource "google_project_iam_member" "vertex" {
 }
 
 resource "google_secret_manager_secret" "app" {
-  for_each  = toset(concat(["gemihub-web-session-secret", "gemihub-web-google-client-secret"], var.paypal_client_id != "" ? ["gemihub-web-paypal-client-secret"] : []))
+  for_each = toset(concat(
+    ["gemihub-web-session-secret", "gemihub-web-google-client-secret"],
+    var.paypal_client_id != "" ? ["gemihub-web-paypal-client-secret"] : [],
+    var.enable_access_password ? ["gemihub-web-access-password"] : [],
+    var.openai_model != "" ? ["gemihub-web-openai-api-key"] : [],
+  ))
   project   = var.project_id
   secret_id = each.value
   replication {
@@ -73,6 +78,36 @@ resource "google_secret_manager_secret_iam_member" "runtime" {
   for_each  = google_secret_manager_secret.app
   project   = var.project_id
   secret_id = each.value.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
+}
+
+# The judge invitation is generated here so its URL can be printed for the submission form.
+resource "random_id" "judge_invite" {
+  count       = var.enable_judge_access ? 1 : 0
+  byte_length = 32
+}
+
+resource "google_secret_manager_secret" "judge_invite" {
+  count     = var.enable_judge_access ? 1 : 0
+  project   = var.project_id
+  secret_id = "gemihub-web-judge-invite"
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.app]
+}
+
+resource "google_secret_manager_secret_version" "judge_invite" {
+  count       = var.enable_judge_access ? 1 : 0
+  secret      = google_secret_manager_secret.judge_invite[0].id
+  secret_data = random_id.judge_invite[0].hex
+}
+
+resource "google_secret_manager_secret_iam_member" "judge_invite" {
+  count     = var.enable_judge_access ? 1 : 0
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.judge_invite[0].secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime.email}"
 }

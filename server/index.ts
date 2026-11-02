@@ -8,6 +8,8 @@ if (process.env.NODE_ENV === "production") {
     throw new Error("APP_ORIGIN must use HTTPS");
   if (process.env.DEMO_MODE === "true")
     throw new Error("DEMO_MODE must be disabled in production");
+  if (process.env.JUDGE_INVITE && process.env.PAYPAL_ENVIRONMENT === "live")
+    throw new Error("Judge access requires the PayPal sandbox");
 }
 const port = Number(process.env.PORT || 3000);
 const server = createApp();

@@ -2269,3 +2269,35 @@ pre {
 .legacy-notes-actions > * { min-height: 44px; white-space: normal; }
 .legacy-notes-settings { padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
 @media (max-width: 600px) { .legacy-notes-actions { flex-direction: column; } .legacy-notes-actions > * { width: 100%; text-align: center; } }
+.judge-access, .access-password, .judge-menu, .admin { max-width: 860px; margin: 24px auto; overflow-wrap: anywhere; }
+.judge-access h1, .access-password h1, .judge-menu h1, .admin h1 { font-size: clamp(1.25rem, 4vw, 1.75rem); line-height: 1.5; margin-top: 0; }
+.judge-access ul, .judge-steps { padding-left: 1.4em; }
+.judge-actions, .admin-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0 0; }
+.judge-actions > *, .admin-actions > * { min-height: 44px; white-space: normal; }
+.access-password form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 16px; }
+.access-password label { display: grid; gap: 6px; flex: 1 1 240px; }
+.judge-facts, .admin-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 20px; margin: 16px 0; }
+.judge-facts div, .admin-facts div { border-left: 3px solid var(--line); padding-left: 10px; }
+.judge-facts dt, .admin-facts dt { font-size: 12px; color: var(--muted); }
+.judge-facts dd, .admin-facts dd { margin: 0; font-weight: 600; }
+.judge-mails { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.judge-mails button { width: 100%; justify-content: flex-start; flex-wrap: wrap; gap: 4px 12px; text-align: left; }
+.judge-mails button span, .judge-mails button small { color: var(--muted); font-size: 12px; }
+.judge-mails pre { white-space: pre-wrap; background: var(--cream); border-radius: 8px; padding: 14px; margin: 6px 0 0; font: inherit; }
+.danger { color: #94503d; border-color: #e8c9bd; }
+.danger:hover { background: #fff0e8; }
+.judge-banner a { margin: 0 4px; }
+.judge-bar { position: sticky; top: 0; z-index: 20; display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 8px 16px; background: #f5eddb; color: #6c5d36; font-size: 13px; }
+.judge-bar button { padding: 6px 14px; }
+.invite-note { margin: 10px 0 0; }
+.admin-copy { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-copy input { flex: 1 1 260px; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; }
+.admin-table { overflow-x: auto; }
+.admin-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.admin-providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.admin-provider { border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.admin-provider.current { border-color: var(--green); box-shadow: inset 3px 0 0 var(--green); }
+.admin-provider h3 { margin-top: 0; }
+.admin-bad { color: #94503d; }
+@media (max-width: 600px) { .judge-actions, .admin-actions { flex-direction: column; } .judge-actions > *, .admin-actions > * { width: 100%; } }

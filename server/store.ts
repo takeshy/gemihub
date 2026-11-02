@@ -5,6 +5,7 @@ import { randomUUID, createHash } from "node:crypto";
 import type { Checkout } from "./payments.ts";
 import type { ShopConfig, Booking } from "./domain.ts";
 import { readRecords, writeRecord } from "./sheet-records.ts";
+import { judgeActive, type DemoGoogle } from "./judge.ts";
 export type Shop = {
   id: string;
   owner: string;
@@ -28,6 +29,8 @@ export type Shop = {
   domain?: string;
   domainToken?: string;
   domainVerified?: boolean;
+  /** Present on shops created through hackathon judge access; stored in the operator's demo Google Drive. */
+  judge?: { createdAt: string; folderId?: string; archivedAt?: string };
 };
 export type User = {
   email: string;
@@ -36,6 +39,10 @@ export type User = {
   role: "owner" | "customer";
   refreshToken?: string;
   legacyNotes?: boolean;
+  /** A hackathon judge account created from the invitation URL; it has no Google token of its own. */
+  judge?: boolean;
+  /** A new owner signed in with Google but has not entered the invitation password yet. */
+  accessPending?: boolean;
 };
 
 const chatKinds = new Set(["shopChat", "shopChatMessage"]);
@@ -123,7 +130,7 @@ export class Store {
           { status: 409 },
         );
       if (shop?.google) {
-        const token = (await this.get<User>("user", shop.owner))?.refreshToken;
+        const token = await this.ownerToken(shop);
         if (!token) throw new Error(tr("店主の Google 再接続が必要です"));
         // Keep Live transcripts durable while the owner sheet is being updated.
         if (chatKinds.has(kind)) await this.persist([{kind,id,value:structuredClone(value)}]);
@@ -167,7 +174,7 @@ export class Store {
       );
     const staged = chatKinds.has(kind) ? (await this.firestore!.collection("gemihub_state").where("kind", "==", kind).get()).docs.map(doc => ({id:doc.get("id") as string,value:JSON.parse(doc.get("json")) as {shopId:string;updatedAt:string}})).filter(entry => entry.value.shopId === shop.id) : [];
     if (!shop.google) return staged.map(entry => entry.value as T);
-    const token = (await this.get<User>("user", shop.owner))?.refreshToken;
+    const token = await this.ownerToken(shop);
     if (!token)
       throw Object.assign(new Error(tr("店主の Google 再接続が必要です")), {
         status: 503,
@@ -238,6 +245,11 @@ export class Store {
           await this.delete(kind, entry.id);
       }
     }
+  }
+  /** The Google token that stores a shop: the owner's, or the operator's demo connection for judge shops. */
+  async ownerToken(shop: Shop) {
+    if (shop.judge) return judgeActive() ? (await this.get<DemoGoogle>("demoGoogle", "current"))?.refreshToken : undefined;
+    return (await this.get<User>("user", shop.owner))?.refreshToken;
   }
   async shop(id: string) {
     return this.get<Shop>("shop", id);

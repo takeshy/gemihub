@@ -171,3 +171,65 @@ variable "google_client_secret_ref" {
     version = "1"
   }
 }
+
+variable "enable_judge_access" {
+  description = "Hackathon judge access: a shared invitation URL, judge shops in the operator's demo Google Drive and recorded (unsent) mail."
+  type        = bool
+  default     = true
+}
+
+variable "judge_until" {
+  description = "RFC 3339 end of judge access. Covers both hackathon judging periods and January follow-up."
+  type        = string
+  default     = "2027-01-31T15:00:00Z"
+  validation {
+    condition     = can(timeadd(var.judge_until, "0s"))
+    error_message = "Use an RFC 3339 timestamp."
+  }
+}
+
+variable "judge_ai_limit" {
+  description = "Maximum AI requests per judge."
+  type        = number
+  default     = 200
+  validation {
+    condition     = var.judge_ai_limit > 0 && floor(var.judge_ai_limit) == var.judge_ai_limit
+    error_message = "Use a positive whole number."
+  }
+}
+
+variable "admin_emails" {
+  description = "Google accounts that may open the operator administration screen."
+  type        = list(string)
+  default     = []
+}
+
+variable "enable_access_password" {
+  description = "Require an invitation password before a new Google owner creates a shop. The payload is added outside Terraform."
+  type        = bool
+  default     = true
+}
+
+variable "access_password_version" {
+  description = "Pinned version of gemihub-web-access-password."
+  type        = string
+  default     = "1"
+}
+
+variable "openai_model" {
+  description = "OpenAI model for text, image input and tool calls. Empty leaves OpenAI unavailable in the administration screen."
+  type        = string
+  default     = ""
+}
+
+variable "openai_image_model" {
+  description = "OpenAI image generation model."
+  type        = string
+  default     = ""
+}
+
+variable "openai_api_key_version" {
+  description = "Pinned version of gemihub-web-openai-api-key; the payload is managed outside Terraform."
+  type        = string
+  default     = "1"
+}

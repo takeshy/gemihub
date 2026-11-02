@@ -160,6 +160,12 @@ The new infra configuration adds this app to the existing shared VM. This reposi
 
 Terraform does not generate or read secret values; pass version references. Runtime uses its own Docker network and gets short-lived credentials for its dedicated account through the shared broker. Container port is 8080, host port is 8105. See [infra/README.md](../infra/README.md) for bootstrap, deployment, recovery, and live-verification boundaries.
 
+## Judge access, invitation-only sign-up, and administration
+
+- A shared invitation URL lets hackathon judges start as owners without Google until `JUDGE_UNTIL`. Judge shops are stored in the operator's demo Google Drive, one folder per judge, through the ordinary storage path. Judge shops never send mail; the judge menu lists each message instead, with AI usage, the trial path and a reset that archives the shop and starts again without restoring AI usage. Judges can switch to a trial customer on their own storefront and back. Each judge has a per-request AI quota.
+- While `ACCESS_PASSWORD` is set, a new Google owner without a shop enters it before the first shop is created. Existing owners, former note users, customers and staff are unaffected.
+- Administrators listed in `ADMIN_EMAILS` connect the demo Google account (`drive.file` only, stored apart from their own token), see invitation URLs and judges, and switch every shop's AI between Vertex AI (Gemini) and OpenAI. A provider without its key and models cannot be selected, and there is no silent fallback. Details: [specs/judge-access-spec.md](../specs/judge-access-spec.md).
+
 ## Service name and public domain
 
 The management host serves a public `/lp` service overview in Japanese and English. Explain bookings, customer notes, news, the three-step setup/publication flow, PayPal prepayment and timed refunds, owner Google Sheets/Drive storage, and FAQs. Do not invent pricing or customer metrics. Server-render content, title, description, Open Graph metadata and language-specific canonical/alternate links without session/database reads. Do not serve the LP on custom storefront hosts. Preserve the selected language when linking to onboarding and the manual. Verify desktop/mobile layouts, keyboard access, feature switching, FAQs and the Storybook state.

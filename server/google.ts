@@ -76,13 +76,29 @@ const headers = [
   ["key", "value"],
   ["id", "record"],
 ];
-export async function provision(shop: Shop, config: ShopConfig, token: string) {
+/** Creates a Drive folder. Judge shops nest their folders under the operator's judge root. */
+export async function createFolder(token: string, name: string, parent?: string) {
+  const { drive } = clients(token);
+  const folder = await drive.files.create({
+    requestBody: { name, mimeType: "application/vnd.google-apps.folder", ...(parent ? { parents: [parent] } : {}) },
+    fields: "id",
+  });
+  return folder.data.id!;
+}
+/** Moves a Drive file or folder, with its contents, to the trash. A missing file is already gone. */
+export async function trashFile(token: string, id: string) {
+  const { drive } = clients(token);
+  try { await drive.files.update({ fileId: id, requestBody: { trashed: true }, fields: "id" }); }
+  catch (error) { if ((error as { code?: number }).code !== 404) throw error; }
+}
+export async function provision(shop: Shop, config: ShopConfig, token: string, parent?: string) {
   const { drive, sheets } = clients(token);
   if (shop.google) return shop.google;
   const folder = await drive.files.create({
     requestBody: {
       name: `${config.name} — ${serviceName}`,
       mimeType: "application/vnd.google-apps.folder",
+      ...(parent ? { parents: [parent] } : {}),
     },
     fields: "id",
   });

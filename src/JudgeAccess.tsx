@@ -1,0 +1,113 @@
+import { tr, intlLocale } from "../shared/i18n";
+import { useEffect, useState } from "react";
+import { useApi } from "./api";
+import { createRequestId } from "./request-id";
+
+type Run = (fn: () => Promise<void>) => Promise<void>;
+const at = (value: string) => new Date(value).toLocaleString(intlLocale(), { timeZone: "Asia/Tokyo", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+/** The shared invitation page. Judges start without Google; the same browser resumes its account. */
+export function JudgeStart({ invite, signedIn, run }: { invite: string; signedIn: boolean; run: Run }) {
+  const api = useApi();
+  return <section className="panel judge-access" aria-labelledby="judge-start-title">
+    <p className="eyebrow">JUDGE ACCESS</p>
+    <h1 id="judge-start-title">{tr("審査員アクセス")}</h1>
+    <p>{tr("Google アカウントなしで、店主としてお店づくりから予約・PayPal Sandbox の支払いまで試せます。")}</p>
+    <ul>
+      <li>{tr("メールは送信されません。送信されるはずのメールは「審査メニュー」で確認できます。")}</li>
+      <li>{tr("データは運営者の Google Drive に審査員ごとに保存し、審査終了後に削除します。")}</li>
+      <li>{tr("このブラウザでは同じアカウントを続けて使えます。別のブラウザや端末では新しいアカウントになります。")}</li>
+    </ul>
+    <div className="judge-actions">
+      <button className="primary" type="button" onClick={() => run(async () => { await api("/api/judge/start", { invite }); location.assign("/"); })}>
+        {signedIn ? tr("続きから試す") : tr("はじめる")}
+      </button>
+    </div>
+  </section>;
+}
+
+type JudgeStatus = { until: string; aiUsed: number; aiLimit: number; storage: boolean; slug: string; published: boolean };
+type JudgeMail = { id: string; to: string; subject: string; body: string; at: string };
+/** Judge-only menu: mails that would have been sent, usage, the trial path and a full reset. */
+export function JudgeMenu({ run }: { run: Run }) {
+  const api = useApi();
+  const [status, setStatus] = useState<JudgeStatus>();
+  const [mails, setMails] = useState<JudgeMail[]>([]);
+  const [open, setOpen] = useState<string>();
+  useEffect(() => { void run(async () => { setStatus(await api<JudgeStatus>("/api/judge/status")); setMails(await api<JudgeMail[]>("/api/judge/mails")); }); }, []);
+  const reset = () => run(async () => {
+    if (!confirm(tr("お店、予約、問い合わせ、お客様、記事、画像、記録されたメールをすべて削除し、最初からやり直します。元に戻せません。"))) return;
+    await api("/api/judge/reset", { requestId: createRequestId() });
+    location.assign("/");
+  });
+  return <div className="judge-menu">
+    <section className="panel" aria-labelledby="judge-menu-title">
+      <p className="eyebrow">JUDGE</p>
+      <h1 id="judge-menu-title">{tr("審査メニュー")}</h1>
+      {status && !status.storage && <p className="alert">{tr("デモ環境の準備中です。しばらくしてからお試しください。")}</p>}
+      {status && <dl className="judge-facts">
+        <div><dt>{tr("AIの利用回数")}</dt><dd>{status.aiUsed} / {status.aiLimit}</dd></div>
+        <div><dt>{tr("利用期限")}</dt><dd>{at(status.until)}</dd></div>
+      </dl>}
+      <h2>{tr("試し方")}</h2>
+      <ol className="judge-steps">
+        <li>{tr("「AIとお店をつくる」でお店のことを話し、提案を確認して仮公開します。")}</li>
+        <li>{tr("「お店の基本情報」の予約ルールで「予約時にPayPalで全額お支払いいただく」を有効にします。")}</li>
+        <li>{tr("公開ページで「お客様として試す」を押し、予約して PayPal Sandbox で支払います。")}</li>
+        <li>{tr("お客様のマイページからキャンセルし、返金を確認します。問い合わせも送れます。")}</li>
+        <li>{tr("「店主に戻る」で管理画面に戻り、予約・返金・問い合わせ・送信されたメールを確認します。")}</li>
+      </ol>
+      <p className="small muted">{tr("PayPal Sandbox の購入者アカウントは、提出フォームのテスト手順に記載しています。")}</p>
+      <div className="judge-actions">
+        <a className="button" href="/">{tr("管理画面に戻る")}</a>
+        {status?.published && <a className="button" href={`/s/${status.slug}`}>{tr("公開ページを開く")}</a>}
+      </div>
+    </section>
+    <section className="panel" aria-labelledby="judge-mails-title">
+      <h2 id="judge-mails-title">{tr("送信されたメール")}</h2>
+      <p className="small muted">{tr("審査員アクセスではメールは送信されません。本番ではこのメールが店主の Gmail から送信されます。")}</p>
+      {!mails.length ? <p className="muted">{tr("まだメールはありません。")}</p> : <ul className="judge-mails">
+        {mails.map(mail => <li key={mail.id}>
+          <button type="button" aria-expanded={open === mail.id} onClick={() => setOpen(open === mail.id ? undefined : mail.id)}>
+            <span>{at(mail.at)}</span><strong>{mail.subject}</strong><small>{tr("宛先：{0}", mail.to)}</small>
+          </button>
+          {open === mail.id && <pre>{mail.body}</pre>}
+        </li>)}
+      </ul>}
+    </section>
+    <section className="panel" aria-labelledby="judge-reset-title">
+      <h2 id="judge-reset-title">{tr("アカウントデータの初期化")}</h2>
+      <p>{tr("お店づくりの最初から試し直せます。AIの利用回数は戻りません。")}</p>
+      <button type="button" className="danger" onClick={reset}>{tr("アカウントデータを初期化")}</button>
+    </section>
+  </div>;
+}
+
+/** On the judge's own storefront: switch to a trial customer, and back to the owner. */
+export function JudgeBar({ customer, run }: { customer: boolean; run: Run }) {
+  const api = useApi();
+  return <div className="judge-bar" role="region" aria-label={tr("審査員アクセス")}>
+    {customer ? <>
+      <span>{tr("審査用のお客様としてログイン中です。")}</span>
+      <button type="button" onClick={() => run(async () => { await api("/api/judge/owner", {}); location.assign("/"); })}>{tr("店主に戻る")}</button>
+    </> : <>
+      <span>{tr("審査員として公開ページを表示しています。")}</span>
+      <button type="button" className="primary" onClick={() => run(async () => { const { slug } = await api<{ slug: string }>("/api/judge/customer", {}); location.assign(`/s/${slug}?pane=reserve`); })}>{tr("お客様として試す")}</button>
+    </>}
+  </div>;
+}
+
+/** New owners enter the invitation password before their first shop is created. */
+export function AccessPassword({ email, run }: { email: string; run: Run }) {
+  const api = useApi();
+  const [password, setPassword] = useState("");
+  return <section className="panel access-password" aria-labelledby="access-password-title">
+    <h1 id="access-password-title">{tr("招待パスワード")}</h1>
+    <p>{tr("gemihub は現在招待制で公開しています。案内された招待パスワードを入力してください。")}</p>
+    <p className="small muted">{tr("Googleアカウント: {0}", email)}</p>
+    <form onSubmit={event => { event.preventDefault(); void run(async () => { await api("/api/access/verify", { password }); location.assign("/"); }); }}>
+      <label>{tr("招待パスワード")}<input type="password" autoComplete="off" value={password} onChange={event => setPassword(event.target.value)} required maxLength={256} /></label>
+      <button className="primary" type="submit" disabled={!password}>{tr("続ける")}</button>
+    </form>
+  </section>;
+}

@@ -55,7 +55,11 @@ import {
   readConfig,
   sendMail,
   syncPostFiles,
+  createFolder,
+  trashFile,
 } from "./google.ts";
+import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
+import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, type AiProvider } from "./llm.ts";
 import {
   session,
   login,
@@ -65,6 +69,7 @@ import {
   checkOrigin,
   origin,
   demoEnabled,
+  appendCookie,
 } from "./auth.ts";
 
 import {
@@ -186,8 +191,37 @@ export function createApp(
   paymentGateway: PaymentGateway = paypalGateway(),
 ) {
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
-  const ownerToken = async (shop: Shop) =>
-    (await store.get<User>("user", shop.owner))?.refreshToken;
+  const ownerToken = (shop: Shop) => store.ownerToken(shop);
+  // The administrator's provider choice applies to every shop; a short cache keeps model calls cheap.
+  type ProviderSetting = { provider: AiProvider; changedAt: string; changedBy: string };
+  let providerCache: { value: AiProvider; at: number } | undefined;
+  setProviderResolver(async () => {
+    if (providerCache && Date.now() - providerCache.at < 10000) return providerCache.value;
+    const value = (await store.get<ProviderSetting>("setting", "aiProvider"))?.provider || "vertex";
+    providerCache = { value, at: Date.now() };
+    return value;
+  });
+  /** Judge shops nest under the operator's "gemihub judges/<judge>" Drive folder. */
+  async function judgeParent(shop: Shop, token: string) {
+    if (!shop.judge) return undefined;
+    const existing = await store.get<{ id: string }>("judgeFolder", shop.owner);
+    if (existing) return existing.id;
+    return store.locked("judge-folders", async () => {
+      const again = await store.get<{ id: string }>("judgeFolder", shop.owner);
+      if (again) return again.id;
+      const connection = await store.get<DemoGoogle>("demoGoogle", "current") || fail(503, demoGoogleUnavailable());
+      let root = connection.rootFolderId;
+      if (!root) {
+        root = await createFolder(token, "gemihub judges");
+        await store.put("demoGoogle", "current", { ...connection, rootFolderId: root });
+      }
+      const id = await createFolder(token, shop.owner.split("@")[0], root);
+      await store.put("judgeFolder", shop.owner, { id });
+      return id;
+    });
+  }
+  const provisionShop = async (shop: Shop, config: ShopConfig, token: string) =>
+    provision(shop, config, token, await judgeParent(shop, token));
   const operator = async (user: User | undefined, shop: Shop) => {
     if (!user) return false;
     if (user.email === shop.owner) return true;
@@ -220,6 +254,12 @@ export function createApp(
     data: Partial<Job> = {},
     id: string = randomUUID(),
   ) {
+    // Judge access never sends mail; the judge menu lists what would have been sent.
+    if (shop.judge && type === "mail") {
+      if (await store.get("judgeMail", id)) return;
+      await store.put("judgeMail", id, { id, shopId: shop.id, owner: shop.owner, to: data.to || "", subject: data.subject || "", body: data.body || "", at: new Date().toISOString() } satisfies JudgeMail);
+      return;
+    }
     if (!shop.google) return;
     if(await store.get("job",id))return;
     await store.put("job", id, {
@@ -308,7 +348,7 @@ export function createApp(
       fresh.publishingPlanId = plan.id;
       await store.saveShop(fresh);
       try {
-        fresh.google = await provision(fresh, plan.config, token);
+        fresh.google = await provisionShop(fresh, plan.config, token);
         await store.saveShop(fresh);
         await syncConfig(
           { ...fresh, history },
@@ -387,7 +427,8 @@ export function createApp(
         res.end(method === "HEAD" ? undefined : renderLegal(path === "/policy" ? "policy" : "terms"));
         return;
       }
-      const allShops = await store.list<Shop>("shop");
+      // Judge shops disappear when judge access ends; a reset archives the previous shop.
+      const allShops = (await store.list<Shop>("shop")).filter(shop => !shop.judge || (judgeActive() && !shop.judge.archivedAt));
       const hosted =
         host !== appHost
           ? allShops.find(
@@ -401,14 +442,25 @@ export function createApp(
       if (host !== appHost && !hosted) fail(404, tr("お店が見つかりません"));
       const publicHost = !!hosted;
       const s = await session(store, req);
-      const user = s?.user;
+      const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
+      if (user?.judge) {
+        // Judge AI calls share one quota per judge, charged once per request before the first model call.
+        aiUsage.enterWith({ charge: () => store.locked(`judge-usage:${user.email}`, async () => {
+          const usage = await store.get<JudgeUsage>("judgeUsage", user.email) || { email: user.email, count: 0 };
+          if (usage.count >= judgeAiLimit()) fail(429, tr("審査用のAI利用回数の上限に達しました"));
+          await store.put("judgeUsage", user.email, { ...usage, count: usage.count + 1, lastUsedAt: new Date().toISOString() });
+        }) });
+      }
       const assertStorefrontAccess = (shop: Shop) => {
-        if (shop.publication === "provisional" && user?.email !== shop.owner)
+        // A judge's own trial customer may use the judge's provisional shop; nobody else may.
+        const trialCustomer = !!shop.judge && !!user && isJudgeCustomerEmail(user.email) && user.shopId === shop.id;
+        if (shop.publication === "provisional" && user?.email !== shop.owner && !trialCustomer)
           fail(user ? 403 : 401, tr("仮公開中のため、このページを用意したユーザーのログインが必要です"));
         if (shop.publication === "provisional") {
           res.setHeader("Vary", "Cookie, X-Gemihub-Language");
           res.setHeader("X-Robots-Tag", "noindex, nofollow");
         }
+        if (shop.judge) res.setHeader("X-Robots-Tag", "noindex, nofollow");
       };
       if (method !== "GET" && method !== "HEAD") {
         if (req.headers.origin !== (publicHost ? `https://${host}` : origin()))
@@ -433,10 +485,15 @@ export function createApp(
                 role: user.role,
                 shopId: user.shopId,
                 ...(user.role === "owner" && user.legacyNotes ? { legacyNotes: true } : {}),
+                ...(user.role === "owner" && user.accessPending ? { accessPending: true } : {}),
+                ...(user.judge ? { judge: true } : {}),
+                ...(user.role === "owner" && isAdmin(user.email) ? { admin: true } : {}),
               }
             : null,
           demo: demoEnabled(),
           hosted: hosted?.slug,
+          invite: accessPasswordEnabled(),
+          ...(user && isJudgeCustomerEmail(user.email) && cookie(req, "gemihub_judge_owner") ? { judgeCustomer: true } : {}),
         });
       if (path === "/api/legacy-notes/check" && method === "POST" && !publicHost) {
         if (user?.role !== "owner") fail(403, tr("店主としてログインしてください"));
@@ -563,6 +620,7 @@ export function createApp(
           calendarShopId?: string;
           email?: string;
           staffId?: string;
+          adminDemo?: boolean;
         }>("oauth", key);
         if (!pending || pending.expires < Date.now())
           fail(400, tr("ログインの有効期限が切れました"));
@@ -605,6 +663,20 @@ export function createApp(
           code: url.searchParams.get("code") || "",
           codeVerifier: pending.verifier,
         });
+        if (pending.adminDemo) {
+          // The operator's demo Drive connection stays separate from the operator's own shop token.
+          if (!user || !isAdmin(user.email) || user.email !== pending.email) fail(403, tr("連携を開始したアカウントでログインしてください"));
+          const identity = (await auth.verifyIdToken({ idToken: tokens.id_token!, audience: process.env.GOOGLE_CLIENT_ID })).getPayload();
+          if (!identity?.email_verified || !identity.email) fail(403, tr("確認済みの Google アカウントが必要です"));
+          if (!tokens.refresh_token) fail(400, tr("Google のアクセス権を再承認してください"));
+          const previous = await store.get<DemoGoogle>("demoGoogle", "current");
+          const email = identity.email.toLowerCase();
+          await store.put("demoGoogle", "current", {
+            email, refreshToken: encrypt(tokens.refresh_token), connectedAt: new Date().toISOString(), connectedBy: user.email,
+            ...(previous?.email === email && previous.rootFolderId ? { rootFolderId: previous.rootFolderId } : {}),
+          } satisfies DemoGoogle);
+          return redirect(res, "/admin?google=connected");
+        }
         const identity = await auth.verifyIdToken({
           idToken: tokens.id_token!,
           audience: process.env.GOOGLE_CLIENT_ID,
@@ -623,8 +695,11 @@ export function createApp(
         if (!pending.shopId) {
           u.legacyNotes = await hasLegacyNotes(tokens.access_token || "");
           // Do not create an empty shop just because an existing note user signed in.
-          const own = allShops.find((s) => s.owner === email)
-            || (!u.legacyNotes ? await store.createShop(email) : undefined);
+          // While sign-up is invitation-only, a new owner first enters the invitation password.
+          const existingShop = allShops.find((s) => s.owner === email);
+          if (!existingShop && !u.legacyNotes && accessPasswordEnabled()) u.accessPending = true;
+          const own = existingShop
+            || (!u.legacyNotes && !u.accessPending ? await store.createShop(email) : undefined);
           u.shopId = own?.id;
           u.refreshToken = tokens.refresh_token
             ? encrypt(tokens.refresh_token)
@@ -656,6 +731,173 @@ export function createApp(
             ? `/s/${(await store.shop(pending.shopId))!.slug}`
             : "/",
         );
+      }
+      const secureCookie = origin().startsWith("https:") ? "; Secure" : "";
+      const failedAttempt = (key: string, limit: number, windowMs: number) => {
+        const current = rate.get(key);
+        const entry = current && current.until > Date.now() ? current : { n: 0, until: Date.now() + windowMs };
+        if (entry.n >= limit) fail(429, tr("少し時間をおいてお試しください"));
+        return () => { entry.n++; rate.set(key, entry); };
+      };
+      if (path === "/api/access/verify" && method === "POST" && !publicHost) {
+        if (user?.role !== "owner" || !user.accessPending) fail(403, tr("招待パスワードの入力は不要です"));
+        const input = z.object({ password: z.string().min(1).max(256) }).parse(await body(req));
+        const recordFailure = failedAttempt(`access:${req.socket.remoteAddress}:${user.email}`, 5, 600000);
+        if (!accessPasswordMatches(input.password)) { recordFailure(); fail(401, tr("招待パスワードが違います")); }
+        const saved = await store.get<User>("user", user.email) || fail(403, tr("Google のアクセス権を再承認してください"));
+        const own = allShops.find(shop => shop.owner === user.email) || await store.createShop(user.email);
+        const updated: User = { ...saved, shopId: own.id, accessPending: false };
+        await store.put("user", user.email, updated);
+        const old = cookie(req, "gemihub_session");
+        if (old) await store.delete("session", digest(old));
+        await login(store, res, updated);
+        return json(res, { success: true });
+      }
+      if (user?.role === "owner" && user.accessPending && !publicHost && path.startsWith("/api/") && path !== "/api/logout")
+        fail(409, tr("招待パスワードを入力してください"));
+      const judgeRoute = path.match(/^\/judge\/([^/]+)$/);
+      if (judgeRoute && !publicHost && (method === "GET" || method === "HEAD")) {
+        if (!judgeActive() || !secretMatches(judgeRoute[1], judgeInvite())) fail(404, tr("見つかりません"));
+        // A fresh browser opens the invitation in English unless a language was chosen.
+        if (!url.searchParams.has("lang") && !cookie(req, "gemihub_locale")) return redirect(res, `${path}?lang=en`);
+      }
+      if (path === "/api/judge/start" && method === "POST" && !publicHost) {
+        const input = z.object({ invite: z.string().max(512) }).parse(await body(req));
+        if (!judgeActive() || !secretMatches(input.invite, judgeInvite())) fail(404, tr("見つかりません"));
+        if (user?.judge) return json(res, { ok: true, resumed: true });
+        const recordCreation = failedAttempt(`judge-start:${req.socket.remoteAddress}`, 10, 3600000);
+        recordCreation();
+        const email = `judge-${randomBytes(9).toString("hex")}@${judgeEmailDomain}`;
+        const shop = await store.createShop(email);
+        shop.judge = { createdAt: new Date().toISOString() };
+        await store.saveShop(shop);
+        const judge: User = { email, name: tr("審査員"), role: "owner", shopId: shop.id, judge: true };
+        await store.put("user", email, judge);
+        await login(store, res, judge, judgeUntil()!.getTime());
+        return json(res, { ok: true });
+      }
+      if (path.startsWith("/api/judge/") && !publicHost) {
+        if (path === "/api/judge/owner" && method === "POST") {
+          // Return from the trial customer to the judge who created it, in the same browser.
+          const ownerId = cookie(req, "gemihub_judge_owner") || fail(403, tr("審査員としてログインしてください"));
+          const owner = await store.get<{ user: User; expires: number }>("session", digest(ownerId));
+          if (!owner?.user.judge || owner.expires < Date.now()) fail(403, tr("審査員としてログインしてください"));
+          const current = cookie(req, "gemihub_session");
+          if (current && current !== ownerId && user && isJudgeCustomerEmail(user.email)) await store.delete("session", digest(current));
+          appendCookie(res, `gemihub_session=${ownerId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((owner.expires - Date.now()) / 1000))}${secureCookie}`);
+          appendCookie(res, `gemihub_judge_owner=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureCookie}`);
+          return json(res, { ok: true, slug: (await store.shop(owner.user.shopId || ""))?.slug });
+        }
+        if (!user?.judge) fail(403, tr("審査員としてログインしてください"));
+        const own = (user.shopId ? await store.shop(user.shopId) : undefined) || fail(404, tr("お店がありません"));
+        if (path === "/api/judge/status" && method === "GET") {
+          const usage = await store.get<JudgeUsage>("judgeUsage", user.email);
+          return json(res, { until: judgeUntil()!.toISOString(), aiUsed: usage?.count || 0, aiLimit: judgeAiLimit(), storage: !!await store.ownerToken(own), shopId: own.id, slug: own.slug, published: !!own.published });
+        }
+        if (path === "/api/judge/mails" && method === "GET") {
+          const mails = (await store.entries<JudgeMail>("judgeMail")).map(entry => entry.value).filter(mail => mail.shopId === own.id && mail.owner === user.email);
+          return json(res, mails.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200));
+        }
+        if (path === "/api/judge/customer" && method === "POST") {
+          if (!own.published) fail(403, tr("自分のお店を公開してからお試しください"));
+          const ownerId = cookie(req, "gemihub_session")!;
+          const customer: User = { email: `judge-customer-${randomBytes(6).toString("hex")}@${judgeEmailDomain}`, name: tr("審査用のお客様"), role: "customer", shopId: own.id };
+          await login(store, res, customer, judgeUntil()!.getTime());
+          appendCookie(res, `gemihub_judge_owner=${ownerId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((judgeUntil()!.getTime() - Date.now()) / 1000))}${secureCookie}`);
+          return json(res, { ok: true, slug: own.slug });
+        }
+        if (path === "/api/judge/reset" && method === "POST") {
+          const input = z.object({ requestId: z.uuid() }).parse(await body(req));
+          return await store.locked(`judge-reset:${user.email}`, async () => {
+            const done = await store.get<{ shopId: string; email: string }>("judgeReset", input.requestId);
+            if (done && done.email !== user.email) fail(409, tr("処理IDが重複しています"));
+            const saved = await store.get<User>("user", user.email) || fail(403, tr("審査員としてログインしてください"));
+            if (!done) {
+              const day = new Date().toISOString().slice(0, 10);
+              const usage = await store.get<JudgeUsage>("judgeUsage", user.email) || { email: user.email, count: 0 };
+              const resets = usage.resets?.day === day ? usage.resets.count : 0;
+              if (resets >= 20) fail(429, tr("本日の初期化回数の上限に達しました"));
+              const previous = saved.shopId ? await store.shop(saved.shopId) : undefined;
+              await store.put("judgeUsage", user.email, { ...usage, resets: { day, count: resets + 1 } });
+              if (previous && !previous.judge?.archivedAt) {
+                await store.locked(previous.id, async () => {
+                  const fresh = (await store.shop(previous.id))!;
+                  const token = await store.ownerToken(fresh);
+                  if (fresh.google && token) await trashFile(token, fresh.google.folderId);
+                  for (const mail of await store.entries<JudgeMail>("judgeMail")) if (mail.value.shopId === fresh.id) await store.delete("judgeMail", mail.id);
+                  for (const entry of await store.entries<{ user: User }>("session"))
+                    if (entry.value.user?.shopId === fresh.id && isJudgeCustomerEmail(entry.value.user.email)) await store.delete("session", entry.id);
+                  // Keep the old records for audit, but detach them from the judge so a new shop is created.
+                  await store.saveShop({ ...fresh, owner: `${user.email}#archived-${fresh.id}`, judge: { ...fresh.judge!, archivedAt: new Date().toISOString() } });
+                });
+              }
+              const shop = await store.createShop(user.email);
+              if (!shop.judge) { shop.judge = { createdAt: new Date().toISOString() }; await store.saveShop(shop); }
+              await store.put("user", user.email, { ...saved, shopId: shop.id });
+              await store.put("judgeReset", input.requestId, { shopId: shop.id, email: user.email });
+            }
+            const updated = await store.get<User>("user", user.email);
+            const old = cookie(req, "gemihub_session");
+            if (old) await store.delete("session", digest(old));
+            await login(store, res, updated!, judgeUntil()!.getTime());
+            return json(res, { ok: true });
+          });
+        }
+        fail(404, tr("見つかりません"));
+      }
+      if ((path.startsWith("/api/admin/") || path === "/admin/google/connect") && !publicHost) {
+        if (user?.role !== "owner" || !isAdmin(user.email)) fail(404, tr("見つかりません"));
+        if (path === "/admin/google/connect" && method === "GET") {
+          if (!process.env.GOOGLE_CLIENT_ID) fail(503, tr("Google ログインはサーバーで設定してください。ローカル確認にはデモモードを利用できます。"));
+          const state = randomBytes(32).toString("base64url");
+          const verifier = randomBytes(48).toString("base64url");
+          await store.put("oauth", digest(state), { verifier, locale: getLocale(), adminDemo: true, email: user.email, returnHost: appHost, expires: Date.now() + 600000 });
+          res.setHeader("Set-Cookie", `gemihub_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${secureCookie}`);
+          return redirect(res, oauth().generateAuthUrl({ access_type: "offline", prompt: "consent select_account", scope: ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.file"], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }));
+        }
+        if (path === "/api/admin/status" && method === "GET") {
+          const connection = await store.get<DemoGoogle>("demoGoogle", "current");
+          let healthy: boolean | undefined;
+          if (connection && !store.memory) {
+            try { healthy = !!(await clients(connection.refreshToken).auth.getAccessToken()).token; } catch { healthy = false; }
+          }
+          const setting = await store.get<ProviderSetting>("setting", "aiProvider");
+          const invite = judgeInvite();
+          const inviteUrl = invite ? `${origin()}/judge/${invite}` : "";
+          return json(res, {
+            demoGoogle: connection ? { email: connection.email, connectedAt: connection.connectedAt, connectedBy: connection.connectedBy, rootFolderId: connection.rootFolderId, healthy } : null,
+            judge: { active: judgeActive(), configured: invite.length >= 32, until: judgeUntil()?.toISOString() || null, aiLimit: judgeAiLimit(), inviteUrl, inviteUrlEn: inviteUrl && `${inviteUrl}?lang=en`, inviteUrlJa: inviteUrl && `${inviteUrl}?lang=ja` },
+            ai: { provider: setting?.provider || "vertex", changedAt: setting?.changedAt, changedBy: setting?.changedBy, vertex: { ...vertexStatus(), ready: providerReady("vertex") }, openai: { ...openAiStatus(), ready: providerReady("openai") } },
+          });
+        }
+        if (path === "/api/admin/judges" && method === "GET") {
+          const shops = await store.list<Shop>("shop");
+          const usages = new Map((await store.entries<JudgeUsage & { lastUsedAt?: string }>("judgeUsage")).map(entry => [entry.id, entry.value]));
+          const mails = (await store.entries<JudgeMail>("judgeMail")).map(entry => entry.value);
+          const judges = (await store.entries<User>("user")).map(entry => entry.value).filter(judge => judge.judge);
+          return json(res, judges.map(judge => {
+            const shop = shops.find(item => item.id === judge.shopId);
+            const usage = usages.get(judge.email);
+            return { email: judge.email, shopName: shop?.published?.name || null, slug: shop?.published ? shop.slug : null, publication: shop?.published ? shop.publication || "public" : null, createdAt: shop?.judge?.createdAt || null, aiUsed: usage?.count || 0, aiLimit: judgeAiLimit(), resets: usage?.resets?.count || 0, mails: mails.filter(mail => mail.shopId === shop?.id).length, lastUsedAt: usage?.lastUsedAt || null };
+          }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 500));
+        }
+        if (path === "/api/admin/google/disconnect" && method === "POST") {
+          await store.delete("demoGoogle", "current");
+          return json(res, { ok: true });
+        }
+        if (path === "/api/admin/ai-provider" && method === "POST") {
+          const input = z.object({ provider: z.enum(["vertex", "openai"]) }).parse(await body(req));
+          if (!providerReady(input.provider)) fail(400, tr("このAIプロバイダの設定が足りません"));
+          await store.put("setting", "aiProvider", { provider: input.provider, changedAt: new Date().toISOString(), changedBy: user.email } satisfies ProviderSetting);
+          providerCache = { value: input.provider, at: Date.now() };
+          return json(res, { ok: true });
+        }
+        if (path === "/api/admin/ai-test" && method === "POST") {
+          const input = z.object({ provider: z.enum(["vertex", "openai"]) }).parse(await body(req));
+          try { return json(res, await testProvider(input.provider)); }
+          catch (error) { const status = (error as { status?: number }).status; if (status && status < 500) throw error; console.error(error); return json(res, { ok: false, error: error instanceof Error ? error.message : String(error) }); }
+        }
+        fail(404, tr("見つかりません"));
       }
       if (path === "/api/demo-login" && method === "POST" && !publicHost) {
         if (!demoEnabled()) fail(404, tr("見つかりません"));
@@ -718,7 +960,10 @@ export function createApp(
                   error: j.error,
                   attempts: j.attempts,
                 })),
-              publicUrl: shop.domainVerified
+              // Judges stay on the management origin, where their trial customer session also lives.
+              publicUrl: shop.judge
+                ? `/s/${shop.slug}`
+                : shop.domainVerified
                 ? `https://${shop.domain}`
                 : process.env.SITE_DOMAIN
                   ? `https://${shop.slug}.${process.env.SITE_DOMAIN}`
@@ -783,7 +1028,7 @@ export function createApp(
           return await store.locked(`image-generation:${shop.id}:${input.requestId}`, async () => {
             const fresh = await store.locked(shop.id, async () => {
               const current = (await store.shop(shop.id))!; assertOwner(user, current);
-              if (!store.memory && !current.google) { const token = await ownerToken(current) || fail(503, tr("店主の Google 再接続が必要です")); current.google = await provision(current, current.draft || sample, token); await store.saveShop(current); }
+              if (!store.memory && !current.google) { const token = await ownerToken(current) || fail(503, tr("店主の Google 再接続が必要です")); current.google = await provisionShop(current, current.draft || sample, token); await store.saveShop(current); }
               return current;
             });
             const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
@@ -853,7 +1098,7 @@ export function createApp(
             if (action === "images" && method === "GET") return json(res, await listImages(store, fresh, fresh.published ? await effective(fresh) : fresh.draft));
             if (method === "POST" && action === "images") {
               const input = await body(req, 8 * 1024 * 1024);
-              if (!store.memory && !fresh.google) { fresh.google = await provision(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
+              if (!store.memory && !fresh.google) { fresh.google = await provisionShop(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
               return json(res, await uploadMenuImage(store, fresh, input, crmFiles, token));
             }
             if (libraryRoute[1] && method === "GET" && !libraryRoute[2]) return json(res, await readMenuImage(store, fresh, libraryRoute[1], crmFiles, token));
@@ -878,7 +1123,7 @@ export function createApp(
             assertOwner(user, fresh);
             const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
             const input = await body(req, 8 * 1024 * 1024);
-            if (!store.memory && !fresh.google) { fresh.google = await provision(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
+            if (!store.memory && !fresh.google) { fresh.google = await provisionShop(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
             return json(res, await uploadMenuImage(store, fresh, input, crmFiles, token));
           }
           const menuImage = action.match(/^menu-images\/([a-f0-9]{64})$/);
@@ -2029,7 +2274,7 @@ export function createApp(
         path !== "/" &&
         (publicHost
           ? !/^\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?$/.test(path)
-          : path !== "/manual" && path !== "/settings/migration" && !/^\/publication-preview\/[^/]+$/.test(path) &&
+          : path !== "/manual" && path !== "/settings/migration" && path !== "/admin" && path !== "/judge-menu" && !judgeRoute && !/^\/publication-preview\/[^/]+$/.test(path) &&
             !/^\/(s)\/[^/]+(?:\/(blogs|announcements|pages)(?:\/[a-z0-9-]+)?)?$/.test(
               path,
             ))
@@ -2146,7 +2391,7 @@ export function createApp(
     void (async () => {
       await store.cleanup();
       for (const shop of (await store.list<Shop>("shop")).filter(
-        (s) => s.published,
+        (s) => s.published && !s.judge?.archivedAt,
       ))
         void store
           .locked(shop.id, async () => {

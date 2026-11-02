@@ -25,16 +25,16 @@ export async function session(store: Store, req: IncomingMessage) {
   if (!s || s.expires < Date.now()) return;
   return s;
 }
-export async function login(store: Store, res: ServerResponse, user: User) {
+export async function login(store: Store, res: ServerResponse, user: User, expires = Date.now() + 7 * 86400000) {
   const id = randomBytes(32).toString("base64url");
-  await store.put("session", digest(id), {
-    user,
-    expires: Date.now() + 7 * 86400000,
-  });
-  res.setHeader(
-    "Set-Cookie",
-    `gemihub_session=${id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800${origin().startsWith("https:") ? "; Secure" : ""}`,
-  );
+  await store.put("session", digest(id), { user, expires });
+  appendCookie(res, `gemihub_session=${id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((expires - Date.now()) / 1000))}${origin().startsWith("https:") ? "; Secure" : ""}`);
+  return id;
+}
+/** Adds a Set-Cookie header without replacing cookies already set on this response. */
+export function appendCookie(res: ServerResponse, value: string) {
+  const current = res.getHeader("Set-Cookie");
+  res.setHeader("Set-Cookie", [...(Array.isArray(current) ? current : current ? [String(current)] : []), value]);
 }
 export function equal(a: string, b: string) {
   return (

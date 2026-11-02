@@ -41,6 +41,7 @@
     "@google/genai": "2.13.0",
     "@noble/hashes": "^2.4.0",
     "googleapis": "171.3.0",
+    "openai": "7.39.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",

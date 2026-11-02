@@ -1,5 +1,5 @@
 import { tr } from "../shared/i18n.ts";
-import { GoogleGenAI } from "@google/genai";
+import { generateJson } from "./llm.ts";
 import { z } from "zod";
 import { pageSchema, headerSchema, footerSchema, type ShopPage } from "./pages.ts";
 import { shopSchema, type ShopConfig } from "./domain.ts";
@@ -7,10 +7,8 @@ import { requestImageParts, requestImageInstruction, type RequestImage } from ".
 export const profileSchema = z.object({ name: shopSchema.shape.name, industry: shopSchema.shape.industry, description: shopSchema.shape.description, address: shopSchema.shape.address, appearance: shopSchema.shape.appearance, notificationEmail: shopSchema.shape.notificationEmail });
 export const messageSchema = z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(12000) });
 async function generate<T extends z.ZodType>(schema: T, input: unknown, instruction: string, images: RequestImage[] = []) {
-  if (!process.env.GOOGLE_CLOUD_PROJECT || !process.env.VERTEX_MODEL) throw Object.assign(new Error(tr("AI の接続がまだ設定されていません")), { status: 503 });
-  const ai = new GoogleGenAI({ vertexai: true, project: process.env.GOOGLE_CLOUD_PROJECT, location: process.env.GOOGLE_CLOUD_LOCATION || "global" });
-  const response = await ai.models.generateContent({ model: process.env.VERTEX_MODEL, contents: [{ role: "user", parts: requestImageParts(input, images) }], config: { responseMimeType: "application/json", responseJsonSchema: z.toJSONSchema(schema), systemInstruction: instruction } });
-  return schema.parse(JSON.parse(response.text || "{}"));
+  const answer = await generateJson({ unavailableMessage: tr("AI の接続がまだ設定されていません"), contents: [{ role: "user", parts: requestImageParts(input, images) }], schema: z.toJSONSchema(schema), system: instruction });
+  return schema.parse(JSON.parse(answer));
 }
 export async function createPageWithAI(messages: z.infer<typeof messageSchema>[], context: Pick<ShopConfig, "name" | "industry" | "description" | "address">, mode: "chat" | "write", images: RequestImage[] = []) {
   const schema = z.object({ reply: z.string().min(1).max(4000), page: pageSchema.omit({ id: true }).nullable() });
