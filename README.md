@@ -8,6 +8,18 @@ Terraform deployment on the shared kiokuflow VM: [infra/README.md](infra/README.
 
 A booking system for small independent businesses. Sign in with Google, describe your shop, review a proposal, publish a private preview, and then open it to customers. Generative AI uses **Gemini on Vertex AI**, authenticated by the server.
 
+## Screenshots
+
+**Edit a screen:** mark an area and ask AI to change it, then review the result before applying it.
+
+![Owner screen editor with an area marked for an AI change request](public/manual/en/22-pen.jpg)
+
+**Customer booking:** choose a service, staff preference, and available time.
+
+![Customer booking screen with services, staff selection, available times, and booking details](public/manual/en/07-reservation.jpg)
+
+Screenshots use fictional sample data. [Read the illustrated manual](#illustrated-manual) for the full workflow.
+
 ## Try locally
 
 Requires Node.js 24 or later.
@@ -273,43 +285,42 @@ See [docs/spec.md](docs/spec.md) for the Japanese requirements, [docs/spec.en.md
 
 `npm run check:articles` checks both article creation methods, visual editing, uploads and existing-image selection, automatic preview, saving/publication, and AI reference insertion on desktop and mobile. AI output is mocked.
 
+## PayPal Sandbox: booking payments and automatic refunds
 
-## PayPal Sandbox：予約時決済・自動返金
+In **Shop information**, enable **Collect full payment through PayPal when booking** in the booking rules and save. Existing unpaid bookings keep their original cancellation deadline. Free services do not require payment.
 
-「お店の基本情報」内の予約ルールで「予約時にPayPalで全額お支払いいただく」を有効にし、保存します。既存の未決済予約は従来のキャンセル期限を使います。0円メニューは決済なしです。
-
-サーバーの環境変数を設定します（`.env.example`参照）。
+Configure these server environment variables (see `.env.example`):
 
 ```dotenv
 PAYPAL_ENVIRONMENT=sandbox
-PAYPAL_CLIENT_ID=<SandboxのClient ID>
+PAYPAL_CLIENT_ID=<Sandbox Client ID>
 PAYPAL_CLIENT_SECRET_FILE=tmp/paypal.secret
 ```
 
-Secretはファイルから読み込みます。Secret Manager等から`PAYPAL_CLIENT_SECRET`で渡すこともできます。`tmp/`と`.env`はGit・Docker・Cloud Buildに含めません。SandboxとLiveの認証情報は混在させず、未完了取引がある間は環境や受取アカウントを変更しないでください。Client IDも含めてサーバーで設定し、お客様や店主の画面にはSecretを出しません。この実装の入金先はサーバーに設定した1つのPayPalアカウントです。店舗別の加盟店接続・売上分配は含みません。
+The secret is read from a file. You can also supply `PAYPAL_CLIENT_SECRET` through Secret Manager or a similar service. `tmp/` and `.env` are excluded from Git, Docker, and Cloud Build. Keep Sandbox and Live credentials separate, and do not change the environment or receiving account while transactions are unfinished. Configure both the client ID and secret on the server; never expose the secret in customer or owner screens. Payments go to the single PayPal account configured on the server. Per-shop merchant connections and revenue splitting are not included.
 
-1. お客様としてログインし、メニューと空き枠を選びます。金額と返金条件に同意し、PayPal Sandboxの**購入者用アカウント**で承認します。
-2. 元の店舗ページに戻ると、サーバーが金額・通貨・予約を照合して決済を確定します。マイページで「支払済み」と予約確定を確認します。承認だけ・PENDINGでは予約確定にしません。
-3. マイページでキャンセルすると見積もりを確認できます。開始まで72時間以上は100%、24〜72時間は50%、24時間未満は0%が初期値です。時間の境界は実際の開始時刻から計算します。返金率は設定・AIの変更案から調整できます。
-4. 半額の確認は開始まで24〜72時間の予約を使います。店都合のキャンセルは運営の「店都合でキャンセル・全額返金」で行い、常に全額です。
+1. Sign in as a customer, choose a service and time, agree to the amount and refund policy, and approve payment with a PayPal Sandbox **buyer account**.
+2. On return to the shop, the server checks the amount, currency, and booking before capturing payment. Check My page for the paid and confirmed states. Approval alone or a PENDING payment does not confirm a booking.
+3. Cancelling on My page shows a refund estimate. Defaults are 100% at least 72 hours before the appointment, 50% from 24 to 72 hours before it, and 0% with less than 24 hours remaining. Boundaries use the actual appointment start time. Refund rates can be changed in settings or through a reviewed AI proposal.
+4. To test a half refund, use an appointment between 24 and 72 hours away. Owner-initiated cancellation uses **Shop cancellation and full refund** in management and always refunds the full amount.
 
-金額と条件は注文作成時に固定し、予約の`payment`列にも保存します。条件やメニュー料金を後から変更しても、その予約には影響しません。キャンセル受付時に理由・時刻・返金額を固定し、一つの処理IDで一回の返金を実行します。1円未満は切り捨てます。返金なしの場合はAPIを呼びません。返金状況はマイページ・運営一覧・通知メールで確認できます。
+The amount and policy are fixed when the order is created and saved in the booking's `payment` column. Later changes to prices or policies do not affect that booking. Cancellation fixes the reason, timestamp, and refund amount, then issues one refund with one operation ID. Fractional yen are rounded down. No refund API call is made for a zero refund. Customers and operators can check the refund state on My page, in management, and in notification emails.
 
-決済中は10分間の枠確保を行い、確定直前にCalendarも再確認します。通信切断後はFirestoreの処理記録とPayPalの注文照会から復旧し、台帳保存の失敗で再課金しません。返金確認中は既存の返金IDを照会します。共有VMでは毎分の復旧処理が再起動後も継続します。処理状況はマイページまたは運営の再確認からも更新できます。曖昧な結果への書き込み再送は5時間以内に制限し、その後や確定エラーは「確認が必要」として停止します。その場合はPayPal管理画面の取引とFirestoreの`checkout`記録を照合し、重複返金を避けて運営で解決してください。返金状態をシートの直接編集だけで変更しないでください。
+Checkout holds the time slot for 10 minutes and rechecks Calendar immediately before confirmation. After a disconnection, Firestore operation records and PayPal order queries recover progress; a ledger-write failure does not charge again. Pending refunds query the existing refund ID. On the shared VM, recovery runs every minute and continues after restarts. My page and management also provide status checks. Retries of writes with ambiguous results are limited to five hours; after that, or after a definitive error, the operation stops for review. Reconcile the PayPal transaction with the Firestore `checkout` record before resolving it, and avoid duplicate refunds. Editing a spreadsheet alone must not change the refund state.
 
-旧`reservations`の14列は維持し、末尾に`payment`（JSON）を自動追加します。復旧のため、Firestoreには予約スナップショットと金額・ポリシー・処理IDを固定した決済処理記録も保存します。機密認証情報は含めません。
+The original 14 `reservations` columns are preserved, with a JSON `payment` column appended automatically. Firestore also stores a booking snapshot and fixed amounts, policies, and operation IDs for recovery. These records do not contain secret credentials.
 
-プレビュー・Storybook・Driveのオフライン成果物はモックだけで完結します。「お客様の予約／お支払い・返金」のストーリーで、同意、支払済み、半額・0円・全額返金、確認中・要確認、運営操作を確認できます。
+Previews, Storybook, and offline Drive exports use mocks. The payment and refund stories cover consent, paid bookings, half/zero/full refunds, pending/review states, and owner actions.
 
-API仕様：[PayPal Orders v2](https://developer.paypal.com/api/orders/v2/)、[決済の返金](https://developer.paypal.com/api/payments/v2/captures-refund)、[冪等性](https://developer.paypal.com/api/rest/reference/idempotency/)。
+API references: [PayPal Orders v2](https://developer.paypal.com/api/orders/v2/), [capture refunds](https://developer.paypal.com/api/payments/v2/captures-refund), and [idempotency](https://developer.paypal.com/api/rest/reference/idempotency/).
 
-検証コマンド：`npm test`、`npm run check:payments`（PC・スマートフォンの操作）、`npm run check:drive-payments`（file://で支払い・返金の練習を行い、通信が発生しないことを確認）、`npm run check:paypal:sandbox`（未決済のSandbox注文を作成・照会）。ブラウザ検証は`CHROMIUM`で既存の実行ファイルを指定できます。
+Verification commands: `npm test`, `npm run check:payments` (desktop/mobile interactions), `npm run check:drive-payments` (offline payment/refund practice without network requests), and `npm run check:paypal:sandbox` (create and query an uncaptured Sandbox order). Set `CHROMIUM` to use an existing browser executable.
 
-実際のSandbox課金・返金は`npm run check:paypal:e2e`で実行します。Liveでは実行しません。購入者用のSandboxアカウントを`tmp/paypal.personal.json`に`{"email":"…","password":"…"}`で保存すると、通常のPayPal承認をブラウザで進めます。受取側とは別のPersonal（購入者用）Sandboxアカウントを使ってください。別名のファイルを使う場合は`PAYPAL_BUYER_FILE=tmp/paypal.personal.json`のように指定できます。購入者の支払い手段が未登録の場合は公式のSandboxテストカードを登録して進めます。購入者ファイルがない場合だけ、[PayPal公式のテストカード](https://developer.paypal.com/sandbox-testing/card-testing)での承認を試します（受取アカウントの設定により拒否される場合があります）。2件の5,500円の決済に対し、お客様キャンセルの2,750円と店都合の5,500円を返金します。ローカルの仮店舗・台帳と実際のSandbox APIを使用し、Googleへの書き込みはしません。途中で失敗した場合は`tmp/paypal-e2e-journal.json`を残して同じコマンドで再開してください。処理IDを変えて重複課金・返金を発生させないため、未完了の記録を削除しないでください。
+Use `npm run check:paypal:e2e` for actual Sandbox captures and refunds. It does not run against Live. Store a Sandbox buyer account in `tmp/paypal.personal.json` as `{"email":"…","password":"…"}` to complete the normal PayPal approval in the browser. Use a Personal buyer account separate from the receiving account. Override the file with `PAYPAL_BUYER_FILE=tmp/paypal.personal.json` if needed. If the buyer has no payment method, add an official Sandbox test card. Only when no buyer file exists does the script try approval using [PayPal's official test cards](https://developer.paypal.com/sandbox-testing/card-testing); account settings may reject this path. The test captures two payments of ¥5,500, then refunds ¥2,750 for a customer cancellation and ¥5,500 for a shop cancellation. It uses a local temporary shop/ledger and the real Sandbox API, without writing to Google. If interrupted, retain `tmp/paypal-e2e-journal.json` and rerun the same command. Do not delete unfinished records: retaining operation IDs prevents duplicate charges and refunds.
 
-PayPalが`REFUND_FAILED_INSUFFICIENT_FUNDS`を返した場合は、運営画面に返金用残高の不足を表示します。金額と処理IDを変えずに毎分再確認し、残高補充後は「返金状況を再確認」からも再試行できます。最初の送信から5時間を超えた未完了処理は、従来どおり確認が必要な状態で停止します。
+If PayPal returns `REFUND_FAILED_INSUFFICIENT_FUNDS`, management shows that the refund balance is insufficient. Recovery checks every minute with the same amount and operation ID. After adding funds, operators can also retry through the refund-status action. Unfinished operations more than five hours after the first submission stop for review.
 
-`npm run check:paypal:recovery`は、完了済みのSandbox全額返金について応答消失を再現し、アプリの再確認APIから同じ処理ID・金額で同じ返金IDを取得できるか検証します。追加の課金はせず、最初の返金送信から5時間以内だけ実行できます。
+`npm run check:paypal:recovery` simulates a lost response for a completed full Sandbox refund and verifies that the app's status API retrieves the same refund ID using the same operation ID and amount. It does not create an additional charge and can run only within five hours of the first refund submission.
 
 Google OAuth for gemihub.net reuses `projects/495062043717/secrets/google-client-id/versions/1` and `projects/495062043717/secrets/google-client-secret/versions/1`. Both enabled version numbers were checked without reading payloads. Terraform grants the service runtime access to these two secrets and exports versioned references for the shared deployer; credentials are not copied into this repository. To supply the client ID directly, set both `google_client_id_secret_ref` and `google_client_secret_ref` to null and configure the client ID and managed secret version.
 
