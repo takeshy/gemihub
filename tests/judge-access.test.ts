@@ -117,6 +117,73 @@ test("judges start without Google, see recorded mail instead of sending it, swit
   assert.equal((await call(`/judge/${invite}?lang=en`)).status, 404);
 });
 
+test("reopening the invitation restores the original owner from trial mode without creating a shop", async t => {
+  process.env.JUDGE_INVITE = invite;
+  process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
+  const { store, call, cookies } = await start(t);
+  const ownerCookie = cookies(await call("/api/judge/start", { invite }))[0];
+  const owner = (await (await call("/api/session", undefined, ownerCookie)).json()).user;
+  const shop = (await store.shop(owner.shopId))!;
+  shop.published = structuredClone(sample);
+  await store.saveShop(shop);
+  const switched = cookies(await call("/api/judge/customer", {}, ownerCookie));
+  const customerCookie = switched.find(value => value.startsWith("gemihub_session="))!;
+  const ownerMemo = switched.find(value => value.startsWith("gemihub_judge_owner="))!;
+  const customer = (await (await call("/api/session", undefined, customerCookie)).json()).user;
+
+  for (const cookie of [`${customerCookie}; ${ownerMemo}`, ownerMemo]) {
+    const response = await call("/api/judge/start", { invite }, cookie);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).resumed, true);
+    assert.equal(cookies(response).find(value => value.startsWith("gemihub_session=")), ownerCookie);
+    const restored = (await (await call("/api/workspace", undefined, ownerCookie)).json()).shops;
+    assert.deepEqual(restored.map((shop: Shop) => shop.id), [owner.shopId]);
+    assert.equal((await store.list("shop")).length, 1);
+  }
+
+  // Browsers already affected by the old behavior retain the original owner cookie.
+  const accidental = cookies(await call("/api/judge/start", { invite }))[0];
+  const recovery = await (await call("/api/session", undefined, `${accidental}; ${ownerMemo}`)).json();
+  assert.equal(recovery.judgeOwnerAvailable, true);
+  const recovered = await call("/api/judge/start", { invite }, `${accidental}; ${ownerMemo}`);
+  assert.equal(cookies(recovered).find(value => value.startsWith("gemihub_session=")), ownerCookie);
+  assert.equal((await store.list("shop")).length, 2, "recovery never creates or deletes shops");
+
+  // A trial session with a lost owner cookie must not silently become a new judge.
+  assert.equal(await store.get("session", digest(customerCookie.split("=")[1])), undefined, "restoring the owner ends the trial session");
+  await store.put("session", digest(customerCookie.split("=")[1]), { user: customer, expires: Date.now() + 60000 });
+  const orphan = await call("/api/judge/start", { invite }, customerCookie);
+  assert.equal(orphan.status, 403);
+  assert.equal((await store.list("shop")).length, 2);
+  const invalid = await call("/api/judge/start", { invite }, `${customerCookie}; gemihub_judge_owner=invalid`);
+  assert.equal(invalid.status, 403);
+  assert.equal((await call("/api/judge/start", { invite }, "gemihub_judge_owner=invalid")).status, 403);
+  assert.equal((await store.list("shop")).length, 2);
+});
+
+test("judge owner restoration rejects expired, archived or mismatched accounts and logout clears recovery", async t => {
+  process.env.JUDGE_INVITE = invite;
+  process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
+  const { store, call, cookies, session: makeSession } = await start(t);
+  const first = cookies(await call("/api/judge/start", { invite }))[0];
+  const owner = (await (await call("/api/session", undefined, first)).json()).user;
+  const memo = `gemihub_judge_owner=${first.split("=")[1]}`;
+  const otherTrial = await makeSession({email:"judge-customer-other@judge.gemihub.invalid",name:"Trial",role:"customer",shopId:"other-shop"});
+  assert.equal((await call("/api/judge/owner", {}, `${otherTrial}; ${memo}`)).status, 403);
+  assert.equal((await call("/api/judge/start", {invite}, `${otherTrial}; ${memo}`)).status, 403);
+  const loggedOut = await call("/api/logout", {}, `${first}; ${memo}`);
+  assert.ok(loggedOut.headers.getSetCookie().some(value => value.startsWith("gemihub_judge_owner=;") && value.includes("Max-Age=0")));
+  assert.equal((await call("/api/judge/owner", {}, memo)).status, 403, "logged-out owner sessions cannot be restored");
+  const expired = await makeSession(owner);
+  const expiredId = expired.split("=")[1];
+  await store.put("session", digest(expiredId), { user: owner, expires: Date.now() - 1000 });
+  assert.equal((await call("/api/judge/owner", {}, `gemihub_judge_owner=${expiredId}`)).status, 403);
+  const archived = await makeSession(owner);
+  const shop = (await store.shop(owner.shopId))!;
+  shop.archivedAt = new Date().toISOString(); await store.saveShop(shop);
+  assert.equal((await call("/api/judge/owner", {}, `gemihub_judge_owner=${archived.split("=")[1]}`)).status, 403);
+});
+
 test("judge shops use the operator's demo Google connection and judge AI calls share one quota", async t => {
   process.env.JUDGE_INVITE = invite;
   process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();

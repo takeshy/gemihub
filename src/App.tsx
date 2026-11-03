@@ -72,7 +72,7 @@ export type Workspace = Shop & {
   jobs: { type: string; error?: string }[];
   publicUrl: string;
 };
-export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; assistantVoice?: boolean };
+export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; judgeOwnerAvailable?: boolean; assistantVoice?: boolean };
 const weekdays = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
 export type AppProps = {
   path?: string;
@@ -103,11 +103,12 @@ export function App({
     const toggleOperatorControls = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && !event.isComposing && (event.code === "KeyL" || event.key.toLowerCase() === "l")) {
         event.preventDefault();
+        event.stopPropagation();
         if (!event.repeat) setShowOperatorControls(value => !value);
       }
     };
-    window.addEventListener("keydown", toggleOperatorControls);
-    return () => window.removeEventListener("keydown", toggleOperatorControls);
+    window.addEventListener("keydown", toggleOperatorControls, true);
+    return () => window.removeEventListener("keydown", toggleOperatorControls, true);
   }, []);
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -148,7 +149,7 @@ export function App({
             {displaySession.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
           {session.user?.role === "owner" && session.user.legacyNotes && <a className="text-button" href="/settings/migration">{tr("旧環境からの引き継ぎ")}</a>}
-          {showOperatorControls && session.user?.judge && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
+          {showOperatorControls && (session.user?.judge || session.judgeCustomer || session.judgeOwnerAvailable) && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
           {showOperatorControls && session.user?.admin && <a className="text-button" href="/admin">{tr("運営管理")}</a>}
           {session.user?.role === "owner" && session.user.shopId && !session.user.judge && !session.user.legacyNotes && !session.user.accessPending && <ShopReset shopId={session.user.shopId} navigate={navigate} showButton={showOperatorControls} />}
           {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
@@ -171,7 +172,7 @@ export function App({
           <div className="demo-banner judge-banner">
             {tr("審査員アクセス · メールは送信されません。内容は")}<a href="/judge-menu">{tr("審査メニュー")}</a>{tr("で確認できます。")}</div>
         )}
-        {showOperatorControls && isPublic && !session.hosted && (session.judgeCustomer || session.user?.judge) && <JudgeBar customer={!!session.judgeCustomer} run={run} />}
+        {showOperatorControls && path !== "/judge-menu" && !session.hosted && (session.judgeCustomer || session.user?.judge || session.judgeOwnerAvailable) && <JudgeBar customer={!!session.judgeCustomer || !session.user} recovery={session.judgeOwnerAvailable} run={run} />}
         {error && (
           <div className="alert" role="alert">
             {error}
@@ -186,9 +187,9 @@ export function App({
           </div>
         )}
         {/^\/judge\/[^/]+$/.test(path) ? (
-          <JudgeStart invite={path.split("/")[2]} signedIn={!!session.user?.judge} run={run} />
-        ) : path === "/judge-menu" && session.user?.judge ? (
-          <JudgeMenu run={run} />
+          <JudgeStart invite={path.split("/")[2]} signedIn={!!(session.user?.judge || session.judgeCustomer || session.judgeOwnerAvailable)} run={run} />
+        ) : path === "/judge-menu" && (session.user?.judge || session.judgeCustomer || session.judgeOwnerAvailable) ? (
+          <JudgeMenu customer={!!session.judgeCustomer || !session.user} canReturnToOwner={session.judgeOwnerAvailable} run={run} />
         ) : path === "/admin" && session.user?.admin ? (
           <Admin run={run} />
         ) : path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.accessPending ? (
@@ -223,6 +224,8 @@ export function App({
           <StaffLogin shopId={path.split("/")[2]} />
         ) : /^\/publication-preview\/[^/]+$/.test(path) ? (
           <PublicationPreview shopId={path.split("/")[2]} />
+        ) : session.judgeCustomer || !session.user && session.judgeOwnerAvailable ? (
+          <JudgeMenu customer run={run} />
         ) : session.user ? (
           <Dashboard
             initialTab={initialTab}
@@ -1229,6 +1232,9 @@ export function PublicShop({
   const [times, setTimes] = useState<
     { start: string; end: string; staffId: string }[]
   >([]);
+  const [timesLoading, setTimesLoading] = useState(false);
+  const [timesError, setTimesError] = useState("");
+  const [timesRetry, setTimesRetry] = useState(0);
   const [selected, setSelected] = useState("");
   const [name, setName] = useState(session.user?.name || "");
   useEffect(() => { setName(session.user?.name || ""); }, [session.user?.email, session.user?.name]);
@@ -1320,6 +1326,9 @@ export function PublicShop({
     setSelected("");
     setRequestId(createRequestId());
     setTimes([]);
+    setTimesError("");
+    if (!date || !selection) { setTimesLoading(false); return; }
+    setTimesLoading(true);
     let cancelled = false;
     const query = new URLSearchParams({
       date,
@@ -1332,13 +1341,14 @@ export function PublicShop({
       .then((t) => {
         if (!cancelled) setTimes(t);
       })
-      .catch(() => {
-        if (!cancelled) setTimes([]);
-      });
+      .catch((error) => {
+        if (!cancelled) setTimesError(error instanceof Error ? error.message : tr("空き時間を取得できませんでした。再試行してください。"));
+      })
+      .finally(() => { if (!cancelled) setTimesLoading(false); });
     return () => {
       cancelled = true;
     };
-  }, [date, menu, optionIds, staff, data, category, pageSlug, pane, confirmed, isCustomer, session.user?.email]);
+  }, [date, menu, optionIds, staff, data, category, pageSlug, pane, confirmed, isCustomer, session.user?.email, timesRetry]);
   useEffect(() => {
     run(loadMine);
   }, [isCustomer]);
@@ -1483,7 +1493,9 @@ export function PublicShop({
                     value={date}
                     onValueChange={value => setDate(value)} />
                 </Field>
-                <div className="time-grid">
+                {timesLoading && <p role="status">{tr("空き時間を確認しています…")}</p>}
+                {timesError && <div className="alert" role="alert"><p>{timesError}</p><button type="button" onClick={() => setTimesRetry(value => value + 1)}>{tr("再試行")}</button></div>}
+                <div className="time-grid" aria-busy={timesLoading}>
                   {times.map((t) => (
                     <button
                       className={selected === t.start ? "selected" : ""}
@@ -1501,7 +1513,7 @@ export function PublicShop({
                     </button>
                   ))}
                 </div>
-                {!times.length && (
+                {!timesLoading && !timesError && !!date && !!selection && !times.length && (
                   <p className="empty-slots">
                     {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}</p>
                 )}

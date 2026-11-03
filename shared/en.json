@@ -1,4 +1,9 @@
 {
+  "店主のセッションを復元できません。運営者にお問い合わせください。": "Unable to restore the owner session. Please contact the operator.",
+  "元の店主アカウントに戻れます。": "You can return to your original owner account.",
+  "店主としてログイン中です。": "Signed in as the owner.",
+  "空き時間を取得できませんでした。再試行してください。": "Unable to load available times. Please retry.",
+  "空き時間を確認しています…": "Checking available times…",
   "日": "Sun",
   "月": "Mon",
   "火": "Tue",

@@ -9,6 +9,7 @@ const at = (value: string) => new Date(value).toLocaleString(intlLocale(), { tim
 /** The shared invitation page. Judges start without Google; the same browser resumes its account. */
 export function JudgeStart({ invite, signedIn, run }: { invite: string; signedIn: boolean; run: Run }) {
   const api = useApi();
+  const [starting, setStarting] = useState(false);
   return <section className="panel judge-access" aria-labelledby="judge-start-title">
     <p className="eyebrow">JUDGE ACCESS</p>
     <h1 id="judge-start-title">{tr("審査員アクセス")}</h1>
@@ -19,7 +20,7 @@ export function JudgeStart({ invite, signedIn, run }: { invite: string; signedIn
       <li>{tr("このブラウザでは同じアカウントを続けて使えます。別のブラウザや端末では新しいアカウントになります。")}</li>
     </ul>
     <div className="judge-actions">
-      <button className="primary" type="button" onClick={() => run(async () => { await api("/api/judge/start", { invite }); location.assign("/"); })}>
+      <button className="primary" type="button" disabled={starting} onClick={() => { setStarting(true); void run(async () => { try { await api("/api/judge/start", { invite }); location.assign("/"); } finally { setStarting(false); } }); }}>
         {signedIn ? tr("続きから試す") : tr("はじめる")}
       </button>
     </div>
@@ -29,21 +30,26 @@ export function JudgeStart({ invite, signedIn, run }: { invite: string; signedIn
 type JudgeStatus = { until: string; aiUsed: number; aiLimit: number; storage: boolean; slug: string; published: boolean };
 type JudgeMail = { id: string; to: string; cc?: string[]; subject: string; body: string; at: string };
 /** Judge-only menu: mails that would have been sent, usage, the trial path and a full reset. */
-export function JudgeMenu({ run }: { run: Run }) {
+export function JudgeMenu({ customer = false, canReturnToOwner = false, run }: { customer?: boolean; canReturnToOwner?: boolean; run: Run }) {
   const api = useApi();
   const [status, setStatus] = useState<JudgeStatus>();
   const [mails, setMails] = useState<JudgeMail[]>([]);
   const [open, setOpen] = useState<string>();
-  useEffect(() => { void run(async () => { setStatus(await api<JudgeStatus>("/api/judge/status")); setMails(await api<JudgeMail[]>("/api/judge/mails")); }); }, []);
+  useEffect(() => { if (!customer) void run(async () => { setStatus(await api<JudgeStatus>("/api/judge/status")); setMails(await api<JudgeMail[]>("/api/judge/mails")); }); }, [customer]);
   const reset = () => run(async () => {
     if (!confirm(tr("お店、予約、問い合わせ、お客様、記事、画像、記録されたメールをすべて削除し、最初からやり直します。元に戻せません。"))) return;
     await api("/api/judge/reset", { requestId: createRequestId() });
     location.assign("/");
   });
+  if (customer) return <section className="panel judge-menu" aria-labelledby="judge-menu-title">
+    <h1 id="judge-menu-title">{tr("審査メニュー")}</h1>
+    <JudgeBar customer run={run} menuLink={false} />
+  </section>;
   return <div className="judge-menu">
     <section className="panel" aria-labelledby="judge-menu-title">
       <p className="eyebrow">JUDGE</p>
       <h1 id="judge-menu-title">{tr("審査メニュー")}</h1>
+      <JudgeBar customer={false} recovery={canReturnToOwner} published={!!status?.published} run={run} menuLink={false} />
       {status && !status.storage && <p className="alert">{tr("デモ環境の準備中です。しばらくしてからお試しください。")}</p>}
       {status && <dl className="judge-facts">
         <div><dt>{tr("AIの利用回数")}</dt><dd>{status.aiUsed} / {status.aiLimit}</dd></div>
@@ -84,17 +90,18 @@ export function JudgeMenu({ run }: { run: Run }) {
   </div>;
 }
 
-/** On the judge's own storefront: switch to a trial customer, and back to the owner. */
-export function JudgeBar({ customer, run }: { customer: boolean; run: Run }) {
+/** Explicit role actions shared by the storefront and management menu. */
+export function JudgeBar({ customer, recovery = false, published = true, menuLink = true, run }: { customer: boolean; recovery?: boolean; published?: boolean; menuLink?: boolean; run: Run }) {
   const api = useApi();
   return <div className="judge-bar" role="region" aria-label={tr("審査員アクセス")}>
-    {customer ? <>
-      <span>{tr("審査用のお客様としてログイン中です。")}</span>
+    {customer || recovery ? <>
+      <span>{customer ? tr("審査用のお客様としてログイン中です。") : tr("元の店主アカウントに戻れます。")}</span>
       <button type="button" onClick={() => run(async () => { await api("/api/judge/owner", {}); location.assign("/"); })}>{tr("店主に戻る")}</button>
     </> : <>
-      <span>{tr("審査員として公開ページを表示しています。")}</span>
-      <button type="button" className="primary" onClick={() => run(async () => { const { slug } = await api<{ slug: string }>("/api/judge/customer", {}); location.assign(`/s/${slug}?pane=reserve`); })}>{tr("お客様として試す")}</button>
+      <span>{tr("店主としてログイン中です。")}</span>
+      <button type="button" className="primary" disabled={!published} onClick={() => run(async () => { const { slug } = await api<{ slug: string }>("/api/judge/customer", {}); location.assign(`/s/${slug}?pane=reserve`); })}>{tr("お客様として試す")}</button>
     </>}
+    {menuLink && <a href="/judge-menu">{tr("審査メニュー")}</a>}
   </div>;
 }
 

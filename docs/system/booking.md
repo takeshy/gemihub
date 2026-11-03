@@ -3,7 +3,7 @@ type: "Process"
 title: "Booking and availability"
 description: "How customers book and how gemihub decides which time slots are open."
 tags: ["booking", "availability", "staff", "calendar"]
-updated: "2026-11-03"
+updated: "2026-11-04"
 ---
 
 How customers book and how gemihub decides which time slots are open.
@@ -45,3 +45,7 @@ Customers may choose a staff member or no preference. With no preference, gemihu
 # Double-booking prevention
 
 The server re-checks availability and saves the booking under a per-shop lock, so two customers cannot take the same staff member's time. A retried request with the same request ID does not create a second booking. If a connected Calendar cannot be read, availability is not guessed; the customer is asked to try again.
+
+The reservation form shows a loading message while checking availability. Failed requests show the returned error and a Retry button; they are never displayed as an empty schedule. Only a successful response with no slots shows the suggestion to choose another date. Dates use the shop's time zone, so a date that is already tomorrow for the viewer may still be a closed day at the shop.
+
+In judge access, Ctrl+Shift+L only reveals the judge controls. Role changes require the explicit Try as a customer or Back to owner button. A trial customer opening management sees Back to owner. Reopening the invitation resumes the saved owner and shop instead of creating another shop; an invalid recovery session produces an error instead of a replacement account.

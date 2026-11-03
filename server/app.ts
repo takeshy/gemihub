@@ -555,6 +555,17 @@ export function createApp(
       const publicHost = !!hosted;
       const s = await session(store, req);
       const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
+      const savedJudgeOwner = async () => {
+        const id = cookie(req, "gemihub_judge_owner");
+        if (!id || !judgeActive()) return;
+        const saved = await store.get<{ user: User; expires: number }>("session", digest(id));
+        if (!saved?.user.judge || saved.expires <= Date.now()) return;
+        const owner = await store.get<User>("user", saved.user.email);
+        const shop = owner?.shopId ? await store.shop(owner.shopId) : undefined;
+        if (!owner?.judge || owner.role !== "owner" || owner.shopId !== saved.user.shopId || !shop?.judge || shop.owner !== owner.email) return;
+        if (user && isJudgeCustomerEmail(user.email) && user.shopId !== shop.id) return;
+        return { id, expires: saved.expires, owner, shop };
+      };
       if (user?.judge) {
         // Judge AI calls share one quota per judge, charged once per request before the first model call.
         aiUsage.enterWith({ charge: () => chargeJudge(user.email) });
@@ -584,7 +595,8 @@ export function createApp(
         if (rate.size > 10000)
           for (const [k, v] of rate) if (v.until < Date.now()) rate.delete(k);
       }
-      if (path === "/api/session" && method === "GET")
+      if (path === "/api/session" && method === "GET") {
+        const judgeOwner = !publicHost ? await savedJudgeOwner() : undefined;
         return json(res, {
           user: user
             ? {
@@ -602,8 +614,10 @@ export function createApp(
           hosted: hosted?.slug,
           invite: accessPasswordEnabled(),
           assistantVoice: liveConfigured(),
-          ...(user && isJudgeCustomerEmail(user.email) && cookie(req, "gemihub_judge_owner") ? { judgeCustomer: true } : {}),
+          ...(user && isJudgeCustomerEmail(user.email) ? { judgeCustomer: true } : {}),
+          ...(judgeOwner && judgeOwner.owner.email !== user?.email ? { judgeOwnerAvailable: true } : {}),
         });
+      }
       if (path === "/api/legacy-notes/check" && method === "POST" && !publicHost) {
         if (user?.role !== "owner") fail(403, tr("店主としてログインしてください"));
         const saved = await store.get<User>("user", user.email);
@@ -621,10 +635,9 @@ export function createApp(
       if (path === "/api/logout" && method === "POST") {
         const id = cookie(req, "gemihub_session");
         if (id) await store.delete("session", digest(id));
-        res.setHeader(
-          "Set-Cookie",
-          "gemihub_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
-        );
+        const secure = origin().startsWith("https:") ? "; Secure" : "";
+        appendCookie(res, `gemihub_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`);
+        appendCookie(res, `gemihub_judge_owner=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`);
         return json(res, { ok: true });
       }
       if (path === "/auth/complete" && method === "GET") {
@@ -854,6 +867,15 @@ export function createApp(
         );
       }
       const secureCookie = origin().startsWith("https:") ? "; Secure" : "";
+      const restoreJudgeOwner = async () => {
+        const saved = await savedJudgeOwner();
+        if (!saved) return;
+        const current = cookie(req, "gemihub_session");
+        if (current && current !== saved.id && user && isJudgeCustomerEmail(user.email)) await store.delete("session", digest(current));
+        appendCookie(res, `gemihub_session=${saved.id}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((saved.expires - Date.now()) / 1000))}${secureCookie}`);
+        appendCookie(res, `gemihub_judge_owner=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureCookie}`);
+        return saved;
+      };
       const failedAttempt = (key: string, limit: number, windowMs: number) => {
         const current = rate.get(key);
         const entry = current && current.until > Date.now() ? current : { n: 0, until: Date.now() + windowMs };
@@ -885,7 +907,9 @@ export function createApp(
       if (path === "/api/judge/start" && method === "POST" && !publicHost) {
         const input = z.object({ invite: z.string().max(512) }).parse(await body(req));
         if (!judgeActive() || !secretMatches(input.invite, judgeInvite())) fail(404, tr("見つかりません"));
+        if (await restoreJudgeOwner()) return json(res, { ok: true, resumed: true });
         if (user?.judge) return json(res, { ok: true, resumed: true });
+        if (user && isJudgeCustomerEmail(user.email) || cookie(req, "gemihub_judge_owner")) fail(403, tr("店主のセッションを復元できません。運営者にお問い合わせください。"));
         const recordCreation = failedAttempt(`judge-start:${req.socket.remoteAddress}`, 10, 3600000);
         recordCreation();
         const email = `judge-${randomBytes(9).toString("hex")}@${judgeEmailDomain}`;
@@ -900,14 +924,8 @@ export function createApp(
       if (path.startsWith("/api/judge/") && !publicHost) {
         if (path === "/api/judge/owner" && method === "POST") {
           // Return from the trial customer to the judge who created it, in the same browser.
-          const ownerId = cookie(req, "gemihub_judge_owner") || fail(403, tr("審査員としてログインしてください"));
-          const owner = await store.get<{ user: User; expires: number }>("session", digest(ownerId));
-          if (!owner?.user.judge || owner.expires < Date.now()) fail(403, tr("審査員としてログインしてください"));
-          const current = cookie(req, "gemihub_session");
-          if (current && current !== ownerId && user && isJudgeCustomerEmail(user.email)) await store.delete("session", digest(current));
-          appendCookie(res, `gemihub_session=${ownerId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((owner.expires - Date.now()) / 1000))}${secureCookie}`);
-          appendCookie(res, `gemihub_judge_owner=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureCookie}`);
-          return json(res, { ok: true, slug: (await store.shop(owner.user.shopId || ""))?.slug });
+          const saved = await restoreJudgeOwner() || fail(403, tr("店主のセッションを復元できません。運営者にお問い合わせください。"));
+          return json(res, { ok: true, slug: saved.shop.slug });
         }
         if (!user?.judge) fail(403, tr("審査員としてログインしてください"));
         // An interrupted legacy judge reset may already have archived its old shop.
