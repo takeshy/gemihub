@@ -16,12 +16,6 @@ A booking and shop management system for small independent businesses and salons
 
 ![Customer booking screen with services, staff selection, available times, and booking details](public/manual/en/07-reservation.jpg)
 
-## Why gemihub
-
-- **AI proposes validated configuration only—never arbitrary executable code:** Fixed templates enforce authentication, customer isolation, and safe rendering so AI cannot break access control or inject unsafe code.
-- **Business data stays in the owner's own Google Sheets and Drive:** Reservations, customer records, menus, posts, published specs (`spec.md`), and change history (`history.md`) live in the owner's Google account rather than being locked into a proprietary database.
-- **Consult & ask answers with sources instead of guessing:** A dedicated read-only research layer checks the system documentation, `spec.md`, `history.md`, and live ledger records to return source-backed answers, explicitly stating when something is not defined.
-
 ---
 
 ## What You Can Do
@@ -58,10 +52,10 @@ A booking and shop management system for small independent businesses and salons
      └── (Ledgers, posts, images, specs, change history) ────────────► [ Owner's Google Sheets / Drive ]
 ```
 
-- **Multimodal requests × Safe template rendering:**
-  Gemini on Vertex AI understands natural conversation, live voice, and pen-marked screenshots to prepare changes. However, AI never generates arbitrary executable code or raw HTML—it proposes validated configuration data (JSON) rendered through safe, fixed templates.
-- **Propose → Preview → Approve (just like working with a human builder):**
-  AI never changes your live shop unannounced or from casual voice agreement alone. Every request becomes a previewable draft and diff that only goes live when the owner clicks to apply, recording the original request in `history.md`.
+- **Multimodal proposals for pages, articles, and settings—with server-enforced booking & payment logic:**
+  Gemini on Vertex AI understands natural conversation, live voice, and pen-marked screenshots to draft page structures, Markdown copy, layouts, images, and shop settings. Meanwhile, authentication, access control, availability calculation, and payment amounts are strictly enforced by the server.
+- **Source-backed answers and a Propose → Preview → Approve workflow:**
+  In **Consult & ask**, a dedicated research LLM checks the system docs, the shop's `spec.md`, `history.md`, and live ledger records to answer with sources—explicitly stating when something is not defined instead of guessing. Change requests only go live after the owner previews the diff and approves on screen, recording the request in `history.md`.
 - **Owner-controlled data storage:**
   Business data (menus, staff, reservations, customers, inquiries, articles) lives in the owner's **Google Sheets**, while images, generated specs (`spec.md`), change history (`history.md`), and offline HTML exports live in the owner's **Google Drive**.
 
