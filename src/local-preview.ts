@@ -64,7 +64,7 @@ export function readDraft(storage: Pick<Storage, "getItem">, key: string) {
 export function writeDraft(storage: Pick<Storage, "setItem">, key: string, draft: z.input<typeof localDraftSchema>) {
   storage.setItem(key, JSON.stringify(localDraftSchema.parse(draft)));
 }
-export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string) => Promise<import("../server/menu-image-domain").MenuImageData>): ApiClient {
+export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string, view?: "display" | "thumbnail") => Promise<import("../server/menu-image-domain").MenuImageData>): ApiClient {
   const bookings: Booking[] = fixtures.bookings.map(b => { const selected = menuSelection(config,b.menuId,b.optionIds);return simulatePayment({ ...b, ...(selected?.optionIds.length ? {optionIds:selected.optionIds,items:selected.items}:{}), shopId, price: selected?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }, config); });
   const posts: PublicPost[] = fixtures.posts.filter(post => articleKinds(config).includes(post.category)).map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
@@ -78,7 +78,8 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     if (image) {
       const ids = image[1] === "images" ? [...managedImageIds(config),...posts.flatMap(post=>postImageIds(post.body))] : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
       if (!ids.includes(image[2]) || !readImage) throw new Error(tr("画像がありません"));
-      result = await readImage(image[2]);
+      const view = url.searchParams.get("view");
+      result = await readImage(image[2], view === "display" || view === "thumbnail" ? view : undefined);
     }
     else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5), paymentSimulation: true, customerProfile: profile, registrationRequired: false };
     else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined,undefined,url.searchParams.getAll("option"));

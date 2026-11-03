@@ -46,7 +46,7 @@ export function RequestImagePicker({ shopId, value, onChange, disabled = false, 
   return <div className="request-image-picker">
     <button type="button" disabled={disabled} onClick={() => { setSelection([...value]); setQuery(""); setSource("all"); setError(""); setImages(undefined); setOpen(true); }}>{label}</button>
     {preview && value.length > 0 && <div className="request-image-selection" aria-label={tr("依頼に選んだ画像")}>{value.map((id, index) => <div key={id}>
-      <MenuImage imageId={id} imageBase={base} name={images?.find(image => image.id === id)?.name || tr("画像{0}", index + 1)} />
+      <MenuImage imageId={id} imageBase={base} name={images?.find(image => image.id === id)?.name || tr("画像{0}", index + 1)} view="thumbnail" />
       <span>{images?.find(image => image.id === id)?.name || tr("画像{0}", index + 1)}</span><button type="button" disabled={disabled} aria-label={tr("画像{0}を依頼から外す", index + 1)} onClick={() => onChange(value.filter(current => current !== id))}>{tr("外す")}</button>
     </div>)}</div>}
     {error && !open && <p role="alert">{error}</p>}
@@ -58,7 +58,7 @@ export function RequestImagePicker({ shopId, value, onChange, disabled = false, 
         <div className="customer-controls"><label>{tr("画像を検索")}<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label><label>{tr("画像の種類")}<select value={source} onChange={event => setSource(event.target.value)}><option value="all">{tr("すべて")}</option><option value="upload">{tr("アップロード")}</option><option value="ai">{tr("AI生成")}</option></select></label></div>
         {!images && !error && <p role="status">{tr("画像を読み込んでいます…")}</p>}
         {images && !visible?.length && <p className="empty">{tr("条件に合う画像はありません。")}</p>}
-        <div className="image-library-grid">{visible?.map(image => <button type="button" key={image.id} className={`request-image-option ${selection.includes(image.id) ? "image-selected" : ""}`} aria-pressed={selection.includes(image.id)} aria-label={tr("{0}を選択", image.name)} onClick={() => choose(image)}><MenuImage imageId={image.id} imageBase={base} name={image.name} className="library-image" /><strong>{image.name}</strong><span>{selection.includes(image.id) ? tr("✓ 選択中") : tr("選択する")}</span></button>)}</div>
+        <div className="image-library-grid">{visible?.map(image => <button type="button" key={image.id} className={`request-image-option ${selection.includes(image.id) ? "image-selected" : ""}`} aria-pressed={selection.includes(image.id)} aria-label={tr("{0}を選択", image.name)} onClick={() => choose(image)}><MenuImage imageId={image.id} imageBase={base} name={image.name} className="library-image" view="thumbnail" /><strong>{image.name}</strong><span>{selection.includes(image.id) ? tr("✓ 選択中") : tr("選択する")}</span></button>)}</div>
       </>}
       <div className="actions request-image-dialog-actions"><span>{selection.length}/{max}{tr("枚")}</span><button type="button" className="primary" disabled={working || !images || (selectionOnly && selection.length !== 1)} onClick={() => { onChange(selection); setOpen(false); }}>{selectionOnly ? tr("この画像を使う") : tr("選択した画像を使う")}</button><button type="button" disabled={working} onClick={() => setOpen(false)}>{tr("やめる")}</button></div>
     </dialog>, document.body)}

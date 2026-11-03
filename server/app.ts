@@ -33,7 +33,7 @@ import { resetShop } from "./shop-reset.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
-import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
+import { uploadMenuImage, readMenuImage, menuImageResource, validateMenuImages, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
 import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
 import { generateImage } from "./image-generation.ts";
 import { managedImageIds } from "./image-references.ts";
@@ -228,6 +228,17 @@ export function createApp(
 ) {
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
+  async function imageResponse(req: IncomingMessage, res: ServerResponse, shop: Shop, imageId: string, url: URL) {
+    const view = z.enum(["original", "display", "thumbnail"]).parse(url.searchParams.get("view") || "original");
+    const image = await menuImageResource(store, shop, imageId, crmFiles, async () => store.memory ? "" : await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")), view);
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.setHeader("ETag", image.etag);
+    const tags = String(req.headers["if-none-match"] || "").split(",").map(tag => tag.trim().replace(/^W\//, ""));
+    if (tags.includes(image.etag) || tags.includes("*")) { res.writeHead(304); res.end(); return; }
+    const data = await image.read();
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(JSON.stringify(data));
+  }
   // The administrator's provider choice applies to every shop; a short cache keeps model calls cheap.
   type ProviderSetting = { provider: AiProvider; changedAt: string; changedBy: string };
   let providerCache: { value: AiProvider; at: number } | undefined;
@@ -1119,6 +1130,19 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        const imageRead = action.match(/^(?:images|menu-images)\/([a-f0-9]{64})$/);
+        if (imageRead && method === "GET") {
+          assertOwner(user, shop);
+          return await imageResponse(req, res, shop, imageRead[1], url);
+        }
+        const staffImageRead = action.match(/^staff-photo\/images\/([a-f0-9]{64})$/);
+        if (staffImageRead && method === "GET") {
+          const assigned = (await staffAccounts(store, shop)).find(account => account.email === user!.email) || fail(403, tr("担当スタッフの登録がありません"));
+          const staff = (await effective(shop)).staff.find(staff => staff.id === assigned.staffId) || fail(403, tr("担当スタッフが削除されています"));
+          const image = await store.get<ImageUpload>("menuImageUpload", staffImageRead[1]);
+          if (staff.imageId !== staffImageRead[1] && image?.uploadedBy !== user!.email) fail(404, tr("画像がありません"));
+          return await imageResponse(req, res, shop, staffImageRead[1], url);
+        }
         const settingsAi = action.match(/^live-settings\/(basic|menus|staff|hours|rules)\/ai$/);
         if (settingsAi && method === "POST") {
           assertOwner(user, shop);
@@ -1280,7 +1304,6 @@ export function createApp(
               if (!store.memory && !fresh.google) { fresh.google = await provisionShop(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
               return json(res, await uploadMenuImage(store, fresh, input, crmFiles, token));
             }
-            if (libraryRoute[1] && method === "GET" && !libraryRoute[2]) return json(res, await readMenuImage(store, fresh, libraryRoute[1], crmFiles, token));
             if (libraryRoute[1] && method === "POST" && libraryRoute[2]) {
               if (libraryRoute[2] === "rename") await updateImage(store, fresh, libraryRoute[1], await body(req, 2000), crmFiles, token);
               else await archiveImage(store, fresh, libraryRoute[1], fresh.published ? await effective(fresh) : fresh.draft);
@@ -1293,12 +1316,6 @@ export function createApp(
             const input = await body(req, 8 * 1024 * 1024);
             if (!store.memory && !fresh.google) { fresh.google = await provisionShop(fresh, fresh.draft || sample, token); await store.saveShop(fresh); }
             return json(res, await uploadMenuImage(store, fresh, input, crmFiles, token));
-          }
-          const menuImage = action.match(/^menu-images\/([a-f0-9]{64})$/);
-          if (menuImage && method === "GET") {
-            assertOwner(user, fresh);
-            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
-            return json(res, await readMenuImage(store, fresh, menuImage[1], crmFiles, token));
           }
           const staffPhotoRoute = action.match(/^staff-photo(?:\/images(?:\/([a-f0-9]{64}))?)?$/);
           if (staffPhotoRoute && (method === "GET" || method === "POST")) {
@@ -1314,10 +1331,6 @@ export function createApp(
             }
             if (action === "staff-photo" && method === "GET") return json(res, { staffId: staff.id, name: staff.name, imageId: staff.imageId });
             if (action === "staff-photo/images" && method === "GET") return json(res, choices);
-            if (staffPhotoRoute[1] && method === "GET") {
-              if (!choices.some(image => image.id === staffPhotoRoute[1])) fail(404, tr("画像がありません"));
-              return json(res, await readMenuImage(store, fresh, staffPhotoRoute[1], crmFiles, token));
-            }
             if (action === "staff-photo/images" && method === "POST") return json(res, await uploadMenuImage(store, fresh, await body(req, 8*1024*1024), crmFiles, token, user!.email));
             if (action === "staff-photo" && method === "POST") {
               const input = z.object({imageId:z.string().regex(/^[a-f0-9]{64}$/).optional(),previousImageId:z.string().default(""),requestId:z.uuid()}).parse(await body(req));
@@ -2160,6 +2173,15 @@ export function createApp(
           fail(404, tr("公開されたお店がありません"));
         if (hosted && hosted.id !== shopRef.id) fail(404, tr("お店がありません"));
         const action = publicRoute[2] || "";
+        const imageRead = action.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
+        if (imageRead && method === "GET") {
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(shop);
+          const config = await effective(shop);
+          const ids = imageRead[1] === "images" ? managedImageIds(config) : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
+          if (!ids.includes(imageRead[2]) && !(imageRead[1] === "images" && publishedPostImageIds(await postsFor(shop)).includes(imageRead[2]))) fail(404, tr("画像がありません"));
+          return await imageResponse(req, res, shop, imageRead[2], url);
+        }
         return await store.locked(shopRef.id, async () => {
           const shop = (await store.shop(shopRef.id))!;
           assertStorefrontAccess(shop);
@@ -2228,12 +2250,6 @@ export function createApp(
             return json(res, post);
           }
           const config = await effective(shop);
-          const menuImage = action.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
-          if (menuImage && method === "GET") {
-            const ids = menuImage[1] === "images" ? [...managedImageIds(config),...publishedPostImageIds(await postsFor(shop))] : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
-            if (!ids.includes(menuImage[2])) fail(404, tr("画像がありません"));
-            return json(res, await readMenuImage(store, shop, menuImage[2], crmFiles, store.memory ? "" : await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です"))));
-          }
           const ownProfile = async () => memberProfile(await store.get("customer", `${shop.id}:${customer().email}`));
           if (action === "profile" && method === "GET") {
             const u = customer();

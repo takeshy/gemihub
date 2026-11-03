@@ -2,11 +2,12 @@ import { tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
-import { menuImageLimit, type MenuImageData } from "../server/menu-image-domain";
+import { menuImageLimit } from "../server/menu-image-domain";
 import { RequestImagePicker } from "./RequestImagePicker";
 import { ImageUploadStatus } from "./ImageUploadStatus";
+import { loadMenuImage } from "./menu-image-loader";
 
-export function MenuImage({ imageId, imageBase, suffix = "", name, className = "menu-image", style }: { imageId?: string; imageBase: string; suffix?: string; name: string; className?: string; style?: React.CSSProperties }) {
+export function MenuImage({ imageId, imageBase, suffix = "", name, className = "menu-image", style, view = "display" }: { imageId?: string; imageBase: string; suffix?: string; name: string; className?: string; style?: React.CSSProperties; view?: "display" | "thumbnail" }) {
   const api = useApi();
   const ref = useRef<HTMLSpanElement>(null);
   const [visible, setVisible] = useState(false);
@@ -14,7 +15,7 @@ export function MenuImage({ imageId, imageBase, suffix = "", name, className = "
   const [error, setError] = useState("");
   useEffect(() => {
     if (!globalThis.IntersectionObserver) { setVisible(true); return; }
-    const observer = new IntersectionObserver(entries => setVisible(entries[0].isIntersecting), { rootMargin: "300px" });
+    const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { setVisible(true); observer.disconnect(); } }, { rootMargin: "300px" });
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
   }, [imageId]);
@@ -24,13 +25,14 @@ export function MenuImage({ imageId, imageBase, suffix = "", name, className = "
     setError("");
     setImage(undefined);
     if (!visible || !imageId) return;
-    api<MenuImageData>(`${imageBase}/${imageId}${suffix}`).then(response => {
+    const path = `${imageBase}/${imageId}${suffix}`;
+    loadMenuImage(api, `${path}${path.includes("?") ? "&" : "?"}view=${view}`).then(response => {
       if (disposed) return;
       url = URL.createObjectURL(new Blob([Uint8Array.from(atob(response.data), char => char.charCodeAt(0))], { type: response.mimeType }));
       setImage({ id: imageId, url });
     }).catch(error => { if (!disposed) setError(error.message); });
     return () => { disposed = true; if (url) URL.revokeObjectURL(url); };
-  }, [imageId, imageBase, suffix, visible, api]);
+  }, [imageId, imageBase, suffix, visible, api, view]);
   if (!imageId) return null;
   return <span ref={ref} className={className} style={style}>{image?.id === imageId ? <img src={image.url} alt={tr("{0}の画像", name)} /> : <span>{error ? tr("画像を読み込めませんでした") : tr("画像を読み込み中…")}</span>}</span>;
 }
@@ -59,7 +61,7 @@ export function MenuImageEditor({ shopId, imageId, name, change, uploading, labe
     finally { setBusy(false); uploading?.(false); }
   }
   return <div className="menu-image-editor">
-    <MenuImage imageId={imageId} imageBase={imageBase || `/api/shops/${shopId}/menu-images`} name={name} />
+    <MenuImage imageId={imageId} imageBase={imageBase || `/api/shops/${shopId}/menu-images`} name={name} view="thumbnail" />
     <div><p>{label}</p><div className="menu-image-methods" role="group" aria-label={tr("{0}の画像の登録方法", name)}><button type="button" disabled={busy} aria-pressed={method === "upload"} onClick={() => setMethod("upload")}>{tr("画像をアップロード")}</button><RequestImagePicker shopId={shopId} max={1} selectionOnly preview={false} imageBase={pickerBase} value={imageId ? [imageId] : []} disabled={busy} label={tr("既存の画像から選ぶ")} onChange={ids => { change(ids[0]); setPending(undefined); setError(""); setMethod(undefined); }}/></div>
     {method === "upload" && <label>{label}<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" disabled={busy} onChange={event => {
       const file = event.target.files?.[0]; event.target.value = "";

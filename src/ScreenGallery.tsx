@@ -27,7 +27,7 @@ export type PreviewLocation = { id: string; name: string; articleKey?: string };
 export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtures, onScreenChange, hideHeader = false, hideFooter = false }: { config: ShopConfig; shopId: string; screen: PreviewScreen; fixtures?: Fixtures; onScreenChange?: (screen:PreviewLocation)=>void; hideHeader?: boolean; hideFooter?: boolean }) {
   const api = useApi();
   const fixtures = useMemo(() => suppliedFixtures || sampleFixtures(config), [config, suppliedFixtures]);
-  const client = useMemo(() => createPreviewClient(config, fixtures, shopId, id => api(`/api/shops/${shopId}/menu-images/${id}`)), [config, fixtures, shopId, api]);
+  const client = useMemo(() => createPreviewClient(config, fixtures, shopId, (id, view) => api(`/api/shops/${shopId}/menu-images/${id}${view ? `?view=${view}` : ""}`)), [config, fixtures, shopId, api]);
   const [route, setRoute] = useState<{ pane?: string; category?: "blogs" | "announcements"; articleKey?: string; pageSlug?: string }>();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");

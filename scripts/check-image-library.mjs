@@ -190,6 +190,7 @@ try {
     await expect(button(manager, "名前を変更")).toHaveCount(2);
     await expect(button(manager, "この画像をもとに生成")).toHaveCount(2);
     await expect(button(manager.locator("figure").filter({ hasText: t("使用中：") }), "画像管理から削除")).toBeDisabled();
+    await manager.locator(".library-image").first().scrollIntoViewIfNeeded();
     await expect(manager.locator(".library-image img").first()).toBeVisible();
     await capture("30-image-library.jpg");
     await startUpload(manager, "managed-upload.png");

@@ -138,7 +138,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenC
     window.addEventListener("focus", check);
     return () => { active = false; clearInterval(timer); window.removeEventListener("focus", check); };
   }, [draft, busy, conflict, key]);
-  const mock = useMemo(() => draft ? createPreviewClient(draft.config, draft.fixtures, shop.id, imageId => api(`/api/shops/${shop.id}/menu-images/${imageId}`)) : undefined, [draft?.config, draft?.fixtures, shop.id]);
+  const mock = useMemo(() => draft ? createPreviewClient(draft.config, draft.fixtures, shop.id, (imageId, view) => api(`/api/shops/${shop.id}/menu-images/${imageId}${view ? `?view=${view}` : ""}`)) : undefined, [draft?.config, draft?.fixtures, shop.id]);
   const session: Session = { demo: false, user: { name: draft?.fixtures.customerName || tr("サンプルのお客様"), email: "sample@example.com", role: "customer", shopId: shop.id } };
   const scope: ReleaseScope = draft?.pending?.scope || (screen.startsWith("page:") ? { kind: "page", pageId: screen.slice(5) } : screen.startsWith("part:") ? { kind: "part", part: screen === "part:footer" ? "footer" : "header" } : { kind: "shared" });
   let releaseConfig = draft?.config;
