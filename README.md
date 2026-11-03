@@ -22,6 +22,7 @@ A booking and shop management system for small independent businesses and salons
 
 ### 1. Ask AI the Same Way You Ask a Person
 - **Set up by conversation:** Describe your business type and desired features by text or voice; AI asks follow-up questions and proposes the screens your shop needs.
+- **Fill settings from notes or URLs:** Use **Set up with AI** in shop, service, staff, hours, and booking-rule settings. Review the suggested values, apply them to the form, then save.
 - **Circle on screen with a pen:** Draw a circle around any part of a preview screen and ask by text or voice to adjust text, layout, or styling—just like pointing at a screen with a designer.
 - **Consult by voice or chat:** Ask the shop assistant questions like "What is our current refund policy?" or discuss rule changes via live voice (Gemini Live) or chat to prepare a change request.
 - **Request photos and blog posts in plain words:** Ask AI to generate custom images for services and pages, or draft blog posts and announcements.

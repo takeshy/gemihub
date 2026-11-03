@@ -1,5 +1,6 @@
 import { googleCallbackPath } from "../shared/brand.ts";
 import { shopExport, exportRows, exportCsv, exportColumns, type ExportTable } from "./data-export.ts";
+import { proposeSettings, settingsChanges, type SettingsProposal } from "./settings-ai.ts";
 import { renderLanding } from "./landing.ts";
 import { renderLegal } from "./legal.ts";
 import { hasLegacyNotes } from "./legacy-notes.ts";
@@ -214,6 +215,7 @@ export function createApp(
     articleMetadata?: typeof generateArticleMetadata;
     assistant?: typeof converse;
     initialTheme?: typeof createInitialTheme;
+    settings?: typeof proposeSettings;
   } = { propose, proposeArticle, identifyVisual, explainSystem },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
@@ -1101,6 +1103,35 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        const settingsAi = action.match(/^live-settings\/(basic|menus|staff|hours|rules)\/ai$/);
+        if (settingsAi && method === "POST") {
+          assertOwner(user, shop);
+          const section = settingsAi[1] as LiveSection;
+          const input = z.object({ note: z.string().trim().min(1).max(12000), value: z.unknown(), requestId: z.uuid() }).parse(await body(req, 250000));
+          const id = digest(`${shop.id}:${user!.email}:${section}:${input.requestId}`);
+          return await store.locked(`settings-ai:${id}`, async () => {
+            const hash = digest(JSON.stringify({ section, note: input.note, value: input.value }));
+            const cached = await store.get<{ hash: string; proposal: SettingsProposal; expires: number }>("settingsAiProposal", id);
+            if (cached) {
+              if (cached.hash !== hash) fail(409, tr("依頼の内容が変わっています。設定案を作り直してください。"));
+              if (cached.expires > Date.now()) return json(res, cached.proposal);
+            }
+            const current = await store.locked(shop.id, async () => {
+              const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+              assertOwner(user, fresh);
+              if (!fresh.published) fail(409, tr("先にお店の共通設定を反映してください"));
+              return updateLiveValue(await effective(fresh), section, input.value);
+            });
+            // Network/model calls do not hold the booking/configuration lock.
+            const proposed = await (intelligence.settings || proposeSettings)(section, current, input.note);
+            const config = updateLiveValue(current, section, proposed.value);
+            if (section === "basic" && (["region", "notificationEmail", "map"] as const).some(key => !same(current[key], config[key]))) fail(400, tr("設定案を作成できませんでした。メモの内容を具体的にして、もう一度お試しください。"));
+            if (section === "rules" && !same(current.rules.payment, config.rules.payment)) fail(400, tr("設定案を作成できませんでした。メモの内容を具体的にして、もう一度お試しください。"));
+            const proposal = { ...proposed, value: liveValue(config, section), changes: settingsChanges(current, config, section) };
+            await store.put("settingsAiProposal", id, { shopId: shop.id, hash, proposal, expires: Date.now() + 3600000 });
+            return json(res, proposal);
+          });
+        }
         if (action === "assistant" && method === "POST") {
           // Questions about this shop, answered from spec.md, history.md and the system OKF bundle.
           if (!shop.published) fail(409, tr("お店を公開してから質問してください"));

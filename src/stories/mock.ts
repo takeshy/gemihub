@@ -12,7 +12,7 @@ import { exampleTheme } from "./themes";
 import { findRelevantHistory } from "../../server/chat-context";
 import type { ShopChat, ShopChatMessage } from "../../server/shop-chat";
 import { customerProfileSchema, type MemberProfile } from "../../server/customer-profile";
-import { updateLiveValue, type LiveSection } from "../../server/live-settings";
+import { liveValue, updateLiveValue, type LiveSection } from "../../server/live-settings";
 import { fingerprint } from "../editor-sync";
 import { imageUses } from "../../server/image-references";
 import type { LibraryImage } from "../../server/image-library-domain";
@@ -553,6 +553,18 @@ export function createMockClient(scenario: Scenario): ApiClient {
         }
         result = current().find(customer => customer.email === email);
       }
+    }
+    else if (action.startsWith(`/api/shops/${shop.id}/live-settings/`) && action.endsWith("/ai")) {
+      const section = action.split("/").at(-2) as LiveSection;
+      const before = updateLiveValue(shop.published || config, section, input.value), next = structuredClone(before);
+      let label = "", old = "", proposed = "";
+      if (section === "basic") { label = tr("店名"); old = before.name; next.name = String(input.note).match(/(?:店名|Shop name)[:：]\s*([^\n]+)/i)?.[1] || "Moon Atelier"; proposed = next.name; }
+      else if (section === "menus") { label = next.menus[0].name; old = String(next.menus[0].price); next.menus[0].price = regionOf(next).country === "US" ? 65 : 6500; proposed = String(next.menus[0].price); }
+      else if (section === "hours") { label = tr("開店"); old = before.hours.start; next.hours.start = "09:00"; proposed = next.hours.start; }
+      else if (section === "rules") { label = tr("何日先まで予約できるか"); old = String(before.rules.advanceDays); next.rules.advanceDays = 45; proposed = "45"; }
+      else { label = next.staff[0].name; old = next.staff[0].start; next.staff[0].start = "09:00"; proposed = "09:00"; }
+      const reference = String(input.note).match(/https?:\/\/[^\s]+/)?.[0];
+      result = { value: liveValue(next, section), changes: old === proposed ? [] : [{ label, before: old, after: proposed }], warnings: [], sources: reference ? [{ url: reference, title: tr("参考ページ（サンプル）") }] : [] };
     }
     else if (action.startsWith(`/api/shops/${shop.id}/live-settings/`)) {
       const section = action.split("/").at(-1) as LiveSection;

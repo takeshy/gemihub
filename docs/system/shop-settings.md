@@ -49,6 +49,14 @@ A new shop is first published provisionally: only the owner who created it can v
 
 # How changes happen
 
+In Shop information, Services and prices, Staff and shifts, Opening hours, and Booking rules, **Set up with AI** accepts notes and up to three public HTTP/HTTPS reference URLs. The server reads the HTML or text of those pages and suggests values for the selected section. Review the current and suggested values, warnings, and source links; choose **Apply to form**, then the screen's existing **Save** action. Creating or applying a suggestion does not save or publish it. Suggestions include valid unsaved form edits, preserve facts that were not supplied, and never delete unmentioned existing items. New services need both a duration and price and are added inactive; assign staff before enabling them.
+
+Notification email, maps, region, currency, time zone, payments, and refund policies remain manual. URL fetching does not execute scripts or load subresources; it rejects private/local DNS and redirect destinations and bounds page count, time, and size. If a page cannot be read, paste the relevant text as notes. An AI server connection is required; manual entry remains available.
+
+The owner-only `POST /api/shops/:id/live-settings/:section/ai` accepts `note`, the selected section's current form `value`, and a UUID `requestId`. It returns `value`, readable `changes`, `warnings`, and fetched `sources`. Identical requests reuse the stored suggestion for one hour, including generated IDs; changing the payload for that ID is rejected. Reading pages and generating suggestions do not hold the shop's booking lock. Saving still uses the existing optimistic previous-value check.
+
+For conversation-based changes:
+
 1. The owner describes a change in words (chat or voice) or edits a settings screen.
 2. gemihub writes a change plan showing exactly which settings change. Nothing is applied yet.
 3. The owner approves the plan on screen. Voice agreement alone is never approval.

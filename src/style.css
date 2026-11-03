@@ -1837,6 +1837,18 @@ pre {
 .shop-export label { display: grid; gap: 8px; }
 .shop-export select { width: 100%; }
 .shop-export > .button { justify-self: start; max-width: 100%; }
+.settings-ai { display: grid; gap: 12px; padding: 18px; margin: 16px 0; border: 1px solid var(--line); border-radius: 12px; background: #f7f9f3; }
+.settings-ai > p, .settings-ai h3, .settings-ai h4 { margin: 0; }
+.settings-ai label { display: grid; gap: 8px; }
+.settings-ai textarea { width: 100%; resize: vertical; }
+.settings-ai-review { display: grid; gap: 12px; }
+.settings-ai-review dl { display: grid; gap: 12px; margin: 0; }
+.settings-ai-change { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: white; overflow-wrap: anywhere; }
+.settings-ai-change dt { grid-column: 1 / -1; font-weight: 600; }
+.settings-ai-change dd { margin: 0; white-space: pre-wrap; font-size: 13px; }
+.settings-ai-change dd > span { display: block; margin-bottom: 4px; font-size: 11px; color: #667565; }
+.settings-ai-warnings, .settings-ai-sources ul { margin: 0; padding-left: 20px; font-size: 13px; overflow-wrap: anywhere; }
+.settings-ai-review > button { justify-self: start; }
 @media (max-width: 900px) { .data-spec-grid { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .data-flow { grid-template-columns: 1fr; } .data-flow li + li::before { content: '↓'; left: 50%; top: -18px; } .data-sheet-list > div { flex-wrap: wrap; } }
 .shop-history ol { list-style: none; max-height: 380px; overflow: auto; padding: 0 0 0 10px; }

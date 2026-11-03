@@ -187,7 +187,7 @@ export class Store {
     });
   }
   async cleanup() {
-    for (const kind of ["session", "oauth", "ticket", "visual", "imageGenerationData"]) {
+    for (const kind of ["session", "oauth", "ticket", "visual", "imageGenerationData", "settingsAiProposal"]) {
       const entries = this.memory
         ? [...this.values.values()].filter((e) => e.kind === kind)
         : (

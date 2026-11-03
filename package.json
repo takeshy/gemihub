@@ -27,6 +27,7 @@
     "check:storybook": "node scripts/check-storybook.mjs",
     "check:articles": "node scripts/check-article-authoring.mjs",
     "check:staff-images": "node scripts/check-staff-images.mjs",
+    "check:settings-ai": "node --import tsx scripts/check-settings-ai.mjs",
     "check:inquiries": "node scripts/check-inquiries.mjs",
     "check:images": "node scripts/check-image-library.mjs",
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs",
