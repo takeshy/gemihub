@@ -35,7 +35,7 @@ export function Inquiries({
       <p>
         {tr("お客様のお名前やお問い合わせを開くと、お客様の詳細画面で返信・対応状況の変更ができます。")}</p>
       <div className="inquiry-filters">
-        <label>
+        <label className="inquiry-search-filter">
           {tr("お問い合わせを検索")}<input
             type="search"
             value={query}
@@ -43,7 +43,7 @@ export function Inquiries({
             placeholder={tr("氏名・メール・お問い合わせ・返信内容")}
           />
         </label>
-        <label>
+        <label className="inquiry-reply-filter">
           {tr("返信状況")}<select
             aria-label={tr("返信状況")}
             value={reply}

@@ -2230,8 +2230,23 @@ pre {
 
 .basic-settings { display: grid; gap: 20px; }
 
-.inquiry-filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 16px; margin: 24px 0; }
+.inquiries-list { container-type: inline-size; container-name: inquiries; }
+.inquiry-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0; align-items: start; }
 .inquiry-filters label, .customer-inquiry form label { display: grid; gap: 8px; font-size: 13px; min-width: 0; }
+.inquiry-search-filter, .inquiry-reply-filter { grid-column: 1 / -1; }
+.inquiry-filters input, .inquiry-filters select { width: 100%; min-width: 0; }
+.inquiry-filters > label > input, .inquiry-filters > label > select, .inquiry-filters .date-input-controls { height: 46px; }
+@container inquiries (min-width: 560px) {
+  .inquiry-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .inquiry-reply-filter { grid-column: auto; }
+}
+@container inquiries (min-width: 960px) {
+  .inquiry-filters { grid-template-columns: minmax(320px, 2fr) minmax(120px, 1fr) repeat(2, minmax(190px, 1fr)); }
+  .inquiry-search-filter { grid-column: auto; }
+}
+@container inquiries (max-width: 399px) {
+  .inquiry-filters { grid-template-columns: minmax(0, 1fr); }
+}
 .inquiry-completed-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .inquiry-completed-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--green); }
 .inquiry-list-items { display: grid; gap: 14px; }
@@ -2260,9 +2275,8 @@ pre {
 .customer-inquiry textarea { width: 100%; margin-top: 8px; }
 .customer-inquiry form { margin-top: 24px; }
 .customer-inquiry .customer-reply { margin: 24px 0; }
-@media(max-width: 850px) { .inquiry-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media(max-width: 500px) {
-  .inquiry-filters, .customer-basic-info { grid-template-columns: minmax(0,1fr); }
+  .customer-basic-info { grid-template-columns: minmax(0,1fr); }
   .customer-inquiry, .inquiry-list-item { padding: 16px; }
   .inquiry-open { width: 100%; margin-left: 0; }
 }
