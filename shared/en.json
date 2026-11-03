@@ -2384,5 +2384,10 @@
   "初回テーマ・赤ペン修正・お知らせと紹介ページ": "Initial theme, red-pen revisions, announcements and introduction pages",
   "ブログやお知らせをページに載せられます。": "Publish blog posts and announcements.",
   "ブログをページに載せられます。": "Publish blog posts.",
-  "お知らせをページに載せられます。": "Publish announcements."
+  "お知らせをページに載せられます。": "Publish announcements.",
+  "アクセスに Google マップを表示する": "Show a Google Map in the access section",
+  "地図で示す場所（空欄なら住所）": "Place shown on the map (address if blank)",
+  "{0}の地図": "Map of {0}",
+  "Google マップで開く": "Open in Google Maps",
+  "地図": "Map"
 }

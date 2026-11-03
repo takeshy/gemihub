@@ -19,6 +19,8 @@ export const shopSchema = z
       articles: z.object({ blogs: z.boolean(), announcements: z.boolean() }).optional(),
     }).optional(),
     notificationEmail: z.email(),
+    /** An embedded Google Map in the access section; `query` (place or address) defaults to the address. */
+    map: z.object({ enabled: z.boolean(), query: z.string().max(300) }).optional(),
     /** Country and time zone; absent means Japan. Decides currency, booking times and dates. */
     region: regionSchema.optional(),
     header: headerSchema.default(() => ({ ...defaultHeader })),
@@ -245,6 +247,6 @@ export function planSummary(before: ShopConfig | null, next: ShopConfig) {
     .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(next[k]))
     .map(
       (k) =>
-        tr("{0}を更新", { name: tr("店名"), industry: tr("業種"), description: tr("お店の紹介"), address: tr("アクセス"), appearance: tr("ページの色・画像・配置"), notificationEmail: tr("通知先"), region: tr("国・タイムゾーン"), pages: tr("追加ページ"), header: tr("共通ヘッダー"), footer: tr("共通フッター"), menus: tr("メニュー"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[k]),
+        tr("{0}を更新", { name: tr("店名"), industry: tr("業種"), description: tr("お店の紹介"), address: tr("アクセス"), appearance: tr("ページの色・画像・配置"), notificationEmail: tr("通知先"), map: tr("地図"), region: tr("国・タイムゾーン"), pages: tr("追加ページ"), header: tr("共通ヘッダー"), footer: tr("共通フッター"), menus: tr("メニュー"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[k]),
     );
 }

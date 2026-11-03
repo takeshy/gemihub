@@ -13,6 +13,7 @@ What the settings in `spec.md` mean and how changes are requested, approved, pub
 `spec.md` contains the shop's current settings as JSON:
 
 - `name`, `industry`, `description`, `address`: shop information shown to customers.
+- `map`: `enabled` shows a Google Map in the access section of "About the shop"; `query` is the place shown, and when blank the `address` is used. Absent or disabled means no map.
 - `region`: `country` (`JP` or `US`) and `timeZone`. The country sets JPY or USD; the time zone sets local business dates and times. Missing region means JP / Asia/Tokyo for existing shops.
 - `notificationEmail`: where the shop receives booking and inquiry emails.
 - `menus[]`: `id`, `name`, `duration` (minutes), `price` (major currency units: whole yen for JP, dollars with up to two decimals for US), `active`, optional image.

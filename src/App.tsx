@@ -37,6 +37,7 @@ import { ImageLibrary } from "./ImageLibrary";
 import { articleKinds } from "../shared/article-features";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
+import { GoogleMap } from "./GoogleMap";
 import { paid, createDisplay, useShopDisplay, ShopRegionContext } from "./money";
 import { currencyOf, regionOf, dateIn, usTimeZones, type Region, type Currency } from "../shared/region";
 export type Plan = {
@@ -642,6 +643,13 @@ export function ConfigEditor({
           onChange={(e) => put("address", e.target.value)}
         />
       </Field>
+      <label className="check-field">
+        <input type="checkbox" checked={!!c.map?.enabled} onChange={(e) => put("map", { enabled: e.target.checked, query: c.map?.query || "" })} />
+        {tr("アクセスに Google マップを表示する")}
+      </label>
+      {c.map?.enabled && <Field label={tr("地図で示す場所（空欄なら住所）")}>
+        <input value={c.map.query} maxLength={300} placeholder={c.address} onChange={(e) => put("map", { enabled: true, query: e.target.value })} />
+      </Field>}
       <Field label={tr("通知メールの宛先")}>
         <input
           type="email"
@@ -1561,6 +1569,7 @@ export function PublicShop({
               <div className="public-staff-list">{c.staff.map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>
               <h3>{tr("アクセス")}</h3>
               <p>{c.address}</p>
+              <GoogleMap config={c} />
               <h3>{tr("営業時間")}</h3>
               <p>
                 {c.hours.start} – {c.hours.end} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・")}
