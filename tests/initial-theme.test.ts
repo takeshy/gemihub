@@ -14,6 +14,33 @@ import { initialInterviewFacts, openingQuestions, logoQuestion, logoUploadQuesti
 export const theme = { headerHtml: '<header class="brand"><slot name="title"></slot><slot name="navigation"></slot></header>', bodyHtml: '<main class="canvas"><slot name="content"></slot></main>', footerHtml: '<footer class="credits"><slot name="content"></slot></footer>', css: ':root { color:#f5eee9; background:#241432 } .brand { padding:clamp(16px,4vw,64px); } h1 { font-family:serif; font-size:clamp(36px,8vw,100px); } .canvas { max-width:72rem; margin:auto; padding:24px; } .public-nav { display:flex; flex-wrap:wrap; gap:12px; } .credits { padding:24px; } @media(max-width:600px){ .canvas { padding:12px } }' };
 const photo = (id: string) => ({ id: id.repeat(64), name: `${id}.png`, mimeType: "image/png", data: "aGVsbG8=" });
 
+test("generation and review see the actual shop text and enabled navigation slot contents", async () => {
+  const config = structuredClone(sample);
+  config.header.title = "A long shop name with room for all navigation";
+  config.pages = [{ id: "services", slug: "services", title: "Services", navigationLabel: "Staff and services", body: "", layout: "standard", imageUrl: "" }];
+  config.appearance = { accent: "sage", layout: "standard", imageUrl: "", articles: { blogs: false, announcements: true } };
+  const calls: ("review" | undefined)[] = [];
+  await createInitialTheme({ config, request: "An airy salon theme", images: [] }, {}, async call => {
+    calls.push(call.purpose);
+    const input = JSON.parse(call.contents[0].parts![0].text!);
+    const example = input.layoutContext.headerSlotExample;
+    assert.match(example, /A long shop name with room for all navigation/);
+    assert.match(example, /data-design-slot="navigation"/);
+    assert.match(example, /class="public-nav"/);
+    assert.match(example, /Staff and services/);
+    assert.match(example, /お知らせ/);
+    assert.doesNotMatch(example, />ブログ</);
+    assert.match(call.system, /spans.*buttons.*anchors/);
+    assert.match(call.system, /narrow preview/);
+    if (call.purpose) {
+      assert.match(input.renderedHeader, /height:auto/);
+      return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
+    }
+    return JSON.stringify(theme);
+  });
+  assert.deepEqual(calls, [undefined, "review"]);
+});
+
 test("theme HTML is free to change structure while CSS, slots and unsafe content remain contained", () => {
   assert.ok(themeSchema.safeParse(theme).success);
   assert.ok(themeSchema.safeParse({ ...theme, headerHtml: theme.headerHtml.replace('<header class="brand">', '<header class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="3"></circle></svg>') }).success);

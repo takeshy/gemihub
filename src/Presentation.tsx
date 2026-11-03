@@ -1,7 +1,7 @@
 import React from "react";
 import { tr } from "../shared/i18n";
 import type { DefaultTreeAdapterTypes as Html } from "parse5";
-import { compilePresentation, presentationStyle, presentationUrl, type Presentation as Design } from "../shared/presentation";
+import { compilePresentation, presentationBaseCss, presentationStyle, presentationUrl, type Presentation as Design } from "../shared/presentation";
 import { MenuImage } from "./MenuImage";
 
 const attributes = new Set("id class title role lang dir width height alt href src target loading decoding viewbox d x y x1 x2 y1 y2 cx cy r rx ry points fill fill-rule fill-opacity stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-opacity opacity transform offset stop-color stop-opacity gradientunits gradienttransform preserveaspectratio clip-path mask colspan rowspan scope datetime open".split(" "));
@@ -31,6 +31,6 @@ export function Presentation({ design, slots, fallback, imageBase, imageSuffix, 
     return React.createElement(node.tagName, props, ["img", "br", "hr", "col"].includes(node.tagName) ? undefined : node.childNodes.map(render));
   };
   return <div className={`design-boundary ${compiled.id}`} style={{ contain: "layout paint", isolation: "isolate" }}>
-    {compiled.css && <style>{compiled.css}</style>}<div className="design-root">{compiled.nodes.map(render)}</div>
+    <style>{presentationBaseCss + "\n" + compiled.css}</style><div className="design-root">{compiled.nodes.map(render)}</div>
   </div>;
 }

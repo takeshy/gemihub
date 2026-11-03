@@ -7,6 +7,13 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { tr } from "./i18n.ts";
 
 export type Presentation = { html: string; css: string };
+// Scoped theme CSS does not stop the application's global element rules from
+// entering a design. Restore structural defaults before applying generated CSS.
+// Keep specificity below generated rules, including plain header/footer rules.
+export const presentationBaseCss = `.design-root :where(header, footer) { display:block; height:auto; align-items:normal; justify-content:normal; gap:normal; padding:0; border:0; background:transparent; color:inherit; font:inherit; }
+.design-root :where(main) { min-height:0; }
+.design-root :where([data-design-slot], .public-nav) { min-width:0; }
+.design-root :where(.public-nav) { flex-wrap:wrap; }`;
 export const presentationTags = new Set("a abbr article aside b blockquote br caption circle clipPath code col colgroup dd defs details div dl dt ellipse em figcaption figure footer g h1 h2 h3 h4 h5 h6 header hr i img li line linearGradient main mark nav ol p path polygon polyline pre radialGradient rect s section slot small span stop strong sub summary sup svg table tbody td text th thead time tr u ul".split(" ").map(t => t.toLowerCase()));
 const atRules = new Set(["media", "supports", "container", "layer", "keyframes", "-webkit-keyframes"]);
 type Compiled = { nodes: Html.ChildNode[]; css: string; id: string; slots: string[]; imageIds: string[]; animations: Map<string, string> };
