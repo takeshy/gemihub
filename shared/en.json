@@ -2450,5 +2450,10 @@
   "修正する箇所を確認し、「この箇所を修正する」を押すと左の画面が更新されます。チャットは開いたままで、続けて修正を頼めます。初回テーマは「送信」だけで更新します。この段階では本番には反映されません。": "Confirm the target and choose Change this area to update the screen on the left. The chat stays open for follow-up requests. During initial theme setup, Send updates the preview directly. These edits are not published yet.",
   "画面の見た目や文章は修正チャットで依頼できます。料金・勤務・営業時間・予約ルールはそれぞれの管理メニューで保存してください。": "Use the editing chat for design and text changes. Save prices, shifts, opening hours and booking rules in their respective settings menus.",
   "初回テーマ・右側の修正チャット": "Initial theme with editing chat on the right",
-  "画面を見ながら赤ペンとチャットで修正": "Edit the screen with the red pen and chat"
+  "画面を見ながら赤ペンとチャットで修正": "Edit the screen with the red pen and chat",
+  "修正履歴": "Edit history",
+  "前の状態に戻る": "Go back to the previous version",
+  "次の状態に進む": "Go forward to the next version",
+  "進む": "Forward",
+  "「戻る」「進む」で修正前後の画面を切り替え、見比べられます。表示中の状態で修正を続けたり、反映したりできます。公開・再読み込み・別の画面への移動後は新しい履歴になります。": "Use Back and Forward to compare versions before and after edits. Continue editing or publish the version currently displayed. Publishing, reloading, or switching screens starts a new history."
 }

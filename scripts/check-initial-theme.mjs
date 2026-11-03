@@ -17,7 +17,7 @@ const withLogo=(theme,id)=>({...theme,headerHtml:theme.headerHtml.replace('<head
 const server=createApp(store,{...intelligence,initialTheme:async(input,context)=>{
   let attempt=0;
   return createInitialTheme(input,context,async call=>{
-    if(!call.purpose){attempt++;return JSON.stringify({...withLogo(exampleTheme,input.images[0].id),css:exampleTheme.css+' .theme-heading h1 {letter-spacing:.08em}'});}
+    if(!call.purpose){attempt++;return JSON.stringify({...withLogo(exampleTheme,input.images[0].id),css:exampleTheme.css+` .theme-heading h1 {letter-spacing:${input.request.includes('calmer')?'.02em':'.08em'}}`});}
     reviews++;return JSON.stringify({approved:attempt>1,issues:attempt>1?[]:['Make the heading spacing match the correction.'],imageUsage:input.images.map(image=>({id:image.id,purpose:'asset'}))});
   });
 }});
@@ -40,6 +40,8 @@ try{
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`${origin}/?lang=${language}`);
     const preview=page.locator('.theme-preview');await expect(preview.locator('.theme-masthead')).toBeVisible();
+    const originalSpacing=await preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing);
+    const themeRequests=[];page.on('request',request=>{if(request.method()==='POST'&&/\/plans\/[^/]+\/theme$/.test(request.url()))themeRequests.push(request.url());});
     await expect(preview.locator('.theme-image img')).toBeVisible();
     assert.equal(await preview.locator('.public-nav').count(),1);
     const labels=await preview.locator('.public-nav > *').allTextContents();assert.equal(labels.length,new Set(labels).size);
@@ -65,12 +67,26 @@ try{
     assert.equal(next.themeReview.approved,true);assert.equal(next.themeReview.attempts,2);assert.notEqual(next.id,plan.id);
     for(const key of ['menus','staff','rules','hours','region'])assert.deepEqual(next.config[key],config[key]);
     assert.equal(workspace.shops[0].published,null);
+    const back=page.getByRole('button',{name:language==='ja'?'前の状態に戻る':'Go back to the previous version',exact:true}),forward=page.getByRole('button',{name:language==='ja'?'次の状態に進む':'Go forward to the next version',exact:true});
+    const firstSpacing=await preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing);
+    const callsBeforeHistory=themeRequests.length;await back.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(originalSpacing);
+    await forward.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(firstSpacing);assert.equal(themeRequests.length,callsBeforeHistory);
+
     await expect(chat).toBeVisible();await expect(preview).toBeVisible();
     await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please also make the footer more spacious.');
     await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).press('Control+Enter');
     await expect(chat.locator('.chat-message-user')).toHaveCount(2);await expect(chat.locator('.chat-message-assistant')).toHaveCount(2);
     const latest=await context.request.get(origin+'/api/workspace').then(r=>r.json());assert.notEqual(latest.shops[0].plans.at(-1).id,next.id,'the same chat revises the replacement plan');
 
+    await back.click();await back.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(originalSpacing);
+    await forward.click();await forward.click();await back.click();
+    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please use a calmer heading.');
+    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).press('Control+Enter');
+    await expect(chat.locator('.chat-message-assistant')).toHaveCount(3);await expect(forward).toBeDisabled();
+    assert.ok(themeRequests.at(-1).includes(`/plans/${next.id}/theme`),'a new correction uses the selected earlier plan');
+    const branchSpacing=await preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing);assert.notEqual(branchSpacing,firstSpacing);
+    await back.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(firstSpacing);
+    await forward.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(branchSpacing);
     await page.screenshot({path:`tmp/initial-theme/side-chat-updated-${language}-${width}.png`,fullPage:true});
     await page.reload();await expect(preview.locator('.theme-heading h1')).toBeVisible();await expect(preview.locator('.theme-image img')).toBeVisible();
     assert.match(await preview.locator('.theme-heading h1').getAttribute('style')||'',/^$/);
@@ -79,7 +95,7 @@ try{
     assert.deepEqual(errors,[]);await context.close();
     console.log(`${language} ${width}px: custom HTML/CSS, scoped styles, news-only navigation, red-pen capture, review/repair loop and saved revision passed.`);
   }
-  assert.equal(reviews,16);
+  assert.equal(reviews,24);
   const english=JSON.parse(await readFile('shared/en.json','utf8'));
   for(const language of ['ja','en']){
     const label=text=>language==='en'?(english[text]||text):text;

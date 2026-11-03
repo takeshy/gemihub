@@ -206,3 +206,7 @@ After the first theme sample, use Make changes and red-pen instructions. A revie
 The first-theme and regular red-pen editors keep the picture on the left and the editing conversation on the right (below on phones). The original preview is hidden while the annotation capture is shown. Replies and target confirmations stay in the chat; applying a revision retains the conversation. Initial themes update on Send; regular changes require target confirmation and remain unpublished until the existing publication action.
 
 Read feature numbers from the actual question, including prefixed or reordered choices. Do not enable unselected blog/news features. Recover selections for existing initial plans using their own interview turn, without changing legacy published shops. A spreadsheet allocated for an image upload is empty storage, not an existing shop configuration: initialize it during first publication, while preserving external-edit checks for published shops.
+
+## Comparing editing versions
+
+Back and Forward switch between editing versions for both the first theme and regular screen edits. Navigation does not call AI or publish anything; controls remain available when the chat is closed. Further edits and publication use the displayed version. Editing an older version drops its former forward history, and initial-theme branches update the saved conversation link. History belongs to the current editing session and resets on publication, reload, screen changes, or baseline updates. Navigation is disabled while an operation is running.

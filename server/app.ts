@@ -1213,7 +1213,7 @@ export function createApp(
             await store.put("plan", id, plan);
             if (chat && original.chat) {
               const reply = chat.messages.find(m => m.role === "assistant" && m.requestId === original.chat!.requestId);
-              if (reply?.detail.planId === original.id) await store.put("shopChatMessage", reply.id, { ...reply, detail: { ...reply.detail, planId: id } });
+              if (reply) await store.put("shopChatMessage", reply.id, { ...reply, detail: { ...reply.detail, planId: id } });
             }
             return json(res, { plan });
           }

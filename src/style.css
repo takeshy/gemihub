@@ -2379,3 +2379,8 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .visual-chat-log .chat-message > b { display: block; margin-bottom: 4px; font-size: 11px; color: #51674d; }
 .visual-chat-open .local-preview-screen .public-nav { flex-wrap: wrap; }
 .visual-chat-open .local-preview-screen .public-nav > * { flex-shrink: 0; white-space: nowrap; }
+.visual-edit-history { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+.visual-edit-history button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 7px 9px; white-space: nowrap; }
+.visual-edit-history > span { min-width: 30px; text-align: center; white-space: nowrap; }
+.visual-chat-view { justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.editor-tools > span:has(.visual-edit-history) { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
