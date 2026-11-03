@@ -30,6 +30,12 @@ try{
   const remove=staff.getByRole('button',{name:label('このスタッフを削除'),exact:true});await expect(remove).toBeEnabled();await remove.click();await expect(staff.locator('.staff-editor')).toHaveCount(0);
   await staff.getByRole('button',{name:label('保存'),exact:true}).click();await expect.poll(async()=>(await store.shop(shop.id)).published.staff.length).toBe(0);
   await expect(page.locator('.staff-accounts')).toHaveCount(0);await expect(page.locator('.staff-calendar')).toHaveCount(0);assert.equal((await store.shop(shop.id)).published.ownerBooking,true);
+  const owner=staff.locator('.owner-editor');await owner.getByLabel(label('店主の名前'),{exact:true}).fill('Owner Morita');
+  await owner.getByRole('button',{name:label('画像をアップロード'),exact:true}).click();
+  await owner.locator('input[type=file]').setInputFiles({name:'owner.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64')});
+  await expect(owner.locator('img')).toBeVisible();await staff.getByRole('button',{name:label('保存'),exact:true}).click();
+  await expect.poll(async()=>(await store.shop(shop.id)).published.staff.map(person=>({id:person.id,name:person.name}))).toEqual([{id:ownerStaffId,name:'Owner Morita'}]);
+  await expect(page.locator('.staff-accounts,.staff-calendar')).toHaveCount(0);await page.reload();await expect(page.getByLabel(label('店主の名前'),{exact:true})).toHaveValue('Owner Morita');await expect(page.locator('.owner-editor img')).toBeVisible();
   await page.screenshot({path:`tmp/owner-booking/staff-${language}-${width}.png`,fullPage:true});
   await page.goto(`${origin}/?shop=${shop.id}&tab=basic&lang=${language}`);
   const hours=page.locator('.live-settings-hours');await expect(hours.getByLabel(label('開店'),{exact:true})).toBeVisible();
@@ -46,7 +52,8 @@ try{
   await expect(page.locator('.salon-details').first()).toContainText(`${label('{0}曜',label('火'))} 09:00 – 21:00`);
   assert.equal(calendarRequests.length,0,'owners have no calendar status panel or extra status request');assert.deepEqual(errors,[]);
   await page.screenshot({path:`tmp/owner-booking/reservation-${language}-${width}.png`,fullPage:true});
-  await context.close();console.log(`${language} ${width}px: last staff deletion, owner-only booking, hidden owner Calendar panel, weekday hours save/reload and public display passed.`);
+  await page.goto(`${origin}/s/${shop.slug}?pane=about&lang=${language}`);await expect(page.locator('.public-staff-list')).toContainText('Owner Morita');await expect(page.locator('.public-staff-list img')).toBeVisible();await page.screenshot({path:`tmp/owner-booking/profile-${language}-${width}.png`,fullPage:true});
+  await context.close();console.log(`${language} ${width}px: last staff deletion, owner name/photo save and reload, public profile, owner-only booking, hidden owner Calendar panel and weekday hours passed.`);
  }
 }catch(error){if(active&&!active.isClosed())await active.screenshot({path:'tmp/owner-booking/failure.png',fullPage:true}).catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>server.close(resolve));await store.close();}

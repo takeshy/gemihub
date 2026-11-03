@@ -24,9 +24,10 @@ import { Manual } from "./Manual";
 import { MenuImage, MenuImageEditor } from "./MenuImage";
 import { Customers } from "./Customers";
 import { createRequestId } from "./request-id";
+import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
 import React, { useEffect, useState, useRef } from "react";
 import { useApi } from "./api";
-import { bookingStaff, bookingStaffName, bookingMenuName, menuSelection, hoursText, type ShopConfig, type Booking } from "../server/domain";
+import { bookingStaff, bookingStaffName, bookingMenuName, menuSelection, hoursText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 import { LegacyNotes } from "./LegacyNotes";
@@ -616,6 +617,10 @@ export function ConfigEditor({
 }) {
   const put = <K extends keyof ShopConfig>(k: K, v: ShopConfig[K]) =>
     set({ ...c, [k]: v });
+  const owner = bookingStaff(c).find(staff => staff.id === ownerStaffId);
+  const putOwner = (value: Pick<ShopConfig["staff"][number], "name" | "imageId">) => {
+    if (owner) set({ ...c, ownerBooking: true, staff: [...c.staff.filter(staff => staff.id !== ownerStaffId), { ...owner, ...value }] });
+  };
   return (
     <div className="editor">
       {(!section || section === "profile" || section === "basic") && <>
@@ -774,8 +779,14 @@ export function ConfigEditor({
       </>}
       {(!section || section === "staff") && <>
       <h3>{tr("スタッフと勤務")}</h3>
-      <p>{tr("スタッフを登録しない場合は、店主が営業時間内のすべてのメニューを担当します。店主のカレンダーはログイン時に自動で連携します。")}</p>
-      {c.staff.map((p, i) => (
+      <p>{tr("店主の情報と、追加スタッフの勤務を設定します。店主だけで営業する場合は、追加スタッフの登録は不要です。")}</p>
+      {owner && <section className="owner-editor panel" aria-label={tr("店主の情報")}>
+        <h3>{tr("店主の情報")}</h3>
+        <Field label={tr("店主の名前")}><input value={owner.name} maxLength={100} onChange={event => putOwner({ name: event.target.value, imageId: owner.imageId })}/></Field>
+        {shopId && <MenuImageEditor shopId={shopId} imageId={owner.imageId} name={owner.name} label={tr("店主の写真（任意）")} uploading={onImageUploading} change={imageId => putOwner({ name: owner.name, imageId })}/>}
+        <p className="small muted">{tr("店主は営業時間内のすべてのメニューを担当します。カレンダーはGoogleログイン時の認可を使うため、追加設定は不要です。")}</p>
+      </section>}
+      {c.staff.map((p, i) => p.id === ownerStaffId ? null : (
         <div className="staff-editor" key={p.id}>
           {shopId && <MenuImageEditor shopId={shopId} imageId={p.imageId} name={p.name} label={tr("スタッフ写真（任意）")} uploading={onImageUploading} change={imageId => put("staff", c.staff.map((staff,j) => j===i ? {...staff,imageId} : staff))}/>}
           <Field label={tr("名前")}>
@@ -1484,8 +1495,8 @@ export function PublicShop({
                     ))}
                 </div>
                 {!!allowedOptions.length && <fieldset className="booking-options"><legend>{tr("追加メニュー（任意）")}</legend><p className="small muted">{tr("選んだ追加メニューの料金と所要時間を合算して空き時間を確認します。同じグループは1つまで選べます。")}</p>{allowedOptions.map(option => <label className="booking-option" key={option.id}><input type="checkbox" checked={optionIds.includes(option.id)} disabled={busy} onChange={event => setOptionIds(current => event.target.checked ? [...current.filter(id => !option.optionGroup || c.menus.find(menu => menu.id === id)?.optionGroup !== option.optionGroup), option.id] : current.filter(id => id !== option.id))}/><MenuImage imageId={option.imageId} imageBase={`${base}/images`} name={option.name} className="booking-option-image"/><span><b>{option.name}</b><small>{yen(option.price)} · {option.duration}{tr("分")}</small></span></label>)}</fieldset>}
-                <h3>{c.staff.length ? tr("02 スタッフと日時") : tr("02 日時")}</h3>
-                {!!c.staff.length && <Field label={tr("スタッフ")}>
+                <h3>{c.staff.some(person => person.id !== ownerStaffId) ? tr("02 スタッフと日時") : tr("02 日時")}</h3>
+                {c.staff.some(person => person.id !== ownerStaffId) && <Field label={tr("スタッフ")}>
                   <select
                     value={staff}
                     onChange={(e) => setStaff(e.target.value)}
@@ -1605,7 +1616,7 @@ export function PublicShop({
                 <hr />
                 <p>{selected ? when(selected) : tr("日時をお選びください")}</p>
                 <p className="small muted">
-                  {!staff
+                  {!c.staff.some(person => person.id !== ownerStaffId) ? bookingStaffName(c, ownerStaffId) : !staff
                     ? tr("スタッフの指名なし")
                     : bookingStaffName(c, staff)}
                 </p>

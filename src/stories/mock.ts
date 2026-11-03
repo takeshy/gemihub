@@ -36,6 +36,8 @@ import type { Plan, Session, Workspace } from "../App";
 import {
   sample,
   slots,
+  bookingStaff,
+  ownerStaffId,
   menuSelection,
   documents,
   planSummary,
@@ -428,8 +430,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
     loginUrl: shop.isOwner ? "/auth/google" : `/staff-login/${shop.id}`,
   };
   let ownerCalendarConsent = scenario !== "calendar-disconnected";
-  if (scenario === "owner-only") { config.staff = []; config.ownerBooking = true; shop.published = config; }
-  const staffLogins = config.staff.map(staff => ({ staffId: staff.id, name: staff.name, email: staff.id === "aoi" ? scenario === "owner-only" ? "" : shop.owner : "haru@example.com", accepted: staff.id === "aoi", connected: staff.id === "aoi" && calendarConnection.connected }));
+  if (scenario === "owner-only") { config.staff = []; config.ownerBooking = true; config.staff = bookingStaff(config); shop.published = config; }
+  const staffLogins = config.staff.filter(staff => staff.id !== ownerStaffId).map(staff => ({ staffId: staff.id, name: staff.name, email: staff.id === "aoi" ? shop.owner : "haru@example.com", accepted: staff.id === "aoi", connected: staff.id === "aoi" && calendarConnection.connected }));
   let visualConfig = structuredClone(config);
   const extraData = { id: "100", title: tr("店販の記録"), headers: [tr("商品"), tr("個数"), tr("金額"), tr("確認済み")], rows: [{ row: 2, values: [tr("ヘアオイル"), 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };
   let chats: ShopChat[] = [];

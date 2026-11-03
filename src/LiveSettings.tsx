@@ -29,17 +29,31 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
     setConfig(data.config); setSource(data.config);
   }
   useEffect(() => {
+    let cancelled = false;
+    let cached: Pending | undefined;
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
-        const cached = pendingSchema.parse(JSON.parse(raw));
-        setPending(cached); setConfig(cached.config); setNotice(tr("保存が完了していません。「保存」を押してください。")); return;
+        cached = pendingSchema.parse(JSON.parse(raw));
+        setPending(cached); setConfig(cached.config); setNotice(tr("保存が完了していません。「保存」で再試行するか、保存待ちを取り消して本番の設定に戻せます。"));
       }
-      void load().catch(e => setError(e.message));
     } catch {
       localStorage.removeItem(key);
-      void load().catch(e => setError(e.message));
     }
+    // Always read saved settings, even when an interrupted save exists in this browser.
+    // A matching result means the save succeeded but its response was lost.
+    void api<{ config: ShopConfig }>(`/api/shops/${shop.id}/live-settings/${section}`).then(data => {
+      if (cancelled) return;
+      setSource(data.config);
+      if (!cached || JSON.stringify(liveValue(cached.config, section)) === JSON.stringify(liveValue(data.config, section))) {
+        setConfig(data.config); setPending(undefined);
+        if (cached) {
+          localStorage.removeItem(key);
+          setNotice(tr("保存済みの設定を確認しました。"));
+        }
+      }
+    }).catch(e => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
   }, [key]);
   return <div className={`panel live-settings live-settings-${section}`}>
     <div className="section-top"><h2>{heading}</h2><button type="button" aria-expanded={aiOpen} disabled={busy || imageUploading || !!pending || !config || !source} onClick={() => { setAiOpen(!aiOpen); setProposal(undefined); }}>{tr("AIで設定")}</button></div>
@@ -97,6 +111,17 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
         } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
       }}>{tr("保存")}</button>
+      {pending && <button type="button" disabled={busy || imageUploading} onClick={async () => {
+        setBusy(true); setError("");
+        try {
+          // The server rejects this read while a publication needs to finish. Never
+          // abandon its retry state or unlock editing until the saved state is known.
+          await load();
+          localStorage.removeItem(key); setPending(undefined); setProposal(undefined); setAiOpen(false);
+          await reload(); setNotice(tr("保存待ちの変更を取り消し、本番の設定を読み込みました。"));
+        } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+        finally { setBusy(false); }
+      }}>{tr("保存待ちを取り消して本番の設定に戻す")}</button>}
     </div>
   </div>;
 }

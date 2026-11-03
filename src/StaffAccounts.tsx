@@ -4,6 +4,7 @@ import { createRequestId } from "./request-id";
 import React, { useEffect, useState } from "react";
 import { useApi } from "./api";
 import type { Workspace } from "./App";
+import { ownerStaffId } from "../server/domain";
 type StaffRow = {
   staffId: string;
   name: string;
@@ -21,10 +22,10 @@ export function StaffAccounts({ shop, onSaved }: { shop: Workspace; onSaved?: ()
     setData(result);
   };
   useEffect(() => {
-    if (shop.published?.staff.length) void load().catch((error) => setError(error.message));
+    if (shop.published?.staff.some(staff => staff.id !== ownerStaffId)) void load().catch((error) => setError(error.message));
     else setData(undefined);
   }, [shop]);
-  if (!shop.published?.staff.length) return null;
+  if (!shop.published?.staff.some(staff => staff.id !== ownerStaffId)) return null;
   return (
     <section
       className="panel staff-accounts"

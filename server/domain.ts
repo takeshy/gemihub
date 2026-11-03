@@ -115,7 +115,8 @@ export const ownerStaffId = "owner";
 /** With no additional staff, the owner handles all menus during shop hours. */
 export function bookingStaff(config: Pick<ShopConfig, "staff" | "menus" | "hours" | "ownerBooking">): ShopConfig["staff"] {
   if (config.staff.length && !config.ownerBooking) return config.staff;
-  const owner = { id: ownerStaffId, name: tr("店主"), menuIds: config.menus.map(menu => menu.id), weekdays: [0, 1, 2, 3, 4, 5, 6], start: config.hours.start, end: config.hours.end };
+  const profile = config.staff.find(staff => staff.id === ownerStaffId);
+  const owner = { id: ownerStaffId, name: profile?.name ?? tr("店主"), ...(profile?.imageId ? { imageId: profile.imageId } : {}), menuIds: config.menus.map(menu => menu.id), weekdays: [0, 1, 2, 3, 4, 5, 6], start: config.hours.start, end: config.hours.end };
   return [...config.staff.filter(staff => staff.id !== ownerStaffId), owner];
 }
 export const bookingStaffName = (config: ShopConfig | null | undefined, id: string) => config?.staff.find(staff => staff.id === id)?.name || (id === ownerStaffId ? tr("店主") : id);

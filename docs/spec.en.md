@@ -14,6 +14,10 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 ## Initial setup, private preview, and public publication
 
+- When restoring a pending settings save from browser storage, always fetch the saved settings. Automatically recover a completed save when the selected section already matches. Otherwise preserve its request ID for retry and offer to discard pending changes after fetching the latest saved configuration, without writing shop data. Keep retry state if the read fails or publication is unfinished.
+
+- In owner-enabled shops, Staff and shifts includes Owner information for the owner's name and photo. Save updates customer-facing screens. Retain the profile under staff ID `owner` without adding a second booking resource or an additional staff login; opening hours and all services still determine owner availability, and Calendar access uses consent granted during owner sign-in.
+
 - Describe what to change returns to the private conversation that produced the proposal, including after reopening the review. Preserve conversation history and in-session drafts, focus the composer, and stay on the review for retry if restoration fails. Do not restart setup or create a replacement conversation when a saved reference exists.
 
 - Before the first private publication, show only Build your shop with AI. Hide the management sidebar, shop name, sample storefront, and screen editor, and do not fetch editor data. Return to creation on subsequent logins and direct management links until a private preview has been published. Then reveal settings and editing. Show booking management and Customers only after public publication. Data management remains disabled after public publication.

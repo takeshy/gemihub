@@ -8,6 +8,8 @@ updated: "2026-11-03"
 
 Customer records, inquiries, staff accounts and Calendar connection, and email notifications.
 
+Settings saves retain their request ID and submitted settings in browser storage when a response is lost. Always read the saved settings when restoring this state: if that section already matches, clear the completed retry automatically. Otherwise retain the pending inputs, and offer “Discard pending changes and load saved settings.” This action reads the current server settings before clearing browser state and makes no configuration write. If the server is unavailable or publication is unfinished, keep the pending retry state. A cached staff row may therefore differ from the current shop; never treat it as proof that a removed staff member was restored on the server.
+
 # Customers
 
 Bookings and inquiries are grouped by email address. The shop sees visit counts, the last visit and totals, and can keep private notes with up to five attachments per note. Customers never see notes. Customer periods and inquiry date filters use midnight in the shop's time zone. Notification dates use that time zone; paid/refunded amounts use the payment's saved currency.

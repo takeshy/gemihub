@@ -49,6 +49,7 @@ import {
   bookingStaffName,
   menuSelection,
   bookingMenuName,
+  ownerStaffId,
   type ShopConfig,
   type Booking,
 } from "./domain.ts";
@@ -734,6 +735,7 @@ export function createApp(
             await assertOperator(user, shop);
             const config = await effective(shop);
             if (!config?.staff.some(s => s.id === pending.staffId)) fail(400, tr("担当者を選び直してください"));
+            if (pending.staffId === ownerStaffId && user.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
             const identity = await calendar.exchange(url.searchParams.get("code") || "", pending.verifier);
             if (identity.email !== pending.email) fail(403, tr("ログイン中と同じ Google アカウントを選択してください"));
             if ((await connections(store, shop)).some(c => c.staffId === pending.staffId && c.email !== user.email)) fail(409, tr("この担当者は別のメンバーが連携済みです"));
@@ -1418,7 +1420,7 @@ export function createApp(
             const config = await effective(fresh);
             const members = await store.records<StaffMember>("member", fresh);
             const linked = await connections(store, fresh);
-            return json(res, { configured: !!process.env.GOOGLE_CLIENT_ID, loginUrl: `/staff-login/${fresh.id}`, staff: (config?.staff || []).map(staff => {
+            return json(res, { configured: !!process.env.GOOGLE_CLIENT_ID, loginUrl: `/staff-login/${fresh.id}`, staff: (config?.staff || []).filter(staff => staff.id !== ownerStaffId).map(staff => {
               const account = accounts.find(account => account.staffId === staff.id);
               return { staffId: staff.id, name: staff.name, email: account?.email || "", accepted: account?.email === fresh.owner || members.some(member => member.email === account?.email && member.accepted), connected: linked.some(connection => connection.staffId === staff.id && connection.email === account?.email) };
             }) });
@@ -1428,7 +1430,7 @@ export function createApp(
             const input = z.object({ staffId: z.string().min(1), email: z.union([z.string().trim().pipe(emailSchema), z.literal("")]), previousEmail: z.string().default("") }).parse(await body(req));
             const config = await effective(fresh);
             if (!config?.staff.some(staff => staff.id === input.staffId)) fail(400, tr("担当スタッフを選択してください"));
-            if (input.email === fresh.owner && config.ownerBooking) fail(400, tr("店主の追加登録は不要です。ログイン時のカレンダーを自動で利用します。"));
+            if (input.staffId === ownerStaffId || input.email === fresh.owner && config.ownerBooking) fail(400, tr("店主の追加登録は不要です。ログイン時のカレンダーを自動で利用します。"));
             const accounts = await staffAccounts(store, fresh);
             const previous = accounts.find(account => account.staffId === input.staffId);
             if ((previous?.email || "") !== input.previousEmail) fail(409, tr("登録内容が更新されています。最新の内容を確認してください。"));
@@ -1477,6 +1479,7 @@ export function createApp(
             const { staffId } = z.object({ staffId: z.string().min(1) }).parse(await body(req));
             const config = await effective(fresh);
             if (!config?.staff.some(s => s.id === staffId)) fail(400, tr("予約の担当者を選択してください"));
+            if (staffId === ownerStaffId) fail(user!.email === fresh.owner ? 400 : 403, tr("店主の追加登録は不要です。ログイン時のカレンダーを自動で利用します。"));
             const assigned = (await staffAccounts(store, fresh)).find(account => account.email === user!.email);
             if (assigned && assigned.staffId !== staffId) fail(403, tr("登録されている担当スタッフで接続してください"));
             if ((await connections(store, fresh)).some(c => c.staffId === staffId && c.email !== user!.email)) fail(409, tr("この担当者は別のメンバーが連携済みです"));

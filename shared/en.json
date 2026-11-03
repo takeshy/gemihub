@@ -2552,5 +2552,15 @@
   "「営業時間・休業日」の「曜日ごとの営業時間」で、通常と異なる曜日だけ設定できます。通常19:00、火・金だけ21:00まで、のように変更し、「保存」で反映します。定休日・臨時休業日が優先されます。": "Under Opening hours and closures, use Opening hours by weekday for exceptions, such as 19:00 normally and 21:00 on Tuesdays and Fridays. Choose Save to apply. Regular and temporary closures take precedence.",
   "付替オフやケアを単独で予約させない場合は、「メニュー・料金」で「ほかのメニューに追加して予約する（単独予約不可）」を選び、追加できるメニューを指定します。同時に選ばせないものには同じ「選択グループ」を入力します。予約時は料金・所要時間を合算します。": "To offer removal or care only with another service, open Services and pricing and select Book as an add-on to another service. Choose eligible services and use the same selection group for mutually exclusive options. Booking combines their prices and durations.",
   "店主のGoogleカレンダーへの接続が必要です。店主にGoogleへの再ログインを依頼してください。": "The owner's Google Calendar needs to be connected. Ask the owner to sign in to Google again.",
+  "店主の情報": "Owner information",
+  "店主の名前": "Owner name",
+  "店主の写真（任意）": "Owner photo (optional)",
+  "店主の情報と、追加スタッフの勤務を設定します。店主だけで営業する場合は、追加スタッフの登録は不要です。": "Set up the owner's information and additional staff shifts. If the owner works alone, no additional staff registration is needed.",
+  "保存が完了していません。「保存」で再試行するか、保存待ちを取り消して本番の設定に戻せます。": "The save did not finish. Choose Save to retry, or discard the pending changes and return to the saved settings.",
+  "保存済みの設定を確認しました。": "The saved settings have been confirmed.",
+  "保存待ちの変更を取り消し、本番の設定を読み込みました。": "Discarded the pending changes and loaded the saved settings.",
+  "保存待ちを取り消して本番の設定に戻す": "Discard pending changes and load saved settings",
+  "店主は営業時間内のすべてのメニューを担当します。カレンダーはGoogleログイン時の認可を使うため、追加設定は不要です。": "The owner handles all services during opening hours. Calendar access uses the permission granted at Google sign-in, so no additional setup is needed.",
+  "「スタッフ・勤務」の「店主の情報」で、店主の名前と写真を登録できます。「保存」でお客様向け画面にも反映します。店主のカレンダーはGoogleログイン時の認可を使うため、追加設定は不要です。": "In Staff and shifts, use Owner information to enter the owner's name and photo. Save also updates the customer-facing screens. Calendar access uses the permission granted at Google sign-in, so no additional setup is needed.",
   "設定": "Settings"
 }

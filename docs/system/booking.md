@@ -33,6 +33,8 @@ Dates, weekdays, holidays, opening hours and staff shifts use the shop's `region
 
 `hours.weekdayHours` overrides the normal start/end for specific weekdays; regular closed days and holidays still take precedence. With no additional staff, the owner handles every service during those actual daily opening hours. New shops retain the owner's availability when additional staff are added later; legacy explicit staff schedules remain supported.
 
+In owner-enabled shops, Staff and shifts includes an Owner information card for the owner's name and photo. Saving it retains a `staff` row with the reserved ID `owner`; it is a profile for the existing owner booking resource, so it never adds a second booking resource or a staff login. Availability still follows shop opening hours and all services, while customer-facing names and photos use the saved profile. The owner's Google sign-in supplies Calendar consent; no separate staff-account or Calendar setup is required.
+
 A menu with `optionFor` is an add-on and cannot be booked alone. It lists the standalone menu IDs that accept it. Only one selected add-on per nonempty `optionGroup` is allowed. Availability covers the combined duration and requires a staff member qualified for the base service and every selected add-on. Prices are summed in integer currency units before conversion back to shop currency. Booking records retain `optionIds`, a frozen `items` list, the combined price, and the full start/end interval. PayPal consent, holds, capture, and refunds use that combined snapshot. Preview and offline exports follow the same rules.
 
 # Nominated and unassigned staff
