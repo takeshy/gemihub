@@ -2389,5 +2389,8 @@
   "地図で示す場所（空欄なら住所）": "Place shown on the map (address if blank)",
   "{0}の地図": "Map of {0}",
   "Google マップで開く": "Open in Google Maps",
-  "地図": "Map"
+  "地図": "Map",
+  "画面イメージを作成する": "Create screen preview",
+  "画面イメージを作成しています…": "Creating screen preview…",
+  "画面イメージを確認する": "View screen preview"
 }
