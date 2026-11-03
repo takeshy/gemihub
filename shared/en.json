@@ -2551,5 +2551,6 @@
   "料金や所要時間が変わりました。メニューと空き時間を確認し直してください。": "The price or duration has changed. Review the services and available times again.",
   "「営業時間・休業日」の「曜日ごとの営業時間」で、通常と異なる曜日だけ設定できます。通常19:00、火・金だけ21:00まで、のように変更し、「保存」で反映します。定休日・臨時休業日が優先されます。": "Under Opening hours and closures, use Opening hours by weekday for exceptions, such as 19:00 normally and 21:00 on Tuesdays and Fridays. Choose Save to apply. Regular and temporary closures take precedence.",
   "付替オフやケアを単独で予約させない場合は、「メニュー・料金」で「ほかのメニューに追加して予約する（単独予約不可）」を選び、追加できるメニューを指定します。同時に選ばせないものには同じ「選択グループ」を入力します。予約時は料金・所要時間を合算します。": "To offer removal or care only with another service, open Services and pricing and select Book as an add-on to another service. Choose eligible services and use the same selection group for mutually exclusive options. Booking combines their prices and durations.",
-  "店主のGoogleカレンダーへの接続が必要です。店主にGoogleへの再ログインを依頼してください。": "The owner's Google Calendar needs to be connected. Ask the owner to sign in to Google again."
+  "店主のGoogleカレンダーへの接続が必要です。店主にGoogleへの再ログインを依頼してください。": "The owner's Google Calendar needs to be connected. Ask the owner to sign in to Google again.",
+  "設定": "Settings"
 }

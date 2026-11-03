@@ -407,17 +407,23 @@ function Dashboard({
           {[
             ["build", "✧", tr("AIとお店をつくる")],
             ["assistant", "✳", tr("相談・質問")],
+            ["configuration", "⚙", tr("設定")],
             ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
             ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")]] : []),
-            ...(shop?.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")]] : []),
             ["inquiries", "✉", tr("お問い合わせ")],
             ...(articleKinds(shop.published).length ? [["blog", "✎", articleKinds(shop.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
             ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
-            ...(shop?.isOwner ? [["images", "▧", tr("画像管理")]] : []),
-            ["settings", "⚙", tr("公開の設定")],
             ["manual", "?", tr("使い方")],
           ].map(([id, icon, label]) => (
-            <React.Fragment key={id}><button
+            id === "configuration" ? <details className="sidebar-settings" key={id} open>
+              <summary><span aria-hidden="true">{icon}</span>{label}</summary>
+              <div className="sidebar-settings-items" role="group" aria-label={label}>
+                {[
+                  ...(shop.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")], ["images", "▧", tr("画像管理")]] : []),
+                  ["settings", "⚙", tr("公開の設定")],
+                ].map(([setting, settingIcon, settingLabel]) => <button key={setting} className={view === setting ? "active" : ""} onClick={() => setTab(setting)}><span aria-hidden="true">{settingIcon}</span>{settingLabel}</button>)}
+              </div>
+            </details> : <React.Fragment key={id}><button
               className={view === id ? "active" : ""}
               onClick={() => setTab(id)}
             >

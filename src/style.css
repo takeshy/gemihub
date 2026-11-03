@@ -352,6 +352,17 @@ aside nav button > span {
 aside .active {
   font-weight: 600;
 }
+.sidebar-settings summary { padding: 13px 14px; font-size: 12px; color: var(--green); cursor: pointer; }
+.sidebar-settings summary > span { margin-right: 11px; color: #86927c; }
+.sidebar-settings-items { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 12px 12px; padding: 8px; border-left: 1px solid var(--line); }
+.dashboard aside nav .sidebar-settings-items button { width: 100%; padding: 8px 6px; font-size: 11px; }
+.dashboard aside nav .sidebar-settings-items button > span { font-size: 14px; }
+@media (max-width: 760px) {
+  .sidebar-settings { flex: 0 0 100%; min-width: 0; }
+  .sidebar-settings summary { padding: 10px; font-size: 10px; }
+  .sidebar-settings-items { flex-direction: row; flex-wrap: wrap; margin: 0 8px 8px; }
+  .dashboard aside nav .sidebar-settings-items button { width: auto; }
+}
 .sidebar-bottom {
   margin-top: auto;
   padding: 60px 14px 5px;
