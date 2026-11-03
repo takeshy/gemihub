@@ -79,3 +79,5 @@ export const PageConflict: Story = {
   loaders: [async () => { const { seedEditor } = await import("./sync-fixtures"); seedEditor("conflict"); return {}; }],
 };
 export const AIPageBuilder: Story = { name: "相談・修正・新ページ作成を選ぶ", args: { scenario: "page-builder" } };
+export const ProposalFailure: Story = { name: "変更案の作成失敗・チャットから再試行", args: { scenario: "proposal-failure" } };
+export const QuestionFailure: Story = { name: "メッセージ送信失敗・下書きを復元", args: { scenario: "question-failure" } };

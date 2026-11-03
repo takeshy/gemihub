@@ -19,6 +19,7 @@
     "capture:manual": "node scripts/capture-manual.mjs",
     "check:multimodal": "node scripts/check-multimodal.mjs",
     "check:chat": "node scripts/check-chat.mjs",
+    "check:chat-failures": "node scripts/check-chat-failures.mjs",
     "check:storybook": "node scripts/check-storybook.mjs",
     "check:articles": "node scripts/check-article-authoring.mjs",
     "check:staff-images": "node scripts/check-staff-images.mjs",

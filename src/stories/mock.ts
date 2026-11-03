@@ -67,6 +67,8 @@ export type Scenario =
   | "editor-remote"
   | "editor-conflict"
   | "page-builder"
+  | "proposal-failure"
+  | "question-failure"
   | "local-editor-pages"
   | "custom-page"
   | "manage-basic"
@@ -185,6 +187,7 @@ export function scenarioProps(scenario: Scenario) {
   };
 }
 export function createMockClient(scenario: Scenario): ApiClient {
+  let pendingChatFailure = scenario === "proposal-failure" || scenario === "question-failure";
   let customerProfile: MemberProfile | null = scenario === "registration" ? null : { name: tr("山田 花子"), birthDate: "1990-01-01", gender: "female" };
   const posts = scenario === "empty-blog" ? [] : storyPosts();
   const config = structuredClone(sample);
@@ -619,6 +622,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action === `/api/shops/${shop.id}/system`) {
       result = {diagram: shopSystem(shop.published || config), svg: systemSvg(shop.published || config), overview: systemSvg(shop.published || config, false), revision: shop.revision};
     } else if (action === `/api/shops/${shop.id}/system/question`) {
+      if (scenario === "question-failure" && pendingChatFailure) { pendingChatFailure = false; throw new Error(tr("操作できませんでした")); }
       const chatReference=input.chat as {id:string;requestId:string}|undefined;
       const existing=chatReference?chats.find(chat=>chat.id===chatReference.id)?.messages.find(message=>message.requestId===chatReference.requestId&&message.role==="assistant"):undefined;
       if(existing)return structuredClone({answer:existing.text,...existing.detail,chat:chatData(chatReference!.id)}) as T;
@@ -646,6 +650,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         result = { id: "story-visual", explanation: tr("ページの変更対象を確認してください。"), candidates: [{ id: `page:${page.id}:title`, label: tr("ページ見出し：{0}", page.title) }, { id: `page:${page.id}:body`, label: tr("ページ本文：{0}", page.title) }] };
       } else result = {id: "story-visual", explanation: tr("Storybook のサンプルでは、店名か紹介文を候補として表示します。"), candidates: [{id: "name", label: tr("店名：{0}", config.name)}, {id: "description", label: tr("紹介文：{0}", config.description)}]};
     } else if (action === `/api/shops/${shop.id}/plan`) {
+      if (scenario === "proposal-failure" && pendingChatFailure) { pendingChatFailure = false; throw new Error(tr("操作できませんでした")); }
       const reference=input.chat as {id:string;requestId:string}|undefined;
       const previousReply=reference?chats.find(chat=>chat.id===reference.id)?.messages.find(message=>message.requestId===reference.requestId&&message.role==="assistant"):undefined;
       if(previousReply?.detail.planId){const previous=shop.plans.find(plan=>plan.id===previousReply.detail.planId);if(previous)return structuredClone(previous) as T;}

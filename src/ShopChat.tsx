@@ -69,13 +69,15 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
     const optimistic:ShopChatMessage={id:`pending-${requestId}`,shopId,conversationId:saved.id,email:saved.email,role:"user",text:value,requestId,sequence:saved.messages.length+1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),detail:{imageIds}};
     acceptChat({...saved,messages:[...saved.messages.filter(message=>message.requestId!==requestId),optimistic]});
     setText("");
+    let reply:{answer:string;changeRequest:boolean;ready?:boolean;chat:SavedChat};
     try {
-      const reply=await api<{answer:string;changeRequest:boolean;ready?:boolean;chat:SavedChat}>(`${prefix}/system/question`,{question:value,intent,imageIds,...context,chat:{id:saved.id,requestId}});
-      if(!alive.current)return;
-      acceptChat({...reply.chat,plans:current.current?.plans});
-      if(intent!=="consult"&&reply.changeRequest&&reply.ready!==false&&isOwner)await createPlan(value,{id:saved.id,requestId},reply.chat);
-      pending.current=undefined;
-    } catch(error) {setText(value);await reload(saved.id).catch(()=>{});throw error;}
+      reply=await api(`${prefix}/system/question`,{question:value,intent,imageIds,...context,chat:{id:saved.id,requestId}});
+    } catch(error) {if(alive.current)setText(value);await reload(saved.id).catch(()=>{});throw error;}
+    if(!alive.current)return;
+    // The message is saved. A later proposal failure must not restore it as a draft.
+    pending.current=undefined;
+    acceptChat({...reply.chat,plans:current.current?.plans});
+    if(intent!=="consult"&&reply.changeRequest&&reply.ready!==false&&isOwner)await createPlan(value,{id:saved.id,requestId},reply.chat);
   }
   function start(next:RequestIntent) {dictationStop.current?.();current.current=undefined;setChat(undefined);setIntent(next);setViewPlan(undefined);setPlans([]);setText("");setImageIds([]);setError("");pending.current=undefined;creationId.current=createRequestId();}
   const description=!published?tr("「はじめる」を押して、AIの質問に答えながらお店のページをつくります。"):intent==="consult"?tr("質問や使い方について相談できます。お店の設定は変更しません。"):intent==="modify"?tr("直したいことや追加したいページを伝えてください。AIと話しながら内容をまとめられます。"):tr("作りたいページを教えてください。本文とメニュー名を、AIと話しながら決められます。");
