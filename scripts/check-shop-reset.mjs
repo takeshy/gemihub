@@ -20,6 +20,7 @@ try{
     const shop=await store.createShop(`${language}-${width}@example.com`);
     shop.published=structuredClone(sample);await store.saveShop(shop);
     const user={email:shop.owner,name:'Recording owner',role:'owner',shopId:shop.id,refreshToken:'preserved-google-token'};
+    process.env.ADMIN_EMAILS=language==='ja'?user.email:'';
     await store.put('user',user.email,user);
     const sessionId=randomUUID();await store.put('session',digest(sessionId),{user,expires:Date.now()+3600000});
     const context=await browser.newContext({viewport:{width,height:900},locale:language==='ja'?'ja-JP':'en-US'});
@@ -28,6 +29,19 @@ try{
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`${origin}/?lang=${language}`);
     const reset=page.getByRole('button',{name:language==='ja'?'自分のお店を初期化':'Reset my shop',exact:true});
+    const admin=page.getByRole('link',{name:language==='ja'?'運営管理':'Admin',exact:true});
+    const toggle='Control+Shift+L';
+    await page.locator('.app-header').waitFor();
+    assert.equal(await reset.count(),0);assert.equal(await admin.count(),0);
+    await page.keyboard.press('Control+Shift+Alt+L');assert.equal(await reset.count(),0);
+    await page.keyboard.press(toggle);await reset.waitFor();assert.equal(await admin.count(),language==='ja'?1:0);
+    await page.evaluate(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'L',code:'KeyL',ctrlKey:true,shiftKey:true,repeat:true})));
+    assert.equal(await reset.isVisible(),true,'holding the shortcut does not toggle repeatedly');
+    await page.keyboard.press(toggle);assert.equal(await reset.count(),0);assert.equal(await admin.count(),0);
+    await page.keyboard.press(toggle);await reset.waitFor();
+    await page.reload();await page.locator('.app-header').waitFor();
+    assert.equal(await reset.count(),0);assert.equal(await admin.count(),0,'visibility is never persisted');
+    await page.keyboard.press(toggle);
     await reset.waitFor();
     const keys={own:`gemihub:local-preview:${shop.owner}:${shop.id}`,other:'gemihub:local-preview:other:keep',language:'recording-preference'};
     await page.evaluate(keys=>{for(const key of Object.values(keys))localStorage.setItem(key,'keep');},keys);
@@ -50,6 +64,7 @@ try{
     await page.route('**/api/shop-reset',async route=>{arrived();await held;await route.continue();},{times:1});
     await confirm.click();await reached;
     assert.equal(await cancel.isDisabled(),true);await page.keyboard.press('Escape');assert.equal(await dialog.isVisible(),true);
+    await page.keyboard.press(toggle);assert.equal(await reset.count(),0);assert.equal(await dialog.isVisible(),true,'hiding the header controls keeps a pending reset alive');
     release();
     await page.getByRole('button',{name:language==='ja'?'はじめる':'Get started',exact:true}).waitFor();
     const session=await context.request.get(origin+'/api/session').then(r=>r.json());
@@ -60,7 +75,9 @@ try{
     assert.deepEqual(workspace.shops.map(s=>s.id),[fresh.id]);assert.deepEqual(workspace.shops[0].plans,[]);
     assert.equal((await context.request.get(origin+`/api/public/${shop.slug}`)).status(),404);
     assert.deepEqual(await page.evaluate(keys=>Object.fromEntries(Object.entries(keys).map(([label,key])=>[label,localStorage.getItem(key)])),keys),{own:null,other:'keep',language:'keep'});
-    await reset.waitFor();await page.screenshot({path:`tmp/shop-reset/after-${language}-${width}.png`,fullPage:true});
+    assert.equal(await reset.count(),0);assert.equal(await admin.count(),0);
+    await page.screenshot({path:`tmp/shop-reset/after-${language}-${width}.png`,fullPage:true});
+    await page.keyboard.press(toggle);await reset.waitFor();
     // A second take can be restarted from the initial creation screen too.
     await reset.click();await confirm.click();
     await page.waitForFunction(id=>document.querySelector('dialog')?.open===false,fresh.id);
@@ -68,7 +85,7 @@ try{
     const again=await context.request.get(origin+'/api/session').then(r=>r.json());assert.notEqual(again.user.shopId,fresh.id);
     assert.equal((await store.get('user',user.email)).refreshToken,user.refreshToken);
     assert.deepEqual(errors,[]);await context.close();
-    console.log(`${language} ${width}px: cancellation, retry, pending controls, Google authorization, isolated draft cleanup and two recording takes passed in production mode.`);
+    console.log(`${language} ${width}px: controls hidden by default/reload, shortcut toggle, repeat guard, permissions, pending reset, Google authorization and two recording takes passed.`);
   }
 }catch(error){if(activePage&&!activePage.isClosed())await activePage.screenshot({path:'tmp/shop-reset/failure.png',fullPage:true}).catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>server.close(resolve));await store.close();}

@@ -248,7 +248,6 @@ try {
       .locator("aside nav")
       .getByRole("button", { name: /AIとお店をつくる$/ })
       .click();
-    await page.getByRole("button", { name: "修正", exact: true }).click();
     await page.getByRole("button", { name: "はじめる", exact: true }).click();
     await page.getByRole("button", { name: "画像を添付", exact: true }).click();
     dialog = page.getByRole("dialog", {

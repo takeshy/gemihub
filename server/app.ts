@@ -35,7 +35,7 @@ import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot, 
 import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
 import { generateImage } from "./image-generation.ts";
 import { managedImageIds } from "./image-references.ts";
-import { generateImageSchema, requestImageIdsSchema } from "./image-library-domain.ts";
+import { generateImageSchema, requestImageIdsSchema, requestImageCountLimit, requestImageTotalLimit } from "./image-library-domain.ts";
 import { readRequestImages, validateProposedImages, validatePageImage } from "./request-images.ts";
 import { addCustomerNote, touchCustomer } from "./customer-notes.ts";
 import {
@@ -115,6 +115,23 @@ import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
 import { renderCustomPage } from "./page-renderer.tsx";
 import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
 import { calendarGateway, calendarScope, connections, availableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
+/**
+ * Images attached anywhere in a conversation plus the current ones, newest first within the request limits.
+ * Earlier images that were since removed (or would exceed the size limit) are skipped; current ones stay strict.
+ */
+async function conversationImageIds(store: Store, shop: Shop, chat: { messages: { role: string; detail: { imageIds?: string[] } }[] } | undefined, current: string[]) {
+  const earlier = (chat?.messages.filter(message => message.role === "user").flatMap(message => message.detail.imageIds || []) || []).filter(id => !current.includes(id));
+  const kept: string[] = [];
+  let total = 0;
+  for (const id of current) total += (await store.get<ImageUpload>("menuImageUpload", id))?.size || 0;
+  for (const id of [...new Set(earlier)].reverse()) {
+    if (kept.length + current.length >= requestImageCountLimit) break;
+    const record = await store.get<ImageUpload>("menuImageUpload", id);
+    if (!record?.complete || record.archived || record.shopId !== shop.id || total + record.size > requestImageTotalLimit) continue;
+    kept.unshift(id); total += record.size;
+  }
+  return [...kept, ...current];
+}
 function fail(status: number, message: string): never {
   throw Object.assign(new Error(message), { status });
 }
@@ -1427,8 +1444,10 @@ export function createApp(
               fail(409, tr("お店の仕様が変わりました。現在の仕様を更新してください"));
             const config = fresh.published ? await effective(fresh) : fresh.draft || {...structuredClone(sample),notificationEmail:user!.email};
             if (input.hash && input.hash !== contentHash(config)) fail(409, tr("お店の仕様が変わりました。現在の仕様を更新してください"));
-            if (input.imageIds.length) assertOwner(user, fresh);
-            const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
+            // Images attached earlier in this conversation stay visible to the AI, not only this message's.
+            const imageIds = await conversationImageIds(store, fresh, savedChat, input.imageIds);
+            if (imageIds.length) assertOwner(user, fresh);
+            const images = await readRequestImages(store, fresh, imageIds, crmFiles, store.memory || !imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
             const excluded = new Set(savedChat?.messages.slice(-25).map(message=>message.id) || []);
             const relatedHistory = await searchConversationHistory(store,fresh,user!.email,input.question,excluded);
             const response = await intelligence.explainSystem(input.intent ? `${requestIntentInstruction[input.intent]}\n${input.question}` : input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: savedChat ? conversationContext({...savedChat,messages:savedChat.messages.filter(message => message.requestId !== input.chat!.requestId)}) : input.messages, history: fresh.history, initialSetup:!fresh.published, relatedHistory, searchHistory:query=>searchConversationHistory(store,fresh,user!.email,query,excluded), ...(images.length ? { images } : {}) });
@@ -1695,7 +1714,9 @@ export function createApp(
               if (JSON.stringify(current) !== JSON.stringify(visual.source))
                 fail(409, tr("設定が変わりました。画面を開き直してください"));
             }
-            const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
+            // A plan from a conversation uses every image attached in it, such as a sample page photo.
+            const planImageIds = visual ? input.imageIds : await conversationImageIds(store, fresh, savedChat, input.imageIds);
+            const images = await readRequestImages(store, fresh, planImageIds, crmFiles, store.memory || !planImageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
             const relatedHistory = input.intent ? await searchConversationHistory(store,fresh,user!.email,input.text,new Set(savedChat?.messages.slice(-24).map(message=>message.id) || [])) : [];
             const historicalContext = relatedHistory.length ? tr("参照用の過去の会話です。今回の変更依頼でも、反映済みという意味でもありません。現在の設定を優先してください。\n{0}\n今回の会話と依頼:\n", JSON.stringify(relatedHistory)) : "";
             const proposed = input.config

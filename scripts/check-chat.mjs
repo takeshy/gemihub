@@ -124,7 +124,8 @@ try{
     await voiceToggle.click();await dictate([["ほかにはありません。以上。",true]]);
     await page.getByRole("heading",{name:"下記の画面でいいですか？",exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.__recognitions.every(rec=>!rec.active)),true);
-    assert.equal(await page.locator('.screen-gallery figure').count(),8);
+    assert.equal(await page.locator('.screen-name-list li').count(),8);
+    assert.equal(await page.locator('.theme-preview .site-header').count(),1);
     assert.deepEqual(errors,[]);
     await context.close();
     console.log(`${width}px: continuous text chat, clarification, automatic private history retrieval without session controls, reviewed page proposal, editable dictation, end-keyword sending and recognition cleanup passed (fixtures).`);

@@ -33,6 +33,7 @@ import "./style.css";
 import { LegacyNotes } from "./LegacyNotes";
 import { JudgeStart, JudgeMenu, JudgeBar, AccessPassword } from "./JudgeAccess";
 import { ShopReset } from "./ShopReset";
+import { ImageLibrary } from "./ImageLibrary";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
 import { paid, createDisplay, useShopDisplay, ShopRegionContext } from "./money";
@@ -86,9 +87,20 @@ export function App({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [showOperatorControls, setShowOperatorControls] = useState(false);
   const refresh = () => api<Session>("/api/session").then(setSession);
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
+    const toggleOperatorControls = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && !event.isComposing && (event.code === "KeyL" || event.key.toLowerCase() === "l")) {
+        event.preventDefault();
+        if (!event.repeat) setShowOperatorControls(value => !value);
+      }
+    };
+    window.addEventListener("keydown", toggleOperatorControls);
+    return () => window.removeEventListener("keydown", toggleOperatorControls);
   }, []);
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -127,8 +139,8 @@ export function App({
           </span>
           {session.user?.role === "owner" && session.user.legacyNotes && <a className="text-button" href="/settings/migration">{tr("旧環境からの引き継ぎ")}</a>}
           {session.user?.judge && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
-          {session.user?.admin && <a className="text-button" href="/admin">{tr("運営管理")}</a>}
-          {session.user?.role === "owner" && session.user.shopId && !session.user.judge && !session.user.legacyNotes && !session.user.accessPending && <ShopReset shopId={session.user.shopId} navigate={navigate} />}
+          {showOperatorControls && session.user?.admin && <a className="text-button" href="/admin">{tr("運営管理")}</a>}
+          {session.user?.role === "owner" && session.user.shopId && !session.user.judge && !session.user.legacyNotes && !session.user.accessPending && <ShopReset shopId={session.user.shopId} navigate={navigate} showButton={showOperatorControls} />}
           {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
           {!isPublic && (
             <a className="text-button" href="/manual">
@@ -347,7 +359,7 @@ function Dashboard({
   const shop = shops.find((s) => s.id === chosen) || shops[0];
   const creating = !!shop?.isOwner && !shop.published;
   const view = creating ? "build" : tab;
-  useEffect(() => { if (shop && !shop.isOwner && ["try", "data"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
+  useEffect(() => { if (shop && !shop.isOwner && ["try", "data", "images"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
   const activePlan =
     plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
       ? plan
@@ -398,7 +410,7 @@ function Dashboard({
             ["inquiries", "✉", tr("お問い合わせ")],
             ["blog", "✎", tr("ブログ・お知らせ")],
             ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
-            ...(shop?.isOwner ? [["data", "▤", tr("データ管理")]] : []),
+            ...(shop?.isOwner ? [["images", "▧", tr("画像管理")], ["data", "▤", tr("データ管理")]] : []),
             ["settings", "⚙", tr("公開の設定")],
             ["manual", "?", tr("使い方")],
           ].map(([id, icon, label]) => (
@@ -496,6 +508,7 @@ function Dashboard({
                 )}
                 {!creating && <div hidden={view!=="inquiries"}><Inquiries shopId={shop.id} inquiries={shop.inquiries}/></div>}
                 {view === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} showMenus={openDataMenu} />}
+                {view === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {view === "settings" && (
                   <Settings shop={shop} run={run} reload={load} hasLegacyNotes={!!session.user?.legacyNotes} />
                 )}

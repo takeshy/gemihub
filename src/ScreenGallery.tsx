@@ -50,17 +50,23 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
   </div>;
 }
 
+/**
+ * The first-publication review: the screens that will be prepared, by name only, and a sample of
+ * the theme (header, footer, colours and layout) with placeholder content instead of screen captures.
+ */
 export function ScreenGallery({ config, shopId }: { config: ShopConfig; shopId: string }) {
-  return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}><h4>{tr("用意する画面")}</h4><p className="small muted">{tr("サムネイルは仮の内容で表示しています。スタッフや料金などは、仮公開後に各メニューで設定できます。")}</p>
-    <p className="small muted">{tr("各画面はヘッダー・フッターを除いた内容を表示します。共通部分は下に分けて表示しています。")}</p>
-    <div className="screen-gallery-grid screen-gallery-pages">{previewScreens(config).map(screen => <figure key={screen.id}>
-      <div className="screen-thumbnail" inert aria-hidden="true"><div className="screen-thumbnail-content"><PreviewSurface config={config} shopId={shopId} screen={screen} hideHeader hideFooter /></div></div>
-      <figcaption><strong>{screen.name}</strong><span>{screen.description}</span></figcaption>
-    </figure>)}</div>
-    <h4>{tr("共通パーツ")}</h4>
-    <div className="screen-gallery-grid screen-gallery-parts">{(["header", "footer"] as const).map(part => <figure key={part} data-part={part}>
-      <div className="screen-thumbnail" inert aria-hidden="true"><div className="screen-thumbnail-content"><ChromePreview config={config} part={part} imageBase={`/api/shops/${shopId}/images`} /></div></div>
-      <figcaption><strong>{part === "header" ? tr("ヘッダー") : tr("フッター")}</strong></figcaption>
-    </figure>)}</div>
+  const accent = config.appearance?.accent || "sage";
+  const layout = config.appearance?.layout || "standard";
+  return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}>
+    <h4>{tr("用意する画面")}</h4>
+    <ul className="screen-name-list">{previewScreens(config).map(screen => <li key={screen.id}><strong>{screen.name}</strong><span>{screen.description}</span></li>)}</ul>
+    <p className="small muted">{tr("全画面に共通のヘッダー・フッターが付きます。")}</p>
+    <h4>{tr("ページの雰囲気")}</h4>
+    <p className="small muted">{tr("色・配置・ヘッダー・フッターの見本です。中身は仮の表示です。")}</p>
+    <div className="theme-preview" inert aria-hidden="true">
+      <ChromePreview config={config} part="header" imageBase={`/api/shops/${shopId}/images`} />
+      <div className={`public-shop accent-${accent} layout-${layout}`}><div className="theme-placeholder"><span>{tr("ここに各種画面の内容が入ります")}</span></div></div>
+      <ChromePreview config={config} part="footer" imageBase={`/api/shops/${shopId}/images`} />
+    </div>
   </section>;
 }

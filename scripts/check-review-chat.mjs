@@ -37,15 +37,13 @@ try{
     const log=page.getByRole('log',{name:language==='ja'?'AIとのチャット':'Chat with AI',exact:true});
     const starts=[];page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/conversations'))starts.push(request.url());});
     await page.goto(`${origin}/?lang=${language}`);await back.waitFor();
-    const pages=page.locator('.screen-gallery-pages');
-    await pages.locator('.public-shop').nth(8).waitFor();
-    assert.equal(await pages.locator('figure').count(),9);
-    assert.equal(await pages.locator('.site-header,.site-footer').count(),0,'page captures contain only the body');
-    const parts=page.locator('.screen-gallery-parts');assert.equal(await parts.locator('figure').count(),2);
-    assert.equal(await parts.locator('[data-part=header] .site-header').count(),1);
-    assert.equal(await parts.locator('[data-part=header] .site-footer').count(),0);
-    assert.equal(await parts.locator('[data-part=footer] .site-footer').count(),1);
-    assert.equal(await parts.locator('[data-part=footer] .site-header').count(),0);
+    // Screens are listed by name; the theme sample shows the real header and footer around placeholder content.
+    assert.equal(await page.locator('.screen-name-list li').count(),9);
+    const theme=page.locator('.theme-preview');await theme.locator('.site-footer').waitFor();
+    assert.equal(await theme.locator('.site-header').count(),1);
+    assert.equal(await theme.locator('.site-footer').count(),1);
+    assert.equal(await theme.locator('.theme-placeholder').count(),1);
+    assert.equal(await page.locator('.screen-thumbnail').count(),0,'no screen captures in the review');
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await page.screenshot({path:`tmp/review-chat/review-${language}-${width}.png`,fullPage:true});
     if(process.env.UPDATE_MANUAL==='1'&&width===1280)await writeFile(`public/manual/${language==='en'?'en/':''}04-plan.jpg`,await page.locator('.screen-gallery').screenshot({type:'jpeg',quality:86}));
