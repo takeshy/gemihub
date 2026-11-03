@@ -21,7 +21,6 @@ export function BookingComplete({booking,config,simulation,onMine,onNew}: {booki
       <div><dt>{tr("担当者")}</dt><dd>{bookingStaffName(config,booking.staffId)}</dd></div>
       <div><dt>{tr("所要時間")}</dt><dd>{tr("合計 {0}分",Math.round((Date.parse(booking.end)-Date.parse(booking.start))/60000))}</dd></div>
       <div><dt>{tr("合計金額")}</dt><dd className="price">{money(booking.price,booking.payment?.currency)}</dd></div>
-      <div><dt>{tr("予約番号")}</dt><dd>{booking.id}</dd></div>
       {!!config.address && <div><dt>{tr("アクセス")}</dt><dd>{config.address}</dd></div>}
       {!!booking.message && <div><dt>{tr("予約時のメッセージ")}</dt><dd className="pre-wrap">{booking.message}</dd></div>}
     </dl>

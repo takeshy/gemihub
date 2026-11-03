@@ -193,7 +193,8 @@ test("HTTP flow enforces consent, ownership, charge-before-booking, idempotence 
   assert.equal(notices.length, 1, "repeated capture sends one confirmation");
   assert.equal(notices[0].to, "alice@example.com");
   assert.deepEqual(notices[0].cc, [shop.owner, config.notificationEmail]);
-  assert.ok(notices[0].body.includes(id));
+  assert.ok(!notices[0].body.includes(id), "internal booking IDs are not shown in confirmation emails");
+  assert.match(notices[0].body, /Alice/);
   config.rules.payment!.refundTiers = [{ hoursBefore: 0, percent: 0 }]; config.menus[0].price = 100; shop.published = config; await store.saveShop(shop);
   const quote = await request(`${base}/bookings/${id}/cancel-quote`); assert.equal(quote.body.amount, 5500);
   assert.equal((await request(`${base}/bookings/${id}/cancel-quote`, "bob")).status, 404);

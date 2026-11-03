@@ -84,7 +84,12 @@ test("unpaid bookings send customer confirmations with owner CC, retain CC on re
   assert.equal(sent.length, 2, "the existing outbox retries the first confirmation");
   assert.deepEqual(await store.list("job"), []);
   for (const raw of sent) assert.match(raw, /^To: customer@example.com\r\nCc: OWNER@example.com\r\n/);
-  assert.ok(sent.some(raw => Buffer.from(raw.split("\r\n\r\n")[1], "base64").toString().includes(first.booking.id)));
+  for (const raw of sent) {
+    const text = Buffer.from(raw.split("\r\n\r\n")[1], "base64").toString();
+    assert.ok(!text.includes(first.booking.id), "internal booking IDs are not included in emails");
+    assert.match(text, /Customer/);
+    assert.ok(text.includes(shop.published.menus[0].name));
+  }
   const previousInvite = process.env.JUDGE_INVITE, previousUntil = process.env.JUDGE_UNTIL;
   process.env.JUDGE_INVITE = "booking-mail-test-invitation-123456789";
   process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();

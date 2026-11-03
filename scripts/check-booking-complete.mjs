@@ -44,13 +44,14 @@ try{
    await expect(complete).toHaveCount(0);assert.equal((await store.bookings(shop.id)).length,0);assert.equal(captures,capturesBefore);await expect(page.locator('body')).not.toContainText('Private Customer');
   }else{
    await expect(complete.getByRole('heading',{name:label('予約が完了しました'),exact:true})).toBeVisible();const booking=(await store.bookings(shop.id))[0];assert.equal((await store.bookings(shop.id)).length,1);
-   for(const text of [booking.id,'Receipt Customer','Foot','Foot care','Other removal','Please use soft colors.',usd?'85.06':'10,500'])await expect(complete).toContainText(text);
+   for(const text of ['Receipt Customer','Foot','Foot care','Other removal','Please use soft colors.',usd?'85.06':'10,500'])await expect(complete).toContainText(text);
+   await expect(complete).not.toContainText(booking.id);
    assert.equal(Date.parse(booking.end)-Date.parse(booking.start),130*60000);assert.equal(booking.price,usd?85.06:10500);assert.equal(await page.evaluate(()=>document.activeElement?.id),'booking-complete-title');await expect(page.locator('.reservation-layout')).toHaveCount(0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
    const returnHref=page.url();
-   if(paid){await expect(complete.locator('.payment-details')).toBeVisible();assert.equal(captures,capturesBefore+1);await page.reload();await expect(complete).toContainText(booking.id);assert.equal(captures,capturesBefore+1,'refreshing a payment return must not charge twice');}
+   if(paid){await expect(complete.locator('.payment-details')).toBeVisible();assert.equal(captures,capturesBefore+1);await page.reload();await expect(complete).toContainText('Receipt Customer');await expect(complete).not.toContainText(booking.id);assert.equal(captures,capturesBefore+1,'refreshing a payment return must not charge twice');}
    await page.screenshot({path:`tmp/booking-complete/${language}-${width}-${mode}-${usd?'usd':'jpy'}.png`,fullPage:true});
-   await complete.getByRole('button',{name:label('マイページで予約を確認'),exact:true}).click();await expect(page.locator('.booking-card')).toContainText(booking.id);if(paid)assert.equal(new URL(page.url()).searchParams.has('checkout'),false);
-   if(paid){await page.goto(returnHref);await expect(complete).toContainText(booking.id);}else await page.locator('.public-nav').getByRole('button',{name:label('ご予約'),exact:true}).click();
+   await complete.getByRole('button',{name:label('マイページで予約を確認'),exact:true}).click();await expect(page.locator('.booking-card')).toContainText('Foot');await expect(page.locator('.booking-card')).not.toContainText(booking.id);if(paid)assert.equal(new URL(page.url()).searchParams.has('checkout'),false);
+   if(paid){await page.goto(returnHref);await expect(complete).toContainText('Receipt Customer');await expect(complete).not.toContainText(booking.id);}else await page.locator('.public-nav').getByRole('button',{name:label('ご予約'),exact:true}).click();
    if(await complete.count())await complete.getByRole('button',{name:label('続けて予約する'),exact:true}).click();
    await expect(page.locator('.reservation-layout')).toBeVisible();await page.locator('.date-input input[type=text]').fill(shopDate(config,Date.now()+4*86400000).replaceAll('-','/'));await expect(page.locator('.time-grid button').first()).toBeVisible();assert.equal((await store.bookings(shop.id)).length,1);assert.equal(submits.length,1);if(paid){assert.equal(new URL(page.url()).searchParams.has('checkout'),false);assert.equal(captures,capturesBefore+1);}
   }

@@ -422,7 +422,7 @@ export function createApp(
     const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
     await store.transaction(async () => {
       await notify(shop, config, booking.customer, `${config.name} ${refund ? tr("予約キャンセル・返金") : booking.status === "no_show" ? tr("予約の状態が変更されました") : tr("ご予約を承りました")}`,
-        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}\n{6}{7}", booking.name, booking.id, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))), event === "paid" ? [shop.owner, config.notificationEmail] : undefined);
+        tr("{0} 様\n予約: {1}\nメニュー: {2}{3}\n支払額: {4}\n{5}{6}", booking.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))), event === "paid" ? [shop.owner, config.notificationEmail] : undefined);
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
     });
   });
@@ -2433,7 +2433,7 @@ export function createApp(
                 config,
                 u.email,
                 tr("{0} ご予約を承りました", config.name),
-                tr("{0} 様\n{1}\n{2}\n予約番号: {3}{4}", b.name, bookingMenuName(config, b), new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), b.id, b.message ? tr("\nメッセージ: {0}", b.message) : ""),
+                tr("{0} 様\n{1}\n{2}{3}", b.name, bookingMenuName(config, b), new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), b.message ? tr("\nメッセージ: {0}", b.message) : ""),
                 [shop.owner, config.notificationEmail],
               );
             });
@@ -2467,7 +2467,7 @@ export function createApp(
                 config,
                 u.email,
                 tr("予約をキャンセルしました"),
-                tr("予約番号: {0}\n{1}", b.id, b.start),
+                tr("{0} 様\n予約: {1}\nメニュー: {2}", b.name, new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, b)),
               );
             });
             await flush(shop);

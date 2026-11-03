@@ -20,6 +20,7 @@
     "check:multimodal": "node scripts/check-multimodal.mjs",
     "check:review-chat": "node --import tsx scripts/check-review-chat.mjs",
     "check:shop-reset": "node --import tsx scripts/check-shop-reset.mjs",
+    "check:judge-controls": "node --import tsx scripts/check-judge-controls.mjs",
     "check:initial-theme": "node --import tsx scripts/check-initial-theme.mjs",
     "check:visual-chat": "node --import tsx scripts/check-visual-chat.mjs",
     "check:chat": "node scripts/check-chat.mjs",

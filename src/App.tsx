@@ -128,6 +128,9 @@ export function App({
     });
   if (!session)
     return <div className="loading">{error || tr("お店の準備をしています…")}</div>;
+  const displaySession = !showOperatorControls && session.user && (session.user.judge || session.judgeCustomer)
+    ? { ...session, user: { ...session.user, name: "John" } }
+    : session;
   const match = path.match(
     /^\/(s)\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
   );
@@ -142,10 +145,10 @@ export function App({
         <Brand />
         <div className="header-right">
           <span className="small muted">
-            {session.user?.name || tr("あなたのお店を、あなたの言葉で。")}
+            {displaySession.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
           {session.user?.role === "owner" && session.user.legacyNotes && <a className="text-button" href="/settings/migration">{tr("旧環境からの引き継ぎ")}</a>}
-          {session.user?.judge && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
+          {showOperatorControls && session.user?.judge && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
           {showOperatorControls && session.user?.admin && <a className="text-button" href="/admin">{tr("運営管理")}</a>}
           {session.user?.role === "owner" && session.user.shopId && !session.user.judge && !session.user.legacyNotes && !session.user.accessPending && <ShopReset shopId={session.user.shopId} navigate={navigate} showButton={showOperatorControls} />}
           {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
@@ -164,11 +167,11 @@ export function App({
           <div className="demo-banner">
             {tr("デモモード · Google には接続せず、サンプルで動作を確認できます。")}</div>
         )}
-        {session.user?.judge && !isPublic && (
+        {showOperatorControls && session.user?.judge && !isPublic && (
           <div className="demo-banner judge-banner">
             {tr("審査員アクセス · メールは送信されません。内容は")}<a href="/judge-menu">{tr("審査メニュー")}</a>{tr("で確認できます。")}</div>
         )}
-        {isPublic && !session.hosted && (session.judgeCustomer || session.user?.judge) && <JudgeBar customer={!!session.judgeCustomer} run={run} />}
+        {showOperatorControls && isPublic && !session.hosted && (session.judgeCustomer || session.user?.judge) && <JudgeBar customer={!!session.judgeCustomer} run={run} />}
         {error && (
           <div className="alert" role="alert">
             {error}
@@ -196,7 +199,7 @@ export function App({
           <Manual />
         ) : isPublic ? (
           <PublicShop
-            session={session}
+            session={displaySession}
             search={search}
             initialPane={
               (["reserve", "about", "mine", "contact"].includes(
@@ -1396,7 +1399,6 @@ export function PublicShop({
                       </p>
                       {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
                       <PaymentDetails booking={b} />
-                      <p className="small muted">{tr("予約番号：")}{b.id}</p>
                     </div>
                     {(b.status === "active" || b.payment?.cancellation && ["retrying", "pending", "awaiting_funds"].includes(b.payment.cancellation.status)) && (
                       <button disabled={busy}
