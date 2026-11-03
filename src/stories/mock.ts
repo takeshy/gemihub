@@ -1,4 +1,6 @@
 import { regionOf, zonedDate } from "../../shared/region";
+import { shopExport, exportColumns, exportCsv, type ExportTable } from "../../server/data-export";
+import type { Store } from "../../server/store";
 import { tr } from "../../shared/i18n";
 import { simulatePayment, simulateCancellation } from "../payment-mock";
 import { defaultRefundTiers, refundQuote } from "../../server/payment-domain";
@@ -327,7 +329,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
             {
               type: "sync",
               error:
-                tr("スプレッドシートに接続できませんでした。再送をお試しください。"),
+                tr("保存先に接続できませんでした。再送をお試しください。"),
             },
           ]
         : [],
@@ -438,6 +440,15 @@ export function createMockClient(scenario: Scenario): ApiClient {
     if (action === "/api/session") result = session;
     else if (action === "/api/workspace") result = { shops: [shop] };
     else if (action === "/api/invitations") result = [];
+    else if (action === `/api/shops/${shop.id}/export`) {
+      if (!shop.isOwner) throw new Error(tr("店主のみ利用できます"));
+      const records: Record<string, unknown[]> = { customer: [{ email: "guest@example.com", name: tr("山田 花子") }], inquiry: shop.inquiries, member: shop.members, post: posts, customerNote: customerNotes, shopChat: chats, shopChatMessage: chats.flatMap(chat => chat.messages) };
+      const snapshot = await shopExport({ bookings: async () => shop.bookings, records: async (kind: string) => records[kind] || [], entries: async () => [] } as unknown as Store, shop, session.user!.email);
+      const table = (url.searchParams.get("table") || "bookings") as ExportTable;
+      if (!Object.hasOwn(exportColumns, table)) throw new Error(tr("操作できませんでした"));
+      const csv = url.searchParams.get("format") === "csv";
+      result = { content: csv ? exportCsv(snapshot.records[table], exportColumns[table]) : JSON.stringify(snapshot, null, 2), mimeType: csv ? "text/csv" : "application/json", filename: csv ? `${table}.csv` : "gemihub.json" };
+    }
     else if(action===`/api/shops/${shop.id}/conversations`){
       if(data===undefined)result={email:session.user!.email,conversations:chats.map(({messages,...chat})=>chat).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))};
       else {

@@ -14,26 +14,14 @@ import { finalDetailsQuestion } from "../server/request-intent.ts";
 
 process.env.DEMO_MODE = "true";
 
-test("first publication initializes storage created by image uploads; later publications still detect external edits", async t => {
-  const tables = new Map<string, unknown[][]>([["reservations", [["existing", "business", "records"]]]]);
-  let uninitializedReads = 0;
-  mock.method(google, "sheets", (() => ({ spreadsheets: { values: {
-    batchGet: async ({ ranges }: { ranges: string[] }) => {
-      if (!tables.get("menus")?.length) uninitializedReads++;
-      return { data: { valueRanges: ranges.map(range => ({ values: tables.get(range.split("!")[0]) || [] })) } };
-    },
-    batchUpdate: async ({ requestBody }: { requestBody: { data: { range: string; values: unknown[][] }[] } }) => {
-      for (const item of requestBody.data) tables.set(item.range.split("!")[0], structuredClone(item.values));
-      return { data: {} };
-    },
-    batchClear: async () => ({ data: {} }),
-  } } })) as never);
+test("Drive created by image uploads does not affect first publication; stale Firestore proposals are rejected", async t => {
+  mock.method(google, "sheets", (() => { throw new Error("Sheets must not be called"); }) as never);
   mock.method(google, "drive", (() => ({ files: { create: async () => ({ data: { id: randomUUID() } }), update: async () => ({ data: {} }) } })) as never);
   t.after(() => mock.restoreAll());
   const store = new Store(":memory:");
   const shop = await store.createShop("owner@example.com");
-  // Uploading a reference/photo provisions Drive and empty Sheets before publication.
-  shop.google = { folderId: "folder", sheetId: "sheet", specId: "spec", historyId: "history" };
+  // Uploading a reference/photo provisions Drive before publication.
+  shop.google = { folderId: "folder", specId: "spec", historyId: "history" };
   await store.saveShop(shop);
   const user = { email: shop.owner, role: "owner" as const, name: "Owner", shopId: shop.id };
   await store.put("user", user.email, { ...user, refreshToken: encrypt("token") });
@@ -66,18 +54,15 @@ test("first publication initializes storage created by image uploads; later publ
   await request(`/plans/${outline.body.id}/approve`, {});
   const published = await request(`/plans/${outline.body.id}/publish`, { publication: "provisional" });
   assert.equal(published.status, 200, JSON.stringify(published.body));
-  assert.equal(uninitializedReads, 0, "an allocated spreadsheet is not a published configuration");
-  assert.deepEqual(tables.get("menus")![0], ["id", "name", "duration", "price", "active", "imageId"]);
-  assert.deepEqual(tables.get("reservations"), [["existing", "business", "records"]]);
   assert.equal((await store.shop(shop.id))!.publication, "provisional");
   assert.deepEqual((await store.shop(shop.id))!.published!.appearance!.articles, { blogs: false, announcements: true });
   assert.equal((await request(`/plans/${outline.body.id}/publish`, { publication: "provisional" })).status, 200);
   assert.equal((await store.shop(shop.id))!.revision, 1);
   const next = await request("/plan", { text: "紹介文の更新", config: { ...config, description: "Proposed description" } });
   assert.equal(next.status, 200);
-  const row = tables.get("settings")!.find(row => row[0] === "description")!; row[1] = JSON.stringify("Changed directly in Sheets");
+  const latest = (await store.shop(shop.id))!; latest.published!.description = "Changed in Firestore"; await store.saveShop(latest);
   await request(`/plans/${next.body.id}/approve`, {});
   assert.equal((await request(`/plans/${next.body.id}/publish`, {})).status, 409);
   assert.equal((await store.shop(shop.id))!.revision, 1, "external-edit protection still applies to published shops");
-  assert.equal(row[1], JSON.stringify("Changed directly in Sheets"));
+  assert.equal((await store.shop(shop.id))!.published!.description, "Changed in Firestore");
 });

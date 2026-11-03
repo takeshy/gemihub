@@ -79,7 +79,7 @@ test("a failed Drive cleanup closes the old site and resumes the same reset", as
   const store = new Store(":memory:");
   const old = await store.createShop("owner@example.com");
   old.published = structuredClone(sample);
-  old.google = { folderId: "only-this-folder", sheetId: "sheet", specId: "spec", historyId: "history" };
+  old.google = { folderId: "only-this-folder", specId: "spec", historyId: "history" };
   await store.saveShop(old);
   const owner: User = { email: old.owner, name: "Owner", role: "owner", shopId: old.id, refreshToken: "google-token" };
   await store.put("user", owner.email, owner);

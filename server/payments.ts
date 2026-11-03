@@ -149,7 +149,7 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
       c.booking.updatedBy = by;
       c.booking.updatedAt = at;
       payment.cancellation = { ...quote, at, by, reason, status: quote.amount ? "retrying" : "not_required", requestId: randomUUID() };
-      await save(c); // Freeze cancellation time, rate and amount even if Sheets/PayPal is unavailable.
+      await save(c); // Freeze cancellation time, rate and amount even if Firestore/PayPal is unavailable.
     }
     await refund(c);
     return c.booking;

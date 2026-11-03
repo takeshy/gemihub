@@ -32,7 +32,7 @@ test("diagram uses validated published settings, customer staff selection, escap
       .join("\n"),
     /Google ドライブ/,
   );
-  assert.match(svg, /スプレッドシート/);
+  assert.match(svg, /Firestore/);
   assert.match(documents(c, []).spec, /"sameDay": false/);
   assert.match(systemSvg(c), /指名先／対応スタッフ/);
   assert.throws(() => shopSystem({ ...c, staff: [] }));

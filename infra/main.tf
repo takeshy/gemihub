@@ -4,7 +4,7 @@ locals {
     "cloudbuild.googleapis.com", "firestore.googleapis.com",
     "secretmanager.googleapis.com", "iam.googleapis.com", "storage.googleapis.com",
     "iamcredentials.googleapis.com", "drive.googleapis.com",
-    "sheets.googleapis.com", "gmail.googleapis.com", "calendar-json.googleapis.com",
+    "gmail.googleapis.com", "calendar-json.googleapis.com",
   ])
   image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}/gemihub-web:bootstrap"
   hosts = distinct([var.app_domain, "*.${var.site_domain}"])

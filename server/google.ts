@@ -14,7 +14,6 @@ import { artifacts } from "./artifacts.ts";
 google.options({ timeout: 15000 });
 import {
   documents,
-  shopSchema,
   type ShopConfig,
   type Booking,
 } from "./domain.ts";
@@ -52,30 +51,9 @@ export function clients(refreshToken: string) {
   return {
     auth,
     drive: google.drive({ version: "v3", auth }),
-    sheets: google.sheets({ version: "v4", auth }),
     gmail: google.gmail({ version: "v1", auth }),
   };
 }
-const tabs = [
-  "menus",
-  "staff",
-  "settings",
-  "reservations",
-  "inquiries",
-  "members",
-  "posts",
-  "pages",
-  "customers",
-  "customer_notes",
-  "ai_chats",
-  "ai_chat_messages",
-];
-const headers = [
-  ["id", "name", "duration", "price", "active", "imageId"],
-  ["id", "name", "menuIds", "weekdays", "start", "end", "imageId"],
-  ["key", "value"],
-  ["id", "record"],
-];
 /** Creates a Drive folder. Judge shops nest their folders under the operator's judge root. */
 export async function createFolder(token: string, name: string, parent?: string) {
   const { drive } = clients(token);
@@ -98,7 +76,7 @@ export async function trashFile(token: string, id: string) {
   catch (error) { if ((error as { code?: number }).code !== 404) throw error; }
 }
 export async function provision(shop: Shop, config: ShopConfig, token: string, parent?: string) {
-  const { drive, sheets } = clients(token);
+  const { drive } = clients(token);
   if (shop.google) return shop.google;
   const folder = await drive.files.create({
     requestBody: {
@@ -107,35 +85,6 @@ export async function provision(shop: Shop, config: ShopConfig, token: string, p
       ...(parent ? { parents: [parent] } : {}),
     },
     fields: "id",
-  });
-  const file = await drive.files.create({
-    requestBody: {
-      name: tr("{0} 予約台帳", config.name),
-      mimeType: "application/vnd.google-apps.spreadsheet",
-      parents: [folder.data.id!],
-    },
-    fields: "id",
-  });
-  const sheetId = file.data.id!;
-  const existing = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: sheetId,
-    requestBody: {
-      requests: [
-        {
-          updateSheetProperties: {
-            properties: {
-              sheetId: existing.data.sheets![0].properties!.sheetId,
-              title: "menus",
-            },
-            fields: "title",
-          },
-        },
-        ...tabs
-          .slice(1)
-          .map((title) => ({ addSheet: { properties: { title } } })),
-      ],
-    },
   });
   const make = async (name: string) =>
     (
@@ -146,7 +95,6 @@ export async function provision(shop: Shop, config: ShopConfig, token: string, p
       })
     ).data.id!;
   return {
-    sheetId,
     folderId: folder.data.id!,
     specId: await make("spec.md"),
     historyId: await make("history.md"),
@@ -161,92 +109,10 @@ export async function syncConfig(
   menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>,
 ) {
   if (!shop.google) throw new Error(tr("Google の保存先が未作成です"));
-  const { sheets, drive } = clients(token);
+  const { drive } = clients(token);
   const doc = documents(config, shop.history);
   // Prepare the runnable export before writing any remote data.
   const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"), undefined, menuImages);
-  const pageIndex = config.pages.map(({ id, slug, title, navigationLabel }) => ({ id, slug, title, navigationLabel }));
-  if (scope?.kind === "part") {
-    const settings = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "settings!A:A" });
-    const rows = settings.data.values || [];
-    const found = rows.findIndex(row => row[0] === scope.part);
-    const row = found >= 0 ? found + 1 : Math.max(2, rows.length + 1);
-    await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: shop.google.sheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `settings!A${row}:B${row}`, values: [[scope.part, JSON.stringify(config[scope.part])]] }] } });
-  } else if (scope?.kind === "page") {
-    const pageRows = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "pages!A:B" });
-    const rows = pageRows.data.values || [];
-    const existing = rows.findIndex(row => row[0] === scope.pageId);
-    const selected = config.pages.find(p => p.id === scope.pageId);
-    if (selected || existing >= 0) {
-      const vacant = rows.findIndex((row, index) => index > 0 && !row[0]);
-      const row = existing >= 0 ? existing + 1 : vacant >= 0 ? vacant + 1 : Math.max(2, rows.length + 1);
-      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: shop.google.sheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `pages!A${row}:B${row}`, values: [selected ? [selected.id, JSON.stringify(selected)] : ["", ""]] }] } });
-    }
-    const settings = await sheets.spreadsheets.values.get({ spreadsheetId: shop.google.sheetId, range: "settings!A:A" });
-    const settingsRows = settings.data.values || [];
-    const found = settingsRows.findIndex(row => row[0] === "pages");
-    const row = found >= 0 ? found + 1 : settingsRows.length + 1;
-    await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: shop.google.sheetId, requestBody: { valueInputOption: "RAW", data: [{ range: `settings!A${row}:B${row}`, values: [["pages", JSON.stringify(pageIndex)]] }] } });
-  } else {
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: shop.google.sheetId,
-      requestBody: {
-        valueInputOption: "RAW",
-        data: [
-          {
-            range: "menus!A1:F1000",
-            values: [
-              ["id", "name", "duration", "price", "active", "imageId"],
-              ...config.menus.map((m) => [
-                m.id,
-                m.name,
-                m.duration,
-                m.price,
-                m.active,
-                m.imageId || "",
-              ]),
-            ],
-          },
-          {
-            range: "staff!A1:G1000",
-            values: [
-              ["id", "name", "menuIds", "weekdays", "start", "end", "imageId"],
-              ...config.staff.map((p) => [
-                p.id,
-                p.name,
-                JSON.stringify(p.menuIds),
-                JSON.stringify(p.weekdays),
-                p.start,
-                p.end,
-                p.imageId || "",
-              ]),
-            ],
-          },
-          { range: "pages!A1:B100", values: [["id", "record"], ...config.pages.map(p => [p.id, JSON.stringify(p)])] },
-          {
-            range: "settings!A1:B100",
-            values: [
-              ["key", "value"],
-              ...Object.entries(config)
-                .filter(([k]) => !["menus", "staff"].includes(k))
-                .map(([k, v]) => [k, JSON.stringify(k === "pages" ? pageIndex : v)]),
-            ],
-          },
-        ],
-      },
-    });
-    // Clear trailing rows when a menu or staff member has been removed.
-    await sheets.spreadsheets.values.batchClear({
-      spreadsheetId: shop.google.sheetId,
-      requestBody: {
-        ranges: [
-          `menus!A${config.menus.length + 2}:F1000`,
-          `staff!A${config.staff.length + 2}:G1000`,
-          `pages!A${config.pages.length + 2}:B100`,
-        ],
-      },
-    });
-  }
   await Promise.all([
     drive.files.update({
       fileId: shop.google.specId,
@@ -321,54 +187,6 @@ export async function syncConfig(
     }
   }
 }
-export async function readConfig(
-  shop: Shop,
-  token: string,
-): Promise<ShopConfig> {
-  const { sheets } = clients(token);
-  const res = await sheets.spreadsheets.values.batchGet({
-    spreadsheetId: shop.google!.sheetId,
-    ranges: ["menus!A:F", "staff!A:G", "settings!A:B", "pages!A:B"],
-  });
-  for (let i = 0; i < headers.length; i++)
-    if (
-      JSON.stringify(res.data.valueRanges?.[i]?.values?.[0]) !==
-      JSON.stringify(headers[i]) && !(i === 1 && JSON.stringify(res.data.valueRanges?.[i]?.values?.[0]) === JSON.stringify(headers[1].slice(0,6)))
-    )
-      throw Object.assign(
-        new Error(
-          tr("スプレッドシートの列構造が変更されています。schema.md の列順に戻してください。"),
-        ),
-        { status: 409 },
-      );
-  const [menus, staff, settings, pages] = res.data.valueRanges!.map((r) =>
-    (r.values || []).slice(1).filter((r) => r[0]),
-  );
-  const config = {
-    ...Object.fromEntries(
-      settings.map((r) => [r[0], JSON.parse(String(r[1]))]),
-    ),
-    pages: pages.map(r => { const page = JSON.parse(String(r[1])); if (page.id !== String(r[0])) throw new Error(tr("ページのIDと行が一致しません")); return page; }),
-    menus: menus.map((r) => ({
-      id: String(r[0]),
-      name: String(r[1]),
-      duration: Number(r[2]),
-      price: Number(r[3]),
-      active: String(r[4]).toLowerCase() === "true",
-      ...(r[5] ? { imageId: String(r[5]) } : {}),
-    })),
-    staff: staff.map((r) => ({
-      id: String(r[0]),
-      name: String(r[1]),
-      menuIds: JSON.parse(String(r[2])),
-      weekdays: JSON.parse(String(r[3])),
-      start: String(r[4]),
-      end: String(r[5]),
-      ...(r[6] ? { imageId: String(r[6]) } : {}),
-    })),
-  };
-  return shopSchema.parse(config);
-}
 export async function sendMail(
   token: string,
   to: string,
@@ -394,7 +212,7 @@ export async function syncPostFiles(
   if (!shop.google || !shop.published) return;
   const { postArtifacts } = await import("./post-renderer.tsx");
   const { drive } = clients(token);
-  const config = await readConfig(shop, token);
+  const config = shop.published;
   const files = postArtifacts(
     config,
     posts,

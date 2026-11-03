@@ -6,7 +6,7 @@ This is the English counterpart of the staged requirements and later refinements
 
 ## Product and promises
 
-Create a dedicated booking system for a small salon, beauty practice, bodywork business, private lesson studio, or similar independent shop through a conversation with its nontechnical owner. Begin with Google login, use plain language, and keep business records in the owner's Google spreadsheet and files in their Drive. Operational credentials and state belong in Firestore. The owner retains readable specifications and history even if the service ends.
+Create a dedicated booking system for a small salon, beauty practice, bodywork business, private lesson studio, or similar independent shop through a conversation with its nontechnical owner. Begin with Google login, use plain language, and keep business records, credentials and operational state in Firestore, with images and page files in the owner's Drive. Owners can export records as JSON or CSV. The owner retains readable specifications and history even if the service ends.
 
 Do not add payments, deposits, or automated no-show prevention. Record cancellations and no-shows without deleting their rows. Customers see only their own bookings. Only the owner and registered staff who completed Google login/calendar consent can operate a shop. Require on-screen review and explicit application of page/design changes; never treat speech as approval. Dedicated management saves apply live business data. Record changes in history.
 
@@ -30,7 +30,7 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 Show the current settings infographic, collapsed change history with count, and the AI change chat together under Build your shop with AI. Display services/prices/durations, staff/schedules/qualified services, opening hours/closures, booking/cancellation rules, staff assignment, and public pages. History opens by mouse or keyboard, newest first. Fetch on entry and show retry only on failure; no download/history-management UI.
 
-Show data flow, standard-sheet-to-menu mappings, public/private destinations, and access permissions in How data and permissions work. Put spreadsheet and Drive links there for connected shops. Do not duplicate a separate data/files panel or show it during initial interviewing/review.
+Show data flow, record-to-menu mappings, public/private destinations, and access permissions in How data and permissions work. Put owner data-export and Drive links there. Do not duplicate a separate data/files panel or show it during initial interviewing/review.
 
 Questions are answered in Consult & ask. Changes clarifies a requested edit. New page proposes content and customer navigation label with new IDs/addresses, preserving unrelated pages and booking configuration. Chat continues on the same screen; a proposal is opened from the chat and explicitly applied after review. Current settings/version fingerprints prevent applying stale conversation-based changes. Operators may read settings/history; owner-only actions remain owner-only.
 
@@ -42,7 +42,7 @@ Keep Google authorization, sign-in, country, and time zone; return to an empty s
 
 ## Local screen editor and scoped releases
 
-After private publication, the owner starts in Try and edit screens; staff start in their calendar until public publication, then booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Sheets, Gmail, Calendar, or production data.
+After private publication, the owner starts in Try and edit screens; staff start in their calendar until public publication, then booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Firestore, Gmail, Calendar, or production data.
 
 Show the selected screen first, without a repeated marketing heading or shared shop-details form. Collapse page/sample editors below it. Show Apply changes and Discard changes only when needed. Save local drafts per account/shop in localStorage; retain them on reload, make storage failures visible, and refuse to publish unsaved drafts. Drafts are local to the device and may be lost when site data is cleared.
 
@@ -74,7 +74,7 @@ Store a required nonnegative booking-time price in the shop's currency (whole JP
 
 ## Customer membership and CRM
 
-After Google verifies email, register a per-shop name, date of birth, and gender (female/male/other/prefer not to say). Date of birth must be valid and not future. Require registration before booking/inquiries in both UI and API. Prefill names; allow profile changes from My page. Bind all records to the verified email and shop. Extend legacy customer columns without discarding rows. Expose profiles only to the customer and authorized operators, never in public configurations or exports. Include registration-only customers in CRM.
+After Google verifies email, register a per-shop name, date of birth, and gender (female/male/other/prefer not to say). Date of birth must be valid and not future. Require registration before booking/inquiries in both UI and API. Prefill names; allow profile changes from My page. Bind all records to the verified email and shop. Store profiles in per-shop Firestore customer records. Expose profiles only to the customer and authorized operators, never in public configurations or public page exports. Include registration-only customers in CRM.
 
 Aggregate existing bookings and inquiries by trimmed lowercase email, without extra owner input or AI. Names use the newest timestamp with deterministic ties. Visits count ended active reservations only, excluding cancellations, no-shows, and future bookings; spending sums recorded prices. Search by name/email and sort by visit count/last visit.
 
@@ -88,7 +88,7 @@ Private notes may contain up to five attachments, 5 MB each, 10 MB total, stored
 
 Use the signed-in name and read-only verified Google email. Submit and reply only to the server-verified address. Show inquiries newest first, hide resolved by default, and support Include resolved, partial name/email/message/latest-reply search, reply state, and inclusive shop-local date bounds. Legacy records without timestamps are excluded only when filtering dates.
 
-Track resolution as `in_progress` or `completed`, reading legacy `open` as in progress and `replied` as completed. Preserve column names/order. A nonempty reply determines Replied independently; replying must not resolve automatically. A phone-handled inquiry can be resolved without an email reply.
+Track resolution as `in_progress` or `completed`, reading legacy `open` as in progress and `replied` as completed. Preserve record identities. A nonempty reply determines Replied independently; replying must not resolve automatically. A phone-handled inquiry can be resolved without an email reply.
 
 Open the corresponding inquiry on customer details. Show message, latest reply, reply form, and resolution control. Replies replace the latest reply; do not introduce a separate threaded messaging product. Deduplicate retry IDs and reject stale latest-reply/status writes with 409 while preserving input. Mail failures use the existing queue. Owner and active operators only; no customer, revoked, pending, cross-shop, or other unauthorized access.
 
@@ -96,7 +96,7 @@ Open the corresponding inquiry on customer details. Show message, latest reply, 
 
 Replace separate family invitations in the UI with per-staff Google email registration under Staff and schedules. Share the staff login URL. Staff OAuth uses `openid email profile calendar.freebusy` in one flow, not Drive/Gmail permissions. Do not create an owner shop/token for staff login. Validate registered email, real staff, membership, state/cookie/PKCE/expiry, and recheck revocation at callback. Missing Calendar consent prevents completing staff login.
 
-Preserve member columns; registration is `registered`/accepted=false and completed login is accepted. Keep `staffAccount` as authentication mapping. Legacy invitation APIs remain only for compatibility and cannot activate new-style registrations. Enforce one account per staff and one staff per account per shop. Owner revocation/replacement immediately removes operator and Calendar access. Staff see My calendar and My staff photo, with reconnect/disconnect.
+Keep membership records in Firestore; registration is `registered`/accepted=false and completed login is accepted. Keep `staffAccount` as authentication mapping. Legacy invitation APIs remain only for compatibility and cannot activate new-style registrations. Enforce one account per staff and one staff per account per shop. Owner revocation/replacement immediately removes operator and Calendar access. Staff see My calendar and My staff photo, with reconnect/disconnect.
 
 Use primary-calendar FreeBusy only, following Google's busy intervals for recurring/all-day events. Free events do not block bookings. No shared/additional-calendar chooser or calendar writes. Intervals touching at their endpoints do not overlap. Never read titles/descriptions or store/publish busy intervals. Encrypt Calendar refresh tokens in Firestore separately from owner Drive/Gmail tokens; never send them to browsers or other members.
 
@@ -106,13 +106,13 @@ Verify reconnect/disconnect, mismatched accounts, duplicate mappings, cross-shop
 
 ## Durable records and notifications
 
-Deduplicate booking requests even when users retry or acknowledgement is lost. The current implementation requires successful Sheets writes before confirmation; queued auxiliary work may recover later. Preserve business records, expose pending tasks/errors, retry delivery automatically and manually, and never silently lose or duplicate bookings. Confirm recovery from interrupted writes using the same request/row identities.
+Deduplicate booking requests even when users retry or acknowledgement is lost. The current implementation requires successful Firestore commits before confirmation; queued auxiliary work may recover later. Preserve business records, expose pending tasks/errors, retry delivery automatically and manually, and never silently lose or duplicate bookings. Confirm recovery from interrupted writes using the same request/record identities.
 
-Text change requests propose additions such as closure days or services, require review/approval/application, update the screen and spreadsheet, and record dated changes plus current specifications. Booking confirmation/cancellation emails go to the customer and owner. Email transport is at least once and may duplicate delivery after a lost success response; booking records remain deduplicated.
+Text change requests propose additions such as closure days or services, require review/approval/application, update the screen and Firestore, and record dated changes plus current specifications. Booking confirmation/cancellation emails go to the customer and owner. Email transport is at least once and may duplicate delivery after a lost success response; booking records remain deduplicated.
 
 ## Storage, schemas, and offline Drive exports
 
-Read master settings, services, staff, and business records from the owner's spreadsheet, reflecting direct edits. Preserve column names/order, JSON cell formats, references, and soft-delete behavior. Store specs/history and generated pages in the owner's Drive. Keep public/customer artifacts separate from operational documents and APIs.
+Read settings, services, staff, and business records from Firestore, scoped by shop and record type. Commit business records and operational work together and preserve references and soft-delete behavior. Owners can download all data as JSON or selected record types as CSV from Publication settings. Exclude credentials, other accounts' private chats and binary files; escape spreadsheet formulas in CSV. Editing an export does not change live data. Store images, attachments, specs/history and generated pages in the owner's Drive. Keep public/customer artifacts separate from operational documents and APIs.
 
 Downloaded `web/index.html` must open by double-click with built JS/CSS inlined. Keep rendering input in separate relative `web/data.js` defining `window.__GEMIHUB_MOCK__`, with shop config, preview customer, empty bookings/inquiries, mode=mock, and writes=discarded. Generate shop.json/mock.json from the same source. Escape embedded user strings safely. Practice actions mutate only browser memory and reset on reload; editing data.js changes the display without editing HTML.
 
@@ -132,9 +132,9 @@ Get started opens an AI-authored first question for setup/changes/new pages. Use
 
 Voice input opens a modal and starts recognition. Preserve edits and draft text in chat. Show/change the end phrase only inside the dialog. Default Japanese phrase is 以上; English is send. Store per-language preferences; blank disables it. Strip and send only a final trailing phrase, never interim results or mentions in the middle. Manual stop, silence, errors, Escape, close, and Back to draft keep unsent text. Do not overwrite manual edits with older recognition. Stop recognition on sending, navigation, and unmount. Image/pen completion stops input only; generation/application remains explicit.
 
-Keep chats/messages private per shop/account. Only their author can list, resume, or write them; no public API/export exposure. Keep the current conversation visible, without a separate user-managed history UI. Search related past messages for the same account/shop along with current settings/history, including model-requested follow-up queries. Past proposals are not current facts or automatic new requests. Client-supplied fake history cannot overwrite saved context.
+Keep chats/messages private per shop/account. Only their author can list, resume, or write them; no public API or other-account export exposure. Keep the current conversation visible, without a separate user-managed history UI. Search related past messages for the same account/shop along with current settings/history, including model-requested follow-up queries. Past proposals are not current facts or automatic new requests. Client-supplied fake history cannot overwrite saved context.
 
-Persist user messages before generation and deduplicate by request ID. Retry failed AI requests and recover the same change plan. Journal in Firestore before private `ai_chats`/`ai_chat_messages` sheet writes, recover the same rows on reload, migrate pre-connection chats, then remove successful working copies.
+Persist user messages before generation and deduplicate by request ID. Retry failed AI requests and recover the same change plan. Store conversations and messages directly in Firestore before and after publication, scoped by shop and account.
 
 ## Images and generation
 
@@ -144,7 +144,7 @@ AI text/voice/pen/page requests select up to 15 managed images, 75 MB total, pas
 
 Generation starts with text/voice method cards, instructions, name, aspect ratio, and optional reference image. Review voice text before generating. Show the result and let the owner accept or request another iteration using it as reference. Save results to the library with prompt/model/origin, not automatically to pages. Use the server's Google SDK and ADC; only Storybook returns sample results. Store operation IDs and generated bytes to retry Drive saves without another paid call. Separate generation locks from shop bookings/settings. Chunk temporary Firestore data and expire it after 24 hours. Failed/uncertain generation requires an explicit new request after checking the library.
 
-Service/staff photos offer upload or an existing-image picker. Publish only after Save. Owners manage all staff; each staff member can edit only their own photo and see current/self-uploaded images. Append imageId after existing staff six columns, maintaining legacy reads. Staff photo writes cannot change other settings. Show published photos on About and named-staff booking. Include references in previews/Drive, record history, and block deleting in-use photos. Refresh image lists/pickers on opening and after mutations; retry controls only on failure.
+Service/staff photos offer upload or an existing-image picker. Publish only after Save. Owners manage all staff; each staff member can edit only their own photo and see current/self-uploaded images. Store imageId in the saved Firestore staff configuration. Staff photo writes cannot change other settings. Show published photos on About and named-staff booking. Include references in previews/Drive, record history, and block deleting in-use photos. Refresh image lists/pickers on opening and after mutations; retry controls only on failure.
 
 ## Articles, references, and publication finishing
 
@@ -183,7 +183,7 @@ Terraform does not generate or read secret values; pass version references. Runt
 
 ## Service name and public domain
 
-The management host serves a public `/lp` service overview in Japanese and English. Explain bookings, customer notes, news, the three-step setup/publication flow, PayPal prepayment and timed refunds, owner Google Sheets/Drive storage, and FAQs. Do not invent pricing or customer metrics. Server-render content, title, description, Open Graph metadata and language-specific canonical/alternate links without session/database reads. Do not serve the LP on custom storefront hosts. Preserve the selected language when linking to onboarding and the manual. Verify desktop/mobile layouts, keyboard access, feature switching, FAQs and the Storybook state.
+The management host serves a public `/lp` service overview in Japanese and English. Explain bookings, customer notes, news, the three-step setup/publication flow, PayPal prepayment and timed refunds, Firestore/Drive storage and JSON/CSV export, and FAQs. Do not invent pricing or customer metrics. Server-render content, title, description, Open Graph metadata and language-specific canonical/alternate links without session/database reads. Do not serve the LP on custom storefront hosts. Preserve the selected language when linking to onboarding and the manual. Verify desktop/mobile layouts, keyboard access, feature switching, FAQs and the Storybook state.
 
 The public brand is gemihub. The management origin is https://gemihub.net and all Google OAuth flows use https://gemihub.net/auth/google/callback. Storefront subdomains default to shops.gemihub.net and need separate DNS/TLS setup. Production settings are provided in .env.production.example; local demo settings remain separate. Configure Google client credentials on the server only.
 
@@ -205,7 +205,7 @@ After the first theme sample, use Make changes and red-pen instructions. A revie
 
 The first-theme and regular red-pen editors keep the picture on the left and the editing conversation on the right (below on phones). The original preview is hidden while the annotation capture is shown. Replies and target confirmations stay in the chat; applying a revision retains the conversation. Initial themes update on Send; regular changes require target confirmation and remain unpublished until the existing publication action.
 
-Read feature numbers from the actual question, including prefixed or reordered choices. Do not enable unselected blog/news features. Recover selections for existing initial plans using their own interview turn, without changing legacy published shops. A spreadsheet allocated for an image upload is empty storage, not an existing shop configuration: initialize it during first publication, while preserving external-edit checks for published shops.
+Read feature numbers from the actual question, including prefixed or reordered choices. Do not enable unselected blog/news features. Recover selections for existing initial plans using their own interview turn, without changing legacy published shops. Drive allocated for an image upload is file storage, not an existing shop configuration: save the first configuration in Firestore during initial publication and preserve conflict checks for published shops.
 
 ## Comparing editing versions
 

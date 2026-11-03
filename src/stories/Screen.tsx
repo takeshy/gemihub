@@ -16,6 +16,16 @@ export function Screen({ scenario }: { scenario: Scenario }) {
     <div
       onClickCapture={(event) => {
         const link = (event.target as HTMLElement).closest("a");
+        if (link?.hasAttribute("download") && /\/export\?/.test(link.getAttribute("href") || "")) {
+          event.preventDefault();
+          void client<{ content: string; mimeType: string; filename: string }>(link.getAttribute("href")!).then(file => {
+            const url = URL.createObjectURL(new Blob([file.content], { type: file.mimeType }));
+            const download = document.createElement("a"); download.href = url; download.download = file.filename;
+            document.body.appendChild(download); download.click(); download.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+          }).catch(error => setNotice(error instanceof Error ? error.message : String(error)));
+          return;
+        }
         if(link?.hasAttribute("data-article-link")&&link.closest(".preview-surface,.local-preview-screen"))return;
         if (
           link &&

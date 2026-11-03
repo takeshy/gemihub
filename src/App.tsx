@@ -305,7 +305,7 @@ function Landing({ demo, invite, run }: { demo: boolean; invite: boolean; run: R
         </div>
         <div>
           <b>{tr("データは、あなたのもの")}</b>
-          <p>{tr("Google スプレッドシートでいつでも確認。")}</p>
+          <p>{tr("JSON・CSVでいつでも書き出し。")}</p>
         </div>
       </div>
     </div>
@@ -1137,6 +1137,7 @@ function Settings({
 }) {
   const api = useApi();
   const [domain, setDomain] = useState(shop.domain || "");
+  const [exportTable, setExportTable] = useState("bookings");
   return (
     <div className="panel">
       {hasLegacyNotes && <section className="legacy-notes-settings"><h2>{tr("旧環境からの引き継ぎ")}</h2><p>{tr("ノートとAIチャットはkiokuflowへ移動しました")}</p><a className="button" href="/settings/migration">{tr("引き継ぎの案内を開く")}</a></section>}
@@ -1151,6 +1152,15 @@ function Settings({
       ) : (
         <p>{tr("お店のページを公開すると、アドレスができあがります。")}</p>
       )}
+      {shop.isOwner && <section className="shop-export" aria-label={tr("お店のデータを書き出す")}>
+        <h3>{tr("お店のデータを書き出す")}</h3>
+        <p>{tr("設定や記録をまとめて保存できます。CSVはスプレッドシートでも開けます。写真・添付ファイルの本体はGoogle Driveに保存されています。")}</p>
+        <a className="button" download href={`/api/shops/${shop.id}/export?format=json`}>{tr("まとめて保存（JSON）")}</a>
+        <label>{tr("CSVで保存するデータ")}<select aria-label={tr("CSVで保存するデータ")} value={exportTable} onChange={event => setExportTable(event.target.value)}>
+          {[["bookings", tr("予約")], ["customers", tr("お客様")], ["inquiries", tr("お問い合わせ")], ["customerNotes", tr("お客様メモ")], ["members", tr("家族・スタッフ")], ["posts", tr("ブログ・お知らせ")], ["menus", tr("メニュー・料金")], ["staff", tr("スタッフ・勤務")]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select></label>
+        <a className="button" download href={`/api/shops/${shop.id}/export?format=csv&table=${exportTable}`}>{tr("選んだデータを保存（CSV）")}</a>
+      </section>}
       <h3>{tr("お店独自のドメイン")}</h3>
       <p className="muted">
         {tr("お持ちのドメインを使う場合に設定してください。DNS と HTTPS の接続設定が必要です。")}</p>

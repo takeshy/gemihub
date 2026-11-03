@@ -6,10 +6,10 @@ import type { Workspace } from "./App";
 export function DataOverview({ isOwner, publiclyPublished, google, open }: { isOwner: boolean; publiclyPublished: boolean; google?: Workspace["google"]; open: (screen: string) => void }) {
   return <section className="panel data-overview" aria-label={tr("データと権限の仕組み")}>
     <h2>{tr("データと権限の仕組み")}</h2>
-    {google && <div className="actions"><a className="button" href={`https://docs.google.com/spreadsheets/d/${google.sheetId}/edit`} target="_blank" rel="noreferrer">{tr("お店のスプレッドシート ↗")}</a><a className="button" href={`https://drive.google.com/drive/folders/${google.folderId}`} target="_blank" rel="noreferrer">{tr("お店のファイル ↗")}</a></div>}
+    <div className="actions">{isOwner && <button type="button" onClick={() => open("settings")}>{tr("お店のデータを書き出す")}</button>}{google && <a className="button" href={`https://drive.google.com/drive/folders/${google.folderId}`} target="_blank" rel="noreferrer">{tr("お店のファイル ↗")}</a>}</div>
     <ol className="data-flow" aria-label={tr("データの流れ")}>
       <li><span aria-hidden="true">✎</span><strong>{tr("予約・問い合わせ・編集")}</strong><p>{tr("お客様と運営メンバーが画面から入力")}</p></li>
-      <li><span aria-hidden="true">▤</span><strong>{tr("店主のスプレッドシート")}</strong><p>{tr("お店の台帳が正本。画像・添付は Drive に保存")}</p></li>
+      <li><span aria-hidden="true">▤</span><strong>{tr("お店のデータ")}</strong><p>{tr("記録はFirestore、画像・添付はDriveに保存")}</p></li>
       <li><span aria-hidden="true">▣</span><strong>{tr("管理画面・公開ページ")}</strong><p>{tr("台帳を読み込み、権限に応じて表示")}</p></li>
     </ol>
     <div className="data-spec-grid">

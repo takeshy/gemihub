@@ -48,9 +48,9 @@
          ▼
    [ gemihub サーバー ] ── (意図の理解・変更案作成・画像生成) ──► [ Vertex AI (Gemini) ]
      │            │
-     │            └── (セッション・排他ロック・一時状態) ───────► [ Cloud Firestore ]
+     │            └── (業務データ・セッション・排他ロック) ───────► [ Cloud Firestore ]
      │
-     └── (台帳・記事・画像・仕様書・変更履歴の保存) ────────────► [ 店主の Google Sheets / Drive ]
+     └── (画像・添付・仕様書・書き出しファイル) ────────────► [ 店主の Google Drive ]
 ```
 
 - **マルチモーダルな対話で画面・記事・設定を提案（予約・決済・権限はサーバーが厳密に管理）：**
@@ -59,8 +59,8 @@
   初回はお店名とロゴの有無を確認し、ブログ・お知らせ・スタッフ紹介・商品やサービス紹介を個別に選べます。AIが参考画像からHTML/CSSでテーマを作成し、独立したAIの確認と修正を最大3回行います。参考ページ画像はデザインの手がかりとし、掲載を依頼したロゴや写真は使います。最初のプレビューから赤ペンで修正できます。
 - **根拠（出典）にもとづく相談と、「提案 → プレビュー確認 → 承認」フロー：**
   「相談・質問」では、調査用のLLMがシステムの仕様書・お店の `spec.md`・変更履歴 `history.md`・台帳の実データを調べて出典付きで回答し、書かれていないことは推測せず「書かれていません」と答えます。変更依頼も、店主が画面でプレビューや差分を確認して承認したときだけ本番に反映され、依頼文も `history.md` に記録されます。
-- **データは店主自身の Google アカウントに保存：**
-  予約台帳・顧客情報・メニュー・記事は店主の **Google スプレッドシート** に、画像や仕様書（`spec.md`）・変更履歴（`history.md`）・オフライン閲覧用HTMLは店主の **Google ドライブ** に保存されます。スプレッドシートから直接確認・編集することもできます。
+- **データの保存と書き出し：**
+  設定・予約・顧客情報・お問い合わせ・記事・AIチャットは **Firestore** に保存します。店主は **「公開の設定」** から全体をJSON、記録の種類ごとにCSVで保存できます。画像・添付・仕様書・変更履歴・オフラインHTMLは店主の **Google ドライブ** に残り、書き出しにはファイル本体ではなく参照が含まれます。
 
 ---
 
@@ -86,10 +86,10 @@ http://localhost:3000 を開き、**「サロンのデモを試す」** を選�
 
 ### 2. Google / Vertex AI を接続して動かす
 
-実際のAI生成や Google スプレッドシート・ドライブ連携を使う場合は、Google Cloud プロジェクトで以下の API を有効化し、Application Default Credentials（`gcloud auth application-default login`）を設定します。
+実際のAI生成や Firestore・Google ドライブ連携を使う場合は、Google Cloud プロジェクトで以下の API を有効化し、Application Default Credentials（`gcloud auth application-default login`）を設定します。
 
 - Vertex AI API / Cloud Firestore API
-- Google Drive API / Google Sheets API / Gmail API / Google Calendar API
+- Google Drive API / Gmail API / Google Calendar API
 
 `.env` に以下の環境変数を設定して起動します（詳細は `.env.example` を参照）。
 

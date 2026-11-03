@@ -11,7 +11,7 @@ import { digest } from "../server/auth.ts";
 import { sample, shopSchema } from "../server/domain.ts";
 import { memoryCustomerFiles } from "../server/customer-files.ts";
 import { uploadMenuImage, readMenuImage } from "../server/menu-images.ts";
-import { syncConfig, readConfig, encrypt } from "../server/google.ts";
+import { syncConfig, encrypt } from "../server/google.ts";
 import { driveSnapshot } from "../server/artifacts.ts";
 import { postArtifacts } from "../server/post-renderer.tsx";
 import { createPreviewClient, sampleFixtures } from "../src/local-preview.ts";
@@ -93,23 +93,17 @@ test("Interrupted menu image uploads reuse reserved IDs; active images survive o
   assert.deepEqual(JSON.parse(driveSnapshot(config, "<title></title><div id=\"root\"></div>", undefined, assets)["web/mock.json"]).menuImages, {});
 });
 
-test("Menu image references round-trip through the trailing Sheets column", async t => {
+test("Menu image references are included in the Drive JSON export without Sheets", async t => {
   t.after(() => { mock.restoreAll(); syncBuiltinESMExports(); });
-  mock.method(fs, "readFile", async () => "<title></title><div id=\"root\"></div>"); syncBuiltinESMExports();
-  const tables = new Map<string, unknown[][]>();
-  mock.method(google, "sheets", (() => ({ spreadsheets: { values: {
-    batchUpdate: async ({ requestBody }: any) => { for (const entry of requestBody.data) tables.set(entry.range.split("!")[0], entry.values); },
-    batchClear: async () => {},
-    batchGet: async ({ ranges }: any) => ({ data: { valueRanges: ranges.map((range: string) => ({ values: tables.get(range.split("!")[0]) })) } }),
-  } } })) as any);
-  mock.method(google, "drive", (() => ({ files: { create: async () => ({ data: { id: randomUUID() } }), update: async () => ({ data: {} }) } })) as any);
-  const shop: Shop = { id: "shop", owner: "owner@example.com", slug: "shop", published: sample, draft: null, revision: 0, history: [], google: { folderId: "folder", sheetId: "sheet", specId: "spec", historyId: "history" } };
-  const config = shopSchema.parse(sample); const id = "a".repeat(64); config.menus[0].imageId = id;
-  await syncConfig(shop, config, encrypt("token"), () => {}, undefined, { [id]: image });
-  assert.deepEqual(tables.get("menus")![0], ["id", "name", "duration", "price", "active", "imageId"]);
-  assert.equal(tables.get("menus")![1][5], id);
-  assert.equal((await readConfig(shop, encrypt("token"))).menus[0].imageId, id);
-  delete config.menus[0].imageId;
-  await syncConfig(shop, config, encrypt("token"));
-  assert.equal((await readConfig(shop, encrypt("token"))).menus[0].imageId, undefined);
+  mock.method(fs, "readFile", async () => '<title></title><div id="root"></div>'); syncBuiltinESMExports();
+  mock.method(google, "sheets", (() => { throw new Error("Sheets must not be called"); }) as any);
+  const exports: string[] = [];
+  mock.method(google, "drive", (() => ({ files: {
+    create: async (input: any) => { if(input.media?.body)for await(const chunk of input.media.body)exports.push(String(chunk)); return {data:{id:randomUUID()}}; },
+    update: async (input: any) => { if(input.media?.body)for await(const chunk of input.media.body)exports.push(String(chunk)); return {data:{}}; },
+  } })) as any);
+  const shop: Shop = { id:"shop",owner:"owner@example.com",slug:"shop",published:sample,draft:null,revision:0,history:[],google:{folderId:"folder",specId:"spec",historyId:"history"} };
+  const config=shopSchema.parse(sample),id="a".repeat(64);config.menus[0].imageId=id;
+  await syncConfig(shop,config,encrypt("token"),()=>{},undefined,{[id]:image});
+  assert.ok(exports.some(text=>{try{return JSON.parse(text).menus?.[0]?.imageId===id;}catch{return false;}}));
 });

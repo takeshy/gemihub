@@ -48,9 +48,9 @@ A booking and shop management system for small independent businesses and salons
          ▼
    [ gemihub Server ] ── (Intent understanding, proposals, images) ──► [ Vertex AI (Gemini) ]
      │            │
-     │            └── (Sessions, locks, operational state) ──────────► [ Cloud Firestore ]
+     │            └── (Business data, sessions, locks) ──────────► [ Cloud Firestore ]
      │
-     └── (Ledgers, posts, images, specs, change history) ────────────► [ Owner's Google Sheets / Drive ]
+     └── (Images, attachments, specs, exports) ────────────► [ Owner's Google Drive ]
 ```
 
 - **Multimodal proposals for pages, articles, and settings—with server-enforced booking & payment logic:**
@@ -59,8 +59,8 @@ A booking and shop management system for small independent businesses and salons
   Initial setup asks for your shop name and logo, with separate choices for blog, announcements, staff introduction, and products/services. AI builds an HTML/CSS theme from reference images, then an independent AI review checks it with up to three repair attempts. Reference-page images guide the design; explicitly requested logos and photos are displayed. Use the red pen to revise the first theme preview.
 - **Source-backed answers and a Propose → Preview → Approve workflow:**
   In **Consult & ask**, a dedicated research LLM checks the system docs, the shop's `spec.md`, `history.md`, and live ledger records to answer with sources—explicitly stating when something is not defined instead of guessing. Change requests only go live after the owner previews the diff and approves on screen, recording the request in `history.md`.
-- **Owner-controlled data storage:**
-  Business data (menus, staff, reservations, customers, inquiries, articles) lives in the owner's **Google Sheets**, while images, generated specs (`spec.md`), change history (`history.md`), and offline HTML exports live in the owner's **Google Drive**.
+- **Data storage and export:**
+  Business data (settings, bookings, customers, inquiries, articles, and AI chats) lives in **Firestore**. Owners can download a JSON export or CSV tables from **Publication settings**. Images, attachments, specs, history, and offline HTML exports remain in the owner's **Google Drive**; exported records include file references, not the file bytes.
 
 ---
 
@@ -86,10 +86,10 @@ Open http://localhost:3000 and click **Try the salon demo** (use http://localhos
 
 ### 2. Connect Google and Vertex AI
 
-To use real AI generation and Google Sheets/Drive storage, enable the following APIs in your Google Cloud project and configure Application Default Credentials (`gcloud auth application-default login`):
+To use real AI generation and Firestore and Google Drive storage, enable the following APIs in your Google Cloud project and configure Application Default Credentials (`gcloud auth application-default login`):
 
 - Vertex AI API / Cloud Firestore API
-- Google Drive API / Google Sheets API / Gmail API / Google Calendar API
+- Google Drive API / Gmail API / Google Calendar API
 
 Update `.env` (see `.env.example` for all options):
 

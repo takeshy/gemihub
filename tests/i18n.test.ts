@@ -103,7 +103,7 @@ test("queued replies retain the initiating language when delivery is deferred", 
   const { randomUUID } = await import("node:crypto");
   process.env.DEMO_MODE="true";
   const store=new Store(":memory:"); const shop=await store.createShop("owner@example.com");
-  shop.published=structuredClone(sample); shop.google={folderId:"folder",sheetId:"sheet",specId:"spec",historyId:"history"}; await store.saveShop(shop);
+  shop.published=structuredClone(sample); shop.google={folderId:"folder",specId:"spec",historyId:"history"}; await store.saveShop(shop);
   await store.put("session",digest("owner"),{user:{email:shop.owner,name:"Owner",role:"owner"},expires:Date.now()+600000});
   await store.put("inquiry","question",{id:"question",shopId:shop.id,email:"guest@example.com",name:"Guest",message:"Hello",reply:"",status:"open",at:new Date().toISOString()});
   const server=createApp(store); await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));

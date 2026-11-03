@@ -1831,9 +1831,12 @@ pre {
 .data-storage-cards section { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fffdf8; }
 .data-storage-cards ul { padding-left: 18px; margin: 0; }
 .data-storage-cards li, .data-storage-cards p { font-size: 11px; line-height: 1.9; }
-.data-management .data-menu-links { margin: 18px 0; }
-.data-management .data-menu-links .actions { flex-wrap: wrap; }
-.data-management .form-grid { margin: 18px 0; }
+.shop-export { display: grid; gap: 12px; margin: 24px 0; padding: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.shop-export h3, .shop-export p { margin: 0; }
+.shop-export p { font-weight: 400; }
+.shop-export label { display: grid; gap: 8px; }
+.shop-export select { width: 100%; }
+.shop-export > .button { justify-self: start; max-width: 100%; }
 @media (max-width: 900px) { .data-spec-grid { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .data-flow { grid-template-columns: 1fr; } .data-flow li + li::before { content: '↓'; left: 50%; top: -18px; } .data-sheet-list > div { flex-wrap: wrap; } }
 .shop-history ol { list-style: none; max-height: 380px; overflow: auto; padding: 0 0 0 10px; }

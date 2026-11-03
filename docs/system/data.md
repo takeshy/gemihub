@@ -1,24 +1,23 @@
 ---
 type: "Concept"
 title: "Data and storage"
-description: "Where shop data is kept and what direct spreadsheet edits change."
-tags: ["data", "storage", "spreadsheet", "drive", "privacy"]
+description: "Firestore records, owner Drive files, and JSON/CSV exports."
+tags: ["data", "storage", "firestore", "drive", "privacy"]
 updated: "2026-11-03"
 ---
 
-Where shop data is kept and what direct spreadsheet edits change.
+# Business records
 
-# Owner's Google account
+Firestore is the source of truth for shop settings, bookings, customers, inquiries, members, notes, articles and AI chats. Google Sheets is not used for reads or writes. Records are queried by shop and record type; transactions commit business records and pending operational work together. Published settings come from the saved shop configuration.
 
-- The booking ledger is a Google spreadsheet in the owner's Drive. Bookings, inquiries, members, customers, notes and articles are rows there, and settings are in the `menus`, `staff`, `settings` and `pages` tabs.
-- Images, attachments, `spec.md`, `history.md` and a runnable export of the shop pages are in the shop's Drive folder.
+Cancellation, no-show, membership revocation and note deletion preserve records through status changes. Payment amounts and refund decisions come from their processing journals. Menu and booking prices use the shop's major currency units; captured payments and refunds use integer yen or cents.
 
-# Server
+# Owner's Google Drive
 
-The server keeps sign-in sessions, encrypted Google tokens, publication state, pending plans, payment and refund processing records, and locks. Payment amounts and refund decisions come from these records, not from spreadsheet edits.
+Images, private attachments, specifications, change history and offline page exports remain in the owner's Drive. Business records do not require Drive access to be read. Drive or email failures remain visible and can be retried.
 
-Menu and booking prices are in the shop's major currency units (yen or dollars). Captured payment and refund amounts are integer yen or cents with their own currency. Old shops and payment journals keep their JP/JPY interpretation. Column names and order remain unchanged.
+# Export
 
-# Direct spreadsheet edits
+In Publication settings, the owner can save all records as JSON or choose a CSV table: bookings, customers, inquiries, customer notes, members, articles, services or staff. JSON includes the current configuration, draft, history and the owner's own chats. Other people's private chats, encrypted Google credentials, sessions and internal payment-processing records are excluded. Booking payment fields retain the recorded amounts and cancellation state.
 
-Settings edited directly in the spreadsheet take effect on the next request. Keep column names and order. Invalid master data stops booking until fixed. Plans created before a direct edit must be created again. Do not add bookings directly while the app is taking bookings; direct edits do not use the booking lock.
+Image and attachment references are included; file bytes remain in Drive. Export files are private downloads. Editing an exported file does not update the shop. CSV values are quoted and text that could be evaluated as a spreadsheet formula is escaped. Use the app to update records or cancel bookings.

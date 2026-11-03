@@ -1,4 +1,5 @@
 import { googleCallbackPath } from "../shared/brand.ts";
+import { shopExport, exportRows, exportCsv, exportColumns, type ExportTable } from "./data-export.ts";
 import { renderLanding } from "./landing.ts";
 import { renderLegal } from "./legal.ts";
 import { hasLegacyNotes } from "./legacy-notes.ts";
@@ -31,7 +32,6 @@ import { resetShop } from "./shop-reset.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
-import { listDataSheets, readDataTable, writeDataRow } from "./data-management.ts";
 import { uploadMenuImage, readMenuImage, validateMenuImages, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
 import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
 import { generateImage } from "./image-generation.ts";
@@ -54,7 +54,6 @@ import {
   encrypt,
   provision,
   syncConfig,
-  readConfig,
   sendMail,
   syncPostFiles,
   readDriveText,
@@ -310,13 +309,7 @@ export function createApp(
   const effective = async (shop: Shop) => {
     if (shop.publishingPlanId)
       fail(503, tr("予約ページを更新中です。しばらくしてからお試しください。"));
-    return shop.google
-      ? readConfig(
-          shop,
-          (await ownerToken(shop)) ||
-            fail(503, tr("店主の Google 再接続が必要です")),
-        )
-      : shop.published!;
+    return shop.published!;
   };
   async function initialPlanFacts(plan: Plan, shop: Shop): Promise<Plan> {
     if (shop.published || !plan.requiresSetup || !plan.chat) return plan;
@@ -411,7 +404,7 @@ export function createApp(
     )
       fail(
         409,
-        tr("スプレッドシートの設定が更新されています。最新の内容でプランを作り直してください"),
+        tr("お店の設定が更新されています。最新の内容でプランを作り直してください"),
       );
     if (fresh.publishingPlanId && fresh.publishingPlanId !== plan.id)
       fail(409, tr("公開中のプランを先に完了してください"));
@@ -1188,6 +1181,19 @@ export function createApp(
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
+          if (action === "export" && method === "GET") {
+            assertOwner(user, fresh);
+            const format = z.enum(["json", "csv"]).parse(url.searchParams.get("format") || "json");
+            const table = z.enum(Object.keys(exportColumns) as [ExportTable, ...ExportTable[]]).parse(url.searchParams.get("table") || "bookings");
+            const content = format === "csv" ? exportCsv(await exportRows(store, fresh, table), exportColumns[table]) : JSON.stringify(await shopExport(store, fresh, user!.email), null, 2);
+            const filename = `gemihub-${fresh.id.replace(/[^a-zA-Z0-9_-]/g, "_")}-${format === "csv" ? table + "-" : ""}${new Date().toISOString().slice(0, 10)}.${format}`;
+            res.setHeader("Content-Type", format === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8");
+            res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+            res.setHeader("Cache-Control", "private, no-store");
+            res.setHeader("X-Content-Type-Options", "nosniff");
+            res.end(content);
+            return;
+          }
           const initialThemeRoute = action.match(/^plans\/([^/]+)\/theme$/);
           if (initialThemeRoute && method === "POST") {
             assertOwner(user, fresh);
@@ -1231,17 +1237,6 @@ export function createApp(
             if (libraryRoute[1] && method === "POST" && libraryRoute[2]) {
               if (libraryRoute[2] === "rename") await updateImage(store, fresh, libraryRoute[1], await body(req, 2000), crmFiles, token);
               else await archiveImage(store, fresh, libraryRoute[1], fresh.published ? await effective(fresh) : fresh.draft);
-              return json(res, { ok: true });
-            }
-          }
-          const dataSheet = action.match(/^data\/sheets(?:\/(\d+)(?:\/rows\/(\d+))?)?$/);
-          if (dataSheet && (method === "GET" || method === "POST")) {
-            assertOwner(user, fresh);
-            const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
-            if (!dataSheet[1] && method === "GET") return json(res, await listDataSheets(store, fresh, token));
-            if (dataSheet[1] && !dataSheet[2] && method === "GET") return json(res, await readDataTable(store, fresh, dataSheet[1], token));
-            if (dataSheet[1] && dataSheet[2] && method === "POST") {
-              await writeDataRow(store, fresh, dataSheet[1], Number(dataSheet[2]), await body(req, 16 * 1024 * 1024), token);
               return json(res, { ok: true });
             }
           }

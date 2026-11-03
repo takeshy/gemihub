@@ -27,7 +27,7 @@ test("CRM files stay in the owner's Drive and repeated upload validates the rese
     },
   } };
   mock.method(google, "drive", (() => drive) as any);
-  const shop: Shop = { id: "shop", owner: "owner@example.com", slug: "shop", published: null, draft: null, revision: 0, history: [], google: { folderId: "private-owner-folder", sheetId: "sheet", specId: "spec", historyId: "history" } };
+  const shop: Shop = { id: "shop", owner: "owner@example.com", slug: "shop", published: null, draft: null, revision: 0, history: [], google: { folderId: "private-owner-folder", specId: "spec", historyId: "history" } };
   const file = { name: "写真.txt", mimeType: "text/plain", data: Buffer.from("private bytes").toString("base64") };
   const { encrypt } = await import("../server/google.ts");
   const token = encrypt("test-token");

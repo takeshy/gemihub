@@ -52,7 +52,7 @@ A new shop is first published provisionally: only the owner who created it can v
 1. The owner describes a change in words (chat or voice) or edits a settings screen.
 2. gemihub writes a change plan showing exactly which settings change. Nothing is applied yet.
 3. The owner approves the plan on screen. Voice agreement alone is never approval.
-4. gemihub saves the settings to the shop's spreadsheet and Drive, regenerates `spec.md`, and adds an entry to `history.md`.
+4. gemihub saves the settings to Firestore and exports page files to Drive, regenerates `spec.md`, and adds an entry to `history.md`.
 
 Amounts are always decided by the server, payment policies are fixed per booking, and factual data is read from the shop settings; a change request cannot override these.
 

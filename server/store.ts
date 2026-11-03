@@ -4,7 +4,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID, createHash } from "node:crypto";
 import type { Checkout } from "./payments.ts";
 import type { ShopConfig, Booking } from "./domain.ts";
-import { readRecords, writeRecord } from "./sheet-records.ts";
 import { judgeActive, type DemoGoogle } from "./judge.ts";
 export type Shop = {
   id: string;
@@ -17,7 +16,6 @@ export type Shop = {
   /** Published changes; `request` keeps the owner's words so the reason can be answered later. */
   history: { at: string; summary: string; request?: string }[];
   google?: {
-    sheetId: string;
     folderId: string;
     specId: string;
     historyId: string;
@@ -89,19 +87,6 @@ export class Store {
     return this.firestore!.collection("gemihub_state").doc(this.key(kind, id));
   }
   async get<T>(kind: string, id: string): Promise<T | undefined> {
-    if (!this.memory && businessKinds.has(kind)) {
-      if (kind === "member" || kind === "customer") {
-        const shop = await this.shop(id.split(":")[0]);
-        return shop
-          ? (await this.records<T & { email: string }>(kind, shop)).find(
-              (v) => `${shop.id}:${v.email}` === id,
-            )
-          : undefined;
-      }
-      return (await this.list<T & { id: string }>(kind)).find(
-        (v) => v.id === id,
-      );
-    }
     const pending = this.batch
       .getStore()
       ?.findLast((e) => e.kind === kind && e.id === id);
@@ -131,23 +116,6 @@ export class Store {
   async put(kind: string, id: string, value: unknown): Promise<void> {
     const recordShop = businessKinds.has(kind) ? await this.get<Shop>("shop", (value as { shopId: string }).shopId) : undefined;
     if (recordShop && isArchivedShop(recordShop)) throw Object.assign(new Error(tr("お店がありません")), { status: 404 });
-    if (!this.memory && businessKinds.has(kind)) {
-      const shop = recordShop;
-      if (!shop?.google && !chatKinds.has(kind))
-        throw Object.assign(
-          new Error(tr("先にお店を公開して保存先を作成してください")),
-          { status: 409 },
-        );
-      if (shop?.google) {
-        const token = await this.ownerToken(shop);
-        if (!token) throw new Error(tr("店主の Google 再接続が必要です"));
-        // Keep Live transcripts durable while the owner sheet is being updated.
-        if (chatKinds.has(kind)) await this.persist([{kind,id,value:structuredClone(value)}]);
-        await writeRecord(shop, kind, id, value as Record<string, unknown>, token);
-        if (chatKinds.has(kind)) await this.ref(kind,id).delete();
-        return;
-      }
-    }
     const entry = { kind, id, value: structuredClone(value) };
     if (this.batch.getStore()) {
       this.batch.getStore()!.push(entry);
@@ -166,6 +134,7 @@ export class Store {
       batch.set(this.ref(e.kind, e.id), {
         kind: e.kind,
         id: e.id,
+        ...(typeof (e.value as { shopId?: unknown })?.shopId === "string" ? { scope: `${e.kind}:${(e.value as { shopId: string }).shopId}` } : {}),
         json: JSON.stringify(e.value),
       });
     await batch.commit();
@@ -176,54 +145,38 @@ export class Store {
     if (this.memory) this.values.delete(this.key(kind, id));
     else await this.ref(kind, id).delete();
   }
+  private pending<T>(kind: string, rows: { id: string; value: T }[], shopId?: string): T[] {
+    const merged = new Map(rows.map(row => [row.id, row.value]));
+    for (const entry of this.batch.getStore() || []) {
+      if (entry.kind === kind && (!shopId || (entry.value as { shopId?: string }).shopId === shopId))
+        merged.set(entry.id, structuredClone(entry.value) as T);
+    }
+    return [...merged.values()];
+  }
   async records<T>(kind: string, shop: Shop): Promise<T[]> {
     if (isArchivedShop(shop)) return [];
-    if (this.memory)
-      return (await this.list<T & { shopId: string }>(kind)).filter(
-        (v) => v.shopId === shop.id,
-      );
-    const staged = chatKinds.has(kind) ? (await this.firestore!.collection("gemihub_state").where("kind", "==", kind).get()).docs.map(doc => ({id:doc.get("id") as string,value:JSON.parse(doc.get("json")) as {shopId:string;updatedAt:string}})).filter(entry => entry.value.shopId === shop.id) : [];
-    if (!shop.google) return staged.map(entry => entry.value as T);
-    const token = await this.ownerToken(shop);
-    if (!token)
-      throw Object.assign(new Error(tr("店主の Google 再接続が必要です")), {
-        status: 503,
-      });
-    const rows = await readRecords(shop, kind, token);
-    for (const entry of staged) {
-      const existing = rows.find(row => row.id === entry.id);
-      if (!existing || String(existing.updatedAt) <= entry.value.updatedAt) {
-        await writeRecord(shop,kind,entry.id,entry.value,token);
-        if (existing) rows.splice(rows.indexOf(existing),1,entry.value); else rows.push(entry.value);
-      }
-      await this.ref(kind,entry.id).delete();
-    }
-    return rows as T[];
+    const rows = this.memory
+      ? [...this.values.values()].filter(entry => entry.kind === kind && (entry.value as { shopId?: string }).shopId === shop.id).map(entry => ({ id: entry.id, value: structuredClone(entry.value) as T }))
+      : (await this.firestore!.collection("gemihub_state").where("scope", "==", `${kind}:${shop.id}`).get()).docs.map(doc => ({ id: doc.get("id") as string, value: JSON.parse(doc.get("json")) as T }));
+    return this.pending(kind, rows, shop.id);
   }
-  async entries<T>(kind: string): Promise<{ id: string; value: T }[]> {
+  async entries<T>(kind: string, shop?: Shop): Promise<{ id: string; value: T }[]> {
     if (businessKinds.has(kind)) throw new Error(tr("業務記録には専用の読み取りを使ってください"));
-    if (this.memory) return [...this.values.values()].filter(entry => entry.kind === kind).map(entry => ({ id: entry.id, value: structuredClone(entry.value) as T }));
-    const result = await this.firestore!.collection("gemihub_state").where("kind", "==", kind).get();
+    if (shop && isArchivedShop(shop)) return [];
+    if (this.memory) return [...this.values.values()].filter(entry => entry.kind === kind && (!shop || (entry.value as { shopId?: string }).shopId === shop.id)).map(entry => ({ id: entry.id, value: structuredClone(entry.value) as T }));
+    const result = await this.firestore!.collection("gemihub_state").where(shop ? "scope" : "kind", "==", shop ? `${kind}:${shop.id}` : kind).get();
     return result.docs.map(doc => ({ id: doc.get("id") as string, value: JSON.parse(doc.get("json")) as T }));
   }
   async list<T>(kind: string): Promise<T[]> {
-    if (!this.memory && businessKinds.has(kind))
-      return (
-        await Promise.all(
-          (await this.list<Shop>("shop")).filter(s => !isArchivedShop(s)).map((s) => this.records<T>(kind, s)),
-        )
-      ).flat();
-    if (this.memory)
-      return [...this.values.values()]
-        .filter((e) => e.kind === kind)
-        .map((e) => structuredClone(e.value) as T);
-    const result = await this.firestore!.collection("gemihub_state")
-      .where("kind", "==", kind)
-      .get();
-    return result.docs.map((d) => JSON.parse(d.get("json")));
+    const rows = this.memory
+      ? [...this.values.values()].filter(entry => entry.kind === kind).map(entry => ({ id: entry.id, value: structuredClone(entry.value) as T }))
+      : (await this.firestore!.collection("gemihub_state").where("kind", "==", kind).get()).docs.map(doc => ({ id: doc.get("id") as string, value: JSON.parse(doc.get("json")) as T }));
+    const values = this.pending(kind, rows);
+    if (!businessKinds.has(kind)) return values;
+    const active = new Set((await this.list<Shop>("shop")).filter(shop => !isArchivedShop(shop)).map(shop => shop.id));
+    return values.filter(value => active.has((value as { shopId: string }).shopId));
   }
-  // Atomic operational writes. Sheets writes are acknowledged before these commit;
-  // request identities in the sheet make an interrupted commit safe to retry.
+  // Business records and operational state commit together; failed batches leave both unchanged.
   async transaction<T>(fn: () => Promise<T>): Promise<T> {
     if (this.batch.getStore()) return fn();
     const entries: Entry[] = [];
@@ -273,7 +226,7 @@ export class Store {
     const s = await this.shop(shop);
     if (!s) return [];
     const bookings = await this.records<Booking>("booking", s);
-    // A sheet edit cannot rewrite the captured amount, consent or cancellation intent.
+    // Captured amounts, consent and cancellation intent come from the payment journal.
     for (const c of (await this.list<Checkout>("checkout")).filter(c => c.shopId === shop && c.phase === "confirmed")) {
       const index = bookings.findIndex(b => b.id === c.booking.id);
       if (index < 0) bookings.push(c.booking); else bookings[index] = c.booking;
@@ -329,7 +282,7 @@ export class Store {
             new Error(tr("別の操作を処理中です。少し待って再試行してください")),
             { status: 503 },
           );
-        // No lease timeout: a paused process must never overlap a new Sheets writer.
+        // No lease timeout: a paused process must never overlap a new writer.
         // After a crash, an operator verifies the process is stopped before deleting the lock.
         try {
           return await fn();

@@ -88,7 +88,6 @@ test("inquiry responses and status are independent, scoped to operators, durable
   // No credentials: replies queue mail locally without contacting Google.
   shop.google = {
     folderId: "folder",
-    sheetId: "sheet",
     specId: "spec",
     historyId: "history",
   };
@@ -289,7 +288,6 @@ test("an accepted inquiry reply sends its queued email before removing the mail 
   const shop = await store.createShop("owner@example.com");
   shop.published = structuredClone(sample);
   shop.google = {
-    sheetId: "sheet",
     folderId: "folder",
     specId: "spec",
     historyId: "history",

@@ -69,23 +69,17 @@ test("per-page Drive sync writes selected HTML/JSON and shared snapshots, never 
   mock.method(fs, "readFile", async () => '<title></title><div id="root"></div>');
   syncBuiltinESMExports();
   const writes: { fileId: string; requestBody?: { trashed?: boolean }; media?: { mimeType: string } }[] = [];
-  const ranges: string[] = [];
-  mock.method(google as unknown as { sheets: () => unknown }, "sheets", (() => ({ spreadsheets: { values: {
-    get: async ({ range }: { range: string }) => ({ data: { values: range === "pages!A:B" ? [["id", "record"], ["faq", JSON.stringify(page("faq"))], ["access", JSON.stringify(page("access"))]] : [["key"], ["name"], ["pages"]] } }),
-    batchUpdate: async ({ requestBody }: { requestBody: { data: { range: string }[] } }) => { ranges.push(...requestBody.data.map(d => d.range)); },
-    batchClear: async () => { throw new Error("must not clear menu/staff rows"); },
-  } } })));
+  mock.method(google as unknown as { sheets: () => unknown }, "sheets", (() => { throw new Error("Sheets must not be called"); }));
   mock.method(google as unknown as { drive: () => unknown }, "drive", (() => ({ files: {
     update: async (data: { fileId: string; requestBody?: { trashed?: boolean } }) => { writes.push(data); return { data: {} }; },
     create: async () => { throw new Error("all required folders/files already exist"); },
   } })));
   const before = { ...structuredClone(sample), pages: [page("faq"), page("access")] };
   const config = structuredClone(before); config.pages[0].body = "変更本文";
-  const shop: Shop = { id: "shop", owner: "owner@example.com", slug: "shop", revision: 1, history: [], draft: null, published: before, google: { sheetId: "sheet", folderId: "root", specId: "spec", historyId: "history", artifactFolders: { web: "web", admin: "admin", "web/pages": "pages" }, artifactIds: { "web/pages/faq.html": "faq-html", "web/pages/faq.json": "faq-json", "web/pages/access.html": "access-html", "web/pages/access.json": "access-json", "web/pages/index.json": "pages-index" } } };
+  const shop: Shop = { id: "shop", owner: "owner@example.com", slug: "shop", revision: 1, history: [], draft: null, published: before, google: { folderId: "root", specId: "spec", historyId: "history", artifactFolders: { web: "web", admin: "admin", "web/pages": "pages" }, artifactIds: { "web/pages/faq.html": "faq-html", "web/pages/faq.json": "faq-json", "web/pages/access.html": "access-html", "web/pages/access.json": "access-json", "web/pages/index.json": "pages-index" } } };
   for (const [path, id] of Object.entries({ "web/index.html": "shop-html", "web/data.js": "shop-data", "web/shop.json": "shop-config", "web/mock.json": "shop-mock" })) shop.google!.artifactIds![path] = id;
   const snapshotIds = ["shop-html", "shop-data", "shop-config", "shop-mock"];
   await syncConfig(shop, config, encrypt("token"), () => {}, { kind: "page", pageId: "faq" });
-  assert.deepEqual(ranges, ["pages!A2:B2", "settings!A3:B3"]);
   assert.deepEqual(writes.map(w => w.fileId).sort(), [...snapshotIds, "faq-html", "faq-json", "history", "pages-index", "spec"].sort());
   assert.equal(writes.find(w => w.fileId === "shop-data")?.media?.mimeType, "text/javascript");
   writes.length = 0;
@@ -97,9 +91,8 @@ test("per-page Drive sync writes selected HTML/JSON and shared snapshots, never 
   shop.google!.artifactIds!["web/parts/header.html"] = "header-html";
   shop.google!.artifactIds!["web/parts/header.json"] = "header-json";
   shop.google!.artifactIds!["web/parts/footer.html"] = "footer-html";
-  writes.length = 0; ranges.length = 0;
+  writes.length = 0;
   await syncConfig(shop, { ...config, header: { ...config.header, title: "ヘッダーだけ更新" } }, encrypt("token"), () => {}, { kind: "part", part: "header" });
-  assert.deepEqual(ranges, ["settings!A4:B4"]);
   assert.deepEqual(writes.map(w => w.fileId).sort(), [...snapshotIds, "header-html", "header-json", "history", "spec"].sort());
 });
 
