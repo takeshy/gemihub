@@ -2318,5 +2318,18 @@
   "メッセージ送信失敗・下書きを復元": "Message send failure: restore the draft",
   "AIの質問に答えながら、直したいことや追加したいことを伝えられます。": "Answer the AI’s questions and continue describing changes or additions.",
   "作成した案の、直したいところを伝えてください。": "Tell us what you would like to change in the proposal.",
-  "各画面はヘッダー・フッターを除いた内容を表示します。共通部分は下に分けて表示しています。": "Each screen shows its content without the header and footer. Shared parts are shown separately below."
+  "各画面はヘッダー・フッターを除いた内容を表示します。共通部分は下に分けて表示しています。": "Each screen shows its content without the header and footer. Shared parts are shown separately below.",
+  "自分のお店を初期化": "Reset my shop",
+  "お店の状態が変わりました。画面を読み直してください。": "The shop has changed. Reload the page and try again.",
+  "お店を最初から作り直しますか？": "Start your shop over?",
+  "自分のお店の公開ページを閉じ、設定・予約・問い合わせ・お客様・記事・画像・AIとの会話を初期化します。元に戻せません。": "Close your shop’s published pages and reset its settings, bookings, inquiries, customers, articles, images, and AI conversations. This cannot be undone.",
+  "Google連携は維持します。お店専用のDriveフォルダはゴミ箱に移動し、次のお店の保存先を新しく用意します。": "Your Google connection stays active. The shop’s Drive folder moves to the trash, and a new folder will store your next shop.",
+  "PayPalの決済・返金履歴は残ります。初期化による返金は行いません。": "PayPal payment and refund history is retained. Resetting does not issue refunds.",
+  "初期化をもう一度押すと、同じ処理を続けます。": "Press reset again to resume the same operation.",
+  "初期化しています…": "Resetting…",
+  "初期化して最初からつくる": "Reset and start over",
+  "撮影用の初期化": "Reset for recording",
+  "Google連携を維持して初期化を確認": "Confirm reset while keeping Google connected",
+  "初期化失敗から同じ処理を再試行": "Retry the same reset after a failure",
+  "初期化中は操作を待つ": "Wait while the shop is resetting"
 }

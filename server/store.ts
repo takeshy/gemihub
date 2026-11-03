@@ -30,6 +30,8 @@ export type Shop = {
   domain?: string;
   domainToken?: string;
   domainVerified?: boolean;
+  /** Reset shops remain as audit records, but are never served or synchronized. */
+  archivedAt?: string;
   /** Present on shops created through hackathon judge access; stored in the operator's demo Google Drive. */
   judge?: { createdAt: string; folderId?: string; archivedAt?: string };
   /** Region chosen from the owner's first visit, used for the first proposal. */
@@ -47,6 +49,8 @@ export type User = {
   /** A new owner signed in with Google but has not entered the invitation password yet. */
   accessPending?: boolean;
 };
+
+export const isArchivedShop = (shop: Shop) => !!(shop.archivedAt || shop.judge?.archivedAt);
 
 const chatKinds = new Set(["shopChat", "shopChatMessage"]);
 const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote", ...chatKinds]);
@@ -125,8 +129,10 @@ export class Store {
     });
   }
   async put(kind: string, id: string, value: unknown): Promise<void> {
+    const recordShop = businessKinds.has(kind) ? await this.get<Shop>("shop", (value as { shopId: string }).shopId) : undefined;
+    if (recordShop && isArchivedShop(recordShop)) throw Object.assign(new Error(tr("お店がありません")), { status: 404 });
     if (!this.memory && businessKinds.has(kind)) {
-      const shop = await this.shop((value as { shopId: string }).shopId);
+      const shop = recordShop;
       if (!shop?.google && !chatKinds.has(kind))
         throw Object.assign(
           new Error(tr("先にお店を公開して保存先を作成してください")),
@@ -171,6 +177,7 @@ export class Store {
     else await this.ref(kind, id).delete();
   }
   async records<T>(kind: string, shop: Shop): Promise<T[]> {
+    if (isArchivedShop(shop)) return [];
     if (this.memory)
       return (await this.list<T & { shopId: string }>(kind)).filter(
         (v) => v.shopId === shop.id,
@@ -203,7 +210,7 @@ export class Store {
     if (!this.memory && businessKinds.has(kind))
       return (
         await Promise.all(
-          (await this.list<Shop>("shop")).map((s) => this.records<T>(kind, s)),
+          (await this.list<Shop>("shop")).filter(s => !isArchivedShop(s)).map((s) => this.records<T>(kind, s)),
         )
       ).flat();
     if (this.memory)
@@ -251,11 +258,13 @@ export class Store {
   }
   /** The Google token that stores a shop: the owner's, or the operator's demo connection for judge shops. */
   async ownerToken(shop: Shop) {
+    if (isArchivedShop(shop)) return undefined;
     if (shop.judge) return judgeActive() ? (await this.get<DemoGoogle>("demoGoogle", "current"))?.refreshToken : undefined;
     return (await this.get<User>("user", shop.owner))?.refreshToken;
   }
   async shop(id: string) {
-    return this.get<Shop>("shop", id);
+    const shop = await this.get<Shop>("shop", id);
+    return shop && !isArchivedShop(shop) ? shop : undefined;
   }
   async saveShop(shop: Shop) {
     await this.put("shop", shop.id, shop);
@@ -277,7 +286,7 @@ export class Store {
   async createShop(owner: string, regionDefault?: import("../shared/region.ts").Region) {
     return this.locked(`owner:${owner}`, async () => {
       const existing = (await this.list<Shop>("shop")).find(
-        (s) => s.owner === owner,
+        (s) => s.owner === owner && !isArchivedShop(s),
       );
       if (existing) return existing;
       const id = randomUUID();

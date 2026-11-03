@@ -110,6 +110,8 @@ Update `.env` (see `.env.example` for all options):
 
 For PayPal Sandbox testing, also set `PAYPAL_ENVIRONMENT=sandbox`, `PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET_FILE`.
 
+For another recording take, a Google-signed-in owner can select **Reset my shop** in the header and confirm. This also works in production. Google stays connected while setup starts over, with a new folder for the next shop. The previous storefront closes and its dedicated Drive folder moves to the trash. Other shops are unaffected. PayPal payment/refund history is retained, and resetting does not issue refunds.
+
 ---
 
 ## Documentation & Testing

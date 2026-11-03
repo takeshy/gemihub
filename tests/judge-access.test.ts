@@ -100,7 +100,7 @@ test("judges start without Google, see recorded mail instead of sending it, swit
   assert.equal(fresh.shops.length, 1);
   assert.notEqual(fresh.shops[0].id, shop.id);
   assert.equal(fresh.shops[0].published, null);
-  assert.ok((await store.shop(shop.id))!.judge!.archivedAt);
+  assert.ok((await store.get<Shop>("shop", shop.id))!.judge!.archivedAt);
   assert.deepEqual(await (await call("/api/judge/mails", undefined, renewed)).json(), []);
   assert.equal((await call("/api/session", undefined, customer).then(r => r.json()) as { user: unknown }).user, null);
   assert.equal((await (await call("/api/judge/status", undefined, renewed)).json() as { aiUsed: number }).aiUsed, 7);

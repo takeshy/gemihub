@@ -34,6 +34,12 @@ Show data flow, standard-sheet-to-menu mappings, public/private destinations, an
 
 Questions are answered in Consult & ask. Changes clarifies a requested edit. New page proposes content and customer navigation label with new IDs/addresses, preserving unrelated pages and booking configuration. Chat continues on the same screen; a proposal is opened from the chat and explicitly applied after review. Current settings/version fingerprints prevent applying stale conversation-based changes. Operators may read settings/history; owner-only actions remain owner-only.
 
+## Reset for recording
+
+Google-signed-in owners can select Reset my shop in the header even during initial setup and in production. Require a confirmation explaining that the storefront closes and settings, bookings, inquiries, customers, articles, images, and AI conversations reset. Focus Cancel first, block duplicate actions while running, and allow the same operation to resume after failure. Customers and another shop’s staff cannot reset it; judges keep their existing judge-menu reset.
+
+Keep Google authorization, sign-in, country, and time zone; return to an empty shop’s creation screen. Archive the old shop, move only its dedicated Drive folder to the trash, and stop its storefront, custom domain, APIs, synchronization, and old staff access. The next private publication creates new storage. Remove only that shop’s local drafts. Retain PayPal payment/refund journals and reset audit records without issuing refunds. Validate owner and origin server-side. A journal and locks keyed to the old shop make retries and concurrent requests safe; a stale tab never resets a later take.
+
 ## Local screen editor and scoped releases
 
 After private publication, the owner starts in Try and edit screens; staff start in booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Sheets, Gmail, Calendar, or production data.

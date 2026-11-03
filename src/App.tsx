@@ -32,6 +32,7 @@ import type { Shop, User } from "../server/store";
 import "./style.css";
 import { LegacyNotes } from "./LegacyNotes";
 import { JudgeStart, JudgeMenu, JudgeBar, AccessPassword } from "./JudgeAccess";
+import { ShopReset } from "./ShopReset";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
 import { paid, createDisplay, useShopDisplay, ShopRegionContext } from "./money";
@@ -118,7 +119,7 @@ export function App({
   return (
     <>
       <LanguageSwitcher />
-      {!isPublic && <header>
+      {!isPublic && <header className="app-header">
         <Brand />
         <div className="header-right">
           <span className="small muted">
@@ -127,6 +128,7 @@ export function App({
           {session.user?.role === "owner" && session.user.legacyNotes && <a className="text-button" href="/settings/migration">{tr("旧環境からの引き継ぎ")}</a>}
           {session.user?.judge && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
           {session.user?.admin && <a className="text-button" href="/admin">{tr("運営管理")}</a>}
+          {session.user?.role === "owner" && session.user.shopId && !session.user.judge && !session.user.legacyNotes && !session.user.accessPending && <ShopReset shopId={session.user.shopId} navigate={navigate} />}
           {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
           {!isPublic && (
             <a className="text-button" href="/manual">

@@ -26,7 +26,8 @@ import { resolveTxt } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { z } from "zod";
-import { Store, type Shop, type User } from "./store.ts";
+import { Store, isArchivedShop, type Shop, type User } from "./store.ts";
+import { resetShop } from "./shop-reset.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
 import { listDataSheets, readDataTable, writeDataRow } from "./data-management.ts";
@@ -270,7 +271,7 @@ export function createApp(
   const provisionShop = async (shop: Shop, config: ShopConfig, token: string) =>
     provision(shop, config, token, await judgeParent(shop, token));
   const operator = async (user: User | undefined, shop: Shop) => {
-    if (!user) return false;
+    if (!user || isArchivedShop(shop)) return false;
     if (user.email === shop.owner) return true;
     const member = await store.get<StaffMember>("member", `${shop.id}:${user.email}`);
     return member?.accepted === true && member.status !== "revoked";
@@ -280,7 +281,7 @@ export function createApp(
       fail(403, tr("運営メンバーのみ利用できます"));
   };
   const assertOwner = (user: User | undefined, shop: Shop) => {
-    if (user?.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
+    if (isArchivedShop(shop) || user?.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
   };
   const inquiries = (shop: Shop) => store.records<Inquiry>("inquiry", shop);
   const postsFor = (shop: Shop) => store.records<Post>("post", shop);
@@ -476,7 +477,7 @@ export function createApp(
         return;
       }
       // Judge shops disappear when judge access ends; a reset archives the previous shop.
-      const allShops = (await store.list<Shop>("shop")).filter(shop => !shop.judge || (judgeActive() && !shop.judge.archivedAt));
+      const allShops = (await store.list<Shop>("shop")).filter(shop => !isArchivedShop(shop) && (!shop.judge || judgeActive()));
       const hosted =
         host !== appHost
           ? allShops.find(
@@ -834,7 +835,8 @@ export function createApp(
           return json(res, { ok: true, slug: (await store.shop(owner.user.shopId || ""))?.slug });
         }
         if (!user?.judge) fail(403, tr("審査員としてログインしてください"));
-        const own = (user.shopId ? await store.shop(user.shopId) : undefined) || fail(404, tr("お店がありません"));
+        // An interrupted legacy judge reset may already have archived its old shop.
+        const own = (user.shopId ? await (path === "/api/judge/reset" ? store.get<Shop>("shop", user.shopId) : store.shop(user.shopId)) : undefined) || fail(404, tr("お店がありません"));
         if (path === "/api/judge/status" && method === "GET") {
           const usage = await store.get<JudgeUsage>("judgeUsage", user.email);
           return json(res, { until: judgeUntil()!.toISOString(), aiUsed: usage?.count || 0, aiLimit: judgeAiLimit(), storage: !!await store.ownerToken(own), shopId: own.id, slug: own.slug, published: !!own.published });
@@ -976,6 +978,11 @@ export function createApp(
       }
       if (user?.role === "owner" && user.legacyNotes && !publicHost && path.startsWith("/api/")) {
         fail(409, tr("旧設定が残っています。kiokuflowでデータの引き継ぎを完了してから、もう一度確認してください。"));
+      }
+      if (path === "/api/shop-reset" && method === "POST" && !publicHost) {
+        if (user?.role !== "owner" || user.judge || user.accessPending) fail(403, tr("店主のみ利用できます"));
+        const input = z.object({ shopId: z.uuid() }).parse(await body(req));
+        return json(res, await resetShop(store, user.email, input.shopId));
       }
       if (path === "/api/workspace" && method === "GET" && !publicHost) {
         if (!user) fail(401, tr("Google アカウントでログインしてください"));
@@ -1972,7 +1979,7 @@ export function createApp(
               if (
                 domain === appHost ||
                 (await store.list<Shop>("shop")).some(
-                  (s) => s.id !== fresh.id && s.domain === domain,
+                  (s) => !isArchivedShop(s) && s.id !== fresh.id && s.domain === domain,
                 )
               )
                 fail(409, tr("このドメインは利用できません"));
@@ -2457,7 +2464,7 @@ export function createApp(
     void (async () => {
       await store.cleanup();
       for (const shop of (await store.list<Shop>("shop")).filter(
-        (s) => s.published && !s.judge?.archivedAt,
+        (s) => s.published && !isArchivedShop(s),
       ))
         void store
           .locked(shop.id, async () => {
