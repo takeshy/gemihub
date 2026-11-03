@@ -4,7 +4,6 @@ import { useApi } from "./api";
 import { createRequestId } from "./request-id";
 import { menuImageLimit, type MenuImageData } from "../server/menu-image-domain";
 import { RequestImagePicker } from "./RequestImagePicker";
-import { ImageUploadStatus } from "./ImageUploadStatus";
 
 export function MenuImage({ imageId, imageBase, suffix = "", name, className = "menu-image" }: { imageId?: string; imageBase: string; suffix?: string; name: string; className?: string }) {
   const api = useApi();
@@ -68,7 +67,7 @@ export function MenuImageEditor({ shopId, imageId, name, change, uploading, labe
       const action = { file, requestId: createRequestId() }; setPending(action); void upload(action);
     }} /></label>}
     <p className="small muted">{tr("1枚・5MBまで。アップロードした画像も画像管理に保存されます。画像を選んだ後、「保存」でお客様の画面に反映します。")}</p>
-    {busy && <ImageUploadStatus name={pending?.file.name} />}
+    {busy && <p role="status">{tr("画像を保存しています…")}</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     <div className="actions">{pending && !busy && error && <button type="button" onClick={() => void upload(pending)}>{tr("画像の保存を再試行")}</button>}{imageId && <button type="button" disabled={busy} onClick={() => { change(undefined); setPending(undefined); setError(""); }}>{tr("画像を解除")}</button>}</div>
     </div>

@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useApi } from "./api";
 import { RequestImagePicker } from "./RequestImagePicker";
-import { ImageUploadStatus } from "./ImageUploadStatus";
 import { createRequestId } from "./request-id";
 import { articleImagePath } from "../server/post-images";
 import { menuImageLimit } from "../server/menu-image-domain";
@@ -147,7 +146,7 @@ export function ArticleImageChooser({
           />
         </label>
       )}
-      {busy && <ImageUploadStatus name={pending?.file.name} />}
+      {busy && <p role="status">{tr("画像を保存しています…")}</p>}
       {error && (
         <p className="alert" role="alert">
           {error}

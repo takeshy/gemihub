@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { tr } from "../shared/i18n";
 import { useApi } from "./api";
 
-export function ShopReset({ shopId, navigate, showButton = true }: { shopId: string; navigate: (href: string) => void; showButton?: boolean }) {
+export function ShopReset({ shopId, navigate }: { shopId: string; navigate: (href: string) => void }) {
   const api = useApi();
   const dialog = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
@@ -23,7 +23,7 @@ export function ShopReset({ shopId, navigate, showButton = true }: { shopId: str
     finally { setBusy(false); }
   };
   return <>
-    {showButton && <button className="text-button" onClick={() => { setError(""); dialog.current?.showModal(); }}>{tr("自分のお店を初期化")}</button>}
+    <button className="text-button" onClick={() => { setError(""); dialog.current?.showModal(); }}>{tr("自分のお店を初期化")}</button>
     <dialog ref={dialog} className="shop-reset-dialog" aria-labelledby="shop-reset-title" aria-describedby="shop-reset-description" onCancel={event => { if (busy) event.preventDefault(); }}>
       <h2 id="shop-reset-title">{tr("お店を最初から作り直しますか？")}</h2>
       <p id="shop-reset-description">{tr("自分のお店の公開ページを閉じ、設定・予約・問い合わせ・お客様・記事・画像・AIとの会話を初期化します。元に戻せません。")}</p>
