@@ -16,7 +16,7 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 - Describe what to change returns to the private conversation that produced the proposal, including after reopening the review. Preserve conversation history and in-session drafts, focus the composer, and stay on the review for retry if restoration fails. Do not restart setup or create a replacement conversation when a saved reference exists.
 
-- Before the first private publication, show only Build your shop with AI. Hide the management sidebar, shop name, sample storefront, and screen editor, and do not fetch editor data. Return to creation on subsequent logins and direct management links until a private preview has been published. Then reveal management and editing.
+- Before the first private publication, show only Build your shop with AI. Hide the management sidebar, shop name, sample storefront, and screen editor, and do not fetch editor data. Return to creation on subsequent logins and direct management links until a private preview has been published. Then reveal settings and editing. Show booking management and Customers only after public publication. Data management remains disabled after public publication.
 
 - Interview by text or dictation about business type and desired features/pages; do not require staff, prices, or hours at the start. Adapt questions to known information rather than following a fixed checklist. Before preparing screens, always ask whether there is anything else to add, wait for the answer, and include any additions.
 - Show a plain-language feature diagram and thumbnails for booking, about, My page, contact, blog/archive/article, announcements/archive/article, and additional pages. Page captures exclude the header and footer; show each shared part in its own preview below the pages. Mark content provisional. Explain that designs and detailed settings can be adjusted after the private preview.
@@ -24,7 +24,7 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 - Enter staff, menus/prices, hours, and rules in their dedicated menus after the private preview. Save updates that private preview without making it public.
 - Review screens and publish shows only saved/applied configuration and published articles, never uncommitted browser drafts or unapplied proposals. Practice actions use sample customers/data and do not affect real bookings or email. Start on About the shop and navigate using the actual shop menu, without a separate screen chooser.
 - Publish publicly removes only the creator-viewing restriction. Server-side version and content/article fingerprints must still match the reviewed preview. Changes since review require reloading and reviewing again. Booking actions and personal history still require customer authentication.
-- Provide Request changes for the current screen, behavior/features, or registered data. Route to that screen/article editor, AI Changes, or the dedicated data menus respectively. Closing the choice retains preview state. Explain the publication boundary in a sticky action bar. Repeat publication attempts must not duplicate writes or history.
+- Provide Request changes for the current screen, behavior/features, or registered data. Route to that screen/article editor, AI Changes, or Shop information respectively; use the dedicated settings menus for services, prices, and articles. Closing the choice retains preview state. Explain the publication boundary in a sticky action bar. Repeat publication attempts must not duplicate writes or history.
 
 ## Current settings, history, and AI consultation
 
@@ -42,7 +42,7 @@ Keep Google authorization, sign-in, country, and time zone; return to an empty s
 
 ## Local screen editor and scoped releases
 
-After private publication, the owner starts in Try and edit screens; staff start in booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Sheets, Gmail, Calendar, or production data.
+After private publication, the owner starts in Try and edit screens; staff start in their calendar until public publication, then booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Sheets, Gmail, Calendar, or production data.
 
 Show the selected screen first, without a repeated marketing heading or shared shop-details form. Collapse page/sample editors below it. Show Apply changes and Discard changes only when needed. Save local drafts per account/shop in localStorage; retain them on reload, make storage failures visible, and refuse to publish unsaved drafts. Drafts are local to the device and may be lost when site data is cleared.
 
@@ -118,7 +118,7 @@ Downloaded `web/index.html` must open by double-click with built JS/CSS inlined.
 
 Use the mock only for file:// plus valid data. Missing/invalid data leaves static shop/service content. HTTP/HTTPS always uses the server API regardless of a mock global. Do not add the offline data reference to the served dist/admin shell. Verify actual file:// actions, discarded writes, edited data, missing-data fallback, and HTTP guards.
 
-Additional sheets are owner-only data management with unique row-1 headers (up to 100 columns) and up to 1,000 data rows. List/search/add/edit, append at the end, preserve existing formulas and column names/order, write only changed RAW cells, and do not delete entire rows or interpret new input as formulas. Compare against original cells; stop on conflicts while retaining edits. Retry fixed rows without duplication. Direct Sheets changes do not share the app lock, so avoid concurrent edits.
+Data management is disabled for now, including after public publication. Hide its menu, additional-sheet editor, links, and manual instructions. Preserve existing ledgers and additional sheets; manage bookings, customers, services, and other standard records through their dedicated screens.
 
 ## Dedicated live management
 

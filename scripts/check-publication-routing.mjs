@@ -38,18 +38,16 @@ try{
     await open();await page.locator('.preview-surface .public-nav').getByRole("button",{name:"よくある質問",exact:true}).click();
     dialog=await request();assert.equal(new URL(await dialog.getByRole("link",{name:"いま開いている画面を直す",exact:true}).getAttribute("href"),origin).searchParams.get("screen"),"page:faq");
     await dialog.getByRole("link",{name:"いま開いている画面を直す",exact:true}).click();
-    await page.locator('.local-preview-screen').getByRole("heading",{name:"初めてでも予約できますか？",exact:true}).waitFor();
+    await page.locator('.local-preview-screen').getByText(/初めてでも予約できますか？/).waitFor();
     await page.waitForFunction(()=>[...document.querySelectorAll('[role="treeitem"]')].some(item=>item.textContent.includes('よくある質問')&&item.getAttribute('aria-selected')==='true'));
     await open();dialog=await request();await dialog.getByRole("link",{name:"動作・機能を直す",exact:true}).click();
     const consultation=page.getByRole("region",{name:"AIへの相談",exact:true});
-    assert.equal(await consultation.getByRole("button",{name:"修正",exact:true}).getAttribute("aria-pressed"),"true");
-    await consultation.getByRole("button",{name:"はじめる",exact:true}).click();await consultation.getByRole("log").getByText(/お店のどこを直したいですか/).waitFor();
+    await consultation.getByText("直したいことや追加したいページを伝えてください。AIと話しながら内容をまとめられます。",{exact:true}).waitFor();
+    await consultation.getByRole("button",{name:"はじめる",exact:true}).click();await consultation.getByRole("log").getByText(/どうしたいですか？直したいことや追加したいページ/).waitFor();
     await open();dialog=await request();await dialog.getByRole("link",{name:"お店の情報・登録データを直す",exact:true}).click();
-    await page.getByRole("heading",{name:"データ管理",exact:true}).waitFor();
-    assert.equal(await page.locator('.data-menu-links').getAttribute("open"),"");
-    await page.locator('.data-menu-links').getByRole("button",{name:"メニュー・料金 →",exact:true}).click();
-    await page.getByRole("heading",{name:"メニュー・料金",exact:true}).waitFor();
-    await page.locator('aside nav').getByRole('button',{name:/お店の基本情報$/}).click();
+    await page.getByRole("region",{name:"お店の基本情報と予約の設定",exact:true}).waitFor();
+    assert.equal(await page.locator('.data-management').count(),0);
+    assert.equal(await page.locator('aside nav').getByRole('button',{name:/予約を管理$|お客様$|データ管理$/}).count(),0);
     const basic=page.locator('.live-settings-basic'),hours=page.locator('.live-settings-hours'),rules=page.locator('.live-settings-rules');
     await basic.getByLabel('店名',{exact:true}).waitFor();await hours.getByLabel('開店',{exact:true}).waitFor();await rules.getByLabel('何日先まで予約できるか',{exact:true}).waitFor();
     assert.equal(await page.locator('aside nav').getByRole('button',{name:/営業時間・休業日|予約ルール/}).count(),0);
@@ -61,6 +59,6 @@ try{
     await page.screenshot({path:`tmp/publication-request-${width}.png`,fullPage:true});
     await page.getByRole("button",{name:"プレビューに戻る",exact:true}).click();await dialog.waitFor({state:"detached"});
     assert.deepEqual(errors,[]);await context.close();
-    console.log(`${width}px: current standard screen, exact article and custom page reach the matching editor; behavior selects AI modification; data opens management menus; closing preserves preview (fixtures).`);
+    console.log(`${width}px: current standard screen, exact article and custom page reach the matching editor; behavior selects AI modification; registered data opens shop settings; closing preserves preview (fixtures).`);
   }
 }finally{await browser.close();}

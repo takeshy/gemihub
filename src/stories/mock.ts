@@ -179,7 +179,7 @@ export function scenarioProps(scenario: Scenario) {
           "calendar-connected": "staff",
           "calendar-member": "staff",
           "calendar-missing-staff": "staff",
-          data: "data", "data-empty": "data",
+          data: "basic", "data-empty": "basic",
           settings: "settings",
           "sync-error": "bookings",
         } as Partial<Record<Scenario, string>>

@@ -13,7 +13,6 @@ import { CustomerRegistration } from "./CustomerRegistration";
 import type { MemberProfile } from "../server/customer-profile";
 import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
-import { DataManagement } from "./DataManagement";
 import { ShopOverview } from "./ShopOverview";
 import { PublicationPreview } from "./PublicationPreview";
 import { ShopRequest } from "./ShopRequest";
@@ -220,11 +219,10 @@ export function App({
           <PublicationPreview shopId={path.split("/")[2]} />
         ) : session.user ? (
           <Dashboard
-            initialTab={new URLSearchParams(search).has("customer")?"customers":["build","assistant","try","data","inquiries","customers","bookings","staff"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
+            initialTab={new URLSearchParams(search).has("customer")?"customers":["build","assistant","try","basic","inquiries","customers","bookings","staff"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
             initialScreen={new URLSearchParams(search).get("screen") || undefined}
             initialArticleKey={new URLSearchParams(search).get("article") || undefined}
             requestIntent={new URLSearchParams(search).get("intent") === "modify" ? "modify" : undefined}
-            openDataMenu={new URLSearchParams(search).get("dataMenu") === "1"}
             initialShop={new URLSearchParams(search).get("shop") || ""}
             focusRequest={new URLSearchParams(search).get("request") === "1"}
             initialCustomer={new URLSearchParams(search).get("customer") || ""}
@@ -320,7 +318,6 @@ function Dashboard({
   initialScreen,
   initialArticleKey,
   requestIntent,
-  openDataMenu = false,
   initialCustomer = "",
   initialCustomerImages = false,
   initialInquiryId = "",
@@ -335,7 +332,6 @@ function Dashboard({
   initialScreen?: string;
   initialArticleKey?: string;
   requestIntent?: RequestIntent;
-  openDataMenu?: boolean;
   initialCustomer?: string;
   initialCustomerImages?: boolean;
   initialInquiryId?: string;
@@ -363,8 +359,11 @@ function Dashboard({
   }, []);
   const shop = shops.find((s) => s.id === chosen) || shops[0];
   const creating = !!shop?.isOwner && !shop.published;
-  const view = creating ? "build" : tab;
-  useEffect(() => { if (shop && !shop.isOwner && ["try", "data", "images"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
+  const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
+  const activeTab = !publiclyPublished && ["bookings", "customers"].includes(tab)
+    ? (shop?.isOwner ? "try" : "staff") : tab;
+  const view = creating ? "build" : activeTab;
+  useEffect(() => { if (shop && !shop.isOwner && ["try", "images"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
   const activePlan =
     plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
       ? plan
@@ -409,13 +408,12 @@ function Dashboard({
             ["build", "✧", tr("AIとお店をつくる")],
             ["assistant", "✳", tr("相談・質問")],
             ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
-            ["bookings", "▦", tr("予約を管理")],
-            ...(shop ? [["customers", "♧", tr("お客様")]] : []),
+            ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")]] : []),
             ...(shop?.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")]] : []),
             ["inquiries", "✉", tr("お問い合わせ")],
             ...(articleKinds(shop.published).length ? [["blog", "✎", articleKinds(shop.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
             ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
-            ...(shop?.isOwner ? [["images", "▧", tr("画像管理")], ["data", "▤", tr("データ管理")]] : []),
+            ...(shop?.isOwner ? [["images", "▧", tr("画像管理")]] : []),
             ["settings", "⚙", tr("公開の設定")],
             ["manual", "?", tr("使い方")],
           ].map(([id, icon, label]) => (
@@ -481,7 +479,7 @@ function Dashboard({
                 )}
                 {view === "build" && (
                   <>
-                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.judge ? undefined : shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} publiclyPublished={publiclyPublished} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.judge ? undefined : shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
                       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds, intent, chat });
                       setPlan(p); await load(); return p;
                     }} />}
@@ -512,7 +510,6 @@ function Dashboard({
                   />
                 )}
                 {!creating && <div hidden={view!=="inquiries"}><Inquiries shopId={shop.id} inquiries={shop.inquiries}/></div>}
-                {view === "data" && shop.isOwner && <DataManagement key={shop.id} shopId={shop.id} open={setTab} showMenus={openDataMenu} />}
                 {view === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {view === "settings" && (
                   <Settings shop={shop} run={run} reload={load} hasLegacyNotes={!!session.user?.legacyNotes} />
@@ -1143,7 +1140,7 @@ function Settings({
   return (
     <div className="panel">
       {hasLegacyNotes && <section className="legacy-notes-settings"><h2>{tr("旧環境からの引き継ぎ")}</h2><p>{tr("ノートとAIチャットはkiokuflowへ移動しました")}</p><a className="button" href="/settings/migration">{tr("引き継ぎの案内を開く")}</a></section>}
-      <h2>{tr("予約ページのアドレス")}</h2>
+      <h2>{tr("お店のアドレス")}</h2>
       {shop.published ? (
         <>
           <p className="muted">{tr("お客様に公開している本番のお店を別タブで開きます。")}</p>

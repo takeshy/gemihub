@@ -12,8 +12,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Data: Story = {
-  name: "データ管理・追加データの編集",
+  name: "データ管理は無効・基本情報を表示",
   args: { scenario: "data" },
 };
 
-export const NoExtraData: Story = { name: "データ管理・追加データなし", args: { scenario: "data-empty" } };
+export const NoExtraData: Story = { name: "追加データなし・基本情報を表示", args: { scenario: "data-empty" } };

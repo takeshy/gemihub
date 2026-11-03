@@ -57,7 +57,7 @@ export function PublicationPreview({ shopId }: { shopId: string }) {
       <div className="publication-request-options">
         <a className="button" aria-label={tr("いま開いている画面を直す")} data-shop-request-link href={screenLink}><strong>{tr("いま開いている画面を直す")}</strong><span>「{currentScreen.name}{tr("」の編集画面で、デザインや表示を調整します。")}</span></a>
         <a className="button" aria-label={tr("動作・機能を直す")} data-shop-request-link href={`/?${new URLSearchParams({shop:shopId,tab:"build",request:"1",intent:"modify"})}`}><strong>{tr("動作・機能を直す")}</strong><span>{tr("予約の流れやお店全体の機能を、AIに修正依頼します。")}</span></a>
-        <a className="button" aria-label={tr("お店の情報・登録データを直す")} data-shop-request-link href={`/?${new URLSearchParams({shop:shopId,tab:"data",dataMenu:"1"})}`}><strong>{tr("お店の情報・登録データを直す")}</strong><span>{tr("メニュー・料金・予約・記事などを、各管理メニューで変更します。")}</span></a>
+        <a className="button" aria-label={tr("お店の情報・登録データを直す")} data-shop-request-link href={`/?${new URLSearchParams({shop:shopId,tab:"basic"})}`}><strong>{tr("お店の情報・登録データを直す")}</strong><span>{tr("お店の基本情報を開きます。メニュー・料金・記事などは、各設定メニューで変更できます。")}</span></a>
       </div>
       <button type="button" onClick={()=>setRequestOpen(false)}>{tr("プレビューに戻る")}</button>
     </dialog>}

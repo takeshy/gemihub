@@ -190,7 +190,7 @@ try {
   await page.getByRole("button", {name:"変更案を確認する",exact:true}).last().click();
   await page.getByRole("heading", {name:"このページを追加してよいですか？",exact:true}).waitFor();
   await capture("21-new-page.jpg", ".new-page-review");
-  await open("settings", "予約ページのアドレス");
+  await open("settings", "お店のアドレス");
   await capture("14-domain.jpg");
   await open("sync-error", /予約一覧/);
   await page.getByRole("button", { name: "再送する", exact: true }).waitFor();
@@ -286,14 +286,6 @@ try {
   await page.locator(".customer-image-dialog img").waitFor();
   await capture("28-customer-image-zoom.jpg");
   await page.getByRole("button", { name: "閉じる", exact: true }).click();
-  await open("data", "データ管理", "運営/データ管理");
-  await page.getByRole("button", { name: "編集", exact: true }).first().waitFor();
-  await capture("29-data-management.jpg", ".data-management");
-  await page.getByRole("button", { name: "編集", exact: true }).first().click();
-  await page.getByRole("heading", { name: "1件目を編集", exact: true }).waitFor();
-  await capture("29-data-edit.jpg", ".data-management");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-  await page.getByRole("status").filter({ hasText: "データを保存しました" }).waitFor();
   await open("library", "依頼の画像を選ぶ", "運営/画像管理");
   await page.locator(".image-library-grid figure").nth(1).waitFor();
   await page.locator(".image-library-grid img").first().waitFor();

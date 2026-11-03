@@ -10,7 +10,7 @@ import { ShopRequest } from "./ShopRequest";
 import type { Plan, Workspace } from "./App";
 export type BuildContext = { config: ShopConfig | null; published: boolean; revision: number; hash: string; history: { at: string; summary: string }[] };
 const days = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
-export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, open, focusRequest = false, initialIntent }: { initialIntent?: RequestIntent; focusRequest?: boolean; google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[], intent?: RequestIntent, chat?: ChatReference) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
+export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPlan, onAccept, plan, open, focusRequest = false, initialIntent }: { initialIntent?: RequestIntent; focusRequest?: boolean; google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; publiclyPublished: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[], intent?: RequestIntent, chat?: ChatReference) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
   const api = useApi();
   const { money, shopTime } = useShopDisplay();
   const [data, setData] = useState<BuildContext>();
@@ -60,7 +60,7 @@ export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, 
           </div>
         </>}
       </section>
-      <DataOverview isOwner={isOwner} google={google} open={open} />
+      <DataOverview isOwner={isOwner} publiclyPublished={publiclyPublished} google={google} open={open} />
     </div>
   </div>;
 }
