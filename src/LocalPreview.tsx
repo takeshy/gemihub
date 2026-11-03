@@ -17,7 +17,8 @@ import { VisualRequest } from "./VisualRequest";
 import { shopSchema, planSummary, bookingStaff, type ShopConfig } from "../server/domain";
 import { postKey, type PostCategory, type PublicPost } from "../server/post-domain";
 import { createRequestId } from "./request-id";
-import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
+import { articleKinds } from "../shared/article-features";
+import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, syncPreviewArticleFeatures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
 
 type Snapshot = Pick<LocalDraft, "base" | "source" | "config"> & { lastPublishedPlanId?: string };
 export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenChange, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; activate?: () => void; onScreenChange?: (screen: string, article?: string) => void; initialScreen?: string; initialArticleKey?: string }) {
@@ -25,6 +26,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenC
   const key = draftKey(email, shop.id);
   const [draft, setDraft] = useState<LocalDraft>();
   const latestDraft = useRef<LocalDraft | undefined>(undefined);
+  const checkedRevision = useRef(shop.revision);
   const entrySelected = useRef<string | undefined>(undefined);
   const selectionVersion = useRef(0);
   const [fixtureEditing, setFixtureEditing] = useState<Fixtures>();
@@ -86,18 +88,33 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenC
     let active = true;
     void run(async () => {
       const cached = readDraft(localStorage, key);
-      if (cached && active) { restore({ ...cached, downloaded: cached.downloaded || cached.source?.pages.map(p => p.id) || [] }); setIndex(cached.index); }
+      if (cached && active) {
+        const updated = shop.published && !cached.pending ? syncPreviewArticleFeatures(cached, shop.published) : cached;
+        restore({ ...updated, downloaded: cached.downloaded || cached.source?.pages.map(p => p.id) || [] });
+        setIndex(updated === cached ? cached.index : undefined);
+      }
       try {
         const [current, remote] = await Promise.all([api<Snapshot>(`/api/shops/${shop.id}/local-editor/shared`), api<EditorIndex>(`/api/shops/${shop.id}/local-editor/index`)]);
         if (!active) return;
         setIndex(remote);
         if (!cached) restore({ ...current, downloaded: [], index: remote, fixtures: sampleFixtures(current.config) });
-        else if (!cached.pending) restore({ ...cached, index: remote, downloaded: cached.downloaded || cached.source?.pages.map(p => p.id) || [], config: { ...cached.config, region: current.config.region, menus: current.config.menus, staff: current.config.staff, hours: current.config.hours, rules: current.config.rules } });
+        else if (!cached.pending) {
+          const updated = syncPreviewArticleFeatures(cached, current.config);
+          restore({ ...updated, index: remote, downloaded: cached.downloaded || cached.source?.pages.map(p => p.id) || [], config: { ...updated.config, region: current.config.region, menus: current.config.menus, staff: current.config.staff, hours: current.config.hours, rules: current.config.rules } });
+        }
       } catch (e) { if (!cached) throw e; setError(tr("リモートの最新状態を確認できません。ローカル編集は保持しています。更新確認を再試行してください。")); }
     });
     return () => { active = false; };
   }, [key]);
   useEffect(() => {
+    const current = latestDraft.current;
+    if (!current || current.pending || !shop.published) return;
+    const updated = syncPreviewArticleFeatures(current, shop.published);
+    if (updated !== current) { save(updated); setIndex(undefined); }
+  }, [key, shop.published?.appearance?.articles?.blogs, shop.published?.appearance?.articles?.announcements]);
+  useEffect(() => {
+    if (checkedRevision.current === shop.revision) return;
+    checkedRevision.current = shop.revision;
     if (!latestDraft.current) return;
     let active = true;
     void api<EditorIndex>(`/api/shops/${shop.id}/local-editor/index`).then(remote => { if (active) setIndex(remote); }).catch(() => { if (active) setError(tr("最新の画面一覧を確認できませんでした。")); });
@@ -150,6 +167,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenC
   }
   async function choose(value: string, articleKey?: string, fromLocation = false) {
     const [category, article] = value.split(":");
+    if ((category === "blogs" || category === "announcements") && !articleKinds(latestDraft.current?.config).includes(category)) return;
     const firstArticle = latestDraft.current?.fixtures.posts.find(post => post.category === category);
     const requestedArticle = article && (category === "blogs" || category === "announcements") ? articleKey || (firstArticle ? postKey(firstArticle) : undefined) : undefined;
     if (!fromLocation) {
@@ -158,10 +176,11 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenC
     }
     const version = ++selectionVersion.current;
     const target: ReleaseScope = value.startsWith("page:") ? { kind: "page", pageId: value.slice(5) } : value.startsWith("part:") ? { kind: "part", part: value === "part:footer" ? "footer" : "header" } : { kind: "shared" };
-    let currentIndex = index;
-    try { currentIndex = await refreshIndex(); } catch { setError(tr("最新の状態を確認できません。保存済みのローカル画面を表示します。")); }
+    // Cached screens switch without a network round trip; polling and publication still check remote changes.
+    const currentIndex = index;
+    const currentDraft = latestDraft.current;
+    const currentStatus = currentDraft && currentIndex ? await syncStatus(currentDraft, currentIndex, target) : undefined;
     if (version !== selectionVersion.current) return;
-    const currentStatus = draft && currentIndex ? await syncStatus(draft, currentIndex, target) : undefined;
     if (currentStatus === "unfetched" || currentStatus === "remote") await fetchScope(target);
     if (version !== selectionVersion.current) return;
     setScreen(value);
@@ -193,10 +212,16 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenC
   }
   useEffect(()=>{
     if(!initialScreen||!draft||!index||draft.pending)return;
+    const category=initialScreen.split(":")[0];
+    if((category==="blogs"||category==="announcements")&&!articleKinds(draft.config).includes(category)){
+      onScreenChange?.("reserve");
+      void run(async()=>choose("reserve",undefined,true));
+      return;
+    }
     const selection=JSON.stringify([initialScreen,initialArticleKey]);
     if(entrySelected.current===selection)return;
     entrySelected.current=selection;
-    const screens=["part:header","part:footer","reserve","about","mine","contact","blogs","blogs:article","announcements","announcements:article",...index.pages.map(page=>`page:${page.id}`),...draft.config.pages.map(page=>`page:${page.id}`)];
+    const screens=["part:header","part:footer","reserve","about","mine","contact",...articleKinds(draft.config).flatMap(category=>[category,`${category}:article`]),...index.pages.map(page=>`page:${page.id}`),...draft.config.pages.map(page=>`page:${page.id}`)];
     if(!screens.includes(initialScreen)){setError(tr("指定された画面が見つかりません。画面一覧から選んでください。"));return;}
     void run(async()=>choose(initialScreen,initialArticleKey,true));
   },[draft,index,initialScreen,initialArticleKey]);

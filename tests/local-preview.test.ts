@@ -5,9 +5,55 @@ import { createApp } from "../server/app.ts";
 import { Store } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
 import { sample, dateJST, type ShopConfig } from "../server/domain.ts";
-import { createPreviewClient, sampleFixtures, draftKey, writeDraft, readDraft } from "../src/local-preview.ts";
+import { createPreviewClient, sampleFixtures, draftKey, writeDraft, readDraft, syncPreviewArticleFeatures, type LocalDraft } from "../src/local-preview.ts";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ScreenTree } from "../src/ScreenTree.tsx";
+import { editorIndex } from "../server/editor-sync.ts";
+import { syncStatus } from "../src/editor-sync.ts";
+import { postKey, type PublicPost } from "../server/post-domain.ts";
 
 process.env.DEMO_MODE = "true";
+test("preview trees and sample APIs show only enabled article features, including cached fixtures", async () => {
+  const original = structuredClone(sample), fixtures = sampleFixtures(original);
+  for (const blogs of [false, true]) for (const announcements of [false, true]) {
+    const config: ShopConfig = { ...original, appearance: { accent: "sage", layout: "standard", imageUrl: "", articles: { blogs, announcements } } };
+    const draft: LocalDraft = { config, source: config, base: 0, fixtures };
+    const html = renderToStaticMarkup(createElement(ScreenTree, { draft, statuses: {}, selected: "reserve", disabled: false, onChoose() {} }));
+    for (const category of ["blogs", "announcements"] as const) {
+      const title = category === "blogs" ? "ブログ一覧" : "お知らせ一覧";
+      assert.equal(html.includes(title), config.appearance!.articles![category]);
+      const articleTitle = category === "blogs" ? "ブログ記事" : "お知らせ記事";
+      assert.equal(html.includes(articleTitle), config.appearance!.articles![category]);
+    }
+    const client = createPreviewClient(config, fixtures, "shop");
+    const recent = await client<{ recentPosts: PublicPost[] }>("/api/public/local-preview");
+    assert.equal(recent.recentPosts.length, Number(blogs) + Number(announcements));
+    assert.deepEqual(sampleFixtures(config).posts.map(post => post.category), fixtures.posts.filter(post => config.appearance!.articles![post.category]).map(post => post.category));
+    for (const post of fixtures.posts) {
+      const list = await client<{ items: PublicPost[] }>(`/api/public/local-preview/posts?category=${post.category}`);
+      assert.equal(list.items.length, Number(config.appearance!.articles![post.category]));
+      if (!config.appearance!.articles![post.category]) await assert.rejects(client(`/api/public/local-preview/posts/${post.category}/${postKey(post)}`));
+    }
+  }
+});
+
+test("updated live article choices replace cached flags without losing design edits or inventing conflicts", async () => {
+  const old: ShopConfig = { ...structuredClone(sample), appearance: { accent: "rose", layout: "compact", imageUrl: "", articles: { blogs: true, announcements: true } } };
+  const draft: LocalDraft = { config: { ...old, description: "Keep my local edit" }, source: structuredClone(old), base: 0, fixtures: sampleFixtures(old), index: editorIndex(old, 0) };
+  const current: ShopConfig = { ...old, appearance: { ...old.appearance!, articles: { blogs: false, announcements: true } } };
+  const updated = syncPreviewArticleFeatures(draft, current);
+  assert.deepEqual(updated.config.appearance?.articles, current.appearance?.articles);
+  assert.deepEqual(updated.source?.appearance?.articles, current.appearance?.articles);
+  assert.equal(updated.config.description, draft.config.description);
+  assert.equal(updated.config.appearance?.accent, "rose");
+  assert.equal(updated.config.appearance?.layout, "compact");
+  assert.equal(updated.index, undefined, "the old feature hashes cannot be reused to invent a conflict");
+  assert.equal(await syncStatus(updated, editorIndex(current, 1), { kind: "shared" }), "local");
+  assert.equal(syncPreviewArticleFeatures(updated, current), updated);
+  assert.equal(draft.config.appearance!.articles!.blogs, true, "the original cached draft is not mutated");
+});
+
 test("local fixtures use an isolated API, allow practice operations and persist by account/shop", async () => {
   const config = structuredClone(sample);
   config.hours.closedWeekdays = [];

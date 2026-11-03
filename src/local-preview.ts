@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n";
+import { articleKinds } from "../shared/article-features";
 import { dateIn, regionOf, zonedDate } from "../shared/region";
 import { simulatePayment, simulateCancellation } from "./payment-mock";
 import { refundQuote } from "../server/payment-domain";
@@ -33,9 +34,9 @@ export function sampleFixtures(config: ShopConfig): Fixtures {
   return {
     customerName: tr("山田 花子（サンプル）"),
     bookings: first && menu && start ? [{ id: "sample-booking", name: tr("山田 花子（サンプル）"), menuId: menu.id, staffId: first.id, start: start.toISOString(), end: new Date(start.getTime() + menu.duration * 60000).toISOString(), status: "active" }] : [],
-    posts: ["blogs", "announcements"].map((category, i) => ({
+    posts: articleKinds(config).map((category, i) => ({
       category: category as "blogs" | "announcements", date: dateIn(Date.now(), timeZone), slug: `sample-${i}`,
-      title: i ? tr("営業日のご案内（サンプル）") : tr("お店からのお便り（サンプル）"),
+      title: category === "announcements" ? tr("営業日のご案内（サンプル）") : tr("お店からのお便り（サンプル）"),
       excerpt: tr("表示を確かめるためのサンプルです。"), body: tr("## お店からのご案内\n\nここに記事のサンプル本文が入ります。"),
     })),
   };
@@ -47,6 +48,13 @@ export const localDraftSchema = z.object({
   pending: z.object({ requestId: z.uuid(), config: shopSchema, scope: releaseScopeSchema.optional(), planId: z.string().optional() }).optional(),
 });
 export type LocalDraft = z.infer<typeof localDraftSchema>;
+// Features are chosen for the live shop; cached screen designs must not re-enable removed features.
+export function syncPreviewArticleFeatures(draft: LocalDraft, current: ShopConfig): LocalDraft {
+  const articles = current.appearance?.articles;
+  if (JSON.stringify(draft.config.appearance?.articles) === JSON.stringify(articles) && (!draft.source || JSON.stringify(draft.source.appearance?.articles) === JSON.stringify(articles))) return draft;
+  const update = (config: ShopConfig): ShopConfig => ({ ...config, appearance: config.appearance || articles ? { accent: "sage", layout: "standard", imageUrl: "", ...config.appearance, articles } : undefined });
+  return { ...draft, index: undefined, config: update(draft.config), source: draft.source && update(draft.source) };
+}
 // Separate by signed-in account and shop. No tokens or real customer records.
 export const draftKey = (email: string, shopId: string) => `gemihub:local-preview:${email}:${shopId}`;
 export function readDraft(storage: Pick<Storage, "getItem">, key: string) {
@@ -58,7 +66,7 @@ export function writeDraft(storage: Pick<Storage, "setItem">, key: string, draft
 }
 export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string) => Promise<import("../server/menu-image-domain").MenuImageData>): ApiClient {
   const bookings: Booking[] = fixtures.bookings.map(b => { const selected = menuSelection(config,b.menuId,b.optionIds);return simulatePayment({ ...b, ...(selected?.optionIds.length ? {optionIds:selected.optionIds,items:selected.items}:{}), shopId, price: selected?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }, config); });
-  const posts: PublicPost[] = fixtures.posts.map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
+  const posts: PublicPost[] = fixtures.posts.filter(post => articleKinds(config).includes(post.category)).map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
   let profile: MemberProfile = { name: fixtures.customerName, birthDate: "1990-01-01", gender: "not_specified" };
   return async <T>(path: string, data?: unknown): Promise<T> => {

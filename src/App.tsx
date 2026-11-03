@@ -1347,7 +1347,7 @@ export function PublicShop({
     });
   }, [base]);
   useEffect(() => {
-    if (!data) return;
+    if (!data || category || pageSlug || pane !== "reserve") return;
     const selection = menuSelection(data.config, menu, optionIds);
     if (optionIds.length && !selection) { setOptionIds([]); return; }
     if (
@@ -1379,7 +1379,7 @@ export function PublicShop({
     return () => {
       cancelled = true;
     };
-  }, [date, menu, optionIds, staff, data]);
+  }, [date, menu, optionIds, staff, data, category, pageSlug, pane]);
   useEffect(() => {
     run(loadMine);
   }, [isCustomer]);

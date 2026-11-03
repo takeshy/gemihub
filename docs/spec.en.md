@@ -52,6 +52,8 @@ Keep Google authorization, sign-in, country, and time zone; return to an empty s
 
 After private publication, the owner starts in Try and edit screens; staff start in their calendar until public publication, then booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Firestore, Gmail, Calendar, or production data.
 
+Show blog and announcement lists/articles in the tree and sample data only when those features are enabled. Refresh feature choices in cached drafts without losing local design edits. Switching between cached screens does not wait for a remote update check; periodic checks and conflict detection at publication remain active.
+
 Show the selected screen first, without a repeated marketing heading or shared shop-details form. Collapse page/sample editors below it. Show Apply changes and Discard changes only when needed. Save local drafts per account/shop in localStorage; retain them on reload, make storage failures visible, and refuse to publish unsaved drafts. Drafts are local to the device and may be lost when site data is cleared.
 
 Check metadata on entry, every 30 seconds, and on focus. Fetch each screen's body automatically when opened. Mark changed items only, not internal cache states. Preserve local edits on remote changes; show conflict comparison instead of overwriting. Discard only the selected screen after confirmation.
