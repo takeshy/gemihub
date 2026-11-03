@@ -115,7 +115,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
       {
         id: "registration",
         get title() { return tr("メール確認後に、会員情報を登録する"); },
-        get lead() { return tr("ヘッダーの下の「会員登録」からGoogleアカウントでメールアドレスを確認し、お名前・生年月日・性別を登録します。"); },
+        get lead() { return tr("ヘッダーの下の「会員登録」から、メールに届いたリンクまたは「Googleでログイン」で認証します。そのあと、お名前・生年月日・性別を登録します。"); },
         get instructions() { return [
           tr("確認済みのメールアドレスを確かめ、予約で使うお名前を入力します。"),
           tr("生年月日を YYYY/MM/DD で入力し、性別を選びます。性別は「回答しない」も選べます。"),
@@ -129,7 +129,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
       {
         id: "reservation",
         get title() { return tr("メニューと日時を選んで予約する"); },
-        get lead() { return tr("ログイン前は「お店のこと」が開きます。ヘッダーの下の「会員登録」または「ログイン」から、お客様自身の Google アカウントで進むと予約できます。"); },
+        get lead() { return tr("ログイン前は「お店のこと」が開きます。ヘッダーの下の「会員登録」または「ログイン」から、メール認証かGoogleログインを選んで予約できます。"); },
         get instructions() { return [
           tr("上部の「ご予約」を開きます。お店からの新着のお便りはマイページで確認できます。"),
           tr("メニューを選び、「指名なし（空いているスタッフ）」または希望する担当スタッフを選びます。"),
@@ -168,7 +168,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
         get title() { return tr("お問い合わせを送る"); },
         get lead() { return tr("ログインすると、お名前とメールアドレスが自動入力されます。"); },
         get instructions() { return [
-          tr("「お問い合わせ」を開き、自動入力されたお名前と返信先メールアドレスを確認します。メールアドレスはログイン中のGoogleアカウントのものです。"),
+          tr("「お問い合わせ」を開き、自動入力されたお名前と返信先メールアドレスを確認します。メールアドレスは認証済みのものです。"),
           tr("ご相談内容を書き、「お問い合わせを送る」を押します。お店からの返信は、表示されたメールアドレスに届きます。"),
         ]; },
         image: "10-contact-form.jpg",

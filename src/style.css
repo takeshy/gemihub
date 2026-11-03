@@ -84,6 +84,15 @@ input[type="checkbox"] {
   accent-color: var(--green);
   margin-right: 6px;
 }
+.customer-email-login { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 14px; color: inherit; }
+.customer-email-login::backdrop { background: #14201999; }
+.customer-email-login .section-top { align-items: flex-start; }
+.customer-email-login h2 { margin: 0; font-size: 20px; }
+.customer-email-login input { width: 100%; min-width: 0; font-size: 16px; }
+.customer-email-login .email-login-address { overflow-wrap: anywhere; font-weight: 600; }
+.customer-email-login .alert { padding: 12px; }
+.email-login-google { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+.email-login-google .button { width: 100%; }
 textarea {
   width: 100%;
   resize: vertical;

@@ -90,7 +90,9 @@ Saved-booking refund policies show explicit date/time ranges computed from the a
 
 ## Customer membership and CRM
 
-After Google verifies email, register a per-shop name, date of birth, and gender (female/male/other/prefer not to say). Date of birth must be valid and not future. Require registration before booking/inquiries in both UI and API. Prefill names; allow profile changes from My page. Bind all records to the verified email and shop. Store profiles in per-shop Firestore customer records. Expose profiles only to the customer and authorized operators, never in public configurations or public page exports. Include registration-only customers in CRM.
+Customer sign-in and registration offer both emailed links without passwords and Google sign-in. Both methods use the same per-shop email identity, member profile, and bookings. Bind each link to its shop and issuing origin, persist only a token hash, and consume it only after explicit confirmation so email scanners cannot sign in. Rate-limit sending and resending. Customer email sessions never grant shop-management permissions, including when their email matches an owner or staff account. Owner and staff Google sign-in remains unchanged.
+
+After verifying email with a single-use link valid for 15 minutes or with Google sign-in, register a per-shop name, date of birth, and gender (female/male/other/prefer not to say). Date of birth must be valid and not future. Require registration before booking/inquiries in both UI and API. Prefill names; allow profile changes from My page. Bind all records to the verified email and shop. Store profiles in per-shop Firestore customer records. Expose profiles only to the customer and authorized operators, never in public configurations or public page exports. Include registration-only customers in CRM.
 
 Aggregate existing bookings and inquiries by trimmed lowercase email, without extra owner input or AI. Names use the newest timestamp with deterministic ties. Visits count ended active reservations only, excluding cancellations, no-shows, and future bookings; spending sums recorded prices. Search by name/email and sort by visit count/last visit.
 

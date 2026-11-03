@@ -18,6 +18,7 @@ import { inquiryStatus, inquiryStatusSchema } from "./inquiries.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, type ChatReference } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
+import { emailLogin, type LoginMailer } from "./email-login.ts";
 import {
   createServer,
   type IncomingMessage,
@@ -225,9 +226,15 @@ export function createApp(
   customerFiles?: CustomerFiles,
   paymentGateway: PaymentGateway = paypalGateway(),
   liveConnector?: LiveConnector,
+  loginMailer?: LoginMailer,
 ) {
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
+  const customerEmailLogin = emailLogin(store, loginMailer || (async (shop, to, subject, text) => {
+    if (shop.judge) { await enqueue(shop, "mail", { to, subject, body: text }); return; }
+    const token = await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です"));
+    await sendMail(token, to, subject, text);
+  }));
   async function imageResponse(req: IncomingMessage, res: ServerResponse, shop: Shop, imageId: string, url: URL) {
     const view = z.enum(["original", "display", "thumbnail"]).parse(url.searchParams.get("view") || "original");
     const image = await menuImageResource(store, shop, imageId, crmFiles, async () => store.memory ? "" : await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")), view);
@@ -309,7 +316,7 @@ export function createApp(
   const provisionShop = async (shop: Shop, config: ShopConfig, token: string) =>
     provision(shop, config, token, await judgeParent(shop, token));
   const operator = async (user: User | undefined, shop: Shop) => {
-    if (!user || isArchivedShop(shop)) return false;
+    if (!user || user.authMethod === "email" || isArchivedShop(shop)) return false;
     if (user.email === shop.owner) return true;
     const account = await store.get<StaffAccount>("staffAccount", staffAccountKey(shop.id, user.email));
     if (account && !shop.published?.staff.some(staff => staff.id === account.staffId)) return false;
@@ -321,7 +328,7 @@ export function createApp(
       fail(403, tr("運営メンバーのみ利用できます"));
   };
   const assertOwner = (user: User | undefined, shop: Shop) => {
-    if (isArchivedShop(shop) || user?.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
+    if (isArchivedShop(shop) || user?.authMethod === "email" || user?.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
   };
   const inquiries = (shop: Shop) => store.records<Inquiry>("inquiry", shop);
   const postsFor = (shop: Shop) => store.records<Post>("post", shop);
@@ -545,7 +552,7 @@ export function createApp(
       const assertStorefrontAccess = (shop: Shop) => {
         // A judge's own trial customer may use the judge's provisional shop; nobody else may.
         const trialCustomer = !!shop.judge && !!user && isJudgeCustomerEmail(user.email) && user.shopId === shop.id;
-        if (shop.publication === "provisional" && user?.email !== shop.owner && !trialCustomer)
+        if (shop.publication === "provisional" && (user?.email !== shop.owner || user?.authMethod === "email") && !trialCustomer)
           fail(user ? 403 : 401, tr("仮公開中のため、このページを用意したユーザーのログインが必要です"));
         if (shop.publication === "provisional") {
           res.setHeader("Vary", "Cookie, X-Gemihub-Language, Accept-Language");
@@ -2173,6 +2180,22 @@ export function createApp(
           fail(404, tr("公開されたお店がありません"));
         if (hosted && hosted.id !== shopRef.id) fail(404, tr("お店がありません"));
         const action = publicRoute[2] || "";
+        if (["auth/email", "auth/email/info", "auth/email/verify"].includes(action) && method === "POST") {
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(shop);
+          if (shop.publication === "provisional") fail(403, tr("仮公開中のため、このページを用意したユーザーのログインが必要です"));
+          const requestOrigin = publicHost ? `https://${host}` : origin();
+          const storefrontPath = publicHost ? "/" : `/s/${shop.slug}`;
+          const input = await body(req, 2000);
+          if (action === "auth/email") {
+            await customerEmailLogin.request(shop, requestOrigin, storefrontPath, req.socket.remoteAddress || "unknown", input);
+            return json(res, { ok: true });
+          }
+          if (action === "auth/email/info") return json(res, await customerEmailLogin.info(shop, requestOrigin, input));
+          const customer = await customerEmailLogin.verify(shop, requestOrigin, input);
+          await login(store, res, customer);
+          return json(res, { ok: true, redirectTo: `${storefrontPath}?pane=mine&lang=${getLocale()}` });
+        }
         const imageRead = action.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
         if (imageRead && method === "GET") {
           const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
@@ -2268,17 +2291,18 @@ export function createApp(
             const profile = isCustomer ? await ownProfile() : undefined;
             return json(res, {
               config:
-                user?.email === shop.owner && !publicHost
+                user?.email === shop.owner && user.authMethod !== "email" && !publicHost
                   ? config
                   : { ...config, notificationEmail: undefined },
               shopId: shop.id,
-              canEdit: user?.email === shop.owner && !publicHost,
+              canEdit: user?.email === shop.owner && user.authMethod !== "email" && !publicHost,
               customerProfile: profile,
               registrationRequired: isCustomer && !profile,
               preview: false,
               publication: shop.publication || "public",
               recentPosts: livePosts.slice(0, 5).map(summarizePost),
-              authUrl: languageUrl(`${origin()}/auth/google?shop=${shop.slug}${hosted ? `&host=${host}` : ""}`),
+              authUrl: `${languageUrl(`${publicHost ? `https://${host}` : origin()}${publicHost ? "/" : `/s/${shop.slug}`}`)}#email-login`,
+              googleAuthUrl: process.env.GOOGLE_CLIENT_ID ? languageUrl(`${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${hosted ? `&host=${encodeURIComponent(host)}` : ""}`) : undefined,
             });
           }
           if (action === "slots" && method === "GET")

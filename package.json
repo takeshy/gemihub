@@ -29,6 +29,7 @@
     "check:staff-images": "node scripts/check-staff-images.mjs",
     "check:owner-booking": "node --import tsx scripts/check-owner-booking.mjs",
     "check:settings-recovery": "node --import tsx scripts/check-settings-recovery.mjs",
+    "check:email-login": "node --import tsx scripts/check-email-login.mjs",
     "check:booking-complete": "node --import tsx scripts/check-booking-complete.mjs",
     "check:menu-addons": "node --import tsx scripts/check-menu-addons.mjs",
     "check:settings-ai": "node --import tsx scripts/check-settings-ai.mjs",

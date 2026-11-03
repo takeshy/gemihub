@@ -10,6 +10,7 @@ import { Inquiries } from "./Inquiries";
 import type { ChatReference } from "../server/shop-chat";
 import { DateInput } from "./DateInput";
 import { CustomerRegistration } from "./CustomerRegistration";
+import { CustomerEmailLogin } from "./CustomerEmailLogin";
 import type { MemberProfile } from "../server/customer-profile";
 import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
@@ -1209,6 +1210,7 @@ export function PublicShop({
     config: ShopConfig;
     shopId: string;
     authUrl?: string;
+    googleAuthUrl?: string;
     publication?: "provisional" | "public";
     recentPosts?: PostSummary[];
     customerProfile?: MemberProfile | null;
@@ -1217,6 +1219,7 @@ export function PublicShop({
   }>();
   const { money: yen, when, shopToday: localDate, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
   const [menu, setMenu] = useState("");
+  const [emailLoginOpen, setEmailLoginOpen] = useState(false);
   const [optionIds, setOptionIds] = useState<string[]>([]);
   const [staff, setStaff] = useState("");
   const [date, setDate] = useState("");
@@ -1618,7 +1621,7 @@ export function PublicShop({
               </Field>
               <Field label={tr("メールアドレス")}>
                 <input aria-label={tr("メールアドレス")} type="email" autoComplete="email" required readOnly value={session.user?.email || ""} />
-                <small className="muted">{session.user ? tr("ログイン中のGoogleアカウントのメールアドレスです。返信はこちらに届きます。") : tr("ログインすると、お名前とメールアドレスが自動入力されます。")}</small>
+                <small className="muted">{session.user ? tr("認証済みのメールアドレスです。返信はこちらに届きます。") : tr("ログインすると、お名前とメールアドレスが自動入力されます。")}</small>
               </Field>
               <Field label={tr("ご相談内容")}>
                 <textarea
@@ -1670,9 +1673,10 @@ export function PublicShop({
       </SiteHeader>}
       <ThemeBody config={c} imageBase={`${base}/images`}>
       {!hideHeader&&!isCustomer&&<section id="customer-signin" tabIndex={-1} className="public-auth" aria-label={tr("会員登録・ログイン")}>
-        <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{tr("Googleアカウントでご利用いただけます。")}</p></div>
-        <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><a className="button primary" href={data.authUrl}>{tr("会員登録")}</a></div><div><span>{tr("登録済みの方")}</span><a className="button" href={data.authUrl}>{tr("ログイン")}</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
+        <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{data.googleAuthUrl ? tr("メールアドレスまたはGoogleアカウントでご利用いただけます。") : tr("メールアドレスでご利用いただけます。")}</p></div>
+        <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><button className="primary" onClick={() => setEmailLoginOpen(true)}>{tr("会員登録")}</button></div><div><span>{tr("登録済みの方")}</span><button onClick={() => setEmailLoginOpen(true)}>{tr("ログイン")}</button></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
       </section>}
+      <CustomerEmailLogin base={base} shopName={c.name} googleAuthUrl={data.googleAuthUrl} open={emailLoginOpen} onClose={() => setEmailLoginOpen(false)}/>
       {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={session.user!.email} name={session.user!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
         c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">{tr("ページがありません。")}</p>
       ) : category && articleKinds(c).includes(category) ? (

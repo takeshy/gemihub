@@ -10,7 +10,7 @@ How customers book and how gemihub decides which time slots are open.
 
 # Booking flow
 
-1. The customer signs in with a Google account. The first time, they register a name and profile for the shop.
+1. The customer enters their email and opens the single-use verification link sent by the shop. The link expires in 15 minutes; opening it shows an explicit email-confirmation button before creating a session. Google sign-in is also available as an alternative; both methods use the same verified email identity. The first time, they register a name and profile for the shop. Existing records remain associated with the same verified email.
 2. They choose a menu, a staff member or "no preference", a date and an open time.
 3. The server checks the slot again, saves the booking and emails the customer and the shop's `notificationEmail`.
 4. With prepayment enabled, the customer pays with PayPal first; the booking is confirmed only after the payment is captured (see [Payments, cancellation and refunds](./payments.md)).

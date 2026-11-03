@@ -40,6 +40,8 @@ export type User = {
   name: string;
   shopId?: string;
   role: "owner" | "customer";
+  /** Customer email verification never grants shop management permissions. */
+  authMethod?: "email";
   refreshToken?: string;
   /** Calendar consent obtained during owner sign-in; encrypted, never sent to the browser. */
   calendarRefreshToken?: string;
@@ -189,7 +191,7 @@ export class Store {
     });
   }
   async cleanup() {
-    for (const kind of ["session", "oauth", "ticket", "visual", "imageGenerationData", "settingsAiProposal"]) {
+    for (const kind of ["session", "oauth", "ticket", "emailLogin", "emailLoginLimit", "visual", "imageGenerationData", "settingsAiProposal"]) {
       const entries = this.memory
         ? [...this.values.values()].filter((e) => e.kind === kind)
         : (

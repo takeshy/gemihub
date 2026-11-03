@@ -11,7 +11,7 @@ export function shopSystem(input: ShopConfig) {
     name: c.name,
     sections: [
       { title: tr("① お客様の予約"), lines: [
-        tr("Google ログイン → メニュー・日時を選択 → 空きを確認 → 予約確定"),
+        tr("メール認証またはGoogleログイン → メニュー・日時を選択 → 空きを確認 → 予約確定"),
         ...c.menus.filter(m => m.active).map(m => tr("{0}：{1}分・{2}", m.name, m.duration, formatMoney(m.price, currencyOf(regionOf(c)), intlLocale()))),
         tr("受付：{0}日前から、開始{1}分前まで。当日予約{2}。", c.rules.advanceDays, c.rules.leadMinutes, c.rules.sameDay ? tr("可") : tr("不可")),
         c.rules.payment?.enabled ? tr("予約時にPayPalで全額決済。キャンセル時は予約時の条件で自動返金。{0}。店都合は全額返金。", policyText(c.rules.payment.refundTiers)) : tr("お客様のキャンセル：開始{0}時間前まで。自分の予約だけ確認・取消できます。", c.rules.cancelHours),

@@ -949,7 +949,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
         if (!b) throw new Error(tr("予約がありません"));
         simulateCancellation(b, "customer");
         result = { ok: true };
-      } else if (action.endsWith("/profile")) {
+      } else if (action.endsWith("/auth/email")) result = { ok: true };
+      else if (action.endsWith("/profile")) {
         if (input && data !== undefined) customerProfile = customerProfileSchema.parse(input);
         result = { profile: customerProfile };
       } else if (action.endsWith("/inquiries")) result = { ok: true };
@@ -962,7 +963,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
           registrationRequired: session.user?.role === "customer" && !customerProfile,
           preview,
           publication: shop.publication || "public",
-          authUrl: "/auth/google",
+          authUrl: `/s/${shop.slug}#email-login`,
+          googleAuthUrl: `/auth/google?shop=${shop.slug}`,
           recentPosts: preview
             ? []
             : publicPosts(posts).slice(0, 5).map(summarizePost),
