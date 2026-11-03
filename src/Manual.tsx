@@ -179,7 +179,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
       {
         id: "bookings",
         get title() { return tr("予約を一覧で確認する"); },
-        get lead() { return tr("店主の画面で「予約を管理」を開くと、お店の予約をまとめて確認できます。"); },
+        get lead() { return tr("運営画面で「予約を管理」を開くと、お店の予約をまとめて確認できます。"); },
         get instructions() { return [
           tr("日付とスタッフを選ぶと、必要な予約に絞り込めます。全件に戻すには「絞り込みを解除」を押します。"),
           tr("お名前、日時、メニュー、担当スタッフ、予約の状態と、予約時のメッセージを確認します。新着を確認するには「更新」を押します。"),

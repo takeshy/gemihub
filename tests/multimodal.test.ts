@@ -71,6 +71,7 @@ test("removed uploads, image identification, ambiguous target selection, explana
   let ids = ["name", "description", "invented"];
   let illegal = false;
   let questionCalls = 0;
+  const screens: unknown[] = [];
   const ai = {
     async identifyVisual(
       media: {
@@ -81,7 +82,10 @@ test("removed uploads, image identification, ambiguous target selection, explana
         id: string;
         label: string;
       }[],
+      _instruction: string,
+      screen?: { id: string; label: string; file: string },
     ) {
+      screens.push(screen);
       assert.equal(media.mimeType, "image/png");
       assert.ok(targets.some((t) => t.id === "name"));
       return {
@@ -152,9 +156,11 @@ test("removed uploads, image identification, ambiguous target selection, explana
     instruction: "ここを新しい店名にして",
     displayed: sample,
     planId: created.id,
+    screen: { id: "about", label: "お店のこと", file: "web/index.html#about" },
   };
   const preview = await request(base + "/visual/identify", visual, owner);
   assert.equal(preview.status, 200);
+  assert.deepEqual(screens.at(-1), visual.screen, "the screen name and file reach the AI, so a request without marks can be located");
   assert.equal(preview.body.candidates.length, 2);
   const input = {
     text: visual.instruction,

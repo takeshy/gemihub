@@ -1441,6 +1441,7 @@ export function createApp(
                 planId: z.string().optional(),
                 displayed: shopSchema,
                 local: z.object({ base: z.number().int(), source: shopSchema.nullable(), pageId: z.string().optional(), part: z.enum(["header", "footer"]).optional() }).optional(),
+                screen: z.object({ id: z.string().max(200), label: z.string().max(200), file: z.string().max(300) }).optional(),
               })
               .parse(await body(req, 12000000));
             if (
@@ -1484,13 +1485,14 @@ export function createApp(
               input.media,
               targets,
               input.instruction,
+              input.screen,
             );
             const candidates = targets.filter((t) => result.ids.includes(t.id));
             if (!candidates.length)
               fail(
                 400,
                 result.explanation +
-                  tr(" 変更したい文言・画像・配置を囲んでください。"),
+                  tr(" 変更したい箇所を依頼文で具体的に伝えるか、赤いペンで囲んでください。"),
               );
             const visual: VisualRequest = {
               id: randomUUID(),
