@@ -2335,5 +2335,18 @@
   "全画面に共通のヘッダー・フッターが付きます。": "Every screen shares the same header and footer.",
   "ページの雰囲気": "Page theme",
   "色・配置・ヘッダー・フッターの見本です。中身は仮の表示です。": "A sample of the colors, layout, header and footer. The content is a placeholder.",
-  "ここに各種画面の内容が入ります": "Each screen's content appears here"
+  "ここに各種画面の内容が入ります": "Each screen's content appears here",
+  "画像をアップロードしました。": "Image uploaded.",
+  "使う画像を選ぶか、その場でアップロード・AI生成できます。": "Select an image, upload one, or generate one with AI here.",
+  "使う画像を選ぶか、その場でアップロードできます。": "Select an image or upload one here.",
+  "画像管理に保存しました。ページやメニューの画像選択から使用できます。": "Saved to image management. You can select this image when editing pages or services.",
+  "画像をアップロードしています…": "Uploading image…",
+  "完了するまで、この画面を開いたままお待ちください。": "Keep this screen open until the upload finishes.",
+  "メニューの「画像管理」で画像を管理できます。依頼や編集時の画像選択では、アップロード・AI生成・選択ができます。": "Manage images from the Image management menu. Image pickers in requests and editors let you upload, generate, and select images.",
+  "「この画像をもとに生成」「名前を変更」「画像管理から削除」は、メニューの「画像管理」だけに表示します。使用していない画像は確認して削除できます。Drive のファイル本体は残ります。": "Generate from this image, Rename, and Remove from image management appear only in the Image management menu. You can confirm removal of unused images; their Drive files are retained.",
+  "アップロード中はスピナー・ファイル名・「画像をアップロードしています…」を表示します。表示が消えるまで待ち、失敗した場合は同じ画面から再試行してください。": "A spinner, file name, and Uploading image… message appear during uploads. Wait until they disappear. If an upload fails, retry from the same screen.",
+  "アップロード中はスピナーとファイル名を表示します。": "A spinner and file name appear during uploads.",
+  "画像アップロード中・スピナーとファイル名": "Image uploading: spinner and file name",
+  "添付した画像": "Attached images",
+  "添付画像{0}": "Attachment {0}"
 }

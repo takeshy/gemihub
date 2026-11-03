@@ -57,6 +57,7 @@ export type Scenario =
   | "image-library-empty"
   | "image-library-generation"
   | "image-library-retry"
+  | "image-library-uploading"
   | "image-page"
   | "crm-list"
   | "crm-detail"
@@ -157,6 +158,7 @@ export function scenarioProps(scenario: Scenario) {
       (
         {
           "image-library": "build", "image-library-empty": "build", "image-library-generation": "build",
+          "image-library-uploading": "images",
           manual: "manual",
           system: "build",
           "us-settings": "basic", "us-menus": "menus",
@@ -482,6 +484,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { ok: true };
     }
     else if ([`/api/shops/${shop.id}/menu-images`, `/api/shops/${shop.id}/images`].includes(action) && data !== undefined) {
+      if (scenario === "image-library-uploading") return new Promise<T>(() => {});
       const imageId = uploadedImages.get(String(input.requestId)) || String(menuImages.size + 1).padStart(64, "0");
       uploadedImages.set(String(input.requestId), imageId);
       menuImages.set(imageId, { mimeType: String(input.mimeType), data: String(input.data) }); result = { imageId };
