@@ -8,9 +8,9 @@ export function initialIntroductionPages(config: ShopConfig, choices?: { staff: 
   const pages = config.pages.filter(page => { const type = pageKind(page); return !type || choices[type]; }).map(page => {
     const type = pageKind(page);
     if (page.body.trim() || !type) return page;
-    return { ...page, body: type === "staff" ? tr("## スタッフ紹介\n\nスタッフの紹介は、ただいま準備中です。") : tr("## 商品・サービス紹介\n\n商品やサービスの紹介は、ただいま準備中です。") };
+    return { ...page, body: type === "staff" ? tr("<h2>スタッフ紹介</h2><p>スタッフの紹介は、ただいま準備中です。</p>") : tr("<h2>商品・サービス紹介</h2><p>商品やサービスの紹介は、ただいま準備中です。</p>") };
   });
-  if (choices.staff && !pages.some(page => pageKind(page) === "staff")) pages.push({ id: "staff-introduction", slug: "staff", title: tr("スタッフ紹介"), navigationLabel: tr("スタッフ紹介"), body: tr("## スタッフ紹介\n\nスタッフの紹介は、ただいま準備中です。"), layout: "standard", imageUrl: "" });
-  if (choices.products && !pages.some(page => pageKind(page) === "products")) pages.push({ id: "product-introduction", slug: "products", title: tr("商品・サービス紹介"), navigationLabel: tr("商品・サービス紹介"), body: tr("## 商品・サービス紹介\n\n商品やサービスの紹介は、ただいま準備中です。"), layout: "standard", imageUrl: "" });
+  if (choices.staff && !pages.some(page => pageKind(page) === "staff")) pages.push({ id: "staff-introduction", slug: "staff", title: tr("スタッフ紹介"), navigationLabel: tr("スタッフ紹介"), body: tr("<h2>スタッフ紹介</h2><p>スタッフの紹介は、ただいま準備中です。</p>"), layout: "standard", imageUrl: "" });
+  if (choices.products && !pages.some(page => pageKind(page) === "products")) pages.push({ id: "product-introduction", slug: "products", title: tr("商品・サービス紹介"), navigationLabel: tr("商品・サービス紹介"), body: tr("<h2>商品・サービス紹介</h2><p>商品やサービスの紹介は、ただいま準備中です。</p>"), layout: "standard", imageUrl: "" });
   return { ...config, pages };
 }

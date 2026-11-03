@@ -3,7 +3,8 @@ import { z } from "zod";
 import { paymentRulesSchema, type BookingPayment } from "./payment-domain.ts";
 import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } from "./pages.ts";
 import { regionSchema, regionOf, currencyOf, validPrice, dateIn, zonedDate, weekdayOf } from "../shared/region.ts";
-import { themeSchema } from "../shared/presentation.ts";
+import { themeSchema, compilePresentation } from "../shared/presentation.ts";
+import { screensSchema } from "../shared/screens.ts";
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const shopSchema = z
   .object({
@@ -21,6 +22,8 @@ export const shopSchema = z
     notificationEmail: z.email(),
     /** An embedded Google Map in the access section; `query` (place or address) defaults to the address. */
     map: z.object({ enabled: z.boolean(), query: z.string().max(300) }).optional(),
+    /** Optional HTML/CSS layouts for built-in screens; working parts are inserted through slots. */
+    screens: screensSchema.optional(),
     /** Country and time zone; absent means Japan. Decides currency, booking times and dates. */
     region: regionSchema.optional(),
     header: headerSchema.default(() => ({ ...defaultHeader })),
@@ -77,6 +80,9 @@ export const shopSchema = z
       new Set(s.staff.map((m) => m.id)).size !== s.staff.length
     )
       fail(tr("メニュー・スタッフの ID が重複しています"));
+    // Page bodies follow the same safe HTML subset as themes: no scripts, handlers, forms, embeds or external CSS.
+    for (const page of s.pages)
+      try { compilePresentation({ html: page.body, css: page.css || "" }); } catch (error) { fail(tr("{0} の本文（HTML）を確認してください。{1}", page.title, error instanceof Error ? error.message : "")); }
     if (new Set(s.pages.map(p => p.id)).size !== s.pages.length || new Set(s.pages.map(p => p.slug)).size !== s.pages.length) fail(tr("ページの ID・アドレスが重複しています"));
     for (const p of s.staff) {
       if (p.start >= p.end) fail(tr("勤務終了は開始より後にしてください"));
@@ -247,6 +253,6 @@ export function planSummary(before: ShopConfig | null, next: ShopConfig) {
     .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(next[k]))
     .map(
       (k) =>
-        tr("{0}を更新", { name: tr("店名"), industry: tr("業種"), description: tr("お店の紹介"), address: tr("アクセス"), appearance: tr("ページの色・画像・配置"), notificationEmail: tr("通知先"), map: tr("地図"), region: tr("国・タイムゾーン"), pages: tr("追加ページ"), header: tr("共通ヘッダー"), footer: tr("共通フッター"), menus: tr("メニュー"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[k]),
+        tr("{0}を更新", { name: tr("店名"), industry: tr("業種"), description: tr("お店の紹介"), address: tr("アクセス"), appearance: tr("ページの色・画像・配置"), notificationEmail: tr("通知先"), map: tr("地図"), screens: tr("画面のデザイン"), region: tr("国・タイムゾーン"), pages: tr("追加ページ"), header: tr("共通ヘッダー"), footer: tr("共通フッター"), menus: tr("メニュー"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[k]),
     );
 }

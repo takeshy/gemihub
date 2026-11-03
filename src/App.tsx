@@ -38,6 +38,8 @@ import { articleKinds } from "../shared/article-features";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
 import { GoogleMap } from "./GoogleMap";
+import { Presentation } from "./Presentation";
+import type { ScreenId } from "../shared/screens";
 import { paid, createDisplay, useShopDisplay, ShopRegionContext } from "./money";
 import { currencyOf, regionOf, dateIn, usTimeZones, type Region, type Currency } from "../shared/region";
 export type Plan = {
@@ -1341,66 +1343,80 @@ export function PublicShop({
   if (!data)
     return <div className="loading">{tr("お店のページを準備しています…")}</div>;
   const c = data.config;
-  return (
-    <ShopRegionContext.Provider value={regionOf(c)}>
-    <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}${c.appearance?.theme ? " custom-theme" : ""}`}>
-      {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
-      {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
-      <nav className="public-nav">
-        {(session.user ? [["mine", tr("マイページ")],
-          ["reserve", tr("ご予約")],
-          ["about", tr("お店のこと")],
-          ["contact", tr("お問い合わせ")]] : [["about", tr("お店のこと")], ["reserve", tr("ご予約")], ["contact", tr("お問い合わせ")]]).map(([id, label]) => (
-          <button
-            className={!category && !pageSlug && pane === id ? "active" : ""}
-            onClick={() =>
-              (category || pageSlug) ? navigate(`${basePath || "/"}?pane=${id}`) : onPaneChange ? onPaneChange(id) : setPane(id)
-            }
-            key={id}
-          >
-            {label}
-          </button>
-        ))}
-        {
-          articleKinds(c).map((cat) => (
-            <button
-              key={cat}
-              className={category === cat ? "active" : ""}
-              onClick={() => navigate(`${basePath}/${cat}`)}
-            >
-              {cat === "blogs" ? tr("ブログ") : tr("お知らせ")}
-            </button>
-          ))}
-        {c.pages.map(page => <button key={page.id} className={pageSlug === page.slug ? "active" : ""} onClick={() => navigate(`${basePath}/pages/${page.slug}`)}>{page.navigationLabel}</button>)}
-      </nav>
-      </SiteHeader>}
-      <ThemeBody config={c} imageBase={`${base}/images`}>
-      {!hideHeader&&!isCustomer&&<section className="public-auth" aria-label={tr("会員登録・ログイン")}>
-        <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{tr("Googleアカウントでご利用いただけます。")}</p></div>
-        <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><a className="button primary" href={data.authUrl}>{tr("会員登録")}</a></div><div><span>{tr("登録済みの方")}</span><a className="button" href={data.authUrl}>{tr("ログイン")}</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
-      </section>}
-      {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={session.user!.email} name={session.user!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
-        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">{tr("ページがありません。")}</p>
-      ) : category && articleKinds(c).includes(category) ? (
-        <PublicBlog
-          baseApi={base}
-          basePath={basePath}
-          category={category}
-          articleKey={articleKey}
-          navigate={navigate}
-        />
-      ) : (
-        <>
-          {pane === "mine" && (
+  // Built-in screens may be laid out in the owner's checked HTML; the working parts below are inserted
+  // through slots, so booking, sign-in, payment and inquiries keep their behavior either way.
+  const screen = (id: ScreenId, slots: Record<string, React.ReactNode>, fallback: React.ReactNode) => {
+    const design = c.screens?.[id];
+    return design ? <Presentation design={design} slots={slots} fallback={fallback} imageBase={`${base}/images`} /> : fallback;
+  };
+  const mineNews = () => (
             <RecentPosts
               posts={(data.recentPosts || []).filter(post=>articleKinds(c).includes(post.category))}
               archive={articleKinds(c)[0]}
               basePath={basePath}
               navigate={navigate}
             />
-          )}
-          {pane === "mine" && isCustomer && <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div>}
-          {pane === "reserve" && (
+  );
+  const mineMember = () => isCustomer ? <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div> : null;
+  const minePanel = () => (
+            <div className="panel">
+              <h2>{tr("あなたのご予約")}</h2>
+              {checkouts.map(checkout => <div className="booking-card" key={checkout.id}>
+                <div><h3>{when(checkout.start)}</h3><p>{yen(checkout.amount, checkout.currency || "JPY")}・{checkout.review ? tr("お店での支払い確認が必要です。お問い合わせください。") : tr("支払い手続き中・予約はまだ確定していません")}</p></div>
+                <div className="actions">
+                  {checkout.phase === "awaiting_approval" && checkout.approvalUrl && checkout.expires > Date.now() && <button disabled={busy} onClick={() => window.location.assign(checkout.approvalUrl!)}>{tr("PayPalで支払いを続ける")}</button>}
+                  {checkout.phase === "creating" && <button disabled={busy} onClick={() => run(async () => { await api(`${base}/checkouts/${checkout.id}/resume`, {}); await loadMine(); })}>{tr("支払い手続きを再開")}</button>}
+                  {checkout.phase !== "creating" && <button disabled={busy} onClick={() => run(async () => confirmCheckout(checkout.id))}>{tr("支払い状況を確認・予約を確定")}</button>}
+                  {["creating", "awaiting_approval"].includes(checkout.phase) && <button disabled={busy} onClick={() => run(async () => confirmCheckout(checkout.id, true))}>{tr("支払いを中止")}</button>}
+                </div>
+              </div>)}
+              {!mine.length ? (
+                <Empty text={tr("ご予約はまだありません。")} />
+              ) : (
+                mine.map((b) => (
+                  <div className="booking-card" key={b.id}>
+                    <div>
+                      <span className={`status ${b.status}`}>
+                        {b.status === "active"
+                          ? tr("予約確定")
+                          : b.status === "no_show"
+                            ? tr("無断キャンセル")
+                            : tr("キャンセル済み")}
+                      </span>
+                      <h3>{when(b.start)}</h3>
+                      <p>
+                        {c.menus.find((m) => m.id === b.menuId)?.name ||
+                          b.menuId}
+                      </p>
+                      {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
+                      <PaymentDetails booking={b} />
+                      <p className="small muted">{tr("予約番号：")}{b.id}</p>
+                    </div>
+                    {(b.status === "active" || b.payment?.cancellation && ["retrying", "pending", "awaiting_funds"].includes(b.payment.cancellation.status)) && (
+                      <button disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            let expectedRefund: number | undefined;
+                            if (b.payment && !b.payment.cancellation) {
+                              const quote = await api<{ amount: number; percent: number }>(`${base}/bookings/${b.id}/cancel-quote`);
+                              if (!window.confirm(tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", paid(quote.amount, b.payment.currency), quote.percent))) return;
+                              expectedRefund = quote.amount;
+                            }
+                            await api(`${base}/bookings/${b.id}/cancel`, { expectedRefund });
+                            await loadMine();
+                            notify(tr("予約をキャンセルしました。"));
+                          })
+                        }
+                      >
+                        {b.payment?.cancellation ? tr("返金状況を再確認") : tr("キャンセルする")}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+  );
+  const bookingSection = () => (
             <div className="reservation-layout">
               <div className="panel">
                 <span className="eyebrow">RESERVATION</span>
@@ -1551,93 +1567,24 @@ export function PublicShop({
                 <p className="small muted">{c.address}</p>
               </div>
             </div>
-          )}
-          {pane === "about" && (
-            <div className="panel about">
-              <h2>{c.name}</h2>
-              <p>{c.description}</p>
-              <h3>{tr("メニュー")}</h3>
-              {c.menus
+  );
+  const aboutMenus = () => <div className="about-menus">{c.menus
                 .filter((m) => m.active)
                 .map((m) => (
                   <div className="menu-row" key={m.id}>
                     <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} name={m.name} />
                     {m.name} · {m.duration}{tr("分 ")}<b>{yen(m.price)}</b>
                   </div>
-                ))}
-              <h3>{tr("スタッフ")}</h3>
-              <div className="public-staff-list">{c.staff.map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>
-              <h3>{tr("アクセス")}</h3>
-              <p>{c.address}</p>
-              <GoogleMap config={c} />
-              <h3>{tr("営業時間")}</h3>
-              <p>
+                ))}</div>;
+  const aboutStaff = () => <div className="public-staff-list">{c.staff.map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>;
+  const aboutAccess = () => <><p>{c.address}</p><GoogleMap config={c} /></>;
+  const aboutHours = () => <><p>
                 {c.hours.start} – {c.hours.end} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・")}
               </p>
               {c.hours.holidays.length > 0 && (
                 <p>{tr("臨時休業：")}{c.hours.holidays.join("、")}</p>
-              )}
-            </div>
-          )}
-          {pane === "mine" && (
-            <div className="panel">
-              <h2>{tr("あなたのご予約")}</h2>
-              {checkouts.map(checkout => <div className="booking-card" key={checkout.id}>
-                <div><h3>{when(checkout.start)}</h3><p>{yen(checkout.amount, checkout.currency || "JPY")}・{checkout.review ? tr("お店での支払い確認が必要です。お問い合わせください。") : tr("支払い手続き中・予約はまだ確定していません")}</p></div>
-                <div className="actions">
-                  {checkout.phase === "awaiting_approval" && checkout.approvalUrl && checkout.expires > Date.now() && <button disabled={busy} onClick={() => window.location.assign(checkout.approvalUrl!)}>{tr("PayPalで支払いを続ける")}</button>}
-                  {checkout.phase === "creating" && <button disabled={busy} onClick={() => run(async () => { await api(`${base}/checkouts/${checkout.id}/resume`, {}); await loadMine(); })}>{tr("支払い手続きを再開")}</button>}
-                  {checkout.phase !== "creating" && <button disabled={busy} onClick={() => run(async () => confirmCheckout(checkout.id))}>{tr("支払い状況を確認・予約を確定")}</button>}
-                  {["creating", "awaiting_approval"].includes(checkout.phase) && <button disabled={busy} onClick={() => run(async () => confirmCheckout(checkout.id, true))}>{tr("支払いを中止")}</button>}
-                </div>
-              </div>)}
-              {!mine.length ? (
-                <Empty text={tr("ご予約はまだありません。")} />
-              ) : (
-                mine.map((b) => (
-                  <div className="booking-card" key={b.id}>
-                    <div>
-                      <span className={`status ${b.status}`}>
-                        {b.status === "active"
-                          ? tr("予約確定")
-                          : b.status === "no_show"
-                            ? tr("無断キャンセル")
-                            : tr("キャンセル済み")}
-                      </span>
-                      <h3>{when(b.start)}</h3>
-                      <p>
-                        {c.menus.find((m) => m.id === b.menuId)?.name ||
-                          b.menuId}
-                      </p>
-                      {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
-                      <PaymentDetails booking={b} />
-                      <p className="small muted">{tr("予約番号：")}{b.id}</p>
-                    </div>
-                    {(b.status === "active" || b.payment?.cancellation && ["retrying", "pending", "awaiting_funds"].includes(b.payment.cancellation.status)) && (
-                      <button disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            let expectedRefund: number | undefined;
-                            if (b.payment && !b.payment.cancellation) {
-                              const quote = await api<{ amount: number; percent: number }>(`${base}/bookings/${b.id}/cancel-quote`);
-                              if (!window.confirm(tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", paid(quote.amount, b.payment.currency), quote.percent))) return;
-                              expectedRefund = quote.amount;
-                            }
-                            await api(`${base}/bookings/${b.id}/cancel`, { expectedRefund });
-                            await loadMine();
-                            notify(tr("予約をキャンセルしました。"));
-                          })
-                        }
-                      >
-                        {b.payment?.cancellation ? tr("返金状況を再確認") : tr("キャンセルする")}
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-          {pane === "contact" && (
+              )}</>;
+  const contactForm = () => (
             <form
               className="panel contact-form"
               onSubmit={(e) => {
@@ -1678,7 +1625,74 @@ export function PublicShop({
               >
                 {tr("お問い合わせを送る →")}</button>
             </form>
-          )}
+  );
+  return (
+    <ShopRegionContext.Provider value={regionOf(c)}>
+    <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}${c.appearance?.theme ? " custom-theme" : ""}`}>
+      {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
+      {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
+      <nav className="public-nav">
+        {(session.user ? [["mine", tr("マイページ")],
+          ["reserve", tr("ご予約")],
+          ["about", tr("お店のこと")],
+          ["contact", tr("お問い合わせ")]] : [["about", tr("お店のこと")], ["reserve", tr("ご予約")], ["contact", tr("お問い合わせ")]]).map(([id, label]) => (
+          <button
+            className={!category && !pageSlug && pane === id ? "active" : ""}
+            onClick={() =>
+              (category || pageSlug) ? navigate(`${basePath || "/"}?pane=${id}`) : onPaneChange ? onPaneChange(id) : setPane(id)
+            }
+            key={id}
+          >
+            {label}
+          </button>
+        ))}
+        {
+          articleKinds(c).map((cat) => (
+            <button
+              key={cat}
+              className={category === cat ? "active" : ""}
+              onClick={() => navigate(`${basePath}/${cat}`)}
+            >
+              {cat === "blogs" ? tr("ブログ") : tr("お知らせ")}
+            </button>
+          ))}
+        {c.pages.map(page => <button key={page.id} className={pageSlug === page.slug ? "active" : ""} onClick={() => navigate(`${basePath}/pages/${page.slug}`)}>{page.navigationLabel}</button>)}
+      </nav>
+      </SiteHeader>}
+      <ThemeBody config={c} imageBase={`${base}/images`}>
+      {!hideHeader&&!isCustomer&&<section className="public-auth" aria-label={tr("会員登録・ログイン")}>
+        <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{tr("Googleアカウントでご利用いただけます。")}</p></div>
+        <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><a className="button primary" href={data.authUrl}>{tr("会員登録")}</a></div><div><span>{tr("登録済みの方")}</span><a className="button" href={data.authUrl}>{tr("ログイン")}</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
+      </section>}
+      {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={session.user!.email} name={session.user!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
+        c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">{tr("ページがありません。")}</p>
+      ) : category && articleKinds(c).includes(category) ? (
+        <PublicBlog
+          baseApi={base}
+          basePath={basePath}
+          category={category}
+          articleKey={articleKey}
+          navigate={navigate}
+        />
+      ) : (
+        <>
+          {pane === "mine" && screen("mine", { news: mineNews(), mypage: <>{mineMember()}{minePanel()}</> }, <>{mineNews()}{mineMember()}{minePanel()}</>)}
+          {pane === "reserve" && (() => { const booking = bookingSection(); return screen("reserve", { booking }, booking); })()}
+          {pane === "about" && screen("about", { menus: aboutMenus(), staff: aboutStaff(), access: aboutAccess(), hours: aboutHours() }, (
+            <div className="panel about">
+              <h2>{c.name}</h2>
+              <p>{c.description}</p>
+              <h3>{tr("メニュー")}</h3>
+              {aboutMenus()}
+              <h3>{tr("スタッフ")}</h3>
+              {aboutStaff()}
+              <h3>{tr("アクセス")}</h3>
+              {aboutAccess()}
+              <h3>{tr("営業時間")}</h3>
+              {aboutHours()}
+            </div>
+          ))}
+          {pane === "contact" && (() => { const form = contactForm(); return screen("contact", { form }, form); })()}
         </>
       )}
       </ThemeBody>

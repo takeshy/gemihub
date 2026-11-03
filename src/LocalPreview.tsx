@@ -9,6 +9,8 @@ import type { EditorIndex } from "../server/editor-index-schema";
 import { ApiProvider, useApi } from "./api";
 import { PublicShop, type Workspace, type Session } from "./App";
 import { PageEditor } from "./PageEditor";
+import { ScreenDesignEditor, ThemeDesignEditor } from "./DesignEditor";
+import { screenIds, type ScreenId } from "../shared/screens";
 import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, type ReleaseScope, type ShopPage } from "../server/pages";
 import { FixtureEditor } from "./FixtureEditor";
 import { VisualRequest } from "./VisualRequest";
@@ -353,6 +355,9 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
       </div>}
     </>}    {draft && !conflict && <div className="panel editor-secondary">
       {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダー") : tr("フッター")}{tr("の内容を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
+      {scope.kind === "shared" && (screenIds as readonly string[]).includes(screen) && <details key={`screen:${screen}`}><summary>{tr("この画面の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ScreenDesignEditor key={`${screen}:${draft.config.screens?.[screen as ScreenId]?.html || ""}`} config={draft.config} screen={screen as ScreenId} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
+      {scope.kind === "shared" && <details key={`theme:${screen}`}><summary>{tr("ヘッダー・フッター・全体の枠の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={JSON.stringify(draft.config.appearance?.theme || null).length} config={draft.config} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
+      {scope.kind === "part" && <p className="small muted">{tr("ヘッダー・フッターのデザインを HTML で直すときは、予約などの画面を開き「ヘッダー・フッター・全体の枠の HTML を編集」を使います。")}</p>}
       {scope.kind === "page" && <details key={`page:${scope.pageId}`}><summary>{tr("このページの内容を編集")}</summary>
         {scope.kind === "page" && <>
           {!draft.source && <p className="notice">{tr("追加ページを公開する前に、予約画面などを選んでお店の共通設定を反映してください。")}</p>}

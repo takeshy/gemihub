@@ -10,7 +10,9 @@ export const pageSchema = z.object({
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
   title: z.string().trim().min(1).max(100),
   navigationLabel: z.string().trim().min(1).max(40),
+  /** A checked HTML fragment (no scripts, handlers, forms or embeds); `css` applies only to this page. */
   body: z.string().max(20000),
+  css: z.string().max(12000).optional(),
   layout: z.enum(["standard", "compact"]),
   imageUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ }).max(2048)]),
   imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(),

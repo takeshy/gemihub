@@ -21,6 +21,9 @@ What the settings in `spec.md` mean and how changes are requested, approved, pub
 - `hours`: `start`, `end`, `closedWeekdays`, `holidays` (dates).
 - `rules`: `interval`, `advanceDays`, `leadMinutes`, `sameDay`, `cancelHours`, and `payment` (`enabled`, `refundTiers`).
 - `pages[]`, `header`, `footer`, `appearance`: customer-facing pages and design.
+- `pages[]`: custom page bodies are checked HTML fragments, and `css` applies only to that page (layout, decoration and animation). Scripts, event attributes, forms, buttons, embedded documents, external CSS and CSS `url()` are rejected. Blog posts and announcements are Markdown.
+- `screens`: the About, Booking, My page and Contact screens may each have checked HTML and screen-scoped CSS. Their working parts stay app components placed through slots: `booking` (required on Booking), `mypage` (required) and `news` on My page, `form` (required) on Contact, and `menus`, `staff`, `access` and `hours` on About. Without a design a screen uses the standard layout.
+- `appearance.theme`: the header, the frame around every screen and the footer in checked HTML with one shared CSS; the owner can edit it after publication from a built-in screen in Try and edit screens.
 - `appearance.articles`: separate `blogs` and `announcements` choices. If absent, both remain enabled for existing shops.
 - `appearance.theme`: the reviewed first-creation HTML/CSS around application-provided navigation, content and footer slots. It cannot supply scripts, booking forms or authentication logic.
 

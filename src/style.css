@@ -2344,3 +2344,13 @@ pre {
 .shop-map figcaption { margin-top: 6px; font-size: 13px; }
 .check-field { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
 .check-field input { width: auto; }
+/* Code fields for HTML page bodies and their CSS. */
+.code-input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; tab-size: 2; }
+/* HTML/CSS editors for built-in screens and the theme. */
+.design-editor { display: grid; gap: 10px; }
+.design-editor h4 { margin: 12px 0 0; }
+.design-slots { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 12px; }
+.design-slots li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.design-slots code { background: var(--cream); border-radius: 6px; padding: 2px 6px; }
+.design-slots b { color: #94503d; font-weight: 600; margin-left: 4px; }
+.page-editor-insert { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; }
