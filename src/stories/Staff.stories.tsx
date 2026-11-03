@@ -15,4 +15,6 @@ export const Staff: Story = { name: "スタッフ・勤務の保存", args: { sc
 
 export const Login: Story = { name: "スタッフのGoogleログイン・カレンダー許可", args: { scenario: "staff-login" } };
 
+export const OwnerCalendar: Story = { name: "店主1人・追加スタッフなし", args: { scenario: "owner-only" } };
+
 export const MyPhoto: Story = { name: "スタッフ本人の写真登録", args: { scenario: "calendar-member" } };

@@ -18,7 +18,7 @@ Customers send inquiries from the shop page. The shop replies from the managemen
 
 # Staff
 
-The owner registers staff email addresses. Staff sign in through the staff login link with their own Google account and can manage bookings, inquiries and customer notes, but not shop settings or publication. A staff member may connect their Google Calendar (free/busy only); busy times then block booking slots for that staff member.
+The owner grants Calendar FreeBusy access during normal owner sign-in, alongside Drive and Gmail permissions. The owner is a booking provider without a staff registration, and their calendar is checked automatically. New shops start with no additional staff. The owner has no separate calendar status panel; ordinary sign-in handles consent. Legacy explicit staff assignments remain supported. Other staff sign in through the staff login link with their own Google account and can manage bookings, inquiries and customer notes, but not shop settings or publication. Busy times in each connected calendar block booking slots for the corresponding staff member.
 
 # Notifications
 

@@ -35,7 +35,7 @@ test("diagram uses validated published settings, customer staff selection, escap
   assert.match(svg, /Firestore/);
   assert.match(documents(c, []).spec, /"sameDay": false/);
   assert.match(systemSvg(c), /指名先／対応スタッフ/);
-  assert.throws(() => shopSystem({ ...c, staff: [] }));
+  assert.match(shopSystem({ ...c, staff: [] }).sections.flatMap(section => section.lines).join("\n"), /店主/);
   assert.throws(() =>
     shopSchema.parse({
       ...c,

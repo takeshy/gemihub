@@ -46,6 +46,9 @@ import {
   sample,
   documents,
   planSummary,
+  bookingStaffName,
+  menuSelection,
+  bookingMenuName,
   type ShopConfig,
   type Booking,
 } from "./domain.ts";
@@ -116,7 +119,7 @@ import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from 
 import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
 import { renderCustomPage } from "./page-renderer.tsx";
 import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
-import { calendarGateway, calendarScope, connections, availableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
+import { calendarGateway, calendarScope, connections, connectOwnerCalendar, bookingCalendars, availableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
 /**
  * Images attached anywhere in a conversation plus the current ones, newest first within the request limits.
  * Earlier images that were since removed (or would exceed the size limit) are skipped; current ones stay strict.
@@ -281,8 +284,8 @@ export function createApp(
       records: async kind => {
         if (kind === "bookings") return (await store.bookings(shop.id)).map(booking => ({
           id: booking.id, start: booking.start, end: booking.end, status: booking.status,
-          menu: config.menus.find(menu => menu.id === booking.menuId)?.name || booking.menuId,
-          staff: config.staff.find(person => person.id === booking.staffId)?.name || booking.staffId,
+          menu: bookingMenuName(config, booking),
+          staff: bookingStaffName(config, booking.staffId),
           customer: booking.name, email: booking.customer, price: booking.price,
           ...(booking.payment ? { paid: booking.payment.amount, refund: booking.payment.cancellation ? { amount: booking.payment.cancellation.amount, status: booking.payment.cancellation.status } : undefined } : {}),
         }));
@@ -296,6 +299,8 @@ export function createApp(
   const operator = async (user: User | undefined, shop: Shop) => {
     if (!user || isArchivedShop(shop)) return false;
     if (user.email === shop.owner) return true;
+    const account = await store.get<StaffAccount>("staffAccount", staffAccountKey(shop.id, user.email));
+    if (account && !shop.published?.staff.some(staff => staff.id === account.staffId)) return false;
     const member = await store.get<StaffMember>("member", `${shop.id}:${user.email}`);
     return member?.accepted === true && member.status !== "revoked";
   };
@@ -390,7 +395,7 @@ export function createApp(
     const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
     await store.transaction(async () => {
       await notify(shop, config, booking.customer, `${config.name} ${refund ? tr("予約キャンセル・返金") : booking.status === "no_show" ? tr("予約の状態が変更されました") : tr("ご予約を承りました")}`,
-        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}\n{6}{7}", booking.name, booking.id, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), config.menus.find(menu => menu.id === booking.menuId)?.name || booking.menuId, booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))));
+        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}\n{6}{7}", booking.name, booking.id, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))));
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
     });
   });
@@ -671,6 +676,7 @@ export function createApp(
                   "profile",
                   "https://www.googleapis.com/auth/drive.file",
                   "https://www.googleapis.com/auth/gmail.send",
+                  calendarScope,
                 ],
             state,
             code_challenge: createHash("sha256")
@@ -700,7 +706,9 @@ export function createApp(
         if (!pending || pending.expires < Date.now())
           fail(400, tr("ログインの有効期限が切れました"));
         if (pending.locale) { requestLocale.enterWith(pending.locale); res.setHeader("Content-Language", pending.locale); }
-        if (url.searchParams.has("error")) fail(400, tr("Google ログインとカレンダーの利用許可を完了してください。スタッフ用ログインからやり直せます。"));
+        if (url.searchParams.has("error")) fail(400, pending.staffShopId || pending.calendarShopId
+          ? tr("Google ログインとカレンダーの利用許可を完了してください。スタッフ用ログインからやり直せます。")
+          : tr("Google ログインと必要なアクセスの許可を完了してください。ログインを最初からやり直してください。"));
         if (pending.staffShopId) {
           const identity = await calendar.exchange(url.searchParams.get("code") || "", pending.verifier);
           return await store.locked(pending.staffShopId, async () => {
@@ -739,10 +747,11 @@ export function createApp(
           codeVerifier: pending.verifier,
         });
         if (pending.adminDemo) {
-          // The operator's demo Drive connection stays separate from the operator's own shop token.
+          // The operator's demo Drive/Calendar connection stays separate from their own shop token.
           if (!user || !isAdmin(user.email) || user.email !== pending.email) fail(403, tr("連携を開始したアカウントでログインしてください"));
           const identity = (await auth.verifyIdToken({ idToken: tokens.id_token!, audience: process.env.GOOGLE_CLIENT_ID })).getPayload();
           if (!identity?.email_verified || !identity.email) fail(403, tr("確認済みの Google アカウントが必要です"));
+          if (!tokens.scope?.split(" ").includes(calendarScope)) fail(400, tr("Google Calendar の空き状況へのアクセスを承認してください"));
           if (!tokens.refresh_token) fail(400, tr("Google のアクセス権を再承認してください"));
           const previous = await store.get<DemoGoogle>("demoGoogle", "current");
           const email = identity.email.toLowerCase();
@@ -768,6 +777,12 @@ export function createApp(
           shopId: pending.shopId,
         };
         if (!pending.shopId) {
+          if (!tokens.scope?.split(" ").includes(calendarScope))
+            fail(400, tr("店主ログインでは、Google Calendar の空き状況へのアクセスも許可してください。"));
+          u.refreshToken = tokens.refresh_token ? encrypt(tokens.refresh_token) : existing?.refreshToken;
+          u.calendarRefreshToken = tokens.refresh_token ? u.refreshToken : existing?.calendarRefreshToken;
+          if (!u.refreshToken || !u.calendarRefreshToken)
+            fail(400, tr("Google のアクセス権を再承認してください"));
           u.legacyNotes = await hasLegacyNotes(tokens.access_token || "");
           // Do not create an empty shop just because an existing note user signed in.
           // While sign-up is invitation-only, a new owner first enters the invitation password.
@@ -776,12 +791,11 @@ export function createApp(
           const own = existingShop
             || (!u.legacyNotes && !u.accessPending ? await store.createShop(email, regionForRequest(req)) : undefined);
           u.shopId = own?.id;
-          u.refreshToken = tokens.refresh_token
-            ? encrypt(tokens.refresh_token)
-            : existing?.refreshToken;
-          if (!u.refreshToken)
-            fail(400, tr("Google のアクセス権を再承認してください"));
           await store.put("user", email, u);
+          if (own?.published && !u.legacyNotes) await store.locked(own.id, async () => {
+            const current = await store.shop(own.id);
+            if (current?.published && !isArchivedShop(current)) await connectOwnerCalendar(store, current, current.published);
+          });
         }
         if (pending.returnHost !== appHost) {
           const ticket = randomBytes(32).toString("base64url");
@@ -929,7 +943,7 @@ export function createApp(
           const verifier = randomBytes(48).toString("base64url");
           await store.put("oauth", digest(state), { verifier, locale: getLocale(), adminDemo: true, email: user.email, returnHost: appHost, expires: Date.now() + 600000 });
           res.setHeader("Set-Cookie", `gemihub_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${secureCookie}`);
-          return redirect(res, oauth().generateAuthUrl({ access_type: "offline", prompt: "consent select_account", scope: ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.file"], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }));
+          return redirect(res, oauth().generateAuthUrl({ access_type: "offline", prompt: "consent select_account", scope: ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.file", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }));
         }
         if (path === "/api/admin/status" && method === "GET") {
           const connection = await store.get<DemoGoogle>("demoGoogle", "current");
@@ -1415,6 +1429,7 @@ export function createApp(
             const input = z.object({ staffId: z.string().min(1), email: z.union([z.string().trim().pipe(emailSchema), z.literal("")]), previousEmail: z.string().default("") }).parse(await body(req));
             const config = await effective(fresh);
             if (!config?.staff.some(staff => staff.id === input.staffId)) fail(400, tr("担当スタッフを選択してください"));
+            if (input.email === fresh.owner && config.ownerBooking) fail(400, tr("店主の追加登録は不要です。ログイン時のカレンダーを自動で利用します。"));
             const accounts = await staffAccounts(store, fresh);
             const previous = accounts.find(account => account.staffId === input.staffId);
             if ((previous?.email || "") !== input.previousEmail) fail(409, tr("登録内容が更新されています。最新の内容を確認してください。"));
@@ -1439,15 +1454,23 @@ export function createApp(
               }
               await store.put("staffAccount", key, { shopId: fresh.id, staffId: input.staffId, email: input.email } satisfies StaffAccount);
             }
-            return json(res, { ok: true });
+            const calendarConnected = input.email === fresh.owner && await connectOwnerCalendar(store, fresh, config);
+            return json(res, { ok: true, calendarConnected });
           }
           if (action === "calendar" && method === "GET") {
-            const connection = await store.get<CalendarConnection>("calendar", `${fresh.id}:${user!.email}`);
+            const connection = (await bookingCalendars(store, fresh, await effective(fresh))).find(connection => connection.email === user!.email);
             const account = (await staffAccounts(store, fresh)).find(account => account.email === user!.email);
-            return json(res, { connected: !!connection, staffId: connection?.staffId || account?.staffId, email: user!.email, configured: !!process.env.GOOGLE_CLIENT_ID, loginUrl: `/staff-login/${fresh.id}` });
+            return json(res, { connected: !!connection, staffId: connection?.staffId || account?.staffId, email: user!.email, configured: !!process.env.GOOGLE_CLIENT_ID, loginUrl: user!.email === fresh.owner ? "/auth/google" : `/staff-login/${fresh.id}` });
           }
           if (action === "calendar/disconnect" && method === "POST") {
             await store.delete("calendar", `${fresh.id}:${user!.email}`);
+            if (user!.email === fresh.owner) {
+              const owner = await store.get<User>("user", fresh.owner);
+              if (owner?.calendarRefreshToken) {
+                delete owner.calendarRefreshToken;
+                await store.put("user", fresh.owner, owner);
+              }
+            }
             return json(res, { ok: true });
           }
           if (action === "calendar/connect" && method === "POST") {
@@ -2246,7 +2269,7 @@ export function createApp(
               await availableSlots(store, shop, config,
                 url.searchParams.get("date") || "",
                 url.searchParams.get("menu") || "",
-                url.searchParams.get("staff") || undefined, calendar),
+                url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")),
             );
           if (action === "checkouts" && method === "GET") {
             const u = customer();
@@ -2263,7 +2286,7 @@ export function createApp(
             else await payments.capture(c, async () => {
               const b = c.booking;
               const date = dateIn(b.start, regionOf(config).timeZone);
-              return (await availableSlots(store, shop, config, date, b.menuId, b.staffId, calendar, c.id)).some(slot => slot.start === b.start && slot.end === b.end && slot.staffId === b.staffId);
+              return (await availableSlots(store, shop, config, date, b.menuId, b.staffId, calendar, c.id, b.optionIds)).some(slot => slot.start === b.start && slot.end === b.end && slot.staffId === b.staffId);
             });
             await flush(shop);
             return json(res, { ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? c.booking : undefined, checkout: checkoutView(c) });
@@ -2285,10 +2308,13 @@ export function createApp(
                 name: z.string().min(1).max(100),
                 message: z.string().max(2000).default(""),
                 menuId: z.string(),
+                optionIds: z.array(z.string().regex(/^[a-z0-9_-]+$/)).max(10).refine(ids => new Set(ids).size === ids.length).default([]),
                 staffId: z.string().optional(),
                 start: z.iso.datetime(),
                 requestId: z.uuid().optional(),
                 paymentConsent: z.object({ amount: z.number().min(0), policy: refundTiersSchema }).optional(),
+                expectedPrice: z.number().min(0).optional(),
+                expectedDuration: z.number().int().min(15).optional(),
               })
               .parse(await body(req));
             const requestKey = input.requestId
@@ -2301,15 +2327,21 @@ export function createApp(
               : undefined;
             const pending = requestKey ? await store.get<Checkout>("checkout", digest(requestKey)) : undefined;
             if (pending) {
-              if (pending.customer !== u.email || pending.shopId !== shop.id || pending.booking.name !== input.name || pending.booking.message !== input.message || pending.booking.start !== input.start || pending.booking.menuId !== input.menuId || (input.staffId && pending.booking.staffId !== input.staffId)) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
+              if (pending.customer !== u.email || pending.shopId !== shop.id || pending.booking.name !== input.name || pending.booking.message !== input.message || pending.booking.start !== input.start || pending.booking.menuId !== input.menuId || JSON.stringify([...(pending.booking.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort()) || (input.staffId && pending.booking.staffId !== input.staffId)) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
               await payments.create(pending);
               return json(res, { ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? pending.booking : undefined, checkout: checkoutView(pending) });
             }
-            if (previous) return json(res, { ok: true, booking: previous });
-            const menuPrice = config.menus.find(menu => menu.id === input.menuId && menu.active)?.price;
+            if (previous) {
+              if (JSON.stringify([...(previous.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort())) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
+              return json(res, { ok: true, booking: previous });
+            }
+            const selection = menuSelection(config, input.menuId, input.optionIds);
+            if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
+            const menuPrice = selection.price;
+            if (input.expectedPrice !== undefined && input.expectedPrice !== selection.price || input.expectedDuration !== undefined && input.expectedDuration !== selection.duration) fail(409, tr("料金や所要時間が変わりました。メニューと空き時間を確認し直してください。"));
             if (config.rules.payment?.enabled && menuPrice && (!input.requestId || !input.paymentConsent || input.paymentConsent.amount !== menuPrice || JSON.stringify(input.paymentConsent.policy) !== JSON.stringify(config.rules.payment.refundTiers))) fail(409, tr("料金と返金条件を読み直し、同意してからPayPalへ進んでください。"));
             const date = dateIn(input.start, regionOf(config).timeZone);
-            const slot = (await availableSlots(store, shop, config, date, input.menuId, input.staffId, calendar)).find((s) => s.start === input.start);
+            const slot = (await availableSlots(store, shop, config, date, input.menuId, input.staffId, calendar, undefined, input.optionIds)).find((s) => s.start === input.start);
             if (!slot)
               fail(409, tr("この時間は予約できません。空き状況を更新してください"));
             const b: Booking = {
@@ -2320,7 +2352,8 @@ export function createApp(
               name: input.name,
               message: input.message,
               menuId: input.menuId,
-              price: config.menus.find(menu => menu.id === input.menuId)!.price,
+              price: selection.price,
+              ...(selection.optionIds.length ? { optionIds: selection.optionIds, items: selection.items } : {}),
               ...slot,
               status: "active",
               createdAt: new Date().toISOString(),
@@ -2348,7 +2381,7 @@ export function createApp(
                 config,
                 u.email,
                 tr("{0} ご予約を承りました", config.name),
-                tr("{0} 様\n{1}\n{2}\n予約番号: {3}{4}", b.name, config.menus.find((m) => m.id === b.menuId)!.name, new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), b.id, b.message ? tr("\nメッセージ: {0}", b.message) : ""),
+                tr("{0} 様\n{1}\n{2}\n予約番号: {3}{4}", b.name, bookingMenuName(config, b), new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), b.id, b.message ? tr("\nメッセージ: {0}", b.message) : ""),
               );
             });
             await flush(shop);

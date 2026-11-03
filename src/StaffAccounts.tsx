@@ -12,7 +12,7 @@ type StaffRow = {
   connected: boolean;
 };
 type Accounts = { staff: StaffRow[]; loginUrl: string; configured: boolean };
-export function StaffAccounts({ shop }: { shop: Workspace }) {
+export function StaffAccounts({ shop, onSaved }: { shop: Workspace; onSaved?: () => Promise<unknown> }) {
   const api = useApi();
   const [data, setData] = useState<Accounts>();
   const [error, setError] = useState("");
@@ -21,8 +21,10 @@ export function StaffAccounts({ shop }: { shop: Workspace }) {
     setData(result);
   };
   useEffect(() => {
-    void load().catch((error) => setError(error.message));
-  }, [shop.id, shop.revision]);
+    if (shop.published?.staff.length) void load().catch((error) => setError(error.message));
+    else setData(undefined);
+  }, [shop]);
+  if (!shop.published?.staff.length) return null;
   return (
     <section
       className="panel staff-accounts"
@@ -66,7 +68,7 @@ export function StaffAccounts({ shop }: { shop: Workspace }) {
                 key={staff.staffId}
                 shopId={shop.id}
                 staff={staff}
-                saved={load}
+                saved={async () => { await load(); await onSaved?.(); }}
               />
             ))}
           </div>
@@ -97,14 +99,14 @@ function StaffAccountRow({
     setError("");
     setNotice("");
     try {
-      await api(`/api/shops/${shopId}/staff-accounts`, {
+      const result = await api<{ calendarConnected?: boolean }>(`/api/shops/${shopId}/staff-accounts`, {
         staffId: staff.staffId,
         email: value.trim().toLowerCase(),
         previousEmail: staff.email,
       });
       await saved();
       setNotice(
-        value
+        result.calendarConnected ? tr("登録しました。店主のカレンダーも連携しました。") : value
           ? tr("登録しました。本人にスタッフ用ログインURLを伝えてください。")
           : tr("登録を解除しました。"),
       );
@@ -186,7 +188,7 @@ function StaffAccountRow({
     </article>
   );
 }
-export function StaffCalendar({ shop }: { shop: Workspace }) {
+export function StaffCalendar({ shop, onSaved }: { shop: Workspace; onSaved?: () => Promise<unknown> }) {
   const api = useApi();
   const [connection, setConnection] = useState<{
     connected: boolean;
@@ -201,7 +203,7 @@ export function StaffCalendar({ shop }: { shop: Workspace }) {
     setConnection(await api(`/api/shops/${shop.id}/calendar`));
   useEffect(() => {
     void load().catch((error) => setError(error.message));
-  }, [shop.id]);
+  }, [shop]);
   const staff = shop.published?.staff.find(
     (staff) => staff.id === connection?.staffId,
   );
@@ -224,7 +226,7 @@ export function StaffCalendar({ shop }: { shop: Workspace }) {
               : tr("カレンダー未連携")}
           </p>
           <p>
-            {tr("スタッフ用のGoogleログインで、カレンダーの利用許可も行います。予定の件名・本文は取得しません。")}</p>
+            {shop.isOwner ? tr("店主は通常のGoogleログインでカレンダーの空き状況も許可します。連携する担当スタッフに自分のメールアドレスを登録してください。予定の件名・本文は取得しません。") : tr("スタッフ用のGoogleログインで、カレンダーの利用許可も行います。予定の件名・本文は取得しません。")}</p>
           <a
             className="button"
             data-staff-login-link
@@ -240,6 +242,7 @@ export function StaffCalendar({ shop }: { shop: Workspace }) {
                 try {
                   await api(`/api/shops/${shop.id}/calendar/disconnect`, {});
                   await load();
+                  await onSaved?.();
                 } catch (error) {
                   setError(
                     error instanceof Error ? error.message : String(error),

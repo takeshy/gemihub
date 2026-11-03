@@ -22,6 +22,10 @@ test("AI settings apply only selected facts, preserve existing rows and append i
   const missing = applySettingsFacts(before, "menus", { items: [{ name: "Unknown time", price: 50 }] }); assert.equal(missing.config.menus.length, before.menus.length); assert.equal(missing.warnings.length, 1);
   const currency = applySettingsFacts(before, "menus", { items: [{ id: before.menus[0].id, name: before.menus[0].name, price: 2000, currency: "JPY" }] }); assert.equal(currency.config.menus[0].price, before.menus[0].price); assert.equal(currency.warnings.length, 1);
   assert.throws(() => applySettingsFacts(before, "menus", { items: [{ id: "not-existing", name: "Overwrite", price: 1 }] }));
+  const option = applySettingsFacts(before, "menus", {items:[{id:before.menus[1].id,name:before.menus[1].name,optionFor:[before.menus[0].id],optionGroup:"removal"}]}).config;
+  assert.deepEqual(option.menus[1].optionFor,[before.menus[0].id]);
+  const standalone = applySettingsFacts(option,"menus",{items:[{id:option.menus[1].id,name:option.menus[1].name,optionFor:null,optionGroup:null}]}).config;
+  assert.equal(standalone.menus[1].optionFor,undefined);assert.equal(standalone.menus[1].optionGroup,undefined);
   assert.throws(() => applySettingsFacts(before, "staff", { items: [{ name: "New staff", menuIds: ["not-existing"] }] }));
   const incomplete = applySettingsFacts(before, "staff", { items: [{ name: "New staff" }] }); assert.equal(incomplete.config.staff.length, before.staff.length); assert.equal(incomplete.warnings.length, 1);
   assert.throws(() => applySettingsFacts(before, "hours", { start: "19:00", end: "18:00" }));

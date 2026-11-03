@@ -39,7 +39,7 @@ export function Admin({ run }: { run: Run }) {
 
     <section className="panel" aria-labelledby="admin-google-title">
       <h2 id="admin-google-title">{tr("デモ用 Google")}</h2>
-      <p className="small muted">{tr("審査員のお店はこの Google アカウントの Drive に、審査員ごとのフォルダで保存されます。メールは送信しないため Gmail の権限は求めません。")}</p>
+      <p className="small muted">{tr("審査員のお店はこの Google アカウントの Drive に、審査員ごとのフォルダで保存されます。店主の予約枠には、このアカウントのカレンダーの空き状況を使います。メールは送信しないため Gmail の権限は求めません。")}</p>
       {google ? <dl className="admin-facts">
         <div><dt>{tr("接続中のアカウント")}</dt><dd>{google.email}</dd></div>
         <div><dt>{tr("接続日時")}</dt><dd>{at(google.connectedAt)}<br /><small className="muted">{google.connectedBy}</small></dd></div>

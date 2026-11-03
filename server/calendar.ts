@@ -4,8 +4,10 @@ import { paymentHolds } from "./payments.ts";
 import { google } from "googleapis";
 import { z } from "zod";
 import { oauth, encrypt, decrypt } from "./google.ts";
-import type { Store, Shop } from "./store.ts";
-import { slots, type ShopConfig } from "./domain.ts";
+import type { Store, Shop, User } from "./store.ts";
+import { staffAccounts } from "./staff-accounts.ts";
+import { demoGoogleUnavailable } from "./judge.ts";
+import { slots, bookingStaff, menuSelection, ownerStaffId, type ShopConfig } from "./domain.ts";
 
 export const calendarScope = "https://www.googleapis.com/auth/calendar.freebusy";
 export type CalendarConnection = {
@@ -69,10 +71,34 @@ export async function connections(store: Store, shop: Shop) {
     )),
   );
 }
+/** A solo owner needs no staff registration; explicit staff assignments remain supported. */
+export async function connectOwnerCalendar(store: Store, shop: Shop, config: ShopConfig) {
+  const owner = await store.get<User>("user", shop.owner);
+  if (!owner?.calendarRefreshToken) return false;
+  const account = (await staffAccounts(store, shop)).find(account => account.email === shop.owner);
+  const staffId = config.ownerBooking || !config.staff.length ? ownerStaffId : account?.staffId;
+  if (!staffId || !bookingStaff(config).some(staff => staff.id === staffId)) return false;
+  if ((await connections(store, shop)).some(connection => connection.staffId === staffId && connection.email !== shop.owner)) return false;
+  await store.put("calendar", `${shop.id}:${shop.owner}`, { shopId: shop.id, email: shop.owner, staffId, refreshToken: owner.calendarRefreshToken } satisfies CalendarConnection);
+  return true;
+}
+export async function bookingCalendars(store: Store, shop: Shop, config: ShopConfig) {
+  const linked = await connections(store, shop);
+  if (config.staff.length && !config.ownerBooking) return linked;
+  const owner = shop.judge ? undefined : await store.get<User>("user", shop.owner);
+  // Resolve the shared judge credential on every request so rotation and disconnect take effect immediately.
+  const refreshToken = shop.judge ? await store.ownerToken(shop)
+    : owner?.calendarRefreshToken || linked.find(connection => connection.email === shop.owner)?.refreshToken;
+  if (!refreshToken && !store.memory) throw Object.assign(new Error(shop.judge ? demoGoogleUnavailable() : tr("店主のGoogleカレンダーへの接続が必要です。店主にGoogleへの再ログインを依頼してください。")), {status:503});
+  return [...linked.filter(connection => connection.email !== shop.owner), ...(refreshToken ? [{ shopId: shop.id, email: shop.owner, staffId: ownerStaffId, refreshToken }] : [])];
+}
 export async function availableSlots(
   store: Store, shop: Shop, config: ShopConfig, date: string, menu: string,
   staff: string | undefined, gateway: CalendarGateway, excludeCheckout?: string,
+  optionIds: string[] = [],
 ) {
+  const selection = menuSelection(config, menu, optionIds);
+  if (!selection) return [];
   const bookings = [...await store.bookings(shop.id), ...await paymentHolds(store, shop.id, excludeCheckout)];
   // Allocate after adding all busy intervals, so unspecified staff can be assigned.
   if (!z.iso.date().safeParse(date).success) return [];
@@ -80,8 +106,9 @@ export async function availableSlots(
   const timeZone = regionOf(config).timeZone;
   const start = zonedDate(date, "00:00", timeZone);
   const end = zonedDate(new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10), "00:00", timeZone);
-  const relevant = (await connections(store, shop)).filter(c =>
-    config.staff.some(s => s.id === c.staffId && s.menuIds.includes(menu)) &&
+  const linked = await bookingCalendars(store, shop, config);
+  const relevant = linked.filter(c =>
+    bookingStaff(config).some(s => s.id === c.staffId && s.menuIds.includes(menu) && selection.options.every(option => s.menuIds.includes(option.id))) &&
     (!staff || c.staffId === staff),
   );
   try {
@@ -101,5 +128,5 @@ export async function availableSlots(
       { status: 503 },
     );
   }
-  return slots(config, bookings, date, menu, staff);
+  return slots(config, bookings, date, menu, staff, undefined, optionIds);
 }

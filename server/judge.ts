@@ -39,7 +39,7 @@ export const isAdmin = (email: string | undefined) => !!email && !isJudgeEmail(e
 export const accessPasswordEnabled = () => !!process.env.ACCESS_PASSWORD;
 export const accessPasswordMatches = (input: string) => secretMatches(input, process.env.ACCESS_PASSWORD || "");
 
-/** The operator's Google connection that stores judge shops. Its refresh token is encrypted. */
+/** The operator's Drive/Calendar connection for judge shops. Its refresh token is encrypted. */
 export type DemoGoogle = { email: string; refreshToken: string; connectedAt: string; connectedBy: string; rootFolderId?: string };
 /** A mail a judge shop would have sent. Judge access never sends mail. */
 export type JudgeMail = { id: string; shopId: string; owner: string; to: string; subject: string; body: string; at: string };

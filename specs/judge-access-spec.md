@@ -94,7 +94,7 @@
 
 ### カレンダー
 
-- 審査員店舗でもスタッフのカレンダー連携（`calendar.freebusy`、自分の Google アカウント）は従来どおり利用できる。使わなくても予約は gemihub 内の予約データで動く。
+- 審査員店舗の店主の予約枠は、運営者が用意したデモ用 Google アカウントのカレンダー（`calendar.freebusy`）を使う。審査員本人の Google ログインは不要。接続情報はリクエストごとに参照し、再接続・解除・審査期限切れを即時に反映する。ほかのスタッフは従来どおり自分の Google アカウントを連携できる。
 
 ### AI 利用上限
 
@@ -117,7 +117,7 @@
 
 ### デモ用 Google 接続
 
-- 「デモ用 Google を接続」: `GET /admin/google/connect` で OAuth を開始する（`openid email profile drive.file`、`access_type=offline`、`prompt=consent`、PKCE）。コールバックは既存の `/auth/google/callback` を使い、保留中 OAuth 記録に `adminDemo: true` を持たせて分岐する。
+- 「デモ用 Google を接続」: `GET /admin/google/connect` で OAuth を開始する（`openid email profile drive.file calendar.freebusy`、`access_type=offline`、`prompt=consent`、PKCE）。コールバックは既存の `/auth/google/callback` を使い、保留中 OAuth 記録に `adminDemo: true` を持たせて分岐する。Calendar の許可と refresh token を検証し、拒否時は既存接続を保持する。以前に Drive だけを許可した接続は、管理画面で接続し直す。
 - 成功時は refresh token を既存の `encrypt()` で暗号化し、`demoGoogle` 記録（接続したメールアドレス、接続日時、接続した運営者）として保存する。運営者自身の `User` は変更しない。
 - 画面には接続中のメールアドレス・接続日時・`gemihub judges` フォルダの Drive リンクを表示する。「接続し直す」「接続を解除」（解除は確認ダイアログ付き。解除中は審査員店舗が 503 になることを明記）。
 - トークン更新に失敗したら画面に「再接続が必要です」と表示する。

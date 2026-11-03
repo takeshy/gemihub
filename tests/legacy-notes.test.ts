@@ -50,7 +50,7 @@ test("old note owners must migrate before creating or managing a shop; completio
     verifyIdToken: (...args: unknown[]) => Promise<unknown>;
     getAccessToken: (...args: unknown[]) => Promise<unknown>;
   };
-  t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "id", access_token: "access", refresh_token: "refresh" } }));
+  t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "id", access_token: "access", refresh_token: "refresh", scope: "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.freebusy" } }));
   t.mock.method(prototype, "verifyIdToken", async () => ({ getPayload: () => ({ email_verified: true, email, name: "Owner" }) }));
   t.mock.method(prototype, "getAccessToken", async () => ({ token: "access" }));
   const originalFetch = globalThis.fetch;

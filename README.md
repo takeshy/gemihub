@@ -29,7 +29,9 @@ A booking and shop management system for small independent businesses and salons
 
 ### 2. Bookings, Payments, and Staff Sync
 - **Smart availability calculation:** Automatically computes open slots from business hours, holidays, staff shifts, and service durations (with or without staff preference).
-- **Google Calendar integration:** Staff members can connect their Google Calendar (FreeBusy) to prevent double bookings.
+- **Google Calendar integration:** Owner sign-in requests Calendar FreeBusy access alongside Drive and Gmail. No staff registration is required for the owner; their Calendar busy times are checked automatically. A shop can start with no additional staff. Other staff grant Calendar access through their staff login.
+- **Add-on services:** Configure removal or care as an optional addition to selected services. Prices and durations are combined for availability, booking and payment; options in the same group are mutually exclusive.
+- **Weekday opening hours:** Keep normal hours and override individual weekdays, such as closing at 19:00 normally and 21:00 on Tuesdays and Fridays.
 - **PayPal prepayment & automated refunds:** Accept PayPal payments at booking time and automatically calculate refunds upon cancellation based on your shop's policy.
 
 ### 3. Daily Operations & CRM

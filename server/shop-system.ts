@@ -1,7 +1,7 @@
 import { formatMoney, currencyOf, regionOf } from "../shared/region.ts";
 import { tr, intlLocale } from "../shared/i18n.ts";
 import { policyText } from "./payment-domain.ts";
-import { shopSchema, type ShopConfig } from "./domain.ts";
+import { shopSchema, bookingStaff, hoursText, type ShopConfig } from "./domain.ts";
 
 // Both the operating screen and the exported SVG use this validated, deterministic model.
 export function shopSystem(input: ShopConfig) {
@@ -18,9 +18,9 @@ export function shopSystem(input: ShopConfig) {
       ] },
       { title: tr("② 空きを判断する仕組み"), lines: [
         tr("お客様が指名・指名なしを選べます。指名時は選んだスタッフのみ、指名なしは対応するスタッフのうち空いている1人に割り当てます。"),
-        tr("営業時間 {0}〜{1}／{2}分刻み（{3}）", c.hours.start, c.hours.end, c.rules.interval, regionOf(c).timeZone),
+        tr("営業時間 {0}／{1}分刻み（{2}）", hoursText(c), c.rules.interval, regionOf(c).timeZone),
         tr("定休日：{0}。臨時休業：{1}。", c.hours.closedWeekdays.map(d => days[d] + tr("曜")).join("・") || tr("なし"), c.hours.holidays.join("・") || tr("なし")),
-        ...c.staff.map(p => `${p.name}：${p.weekdays.map(d => days[d]).join("・")} ${p.start}〜${p.end}／${p.menuIds.map(id => c.menus.find(m => m.id === id)!.name).join("・")}`),
+        ...bookingStaff(c).map(p => `${p.name}：${p.weekdays.map(d => days[d]).join("・")} ${p.start}〜${p.end}／${p.menuIds.map(id => c.menus.find(m => m.id === id)!.name).join("・")}`),
         tr("メニューの所要時間全体について、勤務・営業時間と既存の有効な予約、連携済み Calendar の予定あり時間を照合。重複する予約を防ぎます。"),
       ] },
       { title: tr("③ データの行き先"), lines: [
@@ -41,7 +41,7 @@ export function systemSvg(config: ShopConfig, detailed = true) {
   const model = shopSystem(config);
   const node = (x: number, y: number, width: number, label: string, sub: string, fill = "#eef3ee") => `<rect x="${x}" y="${y}" width="${width}" height="76" rx="14" fill="${fill}" stroke="#cbd8ce"/><text x="${x + width / 2}" y="${y + 30}" text-anchor="middle" font-size="18" font-weight="bold">${escape(label)}</text><text x="${x + width / 2}" y="${y + 56}" text-anchor="middle" font-size="14">${escape(sub)}</text>`;
   const arrow = (path: string) => `<path d="${path}" fill="none" stroke="#648575" stroke-width="2.5" marker-end="url(#arrow)"/>`;
-  const overview = tr("\n    <text x=\"32\" y=\"98\" font-size=\"20\" font-weight=\"bold\">① ログインから予約確定まで</text>\n    {0}\n    {1}\n    {2}\n    {3}\n    {4}{5}{6}\n    <text x=\"32\" y=\"246\" font-size=\"20\" font-weight=\"bold\">② お客様が指名・指名なしを選択</text>\n    {7}\n    {8}\n    {9}\n    {10}\n    {11}\n    {12}{13}\n    {14}{15}\n    <text x=\"32\" y=\"505\" font-size=\"20\" font-weight=\"bold\">③ データの保存と書き出し</text>\n    {16}\n    {17}\n    {18}\n    {19}\n    {20}{21}{22}\n    <text x=\"450\" y=\"782\" text-anchor=\"middle\" font-size=\"15\">記録はFirestore、画像・添付はDriveへ。JSON・CSVで書き出せます。</text>", node(32, 120, 175, tr("ログイン"), tr("自分の予約だけ見える")), node(252, 120, 175, tr("メニュー・日時"), tr("お客様が選ぶ")), node(472, 120, 175, tr("空きを確認"), tr("勤務と既存予約を照合")), node(692, 120, 175, tr("予約確定"), tr("重複を防いで保存")), arrow("M207 158 H246"), arrow("M427 158 H466"), arrow("M647 158 H686"), node(32, 306, 200, tr("指名先／対応スタッフ"), tr("スタッフ {0}人・勤務を照合", config.staff.length)), node(310, 270, 260, tr("選択した条件で空きあり"), tr("施術時間全体が空いている")), node(310, 376, 260, tr("選択した条件で空きなし"), tr("勤務外・休業・期限外も不可"), "#f6efeb"), node(648, 270, 220, tr("○ 予約できる"), tr("指名先／空いている1人")), node(648, 376, 220, tr("× 予約できない"), tr("別の日時を選ぶ"), "#f6efeb"), arrow("M232 344 H265 V308 H304"), arrow("M265 344 V414 H304"), arrow("M570 308 H642"), arrow("M570 414 H642"), node(310, 530, 260, tr("お店のシステム"), tr("予約を保存／承認した内容を公開")), node(32, 666, 250, tr("Firestore"), tr("予約・お客様・設定の正本")), node(325, 666, 250, tr("Google ドライブ"), tr("画像・添付・ページ・仕様と履歴")), node(618, 666, 250, tr("メール通知"), tr("予約確定・取消 → お客様と店主")), arrow("M440 606 V632 H157 V660"), arrow("M450 606 V660"), arrow("M460 606 V632 H743 V660"));
+  const overview = tr("\n    <text x=\"32\" y=\"98\" font-size=\"20\" font-weight=\"bold\">① ログインから予約確定まで</text>\n    {0}\n    {1}\n    {2}\n    {3}\n    {4}{5}{6}\n    <text x=\"32\" y=\"246\" font-size=\"20\" font-weight=\"bold\">② お客様が指名・指名なしを選択</text>\n    {7}\n    {8}\n    {9}\n    {10}\n    {11}\n    {12}{13}\n    {14}{15}\n    <text x=\"32\" y=\"505\" font-size=\"20\" font-weight=\"bold\">③ データの保存と書き出し</text>\n    {16}\n    {17}\n    {18}\n    {19}\n    {20}{21}{22}\n    <text x=\"450\" y=\"782\" text-anchor=\"middle\" font-size=\"15\">記録はFirestore、画像・添付はDriveへ。JSON・CSVで書き出せます。</text>", node(32, 120, 175, tr("ログイン"), tr("自分の予約だけ見える")), node(252, 120, 175, tr("メニュー・日時"), tr("お客様が選ぶ")), node(472, 120, 175, tr("空きを確認"), tr("勤務と既存予約を照合")), node(692, 120, 175, tr("予約確定"), tr("重複を防いで保存")), arrow("M207 158 H246"), arrow("M427 158 H466"), arrow("M647 158 H686"), node(32, 306, 200, tr("指名先／対応スタッフ"), tr("スタッフ {0}人・勤務を照合", bookingStaff(config).length)), node(310, 270, 260, tr("選択した条件で空きあり"), tr("施術時間全体が空いている")), node(310, 376, 260, tr("選択した条件で空きなし"), tr("勤務外・休業・期限外も不可"), "#f6efeb"), node(648, 270, 220, tr("○ 予約できる"), tr("指名先／空いている1人")), node(648, 376, 220, tr("× 予約できない"), tr("別の日時を選ぶ"), "#f6efeb"), arrow("M232 344 H265 V308 H304"), arrow("M265 344 V414 H304"), arrow("M570 308 H642"), arrow("M570 414 H642"), node(310, 530, 260, tr("お店のシステム"), tr("予約を保存／承認した内容を公開")), node(32, 666, 250, tr("Firestore"), tr("予約・お客様・設定の正本")), node(325, 666, 250, tr("Google ドライブ"), tr("画像・添付・ページ・仕様と履歴")), node(618, 666, 250, tr("メール通知"), tr("予約確定・取消 → お客様と店主")), arrow("M440 606 V632 H157 V660"), arrow("M450 606 V660"), arrow("M460 606 V632 H743 V660"));
   let y = 820;
   const content = (detailed ? model.sections : []).map(section => {
     const lines = section.lines.flatMap(line => {

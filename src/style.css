@@ -850,6 +850,7 @@ pre {
 .reservation-layout .panel {
   padding: 30px;
 }
+.booking-mobile-summary { display: none; }
 .booking-summary {
   align-self: start;
   background: #f1f3ea;
@@ -1111,6 +1112,8 @@ pre {
   .booking-summary {
     display: none;
   }
+  .booking-mobile-summary { display: block; padding: 12px 16px; margin: 0 0 20px; background: var(--cream); border: 1px solid var(--line); border-radius: 12px; }
+  .booking-mobile-summary p { margin: 8px 0; }
   .reservation-layout .panel {
     padding: 25px 20px;
   }
@@ -2399,3 +2402,15 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .visual-edit-history > span { min-width: 30px; text-align: center; white-space: nowrap; }
 .visual-chat-view { justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .editor-tools > span:has(.visual-edit-history) { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.weekday-hours { margin: 18px 0; border: 1px solid #dce0d2; border-radius: 8px; padding: 16px; min-width: 0; }
+.weekday-hours-row { margin: 10px 0; }
+.weekday-hours-row > label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.weekday-hours-row > .form-grid { margin-top: 8px; }
+.menu-option-settings,.booking-options { min-width: 0; border: 1px solid #dce0d2; border-radius: 8px; padding: 16px; margin: 14px 0; }
+.booking-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; min-height: 44px; }
+.booking-option > input { width: 18px; min-height: 18px; flex: 0 0 18px; margin-top: 5px; }
+.booking-option > span { min-width: 0; }
+.booking-option small { display: block; color: #61715b; }
+.booking-option-summary { padding-left: 18px; font-size: 13px; }
+.booking-option-image { display: block; flex: 0 0 48px; width: 48px; min-height: 48px; }
+.booking-option-image img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; }

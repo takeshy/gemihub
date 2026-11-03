@@ -1,0 +1,56 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {randomUUID} from "node:crypto";
+import type {AddressInfo} from "node:net";
+import {createApp} from "../server/app.ts";
+import {Store} from "../server/store.ts";
+import {sample,shopSchema,slots,bookingStaff,ownerStaffId,dateJST} from "../server/domain.ts";
+import {digest} from "../server/auth.ts";
+import {encrypt} from "../server/google.ts";
+import {sampleFixtures,createPreviewClient} from "../src/local-preview.ts";
+import {propose} from "../server/ai.ts";
+import {bookingCalendars} from "../server/calendar.ts";
+
+test("zero additional staff uses the owner in slots, previews and new shop defaults",async()=>{
+  const config=shopSchema.parse({...structuredClone(sample),staff:[]});config.hours.closedWeekdays=[];
+  assert.equal(bookingStaff(config).length,1);assert.equal(bookingStaff(config)[0].id,ownerStaffId);
+  const date=dateJST(new Date(Date.now()+3*86400000));const first=slots(config,[],date,"simple")[0];assert.equal(first.staffId,ownerStaffId);
+  const previousBooking={...first,id:"old",shopId:"s",customer:"customer@example.com",name:"Customer",menuId:"simple",price:5500,message:"",createdAt:"",status:"active" as const,staffId:"removed-staff"};
+  assert.ok(!slots(config,[previousBooking],date,"simple").some(slot=>slot.start===first.start),"existing bookings still block the solo owner after staff deletion");
+  const fixtures=sampleFixtures(config);assert.equal(fixtures.bookings[0].staffId,ownerStaffId);fixtures.bookings=[];
+  const preview=createPreviewClient(config,fixtures,"s");const choices=await preview<{staffId:string}[]>(`/api/public/local-preview/slots?date=${date}&menu=simple`);assert.ok(choices.length);assert.ok(choices.every(slot=>slot.staffId===ownerStaffId));
+  const initial=await propose("店主1人のお店",null,"owner@example.com",true);assert.deepEqual(initial.config.staff,[]);assert.equal(initial.config.ownerBooking,true);
+  const unlinkedProduction={memory:false,records:async()=>[],list:async()=>[],get:async()=>({refreshToken:"legacy-drive-only"})} as unknown as Store;
+  await assert.rejects(bookingCalendars(unlinkedProduction,{id:"s",owner:"owner@example.com"} as import("../server/store.ts").Shop,config),error=>(error as {status:number}).status===503);
+});
+
+test("last staff deletion saves with automatic owner Calendar and preserves booking safety",async t=>{
+  process.env.DEMO_MODE="true";
+  const store=new Store(":memory:");const shop=await store.createShop("owner@example.com");
+  const config=structuredClone(sample);config.staff=[config.staff[0]];config.hours.closedWeekdays=[];shop.published=config;await store.saveShop(shop);
+  await store.put("user",shop.owner,{email:shop.owner,name:"Owner",role:"owner",calendarRefreshToken:encrypt("calendar")});
+  for(const [id,email,role] of [["owner",shop.owner,"owner"],["customer","customer@example.com","customer"],["employee","employee@example.com","customer"]])await store.put("session",digest(id),{user:{email,name:id,role,shopId:shop.id},expires:Date.now()+600000});
+  await store.put("staffAccount",`${shop.id}:employee@example.com`,{shopId:shop.id,staffId:"aoi",email:"employee@example.com"});
+  await store.put("member",`${shop.id}:employee@example.com`,{shopId:shop.id,email:"employee@example.com",accepted:true,status:"accepted"});
+  await store.put("customer",`${shop.id}:customer@example.com`,{shopId:shop.id,email:"customer@example.com",name:"Customer",birthDate:"1990-01-01",gender:"not_specified",updatedAt:new Date().toISOString(),updatedBy:"customer@example.com"});
+  let busy:{start:string;end:string}[]=[],broken=false;
+  const server=createApp(store,undefined,{async exchange(){throw new Error("No extra Calendar authorization is needed");},async busy(connection){assert.equal(connection.staffId,ownerStaffId);assert.equal(connection.email,shop.owner);if(broken)throw new Error("private provider failure");return busy;}});
+  await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN=origin;
+  t.after(async()=>{server.close();await store.close();});
+  const request=async(path:string,data?:unknown,who="owner")=>{const response=await fetch(origin+path,{method:data===undefined?"GET":"POST",headers:{Origin:origin,Cookie:`gemihub_session=${who}`,"Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});return{status:response.status,body:await response.json()};};
+  const base=`/api/shops/${shop.id}`;
+  assert.equal((await request(`${base}/calendar`,undefined,"employee")).status,200);
+  const removed=await request(`${base}/live-settings/staff`,{value:[],previous:config.staff,requestId:randomUUID()});assert.equal(removed.status,200);
+  const updated=(await store.shop(shop.id))!;assert.deepEqual(updated.published!.staff,[]);assert.equal(updated.published!.ownerBooking,true);
+  assert.equal((await request(`${base}/calendar`,undefined,"employee")).status,403,"a removed staff member cannot continue using an existing session");
+  const calendar=await request(`${base}/calendar`);assert.equal(calendar.body.connected,true);assert.equal(calendar.body.staffId,ownerStaffId);
+  assert.deepEqual((await store.list("staffAccount")).filter((x:any)=>x.email===shop.owner),[],"no owner staff registration is required");
+  const date=dateJST(new Date(Date.now()+3*86400000));const path=`/api/public/${shop.slug}/slots?date=${date}&menu=simple`;
+  const first=(await request(path)).body[0];assert.equal(first.staffId,ownerStaffId);
+  busy=[{start:first.start,end:first.end}];assert.ok(!(await request(path)).body.some((slot:{start:string})=>slot.start===first.start));
+  const blocked=await request(`/api/public/${shop.slug}/bookings`,{menuId:"simple",start:first.start,name:"Customer"},"customer");assert.equal(blocked.status,409);
+  broken=true;const failed=await request(path);assert.equal(failed.status,503);assert.ok(!JSON.stringify(failed).includes("private provider failure"));broken=false;busy=[];
+  const booked=await request(`/api/public/${shop.slug}/bookings`,{menuId:"simple",start:first.start,name:"Customer"},"customer");assert.equal(booked.status,200);assert.equal(booked.body.booking.staffId,ownerStaffId);
+  assert.equal((await request(`/api/public/${shop.slug}/bookings`,{menuId:"simple",start:first.start,name:"Customer"},"customer")).status,409);
+  const added=await request(`${base}/live-settings/staff`,{value:[structuredClone(sample.staff[1])],previous:[],requestId:randomUUID()});assert.equal(added.status,200);assert.deepEqual(bookingStaff((await store.shop(shop.id))!.published!).map(staff=>staff.id),["haru",ownerStaffId],"adding a staff member later retains the bookable owner");
+});

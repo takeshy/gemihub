@@ -26,7 +26,7 @@ import { Customers } from "./Customers";
 import { createRequestId } from "./request-id";
 import React, { useEffect, useState, useRef } from "react";
 import { useApi } from "./api";
-import type { ShopConfig, Booking } from "../server/domain";
+import { bookingStaff, bookingStaffName, bookingMenuName, menuSelection, hoursText, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 import { LegacyNotes } from "./LegacyNotes";
@@ -494,7 +494,7 @@ function Dashboard({
                 {view === "assistant" && shop.published && <Assistant key={shop.id} shop={shop} voice={!!session.assistantVoice} acceptPlan={acceptPlan} />}
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
-                {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop}/></>}<StaffCalendar key={shop.id} shop={shop}/>{!shop.isOwner && <StaffPhoto shop={shop} reload={load}/>}</>}
+                {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop} onSaved={load}/></>}{!shop.isOwner && <><StaffCalendar key={shop.id} shop={shop} onSaved={load}/><StaffPhoto shop={shop} reload={load}/></>}</>}
                 {view === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
@@ -534,7 +534,7 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
         <div>
           <span>{tr("営業時間")}</span>
           <b>
-            {c.hours.start} – {c.hours.end}
+            {hoursText(c)}
           </b>
         </div>
         <div>
@@ -568,7 +568,7 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
       <details>
         <summary>{tr("スタッフと予約の決まりを見る")}</summary>
         <h4>{tr("スタッフが働く日と時間")}</h4>
-        <ul>{c.staff.map(staff => <li key={staff.id}><b>{staff.name}</b>：{staff.weekdays.map(day => weekdays()[day]).join("・") || tr("勤務日なし")} {staff.start}〜{staff.end}{tr("（担当：")}{staff.menuIds.map(id => c.menus.find(menu => menu.id === id)?.name).filter(Boolean).join("、") || tr("なし")}）</li>)}</ul>
+        <ul>{bookingStaff(c).map(staff => <li key={staff.id}><b>{staff.name}</b>：{staff.weekdays.map(day => weekdays()[day]).join("・") || tr("勤務日なし")} {staff.start}〜{staff.end}{tr("（担当：")}{staff.menuIds.map(id => c.menus.find(menu => menu.id === id)?.name).filter(Boolean).join("、") || tr("なし")}）</li>)}</ul>
         <h4>{tr("予約の決まり")}</h4>
         <ul>
           <li>{tr("予約できるのは")}{c.rules.advanceDays}{tr("日先まで、開始の")}{c.rules.leadMinutes}{tr("分前までです。")}</li>
@@ -734,7 +734,13 @@ export function ConfigEditor({
               }
             />
             {tr("有効")}</label>
-        </div>{shopId && <MenuImageEditor shopId={shopId} imageId={m.imageId} name={m.name} uploading={onImageUploading} change={imageId => put("menus", c.menus.map((menu, index) => index === i ? { ...menu, imageId } : menu))} />}</div>
+        </div><label className="check-field"><input type="checkbox" checked={m.optionFor !== undefined} onChange={event => put("menus", c.menus.map((menu,index) => {
+          if (index !== i) return menu;
+          if (event.target.checked) return { ...menu, optionFor: [] };
+          const { optionFor: _for, optionGroup: _group, ...standalone } = menu; return standalone;
+        }))}/>{tr("ほかのメニューに追加して予約する（単独予約不可）")}</label>
+        {m.optionFor && <fieldset className="menu-option-settings"><legend>{tr("追加できるメニュー")}</legend><div className="checkboxes">{c.menus.filter(base => base.id !== m.id && !base.optionFor).map(base => <label key={base.id}><input type="checkbox" checked={m.optionFor!.includes(base.id)} onChange={event => put("menus", c.menus.map((menu,index) => index === i ? {...menu,optionFor:event.target.checked?[...m.optionFor!,base.id]:m.optionFor!.filter(id=>id!==base.id)} : menu))}/>{base.name}</label>)}</div><Field label={tr("選択グループ（同じグループは1つまで・任意）")}><input value={m.optionGroup || ""} maxLength={80} onChange={event=>put("menus",c.menus.map((menu,index)=>index===i?{...menu,optionGroup:event.target.value||undefined}:menu))}/></Field><p className="small muted">{tr("例：当店オフと他店オフを同じグループにすると、予約時にどちらか1つを選べます。料金と所要時間は通常メニューに加算されます。")}</p></fieldset>}
+        {shopId && <MenuImageEditor shopId={shopId} imageId={m.imageId} name={m.name} uploading={onImageUploading} change={imageId => put("menus", c.menus.map((menu, index) => index === i ? { ...menu, imageId } : menu))} />}</div>
       ))}
       <button
         onClick={() =>
@@ -762,6 +768,7 @@ export function ConfigEditor({
       </>}
       {(!section || section === "staff") && <>
       <h3>{tr("スタッフと勤務")}</h3>
+      <p>{tr("スタッフを登録しない場合は、店主が営業時間内のすべてのメニューを担当します。店主のカレンダーはログイン時に自動で連携します。")}</p>
       {c.staff.map((p, i) => (
         <div className="staff-editor" key={p.id}>
           {shopId && <MenuImageEditor shopId={shopId} imageId={p.imageId} name={p.name} label={tr("スタッフ写真（任意）")} uploading={onImageUploading} change={imageId => put("staff", c.staff.map((staff,j) => j===i ? {...staff,imageId} : staff))}/>}
@@ -863,7 +870,6 @@ export function ConfigEditor({
             ))}
           </div>
           <button
-            disabled={c.staff.length === 1}
             onClick={() =>
               put(
                 "staff",
@@ -906,6 +912,16 @@ export function ConfigEditor({
           </Field>
         ))}
       </div>
+      <fieldset className="weekday-hours"><legend>{tr("曜日ごとの営業時間")}</legend><p className="small muted">{tr("通常と営業時間が異なる曜日だけ設定してください。定休日・臨時休業日の設定が優先されます。")}</p>
+        {weekdays().map((day, index) => {
+          const override = c.hours.weekdayHours?.find(hours => hours.day === index);
+          const change = (value?: { day: number; start: string; end: string }) => {
+            const items = (c.hours.weekdayHours || []).filter(hours => hours.day !== index);
+            put("hours", { ...c.hours, weekdayHours: value ? [...items, value].sort((a, b) => a.day - b.day) : items });
+          };
+          return <div className="weekday-hours-row" key={day}><label><input type="checkbox" checked={!!override} onChange={event => change(event.target.checked ? { day: index, start: c.hours.start, end: c.hours.end } : undefined)}/>{tr("{0}曜の営業時間を変更", day)}</label>{override && <div className="form-grid"><Field label={tr("{0}曜の開店", day)}><input type="time" value={override.start} onChange={event => change({ ...override, start: event.target.value })}/></Field><Field label={tr("{0}曜の閉店", day)}><input type="time" value={override.end} onChange={event => change({ ...override, end: event.target.value })}/></Field></div>}</div>;
+        })}
+      </fieldset>
       <span className="small">{tr("定休日")}</span>
       <div className="checkboxes">
         {weekdays().map((d, i) => (
@@ -1040,7 +1056,7 @@ function Reservations({
         <Field label={tr("スタッフ")}>
           <select value={staff} onChange={(e) => setStaff(e.target.value)}>
             <option value="">{tr("すべて")}</option>
-            {shop.published?.staff.map((p) => (
+            {(shop.published ? bookingStaff(shop.published) : []).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -1084,11 +1100,9 @@ function Reservations({
                   {b.name} {tr(" 様 ")}<small>{when(b.start)}</small>
                 </h3>
                 <p>
-                  {shop.published?.menus.find((m) => m.id === b.menuId)?.name ||
-                    b.menuId}{" "}
+                  {bookingMenuName(shop.published, b)}{" "}
                   /{" "}
-                  {shop.published?.staff.find((p) => p.id === b.staffId)
-                    ?.name || b.staffId}
+                  {bookingStaffName(shop.published, b.staffId)}
                 </p>
                 <span className="small muted">{b.customer}</span>
                 <PaymentDetails booking={b} operator />
@@ -1254,6 +1268,7 @@ export function PublicShop({
   }>();
   const { money: yen, when, shopToday: localDate, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
   const [menu, setMenu] = useState("");
+  const [optionIds, setOptionIds] = useState<string[]>([]);
   const [staff, setStaff] = useState("");
   const [date, setDate] = useState("");
   const [times, setTimes] = useState<
@@ -1267,7 +1282,7 @@ export function PublicShop({
   const [checkouts, setCheckouts] = useState<PendingCheckout[]>([]);
   const [paymentConsent, setPaymentConsent] = useState(false);
   const processedReturn = useRef("");
-  useEffect(() => { setPaymentConsent(false); }, [menu, data?.config.rules.payment, selected]);
+  useEffect(() => { setPaymentConsent(false); }, [menu, optionIds, data?.config.rules.payment, selected]);
 
   const [message, setMessage] = useState("");
   const [bookingMessage, setBookingMessage] = useState("");
@@ -1309,15 +1324,18 @@ export function PublicShop({
       setData(d);
       setDate(dateIn(Date.now(), regionOf(d.config).timeZone));
       if (d.customerProfile) setName(d.customerProfile.name);
-      setMenu(d.config.menus.find((m) => m.active)?.id || "");
+      setMenu(d.config.menus.find((m) => m.active && !m.optionFor)?.id || "");
+      setOptionIds([]);
       setStaff("");
     });
   }, [base]);
   useEffect(() => {
     if (!data) return;
+    const selection = menuSelection(data.config, menu, optionIds);
+    if (optionIds.length && !selection) { setOptionIds([]); return; }
     if (
       staff &&
-      !data.config.staff.some((p) => p.id === staff && p.menuIds.includes(menu))
+      !bookingStaff(data.config).some((p) => p.id === staff && p.menuIds.includes(menu) && (selection?.options || []).every(option => p.menuIds.includes(option.id)))
     ) {
       setStaff("");
       return;
@@ -1333,6 +1351,7 @@ export function PublicShop({
       staff,
 
     });
+    for (const id of optionIds) query.append("option", id);
     api<typeof times>(`${base}/slots?${query}`)
       .then((t) => {
         if (!cancelled) setTimes(t);
@@ -1343,13 +1362,16 @@ export function PublicShop({
     return () => {
       cancelled = true;
     };
-  }, [date, menu, staff, data]);
+  }, [date, menu, optionIds, staff, data]);
   useEffect(() => {
     run(loadMine);
   }, [isCustomer]);
   if (!data)
     return <div className="loading">{tr("お店のページを準備しています…")}</div>;
   const c = data.config;
+  const selection = menuSelection(c, menu, optionIds);
+  const totalPrice = selection?.price || 0;
+  const allowedOptions = c.menus.filter(option => option.active && option.optionFor?.includes(menu));
   // Built-in screens may be laid out in the owner's checked HTML; the working parts below are inserted
   // through slots, so booking, sign-in, payment and inquiries keep their behavior either way.
   const screen = (id: ScreenId, slots: Record<string, React.ReactNode>, fallback: React.ReactNode) => {
@@ -1392,8 +1414,7 @@ export function PublicShop({
                       </span>
                       <h3>{when(b.start)}</h3>
                       <p>
-                        {c.menus.find((m) => m.id === b.menuId)?.name ||
-                          b.menuId}
+                        {bookingMenuName(c, b)}
                       </p>
                       {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
                       <PaymentDetails booking={b} />
@@ -1431,12 +1452,13 @@ export function PublicShop({
                 <h3>{tr("01 メニューを選ぶ")}</h3>
                 <div className="menu-options">
                   {c.menus
-                    .filter((m) => m.active)
+                    .filter((m) => m.active && !m.optionFor)
                     .map((m) => (
                       <button
                         className={menu === m.id ? "selected" : ""}
                         onClick={() => {
                           setMenu(m.id);
+                          setOptionIds([]);
                           setComplete(false);
                         }}
                         key={m.id}
@@ -1453,22 +1475,23 @@ export function PublicShop({
                       </button>
                     ))}
                 </div>
-                <h3>{tr("02 スタッフと日時")}</h3>
-                <Field label={tr("スタッフ")}>
+                {!!allowedOptions.length && <fieldset className="booking-options"><legend>{tr("追加メニュー（任意）")}</legend><p className="small muted">{tr("選んだ追加メニューの料金と所要時間を合算して空き時間を確認します。同じグループは1つまで選べます。")}</p>{allowedOptions.map(option => <label className="booking-option" key={option.id}><input type="checkbox" checked={optionIds.includes(option.id)} disabled={busy} onChange={event => setOptionIds(current => event.target.checked ? [...current.filter(id => !option.optionGroup || c.menus.find(menu => menu.id === id)?.optionGroup !== option.optionGroup), option.id] : current.filter(id => id !== option.id))}/><MenuImage imageId={option.imageId} imageBase={`${base}/images`} name={option.name} className="booking-option-image"/><span><b>{option.name}</b><small>{yen(option.price)} · {option.duration}{tr("分")}</small></span></label>)}</fieldset>}
+                <h3>{c.staff.length ? tr("02 スタッフと日時") : tr("02 日時")}</h3>
+                {!!c.staff.length && <Field label={tr("スタッフ")}>
                   <select
                     value={staff}
                     onChange={(e) => setStaff(e.target.value)}
                   >
                     <option value="">{tr("指名なし（空いているスタッフ）")}</option>
-                    {c.staff
-                      .filter((p) => p.menuIds.includes(menu))
+                    {bookingStaff(c)
+                      .filter((p) => p.menuIds.includes(menu) && (selection?.options || []).every(option => p.menuIds.includes(option.id)))
                       .map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
                         </option>
                       ))}
                   </select>
-                </Field>
+                </Field>}
                 {staff && <MenuImage imageId={c.staff.find(person=>person.id===staff)?.imageId} imageBase={`${base}/images`} name={c.staff.find(person=>person.id===staff)?.name || tr("スタッフ")} className="staff-photo"/>}
                 <Field label={tr("ご希望の日付（{0}）", timeZoneLabel)}>
                   <DateInput aria-label={tr("ご希望の日付（{0}）", timeZoneLabel)}
@@ -1500,6 +1523,7 @@ export function PublicShop({
                     {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}</p>
                 )}
                 <h3>{tr("03 予約内容を確認")}</h3>
+                {selection && <div className="booking-mobile-summary"><p>{selection.base.name}</p>{!!selection.options.length && <ul>{selection.options.map(option => <li key={option.id}>{option.name} · {yen(option.price)}</li>)}</ul>}<p><b className="price">{yen(totalPrice)}</b> · {tr("合計 {0}分", selection.duration)}</p><p>{selected ? when(selected) : tr("日時をお選びください")}</p></div>}
                 <Field label={tr("お名前")}>
                   <input
                     value={name}
@@ -1510,9 +1534,9 @@ export function PublicShop({
                 <Field label={tr("お店へのメッセージ（任意）")}>
                   <textarea maxLength={2000} rows={3} value={bookingMessage} onChange={event => { setBookingMessage(event.target.value); setRequestId(createRequestId()); }} placeholder={tr("ご希望や事前に伝えたいことがあればご記入ください")} />
                 </Field>
-                {c.rules.payment?.enabled && (c.menus.find(m => m.id === menu)?.price || 0) > 0 ? <div className="payment-policy">
+                {c.rules.payment?.enabled && totalPrice > 0 ? <div className="payment-policy">
                   <h4>{tr("予約時のお支払いと返金条件")}</h4>
-                  <p>{tr("PayPalで{0}をお支払い後、予約が確定します。決済中の枠は10分間確保します。", yen(c.menus.find(m => m.id === menu)!.price))}</p>
+                  <p>{tr("PayPalで{0}をお支払い後、予約が確定します。決済中の枠は10分間確保します。", yen(totalPrice))}</p>
                   <p>{policyText(c.rules.payment.refundTiers)}</p>
                   <p className="small">{tr("返金額はキャンセル時点の残り時間で計算し、最小単位（1円・1セント）未満を切り捨てます。店都合は全額返金。予約後に条件が変更されても、この予約の条件は変わりません。")}</p>
                   {data.paymentSimulation && <p className="notice">{tr("プレビューの練習です。実際の支払い・返金は行いません。")}</p>}
@@ -1522,11 +1546,12 @@ export function PublicShop({
                   className="primary wide"
                   disabled={
                     busy ||
+                    !selection ||
                     !selected ||
                     !name.trim() ||
                     (!isCustomer) ||
                     complete ||
-                    (!!c.rules.payment?.enabled && (c.menus.find(m => m.id === menu)?.price || 0) > 0 && !paymentConsent)
+                    (!!c.rules.payment?.enabled && totalPrice > 0 && !paymentConsent)
                   }
                   onClick={() =>
                     run(async () => {
@@ -1534,10 +1559,13 @@ export function PublicShop({
                         name,
                         message: bookingMessage,
                         menuId: menu,
+                        ...(optionIds.length ? {optionIds} : {}),
+                        expectedPrice: totalPrice,
+                        expectedDuration: selection?.duration,
                         staffId: staff,
                         start: selected,
                         requestId,
-                        paymentConsent: paymentConsent && c.rules.payment ? { amount: c.menus.find(m => m.id === menu)!.price, policy: c.rules.payment.refundTiers } : undefined,
+                        paymentConsent: paymentConsent && c.rules.payment ? { amount: totalPrice, policy: c.rules.payment.refundTiers } : undefined,
                       });
                       if (result.checkout) {
                         if (result.checkout.phase === "awaiting_approval" && result.checkout.approvalUrl) { window.location.assign(result.checkout.approvalUrl); return; }
@@ -1553,7 +1581,7 @@ export function PublicShop({
                 >
                   {complete
                     ? tr("✓ 予約を受け付けました")
-                    : c.rules.payment?.enabled && (c.menus.find(m => m.id === menu)?.price || 0) > 0 ? data.paymentSimulation ? tr("支払い・予約を練習する") : tr("PayPalで支払いへ進む") : tr("この内容で予約する")}{" "}
+                    : c.rules.payment?.enabled && totalPrice > 0 ? data.paymentSimulation ? tr("支払い・予約を練習する") : tr("PayPalで支払いへ進む") : tr("この内容で予約する")}{" "}
                   →
                 </button>
               </div>
@@ -1561,15 +1589,17 @@ export function PublicShop({
                 <span className="line-flower">✳</span>
                 <h3>{tr("ご予約内容")}</h3>
                 <p>{c.menus.find((m) => m.id === menu)?.name}</p>
+                {!!selection?.options.length && <ul className="booking-option-summary">{selection.options.map(option => <li key={option.id}>{option.name} · {yen(option.price)} · {option.duration}{tr("分")}</li>)}</ul>}
                 <p className="price">
-                  {yen(c.menus.find((m) => m.id === menu)?.price || 0)}
+                  {yen(totalPrice)}
                 </p>
+                {selection && <p>{tr("合計 {0}分", selection.duration)}</p>}
                 <hr />
                 <p>{selected ? when(selected) : tr("日時をお選びください")}</p>
                 <p className="small muted">
                   {!staff
                     ? tr("スタッフの指名なし")
-                    : c.staff.find((p) => p.id === staff)?.name}
+                    : bookingStaffName(c, staff)}
                 </p>
                 <p className="small muted">{c.address}</p>
               </div>
@@ -1580,13 +1610,13 @@ export function PublicShop({
                 .map((m) => (
                   <div className="menu-row" key={m.id}>
                     <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} name={m.name} />
-                    {m.name} · {m.duration}{tr("分 ")}<b>{yen(m.price)}</b>
+                    {m.name}{m.optionFor && <span className="pill">{tr("追加メニュー")}</span>} · {m.duration}{tr("分 ")}<b>{yen(m.price)}</b>
                   </div>
                 ))}</div>;
-  const aboutStaff = () => <div className="public-staff-list">{c.staff.map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>;
+  const aboutStaff = () => <div className="public-staff-list">{bookingStaff(c).map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>;
   const aboutAccess = () => <><p>{c.address}</p><GoogleMap config={c} /></>;
   const aboutHours = () => <><p>
-                {c.hours.start} – {c.hours.end} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・")}
+                {hoursText(c)} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・")}
               </p>
               {c.hours.holidays.length > 0 && (
                 <p>{tr("臨時休業：")}{c.hours.holidays.join("、")}</p>

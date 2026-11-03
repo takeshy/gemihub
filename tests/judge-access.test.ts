@@ -8,7 +8,9 @@ import { google } from "googleapis";
 import type OpenAI from "openai";
 import { createApp } from "../server/app.ts";
 import { Store, type Shop, type User } from "../server/store.ts";
-import { sample } from "../server/domain.ts";
+import { sample, shopSchema, shopDate, ownerStaffId } from "../server/domain.ts";
+import { availableSlots, bookingCalendars, calendarScope, type CalendarGateway } from "../server/calendar.ts";
+import { decrypt, encrypt } from "../server/google.ts";
 import { digest } from "../server/auth.ts";
 import { aiUsage, currentProvider, generateJson, generateWithTools, setOpenAiClient, toOpenAiInput } from "../server/llm.ts";
 
@@ -148,6 +150,61 @@ test("judge shops use the operator's demo Google connection and judge AI calls s
   assert.equal(requests.length, 2, "a refused charge makes no model call");
 });
 
+test("judge owner slots use the shared demo Calendar token and honor rotation, disconnection and expiry", async t => {
+  process.env.JUDGE_INVITE = invite;
+  process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
+  const store = new Store(":memory:");
+  t.after(() => store.close());
+  const shop = await store.createShop("judge-calendar@judge.gemihub.invalid");
+  shop.judge = { createdAt: new Date().toISOString() };
+  await store.saveShop(shop);
+  const config = shopSchema.parse({ ...structuredClone(sample), staff: [], ownerBooking: true });
+  config.hours.closedWeekdays = [];
+  // Keep storage in memory while exercising the production missing-credential guard.
+  const production = {
+    memory: false, get: store.get.bind(store), list: store.list.bind(store),
+    records: store.records.bind(store), bookings: store.bookings.bind(store), ownerToken: store.ownerToken.bind(store),
+  } as unknown as Store;
+  const unavailable = (error: unknown) => (error as { status: number }).status === 503;
+  await assert.rejects(bookingCalendars(production, shop, config), unavailable);
+  const demo = { email: "demo@example.com", refreshToken: encrypt("demo-calendar-1"), connectedAt: "", connectedBy: "admin@example.com" };
+  await store.put("demoGoogle", "current", demo);
+  let expectedToken = "demo-calendar-1", busy: { start: string; end: string }[] = [], broken = false, queries = 0;
+  const gateway: CalendarGateway = {
+    async exchange() { throw new Error("Judges do not authorize Google"); },
+    async busy(connection) {
+      queries++;
+      assert.equal(connection.staffId, ownerStaffId);
+      assert.equal(connection.shopId, shop.id);
+      assert.equal(decrypt(connection.refreshToken), expectedToken);
+      if (broken) throw new Error("private provider failure");
+      return busy;
+    },
+  };
+  const date = shopDate(config, Date.now() + 3 * 86400000);
+  const slots = () => availableSlots(production, shop, config, date, "simple", undefined, gateway);
+  const first = (await slots())[0];
+  assert.ok(first);
+  busy = [{ start: first.start, end: first.end }];
+  assert.ok(!(await slots()).some(slot => slot.start === first.start));
+  expectedToken = "demo-calendar-2";
+  await store.put("demoGoogle", "current", { ...demo, refreshToken: encrypt(expectedToken) });
+  await slots();
+  assert.equal(queries, 3);
+  assert.deepEqual(await store.list("calendar"), [], "shared credentials are not copied into judge connections");
+  broken = true;
+  await assert.rejects(slots(), error => unavailable(error) && !(error as Error).message.includes("private provider failure"));
+  broken = false;
+  const ownShop = await store.createShop("owner@example.com");
+  await assert.rejects(bookingCalendars(production, ownShop, config), unavailable, "ordinary shops cannot borrow the demo token");
+  await store.delete("demoGoogle", "current");
+  await assert.rejects(slots(), unavailable);
+  await store.put("demoGoogle", "current", demo);
+  process.env.JUDGE_UNTIL = new Date(Date.now() - 1000).toISOString();
+  await assert.rejects(slots(), unavailable);
+  assert.equal(queries, 4, "missing or expired shared credentials never reach Google");
+});
+
 test("OpenAI translation keeps prompts, images and tool calls; tool results come back in the shared shape", async () => {
   const input = toOpenAiInput([
     { role: "user", parts: [{ text: "hello" }, { inlineData: { mimeType: "image/png", data: "AAAA" } }] },
@@ -177,7 +234,7 @@ test("invitation-only sign-up asks new Google owners for the password; existing 
   process.env.ACCESS_PASSWORD = "open sesame";
   let email = "new@example.com";
   const prototype = google.auth.OAuth2.prototype as unknown as Record<"getToken" | "verifyIdToken", (...args: unknown[]) => Promise<unknown>>;
-  t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "id", access_token: "access", refresh_token: "refresh" } }));
+  t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "id", access_token: "access", refresh_token: "refresh", scope: "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.freebusy" } }));
   t.mock.method(prototype, "verifyIdToken", async () => ({ getPayload: () => ({ email_verified: true, email, name: "Owner" }) }));
   const originalFetch = globalThis.fetch;
   t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
@@ -224,7 +281,8 @@ test("administrators connect the demo Google account, see judges and switch the 
   process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
   delete process.env.OPENAI_API_KEY; delete process.env.OPENAI_MODEL; delete process.env.OPENAI_IMAGE_MODEL;
   const prototype = google.auth.OAuth2.prototype as unknown as Record<"getToken" | "verifyIdToken", (...args: unknown[]) => Promise<unknown>>;
-  t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "id", access_token: "access", refresh_token: "demo-refresh" } }));
+  let granted = `openid email profile https://www.googleapis.com/auth/drive.file ${calendarScope}`;
+  t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "id", access_token: "access", refresh_token: "demo-refresh", scope: granted } }));
   t.mock.method(prototype, "verifyIdToken", async () => ({ getPayload: () => ({ email_verified: true, email: "Demo@Example.com" }) }));
   const { store, call, session } = await start(t);
   const admin = await session({ email: "admin@example.com", name: "Admin", role: "owner" });
@@ -237,6 +295,7 @@ test("administrators connect the demo Google account, see judges and switch the 
   assert.equal(begin.status, 302);
   const authorize = new URL(begin.headers.get("Location")!);
   assert.match(authorize.searchParams.get("scope")!, /drive\.file/);
+  assert.ok(authorize.searchParams.get("scope")!.split(" ").includes(calendarScope));
   assert.doesNotMatch(authorize.searchParams.get("scope")!, /gmail/);
   const state = authorize.searchParams.get("state")!;
   const oauthCookie = begin.headers.get("Set-Cookie")!.split(";")[0];
@@ -247,6 +306,14 @@ test("administrators connect the demo Google account, see judges and switch the 
   assert.equal(connection?.email, "demo@example.com");
   assert.notEqual(connection?.refreshToken, "demo-refresh", "the token is encrypted");
   assert.equal(await store.get("user", "admin@example.com"), undefined, "the administrator's own user is untouched");
+
+  granted = "openid email profile https://www.googleapis.com/auth/drive.file";
+  const deniedBegin = await call("/admin/google/connect", undefined, admin);
+  const deniedState = new URL(deniedBegin.headers.get("Location")!).searchParams.get("state")!;
+  const deniedCookie = deniedBegin.headers.get("Set-Cookie")!.split(";")[0];
+  const denied = await call(`/auth/google/callback?code=code&state=${deniedState}`, undefined, `${admin}; ${deniedCookie}`);
+  assert.equal(denied.status, 400, "Calendar consent is required for the shared demo token");
+  assert.deepEqual(await store.get("demoGoogle", "current"), connection, "denied consent preserves the existing connection");
 
   const status = await (await call("/api/admin/status", undefined, admin)).json() as { judge: { active: boolean; inviteUrlEn: string }; demoGoogle: { email: string }; ai: { provider: string; openai: { ready: boolean } } };
   assert.equal(status.judge.active, true);

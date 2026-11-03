@@ -36,6 +36,7 @@ import type { Plan, Session, Workspace } from "../App";
 import {
   sample,
   slots,
+  menuSelection,
   documents,
   planSummary,
   dateJST,
@@ -106,6 +107,10 @@ export type Scenario =
   | "inquiries"
   | "staff-login"
   | "calendar-disconnected"
+  | "owner-only"
+  | "menu-addons"
+  | "manage-addons"
+  | "weekday-hours"
   | "calendar-connected"
   | "calendar-member"
   | "calendar-missing-staff"
@@ -121,6 +126,7 @@ export type Scenario =
   | "contact"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
+  "menu-addons",
   "us-booking",
   "payment-reservation",
   "paid-mypage",
@@ -170,7 +176,7 @@ export function scenarioProps(scenario: Scenario) {
           "local-editor": "try",
           "local-editor-pages": "try",
           "editor-unfetched": "try", "editor-remote": "try", "editor-conflict": "try", "page-builder": "build",
-          "manage-basic": "basic", "manage-menus": "menus", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
+          "manage-basic": "basic", "manage-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
           "local-editor-new": "try",
           "blog-editor": "blog",
           bookings: "bookings", "owner-paid": "bookings", "manage-payment": "rules", "insufficient-refund": "bookings",
@@ -178,6 +184,7 @@ export function scenarioProps(scenario: Scenario) {
           inquiries: "inquiries",
           "staff-login": "staff",
           "calendar-disconnected": "staff",
+          "owner-only": "staff",
           "calendar-connected": "staff",
           "calendar-member": "staff",
           "calendar-missing-staff": "staff",
@@ -200,6 +207,16 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const posts = scenario === "empty-blog" ? [] : storyPosts();
   const config = structuredClone(sample);
   if (scenario.startsWith("us-")) { config.region = {country:"US",timeZone:"America/Los_Angeles"}; config.menus = config.menus.map((menu,i)=>({...menu,price:i?78:55.25})); }
+  if (["menu-addons","manage-addons"].includes(scenario)) {
+    config.staff=[];config.ownerBooking=true;config.hours.closedWeekdays=[];
+    config.menus=[
+      {...config.menus[0]}, {...config.menus[1],name:tr("フットワンカラー")},
+      {id:"own-off",name:tr("当店ジェルオフ"),price:0,duration:35,active:true,optionFor:["simple","design"],optionGroup:tr("付替オフ")},
+      {id:"other-off",name:tr("他店ジェルオフ"),price:500,duration:35,active:true,optionFor:["simple","design"],optionGroup:tr("付替オフ")},
+      {id:"care",name:tr("角質ケア"),price:4000,duration:35,active:true,optionFor:["design"]},
+    ];
+  }
+  if(scenario==="weekday-hours"){config.staff=[];config.ownerBooking=true;config.hours={start:"09:00",end:"19:00",closedWeekdays:[3],holidays:[],weekdayHours:[{day:2,start:"09:00",end:"21:00"},{day:5,start:"09:00",end:"21:00"}]};}
   if (scenario === "initial-theme") {
     config.appearance = { accent: "sage", layout: "standard", imageUrl: "", theme: exampleTheme, articles: { blogs: false, announcements: true } };
     config.pages = initialIntroductionPages(config, { staff: true, products: true }).pages;
@@ -399,18 +416,20 @@ export function createMockClient(scenario: Scenario): ApiClient {
           shopId: shop.id,
         },
   };
-  if (scenario === "calendar-member") {
+  if (scenario.startsWith("calendar-")) {
     shop.isOwner = false;
     session.user = { email: "haru@example.com", name: tr("はる"), role: "customer", shopId: shop.id };
   }
   const calendarConnection = {
     connected: ["calendar-connected", "calendar-member", "calendar-missing-staff"].includes(scenario),
     email: session.user?.email || shop.owner,
-    staffId: scenario === "calendar-missing-staff" ? "removed-staff" : scenario === "calendar-member" ? "haru" : "aoi",
+    staffId: scenario === "owner-only" ? "" : scenario === "calendar-missing-staff" ? "removed-staff" : scenario.startsWith("calendar-") ? "haru" : "aoi",
     configured: scenario.startsWith("calendar-") || scenario === "manage-staff",
-    loginUrl: `/staff-login/${shop.id}`,
+    loginUrl: shop.isOwner ? "/auth/google" : `/staff-login/${shop.id}`,
   };
-  const staffLogins = config.staff.map(staff => ({ staffId: staff.id, name: staff.name, email: staff.id === "aoi" ? shop.owner : "haru@example.com", accepted: staff.id === "aoi", connected: staff.id === "aoi" && calendarConnection.connected }));
+  let ownerCalendarConsent = scenario !== "calendar-disconnected";
+  if (scenario === "owner-only") { config.staff = []; config.ownerBooking = true; shop.published = config; }
+  const staffLogins = config.staff.map(staff => ({ staffId: staff.id, name: staff.name, email: staff.id === "aoi" ? scenario === "owner-only" ? "" : shop.owner : "haru@example.com", accepted: staff.id === "aoi", connected: staff.id === "aoi" && calendarConnection.connected }));
   let visualConfig = structuredClone(config);
   const extraData = { id: "100", title: tr("店販の記録"), headers: [tr("商品"), tr("個数"), tr("金額"), tr("確認済み")], rows: [{ row: 2, values: [tr("ヘアオイル"), 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };
   let chats: ShopChat[] = [];
@@ -562,7 +581,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
       else if (section === "menus") { label = next.menus[0].name; old = String(next.menus[0].price); next.menus[0].price = regionOf(next).country === "US" ? 65 : 6500; proposed = String(next.menus[0].price); }
       else if (section === "hours") { label = tr("開店"); old = before.hours.start; next.hours.start = "09:00"; proposed = next.hours.start; }
       else if (section === "rules") { label = tr("何日先まで予約できるか"); old = String(before.rules.advanceDays); next.rules.advanceDays = 45; proposed = "45"; }
-      else { label = next.staff[0].name; old = next.staff[0].start; next.staff[0].start = "09:00"; proposed = "09:00"; }
+      else {
+        if (!next.staff.length) next.staff.push({id: "additional-staff", name: tr("スタッフ"), menuIds: next.menus.map(menu => menu.id), weekdays: [1, 2, 3, 4, 5], start: next.hours.start, end: next.hours.end});
+        label = next.staff[0].name; old = before.staff[0]?.start || ""; next.staff[0].start = "09:00"; proposed = "09:00";
+      }
       const reference = String(input.note).match(/https?:\/\/[^\s]+/)?.[0];
       result = { value: liveValue(next, section), changes: old === proposed ? [] : [{ label, before: old, after: proposed }], warnings: [], sources: reference ? [{ url: reference, title: tr("参考ページ（サンプル）") }] : [] };
     }
@@ -718,7 +740,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           price: 8500,
           active: true,
         });
-        next.staff[0].menuIds.push("special");
+        for (const staff of next.staff) staff.menuIds.push("special");
       }
       if(input.intent==="create-shop"&&reference){
         const facts=initialInterviewFacts(chats.find(chat=>chat.id===reference.id)?.messages || []);
@@ -782,7 +804,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (!staff) throw new Error(tr("担当スタッフがありません"));
       if (staff.email !== input.previousEmail) throw new Error(tr("登録内容が更新されています"));
       if (input.email && staffLogins.some(other => other !== staff && other.email === input.email)) throw new Error(tr("このアカウントは別のスタッフに登録されています"));
-      staff.email = String(input.email); staff.accepted = false; staff.connected = false; result = { ok: true };
+      const previousEmail = staff.email;
+      staff.email = String(input.email); staff.accepted = input.email === shop.owner; staff.connected = false;
+      if (previousEmail === shop.owner && input.email !== shop.owner) { calendarConnection.connected = false; calendarConnection.staffId = ""; }
+      if (input.email === shop.owner && ownerCalendarConsent) { staff.connected = true; calendarConnection.connected = true; calendarConnection.staffId = staff.staffId; }
+      result = { ok: true, calendarConnected: staff.connected };
     }
     else if (action === `/api/shops/${shop.id}/calendar`) {
       result = calendarConnection;
@@ -790,6 +816,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/calendar/disconnect`) {
       calendarConnection.connected = false;
       calendarConnection.staffId = "";
+      if (shop.isOwner) ownerCalendarConsent = false;
+      for (const staff of staffLogins) if (staff.email === session.user?.email) staff.connected = false;
       result = { ok: true };
     }
     else if (action === `/api/shops/${shop.id}/calendar/connect`) {
@@ -865,7 +893,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           preview ? [] : shop.bookings,
           url.searchParams.get("date") || "",
           url.searchParams.get("menu") || "",
-          url.searchParams.get("staff") || undefined,
+          url.searchParams.get("staff") || undefined, undefined, url.searchParams.getAll("option"),
         );
       else if (action.endsWith("/checkouts")) result = [];
       else if (action.endsWith("/cancel-quote")) {
@@ -885,7 +913,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           preview ? [] : shop.bookings,
           date,
           String(input.menuId),
-          input.staffId ? String(input.staffId) : undefined,
+          input.staffId ? String(input.staffId) : undefined, undefined, Array.isArray(input.optionIds) ? input.optionIds.map(String) : [],
         ).find((s) => s.start === start);
         if (!slot)
           throw new Error(tr("この枠は予約できません。別の時間を選んでください。"));
@@ -897,7 +925,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
             name: String(input.name),
             message: String(input.message || ""),
             menuId: String(input.menuId),
-            price: current.menus.find(menu => menu.id === input.menuId)!.price,
+            price: menuSelection(current,String(input.menuId),Array.isArray(input.optionIds)?input.optionIds.map(String):[])!.price,
+            ...(Array.isArray(input.optionIds)&&input.optionIds.length?{optionIds:input.optionIds.map(String),items:menuSelection(current,String(input.menuId),input.optionIds.map(String))!.items}:{}),
             ...slot,
             status: "active",
             createdAt: new Date().toISOString(),

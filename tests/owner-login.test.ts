@@ -1,0 +1,75 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import type { AddressInfo } from "node:net";
+import { google } from "googleapis";
+import { createApp } from "../server/app.ts";
+import { Store, type User } from "../server/store.ts";
+import { sample, dateJST } from "../server/domain.ts";
+import { decrypt } from "../server/google.ts";
+import { calendarScope, type CalendarConnection } from "../server/calendar.ts";
+
+test("owner sign-in grants Calendar, binds only the registered owner staff and keeps customer sign-in separate", async t => {
+  process.env.DEMO_MODE = "true";
+  process.env.GOOGLE_CLIENT_ID = "owner-login-test";
+  delete process.env.ACCESS_PASSWORD;
+  const scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/gmail.send", calendarScope];
+  let granted = scopes.join(" "), refresh: string | undefined = "owner-refresh-1", email = "owner@example.com";
+  const prototype = google.auth.OAuth2.prototype as unknown as Record<"getToken" | "verifyIdToken", (...args: unknown[]) => Promise<unknown>>;
+  t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "identity", access_token: "access", refresh_token: refresh, scope: granted } }));
+  t.mock.method(prototype, "verifyIdToken", async () => ({ getPayload: () => ({ email_verified: true, email, name: "Owner" }) }));
+  const realFetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => new URL(String(input)).hostname === "www.googleapis.com" ? Response.json({ files: [] }) : realFetch(input, init));
+  const store = new Store(":memory:");
+  let busy: { start: string; end: string }[] = [];
+  const server = createApp(store, undefined, {
+    async exchange() { throw new Error("Owner sign-in must use the combined grant"); },
+    async busy(connection: CalendarConnection) { assert.equal(connection.email, email); assert.equal(connection.staffId, "aoi"); return busy; },
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.close(); await store.close(); });
+  const oauth = async (suffix = "", error = false) => {
+    const start = await realFetch(origin + "/auth/google" + suffix, { redirect: "manual" });
+    const authorization = new URL(start.headers.get("location")!);
+    assert.deepEqual(authorization.searchParams.get("scope")!.split(" "), suffix ? ["openid", "email", "profile"] : scopes);
+    const state = authorization.searchParams.get("state");
+    const done = await realFetch(`${origin}/auth/google/callback?state=${state}&${error ? "error=access_denied" : "code=valid"}`, { redirect: "manual", headers: { Cookie: start.headers.get("set-cookie")!.split(";")[0] } });
+    return { response: done, cookie: done.headers.get("set-cookie")?.split(";")[0] || "" };
+  };
+  granted = scopes.filter(s => s !== calendarScope).join(" ");
+  assert.equal((await oauth()).response.status, 400);
+  assert.equal((await store.list("shop")).length, 0, "denied Calendar consent creates no shop or owner credential");
+  assert.equal(await store.get("user", email), undefined);
+  const denied = await oauth("", true); assert.equal(denied.response.status, 400);assert.doesNotMatch(await denied.response.text(), /スタッフ用/);
+  granted = scopes.join(" "); refresh = undefined;
+  assert.equal((await oauth()).response.status, 400, "initial offline authorization requires a refresh token");
+  refresh = "owner-refresh-1";
+  let signedIn = await oauth(); assert.equal(signedIn.response.status, 302);
+  const owner = (await store.get<User>("user", email))!; assert.equal(decrypt(owner.calendarRefreshToken!), refresh);
+  const shop = (await store.list<import("../server/store.ts").Shop>("shop"))[0];
+  assert.equal(await store.get("calendar", `${shop.id}:${email}`), undefined, "do not guess which staff member is the owner");
+  shop.published = structuredClone(sample); shop.published.hours.closedWeekdays = []; await store.saveShop(shop);
+  const call = async (path: string, data?: unknown) => realFetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Cookie: signedIn.cookie, Origin: origin, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+  const base = `/api/shops/${shop.id}`;
+  assert.equal((await (await call(`${base}/calendar`)).json()).loginUrl, "/auth/google");
+  const registered = await call(`${base}/staff-accounts`, { staffId: "aoi", email, previousEmail: "" });assert.equal(registered.status, 200);assert.equal((await registered.json()).calendarConnected, true);
+  assert.equal(decrypt((await store.get<CalendarConnection>("calendar", `${shop.id}:${email}`))!.refreshToken), refresh);
+  const date = dateJST(new Date(Date.now() + 3 * 86400000));
+  const slots = `/api/public/${shop.slug}/slots?date=${date}&menu=simple&staff=aoi`;
+  const first = (await (await call(slots)).json())[0]; assert.ok(first);
+  busy = [{ start: first.start, end: first.end }]; assert.ok(!(await (await call(slots)).json()).some((slot: { start: string }) => slot.start === first.start));
+  refresh = "owner-refresh-2"; signedIn = await oauth(); assert.equal(signedIn.response.status, 302);
+  assert.equal(decrypt((await store.get<CalendarConnection>("calendar", `${shop.id}:${email}`))!.refreshToken), refresh, "normal owner login updates the staff connection");
+  refresh = undefined; signedIn = await oauth();assert.equal(signedIn.response.status, 302, "a verified existing Calendar refresh token can be retained");
+  const visible = JSON.stringify([await (await call("/api/session")).json(), await (await call("/api/workspace")).json(), await (await call(`${base}/calendar`)).json()]); assert.ok(!visible.includes("calendarRefreshToken") && !visible.includes("owner-refresh"));
+  assert.equal((await call(`${base}/calendar/disconnect`, {})).status, 200);
+  assert.equal((await store.get<User>("user", email))!.calendarRefreshToken, undefined);assert.equal(await store.get("calendar", `${shop.id}:${email}`), undefined);
+  const disconnected = await call(`${base}/staff-accounts`, { staffId: "aoi", email, previousEmail: email });assert.equal((await disconnected.json()).calendarConnected, false, "a disconnected consent cannot be silently reused");
+  assert.equal((await oauth()).response.status, 400, "an old Drive/Gmail token alone cannot be treated as Calendar consent");
+  refresh = "owner-refresh-3"; signedIn = await oauth();assert.equal(signedIn.response.status, 302);
+  assert.equal((await call(`${base}/staff-accounts`, { staffId: "aoi", email: "", previousEmail: email })).status, 200);
+  signedIn = await oauth();assert.equal(await store.get("calendar", `${shop.id}:${email}`), undefined, "removing the staff registration stops automatic binding");
+  email = "customer@example.com"; granted = "openid email profile";
+  assert.equal((await oauth(`?shop=${shop.slug}`)).response.status, 302);assert.equal(await store.get("user", email), undefined);assert.equal((await store.list("shop")).length, 1);
+});

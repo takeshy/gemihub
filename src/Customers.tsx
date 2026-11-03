@@ -3,7 +3,7 @@ import { useShopDisplay } from "./money";
 import { DateInput } from "./DateInput";
 import { genderOptions } from "../server/customer-profile";
 import React, { useEffect, useRef, useState } from "react";
-import { type Booking, type ShopConfig } from "../server/domain";
+import { bookingMenuName, bookingStaffName, type Booking, type ShopConfig } from "../server/domain";
 import { customerPeriods, customerFilterSchema, customerSince, type CustomerFilter, type CustomerSummary, type CustomerDetail } from "../server/customers";
 import { CustomerImageGallery } from "./CustomerImages";
 import { CustomerNoteComposer, CustomerNoteCard } from "./CustomerNotes";
@@ -153,10 +153,10 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
         <ol className="customer-history">{history.map(event => <li key={`${event.kind}-${event.kind === "booking" ? event.booking.id : event.kind === "inquiry" ? event.inquiry.id : event.note.id}`}>
           <time dateTime={event.at}>{when(event.at)}</time>
           {event.kind === "note" ? <CustomerNoteCard note={event.note} showAttachments={!imagesOpen} base={base} rangeQuery={rangeQuery} saved={changed} /> : event.kind === "booking" ? <>
-            <h3>{tr("予約 · ")}{config?.menus.find(menu => menu.id === event.booking.menuId)?.name || event.booking.menuId}</h3>
+            <h3>{tr("予約 · ")}{bookingMenuName(config, event.booking)}</h3>
             <p><span className={`status ${event.booking.status}`}>{event.booking.status === "active" && Date.parse(event.booking.end) <= Date.now() ? tr("来店済み") : status[event.booking.status]}</span>　{yen(event.booking.price)}</p>
             {event.booking.message && <p className="customer-message"><b>{tr("予約時のメッセージ")}</b><br />{event.booking.message}</p>}
-            <p className="small muted">{tr("担当：")}{config?.staff.find(staff => staff.id === event.booking.staffId)?.name || event.booking.staffId} {tr(" · 終了 ")}{when(event.booking.end)}</p>
+            <p className="small muted">{tr("担当：")}{bookingStaffName(config, event.booking.staffId)} {tr(" · 終了 ")}{when(event.booking.end)}</p>
           </> : <><h3>{tr("お問い合わせ · ")}{inquiryStatus(event.inquiry) === "completed" ? tr("対応済み") : tr("対応中")} · {inquiryReplied(event.inquiry) ? tr("返信済み") : tr("未返信")}</h3><p className="inquiry-message-preview">{event.inquiry.message}</p><button onClick={() => focusInquiry(event.inquiry.id)}>{tr("お問い合わせの対応を見る")}</button></>}
         </li>)}</ol>
       </div>
@@ -171,5 +171,5 @@ function CustomerBooking({booking,config}:{booking:Booking;config:ShopConfig|nul
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   });
   const yen = money;
-  return <article className="customer-booking"><h3>{config?.menus.find(menu=>menu.id===booking.menuId)?.name || booking.menuId}</h3><p><time dateTime={booking.start}>{when(booking.start)}</time> 〜 <time dateTime={booking.end}>{when(booking.end)}</time></p><p><span className={`status ${booking.status}`}>{booking.status === "active" && Date.parse(booking.end) <= Date.now() ? tr("来店済み") : status[booking.status]}</span>　{yen(booking.price)}</p><p>{tr("担当：")}{config?.staff.find(staff=>staff.id===booking.staffId)?.name || booking.staffId}</p>{booking.message && <p className="customer-message"><b>{tr("予約時のメッセージ")}</b><br/>{booking.message}</p>}</article>;
+  return <article className="customer-booking"><h3>{bookingMenuName(config, booking)}</h3><p><time dateTime={booking.start}>{when(booking.start)}</time> 〜 <time dateTime={booking.end}>{when(booking.end)}</time></p><p><span className={`status ${booking.status}`}>{booking.status === "active" && Date.parse(booking.end) <= Date.now() ? tr("来店済み") : status[booking.status]}</span>　{yen(booking.price)}</p><p>{tr("担当：")}{bookingStaffName(config, booking.staffId)}</p>{booking.message && <p className="customer-message"><b>{tr("予約時のメッセージ")}</b><br/>{booking.message}</p>}</article>;
 }

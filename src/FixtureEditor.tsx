@@ -3,10 +3,11 @@ import { useShopDisplay } from "./money";
 import { localDateTime, zonedDate } from "../shared/region";
 import { DateInput } from "./DateInput";
 import React from "react";
-import { type ShopConfig } from "../server/domain";
+import { bookingStaff, type ShopConfig } from "../server/domain";
 import { createRequestId } from "./request-id";
 import { sampleFixtures, type Fixtures } from "./local-preview";
 export function FixtureEditor({ value, onChange, config }: { value: Fixtures; onChange: (value: Fixtures) => void; config: ShopConfig }) {
+  const sampleBooking = sampleFixtures(config).bookings[0];
   const { displayTimeZone, shopToday, timeZoneLabel } = useShopDisplay();
   const localTime = (value: string) => Number.isFinite(Date.parse(value)) ? localDateTime(value, displayTimeZone()) : "";
   const utcTime = (value: string) => {
@@ -27,14 +28,14 @@ export function FixtureEditor({ value, onChange, config }: { value: Fixtures; on
       <label>{tr("予約のお名前")}<input value={b.name} onChange={e => booking(index, { name: e.target.value })} /></label>
       <div className="form-grid">
         <label>{tr("予約のメニュー")}<select value={b.menuId} onChange={e => booking(index, { menuId: e.target.value })}>{config.menus.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
-        <label>{tr("予約の担当者")}<select value={b.staffId} onChange={e => booking(index, { staffId: e.target.value })}>{config.staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+        <label>{tr("予約の担当者")}<select value={b.staffId} onChange={e => booking(index, { staffId: e.target.value })}>{bookingStaff(config).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <label>{tr("開始日時（{0}）", timeZoneLabel)}<DateInput aria-label={tr("開始日時（{0}）", timeZoneLabel)} withTime value={localTime(b.start)} onValueChange={value => booking(index, { start: utcTime(value) })} /></label>
         <label>{tr("終了日時（{0}）", timeZoneLabel)}<DateInput aria-label={tr("終了日時（{0}）", timeZoneLabel)} withTime value={localTime(b.end)} onValueChange={value => booking(index, { end: utcTime(value) })} /></label>
         <label>{tr("予約の状態")}<select value={b.status} onChange={e => booking(index, { status: e.target.value as typeof b.status })}><option value="active">{tr("予約確定")}</option><option value="cancelled">{tr("キャンセル済み")}</option><option value="no_show">{tr("無断キャンセル")}</option></select></label>
       </div>
       <button onClick={() => onChange({ ...value, bookings: value.bookings.filter((_, i) => i !== index) })}>{tr("このサンプル予約を削除")}</button>
     </fieldset>)}
-    <button disabled={value.bookings.length >= 100} onClick={() => onChange({ ...value, bookings: [...value.bookings, { ...sampleFixtures(config).bookings[0], id: createRequestId() }] })}>{tr("サンプル予約を追加")}</button>
+    <button disabled={!sampleBooking || value.bookings.length >= 100} onClick={() => { if (sampleBooking) onChange({ ...value, bookings: [...value.bookings, { ...sampleBooking, id: createRequestId() }] }); }}>{tr("サンプル予約を追加")}</button>
     <h3>{tr("サンプル記事")}</h3>
     {value.posts.map((p, index) => <fieldset className="panel" key={`${index}-${p.slug}`}>
       <legend>{tr("記事 ")}{index + 1}</legend>

@@ -2,7 +2,7 @@ import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import { paymentRulesSchema, type BookingPayment } from "./payment-domain.ts";
 import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } from "./pages.ts";
-import { regionSchema, regionOf, currencyOf, validPrice, dateIn, zonedDate, weekdayOf } from "../shared/region.ts";
+import { regionSchema, regionOf, currencyOf, validPrice, toMinor, fromMinor, dateIn, zonedDate, weekdayOf } from "../shared/region.ts";
 import { themeSchema, compilePresentation } from "../shared/presentation.ts";
 import { screensSchema } from "../shared/screens.ts";
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -26,6 +26,8 @@ export const shopSchema = z
     screens: screensSchema.optional(),
     /** Country and time zone; absent means Japan. Decides currency, booking times and dates. */
     region: regionSchema.optional(),
+    /** Owner is bookable without a staff registration; legacy shops keep their explicit assignments. */
+    ownerBooking: z.literal(true).optional(),
     header: headerSchema.default(() => ({ ...defaultHeader })),
     footer: footerSchema.default(() => ({ ...defaultFooter })),
     pages: z.array(pageSchema).max(30).default([]),
@@ -38,6 +40,10 @@ export const shopSchema = z
           price: z.number().min(0).max(1000000),
           active: z.boolean(),
           imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+          /** Present only for add-ons; the IDs of standalone menus that allow this option. */
+          optionFor: z.array(z.string().regex(/^[a-z0-9_-]+$/)).max(50).optional(),
+          /** Only one option in the same group may be selected for a booking. */
+          optionGroup: z.string().trim().min(1).max(80).optional(),
         }),
       )
       .min(1)
@@ -54,13 +60,13 @@ export const shopSchema = z
           imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
         }),
       )
-      .min(1)
       .max(30),
     hours: z.object({
       start: clock,
       end: clock,
       closedWeekdays: z.array(z.number().int().min(0).max(6)),
       holidays: z.array(z.iso.date()),
+      weekdayHours: z.array(z.object({ day: z.number().int().min(0).max(6), start: clock, end: clock })).max(7).optional(),
     }),
     rules: z.object({
       interval: z.number().int().min(5).max(120),
@@ -75,6 +81,8 @@ export const shopSchema = z
     const fail = (message: string) => ctx.addIssue({ code: "custom", message });
     if (s.hours.start >= s.hours.end)
       fail(tr("営業時間の終了は開始より後にしてください"));
+    if (new Set(s.hours.weekdayHours?.map(hours => hours.day)).size !== (s.hours.weekdayHours?.length || 0)) fail(tr("曜日別の営業時間が重複しています"));
+    for (const hours of s.hours.weekdayHours || []) if (hours.start >= hours.end) fail(tr("曜日別の営業時間の終了は開始より後にしてください"));
     if (
       new Set(s.menus.map((m) => m.id)).size !== s.menus.length ||
       new Set(s.staff.map((m) => m.id)).size !== s.staff.length
@@ -90,13 +98,40 @@ export const shopSchema = z
         fail(tr("スタッフの対応メニューが存在しません"));
     }
     const currency = currencyOf(regionOf(s));
+    for (const menu of s.menus) {
+      if (menu.optionFor) {
+        if (menu.active && !menu.optionFor.length) fail(tr("追加メニューの対象を選択してください"));
+        if (new Set(menu.optionFor).size !== menu.optionFor.length || menu.optionFor.some(id => !s.menus.some(base => base.id === id && !base.optionFor))) fail(tr("追加先には実在する通常メニューを指定してください"));
+      } else if (menu.optionGroup) fail(tr("選択グループは追加メニューに設定してください"));
+    }
     for (const m of s.menus)
       if (!validPrice(m.price, currency)) fail(currency === "JPY" ? tr("料金は1円単位で入力してください") : tr("料金はセント単位（小数2桁まで）で入力してください"));
-    for (const m of s.menus.filter((m) => m.active))
-      if (!s.staff.some((p) => p.menuIds.includes(m.id)))
+    for (const m of s.menus.filter((m) => m.active && !m.optionFor))
+      if (!s.ownerBooking && s.staff.length && !s.staff.some((p) => p.menuIds.includes(m.id)))
         fail(tr("{0} に対応するスタッフが必要です", m.name));
   });
 export type ShopConfig = z.infer<typeof shopSchema>;
+export const ownerStaffId = "owner";
+/** With no additional staff, the owner handles all menus during shop hours. */
+export function bookingStaff(config: Pick<ShopConfig, "staff" | "menus" | "hours" | "ownerBooking">): ShopConfig["staff"] {
+  if (config.staff.length && !config.ownerBooking) return config.staff;
+  const owner = { id: ownerStaffId, name: tr("店主"), menuIds: config.menus.map(menu => menu.id), weekdays: [0, 1, 2, 3, 4, 5, 6], start: config.hours.start, end: config.hours.end };
+  return [...config.staff.filter(staff => staff.id !== ownerStaffId), owner];
+}
+export const bookingStaffName = (config: ShopConfig | null | undefined, id: string) => config?.staff.find(staff => staff.id === id)?.name || (id === ownerStaffId ? tr("店主") : id);
+export function menuSelection(config: ShopConfig, menuId: string, optionIds: readonly string[] = []) {
+  const base = config.menus.find(menu => menu.id === menuId && menu.active && !menu.optionFor);
+  if (!base || optionIds.length > 10 || new Set(optionIds).size !== optionIds.length) return undefined;
+  const options = [...optionIds].sort().map(id => config.menus.find(menu => menu.id === id && menu.active && menu.optionFor?.includes(menuId)));
+  if (options.some(option => !option)) return undefined;
+  const selected = options as ShopConfig["menus"];
+  const groups = selected.map(option => option.optionGroup).filter(Boolean);
+  if (new Set(groups).size !== groups.length) return undefined;
+  const currency = currencyOf(regionOf(config));
+  const items = [base, ...selected].map(({id,name,price,duration}) => ({menuId:id,name,price,duration}));
+  return { base, options: selected, optionIds: selected.map(option => option.id), items, duration: items.reduce((total,item)=>total+item.duration,0), price: fromMinor(items.reduce((total,item)=>total+toMinor(item.price,currency),0),currency) };
+}
+export const bookingMenuName = (config: ShopConfig | null | undefined, booking: Pick<Booking, "menuId" | "items">) => booking.items?.length ? booking.items.map(item=>item.name).join(" + ") : config?.menus.find(menu=>menu.id===booking.menuId)?.name || booking.menuId;
 export type Booking = {
   id: string;
   requestKey?: string;
@@ -104,6 +139,8 @@ export type Booking = {
   customer: string;
   name: string;
   menuId: string;
+  optionIds?: string[];
+  items?: { menuId: string; name: string; price: number; duration: number }[];
   price: number;
   message: string;
   staffId: string;
@@ -171,6 +208,11 @@ export const dateJST = (now = new Date()) => dateIn(now, "Asia/Tokyo");
 /** Today's date (or the date of an instant) in the shop's time zone. */
 export const shopDate = (config: Pick<ShopConfig, "region"> | null | undefined, now: Date | number | string = new Date()) => dateIn(now, regionOf(config).timeZone);
 const minutes = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3));
+export const hoursForDate = (config: Pick<ShopConfig, "hours">, date: string) => config.hours.weekdayHours?.find(hours => hours.day === weekdayOf(date)) || config.hours;
+export function hoursText(config: Pick<ShopConfig, "hours">) {
+  const days = [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
+  return [`${config.hours.start} – ${config.hours.end}`, ...(config.hours.weekdayHours || []).map(hours => `${tr("{0}曜", days[hours.day])} ${hours.start} – ${hours.end}`)].join(" / ");
+}
 export function slots(
   config: ShopConfig,
   bookings: Booking[],
@@ -178,9 +220,10 @@ export function slots(
   menuId: string,
   requestedStaff?: string,
   now = new Date(),
+  optionIds: readonly string[] = [],
 ) {
   if (!z.iso.date().safeParse(date).success) return [];
-  const menu = config.menus.find((m) => m.id === menuId && m.active);
+  const menu = menuSelection(config, menuId, optionIds);
   // Dates, weekdays and opening hours are the shop's wall clock in its own time zone.
   const timeZone = regionOf(config).timeZone;
   const weekday = weekdayOf(date);
@@ -196,10 +239,11 @@ export function slots(
   )
     return [];
   const result: { start: string; end: string; staffId: string }[] = [];
-  const closing = zonedDate(date, config.hours.end, timeZone).getTime();
+  const hours = hoursForDate(config, date);
+  const closing = zonedDate(date, hours.end, timeZone).getTime();
   for (
-    let t = minutes(config.hours.start);
-    t < minutes(config.hours.end);
+    let t = minutes(hours.start);
+    t < minutes(hours.end);
     t += config.rules.interval
   ) {
     const hhmm = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
@@ -207,17 +251,18 @@ export function slots(
     const end = new Date(start.getTime() + menu.duration * 60000);
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(closing) || end.getTime() > closing || start.getTime() < now.getTime() + config.rules.leadMinutes * 60000)
       continue;
-    const staff = config.staff.find(
+    const staff = bookingStaff(config).find(
       (p) =>
         (!requestedStaff || p.id === requestedStaff) &&
         p.menuIds.includes(menuId) &&
+        menu.options.every(option => p.menuIds.includes(option.id)) &&
         p.weekdays.includes(weekday) &&
-        zonedDate(date, p.start, timeZone).getTime() <= start.getTime() &&
-        zonedDate(date, p.end, timeZone).getTime() >= end.getTime() &&
+        zonedDate(date, p.id === ownerStaffId && (config.ownerBooking || !config.staff.length) ? hours.start : p.start, timeZone).getTime() <= start.getTime() &&
+        zonedDate(date, p.id === ownerStaffId && (config.ownerBooking || !config.staff.length) ? hours.end : p.end, timeZone).getTime() >= end.getTime() &&
         !bookings.some(
           (b) =>
             b.status === "active" &&
-            b.staffId === p.id &&
+            (b.staffId === p.id || !config.staff.length || (p.id === ownerStaffId && config.ownerBooking && !config.staff.some(staff => staff.id === b.staffId))) &&
             Date.parse(b.start) < end.getTime() &&
             Date.parse(b.end) > start.getTime(),
         ),
@@ -253,6 +298,6 @@ export function planSummary(before: ShopConfig | null, next: ShopConfig) {
     .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(next[k]))
     .map(
       (k) =>
-        tr("{0}を更新", { name: tr("店名"), industry: tr("業種"), description: tr("お店の紹介"), address: tr("アクセス"), appearance: tr("ページの色・画像・配置"), notificationEmail: tr("通知先"), map: tr("地図"), screens: tr("画面のデザイン"), region: tr("国・タイムゾーン"), pages: tr("追加ページ"), header: tr("共通ヘッダー"), footer: tr("共通フッター"), menus: tr("メニュー"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[k]),
+        tr("{0}を更新", { name: tr("店名"), industry: tr("業種"), description: tr("お店の紹介"), address: tr("アクセス"), appearance: tr("ページの色・画像・配置"), notificationEmail: tr("通知先"), map: tr("地図"), screens: tr("画面のデザイン"), region: tr("国・タイムゾーン"), ownerBooking: tr("店主の予約受付"), pages: tr("追加ページ"), header: tr("共通ヘッダー"), footer: tr("共通フッター"), menus: tr("メニュー"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[k]),
     );
 }

@@ -14,7 +14,7 @@ import { screenIds, type ScreenId } from "../shared/screens";
 import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, type ReleaseScope, type ShopPage } from "../server/pages";
 import { FixtureEditor } from "./FixtureEditor";
 import { VisualRequest } from "./VisualRequest";
-import { shopSchema, planSummary, type ShopConfig } from "../server/domain";
+import { shopSchema, planSummary, bookingStaff, type ShopConfig } from "../server/domain";
 import { postKey, type PostCategory, type PublicPost } from "../server/post-domain";
 import { createRequestId } from "./request-id";
 import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
@@ -376,7 +376,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
           <fieldset disabled={busy || !!draft.pending || !!conflict}><FixtureEditor config={draft.config} value={fixtureEditing || draft.fixtures} onChange={setFixtureEditing} /></fieldset>
           <button disabled={busy || !!draft.pending || !!conflict} onClick={() => void run(async () => {
             const fixtures = fixturesSchema.parse(fixtureEditing || draft.fixtures);
-            if (fixtures.bookings.some(b => !draft.config.staff.some(s => s.id === b.staffId) || !draft.config.menus.some(m => m.id === b.menuId) || !draft.config.staff.some(s => s.id === b.staffId && s.menuIds.includes(b.menuId)))) throw new Error(tr("サンプル予約のメニュー・担当者を確認してください"));
+            if (fixtures.bookings.some(b => !bookingStaff(draft.config).some(s => s.id === b.staffId) || !draft.config.menus.some(m => m.id === b.menuId) || !bookingStaff(draft.config).some(s => s.id === b.staffId && s.menuIds.includes(b.menuId)))) throw new Error(tr("サンプル予約のメニュー・担当者を確認してください"));
             save({ ...draft, fixtures }); setScreen("reserve"); setRoute({ pane: "reserve" }); setVersion(v => v + 1); setNotice(tr("サンプルデータを保存しました。"));
           })}>{tr("サンプルをプレビューに反映")}</button>
         </details>

@@ -3,13 +3,13 @@ import type { ShopConversation, ShopChatMessage } from "./shop-chat.ts";
 import type { ImageUpload } from "./menu-images.ts";
 
 export const exportColumns = {
-  bookings: ["id", "customer", "name", "menuId", "staffId", "start", "end", "status", "createdAt", "updatedBy", "updatedAt", "requestKey", "price", "message", "payment"],
+  bookings: ["id", "customer", "name", "menuId", "staffId", "start", "end", "status", "createdAt", "updatedBy", "updatedAt", "requestKey", "price", "message", "payment", "optionIds", "items"],
   customers: ["email", "name", "birthDate", "gender", "updatedBy", "updatedAt"],
   inquiries: ["id", "email", "name", "message", "reply", "status", "at"],
   members: ["email", "accepted", "status", "invitedAt", "acceptedAt", "revokedAt"],
   posts: ["id", "version", "address", "draft", "published", "publishedAt"],
   customerNotes: ["id", "email", "text", "attachments", "createdAt", "createdBy", "status", "updatedAt", "updatedBy"],
-  menus: ["id", "name", "duration", "price", "active", "imageId"],
+  menus: ["id", "name", "duration", "price", "active", "imageId", "optionFor", "optionGroup"],
   staff: ["id", "name", "menuIds", "weekdays", "start", "end", "imageId"],
 } as const;
 export type ExportTable = keyof typeof exportColumns;

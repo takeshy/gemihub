@@ -27,6 +27,8 @@
     "check:storybook": "node scripts/check-storybook.mjs",
     "check:articles": "node scripts/check-article-authoring.mjs",
     "check:staff-images": "node scripts/check-staff-images.mjs",
+    "check:owner-booking": "node --import tsx scripts/check-owner-booking.mjs",
+    "check:menu-addons": "node --import tsx scripts/check-menu-addons.mjs",
     "check:settings-ai": "node --import tsx scripts/check-settings-ai.mjs",
     "check:inquiries": "node scripts/check-inquiries.mjs",
     "check:images": "node scripts/check-image-library.mjs",

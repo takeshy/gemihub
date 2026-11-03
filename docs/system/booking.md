@@ -31,6 +31,10 @@ A slot is offered only when all of the following hold:
 
 Dates, weekdays, holidays, opening hours and staff shifts use the shop's `region.timeZone`; absent settings mean Asia/Tokyo. The booking horizon counts local calendar days. Calendar FreeBusy queries cover local midnight to the following local midnight (23 or 25 hours on US summer-time transitions). Durations and lead times are elapsed minutes. Nonexistent spring-forward times are not offered; a repeated fall-back start uses its earlier occurrence, and appointment ends must stay within opening hours and staff shifts. ISO booking records remain UTC.
 
+`hours.weekdayHours` overrides the normal start/end for specific weekdays; regular closed days and holidays still take precedence. With no additional staff, the owner handles every service during those actual daily opening hours. New shops retain the owner's availability when additional staff are added later; legacy explicit staff schedules remain supported.
+
+A menu with `optionFor` is an add-on and cannot be booked alone. It lists the standalone menu IDs that accept it. Only one selected add-on per nonempty `optionGroup` is allowed. Availability covers the combined duration and requires a staff member qualified for the base service and every selected add-on. Prices are summed in integer currency units before conversion back to shop currency. Booking records retain `optionIds`, a frozen `items` list, the combined price, and the full start/end interval. PayPal consent, holds, capture, and refunds use that combined snapshot. Preview and offline exports follow the same rules.
+
 # Nominated and unassigned staff
 
 Customers may choose a staff member or no preference. With no preference, gemihub assigns one available staff member who handles the menu. The shop cannot turn nomination off; customers always have both choices.

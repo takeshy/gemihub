@@ -6,7 +6,7 @@ import type { Booking } from "../server/domain";
 import {postImageIds} from "../server/post-images";
 import { customerProfileSchema, type MemberProfile } from "../server/customer-profile";
 import { z } from "zod";
-import { shopSchema, slots, type ShopConfig } from "../server/domain";
+import { shopSchema, slots, bookingStaff, menuSelection, type ShopConfig } from "../server/domain";
 import { editorIndexSchema } from "../server/editor-index-schema";
 import { releaseScopeSchema } from "../server/pages";
 import { managedImageIds } from "../server/image-references";
@@ -15,6 +15,7 @@ import type { ApiClient } from "./api";
 
 const bookingSchema = z.object({
   id: z.string().min(1), name: z.string().min(1), menuId: z.string(), staffId: z.string(),
+  optionIds: z.array(z.string()).max(10).optional(),
   start: z.iso.datetime(), end: z.iso.datetime(), status: z.enum(["active", "cancelled", "no_show"]),
 }).refine(b => Date.parse(b.start) < Date.parse(b.end), { error: () => tr("予約の終了は開始より後にしてください") });
 export const fixturesSchema = z.object({
@@ -26,12 +27,12 @@ export type Fixtures = z.infer<typeof fixturesSchema>;
 export function sampleFixtures(config: ShopConfig): Fixtures {
   const timeZone = regionOf(config).timeZone;
   const date = dateIn(Date.now() + 3 * 86400000, timeZone);
-  const first = config.staff[0];
-  const menu = config.menus.find(m => first.menuIds.includes(m.id))!;
-  const start = zonedDate(date, first.start, timeZone);
+  const first = bookingStaff(config).find(staff => config.menus.some(menu => !menu.optionFor && staff.menuIds.includes(menu.id)));
+  const menu = config.menus.find(m => !m.optionFor && first?.menuIds.includes(m.id));
+  const start = first && menu ? zonedDate(date, first.start, timeZone) : undefined;
   return {
     customerName: tr("山田 花子（サンプル）"),
-    bookings: [{ id: "sample-booking", name: tr("山田 花子（サンプル）"), menuId: menu.id, staffId: first.id, start: start.toISOString(), end: new Date(start.getTime() + menu.duration * 60000).toISOString(), status: "active" }],
+    bookings: first && menu && start ? [{ id: "sample-booking", name: tr("山田 花子（サンプル）"), menuId: menu.id, staffId: first.id, start: start.toISOString(), end: new Date(start.getTime() + menu.duration * 60000).toISOString(), status: "active" }] : [],
     posts: ["blogs", "announcements"].map((category, i) => ({
       category: category as "blogs" | "announcements", date: dateIn(Date.now(), timeZone), slug: `sample-${i}`,
       title: i ? tr("営業日のご案内（サンプル）") : tr("お店からのお便り（サンプル）"),
@@ -56,7 +57,7 @@ export function writeDraft(storage: Pick<Storage, "setItem">, key: string, draft
   storage.setItem(key, JSON.stringify(localDraftSchema.parse(draft)));
 }
 export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string) => Promise<import("../server/menu-image-domain").MenuImageData>): ApiClient {
-  const bookings: Booking[] = fixtures.bookings.map(b => simulatePayment({ ...b, shopId, price: config.menus.find(menu => menu.id === b.menuId)?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }, config));
+  const bookings: Booking[] = fixtures.bookings.map(b => { const selected = menuSelection(config,b.menuId,b.optionIds);return simulatePayment({ ...b, ...(selected?.optionIds.length ? {optionIds:selected.optionIds,items:selected.items}:{}), shopId, price: selected?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }, config); });
   const posts: PublicPost[] = fixtures.posts.map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
   let profile: MemberProfile = { name: fixtures.customerName, birthDate: "1990-01-01", gender: "not_specified" };
@@ -72,13 +73,16 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
       result = await readImage(image[2]);
     }
     else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5), paymentSimulation: true, customerProfile: profile, registrationRequired: false };
-    else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined);
+    else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined,undefined,url.searchParams.getAll("option"));
     else if (action === `${base}/checkouts`) result = [];
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {
-      const slot = slots(config, bookings, dateIn(input.start, regionOf(config).timeZone), input.menuId, input.staffId || undefined).find(s => s.start === input.start);
+      const optionIds = (data as {optionIds?:string[]}).optionIds || [];
+      const selected = menuSelection(config,input.menuId,optionIds);
+      if(!selected)throw new Error(tr("メニューと追加メニューの組み合わせを確認してください"));
+      const slot = slots(config, bookings, dateIn(input.start, regionOf(config).timeZone), input.menuId, input.staffId || undefined,undefined,optionIds).find(s => s.start === input.start);
       if (!slot) throw new Error(tr("この時間は予約できません。空き枠を選び直してください。"));
-      bookings.push(simulatePayment({ ...slot, id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: config.menus.find(menu => menu.id === input.menuId)!.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() }, config));
+      bookings.push(simulatePayment({ ...slot, ...(selected.optionIds.length?{optionIds:selected.optionIds,items:selected.items}:{}), id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: selected.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() }, config));
       result = { ok: true };
     } else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/cancel-quote")) {
       const b = bookings.find(b => b.id === action.split("/").at(-2));

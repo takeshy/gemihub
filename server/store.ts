@@ -41,6 +41,8 @@ export type User = {
   shopId?: string;
   role: "owner" | "customer";
   refreshToken?: string;
+  /** Calendar consent obtained during owner sign-in; encrypted, never sent to the browser. */
+  calendarRefreshToken?: string;
   legacyNotes?: boolean;
   /** A hackathon judge account created from the invitation URL; it has no Google token of its own. */
   judge?: boolean;
@@ -209,7 +211,7 @@ export class Store {
       }
     }
   }
-  /** The Google token that stores a shop: the owner's, or the operator's demo connection for judge shops. */
+  /** The shop's storage token; judge shops also use the operator's demo connection for Calendar. */
   async ownerToken(shop: Shop) {
     if (isArchivedShop(shop)) return undefined;
     if (shop.judge) return judgeActive() ? (await this.get<DemoGoogle>("demoGoogle", "current"))?.refreshToken : undefined;

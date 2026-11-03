@@ -58,7 +58,7 @@ export async function propose(
         ),
         { status: 400 },
       );
-    config = { ...structuredClone(sample), notificationEmail: email };
+    config = { ...structuredClone(sample), staff: [], ownerBooking: true, notificationEmail: email };
     // The demo sample is priced in yen; a US shop gets round dollar prices instead.
     if (region?.country === "US") config.menus = config.menus.map(menu => ({ ...menu, price: Math.round(menu.price / 100) }));
   } else if (!current) {
@@ -70,6 +70,8 @@ export async function propose(
     const { articles, ...details } = initialDetailsSchema.parse(JSON.parse(answer).config);
     config = {
       ...structuredClone(sample), ...details,
+      staff: [],
+      ownerBooking: true,
       name: themeContext.shopName || details.name || sample.name,
       industry: details.industry || "other",
       description: details.description || "", address: details.address || "",
@@ -89,7 +91,7 @@ export async function propose(
     config = JSON.parse(answer).config;
   }
   // The region is never changed by a proposal: it decides the currency and booking times.
-  config = shopSchema.parse({ ...config, region }) as ShopConfig;
+  config = shopSchema.parse({ ...config, ...(current?.ownerBooking ? { ownerBooking: true } : {}), region }) as ShopConfig;
   if (!region) delete config.region;
   if (!current && !demo) {
     config = initialThemeConfig(config, images);

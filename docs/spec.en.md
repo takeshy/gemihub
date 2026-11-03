@@ -181,7 +181,7 @@ Terraform does not generate or read secret values; pass version references. Runt
 
 - A shared invitation URL lets hackathon judges start as owners without Google until `JUDGE_UNTIL`. Judge shops are stored in the operator's demo Google Drive, one folder per judge, through the ordinary storage path. Judge shops never send mail; the judge menu lists each message instead, with AI usage, the trial path and a reset that archives the shop and starts again without restoring AI usage. Judges can switch to a trial customer on their own storefront and back. Each judge has a per-request AI quota.
 - While `ACCESS_PASSWORD` is set, a new Google owner without a shop enters it before the first shop is created. Existing owners, former note users, customers and staff are unaffected.
-- Administrators listed in `ADMIN_EMAILS` connect the demo Google account (`drive.file` only, stored apart from their own token), see invitation URLs and judges, and switch every shop's AI between Vertex AI (Gemini) and OpenAI. A provider without its key and models cannot be selected, and there is no silent fallback. Details: [specs/judge-access-spec.md](../specs/judge-access-spec.md).
+- Administrators listed in `ADMIN_EMAILS` connect the demo Google account (`drive.file` and `calendar.freebusy`, stored apart from their own token), see invitation URLs and judges, and switch every shop's AI between Vertex AI (Gemini) and OpenAI. Judge owner slots use the demo account's Calendar without requiring judges to sign in to Google. Reconnect existing Drive-only grants in the admin screen. A provider without its key and models cannot be selected, and there is no silent fallback. Details: [specs/judge-access-spec.md](../specs/judge-access-spec.md).
 
 ## Service name and public domain
 
@@ -212,3 +212,13 @@ Read feature numbers from the actual question, including prefixed or reordered c
 ## Comparing editing versions
 
 Back and Forward switch between editing versions for both the first theme and regular screen edits. Navigation does not call AI or publish anything; controls remain available when the chat is closed. Further edits and publication use the displayed version. Editing an older version drops its former forward history, and initial-theme branches update the saved conversation link. History belongs to the current editing session and resets on publication, reload, screen changes, or baseline updates. Navigation is disabled while an operation is running.
+
+## Owner Calendar consent
+
+Normal owner sign-in requests Calendar FreeBusy alongside Drive and Gmail, validates the granted scope and refresh token, and retains an encrypted Calendar credential. Denied Calendar consent creates no shop or owner credential. A legacy Drive/Gmail token alone does not establish Calendar consent. New shops start with no additional staff, with the owner bookable during shop hours and their Calendar used automatically. No owner staff registration or owner calendar status panel is shown. The last additional staff member can be deleted; existing bookings continue to block the solo owner. Adding staff later retains owner availability. Legacy explicit assignments are preserved, and another person's connection is never overwritten. Disconnect removes both the staff connection and the retained owner Calendar credential. Customer sign-in remains identity-only.
+
+## Weekday hours and add-ons
+
+Allow weekday start/end overrides while retaining normal hours. Closures and holidays take precedence; duplicate weekdays and invalid time ranges are rejected. Availability, owner working hours, public pages, diagrams, and AI settings use the same schedule.
+
+Menus may be add-ons restricted to selected standalone services. A nonempty selection group permits at most one chosen option. Only eligible options appear in booking, and changing the base service clears the options. The server rejects standalone add-ons, invalid parents, duplicate options and duplicate groups. Combined prices use integer currency units; availability covers the full combined duration and requires staff qualified for every item. One booking stores the chosen IDs and immutable item names, prices and durations. PayPal consent, holds, capture, refunds, retry identities, notifications, customer history, JSON/CSV exports and offline previews retain the combined selection and total.
