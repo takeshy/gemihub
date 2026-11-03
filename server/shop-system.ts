@@ -1,3 +1,4 @@
+import { formatMoney, currencyOf, regionOf } from "../shared/region.ts";
 import { tr, intlLocale } from "../shared/i18n.ts";
 import { policyText } from "./payment-domain.ts";
 import { shopSchema, type ShopConfig } from "./domain.ts";
@@ -11,13 +12,13 @@ export function shopSystem(input: ShopConfig) {
     sections: [
       { title: tr("① お客様の予約"), lines: [
         tr("Google ログイン → メニュー・日時を選択 → 空きを確認 → 予約確定"),
-        ...c.menus.filter(m => m.active).map(m => tr("{0}：{1}分・{2}円", m.name, m.duration, m.price.toLocaleString(intlLocale()))),
+        ...c.menus.filter(m => m.active).map(m => tr("{0}：{1}分・{2}", m.name, m.duration, formatMoney(m.price, currencyOf(regionOf(c)), intlLocale()))),
         tr("受付：{0}日前から、開始{1}分前まで。当日予約{2}。", c.rules.advanceDays, c.rules.leadMinutes, c.rules.sameDay ? tr("可") : tr("不可")),
         c.rules.payment?.enabled ? tr("予約時にPayPalで全額決済。キャンセル時は予約時の条件で自動返金。{0}。店都合は全額返金。", policyText(c.rules.payment.refundTiers)) : tr("お客様のキャンセル：開始{0}時間前まで。自分の予約だけ確認・取消できます。", c.rules.cancelHours),
       ] },
       { title: tr("② 空きを判断する仕組み"), lines: [
         tr("お客様が指名・指名なしを選べます。指名時は選んだスタッフのみ、指名なしは対応するスタッフのうち空いている1人に割り当てます。"),
-        tr("営業時間 {0}〜{1}／{2}分刻み（日本時間）", c.hours.start, c.hours.end, c.rules.interval),
+        tr("営業時間 {0}〜{1}／{2}分刻み（{3}）", c.hours.start, c.hours.end, c.rules.interval, regionOf(c).timeZone),
         tr("定休日：{0}。臨時休業：{1}。", c.hours.closedWeekdays.map(d => days[d] + tr("曜")).join("・") || tr("なし"), c.hours.holidays.join("・") || tr("なし")),
         ...c.staff.map(p => `${p.name}：${p.weekdays.map(d => days[d]).join("・")} ${p.start}〜${p.end}／${p.menuIds.map(id => c.menus.find(m => m.id === id)!.name).join("・")}`),
         tr("メニューの所要時間全体について、勤務・営業時間と既存の有効な予約、連携済み Calendar の予定あり時間を照合。重複する予約を防ぎます。"),

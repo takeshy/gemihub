@@ -1,3 +1,4 @@
+import { paypalValue, type Currency } from "../shared/region.ts";
 import { tr } from "../shared/i18n.ts";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
@@ -16,10 +17,11 @@ export type PayPalRefund = z.infer<typeof refundSchema>;
 export interface PaymentGateway {
   environment: PayPalEnvironment;
   ready(): Promise<void>;
-  create(id: string, amount: number, returnUrl: string, cancelUrl: string): Promise<PayPalOrder>;
+  /** `amount` is in minor units (yen or cents) of `currency`. */
+  create(id: string, amount: number, returnUrl: string, cancelUrl: string, currency?: Currency): Promise<PayPalOrder>;
   order(id: string): Promise<PayPalOrder>;
   capture(id: string, requestId: string): Promise<PayPalOrder>;
-  refund(captureId: string, amount: number, requestId: string): Promise<PayPalRefund>;
+  refund(captureId: string, amount: number, requestId: string, currency?: Currency): Promise<PayPalRefund>;
   refundStatus(id: string): Promise<PayPalRefund>;
 }
 export class PayPalError extends Error {
@@ -64,15 +66,15 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
   return {
     environment,
     async ready() { await credentials(); },
-    async create(id, amount, returnUrl, cancelUrl) {
+    async create(id, amount, returnUrl, cancelUrl, currency = "JPY") {
       return orderSchema.parse(await request("/v2/checkout/orders", {
-        intent: "CAPTURE", purchase_units: [{ custom_id: id, amount: { currency_code: "JPY", value: String(amount) } }],
+        intent: "CAPTURE", purchase_units: [{ custom_id: id, amount: { currency_code: currency, value: paypalValue(amount, currency) } }],
         payment_source: { paypal: { experience_context: { user_action: "PAY_NOW", shipping_preference: "NO_SHIPPING", return_url: returnUrl, cancel_url: cancelUrl } } },
       }, `create-${id}`));
     },
     async order(id) { return orderSchema.parse(await request(`/v2/checkout/orders/${encodeURIComponent(id)}`)); },
     async capture(id, requestId) { return orderSchema.parse(await request(`/v2/checkout/orders/${encodeURIComponent(id)}/capture`, {}, requestId)); },
-    async refund(id, amount, requestId) { return refundSchema.parse(await request(`/v2/payments/captures/${encodeURIComponent(id)}/refund`, { amount: { currency_code: "JPY", value: String(amount) } }, requestId)); },
+    async refund(id, amount, requestId, currency = "JPY") { return refundSchema.parse(await request(`/v2/payments/captures/${encodeURIComponent(id)}/refund`, { amount: { currency_code: currency, value: paypalValue(amount, currency) } }, requestId)); },
     async refundStatus(id) { return refundSchema.parse(await request(`/v2/payments/refunds/${encodeURIComponent(id)}`)); },
   };
 }

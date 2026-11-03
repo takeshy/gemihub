@@ -1,4 +1,5 @@
-import { tr, intlLocale } from "../shared/i18n";
+import { tr } from "../shared/i18n";
+import { useShopDisplay } from "./money";
 import React, { useRef, useState } from "react";
 import { DateInput } from "./DateInput";
 import { useApi } from "./api";
@@ -10,17 +11,6 @@ import {
   inquiryStatus,
   type InquiryStatus,
 } from "../server/inquiries";
-const when = (at?: string) =>
-  at && Number.isFinite(Date.parse(at))
-    ? new Date(at).toLocaleString(intlLocale(), {
-        timeZone: "Asia/Tokyo",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : tr("日時未記録");
 export function Inquiries({
   shopId,
   inquiries,
@@ -28,6 +18,8 @@ export function Inquiries({
   shopId: string;
   inquiries: Inquiry[];
 }) {
+  const { shopTime, displayTimeZone } = useShopDisplay();
+  const when = (at?: string) => at && Number.isFinite(Date.parse(at)) ? shopTime(at, {year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : tr("日時未記録");
   const [showCompleted, setShowCompleted] = useState(false),
     [query, setQuery] = useState("");
   const [reply, setReply] = useState<"all" | "unreplied" | "replied">("all");
@@ -35,7 +27,7 @@ export function Inquiries({
     [to, setTo] = useState("");
   const validRange = !from || !to || from <= to;
   const visible = validRange
-    ? filterInquiries(inquiries, { showCompleted, query, reply, from, to })
+    ? filterInquiries(inquiries, { showCompleted, query, reply, from, to }, displayTimeZone())
     : [];
   return (
     <section className="panel inquiries-list" aria-label={tr("お問い合わせ一覧")}>
@@ -141,6 +133,18 @@ export function CustomerInquiry({
   onReload: () => Promise<void>;
 }) {
   const api = useApi();
+  const { shopTime, displayTimeZone } = useShopDisplay();
+  const when = (at?: string) =>
+    at && Number.isFinite(Date.parse(at))
+      ? shopTime(at, {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : tr("日時未記録");
+
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");

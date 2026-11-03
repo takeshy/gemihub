@@ -28,11 +28,11 @@ export function scopedSource(config: ShopConfig | null, scope: ReleaseScope) {
   if (!config) return null;
   if (scope.kind === "part") return config[scope.part];
   if (scope.kind === "page") return pageValue(config, scope.pageId);
-  const { header: _header, footer: _footer, pages: _, menus: _m, staff: _s, hours: _h, rules: _r, ...shared } = config;
+  const { header: _header, footer: _footer, pages: _, menus: _m, staff: _s, hours: _h, rules: _r, region: _region, ...shared } = config;
   return shared;
 }
 export function scopedConfig(current: ShopConfig | null, local: ShopConfig, scope: ReleaseScope): ShopConfig {
-  if (scope.kind === "shared") return current ? { ...current, ...scopedSource(local, scope) as object, appearance: local.appearance } : { ...local, pages: [], header: { ...defaultHeader }, footer: { ...defaultFooter } };
+  if (scope.kind === "shared") return current ? { ...current, ...scopedSource(local, scope) as object, region: current.region, appearance: local.appearance } : { ...local, pages: [], header: { ...defaultHeader }, footer: { ...defaultFooter } };
   if (!current) throw Object.assign(new Error(tr("先にお店の共通設定を本番に反映してください")), { status: 409 });
   if (scope.kind === "part") return { ...current, [scope.part]: local[scope.part] };
   const page = pageValue(local, scope.pageId);

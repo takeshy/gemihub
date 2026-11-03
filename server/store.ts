@@ -32,6 +32,8 @@ export type Shop = {
   domainVerified?: boolean;
   /** Present on shops created through hackathon judge access; stored in the operator's demo Google Drive. */
   judge?: { createdAt: string; folderId?: string; archivedAt?: string };
+  /** Region chosen from the owner's first visit, used for the first proposal. */
+  regionDefault?: import("../shared/region.ts").Region;
 };
 export type User = {
   email: string;
@@ -272,7 +274,7 @@ export class Store {
   async saveBooking(b: Booking) {
     await this.put("booking", b.id, b);
   }
-  async createShop(owner: string) {
+  async createShop(owner: string, regionDefault?: import("../shared/region.ts").Region) {
     return this.locked(`owner:${owner}`, async () => {
       const existing = (await this.list<Shop>("shop")).find(
         (s) => s.owner === owner,
@@ -287,6 +289,7 @@ export class Store {
         draft: null,
         revision: 0,
         history: [],
+        ...(regionDefault && regionDefault.country !== "JP" ? { regionDefault } : {}),
       };
       await this.saveShop(shop);
       return shop;

@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n.ts";
+import { currencyOf, regionOf, validPrice } from "../shared/region.ts";
 import { bookingPaymentSchema } from "./payment-domain.ts";
 import { customerNoteSchema } from "./customers.ts";
 import { clients } from "./google.ts";
@@ -139,13 +140,14 @@ export async function readRecords(
       }
       if (kind === "booking") {
         const price = Number(value.price);
-        if (String(value.price).trim() === "" || !Number.isSafeInteger(price) || price < 0)
-          throw Object.assign(new Error(tr("予約台帳の料金を確認してください")), { status: 409 });
-        value.price = price;
         if (value.payment) {
           try { value.payment = bookingPaymentSchema.parse(JSON.parse(String(value.payment))); }
           catch { throw Object.assign(new Error(tr("予約台帳の支払いの記録を確認してください")), { status: 409 }); }
         } else delete value.payment;
+        const payment = value.payment as { currency: "JPY" | "USD" } | undefined;
+        if (String(value.price).trim() === "" || !validPrice(price, payment?.currency || currencyOf(regionOf(shop.published))))
+          throw Object.assign(new Error(tr("予約台帳の料金を確認してください")), { status: 409 });
+        value.price = price;
       }
       if (
         kind === "booking" &&

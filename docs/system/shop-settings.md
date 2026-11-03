@@ -13,12 +13,21 @@ What the settings in `spec.md` mean and how changes are requested, approved, pub
 `spec.md` contains the shop's current settings as JSON:
 
 - `name`, `industry`, `description`, `address`: shop information shown to customers.
+- `region`: `country` (`JP` or `US`) and `timeZone`. The country sets JPY or USD; the time zone sets local business dates and times. Missing region means JP / Asia/Tokyo for existing shops.
 - `notificationEmail`: where the shop receives booking and inquiry emails.
-- `menus[]`: `id`, `name`, `duration` (minutes), `price` (yen), `active`, optional image.
+- `menus[]`: `id`, `name`, `duration` (minutes), `price` (major currency units: whole yen for JP, dollars with up to two decimals for US), `active`, optional image.
 - `staff[]`: `name`, `menuIds` they handle, `weekdays` (0 = Sunday), `start`, `end`, optional photo.
 - `hours`: `start`, `end`, `closedWeekdays`, `holidays` (dates).
 - `rules`: `interval`, `advanceDays`, `leadMinutes`, `sameDay`, `cancelHours`, and `payment` (`enabled`, `refundTiers`).
 - `pages[]`, `header`, `footer`, `appearance`: customer-facing pages and design.
+
+# Country, currency and time zone
+
+The owner changes these in **Shop information**. JP uses Asia/Tokyo. US offers America/New_York, America/Chicago, America/Denver, America/Phoenix, America/Los_Angeles, America/Anchorage and Pacific/Honolulu. Summer time follows the selected zone; Phoenix and Honolulu do not switch. Interface language is independent of the shop's country.
+
+Changing country does not convert menu amounts. Review prices before accepting new bookings. Existing captured payments and refunds keep their booked currency and amounts. AI proposals and screen design edits cannot change the region; use the settings screen.
+
+New shops use the browser's preferred language: Japanese means JP, other languages mean US. A supported US browser time zone is used; otherwise US defaults to America/New_York. Missing language falls back to JP. Reconnecting or changing interface language does not change an existing shop. The browser supplies a time-zone cookie before login; these values are only initial defaults, not authorization.
 
 # Publication
 

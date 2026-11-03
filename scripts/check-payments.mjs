@@ -45,27 +45,27 @@ try {
     await page.getByRole("button", { name: "マイページ", exact: true }).click();
     // There is an existing sample booking too; cancel the new booking by its final position.
     const booking = page.locator(".booking-card").last();
-    await booking.getByText("PayPal 支払済み：5,500円", { exact: false }).waitFor();
+    await booking.getByText("PayPal 支払済み：¥5,500", { exact: false }).waitFor();
     let confirmation = "";
     page.once("dialog", async dialog => { confirmation = dialog.message(); await dialog.accept(); });
     await booking.getByRole("button", { name: "キャンセルする", exact: true }).click();
-    await booking.getByText("返金完了：2,750円（50%）", { exact: false }).waitFor();
+    await booking.getByText("返金完了：¥2,750（50%）", { exact: false }).waitFor();
     assert.ok(confirmation.includes("2,750"));
     await page.screenshot({ path: `tmp/payment-screenshots/half-refund-${width}.png`, fullPage: true });
     await open("owner");
     page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "店都合でキャンセル・全額返金", exact: true }).click();
-    await page.getByText("返金完了：5,500円（100%）", { exact: false }).waitFor();
+    await page.getByText("返金完了：¥5,500（100%）", { exact: false }).waitFor();
     await open("insufficient-funds");
     await page.getByText("PayPalの返金用残高が不足しています。", { exact: false }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     await page.getByRole("button", { name: "返金状況を再確認", exact: true }).click();
-    await page.getByText("返金完了：5,500円（100%）", { exact: false }).waitFor();
+    await page.getByText("返金完了：¥5,500（100%）", { exact: false }).waitFor();
     await open("policy");
     await page.getByLabel("返金条件2・返金率（%）").fill("60");
     await page.locator(".live-settings-rules").getByRole("button", { name: "保存", exact: true }).click();
     await page.getByText("保存して本番に反映しました。", { exact: true }).waitFor();
-    for (const [suffix, text] of [["partial-refund", "返金完了：2,750円"], ["zero-refund", "返金なし：0円"], ["full-refund", "返金完了：5,500円"], ["pending-refund", "PayPalで返金を確認中"], ["failed-refund", "返金の確認が必要です"]]) {
+    for (const [suffix, text] of [["partial-refund", "返金完了：¥2,750"], ["zero-refund", "返金なし：¥0"], ["full-refund", "返金完了：¥5,500"], ["pending-refund", "PayPalで返金を確認中"], ["failed-refund", "返金の確認が必要です"]]) {
       await open(suffix); await page.getByText(text, { exact: false }).waitFor();
       assert.deepEqual(await page.locator('[role="alert"]').allTextContents(), []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
@@ -77,7 +77,7 @@ try {
     await open("insufficient-funds", "en");
     await page.getByText("The PayPal refund balance is insufficient.", { exact: false }).waitFor();
     await page.getByRole("button", { name: "Check refund status", exact: true }).click();
-    await page.getByText("Refund complete: JPY 5,500 (100%)", { exact: false }).waitFor();
+    await page.getByText("Refund complete: ¥5,500 (100%)", { exact: false }).waitFor();
     assert.equal(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test((await page.locator(".payment-details").allInnerTexts()).join("\n")), false);
     assert.deepEqual(errors, []);
     await context.close();

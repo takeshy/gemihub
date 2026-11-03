@@ -1,11 +1,11 @@
-import { tr, intlLocale } from "../shared/i18n";
+import { tr } from "../shared/i18n";
+import { useShopDisplay } from "./money";
 import React, { useEffect, useRef, useState } from "react";
 import { customerFileLimit, customerTotalFileLimit, previewCustomerImage, type CustomerAttachment, type CustomerDetail, type CustomerNote } from "../server/customers";
 import { CustomerImageDialog } from "./CustomerImages";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
 
-const when = (value: string) => new Date(value).toLocaleString(intlLocale(), { timeZone: "Asia/Tokyo" });
 const fileData = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(String(reader.result).split(",")[1]);
@@ -57,6 +57,7 @@ export function CustomerNoteComposer({ base, rangeQuery, saved }: { base: string
 }
 
 export function CustomerNoteCard({ note, base, rangeQuery, saved, showAttachments = true }: { note: CustomerNote; showAttachments?: boolean; base: string; rangeQuery: string; saved: (customer: CustomerDetail) => void }) {
+  const { shopTime: when } = useShopDisplay();
   const api = useApi();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);

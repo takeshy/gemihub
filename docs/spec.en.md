@@ -62,7 +62,7 @@ Customers choose a service, a qualified staff member or No preference, then date
 
 Validate opening hours, staff shifts, service duration, closures, existing active bookings, lead time, same-day policy, advance limit, and connected Calendar busy times. Recheck immediately before confirmation under the shop lock. No booking on a closed day or overlapping an occupied slot. Show assigned person, recorded price, status, booking number, and optional message. Cancellation deadlines apply; preserve cancelled/no-show records. Operators filter bookings by date/staff and can cancel or mark no-show.
 
-Store a required nonnegative integer booking-time JPY price; later service price changes do not alter history. Optional messages are up to 2,000 characters and appear in operator bookings, customer timeline, personal history, and notification emails.
+Store a required nonnegative booking-time price in the shop's currency (whole JPY or USD with two decimal places); later service price changes do not alter history. Optional messages are up to 2,000 characters and appear in operator bookings, customer timeline, personal history, and notification emails.
 
 ## Customer membership and CRM
 
@@ -70,7 +70,7 @@ After Google verifies email, register a per-shop name, date of birth, and gender
 
 Aggregate existing bookings and inquiries by trimmed lowercase email, without extra owner input or AI. Names use the newest timestamp with deterministic ties. Visits count ended active reservations only, excluding cancellations, no-shows, and future bookings; spending sums recorded prices. Search by name/email and sort by visit count/last visit.
 
-Periods are all time, one week/month/three months/six months/year, or custom start. Use Japan midnight and calendar subtraction with month-end clamping. Apply the same lower bound to metrics and history, keeping future bookings visible. Names and note availability use all dates.
+Periods are all time, one week/month/three months/six months/year, or custom start. Use midnight in the shop's time zone and calendar subtraction with month-end clamping. Apply the same lower bound to metrics and history, keeping future bookings visible. Names and note availability use all dates.
 
 Details show name/email/birth date/gender, current reservations, expandable past bookings/cancellations, inquiry handling, and a newest-first timeline filtered by notes/bookings/inquiries. Missing profile values show Not registered. Operator-only access applies to every detail, write, and file endpoint.
 
@@ -78,7 +78,7 @@ Private notes may contain up to five attachments, 5 MB each, 10 MB total, stored
 
 ## Inquiries
 
-Use the signed-in name and read-only verified Google email. Submit and reply only to the server-verified address. Show inquiries newest first, hide resolved by default, and support Include resolved, partial name/email/message/latest-reply search, reply state, and inclusive Japan-date bounds. Legacy records without timestamps are excluded only when filtering dates.
+Use the signed-in name and read-only verified Google email. Submit and reply only to the server-verified address. Show inquiries newest first, hide resolved by default, and support Include resolved, partial name/email/message/latest-reply search, reply state, and inclusive shop-local date bounds. Legacy records without timestamps are excluded only when filtering dates.
 
 Track resolution as `in_progress` or `completed`, reading legacy `open` as in progress and `replied` as completed. Preserve column names/order. A nonempty reply determines Replied independently; replying must not resolve automatically. A phone-handled inquiry can be resolved without an email reply.
 
@@ -150,7 +150,7 @@ Regenerate the deterministic settings diagram on publication and save it in Driv
 
 ## Japanese and English acceptance requirements
 
-Support Japanese and English across the landing page, management, customer screens, help/manual, notifications and validation, generated artifacts, and AI instructions. Provide a visible language switch and explicit lang links; preserve selection across reloads/login/offline previews without changing business data. Isolate concurrent server locales. Translate readable dates/weekdays and recognition language while retaining JPY, Japan time, fixed date inputs, schema identifiers, and authorization.
+Support Japanese and English across the landing page, management, customer screens, help/manual, notifications and validation, generated artifacts, and AI instructions. Provide a visible language switch and explicit lang links; preserve selection across reloads/login/offline previews without changing business data. Isolate concurrent server locales. Translate readable dates/weekdays and recognition language while retaining the shop's JPY/USD currency, local time zone, fixed date inputs, schema identifiers, and authorization.
 
 Maintain English/Japanese README files and this English specification. Capture English manual screens, expose both languages through the Storybook toolbar, validate every story in both languages and secure/insecure browser contexts, and exercise English booking/inquiry/publication/editor and actual offline output. Record automated evidence separately from untested live Google, model, microphone, and delivery behavior.
 
@@ -180,3 +180,7 @@ The management host serves a public `/lp` service overview in Japanese and Engli
 The public brand is gemihub. The management origin is https://gemihub.net and all Google OAuth flows use https://gemihub.net/auth/google/callback. Storefront subdomains default to shops.gemihub.net and need separate DNS/TLS setup. Production settings are provided in .env.production.example; local demo settings remain separate. Configure Google client credentials on the server only.
 
 The separate former gemihub service is now kiokuflow. This service uses the named database gemihub, collections gemihub_state/gemihub_locks, gemihub_session/gemihub_oauth cookies, gemihub: browser keys, X-Gemihub-Language, window.__GEMIHUB_MOCK__, and TXT _gemihub. The former name was never released, so no migration or compatibility aliases are provided. Use gemihub-web for shared-VM registration and cloud-resource prefixes because kiokuflow retains the legacy runtime ID gemihub.
+
+## JP / US country and time-zone settings
+
+Each shop selects JP (JPY, Asia/Tokyo) or US (USD, one of seven US zones) in Shop information. Missing region is JP for compatibility. Prices use major currency units; payment/refund records use integer yen or cents and snapshot their currency. Region changes do not convert menu prices, and AI/design proposals cannot change region. Dates, availability, Calendar bounds, filters, mail and Drive exports follow the shop, including summer-time transitions. First visits use the browser's preferred language, and new-shop defaults use that language and a supported browser time zone, independently of later language choices. See [system settings](system/shop-settings.md) and [verification](i18n.md#region-verification).

@@ -89,7 +89,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
         if (!active) return;
         setIndex(remote);
         if (!cached) restore({ ...current, downloaded: [], index: remote, fixtures: sampleFixtures(current.config) });
-        else if (!cached.pending) restore({ ...cached, index: remote, downloaded: cached.downloaded || cached.source?.pages.map(p => p.id) || [], config: { ...cached.config, menus: current.config.menus, staff: current.config.staff, hours: current.config.hours, rules: current.config.rules } });
+        else if (!cached.pending) restore({ ...cached, index: remote, downloaded: cached.downloaded || cached.source?.pages.map(p => p.id) || [], config: { ...cached.config, region: current.config.region, menus: current.config.menus, staff: current.config.staff, hours: current.config.hours, rules: current.config.rules } });
       } catch (e) { if (!cached) throw e; setError(tr("リモートの最新状態を確認できません。ローカル編集は保持しています。更新確認を再試行してください。")); }
     });
     return () => { active = false; };

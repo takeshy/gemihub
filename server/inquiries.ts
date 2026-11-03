@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateJST } from "./domain.ts";
+import { dateIn } from "../shared/region.ts";
 export const inquiryStatusSchema = z.enum(["in_progress", "completed"]);
 export type InquiryStatus = z.infer<typeof inquiryStatusSchema>;
 export const inquiryStatus = (inquiry: { status: string }): InquiryStatus =>
@@ -25,7 +25,7 @@ export function filterInquiries<
     message: string;
     at?: string;
   },
->(inquiries: T[], filter: InquiryFilter): T[] {
+>(inquiries: T[], filter: InquiryFilter, timeZone = "Asia/Tokyo"): T[] {
   const query = filter.query.trim().toLowerCase();
   return inquiries
     .filter((inquiry) => {
@@ -46,7 +46,7 @@ export function filterInquiries<
       if (filter.from || filter.to) {
         const time = Date.parse(inquiry.at || "");
         if (!Number.isFinite(time)) return false;
-        const day = dateJST(new Date(time));
+        const day = dateIn(time, timeZone);
         if (
           (filter.from && day < filter.from) ||
           (filter.to && day > filter.to)

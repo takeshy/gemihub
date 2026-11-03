@@ -1,9 +1,10 @@
 import type { Booking, ShopConfig } from "../server/domain";
 import { refundQuote } from "../server/payment-domain";
+import { currencyOf, regionOf, toMinor } from "../shared/region";
 export function simulatePayment(booking: Booking, config: ShopConfig) {
   if (config.rules.payment?.enabled && booking.price > 0) booking.payment = {
     provider: "paypal", environment: "sandbox", orderId: `sample-order-${booking.id}`, captureId: `sample-capture-${booking.id}`,
-    amount: booking.price, currency: "JPY", policy: structuredClone(config.rules.payment.refundTiers),
+    amount: toMinor(booking.price, currencyOf(regionOf(config))), currency: currencyOf(regionOf(config)), policy: structuredClone(config.rules.payment.refundTiers),
   };
   return booking;
 }

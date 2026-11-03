@@ -276,6 +276,12 @@ test("Firestore shares operational state and locks; owner Sheets hold business r
   const recovered=await readConversation(new Store(),shop,shop.owner,conversation.id);
   assert.deepEqual(recovered.messages.map(message=>message.text),["公開前から残す相談","連携が中断しても失わない会話"]);
   assert.ok([...cloud.values()].every(value=>!["shopChat","shopChatMessage"].includes(String(value.kind))),"successful migration clears the operational staging copy");
+  shop.published={...structuredClone(sample),region:{country:"US",timeZone:"America/New_York"}};
+  await first.saveShop(shop);
+  const dollars={...booking,id:"usd-price",price:55.01};delete dollars.payment;
+  await first.saveBooking(dollars);
+  assert.equal((await restarted.bookings(shop.id)).find(b=>b.id==="usd-price")!.price,55.01,"USD decimal prices survive Sheets reads");
+  assert.deepEqual(sheets.get("reservations")![0].slice(0,14),["id","customer","name","menuId","staffId","start","end","status","createdAt","updatedBy","updatedAt","requestKey","price","message"]);
   const headers = sheets.get("reservations")![0];
   headers[0] = "broken";
   await assert.rejects(() => first.bookings(shop.id), /列構造/);

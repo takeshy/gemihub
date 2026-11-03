@@ -17,6 +17,8 @@ Where shop data is kept and what direct spreadsheet edits change.
 
 The server keeps sign-in sessions, encrypted Google tokens, publication state, pending plans, payment and refund processing records, and locks. Payment amounts and refund decisions come from these records, not from spreadsheet edits.
 
+Menu and booking prices are in the shop's major currency units (yen or dollars). Captured payment and refund amounts are integer yen or cents with their own currency. Old shops and payment journals keep their JP/JPY interpretation. Column names and order remain unchanged.
+
 # Direct spreadsheet edits
 
 Settings edited directly in the spreadsheet take effect on the next request. Keep column names and order. Invalid master data stops booking until fixed. Plans created before a direct edit must be created again. Do not add bookings directly while the app is taking bookings; direct edits do not use the booking lock.

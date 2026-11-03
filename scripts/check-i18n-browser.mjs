@@ -6,9 +6,10 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { createApp } from '../server/app.ts';
 import { Store } from '../server/store.ts';
-import { sample, dateJST, slots } from '../server/domain.ts';
+import { sample, slots } from '../server/domain.ts';
 import { requestLocale } from '../server/i18n.ts';
 import { artifacts } from '../server/artifacts.ts';
+import { dateIn, regionOf } from '../shared/region.ts';
 
 process.env.DEMO_MODE='true';
 const store=new Store(':memory:');const server=createApp(store);
@@ -90,10 +91,10 @@ try{
   await page.getByRole('heading',{name:'A little time for yourself.',exact:true}).waitFor();
   const config=(await (await context.request.get(origin+'/api/public/'+shop.slug)).json()).config;
   let date,slot;
-  for(let offset=2;offset<=config.rules.advanceDays;offset++){date=dateJST(new Date(Date.now()+offset*86400000));slot=slots(config,[],date,config.menus[0].id)[0];if(slot)break;}
+  for(let offset=2;offset<=config.rules.advanceDays;offset++){date=dateIn(Date.now()+offset*86400000,regionOf(config).timeZone);slot=slots(config,[],date,config.menus[0].id)[0];if(slot)break;}
   assert.ok(slot);
-  await page.getByLabel('Preferred date (Japan time)',{exact:true}).fill(date);
-  const time=new Date(slot.start).toLocaleTimeString('en-US',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'});
+  await page.getByLabel(`Preferred date (${regionOf(config).country==='JP'?'Japan time':regionOf(config).timeZone})`,{exact:true}).fill(date);
+  const time=new Date(slot.start).toLocaleTimeString('en-US',{timeZone:regionOf(config).timeZone,hour:'2-digit',minute:'2-digit'});
   await page.getByRole('button',{name:time,exact:true}).click();
   await page.getByLabel('Message to the shop (optional)',{exact:true}).fill('Please use the same color as last time.');
   await page.getByRole('button',{name:'Confirm booking →',exact:true}).click();

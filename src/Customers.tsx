@@ -1,8 +1,9 @@
-import { tr, intlLocale } from "../shared/i18n";
+import { tr } from "../shared/i18n";
+import { useShopDisplay } from "./money";
 import { DateInput } from "./DateInput";
 import { genderOptions } from "../server/customer-profile";
 import React, { useEffect, useRef, useState } from "react";
-import { dateJST, type Booking, type ShopConfig } from "../server/domain";
+import { type Booking, type ShopConfig } from "../server/domain";
 import { customerPeriods, customerFilterSchema, customerSince, type CustomerFilter, type CustomerSummary, type CustomerDetail } from "../server/customers";
 import { CustomerImageGallery } from "./CustomerImages";
 import { CustomerNoteComposer, CustomerNoteCard } from "./CustomerNotes";
@@ -10,26 +11,27 @@ import { CustomerInquiry } from "./Inquiries";
 import { inquiryReplied, inquiryStatus } from "../server/inquiries";
 import { useApi } from "./api";
 
-const when = (value: string) => new Date(value).toLocaleString(intlLocale(), {
-  timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
-});
-const yen = (value: number) => `¥${value.toLocaleString(intlLocale())}`;
 const status = { get active() { return tr("予約"); }, get cancelled() { return tr("キャンセル"); }, get no_show() { return tr("無断キャンセル"); } };
 
 export function Customers({ shopId, config, initialEmail = "", initialImages = false, initialInquiryId = "", backToInquiries, inquiriesChanged }: { shopId: string; config: ShopConfig | null; initialEmail?: string; initialImages?: boolean; initialInquiryId?: string; backToInquiries?: () => void; inquiriesChanged?: () => Promise<unknown> }) {
+  const { money, shopTime, shopToday, displayTimeZone, timeZoneLabel } = useShopDisplay();
+  const when = (value: string) => shopTime(value, {
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+  const yen = money;
   const api = useApi();
   const [customers, setCustomers] = useState<CustomerSummary[]>();
   const [selected, setSelected] = useState(initialEmail);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("last-desc");
   const [period, setPeriod] = useState<CustomerFilter["period"]>("all");
-  const [customSince, setCustomSince] = useState(() => dateJST());
+  const [customSince, setCustomSince] = useState(() => shopToday());
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const filter = customerFilterSchema.safeParse({ period, since: period === "custom" ? customSince : undefined });
   const ready = filter.success;
-  const since = filter.success ? customerSince(filter.data, new Date()) : undefined;
-  const rangeLabel = since ? tr("{0} 以降（日本時間）", since) : tr("全期間");
+  const since = filter.success ? customerSince(filter.data, new Date(), displayTimeZone()) : undefined;
+  const rangeLabel = since ? tr("{0} 以降（{1}）", since, timeZoneLabel) : tr("全期間");
   const params = new URLSearchParams({ period, ...(period === "custom" ? { since: customSince } : {}) });
   const rangeQuery = `?${params}`;
   useEffect(() => {
@@ -57,7 +59,7 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
       <label>{tr("集計期間")}<select value={period} onChange={event => { setCustomers(undefined); setPeriod(event.target.value as CustomerFilter["period"]); }}>
         {customerPeriods.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select></label>
-      {period === "custom" && <label>{tr("開始日（日本時間）")}<DateInput aria-label={tr("開始日（日本時間）")} value={customSince} onValueChange={value => { setCustomers(undefined); setCustomSince(value); }} /></label>}
+      {period === "custom" && <label>{tr("開始日（{0}）", timeZoneLabel)}<DateInput aria-label={tr("開始日（{0}）", timeZoneLabel)} value={customSince} onValueChange={value => { setCustomers(undefined); setCustomSince(value); }} /></label>}
     </div>
     <p className="small muted">{ready ? tr("集計対象：{0}。来店回数・最終来店日・合計金額・履歴に適用します。未来の予約も表示します。", rangeLabel) : tr("開始日を指定してください。")}</p>
     <div className="customer-controls">
@@ -80,6 +82,11 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
 }
 
 function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, rangeLabel, initialInquiryId, backToInquiries, inquiriesChanged, back, saved }: { initialInquiryId: string; backToInquiries?: () => void; inquiriesChanged?: () => Promise<unknown>; shopId: string; email: string; initialImages: boolean; config: ShopConfig | null; rangeQuery: string; rangeLabel: string; back: () => void; saved: (customer: CustomerSummary) => void }) {
+  const { money, shopTime, shopToday, displayTimeZone, timeZoneLabel } = useShopDisplay();
+  const when = (value: string) => shopTime(value, {
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+  const yen = money;
   const api = useApi();
   const base = `/api/shops/${shopId}/customers/${encodeURIComponent(email)}`;
   const [customer, setCustomer] = useState<CustomerDetail>();
@@ -127,7 +134,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
         <dl className="customer-stats"><div><dt>{tr("来店回数")}</dt><dd>{customer.visitCount}{tr("回")}</dd></div><div><dt>{tr("最終来店日")}</dt><dd>{customer.lastVisit ? when(customer.lastVisit) : tr("来店なし")}</dd></div><div><dt>{tr("合計金額")}</dt><dd>{yen(customer.totalAmount)}</dd></div></dl>
         <CustomerNoteComposer base={base} rangeQuery={rangeQuery} saved={changed} />
       </div>
-      {customer.history.some(event => event.kind === "booking") && <section className="panel customer-bookings" aria-label={tr("予約内容")}><h2>{tr("予約内容")}</h2><p className="small muted">{tr("集計対象：")}{rangeLabel}{tr("（日本時間）")}</p>
+      {customer.history.some(event => event.kind === "booking") && <section className="panel customer-bookings" aria-label={tr("予約内容")}><h2>{tr("予約内容")}</h2><p className="small muted">{tr("集計対象：")}{rangeLabel}</p>
         {customer.history.filter(event => event.kind === "booking" && event.booking.status === "active" && Date.parse(event.booking.end) > Date.now()).sort((a,b) => Date.parse(a.at) - Date.parse(b.at)).map(event => event.kind === "booking" && <CustomerBooking key={event.booking.id} booking={event.booking} config={config} />)}
         {customer.history.some(event => event.kind === "booking" && (event.booking.status !== "active" || Date.parse(event.booking.end) <= Date.now())) && <details><summary>{tr("過去の予約・キャンセル")}</summary>{customer.history.map(event => event.kind === "booking" && (event.booking.status !== "active" || Date.parse(event.booking.end) <= Date.now()) && <CustomerBooking key={event.booking.id} booking={event.booking} config={config} />)}</details>}
       </section>}
@@ -135,7 +142,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
         {!customer.history.some(event => event.kind === "inquiry") && <p className="empty">{tr("この期間のお問い合わせはありません。")}</p>}
         {customer.history.map(event => event.kind === "inquiry" && <div key={event.inquiry.id} data-inquiry-id={event.inquiry.id} className="customer-inquiry-target" tabIndex={-1} ref={node => { if (node) inquiryNodes.current.set(event.inquiry.id,node); else inquiryNodes.current.delete(event.inquiry.id); }}><CustomerInquiry shopId={shopId} inquiry={event.inquiry} onChanged={reloadInquiries} onReload={reloadInquiries}/></div>)}
       </section>
-      <div className="panel"><h2>{tr("お客様のタイムライン")}</h2><p className="small muted">{tr("チェックした種類を新しい順に表示（日本時間）")}</p>
+      <div className="panel"><h2>{tr("お客様のタイムライン")}</h2><p className="small muted">{tr("チェックした種類を新しい順に表示（{0}）", timeZoneLabel)}</p>
         <fieldset className="customer-history-filter">
           <legend>{tr("タイムラインの表示")}</legend>
           {([{ kind: "note", label: tr("メモ") }, { kind: "booking", label: tr("予約") }, { kind: "inquiry", label: tr("お問い合わせ") }] as const).map(({ kind, label }) => <label key={kind}>
@@ -159,5 +166,10 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
 }
 
 function CustomerBooking({booking,config}:{booking:Booking;config:ShopConfig|null}) {
+  const { money, shopTime, shopToday, displayTimeZone, timeZoneLabel } = useShopDisplay();
+  const when = (value: string) => shopTime(value, {
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+  const yen = money;
   return <article className="customer-booking"><h3>{config?.menus.find(menu=>menu.id===booking.menuId)?.name || booking.menuId}</h3><p><time dateTime={booking.start}>{when(booking.start)}</time> 〜 <time dateTime={booking.end}>{when(booking.end)}</time></p><p><span className={`status ${booking.status}`}>{booking.status === "active" && Date.parse(booking.end) <= Date.now() ? tr("来店済み") : status[booking.status]}</span>　{yen(booking.price)}</p><p>{tr("担当：")}{config?.staff.find(staff=>staff.id===booking.staffId)?.name || booking.staffId}</p>{booking.message && <p className="customer-message"><b>{tr("予約時のメッセージ")}</b><br/>{booking.message}</p>}</article>;
 }

@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n";
+import { useShopDisplay } from "./money";
 import { createRequestId } from "./request-id";
 import { ArticleImageChooser } from "./ArticleImages";
 import type { ArticleFile } from "../server/article-files";
@@ -16,17 +17,16 @@ import {
   type PublicPost,
   type PostSummary,
 } from "../server/post-domain";
-import { dateJST } from "../server/domain";
 import type { Workspace } from "./App";
 
 const ArticleEditor = lazy(() => import("./ArticleEditor"));
 export type Navigate = (href: string) => void;
 type Run = (fn: () => Promise<void>) => Promise<void>;
-const freshContent = (): Content => ({
+const freshContent = (date: string): Content => ({
   category: "blogs",
   title: "",
   slug: "",
-  date: dateJST(),
+  date,
   excerpt: "",
   body: "",
 });
@@ -45,9 +45,11 @@ export function BlogEditor({
   demo: boolean;
 }) {
   const api = useApi();
+  const { shopToday } = useShopDisplay();
+  const fresh = () => freshContent(shopToday());
   const [posts, setPosts] = useState<Post[]>([]),
     [current, setCurrent] = useState<Post>();
-  const [content, setContent] = useState<Content>(freshContent),
+  const [content, setContent] = useState<Content>(fresh),
     [method, setMethod] = useState<"ai" | "write">();
   const [instruction, setInstruction] = useState(""),
     [conversationId, setConversationId] = useState<string>();
@@ -92,7 +94,7 @@ export function BlogEditor({
   }, [base, method]);
   function choose(post?: Post) {
     setCurrent(post);
-    setContent(post ? structuredClone(post.draft) : freshContent());
+    setContent(post ? structuredClone(post.draft) : fresh());
     setMethod(post ? "write" : undefined);
     setSaveId(createRequestId());
     setTurnId(createRequestId());

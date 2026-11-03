@@ -19,7 +19,8 @@ export const paymentRulesSchema = z.object({ enabled: z.boolean(), refundTiers: 
 export const bookingPaymentSchema = z.object({
   provider: z.literal("paypal"), environment: z.enum(["sandbox", "live"]),
   orderId: z.string().min(1), captureId: z.string().min(1),
-  amount: z.number().int().positive(), currency: z.literal("JPY"),
+  // Minor units of `currency` (yen or cents); older payments are all yen.
+  amount: z.number().int().positive(), currency: z.enum(["JPY", "USD"]),
   policy: refundTiersSchema,
   cancellation: z.object({
     at: z.iso.datetime(), by: z.string(), reason: z.enum(["customer", "shop"]),
@@ -33,7 +34,7 @@ export function refundQuote(amount: number, start: string, at: string, policy: R
   const remaining = Math.max(0, Date.parse(start) - Date.parse(at));
   if (!Number.isFinite(remaining) || !Number.isSafeInteger(amount) || amount < 0) throw new Error(tr("返金計算の値が不正です"));
   const percent = reason === "shop" ? 100 : refundTiersSchema.parse(policy).find(t => remaining >= t.hoursBefore * 3600000)!.percent;
-  // JPY has no fractional unit. Round down once, always using the original capture amount.
+  // Amounts are minor units (yen or cents). Round down once, always using the original capture amount.
   return { percent, amount: Math.floor(amount * percent / 100) };
 }
 export function policyText(tiers: RefundTiers) {

@@ -92,7 +92,7 @@ try {
   await page.getByRole('button', { name: 'マイページ', exact: true }).click();
   await page.getByText('予約確定', { exact: true }).waitFor();
   if (config.rules.payment?.enabled) {
-    await page.getByText('PayPal 支払済み：5,500円', { exact: false }).waitFor();
+    await page.getByText('PayPal 支払済み：¥5,500', { exact: false }).waitFor();
     page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: 'キャンセルする', exact: true }).click();
     await page.getByText('キャンセル済み', { exact: true }).waitFor();

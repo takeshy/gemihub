@@ -1,3 +1,4 @@
+import { regionOf, zonedDate } from "../shared/region.ts";
 import { tr } from "../shared/i18n.ts";
 import { paymentHolds } from "./payments.ts";
 import { google } from "googleapis";
@@ -48,7 +49,7 @@ export const calendarGateway = {
     auth.setCredentials({ refresh_token: decrypt(connection.refreshToken) });
     const { data } = await google.calendar({ version: "v3", auth }).freebusy.query({
       requestBody: {
-        timeMin, timeMax, timeZone: "Asia/Tokyo", items: [{ id: "primary" }],
+        timeMin, timeMax, timeZone: "UTC", items: [{ id: "primary" }],
       },
     });
     const calendar = data.calendars?.primary;
@@ -75,8 +76,10 @@ export async function availableSlots(
   const bookings = [...await store.bookings(shop.id), ...await paymentHolds(store, shop.id, excludeCheckout)];
   // Allocate after adding all busy intervals, so unspecified staff can be assigned.
   if (!z.iso.date().safeParse(date).success) return [];
-  const start = new Date(`${date}T00:00:00+09:00`);
-  const end = new Date(start.getTime() + 86400000);
+  // The shop's own day: midnight to midnight in its time zone (23 or 25 hours on US daylight-saving days).
+  const timeZone = regionOf(config).timeZone;
+  const start = zonedDate(date, "00:00", timeZone);
+  const end = zonedDate(new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10), "00:00", timeZone);
   const relevant = (await connections(store, shop)).filter(c =>
     config.staff.some(s => s.id === c.staffId && s.menuIds.includes(menu)) &&
     (!staff || c.staffId === staff),

@@ -66,7 +66,7 @@ test("provisional HTML, pages, posts, images and APIs require the owner; full pu
   assert.equal(page.status, 200);
   assert.match(await page.text(), /OWNER ONLY CONTENT/);
   assert.match(page.headers.get("cache-control")!, /no-store/);
-  assert.equal(page.headers.get("vary"), "Cookie, X-Gemihub-Language");
+  assert.equal(page.headers.get("vary"), "Cookie, X-Gemihub-Language, Accept-Language");
   assert.equal(page.headers.get("x-robots-tag"), "noindex, nofollow");
   const customAnonymous = await request("/pages/private", undefined, "", current.domain);
   assert.equal(customAnonymous.status, 302);

@@ -1,3 +1,4 @@
+import { regionOf, zonedDate } from "../../shared/region";
 import { tr } from "../../shared/i18n";
 import { simulatePayment, simulateCancellation } from "../payment-mock";
 import { defaultRefundTiers, refundQuote } from "../../server/payment-domain";
@@ -37,6 +38,9 @@ import {
   type Booking,
 } from "../../server/domain";
 export type Scenario =
+  | "us-settings"
+  | "us-menus"
+  | "us-booking"
   | "payment-reservation"
   | "paid-mypage"
   | "partial-refund"
@@ -108,6 +112,7 @@ export type Scenario =
   | "contact"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
+  "us-booking",
   "payment-reservation",
   "paid-mypage",
   "partial-refund",
@@ -151,6 +156,7 @@ export function scenarioProps(scenario: Scenario) {
           "image-library": "images", "image-library-empty": "images", "image-library-generation": "images",
           manual: "manual",
           system: "build",
+          "us-settings": "basic", "us-menus": "menus",
           "local-editor": "try",
           "local-editor-pages": "try",
           "editor-unfetched": "try", "editor-remote": "try", "editor-conflict": "try", "page-builder": "build",
@@ -182,6 +188,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   let customerProfile: MemberProfile | null = scenario === "registration" ? null : { name: tr("山田 花子"), birthDate: "1990-01-01", gender: "female" };
   const posts = scenario === "empty-blog" ? [] : storyPosts();
   const config = structuredClone(sample);
+  if (scenario.startsWith("us-")) { config.region = {country:"US",timeZone:"America/Los_Angeles"}; config.menus = config.menus.map((menu,i)=>({...menu,price:i?78:55.25})); }
   config.hours.closedWeekdays = [];
   if (["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
@@ -216,11 +223,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       customer: "guest@example.com",
       name: tr("山田 花子"),
       menuId: "simple",
-      price: 5500,
+      price: config.menus[0].price,
       message: tr("前回と同じピンクで、短めにお願いします。"),
       staffId: "aoi",
-      start: new Date(`${tomorrow}T10:00:00+09:00`).toISOString(),
-      end: new Date(`${tomorrow}T11:00:00+09:00`).toISOString(),
+      start: zonedDate(tomorrow,"10:00",regionOf(config).timeZone).toISOString(),
+      end: zonedDate(tomorrow,"11:00",regionOf(config).timeZone).toISOString(),
       status: "active",
       createdAt: new Date().toISOString(),
     },
@@ -230,11 +237,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       customer: "other@example.com",
       name: tr("鈴木 さくら"),
       menuId: "design",
-      price: 7800,
+      price: config.menus[1].price,
       message: "",
       staffId: "haru",
-      start: new Date(`${tomorrow}T13:00:00+09:00`).toISOString(),
-      end: new Date(`${tomorrow}T14:30:00+09:00`).toISOString(),
+      start: zonedDate(tomorrow,"13:00",regionOf(config).timeZone).toISOString(),
+      end: zonedDate(tomorrow,"14:30",regionOf(config).timeZone).toISOString(),
       status: "cancelled",
       createdAt: new Date().toISOString(),
     },

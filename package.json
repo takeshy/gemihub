@@ -27,6 +27,7 @@
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs",
     "check:publication-routing": "node scripts/check-publication-routing.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "check:region": "node --import tsx scripts/check-region.mjs",
     "check:i18n:browser": "node --import tsx scripts/check-i18n-browser.mjs",
     "capture:manual:en": "node scripts/capture-manual-en.mjs",
     "check:payments": "node scripts/check-payments.mjs",

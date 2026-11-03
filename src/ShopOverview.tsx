@@ -1,4 +1,5 @@
-import { tr, intlLocale } from "../shared/i18n";
+import { tr } from "../shared/i18n";
+import { useShopDisplay } from "./money";
 import type { ChatReference } from "../server/shop-chat";
 import type { RequestIntent } from "../server/request-intent";
 import React, { useEffect, useRef, useState } from "react";
@@ -9,9 +10,9 @@ import { ShopRequest } from "./ShopRequest";
 import type { Plan, Workspace } from "./App";
 export type BuildContext = { config: ShopConfig | null; published: boolean; revision: number; hash: string; history: { at: string; summary: string }[] };
 const days = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
-const money = (price: number) => `¥${price.toLocaleString(intlLocale())}`;
 export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, open, focusRequest = false, initialIntent }: { initialIntent?: RequestIntent; focusRequest?: boolean; google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[], intent?: RequestIntent, chat?: ChatReference) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
   const api = useApi();
+  const { money, shopTime } = useShopDisplay();
   const [data, setData] = useState<BuildContext>();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,7 +34,7 @@ export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, 
       <details>
       <summary><h2>{tr("変更履歴")}</h2><span className="small muted">{data ? tr("{0}件", data.history.length) : tr("読み込み中…")}</span><span className="history-chevron" aria-hidden="true">⌄</span></summary>
       {data && !data.history.length && <p className="muted">{tr("まだ変更履歴はありません。")}</p>}
-      <ol>{[...(data?.history || [])].reverse().map((entry, i) => <li key={`${entry.at}-${i}`}><time dateTime={entry.at}>{new Date(entry.at).toLocaleString(intlLocale(), { timeZone: "Asia/Tokyo" })}</time><p>{entry.summary}</p></li>)}</ol>
+      <ol>{[...(data?.history || [])].reverse().map((entry, i) => <li key={`${entry.at}-${i}`}><time dateTime={entry.at}>{shopTime(entry.at)}</time><p>{entry.summary}</p></li>)}</ol>
       </details>
     </section>
     <section ref={requestSection} className="panel shop-consultation" aria-label={tr("AIへの相談")}>

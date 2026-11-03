@@ -35,6 +35,8 @@ import { LegacyNotes } from "./LegacyNotes";
 import { JudgeStart, JudgeMenu, JudgeBar, AccessPassword } from "./JudgeAccess";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
+import { paid, createDisplay, useShopDisplay, ShopRegionContext } from "./money";
+import { currencyOf, regionOf, dateIn, usTimeZones, type Region, type Currency } from "../shared/region";
 export type Plan = {
   id: string;
   config: ShopConfig;
@@ -57,25 +59,13 @@ export type Workspace = Shop & {
   isOwner: boolean;
   plans: Plan[];
   bookings: Booking[];
-  paymentCheckouts?: { id: string; start: string; amount: number; phase: string; review: boolean; customer: string; name: string }[];
+  paymentCheckouts?: { id: string; start: string; amount: number; currency?: Currency; phase: string; review: boolean; customer: string; name: string }[];
   inquiries: Inquiry[];
   members: { email: string; accepted: boolean; status?: string }[];
   jobs: { type: string; error?: string }[];
   publicUrl: string;
 };
 export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; assistantVoice?: boolean };
-const yen = (n: number) => `¥${n.toLocaleString(intlLocale())}`;
-const when = (s: string) =>
-  new Date(s).toLocaleString(intlLocale(), {
-    timeZone: "Asia/Tokyo",
-    month: "numeric",
-    day: "numeric",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-const localDate = () =>
-  new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 const weekdays = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
 export type AppProps = {
   path?: string;
@@ -373,6 +363,7 @@ function Dashboard({
     notify(publication === "provisional" ? tr("仮公開しました。あなたのログインでだけページを表示できます。") : tr("変更を反映しました。"));
   };
   return (
+    <ShopRegionContext.Provider value={shop?.published ? regionOf(shop.published) : shop?.regionDefault || regionOf(null)}>
     <div className={`dashboard${creating || !shop ? " dashboard-creation" : ""}`}>
       {shop && !creating && <aside>
         <div className="sidebar-label">MY SHOP</div>
@@ -515,9 +506,11 @@ function Dashboard({
         {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} initialScreen={initialScreen} initialArticleKey={initialArticleKey} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} activate={() => setTab("try")} /></div>}
       </section>
     </div>
+    </ShopRegionContext.Provider>
   );
 }
 export function ConfigSummary({ config: c }: { config: ShopConfig }) {
+  const { money: yen } = createDisplay(regionOf(c));
   return (
     <div className="config-summary">
       <h3>{c.name}</h3>
@@ -641,6 +634,22 @@ export function ConfigEditor({
           onChange={(e) => put("notificationEmail", e.target.value)}
         />
       </Field>
+      <Field label={tr("国（通貨）")}>
+        <select
+          aria-label={tr("国（通貨）")}
+          value={regionOf(c).country}
+          onChange={(e) => put("region", (e.target.value === "US" ? { country: "US", timeZone: "America/New_York" } : { country: "JP", timeZone: "Asia/Tokyo" }) as Region)}
+        >
+          <option value="JP">{tr("日本（円）")}</option>
+          <option value="US">{tr("米国（ドル）")}</option>
+        </select>
+      </Field>
+      {regionOf(c).country === "US" && <Field label={tr("タイムゾーン")}>
+        <select aria-label={tr("タイムゾーン")} value={regionOf(c).timeZone} onChange={(e) => put("region", { country: "US", timeZone: e.target.value })}>
+          {usTimeZones.map(zone => <option key={zone} value={zone}>{{ "America/New_York": tr("東部時間（ニューヨーク）"), "America/Chicago": tr("中部時間（シカゴ）"), "America/Denver": tr("山地時間（デンバー）"), "America/Phoenix": tr("山地時間・夏時間なし（フェニックス）"), "America/Los_Angeles": tr("太平洋時間（ロサンゼルス）"), "America/Anchorage": tr("アラスカ時間（アンカレッジ）"), "Pacific/Honolulu": tr("ハワイ時間（ホノルル）") }[zone]}</option>)}
+        </select>
+      </Field>}
+      <p className="small muted">{tr("料金の通貨と、営業時間・予約枠の時刻はこの国とタイムゾーンで決まります。国を変えても料金は換算しないので、メニューの料金を見直してください。")}</p>
       </>}
       {(!section || section === "menus") && <>
       <h3>{tr("メニュー")}</h3>
@@ -673,10 +682,11 @@ export function ConfigEditor({
               }
             />
           </Field>
-          <Field label={tr("料金（円）")}>
+          <Field label={tr("料金（{0}）", currencyOf(regionOf(c)) === "USD" ? tr("ドル") : tr("円"))}>
             <input
               type="number"
               min="0"
+              step={currencyOf(regionOf(c)) === "USD" ? "0.01" : "1"}
               value={m.price}
               onChange={(e) =>
                 put(
@@ -951,7 +961,7 @@ export function ConfigEditor({
           {i < c.rules.payment!.refundTiers.length - 1 && <button onClick={() => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.filter((_, index) => index !== i) } })}>{tr("返金条件{0}を削除", i + 1)}</button>}
         </div>)}
         {c.rules.payment.refundTiers.length < 10 && <button onClick={() => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: [{ hoursBefore: c.rules.payment!.refundTiers[0].hoursBefore + 24, percent: 100 }, ...c.rules.payment!.refundTiers] } })}>{tr("返金条件を追加")}</button>}
-        <p className="small">{tr("時間の大きい順に設定し、最後は0時間（それ以降の返金率）にします。1円未満は切り捨てます。自然な言葉での変更は「AIとお店をつくる」から依頼し、変更案を確認して反映できます。")}</p>
+        <p className="small">{tr("時間の大きい順に設定し、最後は0時間（それ以降の返金率）にします。最小単位（1円・1セント）未満は切り捨てます。自然な言葉での変更は「AIとお店をつくる」から依頼し、変更案を確認して反映できます。")}</p>
       </>}
       <p className="small muted">
         {section ? tr("この項目は保存すると反映されます。") : tr("設定はプラン確認・承認・公開のあとに反映されます。")}
@@ -978,6 +988,7 @@ function Reservations({
   reload: () => Promise<unknown>;
 }) {
   const api = useApi();
+  const { money: yen, when, displayTimeZone, timeZoneLabel } = useShopDisplay();
   const [date, setDate] = useState("");
   const [staff, setStaff] = useState("");
   return (
@@ -999,8 +1010,8 @@ function Reservations({
           {tr("更新")}</button>
       </div>
       <div className="filters">
-        <Field label={tr("日付（日本時間）")}>
-          <DateInput aria-label={tr("日付（日本時間）")}
+        <Field label={tr("日付（{0}）", timeZoneLabel)}>
+          <DateInput aria-label={tr("日付（{0}）", timeZoneLabel)}
             value={date}
             onValueChange={value => setDate(value)} />
         </Field>
@@ -1023,7 +1034,7 @@ function Reservations({
           {tr("絞り込みを解除")}</button>
       </div>
       {shop.paymentCheckouts?.map(checkout => <div className="booking-card" key={checkout.id}>
-        <div><h3>{tr("{0} 様・{1}", checkout.name, when(checkout.start))}</h3><p>{checkout.customer} ／ {yen(checkout.amount)}</p><p>{checkout.review ? tr("PayPalの決済結果を照合してください。予約枠を確保したまま、自動の課金再送は停止しています。") : tr("お支払い手続き中・予約未確定")}</p></div>
+        <div><h3>{tr("{0} 様・{1}", checkout.name, when(checkout.start))}</h3><p>{checkout.customer} ／ {yen(checkout.amount, checkout.currency || "JPY")}</p><p>{checkout.review ? tr("PayPalの決済結果を照合してください。予約枠を確保したまま、自動の課金再送は停止しています。") : tr("お支払い手続き中・予約未確定")}</p></div>
         <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/retry`, {}); await reload(); })}>{tr("決済状況を再確認")}</button>
       </div>)}
       {!shop.bookings.length && !shop.paymentCheckouts?.length && (
@@ -1034,9 +1045,7 @@ function Reservations({
           .filter(
             (b) =>
               (!date ||
-                new Date(Date.parse(b.start) + 9 * 3600000)
-                  .toISOString()
-                  .startsWith(date)) &&
+                dateIn(b.start, displayTimeZone()) === date) &&
               (!staff || b.staffId === staff),
           )
           .map((b) => (
@@ -1070,7 +1079,7 @@ function Reservations({
                       key={status}
                       onClick={() =>
                         run(async () => {
-                          if (status === "cancelled" && !window.confirm(b.payment ? tr("店都合でキャンセルし、{0}を全額返金しますか？", yen(b.payment.amount)) : tr("この予約をキャンセルしますか？"))) return;
+                          if (status === "cancelled" && !window.confirm(b.payment ? tr("店都合でキャンセルし、{0}を全額返金しますか？", paid(b.payment.amount, b.payment.currency)) : tr("この予約をキャンセルしますか？"))) return;
                           await api(
                             `/api/shops/${shop.id}/bookings/${b.id}/status`,
                             { status },
@@ -1211,9 +1220,10 @@ export function PublicShop({
     registrationRequired?: boolean;
     paymentSimulation?: boolean;
   }>();
+  const { money: yen, when, shopToday: localDate, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
   const [menu, setMenu] = useState("");
   const [staff, setStaff] = useState("");
-  const [date, setDate] = useState(localDate());
+  const [date, setDate] = useState("");
   const [times, setTimes] = useState<
     { start: string; end: string; staffId: string }[]
   >([]);
@@ -1221,7 +1231,7 @@ export function PublicShop({
   const [name, setName] = useState(session.user?.name || "");
   useEffect(() => { setName(session.user?.name || ""); }, [session.user?.email, session.user?.name]);
   const [mine, setMine] = useState<Booking[]>([]);
-  type PendingCheckout = { id: string; phase: string; expires: number; approvalUrl?: string; review?: boolean; start: string; amount: number };
+  type PendingCheckout = { id: string; phase: string; expires: number; approvalUrl?: string; review?: boolean; start: string; amount: number; currency?: Currency };
   const [checkouts, setCheckouts] = useState<PendingCheckout[]>([]);
   const [paymentConsent, setPaymentConsent] = useState(false);
   const processedReturn = useRef("");
@@ -1265,6 +1275,7 @@ export function PublicShop({
         registrationRequired?: boolean;
       }>(base);
       setData(d);
+      setDate(dateIn(Date.now(), regionOf(d.config).timeZone));
       if (d.customerProfile) setName(d.customerProfile.name);
       setMenu(d.config.menus.find((m) => m.active)?.id || "");
       setStaff("");
@@ -1308,6 +1319,7 @@ export function PublicShop({
     return <div className="loading">{tr("お店のページを準備しています…")}</div>;
   const c = data.config;
   return (
+    <ShopRegionContext.Provider value={regionOf(c)}>
     <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}`}>
       {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
       {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
@@ -1410,8 +1422,8 @@ export function PublicShop({
                   </select>
                 </Field>
                 {staff && <MenuImage imageId={c.staff.find(person=>person.id===staff)?.imageId} imageBase={`${base}/images`} name={c.staff.find(person=>person.id===staff)?.name || tr("スタッフ")} className="staff-photo"/>}
-                <Field label={tr("ご希望の日付（日本時間）")}>
-                  <DateInput aria-label={tr("ご希望の日付（日本時間）")}
+                <Field label={tr("ご希望の日付（{0}）", timeZoneLabel)}>
+                  <DateInput aria-label={tr("ご希望の日付（{0}）", timeZoneLabel)}
                     min={localDate()}
                     value={date}
                     onValueChange={value => setDate(value)} />
@@ -1428,7 +1440,7 @@ export function PublicShop({
                       }}
                     >
                       {new Date(t.start).toLocaleTimeString(intlLocale(), {
-                        timeZone: "Asia/Tokyo",
+                        timeZone: displayTimeZone(),
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
@@ -1454,7 +1466,7 @@ export function PublicShop({
                   <h4>{tr("予約時のお支払いと返金条件")}</h4>
                   <p>{tr("PayPalで{0}をお支払い後、予約が確定します。決済中の枠は10分間確保します。", yen(c.menus.find(m => m.id === menu)!.price))}</p>
                   <p>{policyText(c.rules.payment.refundTiers)}</p>
-                  <p className="small">{tr("返金額はキャンセル時点の残り時間で計算し、1円未満を切り捨てます。店都合は全額返金。予約後に条件が変更されても、この予約の条件は変わりません。")}</p>
+                  <p className="small">{tr("返金額はキャンセル時点の残り時間で計算し、最小単位（1円・1セント）未満を切り捨てます。店都合は全額返金。予約後に条件が変更されても、この予約の条件は変わりません。")}</p>
                   {data.paymentSimulation && <p className="notice">{tr("プレビューの練習です。実際の支払い・返金は行いません。")}</p>}
                   <label><input type="checkbox" checked={paymentConsent} onChange={e => setPaymentConsent(e.target.checked)} /> {tr("支払額と返金条件を確認しました")}</label>
                 </div> : <p className="small muted">{tr("キャンセルは開始 ")}{c.rules.cancelHours} {tr("時間前までマイページで承ります。それ以降はお問い合わせください。")}</p>}
@@ -1545,7 +1557,7 @@ export function PublicShop({
             <div className="panel">
               <h2>{tr("あなたのご予約")}</h2>
               {checkouts.map(checkout => <div className="booking-card" key={checkout.id}>
-                <div><h3>{when(checkout.start)}</h3><p>{yen(checkout.amount)}・{checkout.review ? tr("お店での支払い確認が必要です。お問い合わせください。") : tr("支払い手続き中・予約はまだ確定していません")}</p></div>
+                <div><h3>{when(checkout.start)}</h3><p>{yen(checkout.amount, checkout.currency || "JPY")}・{checkout.review ? tr("お店での支払い確認が必要です。お問い合わせください。") : tr("支払い手続き中・予約はまだ確定していません")}</p></div>
                 <div className="actions">
                   {checkout.phase === "awaiting_approval" && checkout.approvalUrl && checkout.expires > Date.now() && <button disabled={busy} onClick={() => window.location.assign(checkout.approvalUrl!)}>{tr("PayPalで支払いを続ける")}</button>}
                   {checkout.phase === "creating" && <button disabled={busy} onClick={() => run(async () => { await api(`${base}/checkouts/${checkout.id}/resume`, {}); await loadMine(); })}>{tr("支払い手続きを再開")}</button>}
@@ -1582,7 +1594,7 @@ export function PublicShop({
                             let expectedRefund: number | undefined;
                             if (b.payment && !b.payment.cancellation) {
                               const quote = await api<{ amount: number; percent: number }>(`${base}/bookings/${b.id}/cancel-quote`);
-                              if (!window.confirm(tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", yen(quote.amount), quote.percent))) return;
+                              if (!window.confirm(tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", paid(quote.amount, b.payment.currency), quote.percent))) return;
                               expectedRefund = quote.amount;
                             }
                             await api(`${base}/bookings/${b.id}/cancel`, { expectedRefund });
@@ -1645,5 +1657,6 @@ export function PublicShop({
       )}
       {!hideFooter && <SiteFooter config={c} />}
     </div>
+    </ShopRegionContext.Provider>
   );
 }

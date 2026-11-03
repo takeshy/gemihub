@@ -4,7 +4,7 @@ import { renderLegal } from "./legal.ts";
 import { hasLegacyNotes } from "./legacy-notes.ts";
 import { localizeShell } from "../shared/html.ts";
 import { tr, intlLocale, getLocale } from "../shared/i18n.ts";
-import { localeForRequest, requestLocale } from "./i18n.ts";
+import { localeForRequest, requestLocale, regionForRequest } from "./i18n.ts";
 import { paypalGateway, type PaymentGateway } from "./paypal.ts";
 import { paymentService, checkoutView, type Checkout } from "./payments.ts";
 import { refundTiersSchema, policyText, refundQuote } from "./payment-domain.ts";
@@ -59,6 +59,7 @@ import {
   createFolder,
   trashFile,
 } from "./google.ts";
+import { regionOf, currencyOf, dateIn, formatMinor } from "../shared/region.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
@@ -252,7 +253,7 @@ export function createApp(
     const now = new Date();
     return {
       documents: await shopDocuments(shop),
-      today: new Date(now.getTime() + 9 * 3600000).toISOString().slice(0, 10),
+      today: dateIn(now, regionOf(config).timeZone),
       records: async kind => {
         if (kind === "bookings") return (await store.bookings(shop.id)).map(booking => ({
           id: booking.id, start: booking.start, end: booking.end, status: booking.status,
@@ -359,7 +360,7 @@ export function createApp(
     const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
     await store.transaction(async () => {
       await notify(shop, config, booking.customer, `${config.name} ${refund ? tr("予約キャンセル・返金") : booking.status === "no_show" ? tr("予約の状態が変更されました") : tr("ご予約を承りました")}`,
-        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}円\n{6}{7}", booking.name, booking.id, booking.start, config.menus.find(menu => menu.id === booking.menuId)?.name || booking.menuId, booking.message ? tr("\nメッセージ: {0}", booking.message) : "", booking.payment!.amount, status, refund ? tr("\n返金額: {0}円", refund.amount) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))));
+        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}\n{6}{7}", booking.name, booking.id, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), config.menus.find(menu => menu.id === booking.menuId)?.name || booking.menuId, booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))));
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
     });
   });
@@ -438,7 +439,7 @@ export function createApp(
   >();
   const server = createServer((req, res) => requestLocale.run(localeForRequest(req), async () => {
     res.setHeader("Content-Language", getLocale());
-    res.setHeader("Vary", "Cookie, X-Gemihub-Language");
+    res.setHeader("Vary", "Cookie, X-Gemihub-Language, Accept-Language");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
     res.setHeader("X-Frame-Options", "DENY");
@@ -500,7 +501,7 @@ export function createApp(
         if (shop.publication === "provisional" && user?.email !== shop.owner && !trialCustomer)
           fail(user ? 403 : 401, tr("仮公開中のため、このページを用意したユーザーのログインが必要です"));
         if (shop.publication === "provisional") {
-          res.setHeader("Vary", "Cookie, X-Gemihub-Language");
+          res.setHeader("Vary", "Cookie, X-Gemihub-Language, Accept-Language");
           res.setHeader("X-Robots-Tag", "noindex, nofollow");
         }
         if (shop.judge) res.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -547,7 +548,7 @@ export function createApp(
         try { accessToken = (await clients(saved.refreshToken).auth.getAccessToken()).token || ""; }
         catch { fail(401, tr("Google のアクセス権を再承認してください")); }
         if (await hasLegacyNotes(accessToken)) fail(409, tr("旧設定が残っています。kiokuflowでデータの引き継ぎを完了してから、もう一度確認してください。"));
-        const own = allShops.find(shop => shop.owner === user.email) || await store.createShop(user.email);
+        const own = allShops.find(shop => shop.owner === user.email) || await store.createShop(user.email, regionForRequest(req));
         const updated: User = { ...saved, shopId: own.id, legacyNotes: false };
         await store.put("user", user.email, updated);
         await login(store, res, updated);
@@ -743,7 +744,7 @@ export function createApp(
           const existingShop = allShops.find((s) => s.owner === email);
           if (!existingShop && !u.legacyNotes && accessPasswordEnabled()) u.accessPending = true;
           const own = existingShop
-            || (!u.legacyNotes && !u.accessPending ? await store.createShop(email) : undefined);
+            || (!u.legacyNotes && !u.accessPending ? await store.createShop(email, regionForRequest(req)) : undefined);
           u.shopId = own?.id;
           u.refreshToken = tokens.refresh_token
             ? encrypt(tokens.refresh_token)
@@ -789,7 +790,7 @@ export function createApp(
         const recordFailure = failedAttempt(`access:${req.socket.remoteAddress}:${user.email}`, 5, 600000);
         if (!accessPasswordMatches(input.password)) { recordFailure(); fail(401, tr("招待パスワードが違います")); }
         const saved = await store.get<User>("user", user.email) || fail(403, tr("Google のアクセス権を再承認してください"));
-        const own = allShops.find(shop => shop.owner === user.email) || await store.createShop(user.email);
+        const own = allShops.find(shop => shop.owner === user.email) || await store.createShop(user.email, regionForRequest(req));
         const updated: User = { ...saved, shopId: own.id, accessPending: false };
         await store.put("user", user.email, updated);
         const old = cookie(req, "gemihub_session");
@@ -812,7 +813,7 @@ export function createApp(
         const recordCreation = failedAttempt(`judge-start:${req.socket.remoteAddress}`, 10, 3600000);
         recordCreation();
         const email = `judge-${randomBytes(9).toString("hex")}@${judgeEmailDomain}`;
-        const shop = await store.createShop(email);
+        const shop = await store.createShop(email, regionForRequest(req));
         shop.judge = { createdAt: new Date().toISOString() };
         await store.saveShop(shop);
         const judge: User = { email, name: tr("審査員"), role: "owner", shopId: shop.id, judge: true };
@@ -875,7 +876,7 @@ export function createApp(
                   await store.saveShop({ ...fresh, owner: `${user.email}#archived-${fresh.id}`, judge: { ...fresh.judge!, archivedAt: new Date().toISOString() } });
                 });
               }
-              const shop = await store.createShop(user.email);
+              const shop = await store.createShop(user.email, regionForRequest(req));
               if (!shop.judge) { shop.judge = { createdAt: new Date().toISOString() }; await store.saveShop(shop); }
               await store.put("user", user.email, { ...saved, shopId: shop.id });
               await store.put("judgeReset", input.requestId, { shopId: shop.id, email: user.email });
@@ -957,7 +958,7 @@ export function createApp(
         if (input.role === "owner") {
           shop =
             allShops.find((s) => s.owner === email) ||
-            (await store.createShop(email));
+            (await store.createShop(email, regionForRequest(req)));
         }
         if (!shop) fail(404, tr("お店がありません"));
         const u: User = {
@@ -1703,6 +1704,8 @@ export function createApp(
                   user!.email,
                   demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT,
                   images,
+                  // A new shop takes the region from the owner's first visit; later ones keep their own.
+                  (visual?.config || current) ? (visual?.config || current)!.region : fresh.regionDefault,
                 );
             if (input.intent === "new-page") {
               const added = proposed.config.pages.filter(page => !current!.pages.some(existing => existing.id === page.id));
@@ -1793,7 +1796,7 @@ export function createApp(
           if (customerRoute && (method === "GET" || method === "POST")) {
             const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
             const now = new Date();
-            const loadCustomers = async () => aggregateCustomers(await store.bookings(fresh.id), await inquiries(fresh), await store.records<CustomerNote>("customerNote", fresh), now, customerSince(filter, now), await store.records<import("./customers.ts").CustomerRecord>("customer", fresh));
+            const loadCustomers = async () => aggregateCustomers(await store.bookings(fresh.id), await inquiries(fresh), await store.records<CustomerNote>("customerNote", fresh), now, customerSince(filter, now, regionOf(fresh.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", fresh), regionOf(fresh.published).timeZone);
             const customers = await loadCustomers();
             if (!customerRoute[1] && method === "GET") return json(res, customerSummaries(customers));
             const email = normalizeEmail(decodeURIComponent(customerRoute[1] || ""));
@@ -2141,7 +2144,7 @@ export function createApp(
             } else if (checkoutAction[2] === "resume") await payments.create(c);
             else await payments.capture(c, async () => {
               const b = c.booking;
-              const date = new Date(Date.parse(b.start) + 9 * 3600000).toISOString().slice(0, 10);
+              const date = dateIn(b.start, regionOf(config).timeZone);
               return (await availableSlots(store, shop, config, date, b.menuId, b.staffId, calendar, c.id)).some(slot => slot.start === b.start && slot.end === b.end && slot.staffId === b.staffId);
             });
             await flush(shop);
@@ -2167,7 +2170,7 @@ export function createApp(
                 staffId: z.string().optional(),
                 start: z.iso.datetime(),
                 requestId: z.uuid().optional(),
-                paymentConsent: z.object({ amount: z.number().int().min(0), policy: refundTiersSchema }).optional(),
+                paymentConsent: z.object({ amount: z.number().min(0), policy: refundTiersSchema }).optional(),
               })
               .parse(await body(req));
             const requestKey = input.requestId
@@ -2187,9 +2190,7 @@ export function createApp(
             if (previous) return json(res, { ok: true, booking: previous });
             const menuPrice = config.menus.find(menu => menu.id === input.menuId && menu.active)?.price;
             if (config.rules.payment?.enabled && menuPrice && (!input.requestId || !input.paymentConsent || input.paymentConsent.amount !== menuPrice || JSON.stringify(input.paymentConsent.policy) !== JSON.stringify(config.rules.payment.refundTiers))) fail(409, tr("料金と返金条件を読み直し、同意してからPayPalへ進んでください。"));
-            const date = new Date(Date.parse(input.start) + 9 * 3600000)
-              .toISOString()
-              .slice(0, 10);
+            const date = dateIn(input.start, regionOf(config).timeZone);
             const slot = (await availableSlots(store, shop, config, date, input.menuId, input.staffId, calendar)).find((s) => s.start === input.start);
             if (!slot)
               fail(409, tr("この時間は予約できません。空き状況を更新してください"));
@@ -2214,7 +2215,7 @@ export function createApp(
               back.searchParams.set("paypal", "return");
               const returnUrl = back.href;
               back.searchParams.set("paypal", "cancel");
-              const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href);
+              const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href, currencyOf(regionOf(config)));
               return json(res, { ok: false, checkout: checkoutView(checkout) });
             }
             await store.transaction(async () => {
@@ -2229,7 +2230,7 @@ export function createApp(
                 config,
                 u.email,
                 tr("{0} ご予約を承りました", config.name),
-                tr("{0} 様\n{1}\n{2}\n予約番号: {3}{4}", b.name, config.menus.find((m) => m.id === b.menuId)!.name, new Date(b.start).toLocaleString(intlLocale(), { timeZone: "Asia/Tokyo" }), b.id, b.message ? tr("\nメッセージ: {0}", b.message) : ""),
+                tr("{0} 様\n{1}\n{2}\n予約番号: {3}{4}", b.name, config.menus.find((m) => m.id === b.menuId)!.name, new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), b.id, b.message ? tr("\nメッセージ: {0}", b.message) : ""),
               );
             });
             await flush(shop);
@@ -2316,7 +2317,7 @@ export function createApp(
         const shop = await store.shop(publicationPreviewPage[1]) || fail(404, tr("お店がありません"));
         assertOwner(user, shop);
         res.setHeader("X-Robots-Tag", "noindex, nofollow");
-        res.setHeader("Vary", "Cookie, X-Gemihub-Language");
+        res.setHeader("Vary", "Cookie, X-Gemihub-Language, Accept-Language");
       }
       const root = resolve("dist");
       const file = resolve(root, `.${path}`);
@@ -2361,7 +2362,7 @@ export function createApp(
           if (!shop?.published) fail(404, tr("公開されたお店がありません"));
           if (shop.publication === "provisional" && !user) {
             res.setHeader("Cache-Control", "no-store");
-            res.setHeader("Vary", "Cookie, X-Gemihub-Language");
+            res.setHeader("Vary", "Cookie, X-Gemihub-Language, Accept-Language");
             res.setHeader("X-Robots-Tag", "noindex, nofollow");
             return redirect(res, `${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${publicHost ? `&host=${encodeURIComponent(host)}` : ""}`);
           }

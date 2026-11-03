@@ -20,6 +20,8 @@ if (document.title === serviceTitles.ja || document.title === serviceTitles.en) 
 if (new URLSearchParams(location.search).has("lang")) {
   rememberLocale(getLocale());
 }
+// A new shop's default time zone comes from the browser on its first visit.
+try { if (location.protocol !== "file:") document.cookie = `gemihub_tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol === "https:" ? "; Secure" : ""}`; } catch { /* Cookies may be blocked. */ }
 
 if (location.protocol !== "file:" && location.pathname === "/lp") {
   const root = document.getElementById("root")!;

@@ -2,6 +2,7 @@ import { tr } from "../shared/i18n.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Booking } from "./domain.ts";
 import { refundQuote, type RefundTiers } from "./payment-domain.ts";
+import { fromMinor, toMinor, type Currency } from "../shared/region.ts";
 import { approvalUrl, PayPalError, type PaymentGateway, type PayPalOrder } from "./paypal.ts";
 import type { Store } from "./store.ts";
 
@@ -12,6 +13,8 @@ export type Checkout = {
   expires: number; createdAt: number; captureAttemptedAt?: number;
   orderId?: string; approvalUrl?: string; review?: boolean;
   returnUrl: string; cancelUrl: string; synced?: string;
+  /** The shop's currency when the checkout began; absent on older checkouts, which are yen. */
+  currency?: Currency;
 };
 const fail = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
 export async function paymentHolds(store: Store, shopId: string, exclude?: string) {
@@ -19,7 +22,7 @@ export async function paymentHolds(store: Store, shopId: string, exclude?: strin
     (["capturing", "captured"].includes(c.phase) || (["creating", "awaiting_approval"].includes(c.phase) && c.expires > Date.now()))).map(c => c.booking);
 }
 export function checkoutView(c: Checkout) {
-  return { id: c.id, phase: c.phase, expires: c.expires, approvalUrl: c.phase === "awaiting_approval" ? c.approvalUrl : undefined, review: !!c.review, start: c.booking.start, amount: c.booking.price };
+  return { id: c.id, phase: c.phase, expires: c.expires, approvalUrl: c.phase === "awaiting_approval" ? c.approvalUrl : undefined, review: !!c.review, start: c.booking.start, amount: c.booking.price, currency: c.currency || "JPY" };
 }
 // All methods run under the shop's cross-process lock. Persist the journal BEFORE each PayPal mutation.
 export function paymentService(store: Store, gateway: PaymentGateway, onChange: (booking: Booking, event: string) => Promise<void> = async () => {}) {
@@ -42,18 +45,19 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
     checkEnvironment(c);
     if (["creating", "awaiting_approval"].includes(c.phase) && c.expires <= Date.now()) { c.phase = "expired"; await save(c); return c; }
     if (c.phase !== "creating") return c;
-    const order = await gateway.create(c.id, c.booking.price, c.returnUrl, c.cancelUrl);
+    const currency = c.currency || "JPY";
+    const order = await gateway.create(c.id, toMinor(c.booking.price, currency), c.returnUrl, c.cancelUrl, currency);
     c.orderId = order.id;
     c.approvalUrl = approvalUrl(order, c.environment);
     c.phase = "awaiting_approval";
     await save(c);
     return c;
   }
-  async function begin(booking: Booking, policy: RefundTiers, returnUrl: string, cancelUrl: string) {
+  async function begin(booking: Booking, policy: RefundTiers, returnUrl: string, cancelUrl: string, currency: Currency = "JPY") {
     await gateway.ready();
     let c = await store.get<Checkout>("checkout", booking.id);
     if (!c) {
-      c = { id: booking.id, shopId: booking.shopId, customer: booking.customer, booking: structuredClone(booking), policy: structuredClone(policy), environment: gateway.environment, phase: "creating", createdAt: Date.now(), expires: Date.now() + 10 * 60000, returnUrl, cancelUrl };
+      c = { id: booking.id, shopId: booking.shopId, customer: booking.customer, booking: structuredClone(booking), policy: structuredClone(policy), environment: gateway.environment, phase: "creating", createdAt: Date.now(), expires: Date.now() + 10 * 60000, returnUrl, cancelUrl, currency };
       await save(c);
     }
     return create(c);
@@ -61,18 +65,18 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
   function inspect(c: Checkout, order: PayPalOrder) {
     const units = order.purchase_units || [];
     if (order.id !== c.orderId || units?.length !== 1 || units[0].custom_id !== c.id) fail(503, tr("PayPalの注文内容を照合できません。お店にお問い合わせください。"));
-    if (units[0].amount && (units[0].amount.currency_code !== "JPY" || Number(units[0].amount.value) !== c.booking.price)) fail(503, tr("PayPalの金額を照合できません。お店にお問い合わせください。"));
+    if (units[0].amount && (units[0].amount.currency_code !== (c.currency || "JPY") || Number(units[0].amount.value) !== c.booking.price)) fail(503, tr("PayPalの金額を照合できません。お店にお問い合わせください。"));
     const captures = units[0].payments?.captures || [];
     if (captures.length > 1) fail(503, tr("PayPalの支払い内容を確認してください。"));
     const capture = captures[0];
-    if (capture && (capture.amount.currency_code !== "JPY" || Number(capture.amount.value) !== c.booking.price)) fail(503, tr("PayPalの決済金額を照合できません。"));
+    if (capture && (capture.amount.currency_code !== (c.currency || "JPY") || Number(capture.amount.value) !== c.booking.price)) fail(503, tr("PayPalの決済金額を照合できません。"));
     return capture;
   }
   async function finish(c: Checkout, order: PayPalOrder) {
     const capture = inspect(c, order);
     if (!capture) return false;
     if (capture.status === "COMPLETED") {
-      c.booking.payment = { provider: "paypal", environment: c.environment, orderId: c.orderId!, captureId: capture.id, amount: c.booking.price, currency: "JPY", policy: structuredClone(c.policy) };
+      c.booking.payment = { provider: "paypal", environment: c.environment, orderId: c.orderId!, captureId: capture.id, amount: toMinor(c.booking.price, c.currency || "JPY"), currency: c.currency || "JPY", policy: structuredClone(c.policy) };
       c.phase = "captured";
       await save(c);
       await sync(c);
@@ -124,10 +128,10 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
     }
     if (!r.attemptedAt) { r.attemptedAt = new Date().toISOString(); await save(c); }
     try {
-      const result = r.refundId ? await gateway.refundStatus(r.refundId) : await gateway.refund(payment.captureId, r.amount, r.requestId);
+      const result = r.refundId ? await gateway.refundStatus(r.refundId) : await gateway.refund(payment.captureId, r.amount, r.requestId, payment.currency);
       r.refundId = result.id;
       r.status = result.status === "COMPLETED" ? "completed" : result.status === "PENDING" ? "pending" : "manual_review";
-      if (result.amount && (result.amount.currency_code !== "JPY" || Number(result.amount.value) !== r.amount)) r.status = "manual_review";
+      if (result.amount && (result.amount.currency_code !== payment.currency || Number(result.amount.value) !== fromMinor(r.amount, payment.currency))) r.status = "manual_review";
     } catch (error) {
       r.status = error instanceof PayPalError && error.issue === "REFUND_FAILED_INSUFFICIENT_FUNDS" ? "awaiting_funds"
         : error instanceof PayPalError && error.definitive ? "manual_review" : r.refundId ? "pending" : "retrying";

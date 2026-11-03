@@ -1,10 +1,10 @@
 import { tr, intlLocale } from "../shared/i18n";
+import { useShopDisplay } from "./money";
 import React, { useEffect, useRef, useState } from "react";
 import type { CustomerAttachment, CustomerDetail, CustomerImage, CustomerImages } from "../server/customers";
 import { useApi } from "./api";
 
 type ImageItem = { file: CustomerAttachment; path: string; createdAt?: string };
-const when = (value: string) => new Date(value).toLocaleDateString(intlLocale(), { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
 
 function useImage(path: string, mimeType: string, active = true) {
   const api = useApi();
@@ -27,6 +27,8 @@ function useImage(path: string, mimeType: string, active = true) {
 }
 
 export function CustomerImageDialog({ items, initialIndex, close }: { items: ImageItem[]; initialIndex: number; close: () => void }) {
+  const { displayTimeZone } = useShopDisplay();
+  const when = (value: string) => new Date(value).toLocaleDateString(intlLocale(), { timeZone: displayTimeZone(), year: "numeric", month: "long", day: "numeric" });
   const [index, setIndex] = useState(initialIndex);
   const item = items[index];
   const { url, error, retry } = useImage(item.path, item.file.mimeType);
@@ -64,6 +66,8 @@ function Thumbnail({ item, open }: { item: ImageItem; open: () => void }) {
 export { Thumbnail as CustomerImageThumbnail };
 
 export function CustomerImageGallery({ base, rangeQuery, back, saved }: { base: string; rangeQuery: string; back: () => void; saved: (customer: CustomerDetail) => void }) {
+  const { displayTimeZone } = useShopDisplay();
+  const when = (value: string) => new Date(value).toLocaleDateString(intlLocale(), { timeZone: displayTimeZone(), year: "numeric", month: "long", day: "numeric" });
   const api = useApi();
   const [gallery, setGallery] = useState<CustomerImages>();
   const [error, setError] = useState("");

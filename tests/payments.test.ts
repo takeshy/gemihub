@@ -6,6 +6,7 @@ import { createApp } from "../server/app.ts";
 import { digest } from "../server/auth.ts";
 import { Store } from "../server/store.ts";
 import { sample, dateJST, slots, type Booking } from "../server/domain.ts";
+import { paypalValue } from "../shared/region.ts";
 import { defaultRefundTiers, refundQuote, refundTiersSchema } from "../server/payment-domain.ts";
 import { paymentService, paymentHolds, type Checkout } from "../server/payments.ts";
 import { paypalGateway, approvalUrl, PayPalError, type PaymentGateway, type PayPalOrder, type PayPalRefund } from "../server/paypal.ts";
@@ -21,9 +22,9 @@ function fakePayPal() {
   const requests: { amount: number; id: string }[] = [];
   const gateway: PaymentGateway = {
     environment: "sandbox", async ready() {},
-    async create(id, amount) {
+    async create(id, amount, _return, _cancel, currency = "JPY") {
       calls.create++;
-      const value: PayPalOrder = { id: `order-${id}`, status: "CREATED", purchase_units: [{ custom_id: id, amount: { currency_code: "JPY", value: String(amount) } }], links: [{ rel: "payer-action", href: `https://www.sandbox.paypal.com/checkoutnow?token=${id}` }] };
+      const value: PayPalOrder = { id: `order-${id}`, status: "CREATED", purchase_units: [{ custom_id: id, amount: { currency_code: currency, value: paypalValue(amount, currency) } }], links: [{ rel: "payer-action", href: `https://www.sandbox.paypal.com/checkoutnow?token=${id}` }] };
       orders.set(value.id, value); return structuredClone(value);
     },
     async order(id) { return structuredClone(orders.get(id)!); },
@@ -35,11 +36,11 @@ function fakePayPal() {
       if (state.lostCapture) { state.lostCapture = false; throw new PayPalError(); }
       return structuredClone(o);
     },
-    async refund(_capture, amount, id) {
+    async refund(_capture, amount, id, currency = "JPY") {
       calls.refund++; requests.push({ amount, id });
       if (state.refundDenied) throw new PayPalError(true);
       if (state.refundInsufficient) throw new PayPalError(true, "REFUND_FAILED_INSUFFICIENT_FUNDS");
-      if (!refunds.has(id)) refunds.set(id, { id: `refund-${id}`, status: state.pending ? "PENDING" : "COMPLETED", amount: { currency_code: "JPY", value: String(amount) } });
+      if (!refunds.has(id)) refunds.set(id, { id: `refund-${id}`, status: state.pending ? "PENDING" : "COMPLETED", amount: { currency_code: currency, value: paypalValue(amount, currency) } });
       if (state.lostRefund) { state.lostRefund = false; throw new PayPalError(); }
       return structuredClone(refunds.get(id)!);
     },
@@ -214,6 +215,10 @@ test("PayPal adapter uses Sandbox OAuth, integer JPY, stable request IDs and red
     assert.ok(seen.every(s => s.url.startsWith("https://api-m.sandbox.paypal.com/")));
     assert.equal(seen[1].data.purchase_units[0].amount.value, "5501");
     assert.equal(seen[1].data.payment_source.paypal.experience_context.shipping_preference, "NO_SHIPPING");
+    await g.create("usd-booking", 5501, "https://shop.invalid/r", "https://shop.invalid/c", "USD");
+    await g.refund("usd-capture", 2750, "usd-refund", "USD");
+    assert.deepEqual(seen[3].data.purchase_units[0].amount, {currency_code:"USD",value:"55.01"});
+    assert.deepEqual(seen[4].data.amount, {currency_code:"USD",value:"27.50"});
     assert.equal(seen[2].data.amount.value, "2750"); assert.equal(seen[2].headers["PayPal-Request-Id"], "stable-refund");
     assert.throws(() => approvalUrl({ id: "x", status: "CREATED", links: [{ rel: "approve", href: "https://evil.invalid" }] }, "sandbox"));
     const broken = paypalGateway(async () => new Response("fixture-secret private-provider-detail", { status: 500 }));
@@ -300,4 +305,46 @@ test("PayPal exposes only the known insufficient-balance issue and keeps provide
       : Response.json({ details: [{ issue: "REFUND_FAILED_INSUFFICIENT_FUNDS", description: "private-provider-detail" }] }, { status: 422 }));
     await assert.rejects(gateway.refund("capture", 5500, "stable"), error => error instanceof PayPalError && error.definitive && error.issue === "REFUND_FAILED_INSUFFICIENT_FUNDS" && !error.message.includes("private-provider-detail"));
   } finally { process.env = old; }
+});
+
+test("USD capture/refund stores cents, validates currency and preserves the booked currency across setting changes", async () => {
+  const {store,shop,config,booking}=await setup();
+  config.region={country:"US",timeZone:"America/New_York"};config.menus[0].price=55.01;shop.published=config;await store.saveShop(shop);
+  booking.price=55.01;
+  const f=fakePayPal();const service=paymentService(store,f.gateway);
+  let c=await service.begin(booking,defaultRefundTiers,"https://s.invalid/r","https://s.invalid/c","USD");
+  const order=f.orders.get(c.orderId!)!;
+  assert.deepEqual(order.purchase_units![0].amount,{currency_code:"USD",value:"55.01"});
+  order.status="APPROVED";order.purchase_units![0].amount!.currency_code="JPY";
+  await assert.rejects(service.capture(c,async()=>true));assert.equal(f.calls.capture,0);
+  order.purchase_units![0].amount!.currency_code="USD";
+  c=await service.capture(c,async()=>true);assert.equal(c.booking.payment!.amount,5501);assert.equal(c.booking.payment!.currency,"USD");
+  shop.published={...config,region:{country:"JP",timeZone:"Asia/Tokyo"}};await store.saveShop(shop);
+  await service.cancel(c,"alice@example.com","customer",new Date(Date.parse(booking.start)-30*3600000).toISOString());
+  assert.equal(c.booking.payment!.cancellation!.amount,2750);assert.equal(c.booking.payment!.cancellation!.status,"completed");
+  assert.deepEqual([...f.refunds.values()][0].amount,{currency_code:"USD",value:"27.50"});
+  assert.equal(f.calls.refund,1);await service.cancel(c,"alice@example.com","customer");assert.equal(f.calls.refund,1);
+  await store.close();
+});
+
+test("US booking HTTP flow uses local dates and server-owned dollar amounts through capture", async t => {
+  const {store,shop,config}=await setup();const f=fakePayPal();
+  config.region={country:"US",timeZone:"America/Los_Angeles"};config.menus[0].price=55.01;shop.published=config;await store.saveShop(shop);
+  const server=createApp(store,undefined,undefined,undefined,f.gateway);
+  await new Promise<void>(r=>server.listen(0,"127.0.0.1",r));
+  const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN=origin;
+  t.after(async()=>{await new Promise<void>(r=>server.close(()=>r()));await store.close();});
+  const email="alice@example.com";
+  await store.put("session",digest("us-alice"),{user:{email,name:"Alice",role:"customer",shopId:shop.id},expires:Date.now()+600000});
+  await store.put("customer",`${shop.id}:${email}`,{shopId:shop.id,email,name:"Alice",birthDate:"1990-01-01",gender:"not_specified"});
+  async function request(path:string,data?:unknown){const r=await fetch(origin+path,{method:data===undefined?"GET":"POST",headers:{Origin:origin,Cookie:"gemihub_session=us-alice","Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});return {status:r.status,body:await r.json()};}
+  const date=new Date(Date.now()+4*86400000).toISOString().slice(0,10);
+  const base=`/api/public/${shop.slug}`;
+  const available=await request(`${base}/slots?date=${date}&menu=simple`);assert.equal(available.status,200);assert.ok(available.body.length);
+  const input={name:"Alice",menuId:"simple",start:available.body[0].start,staffId:available.body[0].staffId,requestId:randomUUID(),paymentConsent:{amount:55.01,policy:defaultRefundTiers}};
+  assert.equal((await request(`${base}/bookings`,{...input,paymentConsent:{...input.paymentConsent,amount:5501}})).status,409);
+  const started=await request(`${base}/bookings`,input);assert.equal(started.status,200);assert.equal(started.body.checkout.currency,"USD");
+  const order=[...f.orders.values()][0];assert.deepEqual(order.purchase_units![0].amount,{currency_code:"USD",value:"55.01"});order.status="APPROVED";
+  assert.equal((await request(`${base}/checkouts/${started.body.checkout.id}/capture`,{})).body.ok,true);
+  const saved=(await store.bookings(shop.id))[0];assert.equal(saved.price,55.01);assert.equal(saved.payment!.amount,5501);assert.equal(saved.payment!.currency,"USD");
 });

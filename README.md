@@ -38,6 +38,14 @@ A booking and shop management system for small independent businesses and salons
 
 ---
 
+## Japan and United States shops
+
+In **Shop information**, choose **Country (currency)** and, for US shops, a time zone. JP uses whole yen (JPY) and Asia/Tokyo. US uses dollars (USD, up to two decimal places) and one of seven US time zones. Booking slots, dates, notifications, customer/inquiry filters and Drive exports follow the shop's zone, including summer time. Interface language can be changed independently.
+
+For a first visit, Japanese-preferring browsers open in Japanese; other browser languages open in English. A new shop defaults to JP or US from the browser language and uses a supported US browser time zone, otherwise America/New_York. Existing shops without region settings remain JP. Changing country does not convert menu prices; review them before taking bookings. Existing payments and refunds retain their booked currency and policy. AI proposals cannot change country or time zone.
+
+Verification: `npm test` and, after building, `npm run check:region`. See [the language and region guide](docs/i18n.md) and [the system explanation](docs/system/shop-settings.md).
+
 ## How It Works
 
 ```

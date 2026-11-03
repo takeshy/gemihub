@@ -10,7 +10,7 @@ Customer records, inquiries, staff accounts and Calendar connection, and email n
 
 # Customers
 
-Bookings and inquiries are grouped by email address. The shop sees visit counts, the last visit and totals, and can keep private notes with up to five attachments per note. Customers never see notes.
+Bookings and inquiries are grouped by email address. The shop sees visit counts, the last visit and totals, and can keep private notes with up to five attachments per note. Customers never see notes. Customer periods and inquiry date filters use midnight in the shop's time zone. Notification dates use that time zone; paid/refunded amounts use the payment's saved currency.
 
 # Inquiries
 

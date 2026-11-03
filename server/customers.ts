@@ -1,7 +1,8 @@
 import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import { memberProfile, type MemberProfile } from "./customer-profile.ts";
-import { dateJST, type Booking } from "./domain.ts";
+import type { Booking } from "./domain.ts";
+import { dateIn, zonedDate } from "../shared/region.ts";
 
 export const customerPeriods = [
   { value: "all", get label() { return tr("全期間"); } },
@@ -18,11 +19,11 @@ export const customerFilterSchema = z.object({
 }).refine(filter => filter.period !== "custom" || !!filter.since, { get message() { return tr("開始日を指定してください"); }, path: ["since"] });
 export type CustomerFilter = z.infer<typeof customerFilterSchema>;
 
-// Calendar periods start at JST midnight. Clamp month/year subtraction at month end.
-export function customerSince(filter: CustomerFilter, now: Date): string | undefined {
+// Calendar periods start at midnight in the shop's time zone. Clamp month/year subtraction at month end.
+export function customerSince(filter: CustomerFilter, now: Date, timeZone = "Asia/Tokyo"): string | undefined {
   if (filter.period === "all") return undefined;
   if (filter.period === "custom") return filter.since;
-  const date = new Date(`${dateJST(now)}T00:00:00Z`);
+  const date = new Date(`${dateIn(now, timeZone)}T00:00:00Z`);
   if (filter.period === "week") date.setUTCDate(date.getUTCDate() - 7);
   else {
     const months = { month: 1, quarter: 3, "half-year": 6, year: 12 }[filter.period];
@@ -112,8 +113,9 @@ export function aggregateCustomers(
   now: Date,
   since?: string,
   records: CustomerRecord[] = [],
+  timeZone = "Asia/Tokyo",
 ): CustomerDetail[] {
-  const start = since ? Date.parse(`${since}T00:00:00+09:00`) : -Infinity;
+  const start = since ? zonedDate(since, "00:00", timeZone).getTime() : -Infinity;
   const groups = new Map<string, CustomerEvent[]>();
   function add(email: string, event: CustomerEvent) {
     const key = normalizeEmail(email);

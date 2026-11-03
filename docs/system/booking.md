@@ -29,7 +29,7 @@ A slot is offered only when all of the following hold:
 - A staff member who handles the menu (`staff[].menuIds`) works that weekday (`staff[].weekdays`) and the whole slot falls within their `start`–`end`.
 - That staff member has no overlapping booking, payment in progress, or busy time in a connected Google Calendar.
 
-All times are Japan time.
+Dates, weekdays, holidays, opening hours and staff shifts use the shop's `region.timeZone`; absent settings mean Asia/Tokyo. The booking horizon counts local calendar days. Calendar FreeBusy queries cover local midnight to the following local midnight (23 or 25 hours on US summer-time transitions). Durations and lead times are elapsed minutes. Nonexistent spring-forward times are not offered; a repeated fall-back start uses its earlier occurrence, and appointment ends must stay within opening hours and staff shifts. ISO booking records remain UTC.
 
 # Nominated and unassigned staff
 

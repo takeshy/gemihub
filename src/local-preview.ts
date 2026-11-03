@@ -1,11 +1,12 @@
 import { tr } from "../shared/i18n";
+import { dateIn, regionOf, zonedDate } from "../shared/region";
 import { simulatePayment, simulateCancellation } from "./payment-mock";
 import { refundQuote } from "../server/payment-domain";
 import type { Booking } from "../server/domain";
 import {postImageIds} from "../server/post-images";
 import { customerProfileSchema, type MemberProfile } from "../server/customer-profile";
 import { z } from "zod";
-import { shopSchema, slots, dateJST, type ShopConfig } from "../server/domain";
+import { shopSchema, slots, type ShopConfig } from "../server/domain";
 import { editorIndexSchema } from "../server/editor-index-schema";
 import { releaseScopeSchema } from "../server/pages";
 import { managedImageIds } from "../server/image-references";
@@ -23,15 +24,16 @@ export const fixturesSchema = z.object({
 });
 export type Fixtures = z.infer<typeof fixturesSchema>;
 export function sampleFixtures(config: ShopConfig): Fixtures {
-  const date = dateJST(new Date(Date.now() + 3 * 86400000));
+  const timeZone = regionOf(config).timeZone;
+  const date = dateIn(Date.now() + 3 * 86400000, timeZone);
   const first = config.staff[0];
   const menu = config.menus.find(m => first.menuIds.includes(m.id))!;
-  const start = new Date(`${date}T${first.start}:00+09:00`);
+  const start = zonedDate(date, first.start, timeZone);
   return {
     customerName: tr("山田 花子（サンプル）"),
     bookings: [{ id: "sample-booking", name: tr("山田 花子（サンプル）"), menuId: menu.id, staffId: first.id, start: start.toISOString(), end: new Date(start.getTime() + menu.duration * 60000).toISOString(), status: "active" }],
     posts: ["blogs", "announcements"].map((category, i) => ({
-      category: category as "blogs" | "announcements", date: dateJST(), slug: `sample-${i}`,
+      category: category as "blogs" | "announcements", date: dateIn(Date.now(), timeZone), slug: `sample-${i}`,
       title: i ? tr("営業日のご案内（サンプル）") : tr("お店からのお便り（サンプル）"),
       excerpt: tr("表示を確かめるためのサンプルです。"), body: tr("## お店からのご案内\n\nここに記事のサンプル本文が入ります。"),
     })),
@@ -74,7 +76,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     else if (action === `${base}/checkouts`) result = [];
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {
-      const slot = slots(config, bookings, dateJST(new Date(input.start)), input.menuId, input.staffId || undefined).find(s => s.start === input.start);
+      const slot = slots(config, bookings, dateIn(input.start, regionOf(config).timeZone), input.menuId, input.staffId || undefined).find(s => s.start === input.start);
       if (!slot) throw new Error(tr("この時間は予約できません。空き枠を選び直してください。"));
       bookings.push(simulatePayment({ ...slot, id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: config.menus.find(menu => menu.id === input.menuId)!.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() }, config));
       result = { ok: true };
