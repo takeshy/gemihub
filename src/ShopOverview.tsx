@@ -37,7 +37,7 @@ export function ShopOverview({ shopId, google, isOwner, onPlan, onAccept, plan, 
       </details>
     </section>
     <section ref={requestSection} className="panel shop-consultation" aria-label={tr("AIへの相談")}>
-      <div className="section-top"><span className="ai-mark">✳</span><div><h2>{tr("AIとお店をつくる")}</h2><p className="small muted">{tr("相談・修正・新ページ作成を選べます。")}</p></div></div>
+      <div className="section-top"><span className="ai-mark">✳</span><div><h2>{tr("AIとお店をつくる")}</h2><p className="small muted">{tr("直したいことや追加したいページをAIに伝えます。質問はメニューの「相談・質問」へ。")}</p></div></div>
       <p className="muted">{tr("現在のお店の設定と変更履歴を見ながら、音声や文字でやりとりできます。")}</p>
       {data && config && <ShopRequest key={`${data.hash}-${generation}`} shopId={shopId} initialIntent={initialIntent} published={data.published} isOwner={isOwner} context={{ revision: data.revision, hash: data.hash }} currentConfig={config} plan={plan} onAccept={onAccept} onPlan={async (text, imageIds, intent, chat) => { setPlanning(true); try { return await onPlan(text, { revision: data.revision, hash: data.hash }, imageIds, intent, chat); } finally { setPlanning(false); } }} />}
       {planning && <p role="status">{tr("変更プランを作成しています…")}</p>}

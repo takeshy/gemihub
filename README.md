@@ -121,7 +121,7 @@ A Calendar error pauses affected availability and confirmation with HTTP 503 rat
 
 AI proposes validated configuration, never arbitrary executable code. Fixed templates enforce authentication, customer isolation, and safe rendering. Initial setup asks only for the business type and desired features, adapting to answers. Before preparing screens, it asks whether there is anything else to add and waits for a reply. Staff, prices, and hours can be entered later.
 
-**Build your shop with AI** offers Consultation, Changes, and New page. Questions do not change settings. Change and page proposals require review and an explicit on-screen action before applying. New pages include a new ID, address, content, and customer navigation label while preserving unrelated settings.
+**Build your shop with AI** is one chat for edits and new pages; the AI asks what you want. Questions go to **Consult & ask**. Change and page proposals require review and an explicit on-screen action before applying. New pages include a new ID, address, content, and customer navigation label while preserving unrelated settings.
 
 Current settings and a collapsed, newest-first change history appear together. The data and permissions diagram shows ledger-to-screen mappings, storage locations, and access rules, with spreadsheet and Drive links for connected shops. There is no separate history-management workflow for the owner.
 
@@ -208,6 +208,15 @@ Masters are read from Sheets on each request; direct edits take effect. Preserve
 Business writes must succeed in Sheets before the app reports success. Writes use RAW values, not formulas. Booking request keys in the ledger recover successful writes even if Firestore acknowledgement fails. Do not confirm new bookings while Sheets is unavailable. Cancellations, revoked members, and deleted notes preserve rows through status changes.
 
 Additional sheets use owner-only Data management: up to 100 unique columns and 1,000 data rows; add/search/edit rows, preserve formulas and column order, save only changed cells, reject stale edits, and reuse row identities on retry. Configure sheets/columns/formulas in Sheets itself. Entire-row deletion is not provided.
+
+## Consult & ask: the shop assistant
+
+The **Consult & ask** menu answers questions about the shop and turns change requests into drafts. It replaces the former "Consult" option inside Build your shop with AI, which is now a single chat for edits and new pages.
+
+- **Research layer (read-only).** A separate LLM reads the shared system bundle in [docs/system](docs/system/index.md) (OKF v0.2, describing how gemihub works for every shop), the shop's `spec.md` and `history.md` from Drive, and the shop's records (bookings, customers, inquiries). It returns a concise answer with sources — system chapters, settings such as `rules.payment.refundTiers`, or ledger data — and says when something is not stated instead of guessing.
+- **Conversation layer.** Text chat and voice have the same two tools and never answer facts from their own knowledge: `investigate` calls the research layer, and `draft_request` builds a draft request whose current state comes from research, with the requested change and fixed constraints (server-decided amounts, refund terms fixed per booking, facts read from settings). The owner edits the draft and presses **Approve and create a change plan**; the ordinary plan review, approval, publication and `history.md` entry follow. Staff can ask but not approve.
+- **history.md records requests.** Each published change now records the owner's request text alongside the summary, so "why" questions can be answered. Older entries show only the summary.
+- **Voice (Gemini Live API).** With `VERTEX_LIVE_MODEL` (and optionally `VERTEX_LIVE_LOCATION`, default `us-central1`), **🎙 Talk by voice** streams the microphone through the server to Live on Vertex AI. Answers are one or two spoken sentences; the assistant says a short acknowledgement while researching and lets the user lead. Spoken agreement is never approval: drafts appear on screen. Sessions end after 15 minutes. Voice needs HTTPS or localhost and microphone permission, and always uses Gemini regardless of the administrator's AI provider.
 
 ## Judge access, invitation-only sign-up, and administration
 

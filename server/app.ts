@@ -55,10 +55,13 @@ import {
   readConfig,
   sendMail,
   syncPostFiles,
+  readDriveText,
   createFolder,
   trashFile,
 } from "./google.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
+import { converse, draftText, type ShopData } from "./assistant.ts";
+import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
 import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, type AiProvider } from "./llm.ts";
 import {
   session,
@@ -128,6 +131,8 @@ type Plan = {
   createdAt: number;
   checklist: string[];
   source?: ShopConfig | null;
+  /** The owner's request text, recorded in history.md when the plan is published. */
+  request?: string;
 };
 type Job = {
   id: string;
@@ -185,10 +190,12 @@ export function createApp(
     mergePage?: typeof mergePageWithAI;
     generateImage?: typeof generateImage;
     articleMetadata?: typeof generateArticleMetadata;
+    assistant?: typeof converse;
   } = { propose, proposeArticle, identifyVisual, explainSystem },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
   paymentGateway: PaymentGateway = paypalGateway(),
+  liveConnector?: LiveConnector,
 ) {
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
@@ -219,6 +226,45 @@ export function createApp(
       await store.put("judgeFolder", shop.owner, { id });
       return id;
     });
+  }
+  /** Judge AI usage: one quota per judge, never restored by a reset. */
+  const chargeJudge = (email: string) => store.locked(`judge-usage:${email}`, async () => {
+    const usage = await store.get<JudgeUsage>("judgeUsage", email) || { email, count: 0 };
+    if (usage.count >= judgeAiLimit()) fail(429, tr("審査用のAI利用回数の上限に達しました"));
+    await store.put("judgeUsage", email, { ...usage, count: usage.count + 1, lastUsedAt: new Date().toISOString() });
+  });
+  /** The shop's spec.md and history.md as stored in Drive, generated from the settings when not yet stored. */
+  async function shopDocuments(shop: Shop) {
+    const generated = documents(await effective(shop), shop.history);
+    const token = shop.google ? await ownerToken(shop) : undefined;
+    if (!shop.google || !token) return generated;
+    try {
+      const [spec, history] = await Promise.all([readDriveText(token, shop.google.specId), readDriveText(token, shop.google.historyId)]);
+      return { spec: spec.trim() ? spec : generated.spec, history: history.trim() ? history : generated.history };
+    } catch (error) {
+      console.error(error);
+      return generated;
+    }
+  }
+  /** Read-only material for the assistant's research layer: documents and operator-visible records. */
+  async function shopData(shop: Shop): Promise<ShopData> {
+    const config = await effective(shop);
+    const now = new Date();
+    return {
+      documents: await shopDocuments(shop),
+      today: new Date(now.getTime() + 9 * 3600000).toISOString().slice(0, 10),
+      records: async kind => {
+        if (kind === "bookings") return (await store.bookings(shop.id)).map(booking => ({
+          id: booking.id, start: booking.start, end: booking.end, status: booking.status,
+          menu: config.menus.find(menu => menu.id === booking.menuId)?.name || booking.menuId,
+          staff: config.staff.find(person => person.id === booking.staffId)?.name || booking.staffId,
+          customer: booking.name, email: booking.customer, price: booking.price,
+          ...(booking.payment ? { paid: booking.payment.amount, refund: booking.payment.cancellation ? { amount: booking.payment.cancellation.amount, status: booking.payment.cancellation.status } : undefined } : {}),
+        }));
+        if (kind === "inquiries") return (await inquiries(shop)).map(inquiry => ({ at: inquiry.at, name: inquiry.name, email: inquiry.email, status: inquiry.status, message: inquiry.message.slice(0, 500), replied: !!inquiry.reply }));
+        return customerSummaries(aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, undefined, await store.records<import("./customers.ts").CustomerRecord>("customer", shop)));
+      },
+    };
   }
   const provisionShop = async (shop: Shop, config: ShopConfig, token: string) =>
     provision(shop, config, token, await judgeParent(shop, token));
@@ -339,6 +385,7 @@ export function createApp(
       {
         at: new Date().toISOString(),
         summary: plan.summary.join("、"),
+        ...(plan.request ? { request: plan.request } : {}),
       },
     ];
     if (!demoEnabled() || (await ownerToken(fresh))) {
@@ -445,11 +492,7 @@ export function createApp(
       const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
       if (user?.judge) {
         // Judge AI calls share one quota per judge, charged once per request before the first model call.
-        aiUsage.enterWith({ charge: () => store.locked(`judge-usage:${user.email}`, async () => {
-          const usage = await store.get<JudgeUsage>("judgeUsage", user.email) || { email: user.email, count: 0 };
-          if (usage.count >= judgeAiLimit()) fail(429, tr("審査用のAI利用回数の上限に達しました"));
-          await store.put("judgeUsage", user.email, { ...usage, count: usage.count + 1, lastUsedAt: new Date().toISOString() });
-        }) });
+        aiUsage.enterWith({ charge: () => chargeJudge(user.email) });
       }
       const assertStorefrontAccess = (shop: Shop) => {
         // A judge's own trial customer may use the judge's provisional shop; nobody else may.
@@ -493,6 +536,7 @@ export function createApp(
           demo: demoEnabled(),
           hosted: hosted?.slug,
           invite: accessPasswordEnabled(),
+          assistantVoice: liveConfigured(),
           ...(user && isJudgeCustomerEmail(user.email) && cookie(req, "gemihub_judge_owner") ? { judgeCustomer: true } : {}),
         });
       if (path === "/api/legacy-notes/check" && method === "POST" && !publicHost) {
@@ -1021,6 +1065,16 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        if (action === "assistant" && method === "POST") {
+          // Questions about this shop, answered from spec.md, history.md and the system OKF bundle.
+          if (!shop.published) fail(409, tr("お店を公開してから質問してください"));
+          const input = z.object({
+            question: z.string().trim().min(1).max(4000),
+            messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(4000) })).max(12).default([]),
+          }).parse(await body(req, 100000));
+          const reply = await (intelligence.assistant || converse)({ question: input.question, messages: input.messages, data: await shopData(shop), demo: demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT });
+          return json(res, { answer: reply.answer, sources: reply.sources, ...(reply.draft ? { draft: reply.draft, request: draftText(reply.draft) } : {}) });
+        }
         if (action === "images/generate" && method === "POST") {
           assertOwner(user, shop);
           const input = generateImageSchema.parse(await body(req, 20000));
@@ -1676,6 +1730,7 @@ export function createApp(
               checklist:checklist(),
               source: current,
               ...(input.chat ? {chat:input.chat} : {}),
+              ...(!input.config && !input.visual ? { request: input.text.slice(0, 2000) } : {}),
             };
             if (!plan.summary.length) fail(400, tr("変更点がありません"));
             artifacts(plan.config, '<title></title><div id="root"></div>');
@@ -2268,7 +2323,7 @@ export function createApp(
       }
       const manualAsset = /^\/manual\/(?:en\/)?[a-z0-9-]+\.jpg$/.test(path);
       const asset =
-        path.startsWith("/assets/") || manualAsset;
+        path.startsWith("/assets/") || path === "/live-audio.js" || manualAsset;
       if (
         !asset &&
         path !== "/" &&
@@ -2387,6 +2442,14 @@ export function createApp(
       );
     }
   }));
+  attachAssistantLive(server, async (req, shopId) => {
+    const s = await session(store, req);
+    const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
+    const shop = await store.shop(shopId);
+    if (!user || !shop?.published || (shop.judge && !judgeActive()) || !(await operator(user, shop))) return undefined;
+    if (user.judge) await chargeJudge(user.email);
+    return { data: await shopData(shop) };
+  }, liveConnector);
   const timer = setInterval(() => {
     void (async () => {
       await store.cleanup();

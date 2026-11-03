@@ -133,7 +133,7 @@ try {
     const canvas = page.getByLabel("変更したい箇所を囲む画面");
     await canvas.waitFor();
     await page.waitForFunction(() => document.querySelector("canvas")?.width > 300);
-    assert.equal(await page.getByRole("button", {name: "Gemini に印の対象を確認してもらう"}).isEnabled(), false);
+    assert.equal(await page.locator(".visual-request").getByRole("button", {name: "送信", exact: true}).isEnabled(), false);
     await canvas.evaluate(el => el.scrollIntoView({block: "start"}));
     const box = await canvas.boundingBox(); assert.ok(box);
     const x = box.x + box.width * .20, y = box.y + 150;
@@ -147,7 +147,7 @@ try {
     }), "pointer events draw visible red strokes into captured pixels");
     await page.getByLabel("ここをどう変えたいですか").fill("ここを『季節のアトリエ』に変えて");
     await capture("22-pen.jpg", ".annotation-canvas");
-    await page.getByRole("button", {name: "Gemini に印の対象を確認してもらう"}).click();
+    await page.locator(".visual-request").getByRole("button", {name: "送信", exact: true}).click();
     await page.getByLabel("変更する対象を確認").waitFor();
     assert.equal(await page.getByRole("button", {name: "この対象をローカルに変更"}).isEnabled(), false);
     await page.getByLabel("変更する対象を確認").selectOption("name");

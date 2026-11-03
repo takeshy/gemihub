@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
 import type { ShopChat as SavedChat, ShopChatMessage, ChatReference } from "../server/shop-chat";
-import { chatLabels, type RequestIntent } from "../server/request-intent";
+import type { RequestIntent } from "../server/request-intent";
 import type { ShopRequestProps } from "./ShopRequest";
 import { ConfigSummary, type Plan } from "./App";
 import { CustomPage } from "./CustomPage";
@@ -16,7 +16,9 @@ type ChatData = SavedChat & {plans?:Plan[]};
 export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:legacyPlan,onPlan,onAccept,initialIntent}:ShopRequestProps) {
   const api = useApi();
   const prefix = `/api/shops/${shopId}`;
-  const [intent,setIntent] = useState<RequestIntent>(!published?"create-shop":isOwner&&initialIntent&&initialIntent!=="create-shop"?initialIntent:"consult");
+  // Questions moved to the main "Consult & ask" menu; this chat now only makes changes.
+  // After publication one chat handles every change; the AI asks whether to edit or add a page.
+  const [intent,setIntent] = useState<RequestIntent>(!published?"create-shop":"modify");
   const dictationStop=useRef<(()=>void)|null>(null);
   const [listening,setListening]=useState(false);
   const [chat,setChat] = useState<ChatData>();
@@ -76,12 +78,13 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
     } catch(error) {setText(value);await reload(saved.id).catch(()=>{});throw error;}
   }
   function start(next:RequestIntent) {dictationStop.current?.();current.current=undefined;setChat(undefined);setIntent(next);setViewPlan(undefined);setPlans([]);setText("");setImageIds([]);setError("");pending.current=undefined;creationId.current=createRequestId();}
-  const description=!published?tr("「はじめる」を押して、AIの質問に答えながらお店のページをつくります。"):intent==="consult"?tr("質問や使い方について相談できます。お店の設定は変更しません。"):intent==="modify"?tr("直したいことを伝えてください。AIと話しながら内容をまとめられます。"):tr("作りたいページを教えてください。本文とメニュー名を、AIと話しながら決められます。");
+  const description=!published?tr("「はじめる」を押して、AIの質問に答えながらお店のページをつくります。"):intent==="consult"?tr("質問や使い方について相談できます。お店の設定は変更しません。"):intent==="modify"?tr("直したいことや追加したいページを伝えてください。AIと話しながら内容をまとめられます。"):tr("作りたいページを教えてください。本文とメニュー名を、AIと話しながら決められます。");
   const messages=chat?.messages || [];
   const extraPages=viewPlan?.config.pages.filter(page=>!currentConfig?.pages.some(existing=>existing.id===page.id)) || [];
+  if(published&&!isOwner)return <p className="muted">{tr("変更は店主が行います。質問はメニューの「相談・質問」からどうぞ。")}</p>;
   if(!published&&viewPlan)return <div className="shop-request">{error&&<p className="alert" role="alert">{error}</p>}<InitialPlanReview shopId={shopId} plan={viewPlan} busy={busy} onBack={()=>{setViewPlan(undefined);}} onAccept={()=>void run(()=>onAccept(viewPlan))}/></div>;
   return <div className="shop-request shop-chat">
-    {published&&<div className="request-intents" role="group" aria-label={tr("したいこと")}>{(["consult",...(isOwner?["modify","new-page"]:[])] as RequestIntent[]).map(item=><button type="button" key={item} aria-label={chatLabels[item]} aria-pressed={intent===item} className={intent===item?"selected":""} disabled={busy} onClick={()=>{if(item!==intent)start(item);}}><b>{chatLabels[item]}</b><small>{item==="consult"?tr("質問する・使い方を知る"):item==="modify"?tr("今ある設定やページを直す"):tr("ページとメニューを追加する")}</small></button>)}</div>}
+    {published&&chat&&<div className="request-intents-reset"><button type="button" className="text-button" disabled={busy} onClick={()=>start("modify")}>{tr("新しい会話をはじめる")}</button></div>}
     <p>{description}</p>
     {error&&<p className="alert" role="alert">{error}</p>}
     {!chat?<div className={!published?"onboarding-request":undefined}><div><button className="primary begin-consultation" type="button" disabled={busy} onClick={()=>void run(async()=>{await ensureChat();})}>{busy?tr("準備しています…"):tr("はじめる")}</button></div>{!published&&<OnboardingGuide/>}</div>:<>

@@ -56,6 +56,8 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
   const [review, setReview] = useState(false);
   const [pullReview, setPullReview] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  // While the pen shows the captured screen, the live preview below would duplicate it.
+  const [penOpen, setPenOpen] = useState(false);
   async function run(fn: () => Promise<void>) {
     setBusy(true); setError("");
     try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -325,9 +327,9 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
       {conflict.proposed !== undefined && <div><h3>{tr("AIの結合案")}</h3><p>{conflict.explanation}</p><SyncPreview config={draft.config} value={conflict.proposed} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /><button className="primary" disabled={busy} onClick={() => void run(async () => resolveConflict("merged"))}>{tr("結合案をローカルに採用")}</button></div>}
     </section>}
     {draft && <>
-      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={JSON.stringify(draft.config)} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} onBusyChange={setBusy} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={JSON.stringify(draft.config)} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} onBusyChange={setBusy} onActiveChange={setPenOpen} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && <>
-      {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} className="local-preview-screen" onClickCapture={e => {
+      {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
         if (link && !link.getAttribute("href")?.startsWith("/s/local-preview")) {
           e.preventDefault(); e.stopPropagation();

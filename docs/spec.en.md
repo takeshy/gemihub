@@ -26,11 +26,11 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 ## Current settings, history, and AI consultation
 
-Show the current settings infographic, collapsed change history with count, and AI consultation together under Build your shop with AI. Display services/prices/durations, staff/schedules/qualified services, opening hours/closures, booking/cancellation rules, staff assignment, and public pages. History opens by mouse or keyboard, newest first. Fetch on entry and show retry only on failure; no download/history-management UI.
+Show the current settings infographic, collapsed change history with count, and the AI change chat together under Build your shop with AI. Display services/prices/durations, staff/schedules/qualified services, opening hours/closures, booking/cancellation rules, staff assignment, and public pages. History opens by mouse or keyboard, newest first. Fetch on entry and show retry only on failure; no download/history-management UI.
 
 Show data flow, standard-sheet-to-menu mappings, public/private destinations, and access permissions in How data and permissions work. Put spreadsheet and Drive links there for connected shops. Do not duplicate a separate data/files panel or show it during initial interviewing/review.
 
-Consultation answers questions without proposing changes. Changes clarifies a requested edit. New page proposes content and customer navigation label with new IDs/addresses, preserving unrelated pages and booking configuration. Chat continues on the same screen; a proposal is opened from the chat and explicitly applied after review. Current settings/version fingerprints prevent applying stale conversation-based changes. Operators may read settings/history; owner-only actions remain owner-only.
+Questions are answered in Consult & ask. Changes clarifies a requested edit. New page proposes content and customer navigation label with new IDs/addresses, preserving unrelated pages and booking configuration. Chat continues on the same screen; a proposal is opened from the chat and explicitly applied after review. Current settings/version fingerprints prevent applying stale conversation-based changes. Operators may read settings/history; owner-only actions remain owner-only.
 
 ## Local screen editor and scoped releases
 
@@ -120,7 +120,7 @@ Booking statuses, inquiry replies, and articles use their own management menus. 
 
 ## Voice input and private AI context
 
-Get started opens an AI-authored first question for setup/consultation/changes/new pages. Use short adaptive questions, editable typed answers, or browser dictation. Do not persist interim speech or unsent drafts. Read AI replies on screen; do not provide bidirectional speech or save recordings.
+Get started opens an AI-authored first question for setup/changes/new pages. Use short adaptive questions, editable typed answers, or browser dictation. Do not persist interim speech or unsent drafts. Read AI replies on screen; do not provide bidirectional speech or save recordings.
 
 Voice input opens a modal and starts recognition. Preserve edits and draft text in chat. Show/change the end phrase only inside the dialog. Default Japanese phrase is 以上; English is send. Store per-language preferences; blank disables it. Strip and send only a final trailing phrase, never interim results or mentions in the middle. Manual stop, silence, errors, Escape, close, and Back to draft keep unsent text. Do not overwrite manual edits with older recognition. Stop recognition on sending, navigation, and unmount. Image/pen completion stops input only; generation/application remains explicit.
 
@@ -159,6 +159,13 @@ Maintain English/Japanese README files and this English specification. Capture E
 The new infra configuration adds this app to the existing shared VM. This repository owns app service accounts, a named Firestore database, Secret Manager references, registry, Cloud Build, DNS, and certificates. Kakeratta's existing state owns the shared VM/additional backend; kiokuflow's state owns the HTTPS URL map. Do not duplicate resource ownership. Explicitly configure management/storefront domains, OAuth client ID, and available models.
 
 Terraform does not generate or read secret values; pass version references. Runtime uses its own Docker network and gets short-lived credentials for its dedicated account through the shared broker. Container port is 8080, host port is 8105. See [infra/README.md](../infra/README.md) for bootstrap, deployment, recovery, and live-verification boundaries.
+
+## Consult & ask
+
+- A main menu item answers questions about the shop. A read-only research layer reads the shared system OKF bundle (`docs/system`), the shop's `spec.md` and `history.md`, and its bookings, customers and inquiries, and returns concise answers with sources. Unstated facts are reported as not stated.
+- Text chat and Gemini Live voice share a conversation layer with two tools: `investigate` (research) and `draft_request`. Change requests become an editable draft with the current state from research, the requested change and fixed constraints. Only on-screen approval creates a change plan; the existing plan review, publication and history follow. Voice answers are short, the user leads, and spoken agreement is never approval.
+- Published changes record the owner's request text in `history.md`.
+- Build your shop with AI is one chat for every change after publication; the AI asks whether to edit or add a page.
 
 ## Judge access, invitation-only sign-up, and administration
 

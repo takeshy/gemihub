@@ -33,6 +33,8 @@ output "shared_vm_registration" {
           ADMIN_EMAILS                                                    = join(",", var.admin_emails)
           OPENAI_MODEL                                                    = var.openai_model
           OPENAI_IMAGE_MODEL                                              = var.openai_image_model
+          VERTEX_LIVE_MODEL                                               = var.live_model
+          VERTEX_LIVE_LOCATION                                            = var.live_location
           }, var.google_client_id_secret_ref == null ? { GOOGLE_CLIENT_ID = var.google_client_id } : {}, var.enable_judge_access ? {
           JUDGE_UNTIL                                                     = var.judge_until
           JUDGE_AI_LIMIT                                                  = tostring(var.judge_ai_limit)

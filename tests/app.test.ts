@@ -38,12 +38,14 @@ test("approval, retired preview routes, publication, customer authorization, con
   const owner = login.cookie;
   const work = await request("/api/workspace", undefined, owner);
   const shop: Shop = work.body.shops[0];
-  assert.equal(server.listenerCount("upgrade"),0,"no LIVE WebSocket relay remains");
+  assert.equal(server.listenerCount("upgrade"),1,"only the assistant voice relay accepts WebSocket upgrades; the old interview relay stays removed");
   for(const action of ["interview","interview/turn","interview/plan","live","posts/source"]){
     assert.equal((await request(`/api/shops/${shop.id}/${action}`,undefined,owner)).status,404);
     assert.equal((await request(`/api/shops/${shop.id}/${action}`,{},owner)).status,404);
   }
-  assert.equal((await request("/live-audio.js",undefined,owner)).status,404);
+  const worklet = await fetch(origin + "/live-audio.js");
+  assert.equal(worklet.status, 200, "the assistant voice microphone worklet is served");
+  assert.match(worklet.headers.get("content-type") || "", /javascript/);
   const c = structuredClone(sample);
   c.rules.cancelHours = 0;
   c.hours.closedWeekdays = [];

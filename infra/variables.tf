@@ -216,6 +216,18 @@ variable "access_password_version" {
   default     = "1"
 }
 
+variable "live_model" {
+  description = "Gemini Live model on Vertex AI for the assistant's voice. Empty hides voice."
+  type        = string
+  default     = ""
+}
+
+variable "live_location" {
+  description = "Vertex AI location serving the Live model."
+  type        = string
+  default     = "us-central1"
+}
+
 variable "openai_model" {
   description = "OpenAI model for text, image input and tool calls. Empty leaves OpenAI unavailable in the administration screen."
   type        = string

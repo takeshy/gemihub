@@ -85,6 +85,12 @@ export async function createFolder(token: string, name: string, parent?: string)
   });
   return folder.data.id!;
 }
+/** Reads a text file the app wrote to Drive, such as spec.md or history.md. */
+export async function readDriveText(token: string, id: string) {
+  const { drive } = clients(token);
+  const response = await drive.files.get({ fileId: id, alt: "media" }, { responseType: "text" });
+  return String(response.data ?? "");
+}
 /** Moves a Drive file or folder, with its contents, to the trash. A missing file is already gone. */
 export async function trashFile(token: string, id: string) {
   const { drive } = clients(token);

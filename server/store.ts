@@ -14,7 +14,8 @@ export type Shop = {
   publication?: "provisional" | "public";
   draft: ShopConfig | null;
   revision: number;
-  history: { at: string; summary: string }[];
+  /** Published changes; `request` keeps the owner's words so the reason can be answered later. */
+  history: { at: string; summary: string; request?: string }[];
   google?: {
     sheetId: string;
     folderId: string;

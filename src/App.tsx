@@ -34,6 +34,7 @@ import "./style.css";
 import { LegacyNotes } from "./LegacyNotes";
 import { JudgeStart, JudgeMenu, JudgeBar, AccessPassword } from "./JudgeAccess";
 import { Admin } from "./Admin";
+import { Assistant } from "./Assistant";
 export type Plan = {
   id: string;
   config: ShopConfig;
@@ -62,7 +63,7 @@ export type Workspace = Shop & {
   jobs: { type: string; error?: string }[];
   publicUrl: string;
 };
-export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean };
+export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; assistantVoice?: boolean };
 const yen = (n: number) => `¥${n.toLocaleString(intlLocale())}`;
 const when = (s: string) =>
   new Date(s).toLocaleString(intlLocale(), {
@@ -211,7 +212,7 @@ export function App({
           <PublicationPreview shopId={path.split("/")[2]} />
         ) : session.user ? (
           <Dashboard
-            initialTab={new URLSearchParams(search).has("customer")?"customers":["build","try","data","inquiries","customers","bookings","staff"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
+            initialTab={new URLSearchParams(search).has("customer")?"customers":["build","assistant","try","data","inquiries","customers","bookings","staff"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
             initialScreen={new URLSearchParams(search).get("screen") || undefined}
             initialArticleKey={new URLSearchParams(search).get("article") || undefined}
             requestIntent={new URLSearchParams(search).get("intent") === "modify" ? "modify" : undefined}
@@ -397,6 +398,7 @@ function Dashboard({
         <nav>
           {[
             ["build", "✧", tr("AIとお店をつくる")],
+            ["assistant", "✳", tr("相談・質問")],
             ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")], ["images", "▧", tr("画像管理")]] : []),
             ["bookings", "▦", tr("予約を管理")],
             ...(shop ? [["customers", "♧", tr("お客様")]] : []),
@@ -482,6 +484,7 @@ function Dashboard({
                     </div>
                   </>
                 )}
+                {view === "assistant" && shop.published && <Assistant key={shop.id} shop={shop} voice={!!session.assistantVoice} acceptPlan={acceptPlan} />}
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
                 {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop}/></>}<StaffCalendar key={shop.id} shop={shop}/>{!shop.isOwner && <StaffPhoto shop={shop} reload={load}/>}</>}
