@@ -684,6 +684,7 @@ export function ConfigEditor({
       <h3>{tr("メニュー")}</h3>
       {c.menus.map((m, i) => (
         <div className="menu-edit-block" key={m.id}><div className="edit-row">
+          <Field label={tr("メニュー名")}>
           <input
             aria-label={tr("メニュー名")}
             value={m.name}
@@ -696,6 +697,7 @@ export function ConfigEditor({
               )
             }
           />
+          </Field>
           <Field label={tr("所要時間（分）")}>
             <input
               type="number"
@@ -727,7 +729,7 @@ export function ConfigEditor({
               }
             />
           </Field>
-          <label>
+          <label className="check-field">
             <input
               type="checkbox"
               checked={m.active}
@@ -740,12 +742,12 @@ export function ConfigEditor({
                 )
               }
             />
-            {tr("有効")}</label>
+            <span>{tr("有効")}</span></label>
         </div><label className="check-field"><input type="checkbox" checked={m.optionFor !== undefined} onChange={event => put("menus", c.menus.map((menu,index) => {
           if (index !== i) return menu;
           if (event.target.checked) return { ...menu, optionFor: [] };
           const { optionFor: _for, optionGroup: _group, ...standalone } = menu; return standalone;
-        }))}/>{tr("ほかのメニューに追加して予約する（単独予約不可）")}</label>
+        }))}/><span>{tr("ほかのメニューに追加して予約する（単独予約不可）")}</span></label>
         {m.optionFor && <fieldset className="menu-option-settings"><legend>{tr("追加できるメニュー")}</legend><div className="checkboxes">{c.menus.filter(base => base.id !== m.id && !base.optionFor).map(base => <label key={base.id}><input type="checkbox" checked={m.optionFor!.includes(base.id)} onChange={event => put("menus", c.menus.map((menu,index) => index === i ? {...menu,optionFor:event.target.checked?[...m.optionFor!,base.id]:m.optionFor!.filter(id=>id!==base.id)} : menu))}/>{base.name}</label>)}</div><Field label={tr("選択グループ（同じグループは1つまで・任意）")}><input value={m.optionGroup || ""} maxLength={80} onChange={event=>put("menus",c.menus.map((menu,index)=>index===i?{...menu,optionGroup:event.target.value||undefined}:menu))}/></Field><p className="small muted">{tr("例：当店オフと他店オフを同じグループにすると、予約時にどちらか1つを選べます。料金と所要時間は通常メニューに加算されます。")}</p></fieldset>}
         {shopId && <MenuImageEditor shopId={shopId} imageId={m.imageId} name={m.name} uploading={onImageUploading} change={imageId => put("menus", c.menus.map((menu, index) => index === i ? { ...menu, imageId } : menu))} />}</div>
       ))}

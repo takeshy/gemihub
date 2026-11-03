@@ -586,19 +586,27 @@ pre {
 }
 .edit-row {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr auto;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 9px;
-  align-items: center;
+  align-items: end;
   margin-bottom: 12px;
 }
-.edit-row > input {
+.edit-row .field > input {
+  width: 100%;
   min-width: 0;
+  min-height: 48px;
 }
 .edit-row .field {
   margin: 0;
 }
-.edit-row label {
-  font-size: 11px;
+.edit-row > .check-field {
+  align-items: center;
+  min-height: 48px;
+  margin: 0;
+  white-space: nowrap;
+}
+.edit-row > .check-field > input[type="checkbox"] {
+  margin-top: 0;
 }
 .checkboxes {
   display: flex;
@@ -1050,10 +1058,13 @@ pre {
     gap: 12px;
   }
   .edit-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .edit-row > input {
+  .edit-row > .field:first-child {
     grid-column: span 2;
+  }
+  .edit-row .field > input {
+    font-size: 16px;
   }
   .edit-row > label:last-child {
     grid-column: span 2;
