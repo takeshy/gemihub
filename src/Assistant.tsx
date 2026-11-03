@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
 import { ConfigSummary, type Plan, type Workspace } from "./App";
+import { AssistantAnswer } from "./AssistantAnswer";
 
 type Source = { path: string; title: string };
 type Reply = { answer: string; sources: Source[]; request?: string };
@@ -59,7 +60,7 @@ export function Assistant({ shop, voice, acceptPlan }: { shop: Workspace; voice:
       {!messages.length && <p className="muted">{tr("例：「キャンセルしたら返金はどうなる？」「なぜ水曜が定休日なの？」「来月から水曜を定休日にして」")}</p>}
       {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}>
         <b>{message.role === "user" ? tr("あなた") : "AI"}{message.voice && <small className="muted">{tr("（音声）")}</small>}</b>
-        <div className="pre-wrap">{message.text}</div>
+        {message.role === "assistant" ? <AssistantAnswer text={message.text} /> : <div className="pre-wrap">{message.text}</div>}
         {!!message.sources?.length && <p className="assistant-sources small muted">{tr("根拠：")}{message.sources.map(source => <span key={source.path} className="pill" title={source.path}>{source.title}</span>)}</p>}
       </article>)}
       {busy && <p role="status">{tr("AIが考えています…")}</p>}

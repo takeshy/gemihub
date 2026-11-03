@@ -31,6 +31,7 @@ import { useApi } from "./api";
 import { bookingStaff, bookingStaffName, bookingMenuName, menuSelection, hoursText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
+import "./ManagementTypography.css";
 import { LegacyNotes } from "./LegacyNotes";
 import { JudgeStart, JudgeMenu, JudgeBar, AccessPassword } from "./JudgeAccess";
 import { ShopReset } from "./ShopReset";

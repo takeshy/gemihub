@@ -211,13 +211,18 @@ try {
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
   await page.locator('.article-wysimark [contenteditable="true"]').waitFor();
   assert.equal(await page.getByText("メモから下書きを作る",{exact:true}).count(),0);
-  await page.getByRole("button",{name:"画像を挿入",exact:true}).click();
+  const editorImage=page.locator('.article-wysimark').getByRole('button',{name:'画像',exact:true});
+  if(await editorImage.isVisible())await editorImage.click();
+  else{await page.locator('.article-wysimark').getByRole('button',{name:'挿入',exact:true}).click();await page.locator('.--title').filter({hasText:/^画像$/}).click();}
+  await page.getByRole('radio',{name:'アップロード済み',exact:true}).check();
+  await page.getByRole('button',{name:'アップロード済み',exact:true}).click();
   articleImages=page.getByRole("dialog",{name:"記事に使う画像",exact:true});
   await articleImages.getByRole("button",{name:"既存の画像から選ぶ",exact:true}).click();
   articlePicker=page.getByRole("dialog",{name:"画像を選ぶ",exact:true});
   await articlePicker.getByRole("button",{name:"お店の紹介.pngを選択",exact:true}).click();
   await articlePicker.getByRole("button",{name:"この画像を使う",exact:true}).click();
   await articleImages.waitFor({state:"detached"});
+  await page.getByRole('button',{name:'登録',exact:true}).click();
   await capture("16-blog-edit.jpg", ".post-editor");
   await page.locator(".post-preview .article-managed-image").scrollIntoViewIfNeeded();
   await page.locator(".post-preview img").waitFor();

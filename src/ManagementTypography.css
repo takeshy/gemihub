@@ -1,0 +1,37 @@
+/* Readable operator controls, separate from customer themes and their previews. */
+.app-header { height: auto; min-height: 86px; flex-wrap: wrap; gap: 12px 20px; padding-block: 16px; font-size: 16px; }
+.app-header .header-right { min-width: 0; flex-wrap: wrap; gap: 8px 16px; }
+.app-header :is(.text-button, .small) { font-size: 14px; line-height: 1.7; }
+.app-header .text-button { display: inline-flex; align-items: center; min-height: 40px; }
+.app-header .muted { color: #617167; }
+.language-switcher:has(~ .app-header) button { font-size: 14px; min-height: 40px; }
+
+.dashboard { font-size: 16px; grid-template-columns: 260px minmax(0, 1fr); }
+.dashboard .public-shop { font-size: 14px; }
+.dashboard :is(.small, small):not(:where(.public-shop *)) { font-size: 14px; line-height: 1.8; }
+.dashboard .muted:not(:where(.public-shop *)) { color: #617167; }
+.dashboard .page-title p { font-size: 14px; }
+.dashboard .section-top h2:not(:where(.public-shop *, .assistant-markdown *)) { font-size: 22px; }
+.dashboard .section-top:has(.ai-mark) { align-items: flex-start; }
+.dashboard .section-top:has(.ai-mark) > div { min-width: 0; }
+.dashboard .ai-mark { flex: 0 0 50px; }
+.dashboard .sidebar-label { font-size: 12px; }
+.dashboard .shop-switch strong { font-size: 15px; }
+.dashboard aside nav button,
+.dashboard aside nav .sidebar-settings-items button,
+.dashboard aside nav .sidebar-screen-tree button,
+.dashboard aside nav summary { font-size: 14px; line-height: 1.6; }
+.dashboard aside nav button { min-height: 44px; max-width: 100%; text-align: left; }
+.dashboard .sidebar-bottom { font-size: 14px; }
+.dashboard .chat-message:not(:where(.public-shop *)) { font-size: 16px; }
+.dashboard .chat-composer > textarea { font-size: 16px; }
+.dashboard .chat-composer-toolbar button { font-size: 14px; min-height: 40px; }
+
+@media (max-width: 760px) {
+  .app-header { min-height: 68px; padding: 12px 20px; }
+  .dashboard aside nav button { white-space: normal; }
+  .dashboard .section-top:has(.ai-mark) { display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 10px 14px; }
+  .dashboard .section-top:has(.ai-mark) > div { display: contents; }
+  .dashboard .section-top:has(.ai-mark) p { grid-column: 1 / -1; }
+  .dashboard .chat-message:not(:where(.public-shop *)) { padding: 16px; }
+}

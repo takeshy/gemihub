@@ -32,10 +32,7 @@ export default function ArticleEditor({
     urls = useRef(new Map<string, Promise<string>>()),
     allocated = useRef<string[]>([]);
   const [error, setError] = useState("");
-  const [pick, setPick] = useState<{
-    resolve?: (url: string | null) => void;
-    append?: boolean;
-  }>();
+  const [pick, setPick] = useState<{ resolve: (url: string | null) => void }>();
   if (!patched.current) {
     patched.current = true;
     const original = editor.normalizeNode;
@@ -80,24 +77,11 @@ export default function ArticleEditor({
     return urls.current.get(id)!;
   };
   const selected = (image: ArticleImage) => {
-    const url = articleImageUrl(image.id);
-    if (pick?.append)
-      onChange(
-        `${value.trimEnd()}\n\n![${image.name.replace(/[\[\]\r\n]/g, "")}](${url})\n`,
-      );
-    pick?.resolve?.(url);
+    pick?.resolve(articleImageUrl(image.id));
     setPick(undefined);
   };
   return (
     <div className="article-rich-editor">
-      <div className="actions">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => setPick({ append: true })}
-        >
-          {tr("画像を挿入")}</button>
-      </div>
       {error && (
         <p className="alert" role="alert">
           {error}
@@ -157,7 +141,7 @@ export default function ArticleEditor({
         shopId={shopId}
         open={!!pick}
         close={() => {
-          pick?.resolve?.(null);
+          pick?.resolve(null);
           setPick(undefined);
         }}
         select={selected}

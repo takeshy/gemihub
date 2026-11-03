@@ -131,8 +131,6 @@ export function BlogEditor({
       <div className="panel post-management-list">
         <div className="section-top">
           <h2>{tr("お店のお便り")}</h2>
-          <button disabled={blocked} onClick={() => choose()}>
-            {tr("＋ 新しい記事")}</button>
         </div>
         <p className="small muted">
           {tr("保存前の編集は、お客様には反映されません。")}</p>
@@ -158,7 +156,10 @@ export function BlogEditor({
       <div>
         <section className="panel post-editor">
           <span className="eyebrow">BLOG & NEWS</span>
-          <h2>{current ? tr("記事を編集する") : tr("新しいお便りを書く")}</h2>
+          <div className="section-top">
+            <h2>{current ? tr("記事を編集する") : tr("新しいお便りを書く")}</h2>
+            {current && <button type="button" disabled={blocked} onClick={() => choose()}>{tr("新しいお便りを書く")}</button>}
+          </div>
           {!shop.isOwner && (
             <p className="notice">{tr("記事の作成・変更・公開は店主が行います。")}</p>
           )}
@@ -369,8 +370,6 @@ export function BlogEditor({
                   </Suspense>
                 </>
               )}
-              <p className="small muted">
-                {tr("記事の紹介文とアドレスは、保存時にAIが自動で作成します。既存記事のアドレスは維持します。")}</p>
               <button
                 className="primary"
                 disabled={

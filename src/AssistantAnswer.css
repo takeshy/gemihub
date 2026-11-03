@@ -1,0 +1,16 @@
+.assistant-log .chat-message { min-width: 0; max-width: min(550px, 100%); }
+.assistant-markdown { white-space: normal; overflow-wrap: anywhere; line-height: 1.8; }
+.assistant-markdown :is(h1, h2, h3, h4, h5, h6) { font-size: 1.1em; line-height: 1.5; margin: 1em 0 .5em; }
+.assistant-markdown :is(p, ul, ol, pre, blockquote) { margin: .65em 0; }
+.assistant-markdown :is(ul, ol) { padding-inline-start: 1.5em; }
+.assistant-markdown li + li { margin-top: .25em; }
+.assistant-markdown > :first-child { margin-top: .5em; }
+.assistant-markdown > :last-child { margin-bottom: 0; }
+.assistant-markdown blockquote { border-left: 3px solid #b8c7a6; padding-left: 12px; color: #64735f; }
+.assistant-markdown code { font-family: ui-monospace, monospace; font-size: .9em; }
+.assistant-markdown pre { max-width: 100%; overflow-x: auto; white-space: pre; }
+.assistant-markdown pre code { white-space: pre; overflow-wrap: normal; }
+.assistant-table { max-width: 100%; overflow-x: auto; margin: .65em 0; }
+.assistant-table table { width: 100%; border-collapse: collapse; font-size: .9em; }
+.assistant-table :is(th, td) { padding: 8px 10px; border: 1px solid var(--line); text-align: left; overflow-wrap: normal; }
+.assistant-table th { background: var(--cream); }

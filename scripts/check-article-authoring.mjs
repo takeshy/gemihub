@@ -63,7 +63,18 @@ try {
         .getByRole("heading", { name: "新しいお便りを書く", exact: true })
         .waitFor();
     };
+    const openEditorImage = async () => {
+      const toolbar = page.locator('.article-wysimark');
+      const image = toolbar.getByRole('button', { name: '画像', exact: true });
+      if (await image.isVisible()) await image.click();
+      else {
+        await toolbar.getByRole('button', { name: '挿入', exact: true }).click();
+        await page.locator('.--title').filter({ hasText: /^画像$/ }).click();
+      }
+      await page.getByRole('button', { name: '登録', exact: true }).waitFor();
+    };
     await open();
+    assert.equal(await page.getByRole('button', { name: '＋ 新しい記事', exact: true }).count(), 0);
     assert.equal(
       await page.getByText("メモから下書きを作る", { exact: true }).count(),
       0,
@@ -75,6 +86,8 @@ try {
       0,
     );
     await page.getByRole("button", { name: /^自分で作成する/ }).click();
+    assert.equal(await page.getByRole('button', { name: '画像を挿入', exact: true }).count(), 0);
+    assert.equal(await page.getByText('記事の紹介文とアドレスは、保存時にAIが自動で作成します。既存記事のアドレスは維持します。', { exact: true }).count(), 0);
     let editor = page.locator('.article-wysimark [contenteditable="true"]');
     await editor.waitFor();
     await page
@@ -101,7 +114,9 @@ try {
       await page.getByLabel("短い紹介（一覧に表示）", { exact: true }).count(),
       0,
     );
-    await page.getByRole("button", { name: "画像を挿入", exact: true }).click();
+    await openEditorImage();
+    await page.getByRole('radio', { name: 'アップロード済み', exact: true }).check();
+    await page.getByRole('button', { name: 'アップロード済み', exact: true }).click();
     let chooser = page.getByRole("dialog", {
       name: "記事に使う画像",
       exact: true,
@@ -117,15 +132,12 @@ try {
       .getByRole("button", { name: "この画像を使う", exact: true })
       .click();
     await chooser.waitFor({ state: "detached" });
+    await page.getByRole('button', { name: '登録', exact: true }).click();
     await preview.locator(".article-managed-image").first().scrollIntoViewIfNeeded();
     await preview.locator(".article-managed-image").first().locator("img").waitFor();
-    await page.getByRole("button", { name: "画像を挿入", exact: true }).click();
-    chooser = page.getByRole("dialog", { name: "記事に使う画像", exact: true });
-    await chooser
-      .getByRole("button", { name: "画像をアップロード", exact: true })
-      .click();
-    await chooser
-      .getByLabel("記事用の画像ファイル", { exact: true })
+    await openEditorImage();
+    await page.getByRole('radio', { name: 'アップロード', exact: true }).check();
+    await page.locator('input[type="file"][accept="image/*"]')
       .setInputFiles({
         name: "記事にアップロード.png",
         mimeType: "image/png",
@@ -134,7 +146,7 @@ try {
           "base64",
         ),
       });
-    await chooser.waitFor({ state: "detached" });
+    await page.getByRole('button', { name: '登録', exact: true }).click();
     await preview.locator(".article-managed-image").nth(1).scrollIntoViewIfNeeded();
     await preview.locator(".article-managed-image").nth(1).locator("img").waitFor();
     assert.ok(
@@ -151,6 +163,11 @@ try {
       .getByRole("status")
       .filter({ hasText: "保存して本番に反映しました" })
       .waitFor();
+    await page.locator('.post-editor').getByRole('button', { name: '新しいお便りを書く', exact: true }).click();
+    await page.getByRole('heading', { name: '新しいお便りを書く', exact: true }).waitFor();
+    assert.equal(await page.getByLabel('タイトル', { exact: true }).count(), 0, 'new authoring starts with its own empty form');
+    await page.locator('.post-management-item').filter({ hasText: `自分で書いた記事${width}` }).click();
+    await page.getByLabel('タイトル', { exact: true }).waitFor();
     await page.locator(".post-published-note").getByRole("link").click();
     await page
       .locator(".article-page")
