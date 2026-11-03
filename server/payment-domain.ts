@@ -15,6 +15,19 @@ export const refundTiersSchema = z.array(z.object({
     ctx.addIssue({ code: "custom", message: tr("返金条件は時間の大きい順、返金率は同じか小さくし、最後を0時間にしてください") });
 });
 export type RefundTiers = z.infer<typeof refundTiersSchema>;
+export type RefundWindow = { percent: number; after?: string; until?: string };
+/** Cancellation instants: `after` is exclusive and `until` is inclusive, matching refundQuote. */
+export function refundWindows(start: string, policy: RefundTiers): RefundWindow[] {
+  const at = Date.parse(start);
+  if (!Number.isFinite(at)) throw new RangeError("Invalid booking start");
+  const tiers = refundTiersSchema.parse(policy);
+  const deadline = (hours: number) => new Date(at - hours * 3600000).toISOString();
+  return tiers.map((tier, index) => ({
+    percent: tier.percent,
+    ...(index > 0 ? { after: deadline(tiers[index - 1].hoursBefore) } : {}),
+    ...(tier.hoursBefore > 0 ? { until: deadline(tier.hoursBefore) } : {}),
+  }));
+}
 export const paymentRulesSchema = z.object({ enabled: z.boolean(), refundTiers: refundTiersSchema });
 export const bookingPaymentSchema = z.object({
   provider: z.literal("paypal"), environment: z.enum(["sandbox", "live"]),

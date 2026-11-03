@@ -2583,5 +2583,15 @@
   "ご予約にはログインが必要です。": "Please log in to make a booking.",
   "会員登録またはログイン後に、メニューと日時を選んでご予約ください。": "Register or log in, then choose a service, date and time to book.",
   "会員登録・ログインへ": "Register or log in",
-  "未ログイン・予約前にログインを案内": "Signed out: sign in before booking"
+  "未ログイン・予約前にログインを案内": "Signed out: sign in before booking",
+  "{0}より後、{1}まで：{2}%返金": "After {0}, through {1}: {2}% refund",
+  "{0}まで：{1}%返金": "Through {0}: {1}% refund",
+  "{0}より後（予約開始後を含む）：{1}%返金": "After {0} (including after the appointment starts): {1}% refund",
+  "日時はお店の時間（{0}）です。": "Dates and times use the shop’s time zone ({0}).",
+  "返金期限": "Refund deadlines",
+  "予約日時からの返金期限・年またぎ": "Refund deadlines across a year boundary",
+  "米国・夏時間開始をまたぐ返金期限": "US refund deadlines across the start of daylight saving time",
+  "米国・同じ時刻が繰り返す日の返金期限": "US refund deadlines during a repeated local hour",
+  "期限のない返金条件": "Refund policy without a deadline",
+  "マイページの「予約時の返金条件」で、予約の開始日時から計算した具体的な期限と返金率を確認できます。日時はお店の時間で表示します。": "In My page, open Refund policy saved at booking to see specific deadlines and refund percentages calculated from your appointment start. Dates and times use the shop’s time zone."
 }

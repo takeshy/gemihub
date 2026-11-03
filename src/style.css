@@ -2306,6 +2306,8 @@ pre {
 .payment-policy, .payment-details { padding: 1rem; border: 1px solid var(--line, #d8e1d9); border-radius: 12px; margin: .75rem 0; background: #f6f8f4; }
 .payment-policy label { display: flex; gap: .5rem; align-items: baseline; }
 .payment-details p { margin: .35rem 0; }
+.refund-deadlines { margin: .5rem 0; padding-left: 1.25rem; }
+.refund-deadlines li { margin: .5rem 0; overflow-wrap: anywhere; }
 
 /* Existing note users arrive here before any shop is created. */
 .legacy-notes { max-width: 720px; margin: 24px auto; overflow-wrap: anywhere; }

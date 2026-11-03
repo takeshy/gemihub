@@ -86,6 +86,8 @@ Validate opening hours, staff shifts, service duration, closures, existing activ
 
 Store a required nonnegative booking-time price in the shop's currency (whole JPY or USD with two decimal places); later service price changes do not alter history. Optional messages are up to 2,000 characters and appear in operator bookings, customer timeline, personal history, and notification emails.
 
+Saved-booking refund policies show explicit date/time ranges computed from the appointment start and snapshotted tiers. Each deadline is inclusive; the next range starts strictly after it, with the final range including times after the appointment starts. Show years and shop time-zone offsets/abbreviations to distinguish DST transitions and repeated local hours. A single zero-hour tier means any time. This display does not change the saved percentages, captured amount, or refund calculation.
+
 ## Customer membership and CRM
 
 After Google verifies email, register a per-shop name, date of birth, and gender (female/male/other/prefer not to say). Date of birth must be valid and not future. Require registration before booking/inquiries in both UI and API. Prefill names; allow profile changes from My page. Bind all records to the verified email and shop. Store profiles in per-shop Firestore customer records. Expose profiles only to the customer and authorized operators, never in public configurations or public page exports. Include registration-only customers in CRM.
