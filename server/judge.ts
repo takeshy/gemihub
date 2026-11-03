@@ -42,7 +42,7 @@ export const accessPasswordMatches = (input: string) => secretMatches(input, pro
 /** The operator's Drive/Calendar connection for judge shops. Its refresh token is encrypted. */
 export type DemoGoogle = { email: string; refreshToken: string; connectedAt: string; connectedBy: string; rootFolderId?: string };
 /** A mail a judge shop would have sent. Judge access never sends mail. */
-export type JudgeMail = { id: string; shopId: string; owner: string; to: string; subject: string; body: string; at: string };
+export type JudgeMail = { id: string; shopId: string; owner: string; to: string; cc?: string[]; subject: string; body: string; at: string };
 export type JudgeUsage = { email: string; count: number; lastUsedAt?: string; resets?: { day: string; count: number } };
 
 export const demoGoogleUnavailable = () => tr("デモ環境の準備中です。しばらくしてからお試しください。");

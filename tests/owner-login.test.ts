@@ -8,7 +8,7 @@ import { sample, dateJST } from "../server/domain.ts";
 import { decrypt } from "../server/google.ts";
 import { calendarScope, type CalendarConnection } from "../server/calendar.ts";
 
-test("owner sign-in grants Calendar, binds only the registered owner staff and keeps customer sign-in separate", async t => {
+test("owner sign-in requires Gmail and Calendar consent, binds only the registered owner staff and keeps customer sign-in separate", async t => {
   process.env.DEMO_MODE = "true";
   process.env.GOOGLE_CLIENT_ID = "owner-login-test";
   delete process.env.ACCESS_PASSWORD;
@@ -33,6 +33,8 @@ test("owner sign-in grants Calendar, binds only the registered owner staff and k
     const start = await realFetch(origin + "/auth/google" + suffix, { redirect: "manual" });
     const authorization = new URL(start.headers.get("location")!);
     assert.deepEqual(authorization.searchParams.get("scope")!.split(" "), suffix ? ["openid", "email", "profile"] : scopes);
+    assert.equal(authorization.searchParams.get("prompt"), suffix ? "select_account" : "consent");
+    assert.equal(authorization.searchParams.get("access_type"), "offline");
     const state = authorization.searchParams.get("state");
     const done = await realFetch(`${origin}/auth/google/callback?state=${state}&${error ? "error=access_denied" : "code=valid"}`, { redirect: "manual", headers: { Cookie: start.headers.get("set-cookie")!.split(";")[0] } });
     return { response: done, cookie: done.headers.get("set-cookie")?.split(";")[0] || "" };
@@ -41,12 +43,25 @@ test("owner sign-in grants Calendar, binds only the registered owner staff and k
   assert.equal((await oauth()).response.status, 400);
   assert.equal((await store.list("shop")).length, 0, "denied Calendar consent creates no shop or owner credential");
   assert.equal(await store.get("user", email), undefined);
+  granted = scopes.filter(s => s !== "https://www.googleapis.com/auth/gmail.send").join(" ");
+  const noMail = await oauth();
+  assert.equal(noMail.response.status, 400);
+  assert.match(await noMail.response.text(), /Gmail/);
+  assert.equal((await store.list("shop")).length, 0, "denied Gmail consent creates no shop or owner credential");
+  assert.equal(await store.get("user", email), undefined);
   const denied = await oauth("", true); assert.equal(denied.response.status, 400);assert.doesNotMatch(await denied.response.text(), /スタッフ用/);
   granted = scopes.join(" "); refresh = undefined;
   assert.equal((await oauth()).response.status, 400, "initial offline authorization requires a refresh token");
   refresh = "owner-refresh-1";
   let signedIn = await oauth(); assert.equal(signedIn.response.status, 302);
   const owner = (await store.get<User>("user", email))!; assert.equal(decrypt(owner.calendarRefreshToken!), refresh);
+  granted = scopes.filter(s => s !== "https://www.googleapis.com/auth/gmail.send").join(" ");
+  refresh = "refresh-without-gmail";
+  const existingWithoutMail = await oauth();
+  assert.equal(existingWithoutMail.response.status, 400, "existing owners must also grant Gmail at sign-in");
+  assert.equal(existingWithoutMail.cookie, "", "missing Gmail consent cannot create a login session");
+  assert.deepEqual(await store.get("user", email), owner, "an incomplete grant cannot replace the owner's saved credentials");
+  granted = scopes.join(" "); refresh = "owner-refresh-1";
   const shop = (await store.list<import("../server/store.ts").Shop>("shop"))[0];
   assert.equal(await store.get("calendar", `${shop.id}:${email}`), undefined, "do not guess which staff member is the owner");
   shop.published = structuredClone(sample); shop.published.hours.closedWeekdays = []; await store.saveShop(shop);

@@ -27,7 +27,7 @@ export function JudgeStart({ invite, signedIn, run }: { invite: string; signedIn
 }
 
 type JudgeStatus = { until: string; aiUsed: number; aiLimit: number; storage: boolean; slug: string; published: boolean };
-type JudgeMail = { id: string; to: string; subject: string; body: string; at: string };
+type JudgeMail = { id: string; to: string; cc?: string[]; subject: string; body: string; at: string };
 /** Judge-only menu: mails that would have been sent, usage, the trial path and a full reset. */
 export function JudgeMenu({ run }: { run: Run }) {
   const api = useApi();
@@ -70,6 +70,7 @@ export function JudgeMenu({ run }: { run: Run }) {
         {mails.map(mail => <li key={mail.id}>
           <button type="button" aria-expanded={open === mail.id} onClick={() => setOpen(open === mail.id ? undefined : mail.id)}>
             <span>{at(mail.at)}</span><strong>{mail.subject}</strong><small>{tr("宛先：{0}", mail.to)}</small>
+            {!!mail.cc?.length && <small>CC: {mail.cc.join(", ")}</small>}
           </button>
           {open === mail.id && <pre>{mail.body}</pre>}
         </li>)}

@@ -153,6 +153,9 @@ test("expired/unavailable slots never charge; mismatched amount and old ambiguou
 
 test("HTTP flow enforces consent, ownership, charge-before-booking, idempotence and refund snapshot", async t => {
   const { store, shop, config, booking } = await setup(); const f = fakePayPal();
+  shop.google = { folderId: "folder", specId: "spec", historyId: "history" };
+  config.notificationEmail = "reservations@example.com";
+  await store.saveShop(shop);
   const server = createApp(store, undefined, undefined, undefined, f.gateway);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
@@ -181,10 +184,16 @@ test("HTTP flow enforces consent, ownership, charge-before-booking, idempotence 
   assert.equal((await request(`${base}/checkouts/${id}/capture`, "bob", {})).status, 404);
   assert.equal((await request(`${base}/checkouts`, "bob")).body.length, 0);
   assert.equal((await request(`${base}/checkouts/${id}/capture`, "alice", {})).status, 409);
+  assert.deepEqual(await store.list("job"), [], "no confirmation email before successful payment");
   [...f.orders.values()][0].status = "APPROVED";
   const results = await Promise.all([request(`${base}/checkouts/${id}/capture`, "alice", {}), request(`${base}/checkouts/${id}/capture`, "alice", {})]);
   assert.ok(results.every(r => r.body.ok)); assert.equal(f.calls.capture, 1);
   assert.equal((await store.bookings(shop.id)).length, 1);
+  const notices = await store.list<{ to: string; cc: string[]; body: string }>("job");
+  assert.equal(notices.length, 1, "repeated capture sends one confirmation");
+  assert.equal(notices[0].to, "alice@example.com");
+  assert.deepEqual(notices[0].cc, [shop.owner, config.notificationEmail]);
+  assert.ok(notices[0].body.includes(id));
   config.rules.payment!.refundTiers = [{ hoursBefore: 0, percent: 0 }]; config.menus[0].price = 100; shop.published = config; await store.saveShop(shop);
   const quote = await request(`${base}/bookings/${id}/cancel-quote`); assert.equal(quote.body.amount, 5500);
   assert.equal((await request(`${base}/bookings/${id}/cancel-quote`, "bob")).status, 404);

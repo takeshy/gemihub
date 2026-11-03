@@ -167,6 +167,7 @@ type Job = {
   shopId: string;
   type: "mail" | "posts";
   to?: string;
+  cc?: string[];
   subject?: string;
   body?: string;
   error?: string;
@@ -358,7 +359,7 @@ export function createApp(
     // Judge access never sends mail; the judge menu lists what would have been sent.
     if (shop.judge && type === "mail") {
       if (await store.get("judgeMail", id)) return;
-      await store.put("judgeMail", id, { id, shopId: shop.id, owner: shop.owner, to: data.to || "", subject: data.subject || "", body: data.body || "", at: new Date().toISOString() } satisfies JudgeMail);
+      await store.put("judgeMail", id, { id, shopId: shop.id, owner: shop.owner, to: data.to || "", ...(data.cc?.length ? { cc: data.cc } : {}), subject: data.subject || "", body: data.body || "", at: new Date().toISOString() } satisfies JudgeMail);
       return;
     }
     if (!shop.google) return;
@@ -384,7 +385,7 @@ export function createApp(
           if (job.type === "posts") {
             const posts=await postsFor(shop);
             await syncPostFiles(shop,posts,token,async()=>await store.saveShop(shop),config=>menuImageSnapshot(store,shop,config,crmFiles,token,publishedPostImageIds(posts)));
-          } else await sendMail(token, job.to!, job.subject!, job.body!);
+          } else await sendMail(token, job.to!, job.subject!, job.body!, job.cc);
           await store.delete("job", job.id);
         } catch (err) {
           job.error = err instanceof Error ? err.message : tr("連携エラー");
@@ -400,7 +401,14 @@ export function createApp(
     to: string,
     subject: string,
     text: string,
+    cc?: string[],
   ) {
+    if (cc) {
+      const recipients = new Map(cc.map(address => [address.toLowerCase(), address]));
+      recipients.delete(to.toLowerCase());
+      await enqueue(shop, "mail", { to, cc: [...recipients.values()], subject, body: text });
+      return;
+    }
     for (const address of new Set([to, config.notificationEmail]))
       await enqueue(shop, "mail", { to: address, subject, body: text });
   }
@@ -414,7 +422,7 @@ export function createApp(
     const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
     await store.transaction(async () => {
       await notify(shop, config, booking.customer, `${config.name} ${refund ? tr("予約キャンセル・返金") : booking.status === "no_show" ? tr("予約の状態が変更されました") : tr("ご予約を承りました")}`,
-        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}\n{6}{7}", booking.name, booking.id, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))));
+        tr("{0} 様\n予約番号: {1}\n予約: {2}\nメニュー: {3}{4}\n支払額: {5}\n{6}{7}", booking.name, booking.id, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))), event === "paid" ? [shop.owner, config.notificationEmail] : undefined);
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
     });
   });
@@ -797,6 +805,8 @@ export function createApp(
           shopId: pending.shopId,
         };
         if (!pending.shopId) {
+          if (!tokens.scope?.split(" ").includes("https://www.googleapis.com/auth/gmail.send"))
+            fail(400, tr("店主ログインでは、Gmail のメール送信も許可してください。"));
           if (!tokens.scope?.split(" ").includes(calendarScope))
             fail(400, tr("店主ログインでは、Google Calendar の空き状況へのアクセスも許可してください。"));
           u.refreshToken = tokens.refresh_token ? encrypt(tokens.refresh_token) : existing?.refreshToken;
@@ -2424,6 +2434,7 @@ export function createApp(
                 u.email,
                 tr("{0} ご予約を承りました", config.name),
                 tr("{0} 様\n{1}\n{2}\n予約番号: {3}{4}", b.name, bookingMenuName(config, b), new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), b.id, b.message ? tr("\nメッセージ: {0}", b.message) : ""),
+                [shop.owner, config.notificationEmail],
               );
             });
             await flush(shop);

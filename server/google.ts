@@ -192,12 +192,20 @@ export async function sendMail(
   to: string,
   subject: string,
   body: string,
+  cc: string[] = [],
 ) {
-  if (!/^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/.test(to))
+  if ([to, ...cc].some(address => !/^[^\s@<>,;\r\n]+@[^\s@<>,;\r\n]+\.[^\s@<>,;\r\n]+$/.test(address)))
     throw new Error(tr("メール宛先が不正です"));
+  const seen = new Set([to.toLowerCase()]);
+  const copies = cc.filter(address => {
+    const key = address.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   const { gmail } = clients(token);
   const raw = Buffer.from(
-    `To: ${to}\r\nSubject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString("base64")}`,
+    `To: ${to}\r\n${copies.length ? `Cc: ${copies.join(", ")}\r\n` : ""}Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString("base64")}`,
   ).toString("base64url");
   await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
 }
