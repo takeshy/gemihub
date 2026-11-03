@@ -20,12 +20,13 @@ import { createRequestId } from "./request-id";
 import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
 
 type Snapshot = Pick<LocalDraft, "base" | "source" | "config"> & { lastPublishedPlanId?: string };
-export function LocalPreview({ shop, email, reload, sidebar, activate, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; activate?: () => void; initialScreen?: string; initialArticleKey?: string }) {
+export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenChange, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; activate?: () => void; onScreenChange?: (screen: string, article?: string) => void; initialScreen?: string; initialArticleKey?: string }) {
   const api = useApi();
   const key = draftKey(email, shop.id);
   const [draft, setDraft] = useState<LocalDraft>();
   const latestDraft = useRef<LocalDraft | undefined>(undefined);
-  const entrySelected=useRef(false);
+  const entrySelected = useRef<string | undefined>(undefined);
+  const selectionVersion = useRef(0);
   const [fixtureEditing, setFixtureEditing] = useState<Fixtures>();
   const displayMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -147,13 +148,22 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
     setInvalid(""); save({ ...draft, config: parsed.data });
     if (scope.kind === "page") setPageEditing(parsed.data.pages.find(p => p.id === scope.pageId));
   }
-  async function choose(value: string) {
-    activate?.();
+  async function choose(value: string, articleKey?: string, fromLocation = false) {
+    const [category, article] = value.split(":");
+    const firstArticle = latestDraft.current?.fixtures.posts.find(post => post.category === category);
+    const requestedArticle = article && (category === "blogs" || category === "announcements") ? articleKey || (firstArticle ? postKey(firstArticle) : undefined) : undefined;
+    if (!fromLocation) {
+      entrySelected.current = JSON.stringify([value, requestedArticle]);
+      if (onScreenChange) onScreenChange(value, requestedArticle); else activate?.();
+    }
+    const version = ++selectionVersion.current;
     const target: ReleaseScope = value.startsWith("page:") ? { kind: "page", pageId: value.slice(5) } : value.startsWith("part:") ? { kind: "part", part: value === "part:footer" ? "footer" : "header" } : { kind: "shared" };
     let currentIndex = index;
     try { currentIndex = await refreshIndex(); } catch { setError(tr("最新の状態を確認できません。保存済みのローカル画面を表示します。")); }
+    if (version !== selectionVersion.current) return;
     const currentStatus = draft && currentIndex ? await syncStatus(draft, currentIndex, target) : undefined;
     if (currentStatus === "unfetched" || currentStatus === "remote") await fetchScope(target);
+    if (version !== selectionVersion.current) return;
     setScreen(value);
     if (currentStatus === "conflict") await compareConflict(target);
     setInvalid("");
@@ -162,35 +172,33 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
       setPageEditing(undefined); setRoute({ pane: "reserve", pageSlug: page?.slug }); setVersion(v => v + 1); return;
     }
     if (target.kind === "part") { setRoute({ pane: "reserve" }); setVersion(v => v + 1); return; }
-    const [category, article] = value.split(":");
     if (category === "blogs" || category === "announcements") {
-      const first = draft?.fixtures.posts.find(p => p.category === category);
-      setRoute({ category, articleKey: article && first ? postKey(first) : undefined, pane: "reserve" });
+      if (articleKey && article && !latestDraft.current?.fixtures.posts.some(post => post.category === category && postKey(post) === articleKey)) {
+        const snapshot = await api<{ posts: PublicPost[] }>(`/api/shops/${shop.id}/publication-preview`);
+        if (version !== selectionVersion.current) return;
+        const post = snapshot.posts.find(post => post.category === category && postKey(post) === articleKey);
+        if (post && latestDraft.current) {
+          const current = latestDraft.current;
+          const fixtures = { ...current.fixtures, posts: [...current.fixtures.posts.filter(item => item.category !== category || postKey(item) !== articleKey).slice(0, 49), post] };
+          save({ ...current, fixtures }); setFixtureEditing(structuredClone(fixtures));
+        } else {
+          setScreen(category); setRoute({ category, pane: "reserve" });
+          setNotice(tr("選んだ記事は公開内容から見つかりませんでした。一覧から確認してください。"));
+          setVersion(v => v + 1); return;
+        }
+      }
+      setRoute({ category, articleKey: requestedArticle, pane: "reserve" });
     } else setRoute({ pane: value });
     setVersion(v => v + 1);
   }
   useEffect(()=>{
-    if(entrySelected.current||!initialScreen||!draft||!index||draft.pending)return;
-    entrySelected.current=true;
-    const screens=["reserve","about","mine","contact","blogs","blogs:article","announcements","announcements:article",...index.pages.map(page=>`page:${page.id}`),...draft.config.pages.map(page=>`page:${page.id}`)];
+    if(!initialScreen||!draft||!index||draft.pending)return;
+    const selection=JSON.stringify([initialScreen,initialArticleKey]);
+    if(entrySelected.current===selection)return;
+    entrySelected.current=selection;
+    const screens=["part:header","part:footer","reserve","about","mine","contact","blogs","blogs:article","announcements","announcements:article",...index.pages.map(page=>`page:${page.id}`),...draft.config.pages.map(page=>`page:${page.id}`)];
     if(!screens.includes(initialScreen)){setError(tr("指定された画面が見つかりません。画面一覧から選んでください。"));return;}
-    void run(async()=>{
-      await choose(initialScreen);
-      const category=initialScreen.split(":")[0];
-      if(initialArticleKey&&initialScreen.endsWith(":article")&&(category==="blogs"||category==="announcements")){
-        const snapshot=await api<{posts:PublicPost[]}>(`/api/shops/${shop.id}/publication-preview`);
-        const post=snapshot.posts.find(post=>post.category===category&&postKey(post)===initialArticleKey);
-        if(post&&latestDraft.current){
-          const current=latestDraft.current;
-          const fixtures={...current.fixtures,posts:[...current.fixtures.posts.filter(item=>item.category!==category||postKey(item)!==initialArticleKey).slice(0,49),post]};
-          save({...current,fixtures});setFixtureEditing(structuredClone(fixtures));
-          setRoute({category,articleKey:initialArticleKey,pane:"reserve"});setVersion(value=>value+1);
-        }else{
-          setScreen(category);setRoute({category,pane:"reserve"});
-          setNotice(tr("選んだ記事は公開内容から見つかりませんでした。一覧から確認してください。"));
-        }
-      }
-    });
+    void run(async()=>choose(initialScreen,initialArticleKey,true));
   },[draft,index,initialScreen,initialArticleKey]);
   async function remoteValue(target: ReleaseScope) {
     if (target.kind === "page") return (await api<{ page: ShopPage | null }>(`/api/shops/${shop.id}/local-editor/pages/${target.pageId}`)).page;
@@ -347,8 +355,8 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, initialSc
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
             const pageMatch = url.pathname.match(/^\/s\/local-preview\/pages\/([^/]+)$/);
-            if (pageMatch) { const page = draft.config.pages.find(p => p.slug === pageMatch[1]); if (page) choose(`page:${page.id}`); return; }
-            if (match) { setScreen(`${match[1]}${match[2] ? ":article" : ""}`); setRoute({ category: match[1] as PostCategory, articleKey: match[2], pane: "reserve" }); }
+            if (pageMatch) { const page = draft.config.pages.find(p => p.slug === pageMatch[1]); if (page) void run(async () => choose(`page:${page.id}`)); return; }
+            if (match) void run(async () => choose(`${match[1]}${match[2] ? ":article" : ""}`, match[2]));
             else void run(async () => choose(url.searchParams.get("pane") || "reserve"));
           }} />
         </ApiProvider>}

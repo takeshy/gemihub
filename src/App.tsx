@@ -6,7 +6,6 @@ import { PaymentDetails } from "./PaymentDetails";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
 import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
 import { Inquiries } from "./Inquiries";
-import type { RequestIntent } from "../server/request-intent";
 import type { ChatReference } from "../server/shop-chat";
 import { DateInput } from "./DateInput";
 import { CustomerRegistration } from "./CustomerRegistration";
@@ -85,8 +84,9 @@ export function App({
   search = location.search,
   initialTab = new URLSearchParams(search).has("customer") ? "customers" : new URLSearchParams(search).get("calendar") === "connected" ? "staff" : "try",
   initialPane,
-  navigate = (href) => location.assign(href),
+  navigate: customNavigate,
 }: AppProps = {}) {
+  const navigate: Navigate = customNavigate || (href => location.assign(href));
   const api = useApi();
   const [session, setSession] = useState<Session>();
   const [error, setError] = useState("");
@@ -220,15 +220,9 @@ export function App({
           <PublicationPreview shopId={path.split("/")[2]} />
         ) : session.user ? (
           <Dashboard
-            initialTab={new URLSearchParams(search).has("customer")?"customers":["build","assistant","try","basic","inquiries","customers","bookings","staff"].includes(new URLSearchParams(search).get("tab") || "") ? new URLSearchParams(search).get("tab")! : initialTab}
-            initialScreen={new URLSearchParams(search).get("screen") || undefined}
-            initialArticleKey={new URLSearchParams(search).get("article") || undefined}
-            requestIntent={new URLSearchParams(search).get("intent") === "modify" ? "modify" : undefined}
-            initialShop={new URLSearchParams(search).get("shop") || ""}
-            focusRequest={new URLSearchParams(search).get("request") === "1"}
-            initialCustomer={new URLSearchParams(search).get("customer") || ""}
-            initialInquiryId={new URLSearchParams(search).get("inquiry") || ""}
-            initialCustomerImages={new URLSearchParams(search).get("customerView") === "images"}
+            initialTab={initialTab}
+            search={search}
+            browserNavigation={!customNavigate}
             session={session}
             run={run}
             busy={busy}
@@ -314,37 +308,26 @@ function Landing({ demo, invite, run }: { demo: boolean; invite: boolean; run: R
 }
 function Dashboard({
   initialTab = "try",
-  initialShop = "",
-  focusRequest = false,
-  initialScreen,
-  initialArticleKey,
-  requestIntent,
-  initialCustomer = "",
-  initialCustomerImages = false,
-  initialInquiryId = "",
+  search,
+  browserNavigation,
   session,
   run,
   busy,
   notify,
 }: {
   initialTab?: string;
-  initialShop?: string;
-  focusRequest?: boolean;
-  initialScreen?: string;
-  initialArticleKey?: string;
-  requestIntent?: RequestIntent;
-  initialCustomer?: string;
-  initialCustomerImages?: boolean;
-  initialInquiryId?: string;
+  search: string;
+  browserNavigation: boolean;
   session: Session;
   run: Run;
   busy: boolean;
   notify: (s: string) => void;
 }) {
   const api = useApi();
+  const navigation = useDashboardNavigation(search, initialTab, browserNavigation);
+  const { tab, shop: chosen, screen: initialScreen, article: initialArticleKey, customer: initialCustomer, customerImages: initialCustomerImages, inquiry: initialInquiryId, focusRequest, intent: requestIntent } = navigation.route;
+  const editorSelection = useRef({ screen: initialScreen || "reserve", article: initialArticleKey });
   const [shops, setShops] = useState<Workspace[]>([]);
-  const [chosen, setChosen] = useState(initialShop);
-  const [tab, setTab] = useState(initialTab === "team" ? "staff" : initialTab === "create-page" ? "build" : ["hours","rules"].includes(initialTab)?"basic":initialTab);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
   const buildReview = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<Plan>();
@@ -364,11 +347,23 @@ function Dashboard({
   const activeTab = !publiclyPublished && ["bookings", "customers"].includes(tab)
     ? (shop?.isOwner ? "try" : "staff") : tab;
   const view = creating ? "build" : activeTab;
-  useEffect(() => { if (shop && !shop.isOwner && ["try", "images"].includes(tab)) setTab("bookings"); }, [shop?.id, shop?.isOwner, tab]);
+  function setTab(value: string) {
+    const next = dashboardTab(value);
+    navigation.visit(next, shop?.id || chosen, next === "try" ? editorSelection.current.screen : undefined, next === "try" ? editorSelection.current.article : undefined);
+  }
+  useEffect(() => {
+    if (!shop) return;
+    const allowed = !shop.isOwner && ["try", "images", "basic", "menus"].includes(tab) ? (publiclyPublished ? "bookings" : "staff") : view;
+    if (allowed !== tab) navigation.visit(allowed, shop.id, undefined, undefined, true);
+  }, [shop?.id, shop?.isOwner, view, tab, publiclyPublished]);
+  useEffect(() => {
+    if (tab === "try") editorSelection.current = { screen: initialScreen || "reserve", article: initialArticleKey };
+  }, [tab, initialScreen, initialArticleKey]);
+  useEffect(() => { setPlan(undefined); }, [shop?.id]);
   const activePlan =
     plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
       ? plan
-      : shop?.plans.find(p => p.base === shop.revision && p.id === new URLSearchParams(location.search).get("plan")) || shop?.plans.filter((p) => p.base === shop.revision).at(-1);
+      : shop?.plans.find(p => p.base === shop.revision && p.id === navigation.route.plan) || shop?.plans.filter((p) => p.base === shop.revision).at(-1);
   const request = (action: string, data: unknown = {}) =>
     api(`/api/shops/${shop.id}/${action}`, data);
   const acceptPlan = async (p: Plan) => {
@@ -393,7 +388,8 @@ function Dashboard({
           <select
             value={shop?.id}
             onChange={(e) => {
-              setChosen(e.target.value);
+              editorSelection.current = { screen: "reserve", article: undefined };
+              navigation.visit(tab, e.target.value, tab === "try" ? "reserve" : undefined);
               setPlan(undefined);
             }}
           >
@@ -505,7 +501,7 @@ function Dashboard({
                 {view === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
-                {view === "customers" && <Customers key={shop.id} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={load} />}
+                {view === "customers" && <Customers key={`${shop.id}:${initialCustomer}:${initialCustomerImages}:${initialInquiryId}`} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={load} />}
                 {view === "blog" && (
                   <BlogEditor
                     shop={shop}
@@ -525,7 +521,7 @@ function Dashboard({
             )}
           </>
         )}
-        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} initialScreen={initialScreen} initialArticleKey={initialArticleKey} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} activate={() => setTab("try")} /></div>}
+        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} initialScreen={tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} /></div>}
       </section>
     </div>
     </ShopRegionContext.Provider>

@@ -54,7 +54,7 @@ try{
     await basic.getByLabel('店名',{exact:true}).fill('基本情報をまとめたお店');await basic.getByRole('button',{name:'保存',exact:true}).click();await basic.getByRole('status').filter({hasText:'保存して'}).waitFor();
     await hours.getByLabel('開店',{exact:true}).fill('09:00');await hours.getByRole('button',{name:'保存',exact:true}).click();await hours.getByRole('status').filter({hasText:'保存して'}).waitFor();
     await rules.getByLabel('何日先まで予約できるか',{exact:true}).fill('40');await rules.getByRole('button',{name:'保存',exact:true}).click();await rules.getByRole('status').filter({hasText:'保存して'}).waitFor();
-    await basic.getByRole('button',{name:'最新の内容を読み直す',exact:true}).click();assert.equal(await basic.getByLabel('店名',{exact:true}).inputValue(),'基本情報をまとめたお店');assert.equal(await hours.getByLabel('開店',{exact:true}).inputValue(),'09:00');assert.equal(await rules.getByLabel('何日先まで予約できるか',{exact:true}).inputValue(),'40');
+    await page.locator('aside nav').getByRole('button',{name:/メニュー・料金$/}).click();await page.locator('aside nav').getByRole('button',{name:/お店の基本情報$/}).click();assert.equal(await basic.getByLabel('店名',{exact:true}).inputValue(),'基本情報をまとめたお店');assert.equal(await hours.getByLabel('開店',{exact:true}).inputValue(),'09:00');assert.equal(await rules.getByLabel('何日先まで予約できるか',{exact:true}).inputValue(),'40');
     await open();dialog=await request();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await page.screenshot({path:`tmp/publication-request-${width}.png`,fullPage:true});
     await page.getByRole("button",{name:"プレビューに戻る",exact:true}).click();await dialog.waitFor({state:"detached"});
