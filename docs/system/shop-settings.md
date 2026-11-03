@@ -53,7 +53,7 @@ In Shop information, Services and prices, Staff and shifts, Opening hours, and B
 
 Notification email, maps, region, currency, time zone, payments, and refund policies remain manual. URL fetching does not execute scripts or load subresources; it rejects private/local DNS and redirect destinations and bounds page count, time, and size. If a page cannot be read, paste the relevant text as notes. An AI server connection is required; manual entry remains available.
 
-The owner-only `POST /api/shops/:id/live-settings/:section/ai` accepts `note`, the selected section's current form `value`, and a UUID `requestId`. It returns `value`, readable `changes`, `warnings`, and fetched `sources`. Identical requests reuse the stored suggestion for one hour, including generated IDs; changing the payload for that ID is rejected. Reading pages and generating suggestions do not hold the shop's booking lock. Saving still uses the existing optimistic previous-value check.
+The owner-only `POST /api/shops/:id/live-settings/:section/ai` accepts `note`, the selected section's current form `value`, and a UUID `requestId`. It returns `value`, readable `changes`, `warnings`, and fetched `sources`. Identical requests reuse the stored suggestion for one hour, including generated IDs; changing the payload for that ID is rejected. Reading pages and generating suggestions do not hold the shop's booking lock. Manual saves send the section's `value` and a UUID `requestId`. Each save overwrites that section with the submitted values, even if it changed after the form was opened; other sections retain their latest values. The settings screen has no reload or conflict-resolution button.
 
 For conversation-based changes:
 

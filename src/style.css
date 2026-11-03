@@ -2360,8 +2360,19 @@ pre {
 .shop-map { margin: 12px 0 20px; }
 .shop-map iframe { display: block; width: 100%; max-width: 640px; aspect-ratio: 4 / 3; border: 0; border-radius: 12px; background: var(--cream); }
 .shop-map figcaption { margin-top: 6px; font-size: 13px; }
-.check-field { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
-.check-field input { width: auto; }
+.live-settings > fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.check-field { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 12px; }
+.check-field > input[type="checkbox"] { flex: 0 0 18px; width: 18px; height: 18px; margin: 3px 0 0; padding: 0; }
+.check-field > span { min-width: 0; }
+.refund-tier { display: grid; gap: 12px; padding: 16px; margin: 16px 0; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: #f8faf5; }
+.refund-tier-fields { align-items: end; }
+.refund-tier-fields .field { margin: 0; }
+.refund-tier-fields input { width: 100%; min-width: 0; }
+.refund-tier-remove { justify-self: end; min-height: 44px; }
+@media (max-width: 600px) {
+  .refund-tier-fields { grid-template-columns: minmax(0, 1fr); }
+  .refund-tier-fields input { font-size: 16px; }
+}
 /* Code fields for HTML page bodies and their CSS. */
 .code-input { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; tab-size: 2; }
 /* HTML/CSS editors for built-in screens and the theme. */

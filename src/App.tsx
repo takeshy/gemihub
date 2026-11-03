@@ -980,23 +980,25 @@ export function ConfigEditor({
           </Field>
         ))}
       </div>
-      <label>
+      <label className="check-field">
         <input
           type="checkbox"
           checked={c.rules.sameDay}
           onChange={(e) =>
             put("rules", { ...c.rules, sameDay: e.target.checked })
           }
-        />{" "}
-        {tr("当日の予約を受け付ける")}</label>
+        />
+        <span>{tr("当日の予約を受け付ける")}</span></label>
       <h3>{tr("予約時のお支払い・キャンセル時の返金")}</h3>
-      <label><input type="checkbox" checked={!!c.rules.payment?.enabled} onChange={event => put("rules", { ...c.rules, payment: { enabled: event.target.checked, refundTiers: c.rules.payment?.refundTiers || structuredClone(defaultRefundTiers) } })} /> {tr("予約時にPayPalで全額お支払いいただく")}</label>
+      <label className="check-field"><input type="checkbox" checked={!!c.rules.payment?.enabled} onChange={event => put("rules", { ...c.rules, payment: { enabled: event.target.checked, refundTiers: c.rules.payment?.refundTiers || structuredClone(defaultRefundTiers) } })} /><span>{tr("予約時にPayPalで全額お支払いいただく")}</span></label>
       {c.rules.payment?.enabled && <>
         <p className="small">{tr("開始までの残り時間で返金率を決めます。店都合は常に全額返金です。予約時の金額・条件を保存するため、変更はこれからの予約に適用されます。")}</p>
-        {c.rules.payment.refundTiers.map((tier, i) => <div className="form-grid" key={i}>
+        {c.rules.payment.refundTiers.map((tier, i) => <div className="refund-tier" key={i}>
+          <div className="form-grid refund-tier-fields">
           <Field label={tr("返金条件{0}・開始の何時間前まで", i + 1)}><input type="number" min="0" max="8760" value={tier.hoursBefore} onChange={e => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.map((value, index) => index === i ? { ...value, hoursBefore: Number(e.target.value) } : value) } })} /></Field>
           <Field label={tr("返金条件{0}・返金率（%）", i + 1)}><input type="number" min="0" max="100" value={tier.percent} onChange={e => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.map((value, index) => index === i ? { ...value, percent: Number(e.target.value) } : value) } })} /></Field>
-          {i < c.rules.payment!.refundTiers.length - 1 && <button onClick={() => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.filter((_, index) => index !== i) } })}>{tr("返金条件{0}を削除", i + 1)}</button>}
+          </div>
+          {i < c.rules.payment!.refundTiers.length - 1 && <button className="refund-tier-remove" onClick={() => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: c.rules.payment!.refundTiers.filter((_, index) => index !== i) } })}>{tr("返金条件{0}を削除", i + 1)}</button>}
         </div>)}
         {c.rules.payment.refundTiers.length < 10 && <button onClick={() => put("rules", { ...c.rules, payment: { ...c.rules.payment!, refundTiers: [{ hoursBefore: c.rules.payment!.refundTiers[0].hoursBefore + 24, percent: 100 }, ...c.rules.payment!.refundTiers] } })}>{tr("返金条件を追加")}</button>}
         <p className="small">{tr("時間の大きい順に設定し、最後は0時間（それ以降の返金率）にします。最小単位（1円・1セント）未満は切り捨てます。自然な言葉での変更は「AIとお店をつくる」から依頼し、変更案を確認して反映できます。")}</p>

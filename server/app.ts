@@ -1343,7 +1343,7 @@ export function createApp(
               if (!fresh.published) fail(409, tr("先にお店の共通設定を反映してください"));
               return json(res, { config: await effective(fresh) });
             }
-            const input = z.object({ value: z.unknown(), previous: z.unknown(), requestId: z.uuid() }).parse(await body(req));
+            const input = z.object({ value: z.unknown(), requestId: z.uuid() }).parse(await body(req));
             const id = digest(`${fresh.id}:${user!.email}:settings:${section}:${input.requestId}`);
             let plan = await store.get<Plan>("plan", id);
             if (plan) {
@@ -1351,7 +1351,6 @@ export function createApp(
             } else {
               if (!fresh.published) fail(409, tr("先にお店の共通設定を反映してください"));
               const current = await effective(fresh);
-              if (!same(liveValue(current, section), input.previous)) fail(409, tr("別の操作で更新されました。最新の内容を読み直してください。編集内容はこの画面に残っています"));
               const config = updateLiveValue(current, section, input.value);
               plan = { id, shopId: fresh.id, base: fresh.revision, config, source: current, summary: planSummary(current, config), approved: true, local: true, createdAt: Date.now(), checklist:checklist() };
               if (!plan.summary.length) return json(res, { ok: true });

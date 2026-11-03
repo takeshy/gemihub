@@ -633,7 +633,7 @@
   "お客様への返信を入力してください": "Write your reply to the customer",
   "返信先：": "To: ",
   "メールで返信": "Reply by email",
-  "未完了の保存があります。保存を再試行してください。": "A save is unfinished. Please retry saving.",
+  "保存が完了していません。「保存」を押してください。": "Saving is not complete. Select Save.",
   "保存中のデータを読み込めませんでした。最新の内容を読み直してください。": "Unable to load the data being saved. Reload the latest content.",
   "営業時間・休業日": "Opening hours and closures",
   "予約ルール": "Booking rules",

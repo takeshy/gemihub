@@ -7,7 +7,7 @@ import { shopSchema, type ShopConfig } from "../server/domain";
 import { liveValue, updateLiveValue, type LiveSection } from "../server/live-settings";
 import type { SettingsProposal } from "../server/settings-ai";
 import { createRequestId } from "./request-id";
-const pendingSchema = z.object({ config: shopSchema, previous: z.unknown(), requestId: z.uuid() });
+const pendingSchema = z.object({ config: shopSchema, requestId: z.uuid() });
 type Pending = z.infer<typeof pendingSchema>;
 export function LiveSettings({ shop, section, reload }: { shop: Workspace; section: LiveSection; reload: () => Promise<unknown> }) {
   const api = useApi();
@@ -33,10 +33,13 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
       const raw = localStorage.getItem(key);
       if (raw) {
         const cached = pendingSchema.parse(JSON.parse(raw));
-        setPending(cached); setConfig(cached.config); setNotice(tr("未完了の保存があります。保存を再試行してください。")); return;
+        setPending(cached); setConfig(cached.config); setNotice(tr("保存が完了していません。「保存」を押してください。")); return;
       }
       void load().catch(e => setError(e.message));
-    } catch { setError(tr("保存中のデータを読み込めませんでした。最新の内容を読み直してください。")); }
+    } catch {
+      localStorage.removeItem(key);
+      void load().catch(e => setError(e.message));
+    }
   }, [key]);
   return <div className={`panel live-settings live-settings-${section}`}>
     <div className="section-top"><h2>{heading}</h2><button type="button" aria-expanded={aiOpen} disabled={busy || imageUploading || !!pending || !config || !source} onClick={() => { setAiOpen(!aiOpen); setProposal(undefined); }}>{tr("AIで設定")}</button></div>
@@ -78,13 +81,6 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
     {!config && <p>{tr("お店の共通設定を反映すると管理できます。")}</p>}
     {config && <fieldset disabled={busy || imageUploading || !!pending || !!proposal}><ConfigEditor shopId={shop.id} onImageUploading={setImageUploading} section={section} config={config} onChange={value => { setConfig(value); setNotice(""); }} /></fieldset>}
     <div className="actions">
-      <button disabled={busy || imageUploading || !!proposal} onClick={async () => {
-        if ((pending || config && JSON.stringify(config) !== JSON.stringify(source)) && !window.confirm(tr("編集を破棄して最新の本番データを読み直しますか？"))) return;
-        setBusy(true); setError("");
-        try { await load(); localStorage.removeItem(key); setPending(undefined); setNotice(""); }
-        catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-        finally { setBusy(false); }
-      }}>{tr("最新の内容を読み直す")}</button>
       <button className="primary" disabled={busy || imageUploading || !!proposal || (!pending && (!config || !source || JSON.stringify(liveValue(config, section)) === JSON.stringify(liveValue(source, section))))} onClick={async () => {
         if (!pending && (!config || !source)) return;
         setBusy(true); setError(""); setNotice("");
@@ -93,14 +89,14 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
           if (!action) {
             const checked = shopSchema.safeParse(config);
             if (!checked.success) throw new Error(checked.error.issues[0].message);
-            action = { config: checked.data, previous: liveValue(source!, section), requestId: createRequestId() };
+            action = { config: checked.data, requestId: createRequestId() };
             localStorage.setItem(key, JSON.stringify(action)); setPending(action);
           }
-          await api(`/api/shops/${shop.id}/live-settings/${section}`, { value: liveValue(action.config, section), previous: action.previous, requestId: action.requestId });
+          await api(`/api/shops/${shop.id}/live-settings/${section}`, { value: liveValue(action.config, section), requestId: action.requestId });
           await load(); localStorage.removeItem(key); setPending(undefined); await reload(); setNotice(shop.publication === "provisional" ? tr("保存して仮公開に反映しました。") : tr("保存して本番に反映しました。"));
         } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
-      }}>{pending ? tr("保存を再試行") : tr("保存")}</button>
+      }}>{tr("保存")}</button>
     </div>
   </div>;
 }

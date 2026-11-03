@@ -149,4 +149,18 @@ test("page AI and merge only propose, enforce owner and reject a changed remote"
   const revision = latest.revision;
   assert.equal((await request("live-settings/basic", data)).status, 200);
   assert.equal((await store.shop(shop.id))!.revision, revision);
+
+  const hours = { ...old.hours, end: "19:00" };
+  assert.equal((await request("live-settings/hours", { value: hours, requestId: randomUUID() })).status, 200);
+  const otherTab = { value: { ...basicSchema.parse(old), name: "別端末の店名", description: "別端末の紹介" }, requestId: randomUUID() };
+  assert.equal((await request("live-settings/basic", otherTab)).status, 200);
+  const overwrite = { ...data, value: { ...data.value, name: "後から保存した店名" }, requestId: randomUUID() };
+  assert.equal((await request("live-settings/basic", overwrite)).status, 200, "a stale form overwrites its section without a conflict prompt");
+  const overwritten = (await store.shop(shop.id))!;
+  assert.equal(overwritten.published!.name, "後から保存した店名");
+  assert.equal(overwritten.published!.description, old.description);
+  assert.deepEqual(overwritten.published!.hours, hours, "other sections retain their latest values");
+  assert.equal(overwritten.published!.pages[0].body, "もとの本文");
+  assert.equal((await request("live-settings/basic", overwrite)).status, 200);
+  assert.equal((await store.shop(shop.id))!.revision, overwritten.revision, "retrying a save does not publish twice");
 });

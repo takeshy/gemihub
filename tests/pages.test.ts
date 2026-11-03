@@ -81,7 +81,7 @@ test("page validation, safe HTML exports, scoped changes and local rebase", () =
   assert.throws(() => validateVisualChange(before, pen, "page:faq:body"));
 });
 
-test("per-page release never includes other drafts or live data; direct saves merge and detect conflicts", async t => {
+test("per-page releases stay scoped and detect conflicts; direct saves overwrite their section", async t => {
   const store = new Store(":memory:");
   const shop = await store.createShop("owner@example.com");
   shop.published = { ...structuredClone(sample), pages: [page("faq"), page("access")] };
@@ -116,7 +116,7 @@ test("per-page release never includes other drafts or live data; direct saves me
   const revision = (await store.shop(shop.id))!.revision;
   assert.equal((await request("live-settings/menus", saving)).status, 200);
   assert.equal((await store.shop(shop.id))!.revision, revision);
-  assert.equal((await request("live-settings/menus", { ...saving, requestId: randomUUID() })).status, 409);
+  assert.equal((await request("live-settings/menus", { ...saving, requestId: randomUUID() })).status, 200);
   // An unrelated live price change and released FAQ do not prevent releasing access.
   const second = await request("plan", { text: "店舗紹介だけ反映", config: draft, local: { base: 0, source: original, requestId: randomUUID(), scope: { kind: "page", pageId: "access" } } });
   assert.equal(second.status, 200);
