@@ -2,13 +2,13 @@
 
 [English](README.md) · [日本語](README_ja.md)
 
-**Build your shop's booking system in your own words.**
+**Ask AI to build and run your shop's system the same way you would ask a person.**
 
-A booking and shop management system for small independent businesses and salons. Describe your shop to AI, review the proposed screens in a private preview, refine your settings, and open it to customers.
+A booking and shop management system for small independent businesses and salons. No technical configuration jargon required—talk through what kind of shop you want, circle an area on the screen with a pen to say "change this part," review the preview, and publish when you're ready.
 
 ## Screenshots
 
-**Edit a screen:** Circle an area with the pen tool and ask AI to change it, then preview the result before applying.
+**Point and ask:** Circle the part of the screen you want to change, tell AI what you want, and preview the result before applying.
 
 ![Owner screen editor with an area marked for an AI change request](public/manual/en/22-pen.jpg)
 
@@ -16,15 +16,21 @@ A booking and shop management system for small independent businesses and salons
 
 ![Customer booking screen with services, staff selection, available times, and booking details](public/manual/en/07-reservation.jpg)
 
+## Why gemihub
+
+- **AI proposes validated configuration only—never arbitrary executable code:** Fixed templates enforce authentication, customer isolation, and safe rendering so AI cannot break access control or inject unsafe code.
+- **Business data stays in the owner's own Google Sheets and Drive:** Reservations, customer records, menus, posts, published specs (`spec.md`), and change history (`history.md`) live in the owner's Google account rather than being locked into a proprietary database.
+- **Consult & ask answers with sources instead of guessing:** A dedicated read-only research layer checks the system documentation, `spec.md`, `history.md`, and live ledger records to return source-backed answers, explicitly stating when something is not defined.
+
 ---
 
 ## What You Can Do
 
-### 1. Build and Customize with AI
-- **Conversational setup:** Describe your business type and desired features by text or voice to generate a tailored screen proposal.
-- **Visual pen editing:** Circle any part of a preview screen and ask AI to update text, layout, or styling.
-- **Shop assistant (Consult & ask):** Ask questions about your shop's rules, bookings, or change history, and turn requests into change drafts (supports text and Gemini Live voice).
-- **AI image generation & blog:** Generate custom images for menus and pages, and write or generate blog posts and announcements.
+### 1. Ask AI the Same Way You Ask a Person
+- **Set up by conversation:** Describe your business type and desired features by text or voice; AI asks follow-up questions and proposes the screens your shop needs.
+- **Circle on screen with a pen:** Draw a circle around any part of a preview screen and ask by text or voice to adjust text, layout, or styling—just like pointing at a screen with a designer.
+- **Consult by voice or chat:** Ask the shop assistant questions like "What is our current refund policy?" or discuss rule changes via live voice (Gemini Live) or chat to prepare a change request.
+- **Request photos and blog posts in plain words:** Ask AI to generate custom images for services and pages, or draft blog posts and announcements.
 
 ### 2. Bookings, Payments, and Staff Sync
 - **Smart availability calculation:** Automatically computes open slots from business hours, holidays, staff shifts, and service durations (with or without staff preference).
@@ -43,20 +49,21 @@ A booking and shop management system for small independent businesses and salons
 ```
 [Owner / Staff / Customer]
          │
+         │ (Voice, chat, or pen-marked screen captures)
          ▼
-   [ gemihub Server ] ── (AI proposals, images, voice) ──► [ Vertex AI (Gemini) ]
+   [ gemihub Server ] ── (Intent understanding, proposals, images) ──► [ Vertex AI (Gemini) ]
      │            │
-     │            └── (Sessions, locks, operational state) ► [ Cloud Firestore ]
+     │            └── (Sessions, locks, operational state) ──────────► [ Cloud Firestore ]
      │
-     └── (Ledgers, posts, images, specs, history) ────────► [ Owner's Google Sheets / Drive ]
+     └── (Ledgers, posts, images, specs, change history) ────────────► [ Owner's Google Sheets / Drive ]
 ```
 
-- **Validated configuration, not arbitrary code:**
-  AI proposes structured, validated configuration data rather than arbitrary executable code. Fixed templates guarantee authentication boundaries and safe rendering, and changes only go live after the owner reviews the diff and approves.
+- **Multimodal requests × Safe template rendering:**
+  Gemini on Vertex AI understands natural conversation, live voice, and pen-marked screenshots to prepare changes. However, AI never generates arbitrary executable code or raw HTML—it proposes validated configuration data (JSON) rendered through safe, fixed templates.
+- **Propose → Preview → Approve (just like working with a human builder):**
+  AI never changes your live shop unannounced or from casual voice agreement alone. Every request becomes a previewable draft and diff that only goes live when the owner clicks to apply, recording the original request in `history.md`.
 - **Owner-controlled data storage:**
   Business data (menus, staff, reservations, customers, inquiries, articles) lives in the owner's **Google Sheets**, while images, generated specs (`spec.md`), change history (`history.md`), and offline HTML exports live in the owner's **Google Drive**.
-- **Staged publication workflow:**
-  Start with an owner-only private preview, test and edit screens locally in the browser, and publish to a subdomain or custom domain when ready.
 
 ---
 
