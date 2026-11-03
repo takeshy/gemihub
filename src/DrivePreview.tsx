@@ -10,7 +10,7 @@ import type { PostCategory } from "../server/post-domain";
 export function DrivePreview({ mock }: { mock: DriveMock }) {
   useEffect(() => { document.title = tr("{0} — ご予約", mock.shop.name); }, [mock.shop.name]);
   const shopId = "drive-preview";
-  const client = useMemo(() => createPreviewClient(mock.shop, { customerName: mock.auth.name, bookings: [], posts: [] }, shopId, async imageId => { const image = mock.menuImages?.[imageId]; if (!image) throw new Error(tr("メニュー画像がありません")); return image; }), [mock]);
+  const client = useMemo(() => createPreviewClient(mock.shop, { customerName: mock.auth.name, bookings: [], posts: [] }, shopId, async imageId => { const image = mock.menuImages?.[imageId]; if (!image) throw new Error(tr("メニュー画像がありません")); return image; }, mock.auth.email), [mock]);
   const [route, setRoute] = useState<{ pane: string; category?: PostCategory; articleKey?: string; pageSlug?: string }>({ pane: "mine" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

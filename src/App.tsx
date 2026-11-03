@@ -3,6 +3,7 @@ import { Brand } from "./Brand";
 import { tr, intlLocale } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { PaymentDetails } from "./PaymentDetails";
+import { BookingComplete } from "./BookingComplete";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
 import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
 import { Inquiries } from "./Inquiries";
@@ -1235,19 +1236,41 @@ export function PublicShop({
   const [message, setMessage] = useState("");
   const [bookingMessage, setBookingMessage] = useState("");
   const [pane, setPane] = useState(initialPane || (session.user ? "mine" : "about"));
-  const [complete, setComplete] = useState(false);
+  const [completedBooking, setCompletedBooking] = useState<Booking>();
   const [requestId, setRequestId] = useState(() => createRequestId());
   const isCustomer =
     session.user?.role === "customer" && session.user.shopId === data?.shopId;
+  const confirmed = completedBooking && isCustomer && completedBooking.customer === session.user?.email && completedBooking.shopId === data?.shopId ? completedBooking : undefined;
+  const leavePaymentReturn = (nextPane: string) => {
+    const query = new URLSearchParams(search);
+    if (onPaneChange || !query.has("checkout")) return false;
+    for (const key of ["checkout","paypal","token","PayerID"]) query.delete(key);
+    query.set("pane",nextPane); navigate(`${basePath || "/"}?${query}`);
+    return true;
+  };
   const loadMine = async () => {
     if (isCustomer) {
       const [bookings, pending] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`)]);
       setMine(bookings); setCheckouts(pending);
+      setCompletedBooking(current => {
+        const saved = current && bookings.find(booking => booking.id === current.id);
+        return saved ? saved.status === "active" ? saved : undefined : current;
+      });
     }
   };
+  const finishBooking = (booking: Booking | undefined) => {
+    if (!booking || booking.status !== "active" || booking.customer !== session.user?.email || booking.shopId !== data?.shopId) return false;
+    setCompletedBooking(booking);
+    setMine(current => current.some(previous => previous.id === booking.id) ? current.map(previous => previous.id === booking.id ? booking : previous) : [...current,booking]);
+    setCheckouts(current => current.filter(checkout => checkout.id !== booking.id));
+    setPane("reserve");
+    return true;
+  };
+  useEffect(() => { setCompletedBooking(undefined); }, [base, session.user?.email]);
   const confirmCheckout = async (id: string, abandon = false) => {
-    const result = await api<{ ok: boolean; checkout: PendingCheckout }>(`${base}/checkouts/${id}/${abandon ? "abandon" : "capture"}`, {});
-    notify(result.ok ? tr("お支払いが完了し、予約が確定しました。") : result.checkout.phase === "expired" ? tr("お支払い手続きは終了しました。空き枠から選び直してください。") : result.checkout.phase === "failed" ? tr("お支払いが完了しませんでした。空き枠から選び直してください。") : tr("支払いを確認中です。マイページで状況を再確認できます。"));
+    const result = await api<{ ok: boolean; booking?: Booking; checkout: PendingCheckout }>(`${base}/checkouts/${id}/${abandon ? "abandon" : "capture"}`, {});
+    if (result.ok && finishBooking(result.booking)) return;
+    notify(result.ok ? tr("予約内容はマイページで確認してください。") : result.checkout.phase === "expired" ? tr("お支払い手続きは終了しました。空き枠から選び直してください。") : result.checkout.phase === "failed" ? tr("お支払いが完了しませんでした。空き枠から選び直してください。") : tr("支払いを確認中です。マイページで状況を再確認できます。"));
     await loadMine();
   };
   useEffect(() => {
@@ -1278,7 +1301,7 @@ export function PublicShop({
     });
   }, [base]);
   useEffect(() => {
-    if (!data || !isCustomer || data.registrationRequired || category || pageSlug || pane !== "reserve") return;
+    if (!data || !isCustomer || data.registrationRequired || category || pageSlug || pane !== "reserve" || confirmed) return;
     const selection = menuSelection(data.config, menu, optionIds);
     if (optionIds.length && !selection) { setOptionIds([]); return; }
     if (
@@ -1289,7 +1312,6 @@ export function PublicShop({
       return;
     }
     setSelected("");
-    setComplete(false);
     setRequestId(createRequestId());
     setTimes([]);
     let cancelled = false;
@@ -1310,7 +1332,7 @@ export function PublicShop({
     return () => {
       cancelled = true;
     };
-  }, [date, menu, optionIds, staff, data, category, pageSlug, pane, isCustomer, session.user?.email]);
+  }, [date, menu, optionIds, staff, data, category, pageSlug, pane, confirmed, isCustomer, session.user?.email]);
   useEffect(() => {
     run(loadMine);
   }, [isCustomer]);
@@ -1397,7 +1419,12 @@ export function PublicShop({
               )}
             </div>
   );
-  const bookingSection = () => (
+  const bookingSection = () => confirmed ? <BookingComplete booking={confirmed} config={c} simulation={data.paymentSimulation} onMine={() => {
+    if (leavePaymentReturn("mine")) return;
+    if (onPaneChange) { onPaneChange("mine"); return; }
+    setPane("mine");
+    void run(loadMine);
+  }} onNew={() => { if (leavePaymentReturn("reserve")) return; setCompletedBooking(undefined); setSelected(""); setTimes([]); setBookingMessage(""); setPaymentConsent(false); setRequestId(createRequestId()); }}/> : (
             <div className="reservation-layout">
               <div className="panel">
                 <span className="eyebrow">RESERVATION</span>
@@ -1412,7 +1439,6 @@ export function PublicShop({
                         onClick={() => {
                           setMenu(m.id);
                           setOptionIds([]);
-                          setComplete(false);
                         }}
                         key={m.id}
                       >
@@ -1459,7 +1485,6 @@ export function PublicShop({
                       key={t.start}
                       onClick={() => {
                         setSelected(t.start);
-                        setComplete(false);
                         setRequestId(createRequestId());
                       }}
                     >
@@ -1503,12 +1528,11 @@ export function PublicShop({
                     !selected ||
                     !name.trim() ||
                     (!isCustomer) ||
-                    complete ||
                     (!!c.rules.payment?.enabled && totalPrice > 0 && !paymentConsent)
                   }
                   onClick={() =>
                     run(async () => {
-                      const result = await api<{ ok: boolean; checkout?: PendingCheckout }>(`${base}/bookings`, {
+                      const result = await api<{ ok: boolean; booking?: Booking; checkout?: PendingCheckout }>(`${base}/bookings`, {
                         name,
                         message: bookingMessage,
                         menuId: menu,
@@ -1520,21 +1544,16 @@ export function PublicShop({
                         requestId,
                         paymentConsent: paymentConsent && c.rules.payment ? { amount: totalPrice, policy: c.rules.payment.refundTiers } : undefined,
                       });
+                      if (result.ok && finishBooking(result.booking)) return;
                       if (result.checkout) {
                         if (result.checkout.phase === "awaiting_approval" && result.checkout.approvalUrl) { window.location.assign(result.checkout.approvalUrl); return; }
                         setPane("mine"); await loadMine(); notify(tr("マイページでお支払いの状況を確認してください。")); return;
                       }
-                      setComplete(true);
-                      notify(
-                        tr("ご予約を承りました。マイページからご確認いただけます。"),
-                      );
-                      await loadMine();
+                      setPane("mine"); await loadMine(); notify(tr("予約内容はマイページで確認してください。"));
                     })
                   }
                 >
-                  {complete
-                    ? tr("✓ 予約を受け付けました")
-                    : c.rules.payment?.enabled && totalPrice > 0 ? data.paymentSimulation ? tr("支払い・予約を練習する") : tr("PayPalで支払いへ進む") : tr("この内容で予約する")}{" "}
+                  {c.rules.payment?.enabled && totalPrice > 0 ? data.paymentSimulation ? tr("支払い・予約を練習する") : tr("PayPalで支払いへ進む") : tr("この内容で予約する")}{" "}
                   →
                 </button>
               </div>

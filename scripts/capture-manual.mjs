@@ -121,7 +121,7 @@ try {
     .getByRole("status")
     .filter({ hasText: "ご予約を承りました" })
     .waitFor();
-  await capture("07-reservation-complete.jpg", ".reservation-layout .wide");
+  await capture("07-reservation-complete.jpg", ".booking-complete");
   await open("my-page", "あなたのご予約");
   assert.equal(await page.locator(".public-nav button").first().textContent(), "マイページ");
   await page.getByRole("heading", { name: "お店からのお便り", exact: true }).waitFor();

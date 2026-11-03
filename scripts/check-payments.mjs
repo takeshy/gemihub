@@ -30,7 +30,7 @@ try {
     async function open(suffix, locale = "ja") {
       const entry = entries.find(e => e.id.endsWith(`--${suffix}`)); assert.ok(entry);
       await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story&lang=${locale}`);
-      await page.locator("#storybook-root h2").first().waitFor();
+      await page.locator("#storybook-root h2").first().waitFor({ state: "attached" });
     }
     await open("payment");
     const day = new Date(Date.now() + 2 * 86400000 + 9 * 3600000).toISOString().slice(0, 10);

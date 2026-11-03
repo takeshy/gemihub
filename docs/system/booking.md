@@ -14,6 +14,7 @@ How customers book and how gemihub decides which time slots are open.
 2. They choose a menu, a staff member or "no preference", a date and an open time.
 3. The server checks the slot again, saves the booking and emails the customer and the shop's `notificationEmail`.
 4. With prepayment enabled, the customer pays with PayPal first; the booking is confirmed only after the payment is captured (see [Payments, cancellation and refunds](./payments.md)).
+5. A confirmed booking response replaces the form with the completion screen. It uses the returned record's assigned person, snapshotted services/add-ons, price, dates, duration, booking number and message, with links to My page and another booking. Pending or failed payments stay on My page; missing or foreign booking data never produces a completion receipt. PayPal-return reloads recheck the existing checkout idempotently. Leaving the receipt clears PayPal-return parameters so a subsequent visit does not reopen that flow.
 
 Customers see and cancel their own bookings on My page.
 

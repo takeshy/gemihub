@@ -76,6 +76,8 @@ Acceptance includes practice actions, reload restoration, pen target identificat
 
 Signed-out visitors, owner accounts, and customers of another shop see a sign-in prompt instead of booking inputs, slots, or payment actions. Show the form and fetch slots only after signing in as this shop’s customer and completing member registration.
 
+After receiving the confirmed booking record, replace the input form with a dedicated completion screen showing the saved date/time, customer, actual assigned person, services and add-ons, total, duration, booking number and message. Offer My page and another booking. Use the same screen after confirmed PayPal payment; never show completion for pending/failed payment, missing booking data or another customer's booking. Rechecks and payment-return reloads must not create duplicate charges or bookings. Previews and offline Drive storefronts use the same completion screen.
+
 Show About the shop before login and a unified Register/Login panel below the header for new/existing customers. Explicit booking links still open booking. After login, My page is the first and leftmost destination with recent shop news and personal bookings.
 
 Customers choose a service, a qualified staff member or No preference, then date/time. Default to no preference; there is no owner-side booking-method toggle. Named selection checks only that person and never falls back to another. No preference assigns an actually available qualified person at confirmation. Changing service/staff/date clears the slot and refreshes availability; keep no preference across service changes and reset an incompatible staff choice.

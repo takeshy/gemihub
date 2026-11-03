@@ -2447,3 +2447,15 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .booking-option-summary { padding-left: 18px; font-size: 13px; }
 .booking-option-image { display: block; flex: 0 0 48px; width: 48px; min-height: 48px; }
 .booking-option-image img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; }
+.booking-complete { max-width: 760px; margin: 0 auto; }
+.booking-complete-mark { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--cream); color: var(--green); font-size: 28px; }
+.booking-complete h2:focus { outline: none; }
+.booking-complete-details { margin: 24px 0; }
+.booking-complete-details > div { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.booking-complete-details dt { color: var(--muted); }
+.booking-complete-details dd { margin: 0; overflow-wrap: anywhere; }
+.booking-complete .actions { flex-wrap: wrap; }
+@media (max-width: 500px) {
+  .booking-complete-details > div { grid-template-columns: 1fr; gap: 4px; }
+  .booking-complete .actions > button { width: 100%; }
+}

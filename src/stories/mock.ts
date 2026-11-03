@@ -925,8 +925,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         ).find((s) => s.start === start);
         if (!slot)
           throw new Error(tr("この枠は予約できません。別の時間を選んでください。"));
-        if (!preview)
-          shop.bookings.push(simulatePayment({
+        const booking = simulatePayment({
             id: createRequestId(),
             shopId: shop.id,
             customer: "guest@example.com",
@@ -938,8 +937,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
             ...slot,
             status: "active",
             createdAt: new Date().toISOString(),
-          }, current));
-        result = { ok: true };
+          }, current);
+        if (!preview) shop.bookings.push(booking);
+        result = { ok: true, booking };
       } else if (action.endsWith("/cancel")) {
         const b = shop.bookings.find(
           (b) =>

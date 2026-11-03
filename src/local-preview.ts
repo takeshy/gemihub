@@ -64,8 +64,8 @@ export function readDraft(storage: Pick<Storage, "getItem">, key: string) {
 export function writeDraft(storage: Pick<Storage, "setItem">, key: string, draft: z.input<typeof localDraftSchema>) {
   storage.setItem(key, JSON.stringify(localDraftSchema.parse(draft)));
 }
-export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string, view?: "display" | "thumbnail") => Promise<import("../server/menu-image-domain").MenuImageData>): ApiClient {
-  const bookings: Booking[] = fixtures.bookings.map(b => { const selected = menuSelection(config,b.menuId,b.optionIds);return simulatePayment({ ...b, ...(selected?.optionIds.length ? {optionIds:selected.optionIds,items:selected.items}:{}), shopId, price: selected?.price ?? 0, message: "", customer: "sample@example.com", createdAt: new Date().toISOString() }, config); });
+export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shopId: string, readImage?: (imageId: string, view?: "display" | "thumbnail") => Promise<import("../server/menu-image-domain").MenuImageData>, customerEmail = "sample@example.com"): ApiClient {
+  const bookings: Booking[] = fixtures.bookings.map(b => { const selected = menuSelection(config,b.menuId,b.optionIds);return simulatePayment({ ...b, ...(selected?.optionIds.length ? {optionIds:selected.optionIds,items:selected.items}:{}), shopId, price: selected?.price ?? 0, message: "", customer: customerEmail, createdAt: new Date().toISOString() }, config); });
   const posts: PublicPost[] = fixtures.posts.filter(post => articleKinds(config).includes(post.category)).map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
   let profile: MemberProfile = { name: fixtures.customerName, birthDate: "1990-01-01", gender: "not_specified" };
@@ -91,8 +91,8 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
       if(!selected)throw new Error(tr("メニューと追加メニューの組み合わせを確認してください"));
       const slot = slots(config, bookings, dateIn(input.start, regionOf(config).timeZone), input.menuId, input.staffId || undefined,undefined,optionIds).find(s => s.start === input.start);
       if (!slot) throw new Error(tr("この時間は予約できません。空き枠を選び直してください。"));
-      bookings.push(simulatePayment({ ...slot, ...(selected.optionIds.length?{optionIds:selected.optionIds,items:selected.items}:{}), id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: selected.price, status: "active", shopId, customer: "sample@example.com", createdAt: new Date().toISOString() }, config));
-      result = { ok: true };
+      const booking=simulatePayment({ ...slot, ...(selected.optionIds.length?{optionIds:selected.optionIds,items:selected.items}:{}), id: `practice-${bookings.length}`, name: input.name, message: input.message || "", menuId: input.menuId, price: selected.price, status: "active", shopId, customer: customerEmail, createdAt: new Date().toISOString() }, config);
+      bookings.push(booking); result = { ok: true, booking };
     } else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/cancel-quote")) {
       const b = bookings.find(b => b.id === action.split("/").at(-2));
       if (!b?.payment) throw new Error(tr("支払い済みのサンプル予約がありません"));

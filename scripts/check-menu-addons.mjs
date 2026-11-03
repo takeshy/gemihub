@@ -31,8 +31,8 @@ async function exercise(page,label,date,screenshot){
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
  await page.screenshot({path:screenshot,fullPage:true});
  await page.getByRole('button',{name:new RegExp(label('この内容で予約する'))}).click();
- await expect(page.getByRole('button',{name:new RegExp(label('✓ 予約を受け付けました'))})).toBeVisible();
- await page.locator('.public-nav').getByText(label('マイページ'),{exact:true}).click();
+ await expect(page.getByRole('heading',{name:label('予約が完了しました'),exact:true})).toBeVisible();await expect(page.locator('.booking-complete')).toContainText('10,500');await expect(page.locator('.booking-complete')).toContainText('Foot care');
+ await page.getByRole('button',{name:label('マイページで予約を確認'),exact:true}).click();
  await expect(page.locator('.booking-card')).toContainText('Foot + Foot care + Other removal');
 }
 try{
