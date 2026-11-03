@@ -63,6 +63,31 @@ test("review loop stops at three attempts and resumes review after a temporary f
   assert.equal(rejected,3);
 });
 
+test("image review sees resolved photo markup and retries an exhausted legacy review without regeneration", async () => {
+  const image=photo("c");
+  const candidate={...theme,headerHtml:`<header><img class="interior-photo" data-image-id="${image.id}" alt="Interior" style="width:100%;object-fit:contain"><slot name="navigation"></slot></header>`,footerHtml:`<footer><img data-image-id="${image.id}" alt="Interior"><slot name="content"></slot></footer>`};
+  const config=structuredClone(sample);
+  const state:ThemeRun={config,request:"Use the interior photo large, preserving the mirrors and chairs.",imageIds:[image.id],attempts:3,previousCandidate:candidate,feedback:["renderedHeader has a span, not a photo"],review:{approved:false,issues:["Photo missing"],imageUsage:[{id:image.id,purpose:"asset"}]}};
+  let calls=0;
+  const result=await createInitialTheme({config,request:state.request,images:[image]},{state},async call=>{
+    calls++;assert.equal(call.purpose,"review","retry reviews the saved photo theme without generating again");
+    const text=call.contents[0].parts?.[0].text;assert.ok(text);
+    const input=JSON.parse(text);
+    for(const markup of [input.renderedHeader,input.renderedFooter]){
+      assert.match(markup,new RegExp(`<img[^>]+src="attachment:${image.id}"`));
+      assert.doesNotMatch(markup,/data-design-image|data:image\//);
+    }
+    assert.match(input.renderedHeader,/class="theme-image interior-photo"/);
+    assert.match(input.renderedHeader,/object-fit:contain/);
+    assert.equal(input.imageSources[0].id,image.id);assert.match(input.renderingNote,/actual pixels/);
+    assert.ok(call.contents[0].parts?.some(part=>part.inlineData?.data===image.data));
+    return JSON.stringify({approved:true,issues:[],imageUsage:[{id:image.id,purpose:"asset"}]});
+  });
+  assert.equal(calls,1);assert.equal(result.review?.approved,true);assert.equal(result.attempts,3);
+  assert.equal(state.candidate,undefined,"the stored state is updated only through persistence");
+  assert.equal(result.candidate?.headerHtml,candidate.headerHtml,"review aliases never enter the saved theme");
+});
+
 test("initial setup asks for a real name and logo, separates blog/news, and removes duplicate built-in pages", () => {
   const messages=[{role:"assistant",text:openingQuestions["create-shop"]},{role:"user",text:"月のアトリエです"}];
   let facts=initialInterviewFacts(messages);assert.equal(facts.name,"月のアトリエ");assert.equal(facts.question,logoQuestion);

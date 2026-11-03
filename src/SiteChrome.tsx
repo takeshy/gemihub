@@ -8,13 +8,13 @@ import { Presentation } from "./Presentation";
 import { themePart } from "../shared/presentation";
 import { articleKinds } from "../shared/article-features";
 const days = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
-export function SiteHeader({ config: c, children, actions, imageBase, imageSuffix }: { config: ShopConfig; children?: React.ReactNode; actions?: React.ReactNode; imageBase?: string; imageSuffix?: string }) {
+export function SiteHeader({ config: c, children, actions, imageBase, imageSuffix, resolvedImages }: { config: ShopConfig; children?: React.ReactNode; actions?: React.ReactNode; imageBase?: string; imageSuffix?: string; resolvedImages?: Record<string, string> }) {
   const image = c.header.imageUrl || c.appearance?.imageUrl;
   const title = <h1>{c.header.title || c.name}</h1>;
   const subtitle = <p>{c.header.subtitle || c.description}</p>;
   const details = c.header.showDetails && <div className="salon-details"><span>◷ {c.hours.start} – {c.hours.end}</span><span>{tr("定休日：")}{c.hours.closedWeekdays.map(d => tr("{0}曜", days()[d])).join("・") || tr("なし")}</span></div>;
-  const hero = c.header.imageId && imageBase ? <MenuImage imageId={c.header.imageId} imageBase={imageBase} suffix={imageSuffix} name={tr("お店の紹介")} className="managed-hero-image" /> : image ? <img className="salon-image" src={image} alt={tr("お店の紹介画像")} /> : <span className="hero-flower">✳</span>;
-  if (c.appearance?.theme) return <>{actions}<Presentation design={themePart(c.appearance.theme, "header")} slots={{ title, subtitle, details, image: hero, navigation: c.header.showNavigation ? children : null }} fallback={null} imageBase={imageBase} imageSuffix={imageSuffix} /></>;
+  const hero = c.header.imageId && resolvedImages?.[c.header.imageId] ? <span className="managed-hero-image"><img src={resolvedImages[c.header.imageId]} alt={tr("{0}の画像", tr("お店の紹介"))} /></span> : c.header.imageId && imageBase ? <MenuImage imageId={c.header.imageId} imageBase={imageBase} suffix={imageSuffix} name={tr("お店の紹介")} className="managed-hero-image" /> : image ? <img className="salon-image" src={image} alt={tr("お店の紹介画像")} /> : <span className="hero-flower">✳</span>;
+  if (c.appearance?.theme) return <>{actions}<Presentation design={themePart(c.appearance.theme, "header")} slots={{ title, subtitle, details, image: hero, navigation: c.header.showNavigation ? children : null }} fallback={null} imageBase={imageBase} imageSuffix={imageSuffix} resolvedImages={resolvedImages} /></>;
   return <header className="site-header">{actions}<section className="salon-hero">
     <span className="eyebrow">A LITTLE MOMENT, JUST FOR YOU.</span>
     <h1>{c.header.title || c.name}</h1><p>{c.header.subtitle || c.description}</p>
@@ -22,8 +22,8 @@ export function SiteHeader({ config: c, children, actions, imageBase, imageSuffi
     {c.header.imageId && imageBase ? <MenuImage imageId={c.header.imageId} imageBase={imageBase} suffix={imageSuffix} name={tr("お店の紹介")} className="managed-hero-image" /> : image ? <img className="salon-image" src={image} alt={tr("お店の紹介画像")} /> : <span className="hero-flower">✳</span>}
   </section>{c.header.showNavigation && children}</header>;
 }
-export function SiteFooter({ config: c, imageBase }: { config: ShopConfig; imageBase?: string }) {
-  if (c.appearance?.theme) return <Presentation imageBase={imageBase} design={themePart(c.appearance.theme, "footer")} slots={{ content: <Markdown skipHtml disallowedElements={["img", "iframe", "script", "style", "form", "input"]}>{c.footer.text || `© ${c.name}`}</Markdown> }} fallback={null} />;
+export function SiteFooter({ config: c, imageBase, resolvedImages }: { config: ShopConfig; imageBase?: string; resolvedImages?: Record<string, string> }) {
+  if (c.appearance?.theme) return <Presentation imageBase={imageBase} resolvedImages={resolvedImages} design={themePart(c.appearance.theme, "footer")} slots={{ content: <Markdown skipHtml disallowedElements={["img", "iframe", "script", "style", "form", "input"]}>{c.footer.text || `© ${c.name}`}</Markdown> }} fallback={null} />;
   return <footer className={`site-footer site-footer-${c.footer.alignment}`}><Markdown skipHtml disallowedElements={["img", "iframe", "script", "style", "form", "input"]}>{c.footer.text || `© ${c.name}`}</Markdown></footer>;
 }
 export function ThemeBody({ config, children, imageBase }: { config: ShopConfig; children: React.ReactNode; imageBase?: string }) {
